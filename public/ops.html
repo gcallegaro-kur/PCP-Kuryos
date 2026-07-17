@@ -1,943 +1,946 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de OPs / Lotes · Kuryos PCP</title>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-  <script src="shared/utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    :root {
-      --primary: #0a1c69;
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --border: #cbd5e1;
-      --text: #0f172a;
-      --muted: #64748b;
-      --success: #16a34a;
-      --danger: #dc2626;
-      --warning: #f59e0b;
-      --info: #3b82f6;
-    }
-    
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
-    
-    .container {
-      max-width: 96%;
-      margin: 0 auto;
-      padding: 24px 20px;
-    }
-    
-    .head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-    
-    h1 {
-      font-size: 22px;
-      font-weight: 800;
-    }
-    
-    .subtitle {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 4px;
-    }
-    
-    .btn-sync {
-      padding: 8px 16px;
-      background: var(--info);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.15s;
-    }
-    
-    .btn-sync:hover {
-      background: #2563eb;
-    }
-    
-    .card {
-      background: var(--card);
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    
-    .table-container {
-      overflow-x: auto;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 13.5px;
-    }
-    
-    th, td {
-      padding: 12px 14px;
-      border-bottom: 1px solid #e2e8f0;
-      vertical-align: middle;
-    }
-    
-    th {
-      font-weight: 600;
-      color: var(--muted);
-      font-size: 11.5px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    tr:hover {
-      background: #f8fafc;
-    }
-    
-    .progress-bar-container {
-      width: 100%;
-      background: #e2e8f0;
-      border-radius: 6px;
-      height: 8px;
-      overflow: hidden;
-      margin-top: 4px;
-    }
-    
-    .progress-bar-fill {
-      height: 100%;
-      background: var(--success);
-      border-radius: 6px;
-      transition: width 0.3s ease;
-    }
-    
-    .progress-text {
-      font-size: 11px;
-      color: var(--muted);
-      font-weight: 600;
-      display: block;
-      margin-top: 2px;
-    }
-    
-    select, input[type="text"] {
-      padding: 6px 10px;
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
-      font-size: 13px;
-      background: white;
-      color: var(--text);
-      font-family: inherit;
-      width: 100%;
-    }
-    
-    select:focus, input[type="text"]:focus {
-      outline: none;
-      border-color: var(--info);
-    }
-    
-    .badge-status {
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 11.5px;
-      font-weight: 700;
-      text-align: center;
-      display: inline-block;
-    }
-    
-    .badge-status.nao-iniciado { background: #fee2e2; color: #dc2626; }
-    .badge-status.programado { background: #dbeafe; color: #2563eb; }
-    .badge-status.em-producao { background: #fef3c7; color: #d97706; }
-    .badge-status.producao-parcial { background: #f3e8ff; color: #7c3aed; }
-    
-    .btn-delete {
-      padding: 6px 10px;
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--danger);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.15s;
-    }
-    
-    .btn-delete:hover {
-      background: #fee2e2;
-      border-color: #fca5a5;
-    }
-    
-    .toast {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #1e293b;
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: none;
-      z-index: 11000;
-    }
-  
-    /* Import & Dropzone */
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      padding: 30px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: all .2s;
-    }
-    .drop-zone:hover {
-      border-color: var(--primary);
-      background: #eff6ff;
-    }
-    
-    /* Modal styles */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .modal-overlay.open {
-      display: flex;
-    }
-    .modal {
-      background: white;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-      overflow: hidden;
-    }
-    .modal-hdr {
-      padding: 16px 20px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-ttl {
-      font-size: 15px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .modal-sub {
-      font-size: 11px;
-      color: var(--muted);
-    }
-    .modal-body {
-      padding: 16px;
-    }
-    .modal-footer {
-      padding: 12px 16px;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      font-size: 13px;
-    }
-
-
-    /* Navbar styles */
-    .header {
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 10px 20px;
-    }
-    .nav-links {
-      display: flex;
-      gap: 8px;
-      font-size: 13px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .nav-links a {
-      color: var(--primary);
-      text-decoration: none;
-      font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 20px;
-      background: #f3f4f6;
-      border: 1px solid #e2e8f0;
-      transition: all .15s;
-    }
-    .nav-links a:hover {
-      background: #e5e7eb;
-    }
-    .nav-links a.active {
-      color: white !important;
-      background: #10b981 !important;
-      border-color: #10b981 !important;
-      box-shadow: 0 2px 6px rgba(16,185,129,.3);
-    }
-
-</style>
-</head>
-<body>
-
-  <!-- Header Navbar -->
-  <div class="header">
-    <div class="nav-links">
-      <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-      <a href="form.html">Formulário</a>
-      <a href="planejamento.html">Planejamento</a>
-      <a href="pedidos.html">Pedidos</a>
-      <a href="historico.html">Histórico</a>
-      <a href="produtos.html">Produtos</a>
-      <a href="insumos.html">Insumos</a>
-      <a href="ops.html" class="active">OPs</a>
-      <a href="admin.html">Admin</a>
-    </div>
-  </div>
-
-
-<!-- Unified Navbar will be dynamically injected here by auth_check.js -->
-
-<div class="container">
-  <div class="head">
-    <div>
-      <h1>⚙️ Controle de OPs / Lotes Ativos</h1>
-      <div class="subtitle">Acompanhe o progresso físico dos pedidos e gerencie as OPs / Lotes ativos em produção</div>
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="btn-sync" onclick="toggleImportSection()" style="background: var(--primary);">
-        📤 Importar Nova OP <span id="importToggleIcon">▼</span>
-      </button>
-      <button class="btn-sync" onclick="forceSyncAllStatus()">
-        🔄 Recalcular Status de Todas as OPs / Lotes
-      </button>
-    </div>
-  </div>
-
-  <!-- Seção de Importação de OP (Drag & Drop) -->
-  <div class="card" id="importSectionBody" style="display: none; margin-bottom: 20px; border-left: 4px solid var(--info);">
-    <h2 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📤 Importador de OPs Físicas (Planilhas de Envase)</h2>
-    <div class="drop-zone" id="opImportDropZone">
-      <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
-      <div id="opImportDropText" style="font-size: 14px; font-weight: 600; color: var(--text);">Clique ou arraste o arquivo da OP física aqui</div>
-      <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Aceita planilhas de OP (.xlsx)</div>
-    </div>
-    <input type="file" id="opImportFileInput" accept=".xlsx" style="display: none;">
-  </div>
-  
-  <div class="card">
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 100px;">Carga / OP</th>
-            <th>Cliente</th>
-            <th>Produto / Descrição</th>
-            <th style="width: 110px;">Lote Físico</th>
-            <th style="width: 120px;">Linha</th>
-            <th style="width: 180px;">Progresso Realizado</th>
-            <th style="width: 160px;">Status da OP</th>
-            <th style="width: 60px; text-align: center;">Excluir</th>
-          </tr>
-        </thead>
-        <tbody id="ops-tbody">
-          <tr>
-            <td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div id="toast" class="toast"></div>
-
-<!-- Modal de Vinculação de OP -->
-<div class="modal-overlay" id="linkOpModal">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div>
-        <div class="modal-ttl">Vincular OP Importada</div>
-        <div class="modal-sub">Defina as informações e o vínculo com pedido comercial</div>
-      </div>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label>Código da OP / Lote Físico</label>
-        <input type="text" id="linkOpLote" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>Produto / Descrição</label>
-        <input type="text" id="linkOpProduto" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>SKU</label>
-        <input type="text" id="linkOpSku" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>Quantidade de Peças Sugerida (Volume -> Unidade)</label>
-        <input type="number" id="linkOpQtd" min="1" required>
-      </div>
-      <div class="form-group">
-        <label>Vincular ao Pedido Comercial</label>
-        <select id="linkOpPedidoSelect">
-          <option value="">Nenhum (OP Avulsa)</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-delete" id="linkOpCancelBtn" style="padding: 8px 16px;">Cancelar</button>
-      <button class="btn-sync" id="linkOpConfirmBtn" style="padding: 8px 16px; background: var(--success); color: white;">Confirmar e Importar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Firebase Config -->
-<script>
-  var firebaseConfig = {
-    apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
-    authDomain: "prod-kuryos.firebaseapp.com",
-    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
-    projectId: "prod-kuryos",
-    storageBucket: "prod-kuryos.firebasestorage.app",
-    messagingSenderId: "323674581733",
-    appId: "1:323674581733:web:e283a491c0c2bd6025420c"
-  };
-  firebase.initializeApp(firebaseConfig);
-</script>
-
-<!-- Security Check -->
-<script src="auth_check.js"></script>
-
-<!-- Main Business Logic -->
-<script>
-  const database = firebase.database();
-  let currentRole = 'production';
-  let pedidosGlobal = {};
-  let produtosGlobal = {};
-  
-  // Wait for user authentication to determine role permissions
-  firebase.auth().onAuthStateChanged(user => {
-    if (user) {
-      database.ref('usuarios/' + user.uid).once('value', snap => {
-        const profile = snap.val();
-        if (profile) {
-          currentRole = profile.role || 'production';
-          listenToActiveOps();
-        }
-      });
-    }
-  });
-  
-  function listenToActiveOps() {
-    // Escuta produtos
-    database.ref('produtos').on('value', snap => {
-      produtosGlobal = snap.val() || {};
-    });
-
-    // 1. Escuta pedidos
-    database.ref('pedidos').on('value', pedSnap => {
-    pedidosGlobal = pedSnap.val() || {};
-      const pedidos = pedSnap.val() || {};
-      
-      // 2. Escuta registros de apontamento para calcular progresso realizado em tempo real
-      database.ref('registros').on('value', regSnap => {
-        const registros = regSnap.val() || {};
-        
-        // Agrupa quantidades produzidas por firebaseKey
-        const producedMap = {};
-        Object.keys(registros).forEach(date => {
-          const dayRegs = registros[date] || {};
-          Object.keys(dayRegs).forEach(regId => {
-            const r = dayRegs[regId];
-            if (r.pedidoId && r.produto) {
-              const pedKey = findPedidoKey(r.pedidoId, r.produto);
-              if (pedKey) {
-                producedMap[pedKey] = (producedMap[pedKey] || 0) + (parseFloat(r.quantidade) || 0);
-              }
-            }
-          });
-        });
-        
-        renderActiveOps(pedidos, producedMap);
-      });
-    });
-  }
-  
-  function renderActiveOps(pedidos, producedMap) {
-    const tbody = document.getElementById('ops-tbody');
-    tbody.innerHTML = '';
-    
-    const keys = Object.keys(pedidos);
-    
-    const activeOps = keys.map(k => ({
-      key: k,
-      ...pedidos[k]
-    })).filter(p => p.status !== 'Concluído' && p.key.startsWith('OP_'));
-    
-    if (activeOps.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nenhuma OP ativa no momento. Todas concluídas!</td></tr>';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Controle de OPs / Lotes · Kuryos PCP</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #0a1c69;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --muted: #64748b;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #f59e0b;
+      --info: #3b82f6;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 96%;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+    
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    
+    .btn-sync {
+      padding: 8px 16px;
+      background: var(--info);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    
+    .btn-sync:hover {
+      background: #2563eb;
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13.5px;
+    }
+    
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+    }
+    
+    th {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    tr:hover {
+      background: #f8fafc;
+    }
+    
+    .progress-bar-container {
+      width: 100%;
+      background: #e2e8f0;
+      border-radius: 6px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--success);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      display: block;
+      margin-top: 2px;
+    }
+    
+    select, input[type="text"] {
+      padding: 6px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+      color: var(--text);
+      font-family: inherit;
+      width: 100%;
+    }
+    
+    select:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: var(--info);
+    }
+    
+    .badge-status {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-align: center;
+      display: inline-block;
+    }
+    
+    .badge-status.nao-iniciado { background: #fee2e2; color: #dc2626; }
+    .badge-status.programado { background: #dbeafe; color: #2563eb; }
+    .badge-status.em-producao { background: #fef3c7; color: #d97706; }
+    .badge-status.producao-parcial { background: #f3e8ff; color: #7c3aed; }
+    
+    .btn-delete {
+      padding: 6px 10px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    
+    .btn-delete:hover {
+      background: #fee2e2;
+      border-color: #fca5a5;
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+      z-index: 11000;
+    }
+  
+    /* Import & Dropzone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 30px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .drop-zone:hover {
+      border-color: var(--primary);
+      background: #eff6ff;
+    }
+    
+    /* Modal styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+    .modal-hdr {
+      padding: 16px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-ttl {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .modal-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .modal-body {
+      padding: 16px;
+    }
+    .modal-footer {
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+
+    /* Navbar styles */
+    .header {
+      background: white;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 10px 20px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      font-size: 13px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #f3f4f6;
+      border: 1px solid #e2e8f0;
+      transition: all .15s;
+    }
+    .nav-links a:hover {
+      background: #e5e7eb;
+    }
+    .nav-links a.active {
+      color: white !important;
+      background: #10b981 !important;
+      border-color: #10b981 !important;
+      box-shadow: 0 2px 6px rgba(16,185,129,.3);
+    }
+
+</style>
+</head>
+<body>
+
+  <!-- Header Navbar -->
+  <div class="header">
+    <div class="nav-links">
+      <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+      <a href="form.html">Formulário</a>
+      <a href="planejamento.html">Planejamento</a>
+      <a href="pedidos.html">Pedidos</a>
+      <a href="historico.html">Histórico</a>
+      <a href="produtos.html">Produtos</a>
+      <a href="insumos.html">Insumos</a>
+      <a href="ops.html" class="active">OPs</a>
+      <a href="admin.html">Admin</a>
+    </div>
+  </div>
+
+
+<!-- Unified Navbar will be dynamically injected here by auth_check.js -->
+
+<div class="container">
+  <div class="head">
+    <div>
+      <h1>⚙️ Controle de OPs / Lotes Ativos</h1>
+      <div class="subtitle">Acompanhe o progresso físico dos pedidos e gerencie as OPs / Lotes ativos em produção</div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn-sync" onclick="toggleImportSection()" style="background: var(--primary);">
+        📤 Importar Nova OP <span id="importToggleIcon">▼</span>
+      </button>
+      <button class="btn-sync" onclick="forceSyncAllStatus()">
+        🔄 Recalcular Status de Todas as OPs / Lotes
+      </button>
+    </div>
+  </div>
+
+  <!-- Seção de Importação de OP (Drag & Drop) -->
+  <div class="card" id="importSectionBody" style="display: none; margin-bottom: 20px; border-left: 4px solid var(--info);">
+    <h2 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📤 Importador de OPs Físicas (Planilhas de Envase)</h2>
+    <div class="drop-zone" id="opImportDropZone">
+      <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
+      <div id="opImportDropText" style="font-size: 14px; font-weight: 600; color: var(--text);">Clique ou arraste o arquivo da OP física aqui</div>
+      <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Aceita planilhas de OP (.xlsx)</div>
+    </div>
+    <input type="file" id="opImportFileInput" accept=".xlsx" style="display: none;">
+  </div>
+  
+  <div class="card">
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 100px;">Carga / OP</th>
+            <th>Cliente</th>
+            <th>Produto / Descrição</th>
+            <th style="width: 110px;">Lote Físico</th>
+            <th style="width: 120px;">Linha</th>
+            <th style="width: 180px;">Progresso Realizado</th>
+            <th style="width: 160px;">Status da OP</th>
+            <th style="width: 60px; text-align: center;">Excluir</th>
+          </tr>
+        </thead>
+        <tbody id="ops-tbody">
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Modal de Vinculação de OP -->
+<div class="modal-overlay" id="linkOpModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-ttl">Vincular OP Importada</div>
+        <div class="modal-sub">Defina as informações e o vínculo com pedido comercial</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Código da OP / Lote Físico</label>
+        <input type="text" id="linkOpLote" readonly style="background: #f1f5f9; color: var(--muted);">
+      </div>
+      <div class="form-group">
+        <label>Produto / Descrição</label>
+        <input type="text" id="linkOpProduto" readonly style="background: #f1f5f9; color: var(--muted);">
+      </div>
+      <div class="form-group">
+        <label>SKU</label>
+        <input type="text" id="linkOpSku" readonly style="background: #f1f5f9; color: var(--muted);">
+      </div>
+      <div class="form-group">
+        <label>Quantidade de Peças Sugerida (Volume -> Unidade)</label>
+        <input type="number" id="linkOpQtd" min="1" required>
+      </div>
+      <div class="form-group">
+        <label>Vincular ao Pedido Comercial</label>
+        <select id="linkOpPedidoSelect">
+          <option value="">Nenhum (OP Avulsa)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-delete" id="linkOpCancelBtn" style="padding: 8px 16px;">Cancelar</button>
+      <button class="btn-sync" id="linkOpConfirmBtn" style="padding: 8px 16px; background: var(--success); color: white;">Confirmar e Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase Config -->
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+    authDomain: "prod-kuryos.firebaseapp.com",
+    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    projectId: "prod-kuryos",
+    storageBucket: "prod-kuryos.firebasestorage.app",
+    messagingSenderId: "323674581733",
+    appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+  };
+  firebase.initializeApp(firebaseConfig);
+</script>
+
+<!-- Security Check -->
+<script src="auth_check.js"></script>
+
+<!-- Main Business Logic -->
+<script>
+  const database = firebase.database();
+  let currentRole = 'production';
+  let pedidosGlobal = {};
+  let produtosGlobal = {};
+  
+  // Wait for user authentication to determine role permissions
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) {
+      database.ref('usuarios/' + user.uid).once('value', snap => {
+        const profile = snap.val();
+        if (profile) {
+          currentRole = profile.role || 'production';
+          listenToActiveOps();
+        }
+      });
+    }
+  });
+  
+  let globalPedidos = {};
+  let globalRegistros = {};
+
+  function listenToActiveOps() {
+    // Escuta produtos
+    database.ref('produtos').on('value', snap => {
+      produtosGlobal = snap.val() || {};
+    });
+
+    database.ref('pedidos').on('value', pedSnap => {
+      pedidosGlobal = pedSnap.val() || {};
+      globalPedidos = pedSnap.val() || {};
+      recalculateAndRenderOps();
+    });
+
+    database.ref('registros').on('value', regSnap => {
+      globalRegistros = regSnap.val() || {};
+      recalculateAndRenderOps();
+    });
+  }
+
+  function recalculateAndRenderOps() {
+    const producedMap = {};
+    Object.keys(globalRegistros).forEach(date => {
+      const dayRegs = globalRegistros[date] || {};
+      Object.keys(dayRegs).forEach(regId => {
+        const r = dayRegs[regId];
+        if (r.pedidoId && r.produto) {
+          const pedKey = findPedidoKey(r.pedidoId, r.produto);
+          if (pedKey) {
+            producedMap[pedKey] = (producedMap[pedKey] || 0) + (parseFloat(r.quantidade) || 0);
+          }
+        }
+      });
+    });
+    renderActiveOps(globalPedidos, producedMap);
+  }
+  
+  function renderActiveOps(pedidos, producedMap) {
+    const tbody = document.getElementById('ops-tbody');
+    tbody.innerHTML = '';
+    
+    const keys = Object.keys(pedidos);
+    
+    const activeOps = keys.map(k => ({
+      key: k,
+      ...pedidos[k]
+    })).filter(p => p.status !== 'Concluído');
+    
+    if (activeOps.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nenhuma OP ativa no momento. Todas concluídas!</td></tr>';
+      return;
+    }
+    
+    // Ordena por prioridade de status e ID
+    activeOps.sort((a, b) => {
+      const statusOrder = { 'Em Produção': 1, 'Produção Parcial': 2, 'Programado': 3, 'Não Iniciado': 4 };
+      const aVal = statusOrder[a.status] || 9;
+      const bVal = statusOrder[b.status] || 9;
+      if (aVal !== bVal) return aVal - bVal;
+      return a.key.localeCompare(b.key);
+    });
+    
+    const isAdmin = currentRole === 'admin';
+    const disableAttr = isAdmin ? '' : 'disabled';
+    
+    activeOps.forEach(op => {
+      const tr = document.createElement('tr');
+      
+      const produced = producedMap[op.key] || op.produzido || 0;
+      const planned = op.qtdTotal || 0;
+      const pct = planned > 0 ? Math.min(100, Math.round((produced / planned) * 100)) : 0;
+      
+      // Status formatting for read-only mode
+      const statusMap = {
+        'Não Iniciado': 'nao-iniciado',
+        'Programado': 'programado',
+        'Em Produção': 'em-producao',
+        'Produção Parcial': 'producao-parcial'
+      };
+      const statusClass = statusMap[op.status] || 'nao-iniciado';
+      
+      const escapedKey = escapeHtml(op.key);
+      const escapedCliente = escapeHtml(op.cliente || '-');
+      const escapedProduto = escapeHtml(op.produto || '-');
+      const escapedSku = escapeHtml(op.sku || '-');
+      const escapedVolume = escapeHtml(op.volume || '-');
+      const escapedLote = escapeHtml(op.lote || '-');
+      const escapedLoteAttr = escapeAttr(op.lote || '');
+      const escapedLinha = escapeHtml(op.linha || 'Não definida');
+      const escapedStatus = escapeHtml(op.status || '');
+      const escapedKeyAttr = escapeAttr(op.key);
+
+      tr.innerHTML = `
+        <td><strong>#${escapedKey}</strong></td>
+        <td>${escapedCliente}</td>
+        <td>
+          <div style="font-weight: 600;">${escapedProduto}</div>
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku} | Vol: ${escapedVolume}</div>
+        </td>
+        <td>
+          ${isAdmin 
+            ? `<input type="text" value="${escapedLoteAttr}" onblur="updateOpField('${escapedKeyAttr}', 'lote', this.value)" placeholder="Sem OP/Lote">`
+            : `<span>${escapedLote}</span>`}
+        </td>
+        <td>
+          ${isAdmin
+            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">
+                 <option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>
+                 <option value="Linha 01" ${op.linha === 'Linha 01' ? 'selected' : ''}>Linha 01</option>
+                 <option value="Linha 02" ${op.linha === 'Linha 02' ? 'selected' : ''}>Linha 02</option>
+                 <option value="Linha 03" ${op.linha === 'Linha 03' ? 'selected' : ''}>Linha 03</option>
+                 <option value="Linha 04" ${op.linha === 'Linha 04' ? 'selected' : ''}>Linha 04</option>
+               </select>`
+            : `<span>${escapedLinha}</span>`}
+        </td>
+        <td>
+          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 11.5px;">
+            <span>${produced.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un</span>
+            <span>${pct}%</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width: ${pct}%"></div>
+          </div>
+        </td>
+        <td>
+          ${isAdmin
+            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'status', this.value)">
+                 <option value="Não Iniciado" ${op.status === 'Não Iniciado' ? 'selected' : ''}>Não Iniciado</option>
+                 <option value="Programado" ${op.status === 'Programado' ? 'selected' : ''}>Programado</option>
+                 <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
+                 <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
+                 <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
+               </select>`
+            : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`}
+        </td>
+        <td style="text-align: center;">
+          ${isAdmin
+            ? `<button class="btn-delete" onclick="deleteOp('${escapedKeyAttr}')" title="Excluir OP/Lote">
+                 <i class="fas fa-trash-alt"></i>
+               </button>`
+            : `-`}
+        </td>
+      `;
+      
+      tbody.appendChild(tr);
+    });
+  }
+  
+  function updateOpField(pedidoId, field, value) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+      alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
+      listenToActiveOps();
       return;
     }
-    
-    // Ordena por prioridade de status e ID
-    activeOps.sort((a, b) => {
-      const statusOrder = { 'Em Produção': 1, 'Produção Parcial': 2, 'Programado': 3, 'Não Iniciado': 4 };
-      const aVal = statusOrder[a.status] || 9;
-      const bVal = statusOrder[b.status] || 9;
-      if (aVal !== bVal) return aVal - bVal;
-      return a.key.localeCompare(b.key);
-    });
-    
-    const isAdmin = currentRole === 'admin';
-    const disableAttr = isAdmin ? '' : 'disabled';
-    
-    activeOps.forEach(op => {
-      const tr = document.createElement('tr');
-      
-      const produced = producedMap[op.key] || op.produzido || 0;
-      const planned = op.qtdTotal || 0;
-      const pct = planned > 0 ? Math.min(100, Math.round((produced / planned) * 100)) : 0;
-      
-      // Status formatting for read-only mode
-      const statusMap = {
-        'Não Iniciado': 'nao-iniciado',
-        'Programado': 'programado',
-        'Em Produção': 'em-producao',
-        'Produção Parcial': 'producao-parcial'
-      };
-      const statusClass = statusMap[op.status] || 'nao-iniciado';
-      
-      const escapedKey = escapeHtml(op.key);
-      const escapedCliente = escapeHtml(op.cliente || '-');
-      const escapedProduto = escapeHtml(op.produto || '-');
-      const escapedSku = escapeHtml(op.sku || '-');
-      const escapedVolume = escapeHtml(op.volume || '-');
-      const escapedLote = escapeHtml(op.lote || '-');
-      const escapedLoteAttr = escapeAttr(op.lote || '');
-      const escapedLinha = escapeHtml(op.linha || 'Não definida');
-      const escapedStatus = escapeHtml(op.status || '');
-      const escapedKeyAttr = escapeAttr(op.key);
-
-      tr.innerHTML = `
-        <td><strong>#${escapedKey}</strong></td>
-        <td>${escapedCliente}</td>
-        <td>
-          <div style="font-weight: 600;">${escapedProduto}</div>
-          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku} | Vol: ${escapedVolume}</div>
-        </td>
-        <td>
-          ${isAdmin 
-            ? `<input type="text" value="${escapedLoteAttr}" onblur="updateOpField('${escapedKeyAttr}', 'lote', this.value)" placeholder="Sem OP/Lote">`
-            : `<span>${escapedLote}</span>`}
-        </td>
-        <td>
-          ${isAdmin
-            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">
-                 <option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>
-                 <option value="Linha 01" ${op.linha === 'Linha 01' ? 'selected' : ''}>Linha 01</option>
-                 <option value="Linha 02" ${op.linha === 'Linha 02' ? 'selected' : ''}>Linha 02</option>
-                 <option value="Linha 03" ${op.linha === 'Linha 03' ? 'selected' : ''}>Linha 03</option>
-                 <option value="Linha 04" ${op.linha === 'Linha 04' ? 'selected' : ''}>Linha 04</option>
-               </select>`
-            : `<span>${escapedLinha}</span>`}
-        </td>
-        <td>
-          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 11.5px;">
-            <span>${produced.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un</span>
-            <span>${pct}%</span>
-          </div>
-          <div class="progress-bar-container">
-            <div class="progress-bar-fill" style="width: ${pct}%"></div>
-          </div>
-        </td>
-        <td>
-          ${isAdmin
-            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'status', this.value)">
-                 <option value="Não Iniciado" ${op.status === 'Não Iniciado' ? 'selected' : ''}>Não Iniciado</option>
-                 <option value="Programado" ${op.status === 'Programado' ? 'selected' : ''}>Programado</option>
-                 <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
-                 <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
-                 <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
-               </select>`
-            : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`}
-        </td>
-        <td style="text-align: center;">
-          ${isAdmin
-            ? `<button class="btn-delete" onclick="deleteOp('${escapedKeyAttr}')" title="Excluir OP/Lote">
-                 <i class="fas fa-trash-alt"></i>
-               </button>`
-            : `-`}
-        </td>
-      `;
-      
-      tbody.appendChild(tr);
-    });
-  }
-  
-  function updateOpField(pedidoId, field, value) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
-      listenToActiveOps();
-      return;
-    }
-
-    // Se mudou o status para Concluído manualmente, podemos executar o hook de limpeza de slots futuros
-    if (field === 'status' && value === 'Concluído') {
-      const confirmAction = confirm('Tem certeza de que deseja concluir esta OP? Isso arquivará a OP e removerá todos os seus agendamentos futuros automaticamente.');
-      if (!confirmAction) {
-        listenToActiveOps(); // recarrega os dropdowns originais
-        return;
-      }
-      
-      // Hook de conclusão
-      database.ref('pedidos/' + pedidoId).update({ status: 'Concluído' })
-        .then(() => {
-          // Remove todos os agendamentos desta OP no planejamento (slots futuros)
-          cleanFutureSlots(pedidoId);
-          showToast('OP/Lote concluída e slots de planejamento limpos com sucesso!');
-        });
-    } else {
-      // Atualizações de campo normais
-      database.ref('pedidos/' + pedidoId).update({ [field]: value })
-        .then(() => {
-          showToast('OP/Lote atualizada com sucesso!');
-        })
-        .catch(err => {
-          console.error(err);
-          showToast('Erro ao atualizar campo.');
-        });
+
+    // Se mudou o status para Concluído manualmente, podemos executar o hook de limpeza de slots futuros
+    if (field === 'status' && value === 'Concluído') {
+      const confirmAction = confirm('Tem certeza de que deseja concluir esta OP? Isso arquivará a OP e removerá todos os seus agendamentos futuros automaticamente.');
+      if (!confirmAction) {
+        listenToActiveOps(); // recarrega os dropdowns originais
+        return;
+      }
+      
+      // Hook de conclusão
+      database.ref('pedidos/' + pedidoId).update({ status: 'Concluído' })
+        .then(() => {
+          // Remove todos os agendamentos desta OP no planejamento (slots futuros)
+          cleanFutureSlots(pedidoId);
+          showToast('OP/Lote concluída e slots de planejamento limpos com sucesso!');
+        });
+    } else {
+      // Atualizações de campo normais
+      database.ref('pedidos/' + pedidoId).update({ [field]: value })
+        .then(() => {
+          showToast('OP/Lote atualizada com sucesso!');
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('Erro ao atualizar campo.');
+        });
+    }
+  }
+  
+  function cleanFutureSlots(pedidoId) {
+    return window.cleanFutureSlots(pedidoId, database);
+  }
+
+  function deleteOp(pedidoId) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+      alert('Acesso Negado: Apenas administradores podem excluir OPs.');
+      return;
     }
-  }
-  
-  function cleanFutureSlots(pedidoId) {
-    return window.cleanFutureSlots(pedidoId, database);
-  }
-
-  function deleteOp(pedidoId) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem excluir OPs.');
-      return;
-    }
-
-    const confirmAction = confirm('ATENÇÃO: Deseja realmente excluir permanentemente esta OP/Lote do sistema? Isso removerá o pedido e os agendamentos associados.');
-    if (!confirmAction) return;
-    
-    // 1. Remove de pedidos
-    database.ref('pedidos/' + pedidoId).remove()
-      .then(() => {
-        // 2. Remove agendamentos de slots
-        cleanFutureSlots(pedidoId);
-        showToast('OP/Lote excluída com sucesso!');
-      })
-      .catch(err => {
-        console.error(err);
-        showToast('Erro ao excluir OP.');
-      });
-  }
-  
-  function forceSyncAllStatus() {
-    if (typeof window.syncAllActiveOpsStatus === 'function') {
-      window.syncAllActiveOpsStatus();
-      showToast('Status de todas as OPs recalculado com sucesso!');
-    }
-  }
-  
-  
-  // --- OP Import System ---
-  let currentParsedOp = null;
-
-  function toggleImportSection() {
-    var body = document.getElementById('importSectionBody');
-    var icon = document.getElementById('importToggleIcon');
-    if (body.style.display === 'none') {
-      body.style.display = 'block';
-      icon.textContent = '▲';
-    } else {
-      body.style.display = 'none';
-      icon.textContent = '▼';
-    }
-  }
-
-  function sanitizeKey(str) {
-    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-  }
-
-  function pedidoFirebaseKey(id, produto) {
-    return sanitizeKey(id) + '__' + sanitizeKey(produto);
-  }
-
-  function normalizeForMatch(s) {
-    if (!s) return '';
-    return String(s).toLowerCase().replace(/\s+/g, ' ').trim().split(' ').slice(0, 5).join(' ');
-  }
-
-  function findPedidoKey(pedidoId, produto) {
-    if (!pedidosGlobal || !pedidoId) return null;
-    var keys = Object.keys(pedidosGlobal);
-    var exactKey = pedidoFirebaseKey(pedidoId, produto);
-    if (pedidosGlobal[exactKey]) return exactKey;
-    for (var i = 0; i < keys.length; i++) {
-      var p = pedidosGlobal[keys[i]];
-      if (String(p.id||'') === String(pedidoId)) return keys[i];
-    }
-    return null;
-  }
-
-  function parseIndividualOPFile(file) {
-    document.getElementById('opImportDropText').textContent = '⏳ Lendo ' + file.name + '...';
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var data = new Uint8Array(e.target.result);
-        var wb = XLSX.read(data, { type: 'array', cellDates: true });
-        var ws = wb.Sheets[wb.SheetNames[0]];
-        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
-
-        var rawProduct = '';
-        var rawLote = '';
-
-        // Search rows for Product and Lote
-        for (var i = 0; i < Math.min(rows.length, 12); i++) {
-          var r = rows[i] || [];
-          for (var c = 0; c < r.length; c++) {
-            var valStr = String(r[c] || '').trim().toUpperCase();
-            if (valStr === 'PRODUTO:' && !rawProduct) rawProduct = String(r[c+2] || '').trim();
-            if (valStr === 'LOTE' && !rawLote) rawLote = String(r[c+1] || '').trim();
-            if (valStr === 'LOTE' && !rawLote && r[c+2]) rawLote = String(r[c+2] || '').trim();
-          }
-        }
-
-        var row6 = rows[5] || [];
-        var rawCliente = String(row6[2] || '').trim();
-        var rawQty = parseFloat(row6[6]) || 0;
-
-        var row7 = rows[6] || [];
-        var rawSku = String(row7[2] || '').trim();
-
-        var cleanLote = rawLote.replace(/[.\/[\]#$]/g, '-').trim();
-        if (!cleanLote) {
-          alert('Código de OP / Lote não localizado na planilha.');
-          document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-          return;
-        }
-
-        currentParsedOp = {
-          lote: cleanLote,
-          produto: rawProduct,
-          sku: rawSku,
-          cliente: rawCliente,
-          qtdKg: rawQty
-        };
-
-        // Suggested conversion
-        var suggestedQty = rawQty;
-        // Search in local catalog if possible, otherwise use fallback
-        if (rawQty > 0 && rawQty < 1500) {
-          suggestedQty = Math.round(rawQty / 0.2); // assume 200ml
-        }
-
-        // Show link modal
-        document.getElementById('linkOpLote').value = cleanLote;
-        document.getElementById('linkOpProduto').value = rawProduct;
-        document.getElementById('linkOpSku').value = rawSku;
-        document.getElementById('linkOpQtd').value = suggestedQty;
-
-        // Populate Pedidos select dropdown
-        var sel = document.getElementById('linkOpPedidoSelect');
-        sel.innerHTML = '<option value="">Nenhum (OP Avulsa)</option>';
-
-        var skuUpper = rawSku.toUpperCase();
-        var matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
-          var k = entry[0], p = entry[1];
-          return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0 && (p.sku || '').toUpperCase() === skuUpper;
-        }).map(function(entry) {
-          var p = entry[1];
-          p.key = entry[0];
-          return p;
-        });
-
-        if (matchingPeds.length === 0) {
-          matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
-            var k = entry[0], p = entry[1];
-            return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0;
-          }).map(function(entry) {
-            var p = entry[1];
-            p.key = entry[0];
-            return p;
-          });
-        }
-
-        matchingPeds.forEach(function(p) {
-          var opt = document.createElement('option');
-          opt.value = p.firebaseKey || p.key; // Use key or firebaseKey
-          opt.textContent = 'Pedido #' + p.id + ' - ' + p.produto + ' (Saldo: ' + ((p.qtdTotal||0)-(p.produzido||0)) + ' un)';
-          if ((p.sku || '').toUpperCase() === skuUpper) opt.selected = true;
-          sel.appendChild(opt);
-        });
-
-        document.getElementById('linkOpModal').classList.add('open');
-        document.getElementById('opImportDropText').textContent = '✓ OP ' + cleanLote + ' carregada!';
-      } catch(err) {
-        alert('Erro ao analisar arquivo de OP: ' + err.message);
-        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  // Setup drag and drop event listeners
-  function setupOPImportListeners() {
-    var dropZone = document.getElementById('opImportDropZone');
-    var fileInput = document.getElementById('opImportFileInput');
-    
-    if (!dropZone || !fileInput) return;
-    
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-    dropZone.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--primary)';
-      dropZone.style.background = '#eff6ff';
-    });
-    dropZone.addEventListener('dragleave', function() {
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-    });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-      var f = e.dataTransfer.files[0];
-      if (f) parseIndividualOPFile(f);
-    });
-    fileInput.addEventListener('change', function() {
-      if (this.files[0]) parseIndividualOPFile(this.files[0]);
-    });
-
-    document.getElementById('linkOpCancelBtn').addEventListener('click', function() {
-      document.getElementById('linkOpModal').classList.remove('open');
-      document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-      fileInput.value = '';
-      currentParsedOp = null;
-    });
-
-    document.getElementById('linkOpConfirmBtn').addEventListener('click', function() {
-      if (!currentParsedOp) return;
-      var btn = this;
-      btn.disabled = true;
-      btn.textContent = 'Importando...';
-
-      var lote = currentParsedOp.lote;
-      var produto = currentParsedOp.produto;
-      var sku = currentParsedOp.sku;
-      var cliente = currentParsedOp.cliente;
-      var qtdTotal = parseInt(document.getElementById('linkOpQtd').value) || 0;
-      var parentKey = document.getElementById('linkOpPedidoSelect').value;
-
-      var parentPedidoId = '';
-      if (parentKey && pedidosGlobal[parentKey]) {
-        parentPedidoId = pedidosGlobal[parentKey].id || '';
-      }
-
-      var prod = produtosGlobal[sku] || {};
-      var mediaPorHora = prod.prodHoraRef || 0;
-      var lp = prod.lp || 0;
-
-      var firebaseKey = 'OP_' + sanitizeKey(lote) + '__' + sanitizeKey(produto);
-
-      var opData = {
-        id: lote,
-        produto: produto,
-        sku: sku,
-        qtdTotal: qtdTotal,
-        linha: '',
-        dataProd: '',
-        lp: lp,
-        mediaPorHora: mediaPorHora,
-        produzido: 0,
-        priority: 999,
-        status: 'Não Iniciado',
-        ordenacao: 999999999,
-        ultimoApontamento: '',
-        insumosChecklist: {},
-        cliente: cliente,
-        parentPedidoId: parentPedidoId,
-        parentPedidoKey: parentKey
-      };
-
-      database.ref('pedidos/' + firebaseKey).set(opData).then(function() {
-        btn.disabled = false;
-        btn.textContent = 'Confirmar e Importar';
-        document.getElementById('linkOpModal').classList.remove('open');
-        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-        fileInput.value = '';
-        currentParsedOp = null;
-        alert('OP ' + lote + ' importada e vinculada com sucesso!');
-        
-        if (parentKey && typeof window.updateOpStatusAutomatically === 'function') {
-          window.updateOpStatusAutomatically(parentKey);
-        }
-      }).catch(function(err) {
-        btn.disabled = false;
-        btn.textContent = 'Confirmar e Importar';
-        alert('Erro ao importar OP: ' + err.message);
-      });
-    });
-  }
-
-  setupOPImportListeners();
-
-  function showToast(text) {
-    const toast = document.getElementById('toast');
-    toast.textContent = text;
-    toast.style.display = 'block';
-    setTimeout(() => {
-      toast.style.display = 'none';
-    }, 2500);
-  }
-</script>
-</body>
-</html>
+
+    const confirmAction = confirm('ATENÇÃO: Deseja realmente excluir permanentemente esta OP/Lote do sistema? Isso removerá o pedido e os agendamentos associados.');
+    if (!confirmAction) return;
+    
+    // 1. Remove de pedidos
+    database.ref('pedidos/' + pedidoId).remove()
+      .then(() => {
+        // 2. Remove agendamentos de slots
+        cleanFutureSlots(pedidoId);
+        showToast('OP/Lote excluída com sucesso!');
+      })
+      .catch(err => {
+        console.error(err);
+        showToast('Erro ao excluir OP.');
+      });
+  }
+  
+  function forceSyncAllStatus() {
+    if (typeof window.syncAllActiveOpsStatus === 'function') {
+      window.syncAllActiveOpsStatus();
+      showToast('Status de todas as OPs recalculado com sucesso!');
+    }
+  }
+  
+  
+  // --- OP Import System ---
+  let currentParsedOp = null;
+
+  function toggleImportSection() {
+    var body = document.getElementById('importSectionBody');
+    var icon = document.getElementById('importToggleIcon');
+    if (body.style.display === 'none') {
+      body.style.display = 'block';
+      icon.textContent = '▲';
+    } else {
+      body.style.display = 'none';
+      icon.textContent = '▼';
+    }
+  }
+
+  function sanitizeKey(str) {
+    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
+  }
+
+  function pedidoFirebaseKey(id, produto) {
+    return sanitizeKey(id) + '__' + sanitizeKey(produto);
+  }
+
+  function normalizeForMatch(s) {
+    if (!s) return '';
+    return String(s).toLowerCase().replace(/\s+/g, ' ').trim().split(' ').slice(0, 5).join(' ');
+  }
+
+  function findPedidoKey(pedidoId, produto) {
+    if (!pedidosGlobal || !pedidoId) return null;
+    var keys = Object.keys(pedidosGlobal);
+    var exactKey = pedidoFirebaseKey(pedidoId, produto);
+    if (pedidosGlobal[exactKey]) return exactKey;
+    for (var i = 0; i < keys.length; i++) {
+      var p = pedidosGlobal[keys[i]];
+      if (String(p.id||'') === String(pedidoId)) return keys[i];
+    }
+    return null;
+  }
+
+  function parseIndividualOPFile(file) {
+    document.getElementById('opImportDropText').textContent = '⏳ Lendo ' + file.name + '...';
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var wb = XLSX.read(data, { type: 'array', cellDates: true });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+
+        var rawProduct = '';
+        var rawLote = '';
+
+        // Search rows for Product and Lote
+        for (var i = 0; i < Math.min(rows.length, 12); i++) {
+          var r = rows[i] || [];
+          for (var c = 0; c < r.length; c++) {
+            var valStr = String(r[c] || '').trim().toUpperCase();
+            if (valStr === 'PRODUTO:' && !rawProduct) rawProduct = String(r[c+2] || '').trim();
+            if (valStr === 'LOTE' && !rawLote) rawLote = String(r[c+1] || '').trim();
+            if (valStr === 'LOTE' && !rawLote && r[c+2]) rawLote = String(r[c+2] || '').trim();
+          }
+        }
+
+        var row6 = rows[5] || [];
+        var rawCliente = String(row6[2] || '').trim();
+        var rawQty = parseFloat(row6[6]) || 0;
+
+        var row7 = rows[6] || [];
+        var rawSku = String(row7[2] || '').trim();
+
+        var cleanLote = rawLote.replace(/[.\/[\]#$]/g, '-').trim();
+        if (!cleanLote) {
+          alert('Código de OP / Lote não localizado na planilha.');
+          document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
+          return;
+        }
+
+        currentParsedOp = {
+          lote: cleanLote,
+          produto: rawProduct,
+          sku: rawSku,
+          cliente: rawCliente,
+          qtdKg: rawQty
+        };
+
+        // Suggested conversion
+        var suggestedQty = rawQty;
+        // Search in local catalog if possible, otherwise use fallback
+        if (rawQty > 0 && rawQty < 1500) {
+          suggestedQty = Math.round(rawQty / 0.2); // assume 200ml
+        }
+
+        // Show link modal
+        document.getElementById('linkOpLote').value = cleanLote;
+        document.getElementById('linkOpProduto').value = rawProduct;
+        document.getElementById('linkOpSku').value = rawSku;
+        document.getElementById('linkOpQtd').value = suggestedQty;
+
+        // Populate Pedidos select dropdown
+        var sel = document.getElementById('linkOpPedidoSelect');
+        sel.innerHTML = '<option value="">Nenhum (OP Avulsa)</option>';
+
+        var skuUpper = rawSku.toUpperCase();
+        var matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
+          var k = entry[0], p = entry[1];
+          return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0 && (p.sku || '').toUpperCase() === skuUpper;
+        }).map(function(entry) {
+          var p = entry[1];
+          p.key = entry[0];
+          return p;
+        });
+
+        if (matchingPeds.length === 0) {
+          matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
+            var k = entry[0], p = entry[1];
+            return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0;
+          }).map(function(entry) {
+            var p = entry[1];
+            p.key = entry[0];
+            return p;
+          });
+        }
+
+        matchingPeds.forEach(function(p) {
+          var opt = document.createElement('option');
+          opt.value = p.firebaseKey || p.key; // Use key or firebaseKey
+          opt.textContent = 'Pedido #' + p.id + ' - ' + p.produto + ' (Saldo: ' + ((p.qtdTotal||0)-(p.produzido||0)) + ' un)';
+          if ((p.sku || '').toUpperCase() === skuUpper) opt.selected = true;
+          sel.appendChild(opt);
+        });
+
+        document.getElementById('linkOpModal').classList.add('open');
+        document.getElementById('opImportDropText').textContent = '✓ OP ' + cleanLote + ' carregada!';
+      } catch(err) {
+        alert('Erro ao analisar arquivo de OP: ' + err.message);
+        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Setup drag and drop event listeners
+  function setupOPImportListeners() {
+    var dropZone = document.getElementById('opImportDropZone');
+    var fileInput = document.getElementById('opImportFileInput');
+    
+    if (!dropZone || !fileInput) return;
+    
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+    dropZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--primary)';
+      dropZone.style.background = '#eff6ff';
+    });
+    dropZone.addEventListener('dragleave', function() {
+      dropZone.style.borderColor = 'var(--border)';
+      dropZone.style.background = 'transparent';
+    });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border)';
+      dropZone.style.background = 'transparent';
+      var f = e.dataTransfer.files[0];
+      if (f) parseIndividualOPFile(f);
+    });
+    fileInput.addEventListener('change', function() {
+      if (this.files[0]) parseIndividualOPFile(this.files[0]);
+    });
+
+    document.getElementById('linkOpCancelBtn').addEventListener('click', function() {
+      document.getElementById('linkOpModal').classList.remove('open');
+      document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
+      fileInput.value = '';
+      currentParsedOp = null;
+    });
+
+    document.getElementById('linkOpConfirmBtn').addEventListener('click', function() {
+      if (!currentParsedOp) return;
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Importando...';
+
+      var lote = currentParsedOp.lote;
+      var produto = currentParsedOp.produto;
+      var sku = currentParsedOp.sku;
+      var cliente = currentParsedOp.cliente;
+      var qtdTotal = parseInt(document.getElementById('linkOpQtd').value) || 0;
+      var parentKey = document.getElementById('linkOpPedidoSelect').value;
+
+      var parentPedidoId = '';
+      if (parentKey && pedidosGlobal[parentKey]) {
+        parentPedidoId = pedidosGlobal[parentKey].id || '';
+      }
+
+      var prod = produtosGlobal[sku] || {};
+      var mediaPorHora = prod.prodHoraRef || 0;
+      var lp = prod.lp || 0;
+
+      var firebaseKey = 'OP_' + sanitizeKey(lote) + '__' + sanitizeKey(produto);
+
+      var opData = {
+        id: lote,
+        produto: produto,
+        sku: sku,
+        qtdTotal: qtdTotal,
+        linha: '',
+        dataProd: '',
+        lp: lp,
+        mediaPorHora: mediaPorHora,
+        produzido: 0,
+        priority: 999,
+        status: 'Não Iniciado',
+        ordenacao: 999999999,
+        ultimoApontamento: '',
+        insumosChecklist: {},
+        cliente: cliente,
+        parentPedidoId: parentPedidoId,
+        parentPedidoKey: parentKey
+      };
+
+      database.ref('pedidos/' + firebaseKey).set(opData).then(function() {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar e Importar';
+        document.getElementById('linkOpModal').classList.remove('open');
+        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
+        fileInput.value = '';
+        currentParsedOp = null;
+        alert('OP ' + lote + ' importada e vinculada com sucesso!');
+        
+        if (parentKey && typeof window.updateOpStatusAutomatically === 'function') {
+          window.updateOpStatusAutomatically(parentKey);
+        }
+      }).catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar e Importar';
+        alert('Erro ao importar OP: ' + err.message);
+      });
+    });
+  }
+
+  setupOPImportListeners();
+
+  function showToast(text) {
+    const toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 2500);
+  }
+</script>
+</body>
+</html>
