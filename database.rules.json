@@ -1,6 +1,44 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "config": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "usuarios": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+      }
+    },
+    "produtos": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "insumos": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "pedidos": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "programacao": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "registros": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "estado_linhas": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "perdas": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    ".read": "auth != null",
+    ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
   }
 }
