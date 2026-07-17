@@ -1,0 +1,2283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Producao</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="auth_check.js"></script>
+  <style>
+    :root { --primary:#0a1c69; --primary-dark:#1141a3; --success:#0e9f6e; --danger:#e02424; --bg:#f3f4f6; --card:#ffffff; --border:#e5e7eb; --text:#111827; --muted:#6b7280; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:var(--primary);color:white;padding:16px 20px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .header-top{display:flex;justify-content:space-between;align-items:center}
+    .header h1{font-size:18px;font-weight:700}
+    .header-sub{font-size:12px;opacity:.8;margin-top:2px}
+    .status-bar{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.15);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600}
+    .status-dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
+    .status-dot.online{background:#34d399;animation:pulse 2s infinite}
+    .status-dot.offline{background:#f87171}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:16px;max-width:500px;margin:0 auto}
+    .stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .stat-card{background:white;border-radius:12px;padding:14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .stat-value{font-size:26px;font-weight:800;color:var(--primary)}
+    .stat-label{font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+    .card{background:white;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+    .form-group{margin-bottom:14px}
+    label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+    input,select,textarea{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:16px;color:var(--text);background:white;transition:border-color .2s;-webkit-appearance:none}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.1)}
+    textarea{resize:vertical;min-height:70px}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    /* Linha extra fields (lote + colaboradores) */
+    .linha-extra{display:none}
+    /* Paradas */
+    .parada-section{border:1.5px solid var(--border);border-radius:10px;padding:14px;background:#fafafa}
+    .parada-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .parada-section-title{font-size:13px;font-weight:700;color:var(--muted)}
+    .btn-add-parada{padding:6px 12px;border:1.5px solid var(--danger);border-radius:7px;background:white;color:var(--danger);font-size:12px;font-weight:700;cursor:pointer}
+    .btn-add-parada:hover{background:#fee2e2}
+    .paradas-list{display:flex;flex-direction:column;gap:10px}
+    .parada-entry{background:white;border:1.5px solid #fca5a5;border-radius:8px;padding:12px}
+    .parada-entry-num{font-size:11px;font-weight:700;color:var(--danger);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+    .btn-rem-parada{background:none;border:none;cursor:pointer;color:#9ca3af;font-size:18px;line-height:1;padding:0}
+    .btn-rem-parada:hover{color:var(--danger)}
+    .parada-entry input{border-color:#fca5a5;font-size:15px;padding:10px 12px}
+    .parada-entry input:focus{border-color:var(--danger);box-shadow:0 0 0 3px rgba(224,36,36,.1)}
+    .no-paradas{text-align:center;padding:14px;font-size:13px;color:var(--muted);border:1.5px dashed var(--border);border-radius:8px}
+    /* Retroativo */
+    .retro-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;padding:12px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);background:#f9fafb;user-select:none}
+    .retro-toggle:hover{background:#eff6ff;border-color:var(--primary);color:var(--primary)}
+    .retro-arrow{font-size:12px;transition:transform .2s}
+    .retro-arrow.open{transform:rotate(90deg)}
+    .retro-body{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+    .retro-note{font-size:12px;color:var(--muted);background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px 10px;margin-bottom:14px}
+    .retro-calc{font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 10px;margin-bottom:14px;display:none}
+    .btn-retro{width:100%;padding:13px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;margin-top:4px}
+    .btn-retro:hover{background:#6d28d9}
+    .btn-retro:disabled{background:#c4b5fd;cursor:not-allowed}
+    /* Botao principal */
+    .btn-submit{width:100%;padding:16px;background:var(--primary);color:white;border:none;border-radius:10px;font-size:17px;font-weight:700;cursor:pointer;transition:all .15s;margin-top:4px}
+    .btn-submit:hover{background:var(--primary-dark)}
+    .btn-submit:active{transform:scale(.98)}
+    .btn-submit:disabled{background:#93c5fd;cursor:not-allowed}
+    /* Overlay */
+    .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center}
+    .success-overlay.show{display:flex}
+    .success-box{background:white;border-radius:20px;padding:32px 24px;text-align:center;max-width:300px;width:90%;animation:popIn .3s ease}
+    @keyframes popIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+    .success-icon{font-size:64px;margin-bottom:12px}
+    .success-title{font-size:22px;font-weight:800;color:var(--success)}
+    .success-desc{font-size:15px;color:var(--muted);margin-top:8px}
+    /* Feed */
+    .registro-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+    .registro-item:last-child{border-bottom:none}
+    .registro-hora{font-weight:700;color:var(--primary);min-width:48px}
+    .registro-info{flex:1;margin:0 8px}
+    .registro-prod{font-weight:600;font-size:13px}
+    .registro-sub{font-size:12px;color:var(--muted)}
+    .registro-qtd{font-weight:800;font-size:16px;white-space:nowrap}
+    .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
+    .badge-red{background:#fee2e2;color:#991b1b}
+    .badge-blue{background:#eff6ff;color:#1a56db}
+    .badge-purple{background:#f5f3ff;color:#6d28d9}
+    .badge-green{background:#d1fae5;color:#065f46}
+    .empty{text-align:center;padding:24px;color:var(--muted);font-size:14px}
+    optgroup{font-weight:700;font-size:13px}
+    .form-hint{font-size:12px;color:var(--muted);margin-top:5px;display:none}
+    .form-hint.prog{display:block;color:#059669;font-weight:600}
+    .form-hint.manual{display:block;color:var(--muted)}
+
+    /* ANDON Styles */
+    .andon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px; }
+    .andon-card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; transition: all .2s; background: white; }
+    .andon-card.active { border-left: 5px solid #10b981; }
+    .andon-card.stopped { border-left: 5px solid #ef4444; background: #fff5f5; animation: flashing 2s infinite; }
+    @keyframes flashing {
+      0% { border-left-color: #ef4444; }
+      50% { border-left-color: #feb2b2; }
+      100% { border-left-color: #ef4444; }
+    }
+    .andon-line-title { font-weight: 800; font-size: 15px; color: var(--primary); margin-bottom: 6px; }
+    .andon-status-banner { font-weight: 700; font-size: 13px; padding: 4px; border-radius: 4px; margin-bottom: 8px; }
+    .andon-card.active .andon-status-banner { background: #d1fae5; color: #065f46; }
+    .andon-card.stopped .andon-status-banner { background: #fee2e2; color: #991b1b; }
+    .andon-op-info { font-size: 12px; color: var(--muted); margin-bottom: 12px; height: 36px; display: flex; align-items: center; justify-content: center; line-height: 1.3; font-weight: 500; }
+    .andon-btn { width: 100%; border: none; padding: 8px; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; transition: all .15s; }
+    .andon-btn.btn-stop { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .andon-btn.btn-stop:hover { background: #fca5a5; }
+    .andon-btn.btn-resume { background: #d1fae5; color: #047857; border: 1px solid #6ee7b7; }
+    .andon-btn.btn-resume:hover { background: #6ee7b7; }
+
+    /* Toolbar / Navigation */
+    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
+    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
+    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
+    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+    /* Form Tabs Styles */
+    .form-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      background: #f3f4f6;
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .form-tab {
+      flex: 1;
+      padding: 10px 4px;
+      border: none;
+      background: none;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all .2s;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .form-tab.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top">
+    <div>
+      <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
+      <h1>Registro de Producao</h1>
+      <div class="header-sub" id="headerDate">--</div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Conectando...</span>
+      <span id="syncBadge" style="margin-left: 6px; padding: 2px 7px; background: #e02424; color: white; border-radius: 20px; font-size: 11px; font-weight: 700; display: none;">0 pendente</span>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+    <a href="form.html" class="active">Formulário</a>
+    <a href="planejamento.html">Planejamento</a>
+    <a href="pedidos.html">Pedidos</a>
+    <a href="historico.html">Histórico</a>
+    <a href="produtos.html">Produtos</a>
+    <a href="insumos.html">Insumos</a>
+    <a href="ops.html">OPs</a>
+    <a href="admin.html">Admin</a>
+  </div>
+</div>
+
+<div class="main">
+  <!-- PAINEL ANDON (ESTADO DAS LINHAS) -->
+  <div class="card" style="margin-bottom: 20px;">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>🚨 Status das Linhas de Produção (ANDON)</span>
+      <span style="font-size:11px; background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:12px; font-weight:700;">Tempo Real</span>
+    </div>
+    <div class="andon-grid">
+      <!-- Gerado dinamicamente -->
+    </div>
+  </div>
+
+  <!-- MODAL ANDON PARADA -->
+  <div class="modal-bg" id="andonStopModal" style="display:flex; align-items:center; justify-content:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:none;">
+    <div class="card" style="width:100%; max-width:400px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.15); text-align:left;">
+      <div style="font-weight:800; font-size:16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span id="andonModalTitle">🛑 Registrar Parada de Linha</span>
+        <button type="button" style="border:none; background:none; font-size:20px; cursor:pointer;" onclick="closeAndonModal()">×</button>
+      </div>
+      <div style="font-size:13px; color:var(--muted); margin-bottom:14px;" id="andonModalSubtitle"></div>
+      <form id="andonStopForm">
+        <input type="hidden" id="andonLineName">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; font-size:13px; color:var(--primary); margin-bottom:4px; display:block;">Motivo da Parada *</label>
+          <select id="andonMotivo" required style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <option value="">Selecione...</option>
+            <option value="Quebra de Máquina">Quebra de Máquina</option>
+            <option value="Setup / Troca de Lote">Setup / Troca de Lote</option>
+            <option value="Falta de Material">Falta de Material</option>
+            <option value="Ajuste Técnico">Ajuste Técnico</option>
+            <option value="Limpeza">Limpeza</option>
+            <option value="Falta de Operador">Falta de Operador</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; font-size:13px; color:var(--primary); margin-bottom:4px; display:block;">Ordem de Produção (OP) Ativa *</label>
+          <select id="andonPedido" required style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px;">
+            <option value="">Selecione a OP...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" style="font-weight:600; font-size:13px; color:var(--primary); margin-bottom:4px; display:block;">Lote (se aplicável)</label>
+          <input type="text" id="andonLote" placeholder="Ex: LOTE01" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; box-sizing:border-box;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
+          <button type="button" class="btn-cancel" style="background:#e5e7eb; color:#374151; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-weight:600;" onclick="closeAndonModal()">Cancelar</button>
+          <button type="submit" class="btn-confirm" style="background:#ef4444; color:white; padding:8px 16px; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Confirmar Parada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-value" id="statTotal">--</div>
+      <div class="stat-label">Total Produzido Hoje</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="statReg">--</div>
+      <div class="stat-label">Registros no Dia</div>
+    </div>
+  </div>
+
+  <!-- ABAS DE NAVEGAÇÃO INTERNA DO FORMULÁRIO -->
+  <div class="form-tabs">
+    <button type="button" class="form-tab active" id="tabNormalBtn" onclick="switchFormTab('normal')">⏱️ Apontamento Horário</button>
+    <button type="button" class="form-tab" id="tabFinalizarBtn" onclick="switchFormTab('finalizar')">🏁 Fechar Lote (OP)</button>
+    <button type="button" class="form-tab" id="tabRetroBtn" onclick="switchFormTab('retro')">📅 Turno Retroativo</button>
+  </div>
+
+  <!-- PAINEL 1: APONTAMENTO NORMAL -->
+  <div class="tab-panel active" id="tabPanelNormal">
+    <div class="card">
+      <div class="card-title">Novo Registro &mdash; <span id="clockLabel">--:--</span></div>
+      <form id="prodForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data</label>
+            <input type="date" id="fData" required>
+          </div>
+          <div class="form-group">
+            <label>Periodo</label>
+            <select id="fHora" required></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Linha / Posto de Trabalho</label>
+          <select id="fLinha" required><option value="">Selecione...</option></select>
+        </div>
+
+        <!-- Schedule Banner -->
+        <div id="scheduleBanner" style="display:none; background:#ecfdf5; border:1px solid #10b981; border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px; color:#047857; font-weight:500; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:16px;">📅</span>
+          <span id="scheduleBannerText"></span>
+        </div>
+
+        <!-- OP / Lote: apenas para Linhas de Producao -->
+        <div class="linha-extra" id="fLinhaExtra">
+          <div class="form-group">
+            <label>OP / Lote</label>
+            <input type="text" id="fLote" placeholder="Cod. da OP / Lote...">
+          </div>
+        </div>
+        <!-- Colaboradores: para Linhas e Postos -->
+        <div class="form-group" id="fColabGroup" style="display:none">
+          <label>Colaboradores</label>
+          <input type="number" id="fColaboradores" min="1" placeholder="Ex: 4">
+        </div>
+
+        
+
+        <div class="form-group" id="fProdutoGroup">
+          <label>Produto / Item (Opcional)</label>
+          <input type="text" id="fProdutoSearch" placeholder="🔍 Filtrar por nome ou SKU..." style="margin-bottom: 6px; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; width: 100%; box-sizing: border-box;">
+          <select id="fProduto"><option value="">Selecione...</option></select>
+        </div>
+
+        <div class="form-group" id="fPedidoIdGroup" style="display:none">
+          <label>Ordem de Produção (OP)</label>
+          <input type="text" id="fPedidoId" list="pedidosList" placeholder="Ex: Pedido-Item" autocomplete="off">
+          <div class="form-hint" id="fPedidoIdHint"></div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantidade</label>
+            <input type="number" id="fQtd" min="0" placeholder="0" required>
+          </div>
+          <div class="form-group">
+            <label>Turno</label>
+            <select id="fTurno" required><option value="">Selecione...</option></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Operador</label>
+          <input type="text" id="fOperador" list="operadoresList" placeholder="Nome do operador..." required autocomplete="off">
+          <datalist id="operadoresList"></datalist>
+          <datalist id="pedidosList"></datalist>
+        </div>
+
+        <!-- PARADAS MULTIPLAS -->
+        <div class="form-group">
+          <div class="parada-section">
+            <div class="parada-section-header">
+              <span class="parada-section-title">Paradas de producao</span>
+              <button type="button" class="btn-add-parada" id="btnAddParada">+ Adicionar parada</button>
+            </div>
+            <div class="paradas-list" id="paradasList">
+              <div class="no-paradas" id="noParadasMsg">Nenhuma parada neste periodo.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Observacoes (opcional)</label>
+          <textarea id="fObs" placeholder="Anotacoes adicionais..."></textarea>
+        </div>
+        <button type="submit" class="btn-submit" id="btnSalvar">Salvar Registro</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- PAINEL 2: FECHAMENTO DE OP -->
+  <div class="tab-panel" id="tabPanelFinalizar">
+    <div class="card">
+      <div class="card-title">🏁 Fechar Lote (Ordem de Produção)</div>
+      <div class="retro-note" style="margin-bottom: 12px;">
+        Selecione uma OP ativa para encerrar. O sistema calcula a producao do periodo final e registra as perdas da ordem.
+      </div>
+      <div id="opSuggestPanel">
+        <div class="retro-note">Carregando registros do dia...</div>
+      </div>
+      <!-- opForm -->
+      <form id="opForm" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Linha</label>
+            <input type="text" id="opLinha" readonly style="background:#f9fafb;color:var(--muted)">
+          </div>
+          <div class="form-group">
+            <label>OP / Lote</label>
+            <input type="text" id="opLote" placeholder="Confirme o lote...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Produto</label>
+          <input type="text" id="opProdutoSearch" placeholder="🔍 Filtrar por nome ou SKU..." style="margin-bottom: 6px; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; width: 100%; box-sizing: border-box;">
+          <select id="opProduto" required><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group">
+          <label>Qtd. Total da OP / Lote (soma de todas as horas)</label>
+          <input type="number" id="opQtdTotal" min="0" placeholder="Ex: 2400">
+          <div class="form-hint prog" id="opCalcHint"></div>
+        </div>
+        <div class="parada-section" style="margin-bottom:14px">
+          <div class="parada-section-header">
+            <span class="parada-section-title">Perdas da OP</span>
+            <button type="button" class="btn-add-parada" id="btnAddPerda">+ Adicionar perda</button>
+          </div>
+          <div id="perdasList">
+            <div id="noPerdasMsg" class="no-paradas">Nenhuma perda informada.</div>
+          </div>
+        </div>
+        <div class="form-group" id="opJustificaWrap" style="display:none; margin-top:12px;">
+          <label style="color:#dc2626;font-weight:700">Justificativa do Desvio (Obrigatório)</label>
+          <textarea id="opJustificativa" rows="3" placeholder="Explique o motivo do desvio (ex: quebras de embalagens, rendimento do lote de bulk, refugo, etc.)" style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white;font-family:inherit;resize:vertical;"></textarea>
+        </div>
+        <button type="submit" class="btn-retro" id="btnFinalizarOP" style="background:#059669">&#127937; Finalizar OP / Lote</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- PAINEL 3: ENTRADA RETROATIVA -->
+  <div class="tab-panel" id="tabPanelRetro">
+    <div class="card">
+      <div class="card-title">📅 Registrar Turno Retroativo</div>
+      <div class="retro-note" style="margin-bottom: 12px;">
+        Informe os horarios do turno (inicio, pausa e termino) e o total produzido. O sistema distribui a quantidade pelas horas trabalhadas, descontando o intervalo.
+      </div>
+      <form id="retroForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data</label>
+            <input type="date" id="rData" required>
+          </div>
+          <div class="form-group">
+            <label>Turno</label>
+            <select id="rTurno" required><option value="">Selecione...</option></select>
+          </div>
+        </div>
+
+        <!-- Horarios do turno -->
+        <div class="form-row-3">
+          <div class="form-group">
+            <label>Inicio</label>
+            <input type="time" id="rHoraInicio" required>
+          </div>
+          <div class="form-group">
+            <label>Pausa</label>
+            <input type="time" id="rHoraPausa">
+          </div>
+          <div class="form-group">
+            <label>Termino</label>
+            <input type="time" id="rHoraFim" required>
+          </div>
+        </div>
+
+        <!-- Preview do calculo -->
+        <div class="retro-calc" id="retroCalc"></div>
+
+        <div class="form-group">
+          <label>Linha / Posto de Trabalho</label>
+          <select id="rLinha" required><option value="">Selecione...</option></select>
+        </div>
+
+        <!-- OP / Lote: apenas para Linhas de Producao -->
+        <div class="linha-extra" id="rLinhaExtra">
+          <div class="form-group">
+            <label>OP / Lote</label>
+            <input type="text" id="rLote" placeholder="Cod. da OP / Lote...">
+          </div>
+        </div>
+        <!-- Colaboradores: para Linhas e Postos -->
+        <div class="form-group" id="rColabGroup" style="display:none">
+          <label>Colaboradores</label>
+          <input type="number" id="rColaboradores" min="1" placeholder="Ex: 4">
+        </div>
+
+        
+
+        <div class="form-group" id="rProdutoGroup">
+          <label>Produto / Item (Opcional)</label>
+          <input type="text" id="rProdutoSearch" placeholder="🔍 Filtrar por nome ou SKU..." style="margin-bottom: 6px; padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; width: 100%; box-sizing: border-box;">
+          <select id="rProduto"><option value="">Selecione...</option></select>
+        </div>
+
+        <div class="form-group" id="rPedidoIdGroup" style="display:none">
+          <label>Ordem de Produção (OP) (Opcional)</label>
+          <input type="text" id="rPedidoId" list="pedidosList" placeholder="Ex: Pedido-Item" autocomplete="off">
+          <div class="form-hint" id="rPedidoIdHint"></div>
+        </div>
+
+        <div class="form-group" style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+          <input type="checkbox" id="rDarBaixa" checked style="width:20px; height:20px; cursor:pointer; -webkit-appearance:checkbox;">
+          <label for="rDarBaixa" style="margin-bottom:0; cursor:pointer; font-weight:600; font-size:13px; color:var(--muted)">Dar baixa no pedido (atualizar saldo de produção)</label>
+        </div>
+
+        <div class="form-group">
+          <label>Operador</label>
+          <input type="text" id="rOperador" list="operadoresList" placeholder="Nome do operador..." required autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Total produzido no turno</label>
+          <input type="number" id="rQtd" min="1" placeholder="Ex: 450" required>
+        </div>
+
+        <button type="submit" class="btn-retro" id="btnRetro">Registrar turno retroativo</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ultimos Registros de Hoje</div>
+    <div id="ultimosRegs"><div class="empty">Aguardando registros...</div></div>
+  </div>
+</div>
+
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <div class="success-icon">&#x2705;</div>
+    <div class="success-title" id="successTitle">Registrado!</div>
+    <div class="success-desc" id="successDesc">Dados enviados.</div>
+    <div style="margin-top:16px;font-size:13px;color:var(--muted)">Toque para fechar</div>
+  </div>
+</div>
+
+<!-- MODAL DE FEEDBACK DE META -->
+<div class="modal-bg" id="metaFeedbackModal" style="display:flex; align-items:center; justify-content:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; display:none;">
+  <div id="metaFeedbackContent" class="card" style="width:100%; max-width:420px; padding:24px; text-align:center; box-shadow:0 15px 30px rgba(0,0,0,0.25); border-radius:12px; border-top:8px solid #10b981;">
+    <div style="font-size:48px; margin-bottom:12px;" id="metaFeedbackIcon">🎉</div>
+    <div style="font-weight:900; font-size:22px; margin-bottom:8px;" id="metaFeedbackTitle">DENTRO DA META!</div>
+    <div style="font-size:14px; line-height:1.5; margin-bottom:18px; color:#4b5563; text-align:left;" id="metaFeedbackText"></div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:#f9fafb; padding:12px; border-radius:8px; margin-bottom:18px; border:1px solid var(--border);">
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700;">Apontado</div>
+        <div style="font-weight:800; font-size:18px; color:var(--primary);" id="metaFeedbackQtyVal">0</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700;">Meta do PCP</div>
+        <div style="font-weight:800; font-size:18px; color:var(--primary);" id="metaFeedbackTargetVal">0</div>
+      </div>
+    </div>
+    <button type="button" style="width:100%; background:var(--primary); color:white; padding:10px; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="closeMetaFeedbackModal()">Ok, continuar</button>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c",
+  measurementId: "G-PTVWKLRHTG"
+};
+
+var db;
+var todayListener = null;
+var configPostos = [];
+var configLinhas = [];
+var configTurnos = [];
+var paradaCount = 0;
+var progData = {};      // programacao do dia indexada por horaKey
+var pedidosCache = {};  // todos os pedidos do Firebase
+
+// ── Utilitários de tempo ──
+function today() {
+  var d = new Date();
+  var localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+  return localDate.toISOString().split('T')[0];
+}
+function currentHourValue() { return pad(new Date().getHours()) + ':00'; }
+function nowTime() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function fmtNum(n) { return Number(n||0).toLocaleString('pt-BR'); }
+function fmtHoraRange(hora) {
+  if (!hora) return '—';
+  var cleanHora = hora.replace('_', ':');
+  var parts = cleanHora.split(':');
+  var h = parseInt(parts[0]);
+  if (isNaN(h)) return hora;
+  var nextH = (h + 1) % 24;
+  var nextHStr = String(nextH).padStart(2, '0') + ':00';
+  return cleanHora + 'h - ' + nextHStr + 'h';
+}
+
+function isConcluido(status) {
+  if (!status) return false;
+  var s = String(status).toLowerCase().trim();
+  return s.indexOf('conclu') === 0;
+}
+
+// ── Pedido helpers ──
+function sanitizeKey(str) {
+  return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
+}
+function pedidoFirebaseKey(id, produto) {
+  return sanitizeKey(id) + '__' + sanitizeKey(produto);
+}
+function normalizeForMatch(s) {
+  if (!s) return '';
+  return String(s).toLowerCase().replace(/\s+/g, ' ').trim().split(' ').slice(0, 5).join(' ');
+}
+function findPedidoKey(pedidoId, produto) {
+  if (!pedidosCache || !pedidoId) return null;
+  var pid = String(pedidoId).trim();
+  var prodNorm = produto ? normalizeForMatch(produto) : '';
+  var keys = Object.keys(pedidosCache);
+
+  // 1. Try exact or prefix match + product match
+  for (var i = 0; i < keys.length; i++) {
+    var p = pedidosCache[keys[i]];
+    if (!p) continue;
+    var idStr = String(p.id || '').trim();
+    var idMatches = (idStr === pid || idStr.indexOf(pid + '-') === 0);
+    if (idMatches && prodNorm) {
+      if (normalizeForMatch(p.produto) === prodNorm) {
+        return keys[i];
+      }
+    }
+  }
+
+  // 2. Try exact or prefix match alone
+  for (var i = 0; i < keys.length; i++) {
+    var p = pedidosCache[keys[i]];
+    if (!p) continue;
+    var idStr = String(p.id || '').trim();
+    var idMatches = (idStr === pid || idStr.indexOf(pid + '-') === 0);
+    if (idMatches) {
+      return keys[i];
+    }
+  }
+  return null;
+}
+
+function pad(n) { return n < 10 ? '0'+n : ''+n; }
+
+// ── Abas de Navegação ──
+function switchFormTab(tabName) {
+  document.querySelectorAll('.form-tab').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  document.querySelectorAll('.tab-panel').forEach(function(panel) {
+    panel.style.display = 'none';
+    panel.classList.remove('active');
+  });
+
+  if (tabName === 'normal') {
+    document.getElementById('tabNormalBtn').classList.add('active');
+    document.getElementById('tabPanelNormal').style.display = 'block';
+    document.getElementById('tabPanelNormal').classList.add('active');
+  } else if (tabName === 'finalizar') {
+    document.getElementById('tabFinalizarBtn').classList.add('active');
+    document.getElementById('tabPanelFinalizar').style.display = 'block';
+    document.getElementById('tabPanelFinalizar').classList.add('active');
+    buildOpSuggestions();
+  } else if (tabName === 'retro') {
+    document.getElementById('tabRetroBtn').classList.add('active');
+    document.getElementById('tabPanelRetro').style.display = 'block';
+    document.getElementById('tabPanelRetro').classList.add('active');
+  }
+}
+
+// ── OP Dropdowns Populate ──
+function fillOPSelects() {
+  var fSel = document.getElementById('fPedidoSelect');
+  var rSel = document.getElementById('rPedidoSelect');
+  if (!fSel || !rSel) return;
+  var curF = fSel.value;
+  var curR = rSel.value;
+  
+  fSel.innerHTML = '<option value="">Selecione a OP...</option>';
+  rSel.innerHTML = '<option value="">Selecione a OP...</option>';
+  
+  var list = Object.entries(pedidosCache).map(function(e) {
+    return { key: e[0], val: e[1] };
+  }).filter(function(item) {
+    var st = item.val.status;
+    var isDone = (item.val.statusManual === 'encerrado') || (st && st.toLowerCase().indexOf('conclu') === 0) || (item.val.produzido >= item.val.qtdTotal * 0.95);
+    return !isDone;
+  }).sort(function(a, b) {
+    var pa = a.val.priority || 999, pb = b.val.priority || 999;
+    if (pa !== pb) return pa - pb;
+    return String(a.val.id).localeCompare(String(b.val.id), undefined, {numeric: true});
+  });
+  
+  list.forEach(function(item) {
+    var p = item.val;
+    var display = '#' + p.id + ' · ' + p.produto + (p.sku ? ' [' + p.sku + ']' : '') + (p.cliente ? ' (' + p.cliente + ')' : '');
+    
+    var optF = document.createElement('option');
+    optF.value = item.key;
+    optF.textContent = display;
+    fSel.appendChild(optF);
+    
+    var optR = document.createElement('option');
+    optR.value = item.key;
+    optR.textContent = display;
+    rSel.appendChild(optR);
+  });
+  
+  if (curF && fSel.querySelector('option[value="' + curF + '"]')) fSel.value = curF;
+  if (curR && rSel.querySelector('option[value="' + curR + '"]')) rSel.value = curR;
+}
+
+// ── OP Select Change Handlers ──
+function setupOPSelectListeners() {
+  // Unused after searchable combobox unification
+}
+
+// ── ANDON functions ──
+function openStopModal(linha) {
+  document.getElementById('andonLineName').value = linha;
+  document.getElementById('andonModalSubtitle').textContent = 'Selecione o motivo e confirme a parada da ' + linha + '.';
+  
+  var selectOP = document.getElementById('andonPedido');
+  selectOP.innerHTML = '<option value="">Selecione a OP...</option>';
+  
+  var list = Object.entries(pedidosCache).map(function(e) {
+    return { key: e[0], val: e[1] };
+  }).filter(function(item) {
+    var st = item.val.status;
+    var isDone = (item.val.statusManual === 'encerrado') || (st && st.toLowerCase().indexOf('conclu') === 0) || (item.val.produzido >= item.val.qtdTotal * 0.95);
+    return !isDone;
+  }).sort(function(a, b) {
+    return (a.val.priority || 999) - (b.val.priority || 999);
+  });
+  
+  list.forEach(function(item) {
+    var p = item.val;
+    var display = '#' + p.id + ' · ' + p.produto + (p.sku ? ' [' + p.sku + ']' : '') + (p.cliente ? ' (' + p.cliente + ')' : '');
+    var opt = document.createElement('option');
+    opt.value = item.key;
+    opt.textContent = display;
+    selectOP.appendChild(opt);
+  });
+  
+  // Auto-fill OP and Lote based on schedule for this line at current hour!
+  var nowHour = currentHourValue();
+  var nowHourUnder = nowHour.replace(':', '_');
+  var hourData = progData[nowHour] || progData[nowHourUnder];
+  var scheduledKey = null;
+  
+  if (hourData) {
+    var lineIdx = null;
+    for (var i = 1; i <= 3; i++) {
+      var lName = hourData['linha' + i];
+      if (!lName) {
+        if (linha === 'Linha 1' && i === 1) lineIdx = 1;
+        if (linha === 'Linha 2' && i === 2) lineIdx = 2;
+        if (linha === 'Linha 3' && i === 3) lineIdx = 3;
+      } else if (lName === linha) {
+        lineIdx = i;
+      }
+    }
+    if (lineIdx) {
+      var slotVal = hourData['env' + lineIdx];
+      if (slotVal) {
+        if (typeof slotVal === 'object') {
+          scheduledKey = slotVal.pedidoKey;
+        } else if (typeof slotVal === 'string') {
+          var pid = hourData['pedidoId' + lineIdx];
+          scheduledKey = findPedidoKey(pid, slotVal);
+        }
+      }
+    }
+  }
+  
+  if (scheduledKey && pedidosCache[scheduledKey]) {
+    selectOP.value = scheduledKey;
+  } else {
+    // Fallback: check if pointing form has this line selected
+    var currentFormLine = document.getElementById('fLinha').value;
+    if (currentFormLine === linha) {
+      var rawPedId = document.getElementById('fPedidoId').value.trim();
+      var parsedPedId = parseOpId(rawPedId);
+      var parsedProd = parseProductFromOpDatalist(rawPedId) || document.getElementById('fProduto').value;
+      var currentOP = findPedidoKey(parsedPedId, parsedProd);
+      if (currentOP) selectOP.value = currentOP;
+    }
+  }
+
+  // Pre-fill Lote
+  var currentFormLine = document.getElementById('fLinha').value;
+  if (currentFormLine === linha) {
+    var currentLote = document.getElementById('fLote').value.trim();
+    if (currentLote) document.getElementById('andonLote').value = currentLote;
+  } else {
+    document.getElementById('andonLote').value = '';
+  }
+  
+  document.getElementById('andonStopModal').style.display = 'flex';
+}
+
+function closeAndonModal() {
+  document.getElementById('andonStopModal').style.display = 'none';
+  document.getElementById('andonStopForm').reset();
+}
+
+function resumeLine(linha, state) {
+  var duration = 0;
+  if (state.inicioParada) {
+    var diffMs = new Date() - new Date(state.inicioParada);
+    duration = Math.round(diffMs / 60000);
+  }
+  
+  if (!confirm('Deseja retomar a produção da ' + linha + '?\nTempo parado: ' + duration + ' minutos.')) return;
+  
+  var lineKey = sanitizeKey(linha);
+  
+  var stopRecord = {
+    linha: linha,
+    pedidoId: state.pedidoId || '',
+    produto: state.produto || '',
+    lote: state.lote || '',
+    motivo: state.motivoParada || 'Outros',
+    inicio: state.inicioParada || new Date().toISOString(),
+    fim: new Date().toISOString(),
+    duracao: duration,
+    timestamp: new Date().toISOString()
+  };
+  
+  var p1 = db.ref('paradas_historico').push(stopRecord);
+  
+  var p2 = db.ref('estado_linhas/' + lineKey).set({
+    status: 'ativa',
+    inicioParada: null,
+    motivoParada: null
+  });
+  
+  Promise.all([p1, p2]).then(function() {
+    showSuccess('Produção Retomada!', linha + ' ativa novamente. ' + duration + ' min registrados.');
+  });
+}
+
+// ── Meta Feedback Modal functions ──
+var feedbackTimer = null;
+function showMetaFeedbackModal(pointedQty, targetQty) {
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  
+  var modal = document.getElementById('metaFeedbackModal');
+  var content = document.getElementById('metaFeedbackContent');
+  var icon = document.getElementById('metaFeedbackIcon');
+  var title = document.getElementById('metaFeedbackTitle');
+  var text = document.getElementById('metaFeedbackText');
+  var qtyVal = document.getElementById('metaFeedbackQtyVal');
+  var targetVal = document.getElementById('metaFeedbackTargetVal');
+  
+  qtyVal.textContent = fmtNum(pointedQty);
+  targetVal.textContent = fmtNum(targetQty);
+  
+  var isAtTarget = pointedQty >= targetQty * 0.95;
+  
+  if (isAtTarget) {
+    content.style.borderTopColor = '#10b981'; // Green
+    icon.textContent = '🎉';
+    title.textContent = 'DENTRO DA META!';
+    title.style.color = '#065f46';
+    text.innerHTML = 'Excelente desempenho! O apontamento de <strong>' + fmtNum(pointedQty) + ' un.</strong> bateu a meta planejada de <strong>' + fmtNum(targetQty) + ' un.</strong> para este período.';
+  } else {
+    content.style.borderTopColor = '#ef4444'; // Red
+    icon.textContent = '⚠️';
+    title.textContent = 'ABAIXO DA META!';
+    title.style.color = '#991b1b';
+    var diff = targetQty - pointedQty;
+    text.innerHTML = 'Atenção! O apontamento de <strong>' + fmtNum(pointedQty) + ' un.</strong> ficou abaixo da meta planejada de <strong>' + fmtNum(targetQty) + ' un.</strong> (Faltaram <strong>' + fmtNum(diff) + ' un.</strong> para atingir a meta).';
+  }
+  
+  modal.style.display = 'flex';
+  
+  feedbackTimer = setTimeout(function() {
+    closeMetaFeedbackModal();
+  }, 8000);
+}
+
+function closeMetaFeedbackModal() {
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  document.getElementById('metaFeedbackModal').style.display = 'none';
+}
+
+// ── Firebase init ──────────────────────────────────────────────────
+firebase.initializeApp(firebaseConfig);
+db = firebase.database();
+
+// Initialize OP Select Change listeners
+setupOPSelectListeners();
+
+var latestAndonStates = {};
+
+function rebuildAndonFormGrid() {
+  var grid = document.querySelector('.andon-grid');
+  if (!grid) return;
+  
+  grid.innerHTML = '';
+  configLinhas.forEach(function(linha) {
+    var lineKey = sanitizeKey(linha);
+    var card = document.createElement('div');
+    card.className = 'andon-card active';
+    card.id = 'andon_' + lineKey;
+    
+    card.innerHTML = 
+      '<div class="andon-line-title">' + linha + '</div>' +
+      '<div class="andon-status-banner">🟢 OPERANDO</div>' +
+      '<div class="andon-op-info">Linha operando normalmente.</div>' +
+      '<button type="button" class="andon-btn btn-stop">🛑 Parar Linha</button>';
+      
+    grid.appendChild(card);
+  });
+  updateAndonFormUI();
+}
+
+function updateAndonFormUI() {
+  configLinhas.forEach(function(linha) {
+    var lineKey = sanitizeKey(linha);
+    var andonCard = document.getElementById('andon_' + lineKey);
+    if (!andonCard) return;
+    
+    var state = latestAndonStates[lineKey] || { status: 'ativa' };
+    
+    if (state.status === 'parada') {
+      andonCard.className = 'andon-card stopped';
+      
+      var inicio = new Date(state.inicioParada);
+      var timeStr = isNaN(inicio) ? '—' : inicio.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+      
+      andonCard.querySelector('.andon-status-banner').textContent = '🔴 PARADA: ' + (state.motivoParada || 'Parada');
+      andonCard.querySelector('.andon-op-info').innerHTML = 
+        'OP: #' + (state.pedidoId || '—') + '<br>' +
+        '<span style="font-size:10px; color:#ef4444; font-weight:700;">Desde ' + timeStr + '</span>';
+      
+      var btn = andonCard.querySelector('.andon-btn');
+      btn.className = 'andon-btn btn-resume';
+      btn.textContent = '▶️ Retomar Produção';
+      btn.onclick = function() { resumeLine(linha, state); };
+    } else {
+      andonCard.className = 'andon-card active';
+      andonCard.querySelector('.andon-status-banner').textContent = '🟢 OPERANDO';
+      andonCard.querySelector('.andon-op-info').innerHTML = 'Linha operando normalmente.';
+      
+      var btn = andonCard.querySelector('.andon-btn');
+      btn.className = 'andon-btn btn-stop';
+      btn.textContent = '🛑 Parar Linha';
+      btn.onclick = function() { openStopModal(linha); };
+    }
+  });
+}
+
+// ── ANDON Estado das Linhas Listener ──────────────────────────────
+db.ref('estado_linhas').on('value', function(snap) {
+  latestAndonStates = snap.val() || {};
+  updateAndonFormUI();
+});
+
+// ── ANDON Stop Form Submit Listener ────────────────────────────────
+document.getElementById('andonStopForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var linha = document.getElementById('andonLineName').value;
+  var motivo = document.getElementById('andonMotivo').value;
+  var pedKey = document.getElementById('andonPedido').value;
+  var lote = document.getElementById('andonLote').value.trim();
+  
+  var p = pedidosCache[pedKey] || {};
+  var lineKey = sanitizeKey(linha);
+  
+  db.ref('estado_linhas/' + lineKey).set({
+    status: 'parada',
+    inicioParada: new Date().toISOString(),
+    motivoParada: motivo,
+    pedidoId: p.id || '',
+    produto: p.produto || '',
+    lote: lote || ''
+  }).then(function() {
+    closeAndonModal();
+    showSuccess('Linha Parada!', linha + ' foi colocada em estado de parada.');
+  });
+});
+
+// ── Connection status ─────────────────────────────────────────────
+var isOnline = false;
+db.ref('.info/connected').on('value', function(snap) {
+  var on = !!snap.val();
+  isOnline = on;
+  var dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (on ? ' online' : ' offline');
+  document.getElementById('statusText').textContent = on ? 'Conectado' : 'Offline';
+  if (on) {
+    triggerSync();
+  }
+});
+
+// ── Clock ─────────────────────────────────────────────────────────
+var lastTodayDate = today();
+function updateClock() {
+  var now = new Date();
+  document.getElementById('clockLabel').textContent = nowTime();
+  document.getElementById('headerDate').textContent = now.toLocaleDateString('pt-BR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  
+  var currentToday = today();
+  if (currentToday !== lastTodayDate) {
+    var fDataEl = document.getElementById('fData');
+    if (fDataEl && fDataEl.value === lastTodayDate) {
+      fDataEl.value = currentToday;
+    }
+    var rDataEl = document.getElementById('rData');
+    if (rDataEl && rDataEl.value === lastTodayDate) {
+      rDataEl.value = currentToday;
+    }
+    lastTodayDate = currentToday;
+    listenToday();
+  }
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// ── Hora select ───────────────────────────────────────────────────
+function fillHoraSelect() {
+  var sel = document.getElementById('fHora');
+  var cur = sel.value;
+  sel.innerHTML = '';
+  for (var h = 5; h <= 22; h++) {
+    var v = pad(h) + ':00';
+    var o = document.createElement('option');
+    o.value = v; o.textContent = fmtHoraRange(v);
+    if (!cur && v === currentHourValue()) o.selected = true;
+    sel.appendChild(o);
+  }
+  if (cur) sel.value = cur;
+}
+fillHoraSelect();
+document.getElementById('fData').value = today();
+
+// ── Linha / Turno select helpers ──────────────────────────────────
+function fillLinhaSelect(prefix) {
+  var sel = document.getElementById(prefix + 'Linha');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  configLinhas.forEach(function(l) {
+    var o = document.createElement('option');
+    o.value = l; o.textContent = l;
+    sel.appendChild(o);
+  });
+  configPostos.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+  onLinhaChange(prefix);
+}
+function fillTurnoSelect(prefix) {
+  var sel = document.getElementById(prefix + 'Turno');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  var list = configTurnos.length > 0 ? configTurnos : ['manhã','tarde','noite'];
+  list.forEach(function(t) {
+    var o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+}
+fillTurnoSelect('f');
+fillTurnoSelect('r');
+
+function guessShift() {
+  var hour = new Date().getHours();
+  if (configTurnos && configTurnos.length > 0) {
+    if (configTurnos.length === 2) {
+      return hour < 14 ? configTurnos[0] : configTurnos[1];
+    } else if (configTurnos.length === 3) {
+      return hour < 13 ? configTurnos[0] : hour < 21 ? configTurnos[1] : configTurnos[2];
+    } else {
+      var idx = Math.min(configTurnos.length - 1, Math.floor((hour / 24) * configTurnos.length));
+      return configTurnos[idx];
+    }
+  }
+  return hour < 13 ? 'manhã' : hour < 20 ? 'tarde' : 'noite';
+}
+
+// ── Produto select (shows SKU) ────────────────────────────────────
+var globalProdutosList = [];
+var globalProdutosFreq = {};
+
+function populateSelectWithOptions(selectId, filterText) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  
+  var cur = sel.value;
+  var query = String(filterText || '').trim().toLowerCase();
+  
+  // Filter products
+  var filteredList = globalProdutosList;
+  if (query) {
+    filteredList = globalProdutosList.filter(function(p) {
+      var desc = String(p.descricao || '').toLowerCase();
+      var sku = String(p.sku || '').toLowerCase();
+      var cli = String(p.cliente || '').toLowerCase();
+      return desc.indexOf(query) !== -1 || sku.indexOf(query) !== -1 || cli.indexOf(query) !== -1;
+    });
+  }
+  
+  // Re-calculate top products from filtered list
+  var topProducts = filteredList.filter(function(p) {
+    var f = globalProdutosFreq[String(p.descricao).trim().toLowerCase()] || 0;
+    return f > 0;
+  }).slice(0, 5);
+  
+  // Group by client
+  var groups = {};
+  filteredList.forEach(function(p) {
+    var g = p.cliente || 'Sem cliente';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(p);
+  });
+  
+  // Rebuild options HTML
+  sel.innerHTML = '<option value="">Selecione...</option>';
+  
+  // 1. Special group: ⭐ Mais Produzidos (Curva A)
+  if (topProducts.length > 0) {
+    var ogTop = document.createElement('optgroup');
+    ogTop.label = '⭐ Mais Produzidos (Curva A)';
+    topProducts.forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.descricao;
+      o.textContent = (p.sku ? '[' + p.sku + '] ' : '') + p.descricao + (p.volume ? ' ' + p.volume + (p.unidadeVolume||'') : '');
+      ogTop.appendChild(o);
+    });
+    sel.appendChild(ogTop);
+  }
+  
+  // 2. Normal groups: Cliente > Produtos
+  Object.keys(groups).sort().forEach(function(g) {
+    var og = document.createElement('optgroup');
+    og.label = g;
+    groups[g].forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.descricao;
+      o.textContent = (p.sku ? '[' + p.sku + '] ' : '') + p.descricao + (p.volume ? ' ' + p.volume + (p.unidadeVolume||'') : '');
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  
+  // If the previous value exists in the new filtered options, restore it
+  var valueExists = false;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === cur) {
+      valueExists = true;
+      break;
+    }
+  }
+  if (valueExists) {
+    sel.value = cur;
+  } else {
+    if (cur) {
+      var ogSelected = document.createElement('optgroup');
+      ogSelected.label = '📌 Seleção Atual';
+      var o = document.createElement('option');
+      o.value = cur;
+      o.textContent = cur;
+      ogSelected.appendChild(o);
+      sel.appendChild(ogSelected);
+      sel.value = cur;
+    }
+  }
+}
+
+function fillProdutoSelects() {
+  db.ref('pedidos').once('value', function(pedSnap) {
+    var pedidos = pedSnap.val() || {};
+    var freq = {};
+    Object.values(pedidos).forEach(function(ped) {
+      if (ped.produto && !isConcluido(ped.status) && ped.statusManual !== 'encerrado') {
+        var normProd = String(ped.produto).trim().toLowerCase();
+        freq[normProd] = (freq[normProd] || 0) + 1;
+      }
+    });
+
+    db.ref('produtos').once('value', function(snap) {
+      var produtos = snap.val() || {};
+      var list = Object.values(produtos).filter(function(p){ return p && p.descricao; });
+
+      // Sort: higher frequency first, then alphabetically
+      list.sort(function(a, b) {
+        var fa = freq[String(a.descricao).trim().toLowerCase()] || 0;
+        var fb = freq[String(b.descricao).trim().toLowerCase()] || 0;
+        if (fa !== fb) return fb - fa;
+        return (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
+      });
+
+      globalProdutosList = list;
+      globalProdutosFreq = freq;
+
+      // Populate selects initially
+      ['fProduto','rProduto','opProduto'].forEach(function(id) {
+        populateSelectWithOptions(id, '');
+      });
+    });
+  });
+}
+fillProdutoSelects();
+
+// ── Config listener ───────────────────────────────────────────────
+db.ref('config').on('value', function(snap) {
+  var cfg = snap.val() || {};
+  configLinhas  = cfg.linhas         || [];
+  configPostos  = cfg.postosTrabalho || cfg.postos || [];
+  configTurnos  = cfg.turnos         || [];
+  rebuildAndonFormGrid();
+  fillLinhaSelect('f');
+  fillLinhaSelect('r');
+  fillTurnoSelect('f');
+  fillTurnoSelect('r');
+  var dl = document.getElementById('operadoresList');
+  dl.innerHTML = '';
+  var operadores = cfg.operadores    || [];
+  operadores.forEach(function(op) {
+    var opt = document.createElement('option'); opt.value = op;
+    dl.appendChild(opt);
+  });
+});
+
+// ── Show/hide Lote e Colaboradores por tipo de linha ───────────────
+function onLinhaChange(prefix) {
+  var val = document.getElementById(prefix + 'Linha').value;
+  var isLinha = configLinhas.indexOf(val) >= 0;
+  var isPosto  = configPostos.indexOf(val) >= 0;
+  
+  var extraEl = document.getElementById(prefix + 'LinhaExtra');
+  var colabEl = document.getElementById(prefix + 'ColabGroup');
+  if (extraEl) extraEl.style.display = isLinha ? 'block' : 'none';
+  if (colabEl) colabEl.style.display = (isLinha || isPosto) ? 'block' : 'none';
+  
+  var prodGroup = document.getElementById(prefix + 'ProdutoGroup');
+  var pedIdGroup = document.getElementById(prefix + 'PedidoIdGroup');
+  
+  var prodSelect = document.getElementById(prefix + 'Produto');
+  var pedIdInput = document.getElementById(prefix + 'PedidoId');
+  
+  if (isLinha) {
+    if (prodGroup) prodGroup.style.display = 'none';
+    if (pedIdGroup) pedIdGroup.style.display = 'block';
+    
+    if (pedIdInput) {
+      pedIdInput.required = true;
+      pedIdInput.placeholder = "Selecione ou digite o Pedido...";
+    }
+    if (prodSelect) prodSelect.required = false;
+  } else if (isPosto) {
+    if (prodGroup) prodGroup.style.display = 'block';
+    if (pedIdGroup) pedIdGroup.style.display = 'block';
+    
+    if (pedIdInput) {
+      pedIdInput.required = false;
+      pedIdInput.placeholder = "Selecione o Pedido (opcional)...";
+    }
+    if (prodSelect) prodSelect.required = false;
+  } else {
+    if (prodGroup) prodGroup.style.display = 'none';
+    if (pedIdGroup) pedIdGroup.style.display = 'none';
+    if (pedIdInput) pedIdInput.required = false;
+  }
+}
+// ── Autocomplete search listeners ─────────────────────────────────
+['fProduto','rProduto','opProduto'].forEach(function(id) {
+  var searchInput = document.getElementById(id + 'Search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      populateSelectWithOptions(id, this.value);
+    });
+  }
+});
+
+document.getElementById('fLinha').addEventListener('change', function(){
+  onLinhaChange('f');
+  updateFormFromSchedule();
+});
+document.getElementById('rLinha').addEventListener('change', function(){ onLinhaChange('r'); });
+
+// ── Pedidos listener ──────────────────────────────────────────────
+db.ref('pedidos').on('value', function(snap) {
+  pedidosCache = snap.val() || {};
+  fillOPSelects();
+  
+  var pid = document.getElementById('fPedidoId').value.trim();
+  if (pid) updatePedidoHint(pid, document.getElementById('fProduto').value);
+  var rpid = document.getElementById('rPedidoId').value.trim();
+  if (rpid) updateRetroPedidoHint(rpid, document.getElementById('rProduto').value);
+  
+  // Re-run schedule update since metadata from pedidos cache might have loaded
+  updateFormFromSchedule();
+  
+  // Update datalist options
+  updatePedidosDatalist(document.getElementById('fProduto').value);
+});
+
+// ── Pedido ID hint ────────────────────────────────────────────────
+
+function parseOpId(str) {
+  if (!str) return '';
+  var match = str.match(/\[Pedido\s+#([^\]]+)\]/);
+  if (match) return match[1].trim();
+  return str.trim();
+}
+
+function parseProductFromOpDatalist(str) {
+  if (!str) return '';
+  var cleaned = str.replace(/\[Pedido\s+#[^\]]+\]\s*/, '');
+  cleaned = cleaned.replace(/\s*\[[^\]]+\]$/, '');
+  return cleaned.trim();
+}
+
+function updatePedidoHintGeneral(prefix, pedidoId, produto) {
+  var hint = document.getElementById(prefix + 'PedidoIdHint');
+  if (!hint) return;
+  if (!pedidoId) { hint.className = 'form-hint'; hint.textContent = ''; return; }
+  var key = findPedidoKey(pedidoId, produto);
+  if (key) {
+    var p = pedidosCache[key];
+    var pct = p.qtdTotal ? Math.round((p.produzido||0)/p.qtdTotal*100) : 0;
+    hint.className = 'form-hint prog';
+    hint.textContent = '✓ OP #' + (p.id||pedidoId) + ' — ' + (p.produto||'') + ' (' + pct + '% concluído)';
+  } else {
+    hint.className = 'form-hint manual';
+    hint.textContent = 'Pedido não encontrado no cadastro — será associado como texto livre.';
+  }
+}
+function updatePedidoHint(pedidoId, produto) { updatePedidoHintGeneral('f', pedidoId, produto); }
+function updateRetroPedidoHint(pedidoId, produto) { updatePedidoHintGeneral('r', pedidoId, produto); }
+
+// ── Auto-preenchimento e Datalist helper functions ─────────────────
+function updatePedidosDatalist(selectedProduto) {
+  var dl = document.getElementById('pedidosList');
+  if (!dl) return;
+  dl.innerHTML = '';
+  var activePeds = Object.values(pedidosCache).filter(function(p) {
+    return p && p.id && !isConcluido(p.status) && p.statusManual !== 'encerrado';
+  });
+  
+  if (selectedProduto) {
+    var normSel = normalizeForMatch(selectedProduto);
+    activePeds = activePeds.filter(function(p) {
+      return normalizeForMatch(p.produto) === normSel;
+    });
+  }
+  
+  activePeds.sort(function(a,b) {
+    return (a.priority || 999) - (b.priority || 999) || String(a.id).localeCompare(String(b.id), undefined, {numeric: true});
+  });
+  
+  activePeds.forEach(function(p) {
+    var opt = document.createElement('option');
+    var label = '[OP #' + p.id + '] ' + p.produto + (p.sku ? ' [' + p.sku + ']' : '');
+    opt.value = label;
+    opt.textContent = label + ' (Saldo: ' + fmtNum((p.qtdTotal || 0) - (p.produzido || 0)) + ')';
+    dl.appendChild(opt);
+  });
+}
+
+function findProductByPedidoId(pedidoId) {
+  if (!pedidosCache || !pedidoId) return null;
+  var keys = Object.keys(pedidosCache);
+  for (var i = 0; i < keys.length; i++) {
+    var p = pedidosCache[keys[i]];
+    if (p && String(p.id).trim() === String(pedidoId).trim()) {
+      return p.produto;
+    }
+  }
+  return null;
+}
+
+function cleanFutureSlots(pedidoKey) {
+  if (!pedidoKey) return Promise.resolve();
+  return db.ref('programacao').once('value').then(function(snap) {
+    var prog = snap.val() || {};
+    var updates = {};
+    var todayStr = today();
+    var currentHour = new Date().getHours();
+    
+    Object.entries(prog).forEach(function(dayEntry) {
+      var date = dayEntry[0];
+      var dayData = dayEntry[1];
+      if (date < todayStr) return; // ignore past days
+      
+      Object.entries(dayData).forEach(function(hourEntry) {
+        var hourKey = hourEntry[0];
+        var hourData = hourEntry[1];
+        
+        if (date === todayStr) {
+          var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
+          if (h < currentHour) return; // ignore past hours of today
+        }
+        
+        for (var l = 1; l <= 3; l++) {
+          var env = hourData['env' + l];
+          if (env && env.pedidoKey === pedidoKey) {
+            updates['programacao/' + date + '/' + hourKey + '/env' + l] = null;
+          }
+        }
+      });
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      console.log('Cleaning future planning slots for completed order:', pedidoKey, updates);
+      return db.ref().update(updates);
+    }
+  }).catch(function(err) {
+    console.error('Error cleaning future slots:', err);
+  });
+}
+
+// Bind interactive events
+function handlePedidoIdInput(prefix) {
+  var inputEl = document.getElementById(prefix + 'PedidoId');
+  if (!inputEl) return;
+  var rawVal = inputEl.value.trim();
+  var pid = parseOpId(rawVal);
+  var prodName = parseProductFromOpDatalist(rawVal);
+  
+  if (pid && prodName) {
+    var prodSelect = document.getElementById(prefix + 'Produto');
+    if (prodSelect) {
+      for (var i = 0; i < prodSelect.options.length; i++) {
+        if (normalizeForMatch(prodSelect.options[i].value) === normalizeForMatch(prodName)) {
+          prodSelect.selectedIndex = i;
+          break;
+        }
+      }
+    }
+    updatePedidoHintGeneral(prefix, pid, prodName);
+  } else if (pid) {
+    var prodName2 = findProductByPedidoId(pid);
+    if (prodName2) {
+      var prodSelect = document.getElementById(prefix + 'Produto');
+      if (prodSelect) prodSelect.value = prodName2;
+      updatePedidoHintGeneral(prefix, pid, prodName2);
+    } else {
+      updatePedidoHintGeneral(prefix, pid, '');
+    }
+  } else {
+    updatePedidoHintGeneral(prefix, '', '');
+  }
+}
+
+document.getElementById('fPedidoId').addEventListener('input', function() {
+  handlePedidoIdInput('f');
+});
+
+document.getElementById('fProduto').addEventListener('change', function() {
+  var pid = parseOpId(document.getElementById('fPedidoId').value.trim());
+  updatePedidoHint(pid, this.value);
+  updateFormFromSchedule();
+  updatePedidosDatalist(this.value);
+});
+
+document.getElementById('rPedidoId').addEventListener('input', function() {
+  handlePedidoIdInput('r');
+});
+
+document.getElementById('rProduto').addEventListener('change', function() {
+  updateRetroPedidoHint(document.getElementById('rPedidoId').value.trim(), this.value);
+});
+
+// ── Schedule integration helper ──
+function showScheduleBanner(text) {
+  var banner = document.getElementById('scheduleBanner');
+  var textEl = document.getElementById('scheduleBannerText');
+  if (banner && textEl) {
+    textEl.innerHTML = text;
+    banner.style.display = 'flex';
+  }
+}
+function hideScheduleBanner() {
+  var banner = document.getElementById('scheduleBanner');
+  if (banner) {
+    banner.style.display = 'none';
+  }
+}
+
+function updateFormFromSchedule() {
+  var selectedDate = document.getElementById('fData').value;
+  var selectedHora = document.getElementById('fHora').value;
+  var selectedLinha = document.getElementById('fLinha').value;
+
+  if (!selectedDate || !selectedHora || !selectedLinha) {
+    hideScheduleBanner();
+    return;
+  }
+
+  var hourKey = selectedHora;
+  var hourKeyUnderscore = selectedHora.replace(':', '_');
+  var hourData = progData[hourKey] || progData[hourKeyUnderscore];
+  if (!hourData) {
+    hideScheduleBanner();
+    return;
+  }
+
+  var lineIdx = null;
+  for (var i = 1; i <= 3; i++) {
+    var lineName = hourData['linha' + i];
+    if (!lineName) {
+      if (selectedLinha === 'Linha 1' && i === 1) lineIdx = 1;
+      if (selectedLinha === 'Linha 2' && i === 2) lineIdx = 2;
+      if (selectedLinha === 'Linha 3' && i === 3) lineIdx = 3;
+    } else if (lineName === selectedLinha) {
+      lineIdx = i;
+    }
+  }
+
+  if (!lineIdx) {
+    hideScheduleBanner();
+    return;
+  }
+
+  var slotVal = hourData['env' + lineIdx];
+  var metaVal = hourData['meta' + lineIdx] || 0;
+  var scheduledPedidoId = null;
+  var scheduledProdutoName = null;
+
+  if (slotVal) {
+    if (typeof slotVal === 'object') {
+      scheduledProdutoName = slotVal.produto;
+      if (slotVal.pedidoKey && pedidosCache[slotVal.pedidoKey]) {
+        scheduledPedidoId = pedidosCache[slotVal.pedidoKey].id;
+      }
+      if (slotVal.mediaPorHora && !metaVal) {
+        metaVal = slotVal.mediaPorHora;
+      }
+    } else if (typeof slotVal === 'string') {
+      scheduledProdutoName = slotVal;
+      scheduledPedidoId = hourData['pedidoId' + lineIdx];
+    }
+  }
+
+  var hasChanged = false;
+
+  // 1. Auto-populate product
+  if (scheduledProdutoName) {
+    var prodSelect = document.getElementById('fProduto');
+    var matchedOption = null;
+    for (var k = 0; k < prodSelect.options.length; k++) {
+      if (prodSelect.options[k].value === scheduledProdutoName) {
+        matchedOption = prodSelect.options[k].value;
+        break;
+      }
+    }
+    if (matchedOption && prodSelect.value !== matchedOption) {
+      prodSelect.value = matchedOption;
+      hasChanged = true;
+    }
+  }
+
+  // 2. Auto-populate Pedido ID with friendly layout
+  if (scheduledPedidoId && scheduledProdutoName) {
+    var pedInput = document.getElementById('fPedidoId');
+    var friendlyVal = '[OP #' + scheduledPedidoId + '] ' + scheduledProdutoName;
+    var pedKey = findPedidoKey(scheduledPedidoId, scheduledProdutoName);
+    var p = pedKey ? pedidosCache[pedKey] : null;
+    if (p && p.sku) friendlyVal += ' [' + p.sku + ']';
+    
+    if (pedInput.value !== friendlyVal) {
+      pedInput.value = friendlyVal;
+      hasChanged = true;
+    }
+  } else if (scheduledPedidoId) {
+    var pedInput = document.getElementById('fPedidoId');
+    if (pedInput.value !== scheduledPedidoId) {
+      pedInput.value = scheduledPedidoId;
+      hasChanged = true;
+    }
+  }
+
+  if (hasChanged) {
+    updatePedidoHint(document.getElementById('fPedidoId').value.trim(), document.getElementById('fProduto').value);
+  }
+
+  var scheduleInfo = "";
+  if (scheduledProdutoName) {
+    scheduleInfo += '📋 <strong>Planejado:</strong> ' + scheduledProdutoName;
+    if (scheduledPedidoId) scheduleInfo += ' (OP #' + scheduledPedidoId + ')';
+  }
+  if (metaVal) {
+    scheduleInfo += (scheduleInfo ? ' | ' : '') + '🎯 <strong>Meta:</strong> ' + metaVal + ' un/h';
+  }
+
+  if (scheduleInfo) {
+    showScheduleBanner(scheduleInfo);
+  } else {
+    hideScheduleBanner();
+  }
+}
+
+// ── Programação do dia (dinâmica) ─────────────────────────────────
+var programacaoListener = null;
+function listenProgramacao(date) {
+  var targetDate = date || today();
+  if (programacaoListener) programacaoListener.off();
+  programacaoListener = db.ref('programacao/' + targetDate);
+  programacaoListener.on('value', function(snap) {
+    progData = snap.val() || {};
+    updateFormFromSchedule();
+  });
+}
+listenProgramacao(today());
+
+// ── Registros de hoje (dinâmico) ──────────────────────────────────
+function listenToday(date) {
+  var targetDate = date || today();
+  if (todayListener) todayListener.off();
+  todayListener = db.ref('registros/' + targetDate);
+  todayListener.on('value', function(snap) {
+    var data = snap.val() || {};
+    var regs = Object.values(data);
+    var total = regs.reduce(function(s,r){ return s + (r.quantidade||0); }, 0);
+    document.getElementById('statTotal').textContent = fmtNum(total);
+    document.getElementById('statReg').textContent = regs.length;
+    renderUltimosRegistros(regs);
+    opTodayRegs = regs; // cache for OP finalization
+  });
+}
+listenToday(today());
+
+// Hook up change listeners to trigger dynamic reloading and form updating
+document.getElementById('fData').addEventListener('change', function() {
+  listenProgramacao(this.value);
+  listenToday(this.value);
+});
+document.getElementById('fHora').addEventListener('change', updateFormFromSchedule);
+
+function renderUltimosRegistros(regs) {
+  var el = document.getElementById('ultimosRegs');
+  if (!regs || !regs.length) {
+    el.innerHTML = '<div class="empty">Nenhum registro hoje.</div>';
+    return;
+  }
+  var sorted = regs.slice().sort(function(a,b){ return (b.hora||'').localeCompare(a.hora||''); }).slice(0, 8);
+  el.innerHTML = sorted.map(function(r) {
+    var paradaMins = 0;
+    if (r.paradas && Array.isArray(r.paradas)) {
+      r.paradas.forEach(function(p){ paradaMins += (p.duracao||0); });
+    } else if (r.parada) { paradaMins = r.parada; }
+    var subParts = [r.linha];
+    if (r.lote) subParts.push('Lote: ' + r.lote);
+    if (r.pedidoId) subParts.push('OP: #' + r.pedidoId);
+    if (paradaMins) subParts.push('Parada: ' + paradaMins + 'min');
+    return '<div class="registro-item">' +
+      '<div class="registro-hora">' + fmtHoraRange(r.hora) + '</div>' +
+      '<div class="registro-info">' +
+        '<div class="registro-prod">' + (r.produto||'—') + '</div>' +
+        '<div class="registro-sub">' + subParts.filter(Boolean).join(' · ') + '</div>' +
+      '</div>' +
+      '<div class="registro-qtd">' + fmtNum(r.quantidade||0) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Paradas ───────────────────────────────────────────────────────
+document.getElementById('btnAddParada').addEventListener('click', addParada);
+function addParada() {
+  paradaCount++;
+  var id = paradaCount;
+  var container = document.getElementById('paradasList');
+  var noMsg = document.getElementById('noParadasMsg');
+  if (noMsg) noMsg.style.display = 'none';
+  var div = document.createElement('div');
+  div.className = 'parada-entry'; div.id = 'parada-' + id;
+  div.innerHTML =
+    '<div class="parada-entry-num"><span>Parada ' + id + '</span>' +
+      '<button type="button" class="btn-rem-parada" data-pid="' + id + '">×</button></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>Motivo</label>' +
+        '<input type="text" id="pMotivo-'+id+'" placeholder="Ex: Falta de embalagem"></div>' +
+      '<div class="form-group"><label>Duração (min)</label>' +
+        '<input type="number" id="pDuracao-'+id+'" min="1" placeholder="0"></div>' +
+    '</div>';
+  container.appendChild(div);
+  div.querySelector('.btn-rem-parada').addEventListener('click', function() {
+    removeParada(this.dataset.pid);
+  });
+}
+function removeParada(id) {
+  var el = document.getElementById('parada-' + id);
+  if (el) el.remove();
+  if (!document.querySelector('.parada-entry')) {
+    var noMsg = document.getElementById('noParadasMsg');
+    if (noMsg) noMsg.style.display = '';
+  }
+}
+function collectParadas() {
+  var paradas = [];
+  document.querySelectorAll('.parada-entry').forEach(function(el) {
+    var id = el.id.replace('parada-','');
+    var motivo  = (document.getElementById('pMotivo-'+id)||{value:''}).value || '';
+    var duracao = parseInt((document.getElementById('pDuracao-'+id)||{value:0}).value||0) || 0;
+    if (motivo || duracao) paradas.push({ motivo: motivo, duracao: duracao });
+  });
+  return paradas;
+}
+
+// ── SISTEMA DE FILA OFFLINE (localStorage) ────────────────────────
+function updatePendingBadge() {
+  var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
+  var badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  if (pending.length > 0) {
+    badge.textContent = pending.length + ' pendente' + (pending.length > 1 ? 's' : '');
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function queueOfflineWrite(item) {
+  var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
+  pending.push(item);
+  localStorage.setItem('kuryos_pending_sync', JSON.stringify(pending));
+  updatePendingBadge();
+  triggerSync();
+}
+
+var isSyncing = false;
+function triggerSync() {
+  if (isSyncing || !isOnline) return;
+  var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
+  if (pending.length === 0) return;
+  
+  isSyncing = true;
+  syncNextItem();
+}
+
+function syncNextItem() {
+  var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
+  if (pending.length === 0 || !isOnline) {
+    isSyncing = false;
+    updatePendingBadge();
+    return;
+  }
+
+  var item = pending[0];
+  var promise;
+
+  if (item.type === 'registro') {
+    promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
+      if (item.pedidoId && item.qtd && item.produto) {
+        var pedKey = findPedidoKey(item.pedidoId, item.produto);
+        if (pedKey) {
+          return db.ref('pedidos/' + pedKey).transaction(function(p) {
+            if (!p) return p;
+            p.produzido = (p.produzido || 0) + item.qtd;
+            p.ultimoApontamento = new Date().toISOString();
+            return p;
+          }).then(function(res) {
+            if (res.committed && res.snapshot.exists()) {
+              var val = res.snapshot.val();
+              if (typeof window.updateOpStatusAutomatically === 'function') {
+                window.updateOpStatusAutomatically(pedKey);
+              }
+              var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
+              var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
+              if (isDone) {
+                return cleanFutureSlots(pedKey);
+              }
+            }
+          });
+        }
+      }
+    });
+  } else if (item.type === 'fechamento_op') {
+    promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
+      var saves = [];
+      if (item.pedidoId && item.qtdFinal && item.produto) {
+        var pedKey = findPedidoKey(item.pedidoId, item.produto);
+        if (pedKey) {
+          saves.push(db.ref('pedidos/' + pedKey).transaction(function(p) {
+            if (!p) return p;
+            p.produzido = (p.produzido || 0) + item.qtdFinal;
+            p.ultimoApontamento = new Date().toISOString();
+            return p;
+          }).then(function(res) {
+            if (res.committed && res.snapshot.exists()) {
+              var val = res.snapshot.val();
+              if (typeof window.updateOpStatusAutomatically === 'function') {
+                window.updateOpStatusAutomatically(pedKey);
+              }
+              var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
+              var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
+              if (isDone) {
+                return cleanFutureSlots(pedKey);
+              }
+            }
+          }));
+        }
+      }
+      if (item.perdas && item.perdas.length && item.lote) {
+        var loteSafe = sanitizeKey(item.lote);
+        saves.push(db.ref('perdas/' + loteSafe).push({
+          data: item.data, lote: item.lote, produto: item.produto, linha: item.registro.linha,
+          pedidoId: item.pedidoId, perdas: item.perdas, timestamp: new Date().toISOString()
+        }));
+      }
+      return Promise.all(saves);
+    });
+  }
+
+  promise.then(function() {
+    var currentPending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
+    currentPending = currentPending.filter(function(x) { return x.id !== item.id; });
+    localStorage.setItem('kuryos_pending_sync', JSON.stringify(currentPending));
+    updatePendingBadge();
+    setTimeout(syncNextItem, 100);
+  }).catch(function(err) {
+    console.error('Erro ao sincronizar registro offline:', err);
+    isSyncing = false;
+    updatePendingBadge();
+  });
+}
+
+// Inicializar Badge no carregamento
+setTimeout(updatePendingBadge, 500);
+
+// ── Formulário principal ──────────────────────────────────────────
+document.getElementById('prodForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btnSalvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  var data    = document.getElementById('fData').value;
+  var hora    = document.getElementById('fHora').value;
+  var linha   = document.getElementById('fLinha').value;
+  var produto = document.getElementById('fProduto').value;
+  var qtd     = parseInt(document.getElementById('fQtd').value) || 0;
+  var turno   = document.getElementById('fTurno').value;
+  var operador= document.getElementById('fOperador').value.trim();
+  var lote    = document.getElementById('fLote').value.trim();
+  var colab   = parseInt(document.getElementById('fColaboradores').value) || 0;
+  var rawPedidoId = document.getElementById('fPedidoId').value.trim();
+  var pedidoId = parseOpId(rawPedidoId);
+  var obs     = document.getElementById('fObs').value.trim();
+  var paradas = collectParadas();
+  var totalParada = paradas.reduce(function(s,p){ return s+(p.duracao||0); }, 0);
+
+  // Calculate pointing delay audit
+  var parts = hora.split(':');
+  var pointedHour = parseInt(parts[0]);
+  var targetHour = (pointedHour + 1) % 24;
+  
+  var now = new Date();
+  var currentHour = now.getHours();
+  var currentMin = now.getMinutes();
+  
+  var onTime = (currentHour === targetHour && currentMin <= 10);
+  var localToday = today();
+  if (data !== localToday) {
+    onTime = false;
+  }
+  var isDelayed = !onTime;
+
+  var registro = {
+    data: data, hora: hora, linha: linha, produto: produto,
+    quantidade: qtd, operador: operador, turno: turno,
+    timestamp: new Date().toISOString(),
+    realTimestamp: new Date().toISOString(),
+    realTimeStr: now.toLocaleTimeString('pt-BR'),
+    apontamentoEmAtraso: isDelayed
+  };
+  if (lote)     registro.lote = lote;
+  if (colab)    registro.colaboradores = colab;
+  if (pedidoId) registro.pedidoId = pedidoId;
+  if (obs)      registro.obs = obs;
+  if (paradas.length) { registro.paradas = paradas; registro.parada = totalParada; }
+
+  var clientKey = db.ref('registros/' + data).push().key;
+  var item = {
+    id: clientKey,
+    type: 'registro',
+    data: data,
+    registro: registro,
+    pedidoId: pedidoId,
+    produto: produto,
+    qtd: qtd
+  };
+  queueOfflineWrite(item);
+
+  // Retrieve meta target quantity to show feedback modal
+  var targetQty = 0;
+  var hourKey = hora;
+  var hourKeyUnderscore = hora.replace(':', '_');
+  var hourData = progData[hourKey] || progData[hourKeyUnderscore];
+  if (hourData) {
+    var lineIdx = null;
+    for (var i = 1; i <= 3; i++) {
+      var lineName = hourData['linha' + i];
+      if (!lineName) {
+        if (linha === 'Linha 1' && i === 1) lineIdx = 1;
+        if (linha === 'Linha 2' && i === 2) lineIdx = 2;
+        if (linha === 'Linha 3' && i === 3) lineIdx = 3;
+      } else if (lineName === linha) {
+        lineIdx = i;
+      }
+    }
+    if (lineIdx) {
+      targetQty = hourData['meta' + lineIdx] || 0;
+      var slotVal = hourData['env' + lineIdx];
+      if (!targetQty && slotVal && typeof slotVal === 'object' && slotVal.mediaPorHora) {
+        targetQty = slotVal.mediaPorHora;
+      }
+    }
+  }
+  if (!targetQty) {
+    var pedKey = findPedidoKey(pedidoId, produto);
+    var pObj = pedKey ? pedidosCache[pedKey] : null;
+    if (pObj && pObj.mediaPorHora) {
+      targetQty = pObj.mediaPorHora;
+    }
+  }
+
+  // Reset form fields immediately
+  ['fQtd','fObs','fLote','fColaboradores','fPedidoId'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var hint = document.getElementById('fPedidoIdHint');
+  if (hint) { hint.textContent = ''; hint.className = 'form-hint'; }
+  document.querySelectorAll('.parada-entry').forEach(function(el){ el.remove(); });
+  var noMsg = document.getElementById('noParadasMsg');
+  if (noMsg) noMsg.style.display = '';
+  paradaCount = 0;
+
+  btn.disabled = false; btn.textContent = 'Salvar Registro';
+  
+  if (targetQty > 0) {
+    showMetaFeedbackModal(qtd, targetQty);
+  } else {
+    showSuccess('Registrado!', fmtNum(qtd) + ' un. de ' + produto + ' — ' + hora);
+  }
+  fillHoraSelect();
+});
+
+// ── Success overlay ───────────────────────────────────────────────
+function showSuccess(title, desc) {
+  document.getElementById('successTitle').textContent = title;
+  document.getElementById('successDesc').textContent = desc;
+  var ov = document.getElementById('successOverlay');
+  ov.classList.add('show');
+  setTimeout(function(){ ov.classList.remove('show'); }, 2500);
+}
+document.getElementById('successOverlay').addEventListener('click', function() {
+  this.classList.remove('show');
+});
+
+// Abas substituíram o toggle do retroativo
+
+// ── Retroativo: cálculo ───────────────────────────────────────────
+function calcRetroHours() {
+  var inicio = document.getElementById('rHoraInicio').value;
+  var pausa  = document.getElementById('rHoraPausa').value;
+  var fim    = document.getElementById('rHoraFim').value;
+  if (!inicio || !fim) return null;
+  function toMin(t){ var p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]); }
+  var minInicio = toMin(inicio), minFim = toMin(fim);
+  var slots = [];
+  for (var m = minInicio; m < minFim; m += 60) {
+    var h = Math.floor(m / 60);
+    if (pausa) {
+      var pausaH = Math.floor(toMin(pausa)/60);
+      if (h === pausaH) continue;
+    }
+    if (h >= 0 && h <= 23) slots.push(pad(h) + ':00');
+  }
+  return slots.length ? { slots: slots } : null;
+}
+
+function updateRetroCalc() {
+  var res = calcRetroHours();
+  var calc = document.getElementById('retroCalc');
+  var qty = parseInt(document.getElementById('rQtd').value) || 0;
+  if (!res) { calc.style.display = 'none'; return; }
+  var perHour = qty ? Math.round(qty / res.slots.length) : null;
+  calc.style.display = 'block';
+  calc.textContent = res.slots.length + ' hora(s): ' + res.slots.map(fmtHoraRange).join(', ') +
+    (perHour ? ' — ≈' + fmtNum(perHour) + ' un./h' : '');
+}
+['rHoraInicio','rHoraPausa','rHoraFim','rQtd'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', updateRetroCalc);
+});
+
+document.getElementById('retroForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var res = calcRetroHours();
+  if (!res) { alert('Verifique os horários do turno.'); return; }
+
+  var btn = document.getElementById('btnRetro');
+  btn.disabled = true; btn.textContent = 'Registrando...';
+
+  var data    = document.getElementById('rData').value;
+  var turno   = document.getElementById('rTurno').value;
+  var linha   = document.getElementById('rLinha').value;
+  var produto = document.getElementById('rProduto').value;
+  var operador= document.getElementById('rOperador').value.trim();
+  var qtdTotal= parseInt(document.getElementById('rQtd').value) || 0;
+  var lote    = document.getElementById('rLote').value.trim();
+  var colab   = parseInt(document.getElementById('rColaboradores').value) || 0;
+  var rawPedidoId = document.getElementById('rPedidoId').value.trim();
+  var pedidoId = parseOpId(rawPedidoId) || null;
+  var darBaixa = document.getElementById('rDarBaixa').checked;
+
+  var perSlot   = Math.floor(qtdTotal / res.slots.length);
+  var remainder = qtdTotal - (perSlot * res.slots.length);
+
+  res.slots.forEach(function(hora, idx) {
+    var qtd = perSlot + (idx === res.slots.length - 1 ? remainder : 0);
+    var reg = {
+      data: data, hora: hora, linha: linha, produto: produto,
+      quantidade: qtd, operador: operador, turno: turno,
+      timestamp: new Date().toISOString(), fonte: 'retroativo'
+    };
+    if (lote) reg.lote = lote;
+    if (colab) reg.colaboradores = colab;
+    if (pedidoId) reg.pedidoId = pedidoId;
+
+    var clientKey = db.ref('registros/' + data).push().key;
+    var item = {
+      id: clientKey,
+      type: 'registro',
+      data: data,
+      registro: reg,
+      pedidoId: (darBaixa && pedidoId) ? pedidoId : null,
+      produto: produto,
+      qtd: qtd
+    };
+    queueOfflineWrite(item);
+  });
+
+  btn.disabled = false; btn.textContent = 'Registrar turno retroativo';
+  document.getElementById('retroForm').reset();
+  document.getElementById('rData').value = today();
+  document.getElementById('retroCalc').style.display = 'none';
+  showSuccess('Turno registrado!', fmtNum(qtdTotal) + ' un. em ' + res.slots.length + ' hora(s)');
+});
+
+// ════════════════════════════════════════════════════════
+// ── FINALIZAR OP ─────────────────────────────────────
+// ════════════════════════════════════════════════════════
+var opTodayRegs = [];
+var opPerdaCount = 0;
+var PERDAS_TIPOS = ['Frascos','Rótulos','Tampas/Válvulas','Cartuchos','Produto Semi-Acabado','Display','Caixa de Embarque','Outro'];
+
+// Abas substituíram o toggle do fechamento de OP
+
+function buildOpSuggestions() {
+  var panel = document.getElementById('opSuggestPanel');
+  // Group registros by linha → find last apontamento per linha (excluding fechamentos)
+  var byLinha = {};
+  opTodayRegs.forEach(function(r) {
+    if (r.tipo === 'fechamento_op') return;
+    var l = r.linha || '—';
+    if (!byLinha[l] || (r.hora||'') > (byLinha[l].hora||'')) byLinha[l] = r;
+  });
+
+  var linhas = Object.keys(byLinha);
+  if (!linhas.length) {
+    panel.innerHTML = '<div class="retro-note">Nenhum apontamento hoje ainda. Faça pelo menos um registro horário primeiro.</div>';
+    document.getElementById('opForm').style.display = 'none';
+    return;
+  }
+
+  var html = '<div style="margin-bottom:10px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase">Apontamentos ativos hoje</div>';
+  linhas.sort().forEach(function(linha) {
+    var r = byLinha[linha];
+    var loteParts = [];
+    if (r.lote) loteParts.push('Lote: ' + r.lote);
+    if (r.pedidoId) loteParts.push('OP: #' + r.pedidoId);
+    // Sum qty for this lote/linha
+    var loteQty = opTodayRegs.filter(function(x){ return x.linha===linha && x.lote===r.lote && x.tipo!=='fechamento_op'; })
+                    .reduce(function(s,x){ return s+(x.quantidade||0); }, 0);
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:180px">' +
+        '<div style="font-weight:700;font-size:13px">' + linha + '</div>' +
+        '<div style="font-size:12px;color:var(--muted)">' + (r.produto||'—') + '</div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + loteParts.join(' · ') + '</div>' +
+        '<div style="font-size:11px;color:#059669;font-weight:600">Apontado hoje: ' + fmtNum(loteQty) + ' un.</div>' +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm" data-op-linha="'+encodeURIComponent(linha)+'" data-op-lote="'+encodeURIComponent(r.lote||'')+'" data-op-produto="'+encodeURIComponent(r.produto||'')+'" data-op-pid="'+encodeURIComponent(r.pedidoId||'')+'" data-op-qty="'+loteQty+'">Fechar esta OP →</button>' +
+    '</div>';
+  });
+  panel.innerHTML = html;
+
+  // Add click handlers to suggestion buttons
+  panel.querySelectorAll('[data-op-linha]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      preencheFechamentoForm(
+        decodeURIComponent(this.dataset.opLinha),
+        decodeURIComponent(this.dataset.opLote),
+        decodeURIComponent(this.dataset.opProduto),
+        decodeURIComponent(this.dataset.opPid),
+        parseInt(this.dataset.opQty)||0
+      );
+    });
+  });
+}
+
+function preencheFechamentoForm(linha, lote, produto, pedidoId, apontadoHoje) {
+  var key = findPedidoKey(pedidoId, produto);
+  var p = key ? pedidosCache[key] : null;
+  var qtdEsperada = p ? (p.qtdTotal || 0) : 0;
+  document.getElementById('opForm').dataset.opQtdEsperada = qtdEsperada;
+
+  document.getElementById('opLinha').value = linha;
+  document.getElementById('opLote').value = lote;
+  // Select produto in opProduto
+  var sel = document.getElementById('opProduto');
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === produto) { sel.selectedIndex = i; break; }
+  }
+  document.getElementById('opQtdTotal').value = '';
+  
+  var metaText = qtdEsperada ? ' · Meta PCP: ' + fmtNum(qtdEsperada) + ' un.' : '';
+  document.getElementById('opCalcHint').textContent = 'Já apontado: ' + fmtNum(apontadoHoje) + ' un.' + metaText;
+  document.getElementById('opForm').dataset.opLinha = linha;
+  document.getElementById('opForm').dataset.opLote = lote;
+  document.getElementById('opForm').dataset.opApontado = apontadoHoje;
+  document.getElementById('opForm').dataset.opPid = pedidoId;
+  document.getElementById('opForm').style.display = 'block';
+  document.getElementById('opQtdTotal').focus();
+  // Reset perdas
+  document.querySelectorAll('.perda-entry').forEach(function(el){ el.remove(); });
+  var noPerdasMsg = document.getElementById('noPerdasMsg');
+  if (noPerdasMsg) noPerdasMsg.style.display = '';
+  opPerdaCount = 0;
+
+  // Reset desvio
+  document.getElementById('opJustificativa').value = '';
+  document.getElementById('opJustificativa').required = false;
+  document.getElementById('opJustificaWrap').style.display = 'none';
+}
+
+// Update calc hint when qtdTotal changes
+document.getElementById('opQtdTotal').addEventListener('input', function() {
+  var total = parseInt(this.value) || 0;
+  var apontado = parseInt(document.getElementById('opForm').dataset.opApontado||0) || 0;
+  var qtdEsperada = parseInt(document.getElementById('opForm').dataset.opQtdEsperada||0) || 0;
+  var diff = total - apontado;
+  var hint = document.getElementById('opCalcHint');
+  var metaText = qtdEsperada ? ' · Meta PCP: ' + fmtNum(qtdEsperada) + ' un.' : '';
+  
+  if (!total) {
+    hint.textContent = 'Já apontado: ' + fmtNum(apontado) + ' un.' + metaText;
+    document.getElementById('opJustificativa').required = false;
+    document.getElementById('opJustificaWrap').style.display = 'none';
+    return;
+  }
+  if (diff > 0) {
+    hint.textContent = 'Já apontado: ' + fmtNum(apontado) + ' un. → Período final: ' + fmtNum(diff) + ' un.' + metaText;
+    hint.className = 'form-hint prog';
+  } else if (diff === 0) {
+    hint.textContent = 'Total igual ao apontado — nenhuma produção adicional no período final.' + metaText;
+    hint.className = 'form-hint prog';
+  } else {
+    hint.textContent = 'Atenção: total informado é menor que o já apontado (' + fmtNum(apontado) + ' un.)' + metaText;
+    hint.className = 'form-hint manual';
+  }
+
+  // Verificar desvio
+  var hasDeviation = (qtdEsperada > 0) && (total !== qtdEsperada);
+  if (hasDeviation) {
+    document.getElementById('opJustificaWrap').style.display = 'block';
+    document.getElementById('opJustificativa').required = true;
+  } else {
+    document.getElementById('opJustificaWrap').style.display = 'none';
+    document.getElementById('opJustificativa').required = false;
+  }
+});
+
+// ── Perdas ────────────────────────────────────────────────────────
+document.getElementById('btnAddPerda').addEventListener('click', addPerda);
+function addPerda() {
+  opPerdaCount++;
+  var id = opPerdaCount;
+  var noMsg = document.getElementById('noPerdasMsg');
+  if (noMsg) noMsg.style.display = 'none';
+  var div = document.createElement('div');
+  div.className = 'parada-entry perda-entry'; div.id = 'perda-' + id;
+  var tiposOpts = PERDAS_TIPOS.map(function(t) {
+    return '<option value="'+t+'">'+t+'</option>';
+  }).join('');
+  div.innerHTML =
+    '<div class="parada-entry-num"><span>Perda ' + id + '</span>' +
+      '<button type="button" class="btn-rem-parada" data-pid="'+id+'">×</button></div>' +
+    '<div class="form-row">' +
+      '<div class="form-group"><label>Tipo</label>' +
+        '<select id="pTipo-'+id+'">'+tiposOpts+'</select></div>' +
+      '<div class="form-group"><label>Quantidade</label>' +
+        '<input type="number" id="pQtdPerda-'+id+'" min="0" placeholder="0"></div>' +
+    '</div>' +
+    '<div class="form-group" id="pOutroWrap-'+id+'" style="display:none">' +
+      '<label>Especificar</label>' +
+      '<input type="text" id="pOutroSpec-'+id+'" placeholder="Descreva a perda...">' +
+    '</div>';
+  document.getElementById('perdasList').appendChild(div);
+  div.querySelector('.btn-rem-parada').addEventListener('click', function() {
+    div.remove();
+    if (!document.querySelector('.perda-entry')) {
+      var noPerdasMsg = document.getElementById('noPerdasMsg');
+      if (noPerdasMsg) noPerdasMsg.style.display = '';
+    }
+  });
+  document.getElementById('pTipo-'+id).addEventListener('change', function() {
+    document.getElementById('pOutroWrap-'+id).style.display = this.value === 'Outro' ? 'block' : 'none';
+  });
+}
+
+function collectPerdas() {
+  var perdas = [];
+  document.querySelectorAll('.perda-entry').forEach(function(el) {
+    var id = el.id.replace('perda-','');
+    var tipo = (document.getElementById('pTipo-'+id)||{value:''}).value || '';
+    var qtd  = parseInt((document.getElementById('pQtdPerda-'+id)||{value:0}).value||0) || 0;
+    var spec = (document.getElementById('pOutroSpec-'+id)||{value:''}).value.trim() || '';
+    var entry = { tipo: tipo, quantidade: qtd };
+    if (tipo === 'Outro' && spec) entry.especificacao = spec;
+    if (tipo) perdas.push(entry);
+  });
+  return perdas;
+}
+
+// ── Finalizar OP / Lote submit ───────────────────────────────────────────
+document.getElementById('opForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('btnFinalizarOP');
+  btn.disabled = true; btn.textContent = 'Finalizando...';
+
+  var linha     = this.dataset.opLinha || '';
+  var lote      = document.getElementById('opLote').value.trim();
+  var produto   = document.getElementById('opProduto').value;
+  var qtdTotal  = parseInt(document.getElementById('opQtdTotal').value) || 0;
+  var apontado  = parseInt(this.dataset.opApontado||0) || 0;
+  var pedidoId  = this.dataset.opPid || '';
+  var perdas    = collectPerdas();
+
+  var qtdFinal = Math.max(qtdTotal - apontado, 0);
+
+  if (!produto) { btn.disabled=false; btn.textContent='🏁 Finalizar OP / Lote'; alert('Selecione o produto.'); return; }
+  if (!qtdTotal) { btn.disabled=false; btn.textContent='🏁 Finalizar OP / Lote'; alert('Informe a quantidade total da OP.'); return; }
+
+  // Validar justificativa se houver desvio
+  var qtdEsperada = parseInt(this.dataset.opQtdEsperada || 0) || 0;
+  var hasDeviation = (qtdEsperada > 0) && (qtdTotal !== qtdEsperada);
+  var justificativa = document.getElementById('opJustificativa').value.trim();
+  if (hasDeviation && !justificativa) {
+    btn.disabled = false; btn.textContent = '🏁 Finalizar OP / Lote';
+    alert('Por favor, insira a justificativa para o desvio de quantidade.');
+    document.getElementById('opJustificativa').focus();
+    return;
+  }
+
+  var hora = pad(new Date().getHours()) + ':00';
+  var turno = guessShift();
+
+  var registro = {
+    data: today(), hora: hora, linha: linha, produto: produto,
+    quantidade: qtdFinal, turno: turno,
+    tipo: 'fechamento_op',
+    qtdTotalOP: qtdTotal,
+    qtdEsperadaOP: qtdEsperada,
+    timestamp: new Date().toISOString()
+  };
+  if (hasDeviation && justificativa) {
+    registro.justificativaDivergencia = justificativa;
+  }
+  if (lote)     registro.lote = lote;
+  if (pedidoId) registro.pedidoId = pedidoId;
+  if (perdas.length) registro.perdas = perdas;
+
+  var clientKey = db.ref('registros/' + today()).push().key;
+  var item = {
+    id: clientKey,
+    type: 'fechamento_op',
+    data: today(),
+    registro: registro,
+    pedidoId: pedidoId,
+    produto: produto,
+    qtdFinal: qtdFinal,
+    lote: lote,
+    perdas: perdas
+  };
+  queueOfflineWrite(item);
+
+  btn.disabled = false; btn.textContent = '🏁 Finalizar OP / Lote';
+  document.getElementById('opForm').style.display = 'none';
+  showSuccess('OP / Lote Finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—'));
+  buildOpSuggestions();
+});
+
+</script>
+</body>
+</html>

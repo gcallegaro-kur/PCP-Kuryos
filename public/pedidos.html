@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos de Produção</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="auth_check.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--warning:#d97706;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--purple:#7c3aed}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* Header */
+    .header{background:#0a1c69;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100}
+    .header h1{font-size:18px;font-weight:700}
+    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
+    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
+    .dot.on{background:#34d399;animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* Toolbar */
+    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
+    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
+    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
+    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+    .search-box{flex:1;min-width:160px;position:relative}
+    .search-box input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)}
+    .search-box input:focus{outline:none;border-color:#059669}
+    .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+    select.filter-sel{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white;cursor:pointer}
+    select.filter-sel:focus{outline:none;border-color:#059669}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-green{background:#059669;color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:white;border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
+    .btn-danger{background:var(--danger);color:white}.btn-danger:hover{filter:brightness(.9)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+
+    /* Layout */
+    .main{padding:14px;max-width:96%;margin:0 auto}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+    .stat{background:white;border-radius:10px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .stat-val{font-size:24px;font-weight:800;color:#059669}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+
+    /* Card / Table */
+    .card{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .table-wrap{overflow:auto;max-height:calc(100vh - 280px)}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:860px}
+    thead th{background:#f9fafb;padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+    tr:hover td{background:#f9fafb}
+
+    /* Cell styles */
+    .id-badge{display:inline-block;background:#ede9fe;color:var(--purple);border-radius:6px;font-size:11px;font-weight:700;padding:2px 7px;font-family:monospace;white-space:nowrap}
+    .prod-cell{font-weight:600;max-width:450px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:#d1fae5;color:#065f46}
+    .badge-blue{background:#eff6ff;color:#1a56db}
+    .badge-gray{background:#f3f4f6;color:var(--muted)}
+    .badge-orange{background:#fff7ed;color:#c2410c}
+    .badge-red{background:#fee2e2;color:#991b1b}
+    .badge-purple{background:#ede9fe;color:var(--purple)}
+
+    /* Progress bar inline */
+    .prog-wrap{min-width:110px}
+    .prog-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+    .prog-label .pct{font-weight:700}
+    .prog-bar{height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden}
+    .prog-fill{height:100%;border-radius:3px;transition:width .3s}
+    .fill-green{background:#059669}
+    .fill-orange{background:#d97706}
+    .fill-red{background:#e02424}
+    .fill-purple{background:var(--purple)}
+
+    /* Alert */
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+    .alert-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    .alert-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+
+    /* Empty */
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+
+    /* Actions column */
+    .actions-cell{white-space:nowrap;display:flex;gap:4px;align-items:center}
+
+    /* Modal */
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:white;border-radius:14px;width:100%;max-width:580px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,#059669);color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-close:hover{opacity:1}
+    .modal-body{padding:20px;max-height:75vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f9fafb}
+    .modal-footer-right{display:flex;gap:8px}
+
+    /* Form */
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:white;transition:border-color .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:#059669;box-shadow:0 0 0 3px rgba(5,150,105,.1)}
+    input[readonly]{background:#f9fafb;color:var(--muted)}
+    .form-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .form-hint.warn{color:var(--warning)}
+
+    /* Delete confirm */
+    .del-modal{max-width:400px}
+    .del-body{padding:20px;font-size:14px;color:var(--text)}
+    .del-body p{margin-bottom:8px}
+    .del-body strong{color:var(--danger)}
+
+    /* Import section */
+    .import-section{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;overflow:hidden}
+    .import-section-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+    .import-section-header:hover{background:#f9fafb}
+    .import-section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .import-section-body{padding:16px;display:none}
+    .import-section-body.open{display:block}
+    .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
+    .drop-zone:hover,.drop-zone.drag-over{border-color:#059669;background:#f0fdf4}
+    .drop-icon{font-size:32px;margin-bottom:8px}
+    .drop-text{font-size:14px;font-weight:600;color:var(--text)}
+    .drop-hint{font-size:12px;color:var(--muted);margin-top:4px}
+    input[type=file]{display:none}
+    /* Preview */
+    .preview-card{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
+    .preview-header{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    .preview-field{font-size:13px}
+    .preview-field .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:2px}
+    .preview-field .val{font-weight:600;color:var(--text)}
+    .preview-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;padding:12px;background:white;border:1.5px solid #059669;border-radius:8px}
+    .preview-inputs .pi-label{font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;display:block;margin-bottom:4px}
+    .preview-inputs input,.preview-inputs select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;color:var(--text)}
+    .preview-inputs input:focus,.preview-inputs select:focus{outline:none;border-color:#059669}
+    .preview-note{font-size:12px;color:#065f46;margin-bottom:12px}
+    .preview-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
+    .preview-table th{background:#e5e7eb;padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase}
+    .preview-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .preview-table tr:last-child td{border-bottom:none}
+    .match-badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
+    .match-ok{background:#d1fae5;color:#065f46}
+    .match-warn{background:#fff7ed;color:#c2410c}
+    .match-err{background:#fee2e2;color:#991b1b}
+    .preview-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .preview-summary{font-size:13px;color:var(--muted)}
+    /* Import tabs */
+    .import-tabs{display:flex;gap:2px;margin-bottom:14px;border-bottom:2px solid var(--border)}
+    .import-tab{padding:7px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;white-space:nowrap}
+    .import-tab.active{color:#059669;border-bottom-color:#059669}
+    .import-tab-panel{display:none}
+    .import-tab-panel.active{display:block}
+    /* Planilha preview */
+    .plan-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+    .plan-stat{background:#f0fdf4;border:1px solid #6ee7b7;border-radius:8px;padding:10px;text-align:center}
+    .plan-stat-val{font-size:20px;font-weight:800;color:#059669}
+    .plan-stat-lbl{font-size:10px;color:#065f46;font-weight:600;text-transform:uppercase;margin-top:2px}
+
+    @media(max-width:600px){
+      .stats{grid-template-columns:1fr 1fr}
+      .form-grid{grid-template-columns:1fr}
+      .preview-header{grid-template-columns:1fr 1fr}
+      .preview-inputs{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
+    <h1>Pedidos de Produção</h1>
+    <div class="header-sub">Controle de pedidos · sincronizado com Firebase</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+    <a href="form.html">Formulário</a>
+    <a href="planejamento.html">Planejamento</a>
+    <a href="pedidos.html" class="active">Pedidos</a>
+    <a href="historico.html">Histórico</a>
+    <a href="produtos.html">Produtos</a>
+    <a href="insumos.html">Insumos</a>
+    <a href="ops.html">OPs</a>
+    <a href="admin.html">Admin</a>
+  </div>
+  <div class="search-box">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Buscar por ID, produto...">
+  </div>
+  <select class="filter-sel" id="filterStatus">
+    <option value="">Todos os status</option>
+    <option value="andamento">Em andamento</option>
+    <option value="concluido">Concluído (≥95%)</option>
+    <option value="encerrado">Encerrado</option>
+  </select>
+  <select class="filter-sel" id="filterLinha">
+    <option value="">Todas as linhas</option>
+    <option value="Linha 1">Linha 1</option>
+    <option value="Linha 2">Linha 2</option>
+    <option value="Linha 3">Linha 3</option>
+  </select>
+  <button class="btn btn-green" id="btnNovo">+ Novo Pedido</button>
+  <button class="btn btn-ghost" id="btnToggleImport">📥 Importar Pedidos / OPs</button>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <!-- Import from OP Excel -->
+  <div class="import-section" id="importSection" style="display:none">
+    <div class="import-section-header" id="importToggleHeader">
+      <span class="import-section-title">📥 Importar Pedido Comercial</span>
+      <span id="importChevron" style="font-size:16px;color:var(--muted)">▼</span>
+    </div>
+    <div class="import-section-body open" id="importBody">
+
+      <!-- Tabs -->
+      <div class="import-tabs">
+        <button class="import-tab active" id="tabPlanilha">📊 Controle de Pedidos (PCP)</button>
+        <button class="import-tab" id="tabComercial">📊 Fechamento Comercial (Vendas)</button>
+      </div>
+
+      <!-- ── TAB 1: Controle de Pedidos (planilha) ── -->
+      <div class="import-tab-panel active" id="panelPlanilha">
+        <div id="planDropWrap">
+          <div class="drop-zone" id="planDropZone">
+            <div class="drop-icon">📊</div>
+            <div class="drop-text" id="planDropText">Clique ou arraste "Controle de Insumos e Pedidos.xlsm"</div>
+            <div class="drop-hint">Aceita: .xlsx e .xlsm — lê a aba "Pedidos"</div>
+          </div>
+          <input type="file" id="planFileInput" accept=".xlsx,.xlsm">
+        </div>
+
+        <div id="planPreview" style="display:none">
+          <div class="preview-card">
+            <div class="plan-stats">
+              <div class="plan-stat"><div class="plan-stat-val" id="planStatTotal">—</div><div class="plan-stat-lbl">Pedidos</div></div>
+              <div class="plan-stat"><div class="plan-stat-val" id="planStatLinhas">—</div><div class="plan-stat-lbl">Linhas</div></div>
+              <div class="plan-stat"><div class="plan-stat-val" id="planStatQtd">—</div><div class="plan-stat-lbl">Total un.</div></div>
+            </div>
+            <div class="preview-note">ℹ️ Os pedidos abaixo serão importados para o Firebase. Registros já existentes terão apenas a <strong>quantidade total</strong> atualizada — o campo "produzido" é preservado. Confirme antes de salvar.</div>
+            <div style="max-height:320px;overflow-y:auto;margin-bottom:12px">
+              <table class="preview-table">
+                <thead><tr><th>ID do Pedido</th><th>Produto</th><th>Linha</th><th>Data Prod.</th><th style="text-align:right">Qtd. Total</th></tr></thead>
+                <tbody id="planPreviewBody"></tbody>
+              </table>
+            </div>
+            <div class="preview-actions">
+              <div class="preview-summary" id="planSummary"></div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" id="btnPlanClear">✕ Limpar</button>
+                <button class="btn btn-green" id="btnPlanConfirm">✔ Confirmar e Importar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 3: Fechamento Comercial ── -->
+      <div class="import-tab-panel" id="panelComercial">
+        <div id="comDropWrap">
+          <div class="drop-zone" id="comDropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 30px 20px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom:12px;">
+            <div style="font-size:32px; margin-bottom:8px">📋</div>
+            <div id="comDropText" style="font-size:14px; font-weight:600; color:var(--text)">Clique ou arraste o arquivo do Pedido Comercial aqui</div>
+            <div style="font-size:11px; color:var(--muted); margin-top:4px">Aceita: fechamentos de Pedido Comercial (.xlsx)</div>
+          </div>
+          <input type="file" id="comFileInput" accept=".xlsx" style="display:none">
+        </div>
+
+        <div id="comPreview" style="display:none">
+          <div class="preview-card">
+            <div class="plan-stats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px">
+              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatTotal">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Pedidos/Linhas</div></div>
+              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatLinhas">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Linhas Ativas</div></div>
+              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatQtd">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Qtd Total un.</div></div>
+            </div>
+            
+            <div id="comWarningMissing" style="display:none; margin: 12px 0; background: #fff5f5; border: 1px solid #feb2b2; border-left: 4px solid #f56565; color: #9b2c2c; border-radius: 6px; padding: 10px; font-size:12px;">
+              ⚠️ <strong>Atenção:</strong> Os produtos abaixo não constam no cadastro de produtos ativos. Cadastre-os para evitar falhas:
+              <ul style="margin:6px 0 0 16px; padding:0;" id="comMissingList"></ul>
+            </div>
+
+            <div style="max-height:300px; overflow-y:auto; margin-bottom:12px">
+              <table class="preview-table">
+                <thead><tr><th>ID do Pedido</th><th>SKU</th><th>Produto</th><th>Data Prod.</th><th style="text-align:right">Qtd. Pedida</th></tr></thead>
+                <tbody id="comPreviewBody"></tbody>
+              </table>
+            </div>
+
+            <div class="preview-actions">
+              <div class="preview-summary" id="comSummary"></div>
+              <div style="display:flex; gap:8px">
+                <button class="btn btn-ghost" id="btnComClear">✕ Limpar</button>
+                <button class="btn btn-green" id="btnComConfirm">✔ Confirmar e Importar</button>
+              </div>
+            </div>
+            
+            <div class="progress-wrap" id="comProgressWrap" style="display:none; margin-top:10px">
+              <div style="height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-bottom:4px"><div id="comProgressFill" style="height:100%; border-radius:3px; background:#10b981; width:0%"></div></div>
+              <div id="comProgressText" style="font-size:11px; color:var(--muted)">Salvando...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="statTotal">—</div>
+      <div class="stat-lbl">Total</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="statAndamento" style="color:#1a56db">—</div>
+      <div class="stat-lbl">Em Andamento</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="statConcluido" style="color:#059669">—</div>
+      <div class="stat-lbl">Concluídos</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="statEncerrado" style="color:var(--muted)">—</div>
+      <div class="stat-lbl">Encerrados</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span id="tableCount">Pedidos</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:36px;text-align:center" title="Prioridade da planilha">Prio.</th>
+            <th style="min-width:110px">ID do Pedido</th>
+            <th style="min-width:200px">Produto</th>
+            <th style="min-width:70px">Linha</th>
+            <th style="min-width:90px">Data Prod.</th>
+            <th style="min-width:70px;text-align:right">Qtd Total</th>
+            <th style="min-width:70px;text-align:right">Produzido</th>
+            <th style="min-width:130px">Progresso</th>
+            <th style="min-width:110px">Status</th>
+            <th style="min-width:80px">Insumos</th>
+            <th style="min-width:80px"></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="10" class="no-data">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Novo / Editar Pedido -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Novo Pedido</h2>
+      <button class="modal-close" id="modalClose">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalAlertBox" class="alert alert-danger" style="margin-bottom:12px"></div>
+
+      <div class="section-label" style="margin-top:0">Identificação</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>ID do Pedido *</label>
+          <input type="text" id="fId" placeholder="Ex: PED-2026-001">
+          <div class="form-hint">Usado para vincular apontamentos ao pedido</div>
+        </div>
+        <div class="form-group">
+          <label>Prioridade da Programação</label>
+          <input type="number" id="fPriority" min="1" step="1" placeholder="Ex: 1, 2, 3...">
+          <div class="form-hint">Prioridade sequencial única</div>
+        </div>
+        <div class="form-group">
+          <label>Linha de Produção</label>
+          <select id="fLinha">
+            <option value="">— Selecione —</option>
+            <option value="Linha 1">Linha 1</option>
+            <option value="Linha 2">Linha 2</option>
+            <option value="Linha 3">Linha 3</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Produto *</label>
+          <select id="fProduto">
+            <option value="">— Selecione o produto —</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-label">Produção</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Qtd Total (unidades) *</label>
+          <input type="number" id="fQtdTotal" min="1" step="1" placeholder="Ex: 5000">
+        </div>
+        <div class="form-group">
+          <label>Data de Produção</label>
+          <input type="date" id="fDataProd">
+        </div>
+        <div class="form-group">
+          <label>Produzido até agora</label>
+          <input type="number" id="fProduzido" min="0" step="1" placeholder="0">
+          <div class="form-hint">Ajuste manual se necessário</div>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="fStatusManual">
+            <option value="">— Automático —</option>
+            <option value="encerrado">Encerrado manualmente</option>
+          </select>
+          <div class="form-hint">Automático: ≥95% = Concluído</div>
+        </div>
+      </div>
+
+      <div class="section-label">Informações calculadas</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Progresso atual</label>
+          <input type="text" id="fProgresso" readonly placeholder="—">
+        </div>
+        <div class="form-group">
+          <label>Último apontamento</label>
+          <input type="text" id="fUltimoApontamento" readonly placeholder="—">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div>
+        <button class="btn btn-danger btn-sm" id="btnEncerrar" style="display:none">⬛ Encerrar Pedido</button>
+      </div>
+      <div class="modal-footer-right">
+        <button class="btn btn-ghost" id="btnCancelar">Cancelar</button>
+        <button class="btn btn-green" id="btnSalvar">Salvar Pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirmar exclusão -->
+<div class="modal-bg" id="delModalBg">
+  <div class="modal del-modal">
+    <div class="modal-header" style="background:linear-gradient(135deg,#9b1c1c,#e02424)">
+      <h2>Excluir Pedido</h2>
+      <button class="modal-close" id="delModalClose">×</button>
+    </div>
+    <div class="del-body">
+      <p>Tem certeza que deseja excluir permanentemente o pedido:</p>
+      <p><strong id="delPedidoInfo"></strong></p>
+      <p style="margin-top:12px;font-size:12px;color:var(--muted)">
+        Atenção: os apontamentos de produção vinculados a este pedido <strong>não serão apagados</strong>, mas deixarão de ser contabilizados no progresso.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <div></div>
+      <div class="modal-footer-right">
+        <button class="btn btn-ghost" id="delBtnCancelar">Cancelar</button>
+        <button class="btn btn-danger" id="delBtnConfirmar">Excluir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Firebase config ──────────────────────────────────────────────
+  var firebaseConfig = {
+    apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+    authDomain: "prod-kuryos.firebaseapp.com",
+    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    projectId: "prod-kuryos",
+    storageBucket: "prod-kuryos.firebasestorage.app",
+    messagingSenderId: "323674581733",
+    appId: "1:323674581733:web:e283a491c0c2bd6025420c",
+    measurementId: "G-PTVWKLRHTG"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.database();
+
+  // ── State ────────────────────────────────────────────────────────
+  var allPedidos = {};       // firebaseKey → pedido object (with _key)
+  var produtosCache = {};    // firebaseKey → produto object
+  var editingKey = null;     // key being edited (null = new)
+  var deleteKey = null;      // key pending delete
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  function isConcluido(status) {
+    if (!status) return false;
+    var s = String(status).toLowerCase().trim();
+    return s.indexOf('conclu') === 0;
+  }
+  function sanitizeKey(str) {
+    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
+  }
+  function pedidoFirebaseKey(id, produto) {
+    return sanitizeKey(id) + '__' + sanitizeKey(produto);
+  }
+  function pct(p) {
+    return p && p.qtdTotal ? Math.round((p.produzido || 0) / p.qtdTotal * 100) : 0;
+  }
+  function pedidoStatus(p) {
+    if (p.statusManual === 'encerrado') return 'encerrado';
+    if (isConcluido(p.status)) return 'concluido'; // marcado pelo import quando sumiu da planilha ou concluído na planilha
+    if (pct(p) >= 95) return 'concluido';
+    return 'andamento';
+  }
+  // Badge do status da planilha (Em Produção, Programado, etc.)
+  var STATUS_PLANILHA = {
+    'Em Produção':      {bg:'#dbeafe',cl:'#1e40af'},
+    'Produção Parcial': {bg:'#d1fae5',cl:'#065f46'},
+    'Programado':       {bg:'#fef3c7',cl:'#92400e'},
+    'Não Iniciado':     {bg:'#f1f5f9',cl:'#64748b'},
+    'Concluído':        {bg:'#dcfce7',cl:'#166534'}
+  };
+  function planilhaStatusBadge(p) {
+    if (!p.status) return '';
+    var c = STATUS_PLANILHA[p.status] || {bg:'#f1f5f9',cl:'#64748b'};
+    return '<span style="background:' + c.bg + ';color:' + c.cl + ';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap">' + p.status + '</span>';
+  }
+  function fmtDate(s) {
+    if (!s) return '—';
+    var parts = s.split('-');
+    if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+    return s;
+  }
+  function showAlert(msg, type, box) {
+    var el = box || document.getElementById('alertBox');
+    el.textContent = msg;
+    el.className = 'alert alert-' + (type || 'success') + ' show';
+    if (!box) setTimeout(function(){ el.classList.remove('show'); }, 4000);
+  }
+  function hideModalAlert() {
+    var el = document.getElementById('modalAlertBox');
+    el.classList.remove('show');
+  }
+
+  // ── Connection status ────────────────────────────────────────────
+  db.ref('.info/connected').on('value', function(snap) {
+    var on = snap.val();
+    document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+    document.getElementById('sTxt').textContent = on ? 'Conectado' : 'Offline';
+  });
+
+  // ── Load produtos for select ─────────────────────────────────────
+  db.ref('produtos').on('value', function(snap) {
+    produtosCache = snap.val() || {};
+    fillProdutoSelect();
+  });
+
+  function fillProdutoSelect() {
+    var sel = document.getElementById('fProduto');
+    var current = sel.value;
+    // clear existing optgroups/options except first
+    while (sel.options.length > 1) sel.remove(1);
+    var groups = {};
+    Object.values(produtosCache).forEach(function(p) {
+      if (p.ativo !== 'Ativo') return;
+      var g = p.cliente || 'Sem Cliente';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(p);
+    });
+    Object.keys(groups).sort().forEach(function(g) {
+      var og = document.createElement('optgroup');
+      og.label = g;
+      groups[g].sort(function(a,b){ return a.descricao.localeCompare(b.descricao); }).forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p.descricao;
+        opt.textContent = (p.sku ? '[' + p.sku + '] ' : '') + p.descricao + (p.volume ? ' ' + p.volume + (p.unidadeVolume||'') : '');
+        og.appendChild(opt);
+      });
+      sel.appendChild(og);
+    });
+    if (current) sel.value = current;
+  }
+
+  // ── Load pedidos (realtime) ──────────────────────────────────────
+  db.ref('pedidos').on('value', function(snap) {
+    allPedidos = {};
+    if (snap.val()) {
+      Object.entries(snap.val()).forEach(function(entry) {
+        var k = entry[0], v = entry[1];
+        if (k.indexOf('OP_') === 0) return; // ignore OPs in Pedidos page
+        v._key = k;
+        allPedidos[k] = v;
+      });
+    }
+    renderTable();
+  });
+
+  // ── Render ───────────────────────────────────────────────────────
+  function renderTable() {
+    var search = document.getElementById('searchInput').value.toLowerCase().trim();
+    var filterStatus = document.getElementById('filterStatus').value;
+    var filterLinha = document.getElementById('filterLinha').value;
+
+    var list = Object.values(allPedidos).filter(function(p) {
+      var st = pedidoStatus(p);
+      if (filterStatus && st !== filterStatus) return false;
+      if (filterLinha && p.linha !== filterLinha) return false;
+      if (search) {
+        var hay = ((p.id||'') + ' ' + (p.produto||'') + ' ' + (p.cliente||'')).toLowerCase();
+        if (hay.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+
+    // Sort: usar prioridade (asc), depois ordenacao da planilha, depois status
+    list.sort(function(a, b) {
+      var sa = pedidoStatus(a), sb = pedidoStatus(b);
+      var stOrd = {andamento:0, concluido:1, encerrado:2};
+      if (stOrd[sa] !== stOrd[sb]) return stOrd[sa] - stOrd[sb];
+      // Dentro do mesmo status: usar prioridade
+      var pa = a.priority || 999, pb = b.priority || 999;
+      if (pa !== pb) return pa - pb;
+      var oa = a.ordenacao || 999999999, ob = b.ordenacao || 999999999;
+      if (oa !== ob) return oa - ob;
+      return pct(b) - pct(a);
+    });
+
+    // Stats from ALL pedidos (unfiltered)
+    var all = Object.values(allPedidos);
+    document.getElementById('statTotal').textContent = all.length;
+    document.getElementById('statAndamento').textContent = all.filter(function(p){ return pedidoStatus(p) === 'andamento'; }).length;
+    document.getElementById('statConcluido').textContent = all.filter(function(p){ return pedidoStatus(p) === 'concluido'; }).length;
+    document.getElementById('statEncerrado').textContent = all.filter(function(p){ return pedidoStatus(p) === 'encerrado'; }).length;
+
+    document.getElementById('tableCount').textContent = list.length + ' pedido' + (list.length !== 1 ? 's' : '');
+
+    var tbody = document.getElementById('tableBody');
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="no-data">Nenhum pedido encontrado</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = list.map(function(p) {
+      var pc = pct(p);
+      var st = pedidoStatus(p);
+      var fillClass = pc >= 95 ? 'fill-green' : pc >= 70 ? 'fill-orange' : 'fill-red';
+      if (st === 'encerrado') fillClass = 'fill-purple';
+      var statusBadge =
+        st === 'concluido'  ? '<span class="badge badge-green">✓ Concluído</span>' :
+        st === 'encerrado'  ? '<span class="badge badge-purple">⬛ Encerrado</span>' :
+                              '<span class="badge badge-blue">⚙ Em andamento</span>';
+      var ins = p.insumoStatus;
+      var insBadge = ins === 'ok'      ? '<a href="insumos.html#' + p._key + '" class="badge badge-green" style="text-decoration:none">✓ OK</a>' :
+                     ins === 'parcial' ? '<a href="insumos.html#' + p._key + '" class="badge badge-orange" style="text-decoration:none">⚠ Parcial</a>' :
+                     ins === 'pendente'? '<a href="insumos.html#' + p._key + '" class="badge badge-red" style="text-decoration:none">✗ Pendente</a>' :
+                                         '<a href="insumos.html#' + p._key + '" class="badge" style="text-decoration:none;background:#f3f4f6;color:#6b7280">— —</a>';
+      var prioCell = p.priority
+        ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:800">' + p.priority + '</span>'
+        : '<span style="color:var(--muted)">—</span>';
+      var clientBadge = p.cliente ? ' <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:700;padding:1px 5px;margin-left:4px">' + p.cliente + '</span>' : '';
+      return '<tr>' +
+        '<td style="text-align:center">' + prioCell + '</td>' +
+        '<td><span class="id-badge">#' + (p.id||'—') + '</span></td>' +
+        '<td><div class="prod-cell" title="' + (p.produto||'') + '">' + (p.produto||'—') + clientBadge + '</div></td>' +
+        '<td>' + (p.linha||'—') + '</td>' +
+        '<td>' + fmtDate(p.dataProd) + '</td>' +
+        '<td style="text-align:right;font-weight:600">' + (p.qtdTotal ? p.qtdTotal.toLocaleString('pt-BR') : '—') + '</td>' +
+        '<td style="text-align:right;color:var(--muted)">' + ((p.produzido||0).toLocaleString('pt-BR')) + '</td>' +
+        '<td>' +
+          '<div class="prog-wrap">' +
+            '<div class="prog-label"><span>' + (p.produzido||0).toLocaleString('pt-BR') + ' / ' + (p.qtdTotal||0).toLocaleString('pt-BR') + '</span><span class="pct">' + pc + '%</span></div>' +
+            '<div class="prog-bar"><div class="prog-fill ' + fillClass + '" style="width:' + Math.min(pc,100) + '%"></div></div>' +
+          '</div>' +
+        '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + insBadge + '</td>' +
+        '<td><div class="actions-cell">' +
+          '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '">✏️</button>' +
+          '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // ── Filters ──────────────────────────────────────────────────────
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('filterStatus').addEventListener('change', renderTable);
+  document.getElementById('filterLinha').addEventListener('change', renderTable);
+
+  // ── Table actions (edit / delete) via delegation ─────────────────
+  document.getElementById('tableBody').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var key = btn.dataset.key;
+    if (btn.dataset.action === 'edit') openEdit(key);
+    if (btn.dataset.action === 'delete') openDelete(key);
+  });
+
+  // ── Modal: open new ──────────────────────────────────────────────
+  document.getElementById('btnNovo').addEventListener('click', function() {
+    openNew();
+  });
+
+  function openNew() {
+    editingKey = null;
+    document.getElementById('modalTitle').textContent = 'Novo Pedido';
+    resetForm();
+    document.getElementById('btnEncerrar').style.display = 'none';
+    hideModalAlert();
+    document.getElementById('modalBg').classList.add('open');
+    document.getElementById('fId').focus();
+  }
+
+  function openEdit(key) {
+    var p = allPedidos[key];
+    if (!p) return;
+    editingKey = key;
+    document.getElementById('modalTitle').textContent = 'Editar Pedido · #' + (p.id||key);
+    resetForm();
+    document.getElementById('fId').value = p.id || '';
+    document.getElementById('fProduto').value = p.produto || '';
+    document.getElementById('fPriority').value = p.priority || '';
+    document.getElementById('fLinha').value = p.linha || '';
+    document.getElementById('fQtdTotal').value = p.qtdTotal || '';
+    document.getElementById('fDataProd').value = p.dataProd || '';
+    document.getElementById('fProduzido').value = p.produzido || 0;
+    document.getElementById('fStatusManual').value = p.statusManual || '';
+    var pc = pct(p);
+    document.getElementById('fProgresso').value = pc + '% (' + (p.produzido||0) + ' / ' + (p.qtdTotal||0) + ' un.)';
+    document.getElementById('fUltimoApontamento').value = fmtDate(p.ultimoApontamento);
+    var st = pedidoStatus(p);
+    document.getElementById('btnEncerrar').style.display = (st !== 'encerrado') ? 'inline-flex' : 'none';
+    hideModalAlert();
+    document.getElementById('modalBg').classList.add('open');
+  }
+
+  function resetForm() {
+    document.getElementById('fId').value = '';
+    document.getElementById('fProduto').value = '';
+    document.getElementById('fPriority').value = '';
+    document.getElementById('fLinha').value = '';
+    document.getElementById('fQtdTotal').value = '';
+    document.getElementById('fDataProd').value = '';
+    document.getElementById('fProduzido').value = '';
+    document.getElementById('fStatusManual').value = '';
+    document.getElementById('fProgresso').value = '';
+    document.getElementById('fUltimoApontamento').value = '';
+  }
+
+  function closeModal() {
+    document.getElementById('modalBg').classList.remove('open');
+    editingKey = null;
+  }
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('btnCancelar').addEventListener('click', closeModal);
+  document.getElementById('modalBg').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  // ── Save ─────────────────────────────────────────────────────────
+  document.getElementById('btnSalvar').addEventListener('click', salvar);
+
+  function salvar() {
+    var id = document.getElementById('fId').value.trim();
+    var produto = document.getElementById('fProduto').value.trim();
+    var priorityVal = parseInt(document.getElementById('fPriority').value) || 0;
+    var linha = document.getElementById('fLinha').value;
+    var qtdTotal = parseFloat(document.getElementById('fQtdTotal').value) || 0;
+    var dataProd = document.getElementById('fDataProd').value;
+    var produzido = parseFloat(document.getElementById('fProduzido').value) || 0;
+    var statusManual = document.getElementById('fStatusManual').value;
+
+    if (!id) { showModalAlert('Informe o ID do pedido.'); return; }
+    if (!produto) { showModalAlert('Selecione o produto.'); return; }
+    if (!qtdTotal || qtdTotal < 1) { showModalAlert('Informe a quantidade total (mínimo 1).'); return; }
+
+    var newKey = pedidoFirebaseKey(id, produto);
+
+    var skuVal = '';
+    var clientVal = '';
+    var matchedProd = Object.values(produtosCache).find(function(p) {
+      return p.descricao === produto;
+    });
+    if (matchedProd) {
+      skuVal = matchedProd.sku || '';
+      clientVal = matchedProd.cliente || '';
+    }
+
+    var data = {
+      id: id,
+      produto: produto,
+      sku: skuVal,
+      cliente: clientVal,
+      linha: linha || '',
+      qtdTotal: qtdTotal,
+      dataProd: dataProd || '',
+      produzido: produzido,
+      priority: priorityVal > 0 ? priorityVal : 999
+    };
+    if (statusManual) data.statusManual = statusManual;
+
+    // If editing and the key changed (ID or produto changed), delete old key
+    var oldKey = editingKey;
+    var keyChanged = oldKey && oldKey !== newKey;
+
+    var btn = document.getElementById('btnSalvar');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    var doSave = function(preservedData) {
+      // Merge: preserve ultimoApontamento and produzido if not changed by user
+      if (preservedData) {
+        if (!document.getElementById('fProduzido').value && preservedData.produzido) {
+          data.produzido = preservedData.produzido;
+        }
+        if (preservedData.ultimoApontamento) {
+          data.ultimoApontamento = preservedData.ultimoApontamento;
+        }
+        if (preservedData.cliente) {
+          data.cliente = preservedData.cliente; // preserve client name
+        }
+      }
+
+      var shiftsUpdates = {};
+      if (priorityVal > 0) {
+        var pMap = {};
+        Object.entries(allPedidos).forEach(function(entry) {
+          var k = entry[0], p = entry[1];
+          if (k === oldKey || k === newKey) return;
+          var st = pedidoStatus(p);
+          if (st === 'concluido' || st === 'encerrado') return;
+          var prio = parseInt(p.priority);
+          if (prio > 0) {
+            pMap[prio] = k;
+          }
+        });
+
+        var checkPrio = priorityVal;
+        var shifts = {};
+        while (pMap[checkPrio]) {
+          var collidingKey = pMap[checkPrio];
+          var nextPrio = checkPrio + 1;
+          shifts[collidingKey] = nextPrio;
+          delete pMap[checkPrio];
+          if (pMap[nextPrio]) {
+            checkPrio = nextPrio;
+          } else {
+            pMap[nextPrio] = collidingKey;
+            break;
+          }
+        }
+
+        Object.entries(shifts).forEach(function(entry) {
+          var k = entry[0], newPrio = entry[1];
+          shiftsUpdates['pedidos/' + k + '/priority'] = newPrio;
+        });
+      }
+
+      shiftsUpdates['pedidos/' + newKey] = data;
+
+      var promise = db.ref().update(shiftsUpdates);
+      if (keyChanged) {
+        promise = promise.then(function() {
+          return db.ref('pedidos/' + oldKey).remove();
+        });
+      }
+
+      promise.then(function() {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Pedido';
+        closeModal();
+        showAlert(editingKey ? 'Pedido atualizado com sucesso.' : 'Pedido criado com sucesso.', 'success');
+      }).catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Pedido';
+        showModalAlert('Erro ao salvar: ' + err.message);
+      });
+    };
+
+    if (keyChanged) {
+      // Preserve produzido / ultimoApontamento from old record
+      db.ref('pedidos/' + oldKey).once('value').then(function(snap) {
+        doSave(snap.val());
+      });
+    } else if (editingKey) {
+      // Preserve from same key
+      db.ref('pedidos/' + newKey).once('value').then(function(snap) {
+        doSave(snap.val());
+      });
+    } else {
+      // New order — check if key already exists
+      db.ref('pedidos/' + newKey).once('value').then(function(snap) {
+        if (snap.exists()) {
+          btn.disabled = false;
+          btn.textContent = 'Salvar Pedido';
+          showModalAlert('Já existe um pedido com este ID e produto. Use outro ID ou edite o existente.');
+          return;
+        }
+        doSave(null);
+      });
+    }
+  }
+
+  function showModalAlert(msg) {
+    var el = document.getElementById('modalAlertBox');
+    el.textContent = msg;
+    el.className = 'alert alert-danger show';
+  }
+
+  function cleanFutureSlots(pedidoKey) {
+    if (!pedidoKey) return Promise.resolve();
+    return db.ref('programacao').once('value').then(function(snap) {
+      var prog = snap.val() || {};
+      var updates = {};
+      var d = new Date();
+      var localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+      var todayStr = localDate.toISOString().split('T')[0];
+      var currentHour = new Date().getHours();
+      
+      Object.entries(prog).forEach(function(dayEntry) {
+        var date = dayEntry[0];
+        var dayData = dayEntry[1];
+        if (date < todayStr) return;
+        
+        Object.entries(dayData).forEach(function(hourEntry) {
+          var hourKey = hourEntry[0];
+          var hourData = hourEntry[1];
+          
+          if (date === todayStr) {
+            var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
+            if (h < currentHour) return;
+          }
+          
+          for (var l = 1; l <= 3; l++) {
+            var env = hourData['env' + l];
+            if (env && env.pedidoKey === pedidoKey) {
+              updates['programacao/' + date + '/' + hourKey + '/env' + l] = null;
+            }
+          }
+        });
+      });
+      
+      if (Object.keys(updates).length > 0) {
+        console.log('Cleaning future planning slots for completed/deleted order:', pedidoKey, updates);
+        return db.ref().update(updates);
+      }
+    }).catch(function(err) {
+      console.error('Error cleaning future slots:', err);
+    });
+  }
+
+  // ── Encerrar pedido ──────────────────────────────────────────────
+  document.getElementById('btnEncerrar').addEventListener('click', function() {
+    if (!editingKey) return;
+    var p = allPedidos[editingKey];
+    if (!confirm('Encerrar o pedido #' + (p ? p.id : editingKey) + '?\nIso marcará o pedido como encerrado manualmente.')) return;
+    db.ref('pedidos/' + editingKey + '/statusManual').set('encerrado').then(function() {
+      return cleanFutureSlots(editingKey);
+    }).then(function() {
+      closeModal();
+      showAlert('Pedido encerrado manualmente e slots futuros limpos.', 'success');
+    });
+  });
+
+  // ── Delete ───────────────────────────────────────────────────────
+  function openDelete(key) {
+    var p = allPedidos[key];
+    if (!p) return;
+    deleteKey = key;
+    document.getElementById('delPedidoInfo').textContent = '#' + (p.id||key) + ' — ' + (p.produto||'');
+    document.getElementById('delModalBg').classList.add('open');
+  }
+
+  document.getElementById('delModalClose').addEventListener('click', closeDelModal);
+  document.getElementById('delBtnCancelar').addEventListener('click', closeDelModal);
+  document.getElementById('delModalBg').addEventListener('click', function(e) {
+    if (e.target === this) closeDelModal();
+  });
+
+  function closeDelModal() {
+    document.getElementById('delModalBg').classList.remove('open');
+    deleteKey = null;
+  }
+
+  document.getElementById('delBtnConfirmar').addEventListener('click', function() {
+    if (!deleteKey) return;
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Excluindo...';
+    var k = deleteKey;
+    db.ref('pedidos/' + k).remove().then(function() {
+      return cleanFutureSlots(k);
+    }).then(function() {
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+      closeDelModal();
+      showAlert('Pedido excluído e slots futuros limpos.', 'success');
+    }).catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Excluir';
+      showAlert('Erro ao excluir: ' + err.message, 'danger');
+    });
+  });
+
+  // ══════════════════════════════════════════════
+  // IMPORT FROM OP EXCEL
+  // ══════════════════════════════════════════════
+
+  var importedItems = []; // parsed items from Excel
+
+  // Toggle import section visibility
+  document.getElementById('btnToggleImport').addEventListener('click', function() {
+    var sec = document.getElementById('importSection');
+    sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('importToggleHeader').addEventListener('click', function() {
+    var body = document.getElementById('importBody');
+    var chev = document.getElementById('importChevron');
+    var open = body.classList.toggle('open');
+    chev.textContent = open ? '▼' : '▶';
+  });
+
+  // ── Import tabs ──────────────────────────────────────────────────
+  document.getElementById('tabPlanilha').addEventListener('click', function() {
+    document.getElementById('tabPlanilha').classList.add('active');
+    document.getElementById('tabComercial').classList.remove('active');
+    document.getElementById('panelPlanilha').classList.add('active');
+    document.getElementById('panelComercial').classList.remove('active');
+  });
+  document.getElementById('tabComercial').addEventListener('click', function() {
+    document.getElementById('tabComercial').classList.add('active');
+    document.getElementById('tabPlanilha').classList.remove('active');
+    document.getElementById('panelComercial').classList.add('active');
+    document.getElementById('panelPlanilha').classList.remove('active');
+  });
+
+  // ── Normalize string for fuzzy matching ─────────────────────────
+  function normMatch(s) {
+    return String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  // Score how well two strings match (higher = better)
+  function matchScore(a, b) {
+    var na = normMatch(a), nb = normMatch(b);
+    if (na === nb) return 100;
+    // Check word overlap
+    var wa = na.split(' '), wb = nb.split(' ');
+    var common = wa.filter(function(w){ return wb.indexOf(w) !== -1 && w.length > 2; }).length;
+    var score = common / Math.max(wa.length, wb.length) * 100;
+    return score;
+  }
+
+  // Find best matching produto in catalog for a given description
+  function findBestMatch(descricao) {
+    var best = null, bestScore = 0;
+    Object.values(produtosCache).forEach(function(p) {
+      var s = matchScore(descricao, p.descricao);
+      if (s > bestScore) { bestScore = s; best = p; }
+    });
+    return { produto: best, score: bestScore };
+  }
+
+  // ── Parse the OP Excel file ──────────────────────────────────────
+  
+  // --- Fechamento Comercial (Vendas) Import ---
+  var parsedComercial = [];
+
+  function cleanProduto(v) {
+    if (!v || typeof v !== 'string') return '';
+    var s = v.split('>')[0];
+    s = s.split(' - ')[0];
+    return s.trim();
+  }
+
+  function sanitizeKey(str) {
+    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
+  }
+
+  function parseComercialFile(file) {
+    document.getElementById('comDropText').textContent = '⏳ Lendo ' + file.name + '...';
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true, cellFormula: false });
+        var sheetName = wb.SheetNames[0];
+        var ws = wb.Sheets[sheetName];
+        if (!ws) {
+          alert('Planilha vazia ou sem abas válidas.');
+          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
+          return;
+        }
+
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
+        
+        var client = '';
+        var pedidoNum = '';
+        var dateStr = '';
+
+        // Scan first 15 rows dynamically for headers
+        for (var r = 0; r < Math.min(rows.length, 15); r++) {
+          var row = rows[r] || [];
+          for (var c = 0; c < row.length; c++) {
+            var val = String(row[c] || '').trim().toUpperCase();
+            if (val === 'CLIENTE:' && !client) client = String(row[c+1] || '').trim();
+            if (val === 'PEDIDO:' && !pedidoNum) pedidoNum = String(row[c+1] || '').trim();
+            if (val === 'DATA:' && !dateStr) {
+              var dateVal = row[c+1];
+              if (dateVal instanceof Date) {
+                var offset = dateVal.getTimezoneOffset() * 60000;
+                var local = new Date(dateVal.getTime() - offset);
+                dateStr = local.toISOString().slice(0, 10);
+              } else if (dateVal) {
+                dateStr = String(dateVal).slice(0, 10);
+              }
+            }
+          }
+        }
+
+        // Fallback to F6, F7, F8 cells if headers not found dynamically
+        if (!client && ws['F6']) client = String(ws['F6'].v || ws['F6'].w || '').trim();
+        if (!pedidoNum && ws['F7']) pedidoNum = String(ws['F7'].v || ws['F7'].w || '').trim();
+        if (!dateStr && ws['F8']) {
+          var dateRaw = ws['F8'].v;
+          if (dateRaw instanceof Date) {
+            var offset = dateRaw.getTimezoneOffset() * 60000;
+            var local = new Date(dateRaw.getTime() - offset);
+            dateStr = local.toISOString().slice(0, 10);
+          } else if (dateRaw) {
+            dateStr = String(dateRaw).slice(0, 10);
+          }
+        }
+
+        if (!pedidoNum) {
+          alert('Número do Pedido não localizado na planilha comercial.');
+          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
+          return;
+        }
+
+        // Search for item headers row
+        var startRow = 26; // default line 27 (index 26)
+        for (var r = 0; r < Math.min(rows.length, 45); r++) {
+          var row = rows[r] || [];
+          var colD = row[3] ? String(row[3]).trim().toUpperCase() : '';
+          if (colD === '#') {
+            startRow = r + 1;
+            break;
+          }
+        }
+
+        parsedComercial = [];
+        for (var r = startRow; r < rows.length; r++) {
+          var row = rows[r];
+          if (!row || row.length === 0) continue;
+
+          var idx = row[3] ? String(row[3]).trim() : ''; // Col D (index 3) is '#'
+          if (!idx || isNaN(parseInt(idx))) {
+            if (r > startRow + 50) break; // stop at empty or totals rows
+            continue;
+          }
+
+          var sku = row[4] ? String(row[4]).trim() : ''; // Col E (index 4) is SKU
+          var productDesc = row[8] ? String(row[8]).trim() : ''; // Col I (index 8) is Item description
+          var qty = row[23] ? Math.round(parseFloat(String(row[23]).replace(',', '.')) || 0) : 0; // Col X (index 23) is Qty
+
+          if (productDesc && qty > 0) {
+            var cleanProdName = cleanProduto(productDesc);
+            var firebaseKey = sanitizeKey(pedidoNum) + '__' + sanitizeKey(sku || cleanProdName);
+
+            parsedComercial.push({
+              id: pedidoNum, // Just use the pedidoNum directly as requested by the user!
+              produto: cleanProdName,
+              sku: sku,
+              qtdTotal: qty,
+              dataProd: dateStr,
+              linha: '',
+              status: 'Não Iniciado',
+              priority: 999,
+              ordenacao: 999999999,
+              produzido: 0,
+              insumosChecklist: {},
+              cliente: client,
+              firebaseKey: firebaseKey
+            });
+          }
+        }
+
+        if (!parsedComercial.length) {
+          alert('Nenhum item com quantidade encontrada.');
+          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
+          return;
+        }
+
+        document.getElementById('comDropText').textContent = '✓ ' + file.name + ' (Pedido #' + pedidoNum + ')';
+        onComercialParsed();
+      } catch(err) {
+        alert('Erro ao analisar planilha comercial: ' + err.message);
+        document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function onComercialParsed() {
+    // Check for missing catalog products
+    var missingList = [];
+    parsedComercial.forEach(function(p) {
+      var found = false;
+      var pSku = String(p.sku || '').trim().toUpperCase();
+      var pProd = String(p.produto || '').trim().toUpperCase();
+      
+      // 'produtos' is loaded globally in pedidos.html
+      Object.values(produtosCache).forEach(function(cat) {
+        if (cat.ativo !== 'Ativo') return;
+        var catSku = String(cat.sku || '').trim().toUpperCase();
+        var catDesc = String(cat.descricao || '').trim().toUpperCase();
+        if (pSku && catSku && pSku === catSku) {
+          found = true;
+        } else if (pProd === catDesc) {
+          found = true;
+        }
+      });
+      
+      if (!found) {
+        var itemStr = (p.sku ? '[' + p.sku + '] ' : '') + p.produto;
+        if (missingList.indexOf(itemStr) === -1) {
+          missingList.push(itemStr);
+        }
+      }
+    });
+
+    var warningDiv = document.getElementById('comWarningMissing');
+    var warningUl = document.getElementById('comMissingList');
+    if (missingList.length > 0) {
+      warningUl.innerHTML = missingList.map(function(item) {
+        return '<li>' + item + '</li>';
+      }).join('');
+      warningDiv.style.display = 'block';
+    } else {
+      warningDiv.style.display = 'none';
+    }
+
+    // Render Stats
+    var totalQtd = 0;
+    parsedComercial.forEach(function(p) { totalQtd += p.qtdTotal; });
+    document.getElementById('comStatTotal').textContent = parsedComercial.length;
+    document.getElementById('comStatCliente').textContent = parsedComercial[0].cliente || '—';
+    document.getElementById('comStatQtd').textContent = totalQtd.toLocaleString('pt-BR');
+
+    // Preview tbody
+    var tbody = document.getElementById('comPreviewBody');
+    tbody.innerHTML = '';
+    parsedComercial.forEach(function(p) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = 
+        '<td><strong>#' + p.id + '</strong></td>' +
+        '<td><code>' + (p.sku || '—') + '</code></td>' +
+        '<td>' + p.produto + '</td>' +
+        '<td>' + (p.dataProd ? fmtDate(p.dataProd) : '—') + '</td>' +
+        '<td style="text-align:right"><strong>' + p.qtdTotal.toLocaleString('pt-BR') + '</strong></td>';
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('comDropWrap').style.display = 'none';
+    document.getElementById('comPreview').style.display = 'block';
+    document.getElementById('comSummary').textContent = parsedComercial.length + ' item(ns) pronto(s) para importar';
+  }
+
+  function doImportComercial() {
+    if (!parsedComercial.length) return;
+    var btn = document.getElementById('btnComConfirm');
+    btn.disabled = true;
+    document.getElementById('comProgressWrap').style.display = 'block';
+    
+    // Check existing records to preserve produced quantities
+    db.ref('pedidos').once('value').then(function(snapshot) {
+      var existing = snapshot.val() || {};
+      var total = parsedComercial.length;
+      var done = 0;
+
+      function next() {
+        if (done >= total) {
+          document.getElementById('comProgressFill').style.width = '100%';
+          document.getElementById('comProgressText').textContent = '✓ Concluído!';
+          btn.disabled = false;
+          alert('Pedido comercial importado com sucesso!');
+          doComClear();
+          document.getElementById('importSection').style.display = 'none';
+          return;
+        }
+        var p = parsedComercial[done];
+        var ex = existing[p.firebaseKey] || {};
+        
+        var data = {
+          id: p.id,
+          produto: p.produto,
+          sku: p.sku || '',
+          qtdTotal: p.qtdTotal,
+          linha: ex.linha || '',
+          dataProd: p.dataProd || ex.dataProd || '',
+          lp: ex.lp || 0,
+          mediaPorHora: ex.mediaPorHora || 0,
+          produzido: ex.produzido || 0,
+          priority: ex.priority || 999,
+          status: ex.status || 'Não Iniciado',
+          ordenacao: ex.ordenacao || 999999999,
+          ultimoApontamento: ex.ultimoApontamento || '',
+          insumosChecklist: ex.insumosChecklist || {},
+          cliente: p.cliente || ex.cliente || ''
+        };
+        
+        db.ref('pedidos/' + p.firebaseKey).set(data).then(function() {
+          done++;
+          var pct = Math.round(done / total * 100);
+          document.getElementById('comProgressFill').style.width = pct + '%';
+          document.getElementById('comProgressText').textContent = 'Salvando ' + done + ' / ' + total + '...';
+          next();
+        });
+      }
+      next();
+    });
+  }
+
+  function doComClear() {
+    parsedComercial = [];
+    document.getElementById('comPreview').style.display = 'none';
+    document.getElementById('comDropWrap').style.display = 'block';
+    document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
+    document.getElementById('comFileInput').value = '';
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciamento de Usuários - PCP Kuryos</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <style>
+    :root {
+      --b: #0f172a;
+      --m: #475569;
+      --l: #64748b;
+      --bd: #e2e8f0;
+      --bg: #f8fafc;
+      --c: #fff;
+      --p: #2563eb;
+      --g: #16a34a;
+      --r: #dc2626;
+      --y: #f59e0b;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--b);
+      font-size: 14px;
+    }
+    
+    .container {
+      max-width: 96%;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+    
+    .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    
+    .subtitle {
+      color: var(--l);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    
+    .card {
+      background: var(--c);
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    
+    th, td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--bd);
+    }
+    
+    th {
+      font-weight: 600;
+      color: var(--l);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    tr:hover {
+      background: #f8fafc;
+    }
+    
+    .badge {
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-block;
+    }
+    
+    .badge.pending {
+      background: #fef3c7;
+      color: #d97706;
+    }
+    
+    .badge.production {
+      background: #dbeafe;
+      color: #2563eb;
+    }
+    
+    .badge.admin {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+    
+    select {
+      padding: 6px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      background: white;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    
+    select:focus {
+      outline: none;
+      border-color: var(--p);
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+      z-index: 1000;
+      animation: slideIn 0.2s ease;
+    }
+    
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header Navigation Bar -->
+<div style="background:#0f172a; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; border-bottom:1px solid #1e293b;">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span style="font-size:16px;">👥</span>
+    <span style="letter-spacing:0.5px; text-transform:uppercase; font-size:12px; color:#94a3b8;">Gerenciamento de Acessos</span>
+  </div>
+  <div style="display:flex; gap:16px;" id="nav-links">
+    <a href="dashboard.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">🏠 Daily Dashboard</a>
+    <a href="dashboard_analise.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">📊 Histórico</a>
+    <a href="planejamento.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">🗓 Planejamento</a>
+    <a href="form.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">📝 Formulário</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="head">
+    <div>
+      <h1>Gerenciamento de Usuários</h1>
+      <div class="subtitle">Aprove cadastros e gerencie os perfis de acesso ao sistema PCP Kuryos</div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>E-mail</th>
+            <th>Data Cadastro</th>
+            <th>Status/Perfil</th>
+            <th>Alterar Função</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr>
+            <td colspan="5" style="text-align:center; color:var(--l); padding:30px;">Carregando lista de usuários...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Firebase App Configuration -->
+<script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+    authDomain: "prod-kuryos.firebaseapp.com",
+    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    projectId: "prod-kuryos",
+    storageBucket: "prod-kuryos.firebasestorage.app",
+    messagingSenderId: "323674581733",
+    appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+  };
+  firebase.initializeApp(firebaseConfig);
+</script>
+
+<!-- Security Auth Check -->
+<script src="auth_check.js"></script>
+
+<!-- Business Logic Script -->
+<script>
+  const database = firebase.database();
+  
+  // Wait for auth to be confirmed and load users
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) {
+      // Check if role is admin (secured by auth_check.js, but let's run here too)
+      database.ref('usuarios/' + user.uid).once('value', snap => {
+        const p = snap.val();
+        if (p && p.role === 'admin') {
+          listenToUsers();
+        }
+      });
+    }
+  });
+  
+  function listenToUsers() {
+    database.ref('usuarios').on('value', snapshot => {
+      const users = snapshot.val() || {};
+      const tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = '';
+      
+      const uids = Object.keys(users);
+      if (uids.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--l);">Nenhum usuário cadastrado.</td></tr>';
+        return;
+      }
+      
+      // Sort users: pendings first, then by date desc
+      const sortedUsers = uids.map(uid => ({
+        uid: uid,
+        ...users[uid]
+      })).sort((a, b) => {
+        if (a.role === 'pending' && b.role !== 'pending') return -1;
+        if (a.role !== 'pending' && b.role === 'pending') return 1;
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
+      
+      sortedUsers.forEach(u => {
+        const tr = document.createElement('tr');
+        
+        const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-';
+        
+        const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin' };
+        const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador' };
+        
+        const badgeClass = badgeClasses[u.role] || 'pending';
+        const badgeLabel = badgeLabels[u.role] || u.role;
+        
+        // Disable dropdown for the logged-in administrator itself to prevent accidental lockouts!
+        const selfLogged = firebase.auth().currentUser.uid === u.uid;
+        const disableAttr = selfLogged ? 'disabled' : '';
+        const noteSelf = selfLogged ? ' <span style="font-size:10px; color:var(--l); font-style:italic;">(Você)</span>' : '';
+        
+        tr.innerHTML = `
+          <td><strong>${u.nome || '-'}</strong>${noteSelf}</td>
+          <td>${u.email || '-'}</td>
+          <td>${dateStr}</td>
+          <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+          <td>
+            <select onchange="updateUserRole('${u.uid}', this.value)" ${disableAttr}>
+              <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>Pendente</option>
+              <option value="production" ${u.role === 'production' ? 'selected' : ''}>Produção</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
+            </select>
+          </td>
+        `;
+        
+        tbody.appendChild(tr);
+      });
+    });
+  }
+  
+  function updateUserRole(uid, newRole) {
+    database.ref('usuarios/' + uid).update({
+      role: newRole
+    })
+    .then(() => {
+      showToast('Perfil de acesso atualizado com sucesso!');
+    })
+    .catch(err => {
+      console.error(err);
+      showToast('Erro ao atualizar perfil.');
+    });
+  }
+  
+  function showToast(text) {
+    const toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3000);
+  }
+</script>
+</body>
+</html>

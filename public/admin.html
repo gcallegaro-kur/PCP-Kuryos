@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Configuracoes</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="auth_check.js"></script>
+  <style>
+    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:#0a1c69;color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .header h1{font-size:18px;font-weight:700}
+    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
+    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
+    .dot.on{background:#34d399;animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:16px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+    .card-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+    .fg{display:flex;flex-direction:column;gap:6px}
+    label{font-size:13px;font-weight:600;color:var(--muted)}
+    input[type=text],input[type=number],input[type=date],select{padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;color:var(--text);width:100%;background:white;transition:border-color .2s}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.1)}
+    .btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{background:#1141a3}
+    .btn-success{background:var(--success);color:white}.btn-success:hover{background:#047857}
+    .btn-sm{padding:6px 12px;font-size:13px}
+    /* Tags */
+    .tag-area{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;min-height:32px}
+    .tag{border-radius:20px;padding:4px 8px 4px 12px;font-size:13px;display:inline-flex;align-items:center;gap:4px;line-height:1.4}
+    .tag.linha{background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe}
+    .tag.posto{background:#fdf4ff;color:#7c3aed;border:1px solid #e9d5ff}
+    .tag-name{cursor:default}
+    .tag-btn{background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;font-size:13px;opacity:.6}
+    .tag-btn:hover{opacity:1}
+    .tag-edit-wrap{display:inline-flex;align-items:center;gap:4px}
+    .tag-edit-wrap input{border:none;outline:none;background:transparent;font-size:13px;color:inherit;min-width:60px;max-width:140px;padding:0}
+    .tag-add{display:flex;gap:8px}
+    .tag-add input{flex:1}
+    /* Alerts */
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+    .alert-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:#f9fafb;border-radius:6px;border-left:3px solid var(--border)}
+    /* Metas por linha */
+    .matrix-wrapper { overflow-x: auto; margin-top: 14px; border: 1.5px solid var(--border); border-radius: 8px; background: white }
+    .matrix-table { width: 100%; border-collapse: collapse; font-size: 13px }
+    .matrix-table th, .matrix-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right }
+    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; position: sticky; left: 0; background: white; font-weight: bold }
+    .matrix-table th { background: #f9fafb; font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 10px }
+    .matrix-table input[type=number] { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; width: 85px; text-align: right; font-size: 13px; outline: none }
+    .matrix-table input[type=number]:focus { border-color: var(--primary) }
+    .matrix-table tr:hover { background: #f9fafb }
+    .matrix-table td.day-total { font-weight: 700; color: var(--success) }
+    
+    .meta-totals{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;padding:14px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0}
+    .meta-total-item{text-align:center}
+    .meta-total-val{font-size:22px;font-weight:800;color:var(--success)}
+    .meta-total-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    .empty-metas{padding:20px;text-align:center;font-size:13px;color:var(--muted)}
+
+    /* Toolbar / Navigation */
+    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
+    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
+    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
+    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+  </style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
+    <h1>Administracao</h1>
+    <div style="font-size:12px;opacity:.8;margin-top:2px">Controle de Producao</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+    <a href="form.html">Formulário</a>
+    <a href="planejamento.html">Planejamento</a>
+    <a href="pedidos.html">Pedidos</a>
+    <a href="historico.html">Histórico</a>
+    <a href="produtos.html">Produtos</a>
+    <a href="insumos.html">Insumos</a>
+    <a href="ops.html">OPs</a>
+    <a href="admin.html" class="active">Admin</a>
+  </div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <!-- DADOS DE DEMONSTRACAO (SEED) -->
+  <div class="card" id="seedCard" style="display:none; background:#ecfdf5; border:1.5px solid #10b981;">
+    <div class="card-title" style="color:#059669; border-bottom:1px solid #bbf7d0;">Dados de Demonstração</div>
+    <div class="section-note" style="background:#f0fdf4; border-left:3px solid #10b981; margin-bottom:12px;">
+      O banco de dados está vazio. Clique abaixo para carregar uma configuração padrão (Linhas, Turnos, Operadores, Produtos e OPs) para testar o sistema imediatamente.
+    </div>
+    <button class="btn btn-success" id="btnSeed">⚡ Inicializar com Dados Padrão</button>
+  </div>
+
+  <!-- PERIODO -->
+  <div class="card">
+    <div class="card-title">Periodo da Meta</div>
+    <div class="form-grid">
+      <div class="fg" style="grid-column:1/-1"><label>Descricao</label><input type="text" id="mDesc" placeholder="Ex: Meta de Junho 2026"></div>
+      <div class="fg"><label>Data Inicio</label><input type="date" id="mIni"></div>
+      <div class="fg"><label>Data Fim</label><input type="date" id="mFim"></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn btn-success" id="btnSalvarPeriodo">Salvar Periodo</button></div>
+  </div>
+
+  <!-- METAS POR LINHA/POSTO -->
+  <div class="card">
+    <div class="card-title">Metas Diarias por Linha / Posto</div>
+    <div class="section-note">Informe a producao esperada por dia em cada linha e posto. A meta mestre do periodo e calculada automaticamente: <strong>total diario x dias do periodo</strong>.</div>
+    <div id="metasLinhaContainer"><div class="empty-metas">Cadastre linhas e postos primeiro.</div></div>
+    <div class="meta-totals" id="metaTotalsBox" style="display:none">
+      <div class="meta-total-item">
+        <div class="meta-total-val" id="metaTotalDiario">—</div>
+        <div class="meta-total-lbl">Total diario</div>
+      </div>
+      <div class="meta-total-item">
+        <div class="meta-total-val" id="metaTotalPeriodo">—</div>
+        <div class="meta-total-lbl">Meta do periodo</div>
+      </div>
+    </div>
+    <div style="margin-top:16px"><button class="btn btn-success" id="btnSalvarMetas">Salvar Metas</button></div>
+  </div>
+
+  <!-- LINHAS -->
+  <div class="card">
+    <div class="card-title">Linhas de Producao</div>
+    <div class="section-note">Linhas onde o campo LOTE sera obrigatorio no registro.</div>
+    <div class="tag-area" id="tLinhas"></div>
+    <div class="tag-add">
+      <input type="text" id="iLinha" placeholder="Ex: Linha 1, Linha A...">
+      <button class="btn btn-primary btn-sm" id="btnAddLinha">+ Adicionar</button>
+    </div>
+  </div>
+
+  <!-- POSTOS -->
+  <div class="card">
+    <div class="card-title">Postos de Trabalho</div>
+    <div class="section-note">Postos onde o campo LOTE NAO aparece no registro.</div>
+    <div class="tag-area" id="tPostos"></div>
+    <div class="tag-add">
+      <input type="text" id="iPosto" placeholder="Ex: Posto 1, Montagem...">
+      <button class="btn btn-primary btn-sm" id="btnAddPosto">+ Adicionar</button>
+    </div>
+  </div>
+
+  <!-- PRODUTOS -->
+  <div class="card">
+    <div class="card-title">Produtos / Itens</div>
+    <div class="tag-area" id="tProdutos"></div>
+    <div class="tag-add">
+      <input type="text" id="iProduto" placeholder="Ex: Produto A, Ref. 001...">
+      <button class="btn btn-primary btn-sm" id="btnAddProduto">+ Adicionar</button>
+    </div>
+  </div>
+
+  <!-- OPERADORES -->
+  <div class="card">
+    <div class="card-title">Operadores</div>
+    <div class="tag-area" id="tOperadores"></div>
+    <div class="tag-add">
+      <input type="text" id="iOperador" placeholder="Nome do operador...">
+      <button class="btn btn-primary btn-sm" id="btnAddOperador">+ Adicionar</button>
+    </div>
+  </div>
+
+  <!-- TURNOS -->
+  <div class="card">
+    <div class="card-title">Turnos</div>
+    <div class="tag-area" id="tTurnos"></div>
+    <div class="tag-add">
+      <input type="text" id="iTurno" placeholder="Ex: Manha, Tarde, Noite...">
+      <button class="btn btn-primary btn-sm" id="btnAddTurno">+ Adicionar</button>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:12px;font-size:12px;color:var(--muted)">Clique em ✏ para editar um item. Alteracoes salvas no Firebase.</div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c",
+  measurementId: "G-PTVWKLRHTG"
+};
+
+var db;
+var configData = {
+  meta: {},
+  metasPorLinha: {},
+  linhas: [],
+  postosTrabalho: [],
+  produtos: [],
+  operadores: [],
+  turnos: []
+};
+
+function fmtNum(n){ return Number(n||0).toLocaleString('pt-BR'); }
+function setStatus(on,txt){ document.getElementById('sDot').className='dot'+(on?' on':''); document.getElementById('sTxt').textContent=txt; }
+function showAlert(msg,type){
+  var box=document.getElementById('alertBox');
+  box.className='alert alert-'+(type||'success')+' show';
+  box.textContent=msg;
+  setTimeout(function(){ box.classList.remove('show'); },4000);
+}
+function calcDias(ini,fim){
+  if(!ini||!fim) return 0;
+  var d=Math.round((new Date(fim+'T12:00:00')-new Date(ini+'T12:00:00'))/(864e5))+1;
+  return d>0?d:0;
+}
+
+var tagMapping = {
+  linhas: { elementId: 'tLinhas', cssClass: 'linha' },
+  postosTrabalho: { elementId: 'tPostos', cssClass: 'posto' },
+  produtos: { elementId: 'tProdutos', cssClass: 'linha' },
+  operadores: { elementId: 'tOperadores', cssClass: 'linha' },
+  turnos: { elementId: 'tTurnos', cssClass: 'linha' }
+};
+
+function renderTags(tipo) {
+  var map = tagMapping[tipo];
+  if (!map) return;
+  var el = document.getElementById(map.elementId);
+  if (!el) return;
+  var arr = configData[tipo] || [];
+  
+  if (arr.length === 0) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:13px">Nenhum cadastrado.</span>';
+    return;
+  }
+  
+  el.innerHTML = '';
+  arr.forEach(function(v, i) {
+    var span = document.createElement('span');
+    span.className = 'tag ' + map.cssClass;
+    span.style.cursor = 'pointer';
+
+    var nm = document.createElement('span');
+    nm.className = 'tag-text';
+    nm.textContent = v;
+    span.appendChild(nm);
+
+    var del = document.createElement('button');
+    del.className = 'tag-btn';
+    del.textContent = '×';
+    del.style.marginLeft = '6px';
+    del.addEventListener('click', function(e) {
+      e.stopPropagation();
+      removeItem(tipo, i);
+    });
+    span.appendChild(del);
+
+    // Edit inline
+    span.addEventListener('click', function() {
+      var nv = prompt('Editar item:', v);
+      if (nv === null) return;
+      nv = nv.trim();
+      if (!nv) return;
+      arr[i] = nv;
+      saveConfig().then(function() {
+        renderTags(tipo);
+        if (tipo === 'linhas' || tipo === 'postosTrabalho') {
+          renderMetasPorLinha();
+        }
+        showAlert('Item atualizado.', 'success');
+      });
+    });
+
+    el.appendChild(span);
+  });
+}
+
+function removeItem(tipo, idx) {
+  if (!confirm('Remover este item?')) return;
+  configData[tipo].splice(idx, 1);
+  saveConfig().then(function() {
+    renderTags(tipo);
+    if (tipo === 'linhas' || tipo === 'postosTrabalho') {
+      renderMetasPorLinha();
+    }
+    showAlert('Item removido.', 'success');
+  });
+}
+
+function saveConfig() {
+  if (!db) return Promise.reject(new Error('Sem conexão com banco de dados'));
+  var dataToSave = JSON.parse(JSON.stringify(configData));
+  dataToSave.postos = configData.postosTrabalho; // Mantém compatibilidade com a chave legada
+  return db.ref('config').set(dataToSave);
+}
+
+function addItem(tipo, inputId) {
+  var val = document.getElementById(inputId).value.trim();
+  if (!val) return;
+  if (!configData[tipo]) configData[tipo] = [];
+  if (!configData[tipo].includes(val)) {
+    configData[tipo].push(val);
+    saveConfig().then(function() {
+      renderTags(tipo);
+      if (tipo === 'linhas' || tipo === 'postosTrabalho') {
+        renderMetasPorLinha();
+      }
+      showAlert('"' + val + '" adicionado.', 'success');
+    });
+  }
+  document.getElementById(inputId).value = '';
+}
+
+function renderMetasPorLinha() {
+  var container = document.getElementById('metasLinhaContainer');
+  var totalBox = document.getElementById('metaTotalsBox');
+  if (!container) return;
+
+  var todasAsLinhas = (configData.linhas || []).concat(configData.postosTrabalho || []);
+  if (todasAsLinhas.length === 0) {
+    container.innerHTML = '<div class="empty-metas">Cadastre linhas e postos primeiro.</div>';
+    if (totalBox) totalBox.style.display = 'none';
+    return;
+  }
+
+  var ini = document.getElementById('mIni').value;
+  var fim = document.getElementById('mFim').value;
+
+  var html = '';
+
+  // ── Seção 1: Metas Diárias Padrão ─────────────────────────
+  html += '<div style="margin-bottom: 20px; padding: 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px">';
+  html += '<h3 style="font-size: 13px; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 8px">1. Metas Diárias Padrão</h3>';
+  html += '<div class="section-note" style="margin-bottom: 12px">Configure o valor diário padrão de cada linha. Este valor será sugerido no calendário de produção.</div>';
+  html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px">';
+  
+  var metasPadrao = configData.metasPorLinha || {};
+  todasAsLinhas.forEach(function(nome) {
+    var val = metasPadrao[nome] !== undefined ? metasPadrao[nome] : '';
+    html += '<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px">';
+    html += '<label style="font-weight: 600; color: var(--text)">' + nome + ':</label>';
+    html += '<input type="number" class="meta-padrao-input" data-nome="' + nome + '" value="' + val + '" placeholder="0" style="padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 6px; width: 90px; text-align: right; font-size: 13px">';
+    html += '</div>';
+  });
+  html += '</div>';
+  html += '<div style="margin-top: 10px; text-align: right"><button class="btn btn-primary btn-sm" id="btnAplicarPadrao">Recarregar Metas Padrão no Calendário</button></div>';
+  html += '</div>';
+
+  // ── Seção 2: Calendário de Planejamento de Metas ────────
+  html += '<div style="margin-top: 20px">';
+  html += '<h3 style="font-size: 13px; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 8px">2. Calendário de Produção por Dia</h3>';
+  html += '<div class="section-note">Insira as metas individuais planejadas para cada dia útil. Finais de semana e feriados do PCP serão automaticamente preenchidos como 0.</div>';
+
+  if (!ini || !fim) {
+    html += '<div class="empty-metas" style="margin-top:14px">Selecione as datas de início e fim do período acima para carregar o calendário de produção.</div>';
+    container.innerHTML = html;
+    if (totalBox) totalBox.style.display = 'none';
+    return;
+  }
+
+  var calendarDays = Math.round((new Date(fim+'T12:00:00') - new Date(ini+'T12:00:00')) / 864e5) + 1;
+  if (calendarDays <= 0 || isNaN(calendarDays)) {
+    html += '<div class="empty-metas" style="color:var(--danger); margin-top:14px">A data final deve ser igual ou posterior à data inicial.</div>';
+    container.innerHTML = html;
+    if (totalBox) totalBox.style.display = 'none';
+    return;
+  }
+
+  if (totalBox) totalBox.style.display = 'grid';
+
+  html += '<div class="matrix-wrapper"><table class="matrix-table"><thead><tr>';
+  html += '<th style="text-align:left; min-width:110px">Data</th>';
+  todasAsLinhas.forEach(function(col) {
+    html += '<th>' + col + '</th>';
+  });
+  html += '<th>Total Dia</th></tr></thead><tbody>';
+
+  var dataCursor = new Date(ini + 'T12:00:00');
+  var dataFimObj = new Date(fim + 'T12:00:00');
+  var matriz = configData.metasMatriz || {};
+
+  var plan = configData.planejamento || {};
+  var diasAtivos = plan.diasSemana || [1, 2, 3, 4, 5];
+  var feriados = plan.feriados || {};
+
+  while (dataCursor <= dataFimObj) {
+    var dKey = dataCursor.toISOString().split('T')[0];
+    
+    // Check working day
+    var dw = dataCursor.getDay();
+    var dwConfig = dw === 0 ? 7 : dw;
+    var isWorking = diasAtivos.indexOf(dwConfig) !== -1;
+    var isHoliday = feriados[dKey] !== undefined;
+    var workingDay = isWorking && !isHoliday;
+
+    var dFmt = dataCursor.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+    var styleRow = !workingDay ? 'style="opacity:.65; background:#f9fafb"' : '';
+    
+    html += '<tr ' + styleRow + ' data-date="' + dKey + '">';
+    html += '<td style="text-align:left; font-weight:600">' + dFmt + (!workingDay ? ' 💤' : '') + '</td>';
+
+    var metasDia = matriz[dKey] || {};
+    todasAsLinhas.forEach(function(col) {
+      var val = '';
+      if (metasDia[col] !== undefined) {
+        val = metasDia[col];
+      } else if (!workingDay) {
+        val = 0;
+      } else {
+        val = metasPadrao[col] !== undefined ? metasPadrao[col] : 0;
+      }
+
+      html += '<td><input type="number" class="matrix-cell-input" data-date="' + dKey + '" data-line="' + col + '" value="' + val + '" placeholder="0"></td>';
+    });
+
+    html += '<td class="day-total" id="totalDia-' + dKey + '" style="font-weight:bold">0</td>';
+    html += '</tr>';
+
+    dataCursor.setDate(dataCursor.getDate() + 1);
+  }
+
+  html += '</tbody></table></div></div>';
+  container.innerHTML = html;
+
+  // Bind input listeners
+  document.querySelectorAll('.matrix-cell-input').forEach(function(input) {
+    input.addEventListener('input', updateMatrixTotals);
+  });
+  
+  // Re-apply standard metas to all working days of the calendar
+  document.getElementById('btnAplicarPadrao').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (!confirm('Deseja sobrescrever as metas de todos os dias úteis com os valores padrão atuais? Suas edições manuais de exceções nos dias úteis serão limpas.')) return;
+    
+    // Read standard values
+    var novosPadroes = {};
+    document.querySelectorAll('.meta-padrao-input').forEach(function(inp) {
+      novosPadroes[inp.getAttribute('data-nome')] = parseInt(inp.value) || 0;
+    });
+
+    document.querySelectorAll('.matrix-cell-input').forEach(function(cellInput) {
+      var dKey = cellInput.getAttribute('data-date');
+      var col = cellInput.getAttribute('data-line');
+      var row = cellInput.closest('tr');
+      var isRowWorking = row.style.opacity === ''; // Style rows for folga have opacity
+      
+      if (isRowWorking) {
+        cellInput.value = novosPadroes[col] !== undefined ? novosPadroes[col] : 0;
+      }
+    });
+    updateMatrixTotals();
+    showAlert('Valores padrão aplicados ao calendário de produção!', 'success');
+  });
+
+  updateMatrixTotals();
+}
+
+function calcDiasUteis(ini, fim) {
+  if (!ini || !fim) return 0;
+  var cursor = new Date(ini + 'T12:00:00');
+  var limite = new Date(fim + 'T12:00:00');
+  var diasUteis = 0;
+  
+  var plan = configData.planejamento || {};
+  var diasAtivos = plan.diasSemana || [1, 2, 3, 4, 5];
+  var feriados = plan.feriados || {};
+  
+  while (cursor <= limite) {
+    var ymd = cursor.toISOString().split('T')[0];
+    var dw = cursor.getDay();
+    var dwConfig = dw === 0 ? 7 : dw; // 1 = Seg, 7 = Dom
+    
+    var isWorkingDay = diasAtivos.indexOf(dwConfig) !== -1;
+    var isHoliday = feriados[ymd] !== undefined;
+    
+    if (isWorkingDay && !isHoliday) {
+      diasUteis++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return diasUteis;
+}
+
+function updateMatrixTotals() {
+  var inputs = document.querySelectorAll('.matrix-cell-input');
+  var sumPeriodo = 0;
+  var daySums = {};
+
+  inputs.forEach(function(input) {
+    var val = parseInt(input.value) || 0;
+    var dKey = input.getAttribute('data-date');
+    daySums[dKey] = (daySums[dKey] || 0) + val;
+    sumPeriodo += val;
+  });
+
+  Object.keys(daySums).forEach(function(dKey) {
+    var el = document.getElementById('totalDia-' + dKey);
+    if (el) el.textContent = fmtNum(daySums[dKey]);
+  });
+
+  var ini = document.getElementById('mIni').value;
+  var fim = document.getElementById('mFim').value;
+  var diasUteis = calcDiasUteis(ini, fim);
+  
+  var tdEl = document.getElementById('metaTotalDiario');
+  var tpEl = document.getElementById('metaTotalPeriodo');
+  
+  var mediaDiaria = diasUteis > 0 ? Math.round(sumPeriodo / diasUteis) : 0;
+  
+  if (tdEl) tdEl.textContent = fmtNum(mediaDiaria);
+  if (tpEl) {
+    var diasTexto = diasUteis === 1 ? '1 dia útil' : diasUteis + ' dias úteis';
+    tpEl.innerHTML = fmtNum(sumPeriodo) + ' <span style="font-size:11px; font-weight:normal; color:var(--muted)">(' + diasTexto + ')</span>';
+  }
+}
+
+function updateMetaTotals() {
+  updateMatrixTotals();
+}
+
+function salvarMetasESeletor() {
+  var ini = document.getElementById('mIni').value;
+  var fim = document.getElementById('mFim').value;
+  var desc = document.getElementById('mDesc').value.trim();
+
+  if (!ini || !fim) {
+    showAlert('Preencha as datas de início e fim do período.', 'danger');
+    return;
+  }
+  if (ini > fim) {
+    showAlert('Data inicial não pode ser maior que data final.', 'danger');
+    return;
+  }
+
+  // 1. Collect standard daily goals
+  var metasPadrao = {};
+  document.querySelectorAll('.meta-padrao-input').forEach(function(input) {
+    var nome = input.getAttribute('data-nome');
+    metasPadrao[nome] = parseInt(input.value) || 0;
+  });
+
+  // 2. Collect calendar/matrix day-by-day metas
+  var metasMatriz = {};
+  var sumPeriodo = 0;
+  var inputs = document.querySelectorAll('.matrix-cell-input');
+  inputs.forEach(function(input) {
+    var dKey = input.getAttribute('data-date');
+    var col = input.getAttribute('data-line');
+    var val = parseInt(input.value) || 0;
+    if (!metasMatriz[dKey]) metasMatriz[dKey] = {};
+    metasMatriz[dKey][col] = val;
+    sumPeriodo += val;
+  });
+
+  var diasUteis = calcDiasUteis(ini, fim);
+
+  configData.meta = {
+    descricao: desc,
+    inicio: ini,
+    fim: fim,
+    quantidade: sumPeriodo,
+    totalDiario: diasUteis > 0 ? Math.round(sumPeriodo / diasUteis) : 0
+  };
+  configData.metasPorLinha = metasPadrao;
+  configData.metasMatriz = metasMatriz;
+
+  saveConfig().then(function() {
+    showAlert('Calendário de metas e valores padrão salvos com sucesso!', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+}
+
+function renderAll() {
+  renderTags('linhas');
+  renderTags('postosTrabalho');
+  renderTags('produtos');
+  renderTags('operadores');
+  renderTags('turnos');
+
+  if (configData.meta) {
+    document.getElementById('mDesc').value = configData.meta.descricao || '';
+    document.getElementById('mIni').value = configData.meta.inicio || '';
+    document.getElementById('mFim').value = configData.meta.fim || '';
+  }
+  
+  renderMetasPorLinha();
+}
+
+// Bind tag adding buttons
+document.getElementById('btnAddLinha').addEventListener('click', function() { addItem('linhas', 'iLinha'); });
+document.getElementById('btnAddPosto').addEventListener('click', function() { addItem('postosTrabalho', 'iPosto'); });
+document.getElementById('btnAddProduto').addEventListener('click', function() { addItem('produtos', 'iProduto'); });
+document.getElementById('btnAddOperador').addEventListener('click', function() { addItem('operadores', 'iOperador'); });
+document.getElementById('btnAddTurno').addEventListener('click', function() { addItem('turnos', 'iTurno'); });
+
+// Keypress enter support
+['iLinha','iPosto','iProduto','iOperador','iTurno'].forEach(function(id) {
+  document.getElementById(id).addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      var mapping = {
+        iLinha: 'linhas',
+        iPosto: 'postosTrabalho',
+        iProduto: 'produtos',
+        iOperador: 'operadores',
+        iTurno: 'turnos'
+      };
+      var tipo = mapping[id];
+      addItem(tipo, id);
+      e.preventDefault();
+    }
+  });
+});
+
+document.getElementById('mIni').addEventListener('change', updateMetaTotals);
+document.getElementById('mFim').addEventListener('change', updateMetaTotals);
+document.getElementById('btnSalvarPeriodo').addEventListener('click', salvarMetasESeletor);
+document.getElementById('btnSalvarMetas').addEventListener('click', salvarMetasESeletor);
+
+// Firebase Init
+try {
+  if (firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); }
+  db = firebase.database();
+
+  db.ref('.info/connected').on('value', function(snap) {
+    setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+  });
+
+  db.ref('config').on('value', function(snap) {
+    var val = snap.val() || {};
+    configData.meta = val.meta || {};
+    configData.metasPorLinha = val.metasPorLinha || {};
+    configData.metasMatriz = val.metasMatriz || {};
+    configData.linhas = val.linhas || [];
+    configData.postosTrabalho = val.postosTrabalho || val.postos || [];
+    configData.produtos = val.produtos || [];
+    configData.operadores = val.operadores || [];
+    configData.turnos = val.turnos || [];
+    configData.planejamento = val.planejamento || {};
+    renderAll();
+
+    if (!val.linhas || val.linhas.length === 0) {
+      document.getElementById('seedCard').style.display = 'block';
+    } else {
+      document.getElementById('seedCard').style.display = 'none';
+    }
+  });
+
+  // Seed Functionality
+  document.getElementById('btnSeed').addEventListener('click', function() {
+    var t = new Date().toISOString().split('T')[0];
+    var nextMonth = new Date(); nextMonth.setDate(nextMonth.getDate() + 30);
+    var nextMonthStr = nextMonth.toISOString().split('T')[0];
+    
+    var seedData = {
+      "config": {
+        "linhas": ["Linha 1", "Linha 2", "Linha 3"],
+        "postosTrabalho": ["Posto 1", "Posto 2"],
+        "turnos": ["manhã", "tarde", "noite"],
+        "operadores": ["Ana", "Carlos", "João", "Maria"],
+        "meta": {
+          "descricao": "Meta Inicial de Teste",
+          "inicio": t,
+          "fim": nextMonthStr,
+          "quantidade": 150000,
+          "totalDiario": 5000
+        },
+        "metasPorLinha": {
+          "Linha 1": 2000,
+          "Linha 2": 1500,
+          "Linha 3": 1000,
+          "Posto 1": 500,
+          "Posto 2": 500
+        }
+      },
+      "produtos": {
+        "prod_sabonete": { "descricao": "Sabonete Líquido Erva Doce", "sku": "SL001", "cliente": "Kuryos", "volume": "500", "unidadeVolume": "ml", "ativo": "Ativo" },
+        "prod_alcool": { "descricao": "Álcool em Gel 70%", "sku": "AG002", "cliente": "Kuryos", "volume": "1", "unidadeVolume": "L", "ativo": "Ativo" },
+        "prod_locao": { "descricao": "Loção Hidratante Corporal", "sku": "LH003", "cliente": "Kuryos", "volume": "200", "unidadeVolume": "ml", "ativo": "Ativo" }
+      },
+      "pedidos": {
+        "0042__SL001": {
+          "id": "0042",
+          "produto": "Sabonete Líquido Erva Doce",
+          "sku": "SL001",
+          "qtdTotal": 5000,
+          "produzido": 0,
+          "linha": "Linha 1",
+          "priority": 1,
+          "status": "Em andamento",
+          "ordenacao": 1,
+          "insumoStatus": "ok",
+          "insumosChecklist": {
+            "artes": "True", "anvisa": "True", "rotulos": "True", "frascos": "True",
+            "tampas": "True", "cartucho": "-", "valvulas": "-", "celofane": "-",
+            "display": "-", "caixas": "True", "essencia": "True", "mp": "True", "ok": "True"
+          }
+        },
+        "0043__LH003": {
+          "id": "0043",
+          "produto": "Loção Hidratante Corporal",
+          "sku": "LH003",
+          "qtdTotal": 3000,
+          "produzido": 0,
+          "linha": "Linha 2",
+          "priority": 2,
+          "status": "Programado",
+          "ordenacao": 2,
+          "insumoStatus": "parcial",
+          "insumosChecklist": {
+            "artes": "True", "anvisa": "True", "rotulos": "True", "frascos": "True",
+            "tampas": "True", "cartucho": "True", "valvulas": "-", "celofane": "True",
+            "display": "True", "caixas": "True", "essencia": "True", "mp": "True", "ok": "True"
+          }
+        }
+      }
+    };
+
+    var btn = document.getElementById('btnSeed');
+    btn.disabled = true; btn.textContent = 'Carregando...';
+    
+    db.ref().update(seedData).then(function() {
+      showAlert('Dados de demonstração carregados com sucesso!', 'success');
+    }).catch(function(err) {
+      showAlert('Erro ao inicializar dados: ' + err.message, 'danger');
+      btn.disabled = false; btn.textContent = '⚡ Inicializar com Dados Padrão';
+    });
+  });
+} catch (e) {
+  setStatus(false, 'Erro');
+  console.error(e);
+}
+</script>
+</body>
+</html>
