@@ -10,7 +10,8 @@ const pageAccessRules = {
   'produtos.html': ['admin'],
   'insumos.html': ['admin'],
   'usuarios.html': ['admin'],
-  'admin.html': ['admin']
+  'admin.html': ['admin'],
+  'importar.html': ['admin']
 };
 
 // Extrai o nome da página atual
