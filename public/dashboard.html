@@ -1,1269 +1,1270 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard de Producao</title>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-  <script src="auth_check.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-  <style>
-    :root { --primary:#0a1c69; --success:#0e9f6e; --warning:#d97706; --danger:#e02424; --bg:#f1f5f9; --card:#ffffff; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .header{background:#0a1c69;color:white;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
-    .header h1{font-size:20px;font-weight:800}
-    .header-sub{font-size:12px;opacity:.75;margin-top:2px}
-    .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-    .clock{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-    .live-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700}
-    .live-dot{width:7px;height:7px;border-radius:50%;background:#f87171}
-    .live-dot.on{background:#34d399;animation:pulse 1.5s infinite}
-    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
-    .date-nav-bar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .date-nav-bar input[type=date]{flex:1;min-width:130px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px}
-    .date-nav-bar button{padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:14px;font-weight:600;color:var(--text)}
-    .date-nav-bar button:hover{background:#eff6ff;border-color:var(--primary);color:var(--primary)}
-    .btn-today{background:var(--primary)!important;color:white!important;border-color:var(--primary)!important;font-size:13px!important}
-    .main{padding:16px;max-width:96%;margin:0 auto}
-    .meta-card{background:white;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:16px}
-    .meta-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
-    .meta-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-    .meta-desc{font-size:16px;font-weight:800;color:var(--text);margin-top:2px}
-    .meta-pct{font-size:36px;font-weight:900;color:var(--primary);line-height:1}
-    .meta-pct-label{font-size:12px;color:var(--muted);text-align:right}
-    .progress-bg{background:#e2e8f0;border-radius:999px;height:22px;overflow:hidden}
-    .progress-fill{height:100%;border-radius:999px;transition:width .6s}
-    .progress-fill.low{background:linear-gradient(90deg,#ef4444,#f87171)}
-    .progress-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
-    .progress-fill.high{background:linear-gradient(90deg,#059669,#34d399)}
-    .progress-stats{display:flex;justify-content:space-between;margin-top:8px;font-size:13px}
-    .progress-stats span{color:var(--muted)}
-    .progress-stats strong{color:var(--text)}
-    .pbadge{background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;display:inline-block;margin-top:6px}
-    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
-    .metric{background:white;border-radius:12px;padding:16px 14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06);position:relative;overflow:hidden}
-    .metric::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--primary)}
-    .metric.green::before{background:var(--success)}
-    .metric.red::before{background:var(--danger)}
-    .metric.orange::before{background:var(--warning)}
-    .metric-val{font-size:26px;font-weight:900;color:var(--text)}
-    .metric-lbl{font-size:11px;color:var(--muted);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:.3px}
-    .card{background:white;border-radius:14px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
-    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
-    .chart-wrapper{position:relative;height:230px}
-    .prod-bar{margin-bottom:10px}
-    .prod-bar-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
-    .prod-bar-top strong{color:var(--text)}
-    .prod-bar-top span{color:var(--muted)}
-    .prod-bar-bg{background:#e2e8f0;border-radius:999px;height:8px;overflow:hidden}
-    .prod-bar-fill{height:100%;border-radius:999px;transition:width .5s}
-    .parada-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
-    .parada-item:last-child{border-bottom:none}
-    .parada-icon{font-size:24px}
-    .parada-hora{font-weight:700;color:var(--danger)}
-    .parada-desc{font-size:13px;color:var(--text);margin-top:2px}
-    .parada-meta{font-size:12px;color:var(--muted);margin-top:2px}
-    .feed-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;font-size:13px}
-    .feed-item:last-child{border-bottom:none}
-    .feed-hora{font-weight:700;color:var(--primary);min-width:44px;font-variant-numeric:tabular-nums}
-    .feed-info{flex:1}
-    .feed-prod{font-weight:600}
-    .feed-sub{color:var(--muted);font-size:12px}
-    .feed-qtd{font-weight:800;font-size:15px}
-    .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
-    .badge-red{background:#fee2e2;color:#991b1b}
-    .badge-blue{background:#eff6ff;color:#1a56db}
-    .badge-orange{background:#fff7ed;color:#c2410c}
-    .badge-purple{background:#f5f3ff;color:#6d28d9}
-    .badge-green{background:#d1fae5;color:#065f46}
-    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:14px}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    @media(max-width:640px){.two-col{grid-template-columns:1fr}}
-    .last-update{text-align:center;font-size:12px;color:var(--muted);padding:8px;margin-top:4px}
-    .meta-linha-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
-    .meta-linha-row:last-child{border-bottom:none}
-    .meta-linha-nome{font-weight:600;font-size:14px}
-    .meta-linha-nums{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right}
-    .meta-linha-pct{font-size:13px;font-weight:800;min-width:44px;text-align:right}
-    .meta-linha-bar{grid-column:1/-1;margin-top:2px}
-    /* Programacao vs Realizado */
-    .prog-block{padding:14px 0;border-bottom:1px solid var(--border)}
-    .prog-block:last-child{border-bottom:none;padding-bottom:0}
-    .prog-block:first-child{padding-top:0}
-    .prog-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
-    .prog-nome{font-weight:800;font-size:15px;color:var(--text)}
-    .prog-produto{font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
-    .prog-pct{font-size:22px;font-weight:900;line-height:1;white-space:nowrap;margin-left:10px}
-    .prog-stats{display:flex;gap:14px;font-size:12px;margin:6px 0 8px;flex-wrap:wrap}
-    .prog-stats span{color:var(--muted)}
-    .prog-stats strong{color:var(--text)}
-    .prog-bar-bg{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}
-    .prog-bar-fill{height:100%;border-radius:999px;transition:width .6s}
-    /* Acompanhamento de Pedidos */
-    .pedido-row{padding:13px 0;border-bottom:1px solid var(--border)}
-    .pedido-row:last-child{border-bottom:none;padding-bottom:0}
-    .pedido-row:first-child{padding-top:0}
-    .pedido-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;gap:8px}
-    .pedido-id-badge{background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
-    .pedido-concluido-badge{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
-    .pedido-produto{font-size:13px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 8px}
-    .pedido-pct{font-size:20px;font-weight:900;line-height:1;white-space:nowrap}
-    .pedido-stats{display:flex;gap:12px;font-size:12px;margin:4px 0 7px;flex-wrap:wrap}
-    .pedido-stats span{color:var(--muted)}
-    .pedido-stats strong{color:var(--text)}
-    .pedido-bar-bg{height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden}
-    .pedido-bar-fill{height:100%;border-radius:999px;transition:width .6s}
-
-    /* ANDON Realtime Dashboard Styles */
-    .andon-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
-    .andon-db-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center; background: white; transition: all .2s; }
-    .andon-db-card.active { border-left: 4px solid #10b981; }
-    .andon-db-card.stopped { border-left: 4px solid #ef4444; background: #fff5f5; animation: flashing-db 2.5s infinite; }
-    @keyframes flashing-db {
-      0% { border-left-color: #ef4444; }
-      50% { border-left-color: #feb2b2; }
-      100% { border-left-color: #ef4444; }
-    }
-    .andon-db-title { font-weight: 800; font-size: 14px; color: var(--primary); margin-bottom: 4px; }
-    .andon-db-status { font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 6px; }
-    .andon-db-card.active .andon-db-status { background: #d1fae5; color: #065f46; }
-    .andon-db-card.stopped .andon-db-status { background: #fee2e2; color: #991b1b; }
-    .andon-db-info { font-size: 11px; color: var(--muted); line-height: 1.25; height: 32px; display: flex; align-items: center; justify-content: center; }
-
-    /* Toolbar / Navigation */
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
-
-    /* Stacked Goals Style Rules */
-    .meta-stack-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; transition: transform .15s; position: relative }
-    .meta-stack-item:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.03) }
-    .meta-stack-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px }
-    .meta-stack-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px }
-    .meta-stack-desc { font-size: 14px; font-weight: 800; color: var(--text); margin-top: 1px }
-    .meta-stack-pct { font-size: 22px; font-weight: 900; color: var(--primary); line-height: 1 }
-    .meta-stack-pct-label { font-size: 10px; color: var(--muted); text-align: right; margin-top: 2px }
-    .meta-stack-progress-bg { background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden; margin: 8px 0 }
-    .meta-stack-progress-fill { height: 100%; border-radius: 999px; transition: width .5s }
-    .meta-stack-progress-fill.low { background: linear-gradient(90deg,#ef4444,#f87171) }
-    .meta-stack-progress-fill.mid { background: linear-gradient(90deg,#f59e0b,#fbbf24) }
-    .meta-stack-progress-fill.high { background: linear-gradient(90deg,#059669,#34d399) }
-    .meta-stack-stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted) }
-    .meta-stack-stats strong { color: var(--text) }
-  </style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
-    <h1>Dashboard de Producao</h1>
-    <div class="header-sub" id="hDate">—</div>
-  </div>
-  <div class="header-right">
-    <div class="clock" id="hClock">—</div>
-    <div class="live-badge">
-      <div class="live-dot" id="liveDot"></div>
-      <span id="liveText">Conectando...</span>
-    </div>
-  </div>
-</div>
-
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html" class="active">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
-</div>
-
-<div class="date-nav-bar">
-  <button id="btnPrev">&#9664;</button>
-  <input type="date" id="dateInput">
-  <button id="btnNext">&#9654;</button>
-  <button class="btn-today" id="btnToday">Hoje</button>
-</div>
-
-<div class="main">
-  <!-- PAINEL ANDON REALTIME (STATUS DAS LINHAS) -->
-  <div class="card" style="margin-bottom: 20px;">
-    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-      <span>🚨 Status das Linhas de Produção (ANDON)</span>
-      <span style="font-size:11px; background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:12px; font-weight:700; animation: pulse 2.5s infinite;">Tempo Real</span>
-    </div>
-    <div class="andon-dashboard-grid">
-      <!-- Gerado dinamicamente -->
-    </div>
-  </div>
-
-  <style>
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-  </style>
-
-  <div class="card" id="metasCard" style="display:none">
-    <div class="card-title">Acompanhamento e Empilhamento de Metas</div>
-    <div id="stackedMetasContainer" style="display:flex; flex-direction:column; gap:14px"></div>
-  </div>
-
-  <div class="metrics">
-    <div class="metric"><div class="metric-val" id="mTotal">—</div><div class="metric-lbl">Total do Dia</div></div>
-    <div class="metric green"><div class="metric-val" id="mRegs">—</div><div class="metric-lbl">Registros</div></div>
-    <div class="metric orange"><div class="metric-val" id="mMedia">—</div><div class="metric-lbl">Media/Registro</div></div>
-    <div class="metric red"><div class="metric-val" id="mParadas">—</div><div class="metric-lbl">Paradas</div></div>
-  </div>
-
-  <!-- Charts Row 1: Hora e Turno -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">Produção por Hora</div>
-      <div class="chart-wrapper" id="chartBarWrapper"><canvas id="chartBar"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Produção por Turno</div>
-      <div class="chart-wrapper" id="chartTurnosWrapper"><canvas id="chartTurnos"></canvas></div>
-    </div>
-  </div>
-
-  <!-- Charts Row 2: Linhas e Postos -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">Linhas de Envase (Envase)</div>
-      <div class="chart-wrapper" id="chartLinhasWrapper"><canvas id="chartLinhas"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Rotulagem & Postos de Trabalho</div>
-      <div class="chart-wrapper" id="chartPostosWrapper"><canvas id="chartPostos"></canvas></div>
-    </div>
-  </div>
-
-  <!-- Meta diaria por linha -->
-  <div class="card" id="metaDiariaCard" style="display:none">
-    <div class="card-title">Progresso Diário por Linha / Posto</div>
-    <div id="metaDiariaContent"></div>
-  </div>
-
-  <!-- Programacao vs Realizado -->
-  <div class="card" id="progCard" style="display:none">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Programacao vs Realizado</span>
-      <a href="importar.html" style="font-size:11px;color:var(--primary);text-decoration:none;font-weight:600">Importar ↗</a>
-    </div>
-    <div id="progContent"></div>
-  </div>
-
-  <!-- Acompanhamento de Pedidos -->
-  <div class="card" id="pedidosCard" style="display:none">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Acompanhamento de Pedidos</span>
-      <a href="importar.html" style="font-size:11px;color:#7c3aed;text-decoration:none;font-weight:600">Importar ↗</a>
-    </div>
-    <div id="pedidosContent"></div>
-  </div>
-
-  <div class="two-col">
-    <div class="card"><div class="card-title">Por Produto</div><div id="prodProd"></div></div>
-    <div class="card"><div class="card-title">Paradas</div><div id="paradasList"></div></div>
-  </div>
-
-  <div class="two-col">
-    <div class="card"><div class="card-title">Por Colaborador</div><div id="prodColab"></div></div>
-    <div class="card"><div class="card-title">Por Lote</div><div id="prodLote"></div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Ultimos Registros</div>
-    <div id="feedLive"></div>
-  </div>
-
-  <div class="last-update">Atualizado em tempo real · <span id="lastUpdate">—</span></div>
-</div>
-
-<script>
-var firebaseConfig = {
-  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
-  authDomain: "prod-kuryos.firebaseapp.com",
-  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
-  projectId: "prod-kuryos",
-  storageBucket: "prod-kuryos.firebasestorage.app",
-  messagingSenderId: "323674581733",
-  appId: "1:323674581733:web:e283a491c0c2bd6025420c",
-  measurementId: "G-PTVWKLRHTG"
-};
-
-var db, cfg = {}, chartBar = null, chartLinhas = null, chartPostos = null, chartTurnos = null, currentRef = null, progRef = null;
-var currentDate = new Date().toISOString().split('T')[0];
-var progData = null;
-var regsData = [];
-var BAR_COLORS = ['#1a56db','#0e9f6e','#d97706','#dc2626','#7c3aed','#db2777','#0891b2','#65a30d'];
-
-function isWorking(dateObj) {
-  var plan = cfg.planejamento || {};
-  var diasAtivos = plan.diasSemana || [1, 2, 3, 4, 5];
-  var feriados = plan.feriados || {};
-  var ymd = dateObj.toISOString().split('T')[0];
-  var dw = dateObj.getDay();
-  var dwConfig = dw === 0 ? 7 : dw; // 1 = Seg, 7 = Dom
-  var isWorkingDay = diasAtivos.indexOf(dwConfig) !== -1;
-  var isHoliday = feriados[ymd] !== undefined;
-  return isWorkingDay && !isHoliday;
-}
-
-function countWorkingDays(iniStr, fimStr) {
-  if (!iniStr || !fimStr) return 0;
-  var cursor = new Date(iniStr + 'T12:00:00');
-  var limit = new Date(fimStr + 'T12:00:00');
-  var count = 0;
-  while (cursor <= limit) {
-    if (isWorking(cursor)) count++;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return count;
-}
-
-function today() {
-  var d = new Date();
-  var localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-  return localDate.toISOString().split('T')[0];
-}
-function fmtNum(n) { return Number(n||0).toLocaleString('pt-BR'); }
-function fmtDate(d) { if(!d)return'—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
-function fmtTime() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
-function fmtHoraRange(hora) {
-  if (!hora) return '—';
-  var cleanHora = hora.replace('_', ':');
-  var parts = cleanHora.split(':');
-  var h = parseInt(parts[0]);
-  if (isNaN(h)) return hora;
-  var nextH = (h + 1) % 24;
-  var nextHStr = String(nextH).padStart(2, '0') + ':00';
-  return cleanHora + 'h - ' + nextHStr + 'h';
-}
-
-var lastTodayDate = today();
-function updateClock() {
-  var now = new Date();
-  document.getElementById('hClock').textContent = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('hDate').textContent = now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
-
-  var currentToday = today();
-  if (currentToday !== lastTodayDate) {
-    if (currentDate === lastTodayDate) {
-      currentDate = currentToday;
-      var dateInput = document.getElementById('dateInput');
-      if (dateInput) dateInput.value = currentDate;
-      listenToDate(currentDate);
-    }
-    lastTodayDate = currentToday;
-  }
-}
-
-function setLive(on, text) {
-  document.getElementById('liveDot').className = 'live-dot' + (on ? ' on' : '');
-  document.getElementById('liveText').textContent = text;
-}
-
-function updateStackedMetas() {
-  var container = document.getElementById('stackedMetasContainer');
-  var card = document.getElementById('metasCard');
-  if (!container || !card) return;
-
-  var plan = cfg.planejamento || {};
-  var metasPadrao = cfg.metasPorLinha || {};
-  
-  // 1. Calculate soma das metas das linhas de envase
-  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
-  var somaLinhas = 0;
-  linesList.forEach(function(l) {
-    somaLinhas += Number(metasPadrao[l] || 0);
-  });
-  if (somaLinhas === 0) somaLinhas = 20600; // Fallback se não configurado
-  
-  // ── 1. META DE HOJE ───────────────────────────────────
-  var todayDateObj = new Date(currentDate + 'T12:00:00');
-  var todayIsWorking = isWorking(todayDateObj);
-  
-  var metaHoje = 0;
-  var matrizHoje = cfg.metasMatriz && cfg.metasMatriz[currentDate];
-  if (matrizHoje) {
-    linesList.forEach(function(l) {
-      metaHoje += Number(matrizHoje[l] || 0);
-    });
-    todayIsWorking = metaHoje > 0;
-  } else {
-    metaHoje = todayIsWorking ? somaLinhas : 0;
-  }
-  var prodHoje = regsData.reduce(function(s, r) { return s + (r.quantidade || 0); }, 0);
-  
-  // ── 2. META DA SEMANA ─────────────────────────────────
-  // Find Monday and Sunday of selected week
-  var Monday = new Date(todayDateObj);
-  var dw = Monday.getDay();
-  Monday.setDate(Monday.getDate() + (dw === 0 ? -6 : 1 - dw));
-  var Sunday = new Date(Monday);
-  Sunday.setDate(Sunday.getDate() + 6);
-  
-  var weekStartStr = Monday.toISOString().split('T')[0];
-  var weekEndStr = Sunday.toISOString().split('T')[0];
-  
-  var metaSemanal = 0;
-  var cursor = new Date(Monday);
-  while (cursor <= Sunday) {
-    var dKey = cursor.toISOString().split('T')[0];
-    var matrizDia = cfg.metasMatriz && cfg.metasMatriz[dKey];
-    if (matrizDia) {
-      linesList.forEach(function(l) {
-        metaSemanal += Number(matrizDia[l] || 0);
-      });
-    } else {
-      if (isWorking(cursor)) {
-        metaSemanal += somaLinhas;
-      }
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  
-  var workingDaysInWeek = countWorkingDays(weekStartStr, weekEndStr);
-  
-  // ── 3. META DO PERÍODO PCP ────────────────────────────
-  var metaPcp = cfg.meta || {};
-  var pcpStartStr = metaPcp.inicio;
-  var pcpEndStr = metaPcp.fim;
-  var pcpDesc = metaPcp.descricao || "Meta do Período";
-  var metaPcpQty = Number(metaPcp.quantidade) || 0;
-  
-  if (!pcpStartStr || !pcpEndStr) {
-    if (metaHoje === 0 && prodHoje === 0) {
-      card.style.display = 'none';
-      return;
-    }
-  }
-  
-  card.style.display = 'block';
-  
-  // Fetch weekly and period records from Firebase in parallel
-  var promises = [];
-  promises.push(db.ref('registros').orderByKey().startAt(weekStartStr).endAt(weekEndStr).once('value'));
-  if (pcpStartStr && pcpEndStr) {
-    promises.push(db.ref('registros').orderByKey().startAt(pcpStartStr).endAt(pcpEndStr).once('value'));
-  }
-  
-  Promise.all(promises).then(function(snaps) {
-    var prodSemanal = 0;
-    var snapWeek = snaps[0];
-    if (snapWeek && snapWeek.exists()) {
-      snapWeek.forEach(function(dateSnap) {
-        dateSnap.forEach(function(r) { prodSemanal += (r.val().quantidade || 0); });
-      });
-    }
-    
-    var prodPcp = 0;
-    if (snaps.length > 1) {
-      var snapPcp = snaps[1];
-      if (snapPcp && snapPcp.exists()) {
-        snapPcp.forEach(function(dateSnap) {
-          dateSnap.forEach(function(r) { prodPcp += (r.val().quantidade || 0); });
-        });
-      }
-    }
-    
-    var list = [];
-    
-    // Item 1: Meta de Hoje
-    var pctHoje = metaHoje ? Math.min(100, Math.round(prodHoje / metaHoje * 100)) : 0;
-    var statusHoje = todayIsWorking ? pctHoje + '%' : 'Folga / Sem Meta';
-    var fillClsHoje = pctHoje >= 80 ? 'high' : pctHoje >= 50 ? 'mid' : 'low';
-    var descHoje = todayIsWorking ? 'Meta Diária de Produção' : 'Folga / Sem Programação Planejada';
-    
-    var itemHojeHtml = '<div class="meta-stack-item">' +
-      '<div class="meta-stack-hdr">' +
-        '<div>' +
-          '<div class="meta-stack-title">Meta de Hoje (' + fmtDate(currentDate) + ')</div>' +
-          '<div class="meta-stack-desc" style="' + (!todayIsWorking ? 'color:var(--muted); font-weight:normal; font-style:italic' : '') + '">' + descHoje + '</div>' +
-        '</div>' +
-        '<div style="text-align:right">' +
-          '<div class="meta-stack-pct" style="' + (!todayIsWorking ? 'color:var(--muted)' : '') + '">' + statusHoje + '</div>' +
-          (todayIsWorking ? '<div class="meta-stack-pct-label">concluído</div>' : '') +
-        '</div>' +
-      '</div>' +
-      (todayIsWorking ? 
-        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsHoje + '" style="width:' + pctHoje + '%"></div></div>' +
-        '<div class="meta-stack-stats">' +
-          '<span>Produzido: <strong>' + fmtNum(prodHoje) + ' un</strong></span>' +
-          '<span>Meta: <strong>' + fmtNum(metaHoje) + ' un</strong></span>' +
-          '<span>Saldo: <strong>' + (prodHoje >= metaHoje ? 'Atingida!' : fmtNum(metaHoje - prodHoje) + ' un') + '</strong></span>' +
-        '</div>' : 
-        '<div style="font-size:11px; color:var(--muted); margin-top:4px">Nenhuma meta programada no calendário de planejamento para este dia.</div>'
-      ) +
-    '</div>';
-    
-    list.push({ days: 1, html: itemHojeHtml });
-    
-    // Item 2: Meta da Semana
-    if (metaSemanal > 0) {
-      var pctSemanal = Math.min(100, Math.round(prodSemanal / metaSemanal * 100));
-      var fillClsSemanal = pctSemanal >= 80 ? 'high' : pctSemanal >= 50 ? 'mid' : 'low';
-      
-      var itemSemanalHtml = '<div class="meta-stack-item">' +
-        '<div class="meta-stack-hdr">' +
-          '<div>' +
-            '<div class="meta-stack-title">Meta da Semana (' + fmtDate(weekStartStr) + ' a ' + fmtDate(weekEndStr) + ')</div>' +
-            '<div class="meta-stack-desc">Acumulado da Semana Útil</div>' +
-          '</div>' +
-          '<div style="text-align:right">' +
-            '<div class="meta-stack-pct">' + pctSemanal + '%</div>' +
-            '<div class="meta-stack-pct-label">concluído</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsSemanal + '" style="width:' + pctSemanal + '%"></div></div>' +
-        '<div class="meta-stack-stats">' +
-          '<span>Produzido: <strong>' + fmtNum(prodSemanal) + ' un</strong></span>' +
-          '<span>Meta: <strong>' + fmtNum(metaSemanal) + ' un <span style="font-weight:normal; font-size:10px">(' + workingDaysInWeek + 'd úteis)</span></strong></span>' +
-          '<span>Saldo: <strong>' + (prodSemanal >= metaSemanal ? 'Atingida!' : fmtNum(metaSemanal - prodSemanal) + ' un') + '</strong></span>' +
-        '</div>' +
-      '</div>';
-      
-      list.push({ days: 7, html: itemSemanalHtml });
-    }
-    
-    // Item 3: Meta do Período PCP
-    if (metaPcpQty > 0 && pcpStartStr && pcpEndStr) {
-      var pctPcp = Math.min(100, Math.round(prodPcp / metaPcpQty * 100));
-      var fillClsPcp = pctPcp >= 80 ? 'high' : pctPcp >= 50 ? 'mid' : 'low';
-      var pcpDaysCount = countWorkingDays(pcpStartStr, pcpEndStr);
-      
-      var itemPcpHtml = '<div class="meta-stack-item">' +
-        '<div class="meta-stack-hdr">' +
-          '<div>' +
-            '<div class="meta-stack-title">Meta do Período (' + fmtDate(pcpStartStr) + ' a ' + fmtDate(pcpEndStr) + ')</div>' +
-            '<div class="meta-stack-desc">' + pcpDesc + '</div>' +
-          '</div>' +
-          '<div style="text-align:right">' +
-            '<div class="meta-stack-pct">' + pctPcp + '%</div>' +
-            '<div class="meta-stack-pct-label">concluído</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsPcp + '" style="width:' + pctPcp + '%"></div></div>' +
-        '<div class="meta-stack-stats">' +
-          '<span>Produzido: <strong>' + fmtNum(prodPcp) + ' un</strong></span>' +
-          '<span>Meta: <strong>' + fmtNum(metaPcpQty) + ' un <span style="font-weight:normal; font-size:10px">(' + pcpDaysCount + 'd úteis)</span></strong></span>' +
-          '<span>Saldo: <strong>' + (prodPcp >= metaPcpQty ? 'Atingida!' : fmtNum(metaPcpQty - prodPcp) + ' un') + '</strong></span>' +
-        '</div>' +
-      '</div>';
-      
-      var totalDaysSpan = Math.round((new Date(pcpEndStr) - new Date(pcpStartStr)) / 864e5) + 1;
-      list.push({ days: totalDaysSpan, html: itemPcpHtml });
-    }
-    
-    list.sort(function(a, b) { return a.days - b.days; });
-    container.innerHTML = list.map(function(item) { return item.html; }).join('');
-    
-  }).catch(function(e) {
-    console.error("Erro ao calcular empilhamento de metas: ", e);
-  });
-}
-
-function listenToDate(date) {
-  if (currentRef) { currentRef.off(); currentRef = null; }
-  if (progRef) { progRef.off(); progRef = null; }
-  progData = null;
-  regsData = [];
-
-  currentRef = db.ref('registros/' + date);
-  currentRef.on('value', function(snap) {
-    var data = snap.val() || {};
-    regsData = Object.values(data);
-    regsData.sort(function(a, b) { return (a.hora || '').localeCompare(b.hora || ''); });
-    renderAll(regsData);
-    document.getElementById('lastUpdate').textContent = fmtTime();
-    updateStackedMetas();
-  });
-
-  progRef = db.ref('programacao/' + date);
-  progRef.on('value', function(snap) {
-    progData = snap.val();
-    renderProgramacao(progData, regsData);
-  });
-}
-
-function getParadasFromReg(r) {
-  // Suporte ao novo formato (array) e ao formato legado (campo unico)
-  if (Array.isArray(r.paradas) && r.paradas.length > 0) return r.paradas;
-  if (r.parada && (r.motivoParada || r.horaInicioParada)) {
-    return [{ motivo: r.motivoParada||'', horaInicio: r.horaInicioParada||'', horaFim: r.horaFimParada||'' }];
-  }
-  return [];
-}
-
-function renderAll(regs) {
-  var total = regs.reduce(function(s,r){ return s+(r.quantidade||0); }, 0);
-  // conta registros com pelo menos uma parada
-  var numRegsComParada = regs.filter(function(r){ return getParadasFromReg(r).length > 0; }).length;
-  // total de ocorrencias de parada
-  var totalParadas = regs.reduce(function(s,r){ return s + getParadasFromReg(r).length; }, 0);
-  var media = regs.length ? Math.round(total / regs.length) : 0;
-  document.getElementById('mTotal').textContent = fmtNum(total);
-  document.getElementById('mRegs').textContent = regs.length;
-  document.getElementById('mMedia').textContent = fmtNum(media);
-  document.getElementById('mParadas').textContent = totalParadas;
-  renderChart(regs);
-  renderLinhasPostosTurnosCharts(regs);
-  renderProdutos(regs, total);
-  renderParadas(regs);
-  renderColaboradores(regs, total);
-  renderLotes(regs);
-  renderMetaDiaria(regs);
-  renderProgramacao(progData, regs);
-  renderFeed(regs.slice().reverse().slice(0,8));
-}
-
-function renderChart(regs) {
-  var byHour = {}, byHourParada = {};
-  regs.forEach(function(r) {
-    var h = (r.hora||'00:00').split(':')[0] + ':00';
-    byHour[h] = (byHour[h]||0) + (r.quantidade||0);
-    if (r.parada) byHourParada[h] = true;
-  });
-  var labels = Object.keys(byHour).sort();
-  var values = labels.map(function(h){ return byHour[h]; });
-  var colors = labels.map(function(h){ return byHourParada[h] ? 'rgba(220,38,38,.7)' : 'rgba(26,86,219,.75)'; });
-  
-  var wrapper = document.getElementById('chartBarWrapper');
-  if (chartBar) { chartBar.destroy(); chartBar = null; }
-  if (!labels.length) {
-    wrapper.innerHTML = '<div class="no-data">Nenhum dado neste dia.</div>';
-    return;
-  }
-  wrapper.innerHTML = '<canvas id="chartBar"></canvas>';
-  var ctx = document.getElementById('chartBar');
-  
-  chartBar = new Chart(ctx, {
-    type: 'bar',
-    data: { labels: labels.map(fmtHoraRange), datasets: [{ label: 'Quantidade', data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }
-  });
-}
-
-function renderLinhasPostosTurnosCharts(regs) {
-  var linesData = {}, postosData = {};
-  var turnosData = { 'manhã': 0, 'tarde': 0, 'noite': 0 };
-  
-  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
-  var postosList = cfg.postosTrabalho || ['Rotuladora 01', 'Rotuladora 02'];
-  
-  function isLinhaDeProducao(name) {
-    if (!name) return true;
-    if (linesList.indexOf(name) !== -1) return true;
-    if (postosList.indexOf(name) !== -1) return false;
-    return name.toLowerCase().indexOf('linha') === 0;
-  }
-  
-  regs.forEach(function(r) {
-    var l = r.linha || 'Não Informado';
-    var t = String(r.turno || 'manhã').toLowerCase().trim();
-    var q = r.quantidade || 0;
-    
-    // Group by shift
-    if (t === 'tarde') {
-      turnosData['tarde'] += q;
-    } else if (t === 'noite') {
-      turnosData['noite'] += q;
-    } else {
-      turnosData['manhã'] += q;
-    }
-    
-    // Group by line / post
-    if (isLinhaDeProducao(l)) {
-      linesData[l] = (linesData[l] || 0) + q;
-    } else {
-      postosData[l] = (postosData[l] || 0) + q;
-    }
-  });
-  
-  // ── Render Chart: Linhas ──────────────────────────────────────
-  renderDoughnutChart('chartLinhasWrapper', 'chartLinhas', linesData, {
-    'Linha 1': '#10b981', 'Linha 01': '#10b981', 'linha 1': '#10b981', 'linha 01': '#10b981',
-    'Linha 2': '#3b82f6', 'Linha 02': '#3b82f6', 'linha 2': '#3b82f6', 'linha 02': '#3b82f6',
-    'Linha 3': '#8b5cf6', 'Linha 03': '#8b5cf6', 'linha 3': '#8b5cf6', 'linha 03': '#8b5cf6',
-    'Linha 4': '#f59e0b', 'Linha 04': '#f59e0b', 'linha 4': '#f59e0b', 'linha 04': '#f59e0b',
-    'Linha 5': '#10b981', 'Linha 05': '#10b981',
-    'Linha 6': '#06b6d4', 'Linha 06': '#06b6d4',
-    'Linha 7': '#64748b', 'Linha 07': '#64748b',
-    'Linha 8': '#14b8a6', 'Linha 08': '#14b8a6',
-    'default': '#475569'
-  }, 'Linhas de Envase');
-  
-  // ── Render Chart: Postos / Rotulagem ─────────────────────────
-  renderDoughnutChart('chartPostosWrapper', 'chartPostos', postosData, {
-    'Rotuladora 01': '#f43f5e', // Rose
-    'Rotuladora 02': '#06b6d4', // Cyan
-    'default': '#14b8a6'
-  }, 'Rotulagem & Postos');
-
-  // ── Render Chart: Turnos ──────────────────────────────────────
-  renderDoughnutChart('chartTurnosWrapper', 'chartTurnos', turnosData, {
-    'manhã': '#fbbf24', // Golden sun
-    'tarde': '#f97316', // Sunset orange
-    'noite': '#6366f1', // Indigo/Purple
-    'default': '#64748b'
-  }, 'Turnos');
-}
-
-function renderDoughnutChart(wrapperId, canvasId, groupedData, colorMap, title) {
-  var wrapper = document.getElementById(wrapperId);
-  if (!wrapper) return;
-  
-  var labels = [];
-  var values = [];
-  var colors = [];
-  var total = 0;
-  
-  Object.entries(groupedData).forEach(function(entry) {
-    var label = entry[0];
-    var val = entry[1];
-    if (val > 0) {
-      labels.push(label);
-      values.push(val);
-      total += val;
-      
-      var c = colorMap[label] || colorMap[label.toLowerCase()] || colorMap['default'] || '#64748b';
-      colors.push(c);
-    }
-  });
-  
-  if (canvasId === 'chartLinhas' && chartLinhas) { chartLinhas.destroy(); chartLinhas = null; }
-  if (canvasId === 'chartPostos' && chartPostos) { chartPostos.destroy(); chartPostos = null; }
-  if (canvasId === 'chartTurnos' && chartTurnos) { chartTurnos.destroy(); chartTurnos = null; }
-  
-  if (total === 0) {
-    wrapper.innerHTML = '<div class="no-data">Nenhuma produção registrada hoje.</div>';
-    return;
-  }
-  
-  wrapper.innerHTML = '<canvas id="' + canvasId + '"></canvas>';
-  var ctx = document.getElementById(canvasId);
-  
-  var chartInstance = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        borderWidth: 2,
-        borderColor: '#ffffff',
-        hoverOffset: 6
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: {
-            font: { size: 11, weight: 'bold' },
-            boxWidth: 12,
-            padding: 8
-          }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              var val = context.raw || 0;
-              var pct = total ? ((val / total) * 100).toFixed(1) : 0;
-              return context.label + ': ' + fmtNum(val) + ' (' + pct + '%)';
-            }
-          }
-        }
-      },
-      cutout: '60%'
-    },
-    plugins: [{
-      id: 'centerText',
-      afterDraw: function(chart) {
-        var ctx = chart.ctx;
-        ctx.save();
-        var activeMeta = chart.getDatasetMeta(0);
-        if (activeMeta && activeMeta.data && activeMeta.data.length > 0) {
-          var centerPoint = activeMeta.data[0];
-          var x = centerPoint.x;
-          var y = centerPoint.y;
-          
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          
-          ctx.font = 'bold 15px sans-serif';
-          ctx.fillStyle = '#0f172a';
-          ctx.fillText(fmtNum(total), x, y - 6);
-          
-          ctx.font = '600 9px sans-serif';
-          ctx.fillStyle = '#64748b';
-          ctx.fillText('PEÇAS', x, y + 10);
-        }
-        ctx.restore();
-      }
-    }]
-  });
-  
-  if (canvasId === 'chartLinhas') chartLinhas = chartInstance;
-  if (canvasId === 'chartPostos') chartPostos = chartInstance;
-  if (canvasId === 'chartTurnos') chartTurnos = chartInstance;
-}
-
-function renderProdutos(regs, total) {
-  var c = document.getElementById('prodProd');
-  if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
-  var byP = {};
-  regs.forEach(function(r){ byP[r.produto] = (byP[r.produto]||0) + (r.quantidade||0); });
-  var sorted = Object.entries(byP).sort(function(a,b){ return b[1]-a[1]; });
-  c.innerHTML = sorted.map(function(entry, i) {
-    var prod = entry[0], qtd = entry[1];
-        var pct = total ? Math.round((qtd/total)*100) : 0;
-    var color = BAR_COLORS[i % BAR_COLORS.length];
-    return '<div class="prod-bar">' +
-      '<div class="prod-bar-top"><strong>' + (prod||'—') + '</strong><span>' + fmtNum(qtd) + ' (' + pct + '%)</span></div>' +
-      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderParadas(regs) {
-  var c = document.getElementById('paradasList');
-  var allParadas = [];
-  regs.forEach(function(r) {
-    getParadasFromReg(r).forEach(function(p) {
-      allParadas.push({ hora: r.hora, linha: r.linha, motivo: p.motivo||p.motivoParada||'—', duracao: p.duracao||0 });
-    });
-  });
-  if (!allParadas.length) { c.innerHTML = '<div class="no-data">Nenhuma parada registrada.</div>'; return; }
-  c.innerHTML = allParadas.map(function(p) {
-    return '<div class="parada-item">' +
-      '<div class="parada-icon">⏸️</div>' +
-      '<div>' +
-        '<div class="parada-hora">' + fmtHoraRange(p.hora) + (p.linha ? ' · ' + p.linha : '') + '</div>' +
-        '<div class="parada-desc">' + p.motivo + '</div>' +
-        (p.duracao ? '<div class="parada-meta">' + p.duracao + ' min</div>' : '') +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderColaboradores(regs, total) {
-  var c = document.getElementById('prodColab');
-  if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
-  var byC = {};
-  regs.forEach(function(r) {
-    var key = r.colaboradores ? r.colaboradores + ' colaboradores' : r.operador || '—';
-    byC[key] = (byC[key]||0) + (r.quantidade||0);
-  });
-  var sorted = Object.entries(byC).sort(function(a,b){ return b[1]-a[1]; });
-  c.innerHTML = sorted.map(function(entry, i) {
-    var nome = entry[0], qtd = entry[1];
-    var pct = total ? Math.round((qtd/total)*100) : 0;
-    var color = BAR_COLORS[i % BAR_COLORS.length];
-    return '<div class="prod-bar">' +
-      '<div class="prod-bar-top"><strong>' + nome + '</strong><span>' + fmtNum(qtd) + ' (' + pct + '%)</span></div>' +
-      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderLotes(regs) {
-  var c = document.getElementById('prodLote');
-  var byL = {};
-  regs.forEach(function(r) {
-    if (!r.lote) return;
-    if (!byL[r.lote]) {
-      byL[r.lote] = { total: 0, produtos: {} };
-    }
-    byL[r.lote].total += (r.quantidade||0);
-    if (r.produto) byL[r.lote].produtos[r.produto] = true;
-  });
-  var sorted = Object.entries(byL).sort(function(a,b){ return b[1].total-a[1].total; });
-  if (!sorted.length) { c.innerHTML = '<div class="no-data">Nenhum lote registrado.</div>'; return; }
-  c.innerHTML = sorted.map(function(entry, i) {
-    var lote = entry[0], d = entry[1];
-    var prodsList = Object.keys(d.produtos).join(', ');
-    var color = BAR_COLORS[i % BAR_COLORS.length];
-    return '<div class="prod-bar">' +
-      '<div class="prod-bar-top"><strong>' + lote + ' <span style="font-weight:normal; font-size:11px; color:var(--muted)">(' + (prodsList || 'Produto não identificado') + ')</span></strong><span>' + fmtNum(d.total) + '</span></div>' +
-      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:100%;background:'+color+';opacity:.6"></div></div>' +
-    '</div>';
-  }).join('');
-}
-
-function renderMetaDiaria(regs) {
-  var card = document.getElementById('metaDiariaCard');
-  
-  var plan = cfg.planejamento || {};
-  var metasPadrao = cfg.metasPorLinha || {};
-  
-  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
-  var postosList = cfg.postosTrabalho || ['Rotuladora 01', 'Rotuladora 02'];
-  
-  var todayDateObj = new Date(currentDate + 'T12:00:00');
-  var todayIsWorking = isWorking(todayDateObj);
-  
-  var somaLinhas = 0;
-  linesList.forEach(function(l) {
-    somaLinhas += Number(metasPadrao[l] || 0);
-  });
-  if (somaLinhas === 0) somaLinhas = 20600;
-  
-  var metaHoje = todayIsWorking ? somaLinhas : 0;
-  
-  card.style.display = 'block';
-  
-  function isLinhaDeProducao(name) {
-    if (!name) return true;
-    if (linesList.indexOf(name) !== -1) return true;
-    if (postosList.indexOf(name) !== -1) return false;
-    return name.toLowerCase().indexOf('linha') === 0;
-  }
-
-  var byLinha = {}, byPosto = {};
-  var totalEnvase = 0;
-  
-  regs.forEach(function(r) {
-    var l = r.linha || '—';
-    var q = r.quantidade || 0;
-    if (isLinhaDeProducao(l)) {
-      byLinha[l] = (byLinha[l]||0) + q;
-      totalEnvase += q;
-    } else {
-      byPosto[l] = (byPosto[l]||0) + q;
-    }
-  });
-  
-  var pctTotal = metaHoje ? Math.min(100, Math.round(totalEnvase / metaHoje * 100)) : 0;
-  var fillCls = pctTotal >= 80 ? 'high' : pctTotal >= 50 ? 'mid' : 'low';
-  
-  var html = '';
-  
-  if (todayIsWorking) {
-    html += '<div class="meta-linha-row">' +
-      '<div class="meta-linha-nome">Progresso do Envase (Meta Diária)</div>' +
-      '<div class="meta-linha-nums">' + fmtNum(totalEnvase) + ' / ' + fmtNum(metaHoje) + '</div>' +
-      '<div class="meta-linha-pct" style="color:' + (pctTotal>=80?'#059669':pctTotal>=50?'#d97706':'#e02424') + '">' + pctTotal + '%</div>' +
-      '<div class="meta-linha-bar"><div class="progress-bg" style="height:8px"><div class="progress-fill '+fillCls+'" style="width:'+pctTotal+'%"></div></div></div>' +
-      '</div>';
-  } else {
-    html += '<div class="meta-linha-row">' +
-      '<div class="meta-linha-nome" style="font-weight:bold; color:var(--muted)">Progresso do Envase (Dia de Folga)</div>' +
-      '<div class="meta-linha-nums" style="color:var(--muted)">' + fmtNum(totalEnvase) + ' peças produzidas</div>' +
-      '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:11px; font-weight:700">Folga / Sem Meta</span></div>' +
-      '</div>';
-  }
-  
-  html += '<div style="margin-top: 14px; font-weight: 700; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; letter-spacing: 0.5px">LINHAS DE ENVASE</div>';
-  
-  linesList.forEach(function(linha) {
-    var qtd = byLinha[linha] || 0;
-    var metaLinha = todayIsWorking ? Number(metasPadrao[linha] || 0) : 0;
-    
-    html += '<div class="meta-linha-row">';
-    if (metaLinha === 0) {
-      html += '<div class="meta-linha-nome" style="opacity:.65">' + linha + '</div>' +
-              '<div class="meta-linha-nums" style="opacity:.65">' + fmtNum(qtd) + '</div>' +
-              '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:10px; font-weight:700; background:#f3f4f6; color:#4b5563; border:none">' + (todayIsWorking ? 'Não Planejada' : 'Folga') + '</span></div>';
-    } else {
-      var pct = Math.min(100, Math.round(qtd / metaLinha * 100));
-      html += '<div class="meta-linha-nome">' + linha + '</div>' +
-              '<div class="meta-linha-nums">' + fmtNum(qtd) + ' / ' + fmtNum(metaLinha) + '</div>' +
-              '<div class="meta-linha-pct">' + pct + '%</div>';
-    }
-    html += '</div>';
-  });
-  
-  html += '<div style="margin-top: 14px; font-weight: 700; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; letter-spacing: 0.5px">ROTULAGEM & OUTROS POSTOS</div>';
-  
-  postosList.forEach(function(posto) {
-    var qtd = byPosto[posto] || 0;
-    var metaPosto = todayIsWorking ? Number(metasPadrao[posto] || 0) : 0;
-    
-    html += '<div class="meta-linha-row">';
-    if (metaPosto === 0) {
-      html += '<div class="meta-linha-nome" style="opacity:.65">' + posto + '</div>' +
-              '<div class="meta-linha-nums" style="opacity:.65">' + fmtNum(qtd) + '</div>' +
-              '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:10px; font-weight:700; background:#f3f4f6; color:#4b5563; border:none">Sem Meta</span></div>';
-    } else {
-      var pct = Math.min(100, Math.round(qtd / metaPosto * 100));
-      html += '<div class="meta-linha-nome">' + posto + '</div>' +
-              '<div class="meta-linha-nums">' + fmtNum(qtd) + ' / ' + fmtNum(metaPosto) + '</div>' +
-              '<div class="meta-linha-pct">' + pct + '%</div>';
-    }
-    html += '</div>';
-  });
-  
-  document.getElementById('metaDiariaContent').innerHTML = html;
-}
-
-function renderProgramacao(progData, regs) {
-  var card = document.getElementById('progCard');
-  if (!progData) { card.style.display = 'none'; return; }
-  var slots = Object.values(progData);
-  if (!slots.length) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-
-  var byProd = {};
-  slots.forEach(function(s) {
-    var k = s.produto || '—';
-    if (!byProd[k]) byProd[k] = { meta: 0, realizado: 0, linha: s.linha||'', pedidoId: s.pedidoId||'' };
-    byProd[k].meta += (s.quantidade||0);
-  });
-  regs.forEach(function(r) {
-    var k = r.produto || '—';
-    if (byProd[k]) byProd[k].realizado += (r.quantidade||0);
-  });
-
-  var html = Object.entries(byProd).map(function(entry) {
-    var prod = entry[0], d = entry[1];
-    var pct = d.meta ? Math.min(100, Math.round(d.realizado/d.meta*100)) : 0;
-    var fillCls = pct >= 95 ? 'high' : pct >= 60 ? 'mid' : 'low';
-    var pctColor = pct >= 95 ? '#059669' : pct >= 60 ? '#d97706' : '#e02424';
-    return '<div class="prog-block">' +
-      '<div class="prog-header">' +
-        '<div>' +
-          '<div class="prog-nome">' + (d.linha||'') + (d.pedidoId?' <span class="badge badge-purple">#'+d.pedidoId+'</span>':'') + '</div>' +
-          '<div class="prog-produto">' + prod + '</div>' +
-        '</div>' +
-        '<div class="prog-pct" style="color:'+pctColor+'">' + pct + '%</div>' +
-      '</div>' +
-      '<div class="prog-stats">' +
-        '<span>Meta: <strong>' + fmtNum(d.meta) + '</strong></span>' +
-        '<span>Realizado: <strong>' + fmtNum(d.realizado) + '</strong></span>' +
-        '<span>Saldo: <strong>' + fmtNum(Math.max(0,d.meta-d.realizado)) + '</strong></span>' +
-      '</div>' +
-      '<div class="progress-bg" style="height:10px"><div class="progress-fill '+fillCls+'" style="width:'+pct+'%"></div></div>' +
-    '</div>';
-  }).join('');
-  document.getElementById('progContent').innerHTML = html;
-}
-
-function renderFeed(regs) {
-  var c = document.getElementById('feedLive');
-  if (!regs.length) { c.innerHTML = '<div class="no-data">Nenhum registro hoje.</div>'; return; }
-  c.innerHTML = regs.map(function(r) {
-    var paradas = getParadasFromReg(r);
-    var totalParada = paradas.reduce(function(s,p){ return s+(p.duracao||0); }, 0);
-    var subParts = [r.linha];
-    if (r.lote) subParts.push('Lote: ' + r.lote);
-    if (r.pedidoId) subParts.push('OP: #' + r.pedidoId);
-    if (totalParada) subParts.push(totalParada + 'min parada');
-    return '<div class="feed-item">' +
-      '<div class="feed-hora">' + fmtHoraRange(r.hora) + '</div>' +
-      '<div class="feed-info">' +
-        '<div class="feed-prod">' + (r.produto||'—') + '</div>' +
-        '<div class="feed-sub">' + subParts.filter(Boolean).join(' · ') + '</div>' +
-      '</div>' +
-      '<div class="feed-qtd">' + fmtNum(r.quantidade||0) + '</div>' +
-    '</div>';
-  }).join('');
-}
-
-function isConcluido(status) {
-  if (!status) return false;
-  var s = String(status).toLowerCase().trim();
-  return s.indexOf('conclu') === 0;
-}
-
-function renderPedidos(regs) {
-  var card = document.getElementById('pedidosCard');
-  if (!pedidosCache || !Object.keys(pedidosCache).length) { card.style.display = 'none'; return; }
-  // Only show active (andamento) pedidos
-  var ativos = Object.values(pedidosCache).filter(function(p) {
-    var pct = p.qtdTotal ? Math.round((p.produzido||0)/p.qtdTotal*100) : 0;
-    return p.statusManual !== 'encerrado' && !isConcluido(p.status) && pct < 95 && (!p._key || p._key.indexOf('OP_') !== 0);
-  });
-  if (!ativos.length) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  ativos.sort(function(a,b) {
-    var pa = a.qtdTotal ? Math.round((a.produzido||0)/a.qtdTotal*100) : 0;
-    var pb = b.qtdTotal ? Math.round((b.produzido||0)/b.qtdTotal*100) : 0;
-    return pb - pa;
-  });
-  
-  var now = new Date();
-  now.setHours(0,0,0,0);
-  
-  var html = ativos.slice(0,5).map(function(p) {
-    var pct = p.qtdTotal ? Math.min(100, Math.round((p.produzido||0)/p.qtdTotal*100)) : 0;
-    var fillCls = pct >= 95 ? 'high' : pct >= 60 ? 'mid' : 'low';
-    var pctColor = pct >= 95 ? '#059669' : pct >= 60 ? '#d97706' : '#e02424';
-    
-    // Inactivity check
-    var lastApont = p.ultimoApontamento;
-    var warn = false;
-    var dateText = "Nunca produzido";
-    if (lastApont) {
-      var lastDate = new Date(lastApont);
-      if (!isNaN(lastDate.getTime())) {
-        dateText = lastDate.toLocaleDateString('pt-BR');
-        var checkDate = new Date(lastDate);
-        checkDate.setHours(0,0,0,0);
-        var diffDays = Math.round((now - checkDate) / (1000 * 60 * 60 * 24));
-        if (diffDays > 2) {
-          warn = true;
-        }
-      }
-    } else {
-      warn = true;
-    }
-    
-    return '<div class="prog-block">' +
-      '<div class="prog-header">' +
-        '<div>' +
-          '<div class="prog-nome"><span class="badge badge-purple">#' + (p.id||'—') + '</span> ' + (p.linha||'') + '</div>' +
-          '<div class="prog-produto">' + (p.produto||'—') + '</div>' +
-        '</div>' +
-        '<div class="prog-pct" style="color:'+pctColor+'">' + pct + '%</div>' +
-      '</div>' +
-      '<div class="prog-stats">' +
-        '<span>Meta: <strong>' + fmtNum(p.qtdTotal) + '</strong></span>' +
-        '<span>Produzido: <strong>' + fmtNum(p.produzido||0) + '</strong></span>' +
-        '<span>Saldo: <strong>' + fmtNum(Math.max(0,(p.qtdTotal||0)-(p.produzido||0))) + '</strong></span>' +
-      '</div>' +
-      '<div class="prog-stats" style="margin-top: 4px; display:flex; align-items:center; gap:8px">' +
-        '<span>Última Produção: <strong style="color: ' + (warn ? 'var(--danger)' : 'var(--text)') + '">' + dateText + '</strong></span>' +
-        (warn ? ' <span class="badge badge-red" style="font-size:10px; font-weight:700">⚠️ Parado há mais de 2 dias (PCP deve justificar)</span>' : '') +
-      '</div>' +
-      '<div class="progress-bg" style="height:10px; margin-top:8px"><div class="progress-fill '+fillCls+'" style="width:'+pct+'%"></div></div>' +
-    '</div>';
-  }).join('');
-  document.getElementById('pedidosContent').innerHTML = html;
-}
-
-// ── Firebase init + startup ───────────────────────────────────────
-var pedidosCache = {};
-
-firebase.initializeApp(firebaseConfig);
-db = firebase.database();
-
-function sanitizeKey(str) {
-  return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-}
-
-var latestAndonStates = {};
-
-function rebuildAndonDashboardGrid() {
-  var grid = document.querySelector('.andon-dashboard-grid');
-  if (!grid) return;
-  
-  var linesList = cfg.linhas || ["Linha 1", "Linha 2", "Linha 3"];
-  grid.innerHTML = '';
-  
-  linesList.forEach(function(linha) {
-    var lineKey = sanitizeKey(linha);
-    var card = document.createElement('div');
-    card.className = 'andon-db-card active';
-    card.id = 'andon_' + lineKey;
-    
-    card.innerHTML = 
-      '<div class="andon-db-title">' + linha + '</div>' +
-      '<div class="andon-db-status">🟢 OPERANDO</div>' +
-      '<div class="andon-db-info">Linha operando normalmente.</div>';
-      
-    grid.appendChild(card);
-  });
-  updateAndonUI();
-}
-
-function updateAndonUI() {
-  var linesList = cfg.linhas || ["Linha 1", "Linha 2", "Linha 3"];
-  linesList.forEach(function(linha) {
-    var lineKey = sanitizeKey(linha);
-    var card = document.getElementById('andon_' + lineKey);
-    if (!card) return;
-    
-    var state = latestAndonStates[lineKey] || { status: 'ativa' };
-    
-    if (state.status === 'parada') {
-      card.className = 'andon-db-card stopped';
-      card.querySelector('.andon-db-status').textContent = '🔴 PARADA: ' + (state.motivoParada || 'Parada');
-      
-      var inicio = new Date(state.inicioParada);
-      var timeStr = isNaN(inicio) ? '—' : inicio.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-      
-      card.querySelector('.andon-db-info').innerHTML = 
-        '<strong style="color:#b91c1c;">OP #' + (state.pedidoId || '—') + '</strong><br>' +
-        'Desde ' + timeStr + ' · Lote: ' + (state.lote || '—');
-    } else {
-      card.className = 'andon-db-card active';
-      card.querySelector('.andon-db-status').textContent = '🟢 OPERANDO';
-      card.querySelector('.andon-db-info').textContent = 'Linha operando normalmente.';
-    }
-  });
-}
-
-// ── ANDON Realtime status listener ──
-db.ref('estado_linhas').on('value', function(snap) {
-  latestAndonStates = snap.val() || {};
-  updateAndonUI();
-});
-
-db.ref('.info/connected').on('value', function(snap) {
-  setLive(snap.val(), snap.val() ? 'Ao vivo' : 'Offline');
-});
-
-db.ref('config').on('value', function(snap) {
-  cfg = snap.val() || {};
-  rebuildAndonDashboardGrid();
-  renderMetaDiaria(regsData);
-  updateStackedMetas();
-});
-
-db.ref('pedidos').on('value', function(snap) {
-  pedidosCache = {};
-  if (snap.val()) {
-    Object.entries(snap.val()).forEach(function(entry) {
-      var k = entry[0], v = entry[1];
-      v._key = k;
-      pedidosCache[k] = v;
-    });
-  }
-  renderPedidos(regsData);
-});
-
-// ── Date navigation ───────────────────────────────────────────────
-function changeDate(delta) {
-  var d = new Date(currentDate + 'T12:00:00');
-  d.setDate(d.getDate() + delta);
-  currentDate = d.toISOString().split('T')[0];
-  document.getElementById('dateInput').value = currentDate;
-  listenToDate(currentDate);
-}
-
-document.getElementById('btnPrev').addEventListener('click', function() { changeDate(-1); });
-document.getElementById('btnNext').addEventListener('click', function() { changeDate(1); });
-document.getElementById('btnToday').addEventListener('click', function() {
-  currentDate = today();
-  document.getElementById('dateInput').value = currentDate;
-  listenToDate(currentDate);
-});
-document.getElementById('dateInput').addEventListener('change', function() {
-  if (!this.value) return;
-  currentDate = this.value;
-  listenToDate(currentDate);
-});
-
-// ── Clock ─────────────────────────────────────────────────────────
-updateClock();
-setInterval(updateClock, 1000);
-
-// ── Start ─────────────────────────────────────────────────────────
-document.getElementById('dateInput').value = currentDate;
-listenToDate(currentDate);
-
-</script>
-</body>
-</html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard de Producao</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root { --primary:#0a1c69; --success:#0e9f6e; --warning:#d97706; --danger:#e02424; --bg:#f1f5f9; --card:#ffffff; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:#0a1c69;color:white;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.25)}
+    .header h1{font-size:20px;font-weight:800}
+    .header-sub{font-size:12px;opacity:.75;margin-top:2px}
+    .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+    .clock{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+    .live-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:#f87171}
+    .live-dot.on{background:#34d399;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+    .date-nav-bar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .date-nav-bar input[type=date]{flex:1;min-width:130px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px}
+    .date-nav-bar button{padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:14px;font-weight:600;color:var(--text)}
+    .date-nav-bar button:hover{background:#eff6ff;border-color:var(--primary);color:var(--primary)}
+    .btn-today{background:var(--primary)!important;color:white!important;border-color:var(--primary)!important;font-size:13px!important}
+    .main{padding:16px;max-width:96%;margin:0 auto}
+    .meta-card{background:white;border-radius:14px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:16px}
+    .meta-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+    .meta-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .meta-desc{font-size:16px;font-weight:800;color:var(--text);margin-top:2px}
+    .meta-pct{font-size:36px;font-weight:900;color:var(--primary);line-height:1}
+    .meta-pct-label{font-size:12px;color:var(--muted);text-align:right}
+    .progress-bg{background:#e2e8f0;border-radius:999px;height:22px;overflow:hidden}
+    .progress-fill{height:100%;border-radius:999px;transition:width .6s}
+    .progress-fill.low{background:linear-gradient(90deg,#ef4444,#f87171)}
+    .progress-fill.mid{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+    .progress-fill.high{background:linear-gradient(90deg,#059669,#34d399)}
+    .progress-stats{display:flex;justify-content:space-between;margin-top:8px;font-size:13px}
+    .progress-stats span{color:var(--muted)}
+    .progress-stats strong{color:var(--text)}
+    .pbadge{background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe;border-radius:6px;padding:3px 8px;font-size:12px;font-weight:600;display:inline-block;margin-top:6px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px}
+    .metric{background:white;border-radius:12px;padding:16px 14px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06);position:relative;overflow:hidden}
+    .metric::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--primary)}
+    .metric.green::before{background:var(--success)}
+    .metric.red::before{background:var(--danger)}
+    .metric.orange::before{background:var(--warning)}
+    .metric-val{font-size:26px;font-weight:900;color:var(--text)}
+    .metric-lbl{font-size:11px;color:var(--muted);font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:.3px}
+    .card{background:white;border-radius:14px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+    .chart-wrapper{position:relative;height:230px}
+    .prod-bar{margin-bottom:10px}
+    .prod-bar-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+    .prod-bar-top strong{color:var(--text)}
+    .prod-bar-top span{color:var(--muted)}
+    .prod-bar-bg{background:#e2e8f0;border-radius:999px;height:8px;overflow:hidden}
+    .prod-bar-fill{height:100%;border-radius:999px;transition:width .5s}
+    .parada-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .parada-item:last-child{border-bottom:none}
+    .parada-icon{font-size:24px}
+    .parada-hora{font-weight:700;color:var(--danger)}
+    .parada-desc{font-size:13px;color:var(--text);margin-top:2px}
+    .parada-meta{font-size:12px;color:var(--muted);margin-top:2px}
+    .feed-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);align-items:center;font-size:13px}
+    .feed-item:last-child{border-bottom:none}
+    .feed-hora{font-weight:700;color:var(--primary);min-width:44px;font-variant-numeric:tabular-nums}
+    .feed-info{flex:1}
+    .feed-prod{font-weight:600}
+    .feed-sub{color:var(--muted);font-size:12px}
+    .feed-qtd{font-weight:800;font-size:15px}
+    .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
+    .badge-red{background:#fee2e2;color:#991b1b}
+    .badge-blue{background:#eff6ff;color:#1a56db}
+    .badge-orange{background:#fff7ed;color:#c2410c}
+    .badge-purple{background:#f5f3ff;color:#6d28d9}
+    .badge-green{background:#d1fae5;color:#065f46}
+    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:14px}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:640px){.two-col{grid-template-columns:1fr}}
+    .last-update{text-align:center;font-size:12px;color:var(--muted);padding:8px;margin-top:4px}
+    .meta-linha-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .meta-linha-row:last-child{border-bottom:none}
+    .meta-linha-nome{font-weight:600;font-size:14px}
+    .meta-linha-nums{font-size:13px;color:var(--muted);white-space:nowrap;text-align:right}
+    .meta-linha-pct{font-size:13px;font-weight:800;min-width:44px;text-align:right}
+    .meta-linha-bar{grid-column:1/-1;margin-top:2px}
+    /* Programacao vs Realizado */
+    .prog-block{padding:14px 0;border-bottom:1px solid var(--border)}
+    .prog-block:last-child{border-bottom:none;padding-bottom:0}
+    .prog-block:first-child{padding-top:0}
+    .prog-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
+    .prog-nome{font-weight:800;font-size:15px;color:var(--text)}
+    .prog-produto{font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+    .prog-pct{font-size:22px;font-weight:900;line-height:1;white-space:nowrap;margin-left:10px}
+    .prog-stats{display:flex;gap:14px;font-size:12px;margin:6px 0 8px;flex-wrap:wrap}
+    .prog-stats span{color:var(--muted)}
+    .prog-stats strong{color:var(--text)}
+    .prog-bar-bg{height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+    .prog-bar-fill{height:100%;border-radius:999px;transition:width .6s}
+    /* Acompanhamento de Pedidos */
+    .pedido-row{padding:13px 0;border-bottom:1px solid var(--border)}
+    .pedido-row:last-child{border-bottom:none;padding-bottom:0}
+    .pedido-row:first-child{padding-top:0}
+    .pedido-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;gap:8px}
+    .pedido-id-badge{background:#f5f3ff;color:#6d28d9;border:1px solid #c4b5fd;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+    .pedido-concluido-badge{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+    .pedido-produto{font-size:13px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 8px}
+    .pedido-pct{font-size:20px;font-weight:900;line-height:1;white-space:nowrap}
+    .pedido-stats{display:flex;gap:12px;font-size:12px;margin:4px 0 7px;flex-wrap:wrap}
+    .pedido-stats span{color:var(--muted)}
+    .pedido-stats strong{color:var(--text)}
+    .pedido-bar-bg{height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+    .pedido-bar-fill{height:100%;border-radius:999px;transition:width .6s}
+
+    /* ANDON Realtime Dashboard Styles */
+    .andon-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 8px; }
+    .andon-db-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center; background: white; transition: all .2s; }
+    .andon-db-card.active { border-left: 4px solid #10b981; }
+    .andon-db-card.stopped { border-left: 4px solid #ef4444; background: #fff5f5; animation: flashing-db 2.5s infinite; }
+    @keyframes flashing-db {
+      0% { border-left-color: #ef4444; }
+      50% { border-left-color: #feb2b2; }
+      100% { border-left-color: #ef4444; }
+    }
+    .andon-db-title { font-weight: 800; font-size: 14px; color: var(--primary); margin-bottom: 4px; }
+    .andon-db-status { font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 6px; }
+    .andon-db-card.active .andon-db-status { background: #d1fae5; color: #065f46; }
+    .andon-db-card.stopped .andon-db-status { background: #fee2e2; color: #991b1b; }
+    .andon-db-info { font-size: 11px; color: var(--muted); line-height: 1.25; height: 32px; display: flex; align-items: center; justify-content: center; }
+
+    /* Toolbar / Navigation */
+    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
+    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
+    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
+    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+
+    /* Stacked Goals Style Rules */
+    .meta-stack-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; transition: transform .15s; position: relative }
+    .meta-stack-item:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.03) }
+    .meta-stack-hdr { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px }
+    .meta-stack-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px }
+    .meta-stack-desc { font-size: 14px; font-weight: 800; color: var(--text); margin-top: 1px }
+    .meta-stack-pct { font-size: 22px; font-weight: 900; color: var(--primary); line-height: 1 }
+    .meta-stack-pct-label { font-size: 10px; color: var(--muted); text-align: right; margin-top: 2px }
+    .meta-stack-progress-bg { background: #e2e8f0; border-radius: 999px; height: 10px; overflow: hidden; margin: 8px 0 }
+    .meta-stack-progress-fill { height: 100%; border-radius: 999px; transition: width .5s }
+    .meta-stack-progress-fill.low { background: linear-gradient(90deg,#ef4444,#f87171) }
+    .meta-stack-progress-fill.mid { background: linear-gradient(90deg,#f59e0b,#fbbf24) }
+    .meta-stack-progress-fill.high { background: linear-gradient(90deg,#059669,#34d399) }
+    .meta-stack-stats { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted) }
+    .meta-stack-stats strong { color: var(--text) }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
+    <h1>Dashboard de Producao</h1>
+    <div class="header-sub" id="hDate">—</div>
+  </div>
+  <div class="header-right">
+    <div class="clock" id="hClock">—</div>
+    <div class="live-badge">
+      <div class="live-dot" id="liveDot"></div>
+      <span id="liveText">Conectando...</span>
+    </div>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-links">
+    <a href="dashboard.html" class="active">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+    <a href="form.html">Formulário</a>
+    <a href="planejamento.html">Planejamento</a>
+    <a href="pedidos.html">Pedidos</a>
+    <a href="historico.html">Histórico</a>
+    <a href="produtos.html">Produtos</a>
+    <a href="insumos.html">Insumos</a>
+    <a href="ops.html">OPs</a>
+    <a href="admin.html">Admin</a>
+  </div>
+</div>
+
+<div class="date-nav-bar">
+  <button id="btnPrev">&#9664;</button>
+  <input type="date" id="dateInput">
+  <button id="btnNext">&#9654;</button>
+  <button class="btn-today" id="btnToday">Hoje</button>
+</div>
+
+<div class="main">
+  <!-- PAINEL ANDON REALTIME (STATUS DAS LINHAS) -->
+  <div class="card" style="margin-bottom: 20px;">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>🚨 Status das Linhas de Produção (ANDON)</span>
+      <span style="font-size:11px; background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:12px; font-weight:700; animation: pulse 2.5s infinite;">Tempo Real</span>
+    </div>
+    <div class="andon-dashboard-grid">
+      <!-- Gerado dinamicamente -->
+    </div>
+  </div>
+
+  <style>
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+  </style>
+
+  <div class="card" id="metasCard" style="display:none">
+    <div class="card-title">Acompanhamento e Empilhamento de Metas</div>
+    <div id="stackedMetasContainer" style="display:flex; flex-direction:column; gap:14px"></div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="metric-val" id="mTotal">—</div><div class="metric-lbl">Total do Dia</div></div>
+    <div class="metric green"><div class="metric-val" id="mRegs">—</div><div class="metric-lbl">Registros</div></div>
+    <div class="metric orange"><div class="metric-val" id="mMedia">—</div><div class="metric-lbl">Media/Registro</div></div>
+    <div class="metric red"><div class="metric-val" id="mParadas">—</div><div class="metric-lbl">Paradas</div></div>
+  </div>
+
+  <!-- Charts Row 1: Hora e Turno -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Produção por Hora</div>
+      <div class="chart-wrapper" id="chartBarWrapper"><canvas id="chartBar"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Produção por Turno</div>
+      <div class="chart-wrapper" id="chartTurnosWrapper"><canvas id="chartTurnos"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2: Linhas e Postos -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Linhas de Envase (Envase)</div>
+      <div class="chart-wrapper" id="chartLinhasWrapper"><canvas id="chartLinhas"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Rotulagem & Postos de Trabalho</div>
+      <div class="chart-wrapper" id="chartPostosWrapper"><canvas id="chartPostos"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Meta diaria por linha -->
+  <div class="card" id="metaDiariaCard" style="display:none">
+    <div class="card-title">Progresso Diário por Linha / Posto</div>
+    <div id="metaDiariaContent"></div>
+  </div>
+
+  <!-- Programacao vs Realizado -->
+  <div class="card" id="progCard" style="display:none">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Programacao vs Realizado</span>
+      <a href="importar.html" style="font-size:11px;color:var(--primary);text-decoration:none;font-weight:600">Importar ↗</a>
+    </div>
+    <div id="progContent"></div>
+  </div>
+
+  <!-- Acompanhamento de Pedidos -->
+  <div class="card" id="pedidosCard" style="display:none">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Acompanhamento de Pedidos</span>
+      <a href="importar.html" style="font-size:11px;color:#7c3aed;text-decoration:none;font-weight:600">Importar ↗</a>
+    </div>
+    <div id="pedidosContent"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card"><div class="card-title">Por Produto</div><div id="prodProd"></div></div>
+    <div class="card"><div class="card-title">Paradas</div><div id="paradasList"></div></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card"><div class="card-title">Por Colaborador</div><div id="prodColab"></div></div>
+    <div class="card"><div class="card-title">Por Lote</div><div id="prodLote"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ultimos Registros</div>
+    <div id="feedLive"></div>
+  </div>
+
+  <div class="last-update">Atualizado em tempo real · <span id="lastUpdate">—</span></div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c",
+  measurementId: "G-PTVWKLRHTG"
+};
+
+var db, cfg = {}, chartBar = null, chartLinhas = null, chartPostos = null, chartTurnos = null, currentRef = null, progRef = null;
+var currentDate = new Date().toISOString().split('T')[0];
+var progData = null;
+var regsData = [];
+var BAR_COLORS = ['#1a56db','#0e9f6e','#d97706','#dc2626','#7c3aed','#db2777','#0891b2','#65a30d'];
+
+function isWorking(dateObj) {
+  var plan = cfg.planejamento || {};
+  var diasAtivos = plan.diasSemana || [1, 2, 3, 4, 5];
+  var feriados = plan.feriados || {};
+  var ymd = dateObj.toISOString().split('T')[0];
+  var dw = dateObj.getDay();
+  var dwConfig = dw === 0 ? 7 : dw; // 1 = Seg, 7 = Dom
+  var isWorkingDay = diasAtivos.indexOf(dwConfig) !== -1;
+  var isHoliday = feriados[ymd] !== undefined;
+  return isWorkingDay && !isHoliday;
+}
+
+function countWorkingDays(iniStr, fimStr) {
+  if (!iniStr || !fimStr) return 0;
+  var cursor = new Date(iniStr + 'T12:00:00');
+  var limit = new Date(fimStr + 'T12:00:00');
+  var count = 0;
+  while (cursor <= limit) {
+    if (isWorking(cursor)) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+function today() {
+  var d = new Date();
+  var localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+  return localDate.toISOString().split('T')[0];
+}
+function fmtNum(n) { return Number(n||0).toLocaleString('pt-BR'); }
+function fmtDate(d) { if(!d)return'—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function fmtTime() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function fmtHoraRange(hora) {
+  if (!hora) return '—';
+  var cleanHora = hora.replace('_', ':');
+  var parts = cleanHora.split(':');
+  var h = parseInt(parts[0]);
+  if (isNaN(h)) return hora;
+  var nextH = (h + 1) % 24;
+  var nextHStr = String(nextH).padStart(2, '0') + ':00';
+  return cleanHora + 'h - ' + nextHStr + 'h';
+}
+
+var lastTodayDate = today();
+function updateClock() {
+  var now = new Date();
+  document.getElementById('hClock').textContent = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('hDate').textContent = now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+
+  var currentToday = today();
+  if (currentToday !== lastTodayDate) {
+    if (currentDate === lastTodayDate) {
+      currentDate = currentToday;
+      var dateInput = document.getElementById('dateInput');
+      if (dateInput) dateInput.value = currentDate;
+      listenToDate(currentDate);
+    }
+    lastTodayDate = currentToday;
+  }
+}
+
+function setLive(on, text) {
+  document.getElementById('liveDot').className = 'live-dot' + (on ? ' on' : '');
+  document.getElementById('liveText').textContent = text;
+}
+
+function updateStackedMetas() {
+  var container = document.getElementById('stackedMetasContainer');
+  var card = document.getElementById('metasCard');
+  if (!container || !card) return;
+
+  var plan = cfg.planejamento || {};
+  var metasPadrao = cfg.metasPorLinha || {};
+  
+  // 1. Calculate soma das metas das linhas de envase
+  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
+  var somaLinhas = 0;
+  linesList.forEach(function(l) {
+    somaLinhas += Number(metasPadrao[l] || 0);
+  });
+  if (somaLinhas === 0) somaLinhas = 20600; // Fallback se não configurado
+  
+  // ── 1. META DE HOJE ───────────────────────────────────
+  var todayDateObj = new Date(currentDate + 'T12:00:00');
+  var todayIsWorking = isWorking(todayDateObj);
+  
+  var metaHoje = 0;
+  var matrizHoje = cfg.metasMatriz && cfg.metasMatriz[currentDate];
+  if (matrizHoje) {
+    linesList.forEach(function(l) {
+      metaHoje += Number(matrizHoje[l] || 0);
+    });
+    todayIsWorking = metaHoje > 0;
+  } else {
+    metaHoje = todayIsWorking ? somaLinhas : 0;
+  }
+  var prodHoje = regsData.reduce(function(s, r) { return s + (r.quantidade || 0); }, 0);
+  
+  // ── 2. META DA SEMANA ─────────────────────────────────
+  // Find Monday and Sunday of selected week
+  var Monday = new Date(todayDateObj);
+  var dw = Monday.getDay();
+  Monday.setDate(Monday.getDate() + (dw === 0 ? -6 : 1 - dw));
+  var Sunday = new Date(Monday);
+  Sunday.setDate(Sunday.getDate() + 6);
+  
+  var weekStartStr = Monday.toISOString().split('T')[0];
+  var weekEndStr = Sunday.toISOString().split('T')[0];
+  
+  var metaSemanal = 0;
+  var cursor = new Date(Monday);
+  while (cursor <= Sunday) {
+    var dKey = cursor.toISOString().split('T')[0];
+    var matrizDia = cfg.metasMatriz && cfg.metasMatriz[dKey];
+    if (matrizDia) {
+      linesList.forEach(function(l) {
+        metaSemanal += Number(matrizDia[l] || 0);
+      });
+    } else {
+      if (isWorking(cursor)) {
+        metaSemanal += somaLinhas;
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  
+  var workingDaysInWeek = countWorkingDays(weekStartStr, weekEndStr);
+  
+  // ── 3. META DO PERÍODO PCP ────────────────────────────
+  var metaPcp = cfg.meta || {};
+  var pcpStartStr = metaPcp.inicio;
+  var pcpEndStr = metaPcp.fim;
+  var pcpDesc = metaPcp.descricao || "Meta do Período";
+  var metaPcpQty = Number(metaPcp.quantidade) || 0;
+  
+  if (!pcpStartStr || !pcpEndStr) {
+    if (metaHoje === 0 && prodHoje === 0) {
+      card.style.display = 'none';
+      return;
+    }
+  }
+  
+  card.style.display = 'block';
+  
+  // Fetch weekly and period records from Firebase in parallel
+  var promises = [];
+  promises.push(db.ref('registros').orderByKey().startAt(weekStartStr).endAt(weekEndStr).once('value'));
+  if (pcpStartStr && pcpEndStr) {
+    promises.push(db.ref('registros').orderByKey().startAt(pcpStartStr).endAt(pcpEndStr).once('value'));
+  }
+  
+  Promise.all(promises).then(function(snaps) {
+    var prodSemanal = 0;
+    var snapWeek = snaps[0];
+    if (snapWeek && snapWeek.exists()) {
+      snapWeek.forEach(function(dateSnap) {
+        dateSnap.forEach(function(r) { prodSemanal += (r.val().quantidade || 0); });
+      });
+    }
+    
+    var prodPcp = 0;
+    if (snaps.length > 1) {
+      var snapPcp = snaps[1];
+      if (snapPcp && snapPcp.exists()) {
+        snapPcp.forEach(function(dateSnap) {
+          dateSnap.forEach(function(r) { prodPcp += (r.val().quantidade || 0); });
+        });
+      }
+    }
+    
+    var list = [];
+    
+    // Item 1: Meta de Hoje
+    var pctHoje = metaHoje ? Math.min(100, Math.round(prodHoje / metaHoje * 100)) : 0;
+    var statusHoje = todayIsWorking ? pctHoje + '%' : 'Folga / Sem Meta';
+    var fillClsHoje = pctHoje >= 80 ? 'high' : pctHoje >= 50 ? 'mid' : 'low';
+    var descHoje = todayIsWorking ? 'Meta Diária de Produção' : 'Folga / Sem Programação Planejada';
+    
+    var itemHojeHtml = '<div class="meta-stack-item">' +
+      '<div class="meta-stack-hdr">' +
+        '<div>' +
+          '<div class="meta-stack-title">Meta de Hoje (' + fmtDate(currentDate) + ')</div>' +
+          '<div class="meta-stack-desc" style="' + (!todayIsWorking ? 'color:var(--muted); font-weight:normal; font-style:italic' : '') + '">' + descHoje + '</div>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<div class="meta-stack-pct" style="' + (!todayIsWorking ? 'color:var(--muted)' : '') + '">' + statusHoje + '</div>' +
+          (todayIsWorking ? '<div class="meta-stack-pct-label">concluído</div>' : '') +
+        '</div>' +
+      '</div>' +
+      (todayIsWorking ? 
+        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsHoje + '" style="width:' + pctHoje + '%"></div></div>' +
+        '<div class="meta-stack-stats">' +
+          '<span>Produzido: <strong>' + fmtNum(prodHoje) + ' un</strong></span>' +
+          '<span>Meta: <strong>' + fmtNum(metaHoje) + ' un</strong></span>' +
+          '<span>Saldo: <strong>' + (prodHoje >= metaHoje ? 'Atingida!' : fmtNum(metaHoje - prodHoje) + ' un') + '</strong></span>' +
+        '</div>' : 
+        '<div style="font-size:11px; color:var(--muted); margin-top:4px">Nenhuma meta programada no calendário de planejamento para este dia.</div>'
+      ) +
+    '</div>';
+    
+    list.push({ days: 1, html: itemHojeHtml });
+    
+    // Item 2: Meta da Semana
+    if (metaSemanal > 0) {
+      var pctSemanal = Math.min(100, Math.round(prodSemanal / metaSemanal * 100));
+      var fillClsSemanal = pctSemanal >= 80 ? 'high' : pctSemanal >= 50 ? 'mid' : 'low';
+      
+      var itemSemanalHtml = '<div class="meta-stack-item">' +
+        '<div class="meta-stack-hdr">' +
+          '<div>' +
+            '<div class="meta-stack-title">Meta da Semana (' + fmtDate(weekStartStr) + ' a ' + fmtDate(weekEndStr) + ')</div>' +
+            '<div class="meta-stack-desc">Acumulado da Semana Útil</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div class="meta-stack-pct">' + pctSemanal + '%</div>' +
+            '<div class="meta-stack-pct-label">concluído</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsSemanal + '" style="width:' + pctSemanal + '%"></div></div>' +
+        '<div class="meta-stack-stats">' +
+          '<span>Produzido: <strong>' + fmtNum(prodSemanal) + ' un</strong></span>' +
+          '<span>Meta: <strong>' + fmtNum(metaSemanal) + ' un <span style="font-weight:normal; font-size:10px">(' + workingDaysInWeek + 'd úteis)</span></strong></span>' +
+          '<span>Saldo: <strong>' + (prodSemanal >= metaSemanal ? 'Atingida!' : fmtNum(metaSemanal - prodSemanal) + ' un') + '</strong></span>' +
+        '</div>' +
+      '</div>';
+      
+      list.push({ days: 7, html: itemSemanalHtml });
+    }
+    
+    // Item 3: Meta do Período PCP
+    if (metaPcpQty > 0 && pcpStartStr && pcpEndStr) {
+      var pctPcp = Math.min(100, Math.round(prodPcp / metaPcpQty * 100));
+      var fillClsPcp = pctPcp >= 80 ? 'high' : pctPcp >= 50 ? 'mid' : 'low';
+      var pcpDaysCount = countWorkingDays(pcpStartStr, pcpEndStr);
+      
+      var itemPcpHtml = '<div class="meta-stack-item">' +
+        '<div class="meta-stack-hdr">' +
+          '<div>' +
+            '<div class="meta-stack-title">Meta do Período (' + fmtDate(pcpStartStr) + ' a ' + fmtDate(pcpEndStr) + ')</div>' +
+            '<div class="meta-stack-desc">' + pcpDesc + '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div class="meta-stack-pct">' + pctPcp + '%</div>' +
+            '<div class="meta-stack-pct-label">concluído</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="meta-stack-progress-bg"><div class="meta-stack-progress-fill ' + fillClsPcp + '" style="width:' + pctPcp + '%"></div></div>' +
+        '<div class="meta-stack-stats">' +
+          '<span>Produzido: <strong>' + fmtNum(prodPcp) + ' un</strong></span>' +
+          '<span>Meta: <strong>' + fmtNum(metaPcpQty) + ' un <span style="font-weight:normal; font-size:10px">(' + pcpDaysCount + 'd úteis)</span></strong></span>' +
+          '<span>Saldo: <strong>' + (prodPcp >= metaPcpQty ? 'Atingida!' : fmtNum(metaPcpQty - prodPcp) + ' un') + '</strong></span>' +
+        '</div>' +
+      '</div>';
+      
+      var totalDaysSpan = Math.round((new Date(pcpEndStr) - new Date(pcpStartStr)) / 864e5) + 1;
+      list.push({ days: totalDaysSpan, html: itemPcpHtml });
+    }
+    
+    list.sort(function(a, b) { return a.days - b.days; });
+    container.innerHTML = list.map(function(item) { return item.html; }).join('');
+    
+  }).catch(function(e) {
+    console.error("Erro ao calcular empilhamento de metas: ", e);
+  });
+}
+
+function listenToDate(date) {
+  if (currentRef) { currentRef.off(); currentRef = null; }
+  if (progRef) { progRef.off(); progRef = null; }
+  progData = null;
+  regsData = [];
+
+  currentRef = db.ref('registros/' + date);
+  currentRef.on('value', function(snap) {
+    var data = snap.val() || {};
+    regsData = Object.values(data);
+    regsData.sort(function(a, b) { return (a.hora || '').localeCompare(b.hora || ''); });
+    renderAll(regsData);
+    document.getElementById('lastUpdate').textContent = fmtTime();
+    updateStackedMetas();
+  });
+
+  progRef = db.ref('programacao/' + date);
+  progRef.on('value', function(snap) {
+    progData = snap.val();
+    renderProgramacao(progData, regsData);
+  });
+}
+
+function getParadasFromReg(r) {
+  // Suporte ao novo formato (array) e ao formato legado (campo unico)
+  if (Array.isArray(r.paradas) && r.paradas.length > 0) return r.paradas;
+  if (r.parada && (r.motivoParada || r.horaInicioParada)) {
+    return [{ motivo: r.motivoParada||'', horaInicio: r.horaInicioParada||'', horaFim: r.horaFimParada||'' }];
+  }
+  return [];
+}
+
+function renderAll(regs) {
+  var total = regs.reduce(function(s,r){ return s+(r.quantidade||0); }, 0);
+  // conta registros com pelo menos uma parada
+  var numRegsComParada = regs.filter(function(r){ return getParadasFromReg(r).length > 0; }).length;
+  // total de ocorrencias de parada
+  var totalParadas = regs.reduce(function(s,r){ return s + getParadasFromReg(r).length; }, 0);
+  var media = regs.length ? Math.round(total / regs.length) : 0;
+  document.getElementById('mTotal').textContent = fmtNum(total);
+  document.getElementById('mRegs').textContent = regs.length;
+  document.getElementById('mMedia').textContent = fmtNum(media);
+  document.getElementById('mParadas').textContent = totalParadas;
+  renderChart(regs);
+  renderLinhasPostosTurnosCharts(regs);
+  renderProdutos(regs, total);
+  renderParadas(regs);
+  renderColaboradores(regs, total);
+  renderLotes(regs);
+  renderMetaDiaria(regs);
+  renderProgramacao(progData, regs);
+  renderFeed(regs.slice().reverse().slice(0,8));
+}
+
+function renderChart(regs) {
+  var byHour = {}, byHourParada = {};
+  regs.forEach(function(r) {
+    var h = (r.hora||'00:00').split(':')[0] + ':00';
+    byHour[h] = (byHour[h]||0) + (r.quantidade||0);
+    if (r.parada) byHourParada[h] = true;
+  });
+  var labels = Object.keys(byHour).sort();
+  var values = labels.map(function(h){ return byHour[h]; });
+  var colors = labels.map(function(h){ return byHourParada[h] ? 'rgba(220,38,38,.7)' : 'rgba(26,86,219,.75)'; });
+  
+  var wrapper = document.getElementById('chartBarWrapper');
+  if (chartBar) { chartBar.destroy(); chartBar = null; }
+  if (!labels.length) {
+    wrapper.innerHTML = '<div class="no-data">Nenhum dado neste dia.</div>';
+    return;
+  }
+  wrapper.innerHTML = '<canvas id="chartBar"></canvas>';
+  var ctx = document.getElementById('chartBar');
+  
+  chartBar = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels.map(fmtHoraRange), datasets: [{ label: 'Quantidade', data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } } }
+  });
+}
+
+function renderLinhasPostosTurnosCharts(regs) {
+  var linesData = {}, postosData = {};
+  var turnosData = { 'manhã': 0, 'tarde': 0, 'noite': 0 };
+  
+  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
+  var postosList = cfg.postosTrabalho || ['Rotuladora 01', 'Rotuladora 02'];
+  
+  function isLinhaDeProducao(name) {
+    if (!name) return true;
+    if (linesList.indexOf(name) !== -1) return true;
+    if (postosList.indexOf(name) !== -1) return false;
+    return name.toLowerCase().indexOf('linha') === 0;
+  }
+  
+  regs.forEach(function(r) {
+    var l = r.linha || 'Não Informado';
+    var t = String(r.turno || 'manhã').toLowerCase().trim();
+    var q = r.quantidade || 0;
+    
+    // Group by shift
+    if (t === 'tarde') {
+      turnosData['tarde'] += q;
+    } else if (t === 'noite') {
+      turnosData['noite'] += q;
+    } else {
+      turnosData['manhã'] += q;
+    }
+    
+    // Group by line / post
+    if (isLinhaDeProducao(l)) {
+      linesData[l] = (linesData[l] || 0) + q;
+    } else {
+      postosData[l] = (postosData[l] || 0) + q;
+    }
+  });
+  
+  // ── Render Chart: Linhas ──────────────────────────────────────
+  renderDoughnutChart('chartLinhasWrapper', 'chartLinhas', linesData, {
+    'Linha 1': '#10b981', 'Linha 01': '#10b981', 'linha 1': '#10b981', 'linha 01': '#10b981',
+    'Linha 2': '#3b82f6', 'Linha 02': '#3b82f6', 'linha 2': '#3b82f6', 'linha 02': '#3b82f6',
+    'Linha 3': '#8b5cf6', 'Linha 03': '#8b5cf6', 'linha 3': '#8b5cf6', 'linha 03': '#8b5cf6',
+    'Linha 4': '#f59e0b', 'Linha 04': '#f59e0b', 'linha 4': '#f59e0b', 'linha 04': '#f59e0b',
+    'Linha 5': '#10b981', 'Linha 05': '#10b981',
+    'Linha 6': '#06b6d4', 'Linha 06': '#06b6d4',
+    'Linha 7': '#64748b', 'Linha 07': '#64748b',
+    'Linha 8': '#14b8a6', 'Linha 08': '#14b8a6',
+    'default': '#475569'
+  }, 'Linhas de Envase');
+  
+  // ── Render Chart: Postos / Rotulagem ─────────────────────────
+  renderDoughnutChart('chartPostosWrapper', 'chartPostos', postosData, {
+    'Rotuladora 01': '#f43f5e', // Rose
+    'Rotuladora 02': '#06b6d4', // Cyan
+    'default': '#14b8a6'
+  }, 'Rotulagem & Postos');
+
+  // ── Render Chart: Turnos ──────────────────────────────────────
+  renderDoughnutChart('chartTurnosWrapper', 'chartTurnos', turnosData, {
+    'manhã': '#fbbf24', // Golden sun
+    'tarde': '#f97316', // Sunset orange
+    'noite': '#6366f1', // Indigo/Purple
+    'default': '#64748b'
+  }, 'Turnos');
+}
+
+function renderDoughnutChart(wrapperId, canvasId, groupedData, colorMap, title) {
+  var wrapper = document.getElementById(wrapperId);
+  if (!wrapper) return;
+  
+  var labels = [];
+  var values = [];
+  var colors = [];
+  var total = 0;
+  
+  Object.entries(groupedData).forEach(function(entry) {
+    var label = entry[0];
+    var val = entry[1];
+    if (val > 0) {
+      labels.push(label);
+      values.push(val);
+      total += val;
+      
+      var c = colorMap[label] || colorMap[label.toLowerCase()] || colorMap['default'] || '#64748b';
+      colors.push(c);
+    }
+  });
+  
+  if (canvasId === 'chartLinhas' && chartLinhas) { chartLinhas.destroy(); chartLinhas = null; }
+  if (canvasId === 'chartPostos' && chartPostos) { chartPostos.destroy(); chartPostos = null; }
+  if (canvasId === 'chartTurnos' && chartTurnos) { chartTurnos.destroy(); chartTurnos = null; }
+  
+  if (total === 0) {
+    wrapper.innerHTML = '<div class="no-data">Nenhuma produção registrada hoje.</div>';
+    return;
+  }
+  
+  wrapper.innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+  var ctx = document.getElementById(canvasId);
+  
+  var chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#ffffff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            font: { size: 11, weight: 'bold' },
+            boxWidth: 12,
+            padding: 8
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              var val = context.raw || 0;
+              var pct = total ? ((val / total) * 100).toFixed(1) : 0;
+              return context.label + ': ' + fmtNum(val) + ' (' + pct + '%)';
+            }
+          }
+        }
+      },
+      cutout: '60%'
+    },
+    plugins: [{
+      id: 'centerText',
+      afterDraw: function(chart) {
+        var ctx = chart.ctx;
+        ctx.save();
+        var activeMeta = chart.getDatasetMeta(0);
+        if (activeMeta && activeMeta.data && activeMeta.data.length > 0) {
+          var centerPoint = activeMeta.data[0];
+          var x = centerPoint.x;
+          var y = centerPoint.y;
+          
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          ctx.font = 'bold 15px sans-serif';
+          ctx.fillStyle = '#0f172a';
+          ctx.fillText(fmtNum(total), x, y - 6);
+          
+          ctx.font = '600 9px sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText('PEÇAS', x, y + 10);
+        }
+        ctx.restore();
+      }
+    }]
+  });
+  
+  if (canvasId === 'chartLinhas') chartLinhas = chartInstance;
+  if (canvasId === 'chartPostos') chartPostos = chartInstance;
+  if (canvasId === 'chartTurnos') chartTurnos = chartInstance;
+}
+
+function renderProdutos(regs, total) {
+  var c = document.getElementById('prodProd');
+  if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
+  var byP = {};
+  regs.forEach(function(r){ byP[r.produto] = (byP[r.produto]||0) + (r.quantidade||0); });
+  var sorted = Object.entries(byP).sort(function(a,b){ return b[1]-a[1]; });
+  c.innerHTML = sorted.map(function(entry, i) {
+    var prod = entry[0], qtd = entry[1];
+        var pct = total ? Math.round((qtd/total)*100) : 0;
+    var color = BAR_COLORS[i % BAR_COLORS.length];
+    return '<div class="prod-bar">' +
+      '<div class="prod-bar-top"><strong>' + (prod||'—') + '</strong><span>' + fmtNum(qtd) + ' (' + pct + '%)</span></div>' +
+      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderParadas(regs) {
+  var c = document.getElementById('paradasList');
+  var allParadas = [];
+  regs.forEach(function(r) {
+    getParadasFromReg(r).forEach(function(p) {
+      allParadas.push({ hora: r.hora, linha: r.linha, motivo: p.motivo||p.motivoParada||'—', duracao: p.duracao||0 });
+    });
+  });
+  if (!allParadas.length) { c.innerHTML = '<div class="no-data">Nenhuma parada registrada.</div>'; return; }
+  c.innerHTML = allParadas.map(function(p) {
+    return '<div class="parada-item">' +
+      '<div class="parada-icon">⏸️</div>' +
+      '<div>' +
+        '<div class="parada-hora">' + fmtHoraRange(p.hora) + (p.linha ? ' · ' + p.linha : '') + '</div>' +
+        '<div class="parada-desc">' + p.motivo + '</div>' +
+        (p.duracao ? '<div class="parada-meta">' + p.duracao + ' min</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderColaboradores(regs, total) {
+  var c = document.getElementById('prodColab');
+  if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
+  var byC = {};
+  regs.forEach(function(r) {
+    var key = r.colaboradores ? r.colaboradores + ' colaboradores' : r.operador || '—';
+    byC[key] = (byC[key]||0) + (r.quantidade||0);
+  });
+  var sorted = Object.entries(byC).sort(function(a,b){ return b[1]-a[1]; });
+  c.innerHTML = sorted.map(function(entry, i) {
+    var nome = entry[0], qtd = entry[1];
+    var pct = total ? Math.round((qtd/total)*100) : 0;
+    var color = BAR_COLORS[i % BAR_COLORS.length];
+    return '<div class="prod-bar">' +
+      '<div class="prod-bar-top"><strong>' + nome + '</strong><span>' + fmtNum(qtd) + ' (' + pct + '%)</span></div>' +
+      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderLotes(regs) {
+  var c = document.getElementById('prodLote');
+  var byL = {};
+  regs.forEach(function(r) {
+    if (!r.lote) return;
+    if (!byL[r.lote]) {
+      byL[r.lote] = { total: 0, produtos: {} };
+    }
+    byL[r.lote].total += (r.quantidade||0);
+    if (r.produto) byL[r.lote].produtos[r.produto] = true;
+  });
+  var sorted = Object.entries(byL).sort(function(a,b){ return b[1].total-a[1].total; });
+  if (!sorted.length) { c.innerHTML = '<div class="no-data">Nenhum lote registrado.</div>'; return; }
+  c.innerHTML = sorted.map(function(entry, i) {
+    var lote = entry[0], d = entry[1];
+    var prodsList = Object.keys(d.produtos).join(', ');
+    var color = BAR_COLORS[i % BAR_COLORS.length];
+    return '<div class="prod-bar">' +
+      '<div class="prod-bar-top"><strong>' + lote + ' <span style="font-weight:normal; font-size:11px; color:var(--muted)">(' + (prodsList || 'Produto não identificado') + ')</span></strong><span>' + fmtNum(d.total) + '</span></div>' +
+      '<div class="prod-bar-bg"><div class="prod-bar-fill" style="width:100%;background:'+color+';opacity:.6"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderMetaDiaria(regs) {
+  var card = document.getElementById('metaDiariaCard');
+  
+  var plan = cfg.planejamento || {};
+  var metasPadrao = cfg.metasPorLinha || {};
+  
+  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
+  var postosList = cfg.postosTrabalho || ['Rotuladora 01', 'Rotuladora 02'];
+  
+  var todayDateObj = new Date(currentDate + 'T12:00:00');
+  var todayIsWorking = isWorking(todayDateObj);
+  
+  var somaLinhas = 0;
+  linesList.forEach(function(l) {
+    somaLinhas += Number(metasPadrao[l] || 0);
+  });
+  if (somaLinhas === 0) somaLinhas = 20600;
+  
+  var metaHoje = todayIsWorking ? somaLinhas : 0;
+  
+  card.style.display = 'block';
+  
+  function isLinhaDeProducao(name) {
+    if (!name) return true;
+    if (linesList.indexOf(name) !== -1) return true;
+    if (postosList.indexOf(name) !== -1) return false;
+    return name.toLowerCase().indexOf('linha') === 0;
+  }
+
+  var byLinha = {}, byPosto = {};
+  var totalEnvase = 0;
+  
+  regs.forEach(function(r) {
+    var l = r.linha || '—';
+    var q = r.quantidade || 0;
+    if (isLinhaDeProducao(l)) {
+      byLinha[l] = (byLinha[l]||0) + q;
+      totalEnvase += q;
+    } else {
+      byPosto[l] = (byPosto[l]||0) + q;
+    }
+  });
+  
+  var pctTotal = metaHoje ? Math.min(100, Math.round(totalEnvase / metaHoje * 100)) : 0;
+  var fillCls = pctTotal >= 80 ? 'high' : pctTotal >= 50 ? 'mid' : 'low';
+  
+  var html = '';
+  
+  if (todayIsWorking) {
+    html += '<div class="meta-linha-row">' +
+      '<div class="meta-linha-nome">Progresso do Envase (Meta Diária)</div>' +
+      '<div class="meta-linha-nums">' + fmtNum(totalEnvase) + ' / ' + fmtNum(metaHoje) + '</div>' +
+      '<div class="meta-linha-pct" style="color:' + (pctTotal>=80?'#059669':pctTotal>=50?'#d97706':'#e02424') + '">' + pctTotal + '%</div>' +
+      '<div class="meta-linha-bar"><div class="progress-bg" style="height:8px"><div class="progress-fill '+fillCls+'" style="width:'+pctTotal+'%"></div></div></div>' +
+      '</div>';
+  } else {
+    html += '<div class="meta-linha-row">' +
+      '<div class="meta-linha-nome" style="font-weight:bold; color:var(--muted)">Progresso do Envase (Dia de Folga)</div>' +
+      '<div class="meta-linha-nums" style="color:var(--muted)">' + fmtNum(totalEnvase) + ' peças produzidas</div>' +
+      '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:11px; font-weight:700">Folga / Sem Meta</span></div>' +
+      '</div>';
+  }
+  
+  html += '<div style="margin-top: 14px; font-weight: 700; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; letter-spacing: 0.5px">LINHAS DE ENVASE</div>';
+  
+  linesList.forEach(function(linha) {
+    var qtd = byLinha[linha] || 0;
+    var metaLinha = todayIsWorking ? Number(metasPadrao[linha] || 0) : 0;
+    
+    html += '<div class="meta-linha-row">';
+    if (metaLinha === 0) {
+      html += '<div class="meta-linha-nome" style="opacity:.65">' + linha + '</div>' +
+              '<div class="meta-linha-nums" style="opacity:.65">' + fmtNum(qtd) + '</div>' +
+              '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:10px; font-weight:700; background:#f3f4f6; color:#4b5563; border:none">' + (todayIsWorking ? 'Não Planejada' : 'Folga') + '</span></div>';
+    } else {
+      var pct = Math.min(100, Math.round(qtd / metaLinha * 100));
+      html += '<div class="meta-linha-nome">' + linha + '</div>' +
+              '<div class="meta-linha-nums">' + fmtNum(qtd) + ' / ' + fmtNum(metaLinha) + '</div>' +
+              '<div class="meta-linha-pct">' + pct + '%</div>';
+    }
+    html += '</div>';
+  });
+  
+  html += '<div style="margin-top: 14px; font-weight: 700; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; letter-spacing: 0.5px">ROTULAGEM & OUTROS POSTOS</div>';
+  
+  postosList.forEach(function(posto) {
+    var qtd = byPosto[posto] || 0;
+    var metaPosto = todayIsWorking ? Number(metasPadrao[posto] || 0) : 0;
+    
+    html += '<div class="meta-linha-row">';
+    if (metaPosto === 0) {
+      html += '<div class="meta-linha-nome" style="opacity:.65">' + posto + '</div>' +
+              '<div class="meta-linha-nums" style="opacity:.65">' + fmtNum(qtd) + '</div>' +
+              '<div class="meta-linha-pct"><span class="badge badge-orange" style="font-size:10px; font-weight:700; background:#f3f4f6; color:#4b5563; border:none">Sem Meta</span></div>';
+    } else {
+      var pct = Math.min(100, Math.round(qtd / metaPosto * 100));
+      html += '<div class="meta-linha-nome">' + posto + '</div>' +
+              '<div class="meta-linha-nums">' + fmtNum(qtd) + ' / ' + fmtNum(metaPosto) + '</div>' +
+              '<div class="meta-linha-pct">' + pct + '%</div>';
+    }
+    html += '</div>';
+  });
+  
+  document.getElementById('metaDiariaContent').innerHTML = html;
+}
+
+function renderProgramacao(progData, regs) {
+  var card = document.getElementById('progCard');
+  if (!progData) { card.style.display = 'none'; return; }
+  var slots = Object.values(progData);
+  if (!slots.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  var byProd = {};
+  slots.forEach(function(s) {
+    var k = s.produto || '—';
+    if (!byProd[k]) byProd[k] = { meta: 0, realizado: 0, linha: s.linha||'', pedidoId: s.pedidoId||'' };
+    byProd[k].meta += (s.quantidade||0);
+  });
+  regs.forEach(function(r) {
+    var k = r.produto || '—';
+    if (byProd[k]) byProd[k].realizado += (r.quantidade||0);
+  });
+
+  var html = Object.entries(byProd).map(function(entry) {
+    var prod = entry[0], d = entry[1];
+    var pct = d.meta ? Math.min(100, Math.round(d.realizado/d.meta*100)) : 0;
+    var fillCls = pct >= 95 ? 'high' : pct >= 60 ? 'mid' : 'low';
+    var pctColor = pct >= 95 ? '#059669' : pct >= 60 ? '#d97706' : '#e02424';
+    return '<div class="prog-block">' +
+      '<div class="prog-header">' +
+        '<div>' +
+          '<div class="prog-nome">' + (d.linha||'') + (d.pedidoId?' <span class="badge badge-purple">#'+d.pedidoId+'</span>':'') + '</div>' +
+          '<div class="prog-produto">' + prod + '</div>' +
+        '</div>' +
+        '<div class="prog-pct" style="color:'+pctColor+'">' + pct + '%</div>' +
+      '</div>' +
+      '<div class="prog-stats">' +
+        '<span>Meta: <strong>' + fmtNum(d.meta) + '</strong></span>' +
+        '<span>Realizado: <strong>' + fmtNum(d.realizado) + '</strong></span>' +
+        '<span>Saldo: <strong>' + fmtNum(Math.max(0,d.meta-d.realizado)) + '</strong></span>' +
+      '</div>' +
+      '<div class="progress-bg" style="height:10px"><div class="progress-fill '+fillCls+'" style="width:'+pct+'%"></div></div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('progContent').innerHTML = html;
+}
+
+function renderFeed(regs) {
+  var c = document.getElementById('feedLive');
+  if (!regs.length) { c.innerHTML = '<div class="no-data">Nenhum registro hoje.</div>'; return; }
+  c.innerHTML = regs.map(function(r) {
+    var paradas = getParadasFromReg(r);
+    var totalParada = paradas.reduce(function(s,p){ return s+(p.duracao||0); }, 0);
+    var subParts = [r.linha];
+    if (r.lote) subParts.push('Lote: ' + r.lote);
+    if (r.pedidoId) subParts.push('OP: #' + r.pedidoId);
+    if (totalParada) subParts.push(totalParada + 'min parada');
+    return '<div class="feed-item">' +
+      '<div class="feed-hora">' + fmtHoraRange(r.hora) + '</div>' +
+      '<div class="feed-info">' +
+        '<div class="feed-prod">' + (r.produto||'—') + '</div>' +
+        '<div class="feed-sub">' + subParts.filter(Boolean).join(' · ') + '</div>' +
+      '</div>' +
+      '<div class="feed-qtd">' + fmtNum(r.quantidade||0) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function isConcluido(status) {
+  if (!status) return false;
+  var s = String(status).toLowerCase().trim();
+  return s.indexOf('conclu') === 0;
+}
+
+function renderPedidos(regs) {
+  var card = document.getElementById('pedidosCard');
+  if (!pedidosCache || !Object.keys(pedidosCache).length) { card.style.display = 'none'; return; }
+  // Only show active (andamento) pedidos
+  var ativos = Object.values(pedidosCache).filter(function(p) {
+    var pct = p.qtdTotal ? Math.round((p.produzido||0)/p.qtdTotal*100) : 0;
+    return p.statusManual !== 'encerrado' && !isConcluido(p.status) && pct < 95 && (!p._key || p._key.indexOf('OP_') !== 0);
+  });
+  if (!ativos.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  ativos.sort(function(a,b) {
+    var pa = a.qtdTotal ? Math.round((a.produzido||0)/a.qtdTotal*100) : 0;
+    var pb = b.qtdTotal ? Math.round((b.produzido||0)/b.qtdTotal*100) : 0;
+    return pb - pa;
+  });
+  
+  var now = new Date();
+  now.setHours(0,0,0,0);
+  
+  var html = ativos.slice(0,5).map(function(p) {
+    var pct = p.qtdTotal ? Math.min(100, Math.round((p.produzido||0)/p.qtdTotal*100)) : 0;
+    var fillCls = pct >= 95 ? 'high' : pct >= 60 ? 'mid' : 'low';
+    var pctColor = pct >= 95 ? '#059669' : pct >= 60 ? '#d97706' : '#e02424';
+    
+    // Inactivity check
+    var lastApont = p.ultimoApontamento;
+    var warn = false;
+    var dateText = "Nunca produzido";
+    if (lastApont) {
+      var lastDate = new Date(lastApont);
+      if (!isNaN(lastDate.getTime())) {
+        dateText = lastDate.toLocaleDateString('pt-BR');
+        var checkDate = new Date(lastDate);
+        checkDate.setHours(0,0,0,0);
+        var diffDays = Math.round((now - checkDate) / (1000 * 60 * 60 * 24));
+        if (diffDays > 2) {
+          warn = true;
+        }
+      }
+    } else {
+      warn = true;
+    }
+    
+    return '<div class="prog-block">' +
+      '<div class="prog-header">' +
+        '<div>' +
+          '<div class="prog-nome"><span class="badge badge-purple">#' + (p.id||'—') + '</span> ' + (p.linha||'') + '</div>' +
+          '<div class="prog-produto">' + (p.produto||'—') + '</div>' +
+        '</div>' +
+        '<div class="prog-pct" style="color:'+pctColor+'">' + pct + '%</div>' +
+      '</div>' +
+      '<div class="prog-stats">' +
+        '<span>Meta: <strong>' + fmtNum(p.qtdTotal) + '</strong></span>' +
+        '<span>Produzido: <strong>' + fmtNum(p.produzido||0) + '</strong></span>' +
+        '<span>Saldo: <strong>' + fmtNum(Math.max(0,(p.qtdTotal||0)-(p.produzido||0))) + '</strong></span>' +
+      '</div>' +
+      '<div class="prog-stats" style="margin-top: 4px; display:flex; align-items:center; gap:8px">' +
+        '<span>Última Produção: <strong style="color: ' + (warn ? 'var(--danger)' : 'var(--text)') + '">' + dateText + '</strong></span>' +
+        (warn ? ' <span class="badge badge-red" style="font-size:10px; font-weight:700">⚠️ Parado há mais de 2 dias (PCP deve justificar)</span>' : '') +
+      '</div>' +
+      '<div class="progress-bg" style="height:10px; margin-top:8px"><div class="progress-fill '+fillCls+'" style="width:'+pct+'%"></div></div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('pedidosContent').innerHTML = html;
+}
+
+// ── Firebase init + startup ───────────────────────────────────────
+var pedidosCache = {};
+
+firebase.initializeApp(firebaseConfig);
+db = firebase.database();
+
+function sanitizeKey(str) {
+  return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
+}
+
+var latestAndonStates = {};
+
+function rebuildAndonDashboardGrid() {
+  var grid = document.querySelector('.andon-dashboard-grid');
+  if (!grid) return;
+  
+  var linesList = cfg.linhas || ["Linha 1", "Linha 2", "Linha 3"];
+  grid.innerHTML = '';
+  
+  linesList.forEach(function(linha) {
+    var lineKey = sanitizeKey(linha);
+    var card = document.createElement('div');
+    card.className = 'andon-db-card active';
+    card.id = 'andon_' + lineKey;
+    
+    card.innerHTML = 
+      '<div class="andon-db-title">' + linha + '</div>' +
+      '<div class="andon-db-status">🟢 OPERANDO</div>' +
+      '<div class="andon-db-info">Linha operando normalmente.</div>';
+      
+    grid.appendChild(card);
+  });
+  updateAndonUI();
+}
+
+function updateAndonUI() {
+  var linesList = cfg.linhas || ["Linha 1", "Linha 2", "Linha 3"];
+  linesList.forEach(function(linha) {
+    var lineKey = sanitizeKey(linha);
+    var card = document.getElementById('andon_' + lineKey);
+    if (!card) return;
+    
+    var state = latestAndonStates[lineKey] || { status: 'ativa' };
+    
+    if (state.status === 'parada') {
+      card.className = 'andon-db-card stopped';
+      card.querySelector('.andon-db-status').textContent = '🔴 PARADA: ' + (state.motivoParada || 'Parada');
+      
+      var inicio = new Date(state.inicioParada);
+      var timeStr = isNaN(inicio) ? '—' : inicio.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+      
+      card.querySelector('.andon-db-info').innerHTML = 
+        '<strong style="color:#b91c1c;">OP #' + (state.pedidoId || '—') + '</strong><br>' +
+        'Desde ' + timeStr + ' · Lote: ' + (state.lote || '—');
+    } else {
+      card.className = 'andon-db-card active';
+      card.querySelector('.andon-db-status').textContent = '🟢 OPERANDO';
+      card.querySelector('.andon-db-info').textContent = 'Linha operando normalmente.';
+    }
+  });
+}
+
+// ── ANDON Realtime status listener ──
+db.ref('estado_linhas').on('value', function(snap) {
+  latestAndonStates = snap.val() || {};
+  updateAndonUI();
+});
+
+db.ref('.info/connected').on('value', function(snap) {
+  setLive(snap.val(), snap.val() ? 'Ao vivo' : 'Offline');
+});
+
+db.ref('config').on('value', function(snap) {
+  cfg = snap.val() || {};
+  rebuildAndonDashboardGrid();
+  renderMetaDiaria(regsData);
+  updateStackedMetas();
+});
+
+db.ref('pedidos').on('value', function(snap) {
+  pedidosCache = {};
+  if (snap.val()) {
+    Object.entries(snap.val()).forEach(function(entry) {
+      var k = entry[0], v = entry[1];
+      v._key = k;
+      pedidosCache[k] = v;
+    });
+  }
+  renderPedidos(regsData);
+});
+
+// ── Date navigation ───────────────────────────────────────────────
+function changeDate(delta) {
+  var d = new Date(currentDate + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  currentDate = d.toISOString().split('T')[0];
+  document.getElementById('dateInput').value = currentDate;
+  listenToDate(currentDate);
+}
+
+document.getElementById('btnPrev').addEventListener('click', function() { changeDate(-1); });
+document.getElementById('btnNext').addEventListener('click', function() { changeDate(1); });
+document.getElementById('btnToday').addEventListener('click', function() {
+  currentDate = today();
+  document.getElementById('dateInput').value = currentDate;
+  listenToDate(currentDate);
+});
+document.getElementById('dateInput').addEventListener('change', function() {
+  if (!this.value) return;
+  currentDate = this.value;
+  listenToDate(currentDate);
+});
+
+// ── Clock ─────────────────────────────────────────────────────────
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Start ─────────────────────────────────────────────────────────
+document.getElementById('dateInput').value = currentDate;
+listenToDate(currentDate);
+
+</script>
+</body>
+</html>

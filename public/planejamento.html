@@ -1,1115 +1,1117 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Planejamento · Kuryos</title>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="shared/utils.js"></script>
-  <script src="auth_check.js"></script>
-  <style>
-    :root{--primary:#0a1c69;--primary-light:#1e3a8a;--success:#059669;--danger:#e02424;--warning:#d97706;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .header{background:var(--primary);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(10,28,105,.3);position:sticky;top:0;z-index:100}
-    .header h1{font-size:18px;font-weight:700}
-    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600}
-    .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3)}
-    .dot.on{background:#34d399;animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    .main{padding:16px;max-width:96%;margin:0 auto}
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
-    /* Top tabs */
-    .top-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--card);border-radius:12px;padding:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);width:fit-content}
-    .top-tab{padding:8px 20px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s}
-    .top-tab.active{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(10,28,105,.25)}
-    .top-tab:hover:not(.active){background:var(--bg);color:var(--text)}
-    .tab-content{display:none}
-    .tab-content.active{display:block}
-    /* Buttons */
-    .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{background:var(--primary-light)}
-    .btn-success{background:var(--success);color:white}.btn-success:hover{filter:brightness(.9)}
-    .btn-ghost{background:var(--bg);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{background:#e2e8f0}
-    .btn-danger-sm{background:#fee2e2;color:var(--danger);padding:5px 12px;font-size:12px}.btn-danger-sm:hover{background:var(--danger);color:white}
-    .btn-sm{padding:6px 14px;font-size:12px}
-    .btn:disabled{opacity:.45;cursor:not-allowed}
-    /* Grade tab */
-    .week-bar{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .week-label{font-size:15px;font-weight:800;color:var(--text);flex:1;min-width:160px}
-    .week-sub{font-size:11px;color:var(--muted);margin-top:2px}
-    .week-nav-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
-    .week-nav-btn:hover{background:var(--primary);color:white;border-color:var(--primary)}
-    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
-    .sum-card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);text-align:center;border-top:3px solid var(--primary)}
-    .sum-val{font-size:22px;font-weight:800;color:var(--primary)}
-    .sum-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
-    .day-tabs{display:flex;gap:5px;overflow-x:auto;padding-bottom:0}
-    .day-tab{padding:9px 16px;border-radius:9px 9px 0 0;font-size:12px;font-weight:700;cursor:pointer;background:#e2e8f0;color:var(--muted);border:none;transition:all .15s;white-space:nowrap}
-    .day-tab.active{background:var(--primary);color:white}
-    .day-tab:hover:not(.active){background:#cbd5e1;color:var(--text)}
-    .day-tab.is-today{box-shadow:inset 0 -2px 0 #34d399}
-    .grid-card{background:var(--card);border-radius:0 12px 12px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;margin-bottom:14px}
-    .plan-table-wrap{overflow-x:auto}
-    .plan-table{width:100%;border-collapse:collapse;min-width:660px}
-    .plan-table th{background:#f8fafc;padding:10px 12px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center}
-    .plan-table th.col-hora{text-align:left;width:72px}
-    .plan-table td{padding:5px 7px;border-bottom:1px solid var(--border);vertical-align:middle}
-    .plan-table tr:last-child td{border-bottom:none}
-    .plan-table tr.row-pausa td{background:#fafafa}
-    .plan-table tr.row-total td{background:#f0fdf4}
-    .col-e1{border-top:3px solid var(--env1)}
-    .col-e2{border-top:3px solid var(--env2)}
-    .col-e3{border-top:3px solid var(--env3)}
-    .col-e4{border-top:3px solid var(--env4)}
-    .col-e5{border-top:3px solid var(--env5)}
-    .col-e6{border-top:3px solid var(--env6)}
-    .col-e7{border-top:3px solid var(--env7)}
-    .col-e8{border-top:3px solid var(--env8)}
-    .hora-cell{font-size:12px;font-weight:700;color:var(--text);width:72px;white-space:nowrap;padding:5px 8px}
-    .hora-cell.is-pausa{color:var(--muted);font-style:italic;font-weight:500;font-size:11px}
-    .slot-cell{cursor:pointer;border-radius:7px;padding:6px 9px;transition:background .12s;user-select:none;min-width:160px}
-    .slot-cell:hover:not(.is-pausa){background:#eff6ff}
-    .slot-cell.is-pausa{cursor:default;text-align:center;color:var(--muted);font-size:11px;font-style:italic}
-    .slot-cell[data-l="1"]{border-left:3px solid var(--env1)}
-    .slot-cell[data-l="2"]{border-left:3px solid var(--env2)}
-    .slot-cell[data-l="3"]{border-left:3px solid var(--env3)}
-    .slot-cell[data-l="4"]{border-left:3px solid var(--env4)}
-    .slot-cell[data-l="5"]{border-left:3px solid var(--env5)}
-    .slot-cell[data-l="6"]{border-left:3px solid var(--env6)}
-    .slot-cell[data-l="7"]{border-left:3px solid var(--env7)}
-    .slot-cell[data-l="8"]{border-left:3px solid var(--env8)}
-    .slot-empty{color:#bfdbfe;font-size:11px;text-align:center;padding:4px 0}
-    .slot-empty::after{content:'＋ produto'}
-    .slot-filled{display:flex;flex-direction:column;gap:2px}
-    .slot-nome{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-    .slot-badges{display:flex;gap:5px;align-items:center;margin-top:2px;flex-wrap:wrap}
-    .sbadge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;white-space:nowrap}
-    .sbadge-meta{background:#dbeafe;color:#1e40af}
-    .sbadge-lp{background:#fef3c7;color:#92400e}
-    .sbadge-sku{background:#f1f5f9;color:var(--muted)}
-    .sbadge-actual{background:#e0f2fe;color:#0369a1}
-    .sbadge-actual-ok{background:#d1fae5;color:#065f46;font-weight:700}
-    .sbadge-actual-warn{background:#fee2e2;color:#991b1b}
-    .sbadge-actual-zero{background:#f1f5f9;color:#94a3b8}
-    .sbadge-done{background:#10b981;color:white;font-weight:bold}
-    .slot-x{font-size:10px;color:var(--muted);cursor:pointer;margin-left:auto;opacity:0;padding:1px 4px;border-radius:3px;transition:opacity .12s}
-    .slot-cell:hover .slot-x{opacity:1}
-    .total-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
-    .total-v{font-size:12px;font-weight:800;color:var(--success)}
-    /* Agendamento tab */
-    .ped-queue{display:grid;gap:10px}
-    .ped-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid var(--border)}
-    .ped-card.pct-low{border-left-color:var(--success)}
-    .ped-card.pct-mid{border-left-color:var(--warning)}
-    .ped-card.pct-high{border-left-color:var(--danger)}
-    .ped-card.pct-done{border-left-color:#94a3b8;opacity:.55}
-    .ped-info{flex:1;min-width:180px}
-    .ped-nome{font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-    .ped-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-    .prog-wrap{display:flex;align-items:center;gap:8px}
-    .prog-bar{height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden;flex:1;min-width:80px}
-    .prog-fill{height:100%;border-radius:3px;background:var(--success)}
-    .prog-fill.over{background:var(--danger)}
-    .prog-pct{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
-    .ped-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
-    /* Config tab */
-    .config-section{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
-    .config-title{font-size:13px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
-    .hours-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-    .hour-chip{padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
-    .hour-chip.active{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
-    .hour-chip.pausa{background:#fef3c7;border-color:#fcd34d;color:#92400e}
-    .hour-chip-hint{font-size:9px;font-weight:500;margin-top:2px;opacity:.7}
-    .days-grid{display:flex;gap:8px;flex-wrap:wrap}
-    .day-chip{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
-    .day-chip.active{background:#d1fae5;border-color:#6ee7b7;color:#065f46}
-    .day-chip.weekend.active{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}
-    .feriado-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;max-height:200px;overflow-y:auto}
-    .feriado-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;font-size:13px}
-    .feriado-date{font-weight:700;color:var(--text);width:90px}
-    .feriado-label{flex:1;color:var(--muted)}
-    .feriado-rm{color:var(--danger);cursor:pointer;font-size:14px;font-weight:700;padding:2px 6px;border-radius:4px}
-    .feriado-rm:hover{background:#fee2e2}
-    .feriado-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .feriado-add input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none}
-    .feriado-add input:focus{border-color:var(--primary)}
-    .legend-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--muted)}
-    .legend-chip{display:flex;align-items:center;gap:5px}
-    .legend-dot{width:12px;height:12px;border-radius:3px}
-    /* Modals */
-    .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
-    .modal-overlay.open{display:flex}
-    .modal{background:var(--card);border-radius:16px;width:100%;max-width:500px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 60px rgba(0,0,0,.2)}
-    .modal-hdr{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
-    .modal-ttl{font-size:15px;font-weight:800;color:var(--text)}
-    .modal-sub{font-size:12px;color:var(--muted);margin-top:3px}
-    .modal-x{width:28px;height:28px;border-radius:50%;border:none;background:var(--bg);cursor:pointer;font-size:14px;color:var(--muted);flex-shrink:0}
-    .modal-x:hover{background:#e2e8f0}
-    .modal-body{flex:1;overflow-y:auto;padding:16px 20px}
-    .modal-ftr{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
-    .prod-search input{width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;margin-bottom:10px}
-    .prod-search input:focus{border-color:var(--primary)}
-    .prod-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}
-    .prod-item{padding:11px 14px;border-radius:10px;cursor:pointer;border:1.5px solid transparent;transition:all .12s}
-    .prod-item:hover{background:#f0f9ff;border-color:#bae6fd}
-    .prod-item.sel{background:#eff6ff;border-color:var(--primary)}
-    .prod-item-name{font-size:13px;font-weight:700;color:var(--text)}
-    .prod-item-meta{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
-    .agd-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-    .agd-info-box{background:var(--bg);border-radius:8px;padding:12px;text-align:center}
-    .agd-info-val{font-size:18px;font-weight:800;color:var(--primary)}
-    .agd-info-lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
-    .agd-field{margin-bottom:14px}
-    .agd-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
-    .agd-field input[type=number],.agd-field input[type=date]{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;outline:none}
-    .agd-field input:focus{border-color:var(--primary)}
-    .linha-btns{display:flex;gap:8px}
-    .linha-btn{flex:1;padding:10px 8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid var(--border);background:var(--bg);color:var(--muted);transition:all .12s;text-align:center}
-    .linha-btn.active-e1{border-color:var(--env1);background:#eff6ff;color:#1e40af}
-    .linha-btn.active-e2{border-color:var(--env2);background:#f5f3ff;color:#5b21b6}
-    .linha-btn.active-e3{border-color:var(--env3);background:#fdf2f8;color:#9d174d}
-    .linha-btn.active-e4{border-color:var(--env4);background:#fef3c7;color:#b45309}
-    .linha-btn.active-e5{border-color:var(--env5);background:#d1fae5;color:#065f46}
-    .linha-btn.active-e6{border-color:var(--env6);background:#ecfeff;color:#0891b2}
-    .linha-btn.active-e7{border-color:var(--env7);background:#f1f5f9;color:#475569}
-    .linha-btn.active-e8{border-color:var(--env8);background:#f0fdfa;color:#0d9488}
-    .agd-preview{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;font-size:12px;color:#065f46;margin-top:4px;display:none}
-    .toast{position:fixed;bottom:20px;right:20px;background:#0f172a;color:white;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:2000;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.25)}
-    .toast.show{display:flex}
-    .toast-dot{width:7px;height:7px;border-radius:50%;background:#34d399;animation:pulse 1s infinite}
-    @media(max-width:640px){.hours-grid{grid-template-columns:repeat(4,1fr)}.agd-info-grid{grid-template-columns:1fr}}
-  </style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
-    <h1>Planejamento de Produção</h1>
-    <div class="header-sub" id="headerSub">Carregando...</div>
-  </div>
-  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
-</div>
-
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html" class="active">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
-</div>
-
-<div class="main">
-
-  <div class="top-tabs">
-    <button class="top-tab active" data-tab="grade">📅 Grade Semanal</button>
-    <button class="top-tab" data-tab="agendamento">📋 Agendamento</button>
-    <button class="top-tab" data-tab="config">⚙️ Configurações</button>
-  </div>
-
-  <!-- GRADE -->
-  <div class="tab-content active" id="tabGrade">
-    <div class="week-bar">
-      <div style="flex:1"><div class="week-label" id="weekLabel">—</div><div class="week-sub" id="weekRange">—</div></div>
-      <button class="week-nav-btn" id="btnPrev">← Anterior</button>
-      <button class="week-nav-btn" id="btnToday" style="background:#eff6ff;border-color:#bfdbfe;color:var(--primary)">Hoje</button>
-      <button class="week-nav-btn" id="btnNext">Próxima →</button>
-    </div>
-    <div class="summary-grid">
-      <div class="sum-card"><div class="sum-val" id="sumMeta">—</div><div class="sum-lbl">Meta semana</div></div>
-      <div class="sum-card"><div class="sum-val" id="sumSlots">—</div><div class="sum-lbl">Slots planejados</div></div>
-      <div class="sum-card"><div class="sum-val" id="sumDias">—</div><div class="sum-lbl">Dias com prog.</div></div>
-      <div class="sum-card"><div class="sum-val" id="sumPeds">—</div><div class="sum-lbl">Pedidos ativos</div></div>
-    </div>
-    <div class="day-tabs" id="dayTabs"></div>
-    <div class="grid-card">
-      <div class="plan-table-wrap">
-        <table class="plan-table">
-          <thead><tr id="gridHeaderRow">
-            <th class="col-hora">Hora</th>
-          </tr></thead>
-          <tbody id="planBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Resumo Semanal Consolidado para Produção -->
-    <div class="grid-card" id="weeklySummaryCard" style="margin-top: 14px; padding: 16px;">
-      <div style="font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-        <span>📋 Programação Semanal Consolidada (Produção)</span>
-      </div>
-      <div style="overflow-x: auto;">
-        <table class="plan-table" style="min-width: 100%;">
-          <thead>
-            <tr>
-              <th>Produto / Item</th>
-              <th>OP / Lote</th>
-              <th>Pedido Comercial</th>
-              <th style="text-align:right">Total do Lote (OP)</th>
-              <th style="text-align:right">Programado na Semana</th>
-              <th style="text-align:right">Apontado (Realizado)</th>
-              <th>Progresso</th>
-            </tr>
-          </thead>
-          <tbody id="weeklySummaryBody">
-            <tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- AGENDAMENTO -->
-  <div class="tab-content" id="tabAgendamento">
-    <div style="margin-bottom:12px">
-      <div style="font-size:15px;font-weight:800;color:var(--text)">Pedidos em Aberto</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:2px">Ordenados por prioridade da planilha. Clique em "Agendar" para distribuir automaticamente nos slots livres.</div>
-    </div>
-    <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
-      <input type="text" id="agdSearchInput" placeholder="Buscar por produto, SKU, ID..." style="flex:1; min-width:200px; padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; transition:border-color .15s;">
-      <select id="agdFilterClient" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; max-width:220px; transition:border-color .15s; background:white;">
-        <option value="">Todos os clientes</option>
-      </select>
-    </div>
-    <div class="ped-queue" id="pedQueue"><div style="color:var(--muted);font-size:13px;padding:20px">Carregando...</div></div>
-  </div>
-
-  <!-- CONFIG -->
-  <div class="tab-content" id="tabConfig">
-    <!-- 📤 Importador Integrado de Programação Semanal -->
-    <div class="config-section" style="border-left: 4px solid var(--primary);">
-      <div class="config-title">📤 Importar Programação Semanal (Previsão de Envase)</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Selecione ou arraste a planilha semanal para importar todos os slots planejados.</div>
-      
-      <div class="drop-zone" id="dropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom:12px;">
-        <div style="font-size:32px; margin-bottom:8px">📂</div>
-        <div id="dropText" style="font-size:14px; font-weight:600; color:var(--text)">Clique ou arraste o arquivo da planilha aqui</div>
-        <div style="font-size:11px; color:var(--muted); margin-top:4px">Aceita: .xlsm e .xlsx — aba "Previsao Envase"</div>
-      </div>
-      <input type="file" id="fileInput" accept=".xlsm,.xlsx" style="display:none">
-      
-      <!-- Info (após parse) -->
-      <div id="infoCard" style="display:none; margin-bottom:16px;">
-        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px">
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSemanas">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Semanas</div></div>
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statDias">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Dias</div></div>
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSlots">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Slots Horários</div></div>
-        </div>
-        <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px">Mapeamento de Linhas</div>
-        <div id="mappingContainer" style="display:flex; flex-direction:column; gap:4px; font-size:12px; margin-bottom:12px"></div>
-      </div>
-
-      <!-- Filtro + Preview -->
-      <div id="filterCard" style="display:none; margin-bottom:16px;">
-        <div class="filter-options" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
-          <button class="filter-btn active" data-filter="future" id="fltFuture" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">A partir de hoje</button>
-          <button class="filter-btn" data-filter="all" id="fltAll" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">Todas as datas</button>
-        </div>
-        <div id="filterInfo" style="font-size:12px; color:var(--muted); margin-bottom:8px">—</div>
-      </div>
-
-      <!-- Confirmar -->
-      <div id="importCard" style="display:none">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px">
-          <button class="btn btn-success" id="btnImport" style="background:#10b981; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">✓ Importar no Planejamento</button>
-        </div>
-        <div id="progressWrap" style="display:none">
-          <div style="height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-bottom:4px"><div id="progressFill" style="height:100%; border-radius:3px; background:#10b981; width:0%"></div></div>
-          <div id="progressText" style="font-size:11px; color:var(--muted)">Salvando...</div>
-        </div>
-      </div>
-    </div>
-    <div class="config-section">
-      <div class="config-title">🕐 Horas de Produção</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px"><strong>1 clique</strong> = ativa, <strong>2 cliques</strong> = marca como intervalo, <strong>3 cliques</strong> = desativa.</div>
-      <div class="hours-grid" id="hoursGrid"></div>
-      <div class="legend-row">
-        <div class="legend-chip"><div class="legend-dot" style="background:#dbeafe;border:1.5px solid #93c5fd"></div> Produção</div>
-        <div class="legend-chip"><div class="legend-dot" style="background:#fef3c7;border:1.5px solid #fcd34d"></div> Intervalo</div>
-        <div class="legend-chip"><div class="legend-dot" style="background:var(--bg);border:1.5px solid var(--border)"></div> Inativo</div>
-      </div>
-    </div>
-    <div class="config-section">
-      <div class="config-title">📅 Dias de Trabalho</div>
-      <div class="days-grid" id="daysGrid"></div>
-    </div>
-    <div class="config-section">
-      <div class="config-title">🚫 Feriados e Dias Bloqueados</div>
-      <div class="feriado-list" id="feriadoList"></div>
-      <div class="feriado-add" style="margin-bottom:12px;">
-        <input type="date" id="feriadoData" style="width:160px">
-        <input type="text" id="feriadoNome" placeholder="Descrição (ex: Corpus Christi)" style="flex:1;min-width:160px">
-        <button class="btn btn-primary btn-sm" id="addFeriadoBtn">Adicionar</button>
-      </div>
-      <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
-        <button class="btn btn-ghost btn-sm" id="btnImportFeriados" style="border:1.5px solid #10b981; color:#047857; font-size:12px; font-weight:700;">✨ Sugerir e Importar Feriados Nacionais 2026</button>
-      </div>
-    </div>
-    <div class="config-section" style="border-left: 4px solid var(--danger);">
-      <div class="config-title" style="color: var(--danger);">🧹 Limpar Programação em Lote</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Selecione o intervalo de datas, a linha e os horários para apagar as programações correspondentes no Firebase.</div>
-      
-      <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
-        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
-          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Linha</label>
-          <select id="clearLinha" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
-            <option value="all">Todas as Linhas</option>
-            <option value="1">Envase 1 (Linha 1)</option>
-            <option value="2">Envase 2 (Linha 2)</option>
-            <option value="3">Envase 3 (Linha 3)</option>
-          </select>
-        </div>
-        
-        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
-          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Data de Início</label>
-          <input type="date" id="clearDataInicio" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
-        </div>
-        
-        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
-          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Data de Término</label>
-          <input type="date" id="clearDataFim" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
-        </div>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;">
-        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Intervalo de Horários</label>
-        <select id="clearHorarioTipo" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600; margin-bottom: 8px;">
-          <option value="all">Todo o Dia (Todos os horários ativos)</option>
-          <option value="range">Range Específico de Horas</option>
-        </select>
-        
-        <div id="clearHorasRangeWrap" style="display: none; gap: 8px; flex-wrap: wrap;">
-          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-            <label style="font-size: 10px; color: var(--muted);">Hora Início (ex: 06:00)</label>
-            <select id="clearHoraInicio" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600;"></select>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
-            <label style="font-size: 10px; color: var(--muted);">Hora Fim (ex: 15:00)</label>
-            <select id="clearHoraFim" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600;"></select>
-          </div>
-        </div>
-      </div>
-      
-      <button class="btn" id="clearPeriodBtn" style="background: #fee2e2; color: var(--danger); font-size: 13px; border: 1px solid #fecaca; width: 100%; justify-content: center;">🧹 Apagar Programação do Período</button>
-    </div>
-
-    <button class="btn btn-success" id="saveConfigBtn" style="font-size:14px;padding:12px 28px">💾 Salvar Configurações</button>
-  </div>
-</div>
-
-<!-- Modal: Produto -->
-<div class="modal-overlay" id="prodModal">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div><div class="modal-ttl" id="prodModalTitle">Selecionar produto</div><div class="modal-sub" id="prodModalSub">—</div></div>
-      <button class="modal-x" id="prodModalClose">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="prod-search"><input type="text" id="prodSearch" placeholder="Buscar produto ou SKU..."></div>
-      <div class="prod-list" id="prodList"></div>
-    </div>
-    <div class="modal-ftr">
-      <button class="btn btn-danger-sm" id="prodClearBtn">🗑 Limpar</button>
-      <button class="btn btn-ghost" id="prodCancelBtn">Cancelar</button>
-      <button class="btn btn-primary" id="prodConfirmBtn">Confirmar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: Agendamento -->
-<div class="modal-overlay" id="agdModal">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-hdr">
-      <div><div class="modal-ttl" id="agdTitle">Agendar Produção</div><div class="modal-sub" id="agdSub">—</div></div>
-      <button class="modal-x" id="agdClose">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="agd-info-grid" id="agdInfoGrid"></div>
-      <div class="agd-field">
-        <label>Linha de Envase</label>
-        <div class="linha-btns" id="linhaSelector">
-          <div class="linha-btn" data-linha="1">Envase 1</div>
-          <div class="linha-btn" data-linha="2">Envase 2</div>
-          <div class="linha-btn" data-linha="3">Envase 3</div>
-        </div>
-      </div>
-      <div class="agd-field">
-        <label>Horas a agendar</label>
-        <input type="number" id="agdHoras" min="1" max="500" step="1">
-      </div>
-      <div class="agd-field">
-        <label>Data de início</label>
-        <input type="date" id="agdDataInicio">
-      </div>
-      <div class="agd-preview" id="agdPreview"></div>
-    </div>
-    <div class="modal-ftr">
-      <button class="btn btn-ghost" id="agdCancelBtn">Cancelar</button>
-      <button class="btn btn-primary" id="agdConfirmBtn">🗓 Agendar</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg">Salvando...</span></div>
-
-<script>
-var firebaseConfig={apiKey:"AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",authDomain:"prod-kuryos.firebaseapp.com",databaseURL:"https://prod-kuryos-default-rtdb.firebaseio.com",projectId:"prod-kuryos",storageBucket:"prod-kuryos.firebasestorage.app",messagingSenderId:"323674581733",appId:"1:323674581733:web:e283a491c0c2bd6025420c"};
-firebase.initializeApp(firebaseConfig);
-var db=firebase.database();
-db.ref('.info/connected').on('value',function(s){var on=s.val();document.getElementById('sDot').className='dot'+(on?' on':'');document.getElementById('sTxt').textContent=on?'Online':'Offline';});
-
-var ALL_HOURS=[];for(var _h=0;_h<24;_h++)ALL_HOURS.push(String(_h).padStart(2,'0')+':00');
-var DIAS_SHORT=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-var DIAS_NOMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-var DEFAULT_CONFIG={horasAtivas:['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'],pausas:['12:00','17:00'],diasSemana:[1,2,3,4,5],feriados:{}};
-var config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-var configLinhas=["Linha 1","Linha 2","Linha 3"];
-var pedidos={}; var allProdutos={};
-var weekData={};
-var weekRegs={};
-var weekListeners=[];
-var regsListeners=[];
-var currentWeekStart=null;
-var currentDayIdx=0;
-var mSlot=null,mSelected=null;
-var agdPedidoKey=null,agdLinha=1;
-var firstLoad=true;
-
-var STATUS_CORES={'Em Produção':{bg:'#dbeafe',cl:'#1e40af'},'Produção Parcial':{bg:'#d1fae5',cl:'#065f46'},'Programado':{bg:'#fef3c7',cl:'#92400e'},'Não Iniciado':{bg:'#f1f5f9',cl:'#64748b'},'Concluído':{bg:'#dcfce7',cl:'#166534'}};
-
-// Date helpers
-function getMon(d){var c=new Date(d);c.setHours(0,0,0,0);var dw=c.getDay();c.setDate(c.getDate()+(dw===0?-6:1-dw));return c;}
-function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
-function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function parsYMD(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
-function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
-function weekNum(d){var j1=new Date(d.getFullYear(),0,1);return Math.ceil(((d-j1)/86400000+j1.getDay()+1)/7);}
-function fmtNum(n){return Math.round(n).toLocaleString('pt-BR');}
-function hKey(h){return h.replace(':','_');}
-function fmtHoraRange(hora) {
-  if (!hora) return '—';
-  var cleanHora = hora.replace('_', ':');
-  var parts = cleanHora.split(':');
-  var h = parseInt(parts[0]);
-  if (isNaN(h)) return hora;
-  var nextH = (h + 1) % 24;
-  var nextHStr = String(nextH).padStart(2, '0') + ':00';
-  return cleanHora + 'h - ' + nextHStr + 'h';
-}
-function dowToConfig(dw){return dw===0?7:dw;}
-function isWorkingDay(date){var ymd=toYMD(date);var dw=dowToConfig(date.getDay());if(!config.diasSemana.includes(dw))return false;if(config.feriados&&config.feriados[ymd])return false;return true;}
-function nextWorkingDay(from){var d=new Date(from);d.setHours(0,0,0,0);for(var i=0;i<365;i++){if(isWorkingDay(d))return d;d=addDays(d,1);}return from;}
-function isConcluido(status){
-  if(!status)return false;
-  var s=String(status).toLowerCase().trim();
-  return s.indexOf('conclu')===0;
-}
-
-// Init
-window.addEventListener('DOMContentLoaded',function(){
-  currentWeekStart=getMon(new Date());
-  var dw=new Date().getDay();
-  currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;
-  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupConfigTab();
-  
-  var agdSearch = document.getElementById('agdSearchInput');
-  var agdFilter = document.getElementById('agdFilterClient');
-  if (agdSearch) agdSearch.addEventListener('input', function() { renderAgendaTab(); });
-  if (agdFilter) agdFilter.addEventListener('change', function() { renderAgendaTab(); });
-
-  loadConfig();
-});
-
-function setupTabBar(){
-  document.querySelectorAll('.top-tab').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var tab=this.getAttribute('data-tab');
-      document.querySelectorAll('.top-tab').forEach(function(b){b.classList.remove('active');});
-      document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
-      this.classList.add('active');
-      document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
-    });
-  });
-}
-
-function loadConfig(){
-  db.ref('produtos').on('value', function(pSnap) {
-    allProdutos = pSnap.val() || {};
-    if (!firstLoad) {
-      renderGrid();
-      updateSummary();
-      renderAgendaTab();
-    }
-  });
-
-  db.ref('config').once('value', function(cSnap) {
-    var cVal = cSnap.val() || {};
-    if (cVal.linhas && cVal.linhas.length) {
-      configLinhas = cVal.linhas;
-    }
-    updateDynamicLinhasUI();
-    
-    db.ref('config/planejamento').once('value',function(snap){
-      var s=snap.val()||{};
-      if(s.horasAtivas&&s.horasAtivas.length)config.horasAtivas=s.horasAtivas;
-      if(s.pausas)config.pausas=s.pausas;
-      if(s.diasSemana&&s.diasSemana.length)config.diasSemana=s.diasSemana;
-      config.feriados=s.feriados||{};
-      renderConfigTab();loadPedidos();
-    });
-  });
-}
-
-function updateDynamicLinhasUI() {
-  // 1. Rebuild table headers
-  var headerRow = document.getElementById('gridHeaderRow');
-  if (headerRow) {
-    while (headerRow.cells.length > 1) {
-      headerRow.deleteCell(1);
-    }
-    configLinhas.forEach(function(lineName, index) {
-      var th = document.createElement('th');
-      th.className = 'col-e' + (index + 1);
-      th.textContent = lineName;
-      headerRow.appendChild(th);
-    });
-  }
-
-  // 2. Rebuild modal buttons
-  var selector = document.getElementById('linhaSelector');
-  if (selector) {
-    selector.innerHTML = '';
-    configLinhas.forEach(function(lineName, index) {
-      var lNum = index + 1;
-      var btn = document.createElement('div');
-      btn.className = 'linha-btn';
-      btn.setAttribute('data-linha', lNum);
-      btn.textContent = lineName;
-      
-      btn.addEventListener('click', function() {
-        document.querySelectorAll('.linha-btn').forEach(function(b){b.className='linha-btn';});
-        agdLinha = lNum;
-        btn.className = 'linha-btn active-e' + lNum;
-        updateAgdPreview();
-      });
-      
-      selector.appendChild(btn);
-    });
-  }
-
-  // 3. Rebuild batch clear options
-  var clearSel = document.getElementById('clearLinha');
-  if (clearSel) {
-    clearSel.innerHTML = '<option value="all">Todas as Linhas</option>';
-    configLinhas.forEach(function(lineName, index) {
-      var opt = document.createElement('option');
-      opt.value = index + 1;
-      opt.textContent = lineName;
-      clearSel.appendChild(opt);
-    });
-  }
-}
-
-function loadPedidos(){
-  db.ref('pedidos').on('value',function(snap){
-    pedidos={};
-    snap.forEach(function(ch){
-      var v=ch.val();if(!v||!v.produto)return;
-      v._key=ch.key;
-      v._falta=Math.max((v.qtdTotal||0)-(v.produzido||0),0);
-      v._pct=v.qtdTotal>0?(v.produzido||0)/v.qtdTotal:0;
-      v._horas=v.mediaPorHora>0?Math.ceil(v._falta/v.mediaPorHora):null;
-      v._isDone=isConcluido(v.status)||Math.round(v._pct*100)>=95;
-      pedidos[ch.key]=v;
-    });
-    var ativos=Object.values(pedidos).filter(function(p){return!p._isDone;});
-    document.getElementById('sumPeds').textContent=ativos.length;
-    populateAgdClientFilter();
-    renderAgendaTab();
-    if(firstLoad){
-      firstLoad=false;
-      loadWeek();
-    } else {
-      renderGrid();
-      updateSummary();
-    }
-  });
-}
-
-function setupGradeControls(){
-  document.getElementById('btnPrev').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,-7);loadWeek();});
-  document.getElementById('btnNext').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,7);loadWeek();});
-  document.getElementById('btnToday').addEventListener('click',function(){
-    currentWeekStart=getMon(new Date());var dw=new Date().getDay();
-    currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;loadWeek();
-  });
-}
-
-function loadWeek(){
-  var wn=weekNum(currentWeekStart);var fri=addDays(currentWeekStart,4);
-  document.getElementById('weekLabel').textContent=wn+'ª SEMANA DE '+currentWeekStart.getFullYear();
-  document.getElementById('weekRange').textContent=fmtBR(currentWeekStart)+' — '+fmtBR(fri);
-  var hs=document.getElementById('headerSub');if(hs)hs.textContent=wn+'ª Semana · '+fmtBR(currentWeekStart)+' a '+fmtBR(fri);
-  weekListeners.forEach(function(r){try{r.off();}catch(e){}});weekListeners=[];weekData={};
-  regsListeners.forEach(function(r){try{r.off();}catch(e){}});regsListeners=[];weekRegs={};
-  var dates=[];for(var i=0;i<7;i++)dates.push(toYMD(addDays(currentWeekStart,i)));
-  var loaded=0;
-  dates.forEach(function(date){
-    var ref=db.ref('programacao/'+date);weekListeners.push(ref);
-    ref.on('value',function(snap){
-      weekData[date]={};
-      snap.forEach(function(hSnap){weekData[date][hSnap.key.replace('_',':')]=hSnap.val()||{};});
-      loaded++;if(loaded>=7){buildDayTabs();renderGrid();updateSummary();}
-    });
-    
-    var regRef=db.ref('registros/'+date);regsListeners.push(regRef);
-    regRef.on('value',function(snap){
-      weekRegs[date]=snap.val()||{};
-      if(loaded>=7){renderGrid();updateSummary();}
-    });
-  });
-}
-
-function buildDayTabs(){
-  var container=document.getElementById('dayTabs');container.innerHTML='';
-  var today=toYMD(new Date());
-  var workDays=[];
-  for(var i=0;i<7;i++){var d=addDays(currentWeekStart,i);if(config.diasSemana.includes(dowToConfig(d.getDay())))workDays.push({idx:i,date:d});}
-  workDays.forEach(function(wd){
-    var ds=toYMD(wd.date);var isBlocked=config.feriados&&config.feriados[ds];
-    var btn=document.createElement('button');
-    btn.className='day-tab'+(wd.idx===currentDayIdx?' active':'')+(ds===today?' is-today':'');
-    var dowIdx=(wd.date.getDay()+6)%7;
-    btn.textContent=DIAS_SHORT[dowIdx]+' '+fmtBR(wd.date)+(isBlocked?' 🚫':'');
-    if(isBlocked)btn.title=config.feriados[ds];
-    (function(idx){btn.addEventListener('click',function(){currentDayIdx=idx;buildDayTabs();renderGrid();});})(wd.idx);
-    container.appendChild(btn);
-  });
-}
-
-function renderGrid(){
-  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
-  var dayData=weekData[date]||{};
-  var tbody=document.getElementById('planBody');tbody.innerHTML='';
-  var activeHours=config.horasAtivas.filter(function(h){return ALL_HOURS.includes(h);});
-  if(!activeHours.length){
-    var tr=document.createElement('tr');
-    tr.innerHTML='<td colspan="' + (configLinhas.length + 1) + '" style="text-align:center;padding:30px;color:var(--muted)">Nenhuma hora configurada. Ajuste em <strong>Configurações</strong>.</td>';
-    tbody.appendChild(tr);return;
-  }
-  activeHours.forEach(function(hora){
-    var isPausa=config.pausas.includes(hora);
-    var tr=document.createElement('tr');if(isPausa)tr.className='row-pausa';
-    var tdH=document.createElement('td');tdH.className='hora-cell'+(isPausa?' is-pausa':'');tdH.textContent=fmtHoraRange(hora);tr.appendChild(tdH);
-    var horaData=dayData[hora]||{};
-    configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
-      var td=document.createElement('td');td.className='slot-cell'+(isPausa?' is-pausa':'');td.setAttribute('data-l',l);
-      if(isPausa){td.textContent='—';tr.appendChild(td);return;}
-      var slot=(horaData['env'+l])||null;
-      if(slot&&slot.pedidoKey){
-        var ped=pedidos[slot.pedidoKey];
-        var isDone=ped&&ped._isDone;
-        if(isDone){
-          td.style.background='#f0fdf4';
-          td.style.borderLeftColor='#10b981';
-        } else {
-          td.style.background='';
-          td.style.borderLeftColor='';
-        }
-        
-        // Sum actual registrations
-        var actualQty=0;
-        var lineName='Linha '+l;
-        if(weekRegs[date]){
-          Object.values(weekRegs[date]).forEach(function(r){
-            if(r.hora===hora&&r.linha===lineName){
-              actualQty+=(r.quantidade||0);
-            }
-          });
-        }
-        
-        td.innerHTML=buildSlotHTML(slot,ped,actualQty);
-      }
-      else{
-        td.style.background='';
-        td.style.borderLeftColor='';
-        td.innerHTML='<div class="slot-empty"></div>';
-      }
-      (function(h,ln,s){
-        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x'))return;openProdModal(date,h,ln,s);});
-        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x')){e.stopPropagation();clearSlot(date,h,ln);}});
-      })(hora,l,slot);
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
-  });
-  // Total row
-  var trT=document.createElement('tr');trT.className='row-total';
-  var tdL=document.createElement('td');tdL.innerHTML='<span class="total-lbl">Total dia</span>';trT.appendChild(tdL);
-  configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
-    var sum=0;
-    activeHours.forEach(function(hora){
-      if(config.pausas.includes(hora))return;
-      var sl=(dayData[hora]||{})['env'+l];
-      if(sl&&sl.pedidoKey&&pedidos[sl.pedidoKey]){
-        var p = pedidos[sl.pedidoKey];
-        var sku = sl.sku || (p && p.sku) || '';
-        var prod = allProdutos[sku] || {};
-        var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
-        sum += rate;
-      }
-    });
-    var td=document.createElement('td');
-    td.innerHTML=sum>0?'<span class="total-v">'+fmtNum(sum)+' un</span>':'<span style="color:var(--muted);font-size:11px">—</span>';
-    trT.appendChild(td);
-  });
-  tbody.appendChild(trT);
-}
-
-function buildSlotHTML(slot,ped,actualQty){
-  var nome=slot.produto||'?';
-  var isDone=ped&&ped._isDone;
-  
-  var sku = slot.sku || (ped && ped.sku) || '';
-  var prod = allProdutos[sku] || {};
-  var metaVal = slot.mediaPorHora || (ped && ped.mediaPorHora) || prod.prodHoraRef || 0;
-  var m=metaVal?'<span class="sbadge sbadge-meta">🎯 '+fmtNum(metaVal)+'/h</span>':'';
-  
-  var lp=ped&&ped.lp&&metaVal?'<span class="sbadge sbadge-lp">LP/h '+fmtNum(ped.lp*metaVal)+'</span>':'';
-  var sk=ped&&ped.sku?'<span class="sbadge sbadge-sku">'+ped.sku+'</span>':'';
-  
-  var actualBadge = '';
-  if (actualQty > 0) {
-    var badgeClass = 'sbadge-actual';
-    if (metaVal > 0) {
-      if (actualQty >= metaVal) {
-        badgeClass = 'sbadge-actual-ok'; // Met or exceeded
-      } else {
-        badgeClass = 'sbadge-actual-warn'; // Below meta
-      }
-    }
-    actualBadge = '<span class="sbadge ' + badgeClass + '">✏️ ' + fmtNum(actualQty) + '</span>';
-  } else if (metaVal > 0 && !isDone) {
-    actualBadge = '<span class="sbadge sbadge-actual-zero">✏️ 0</span>';
-  }
-  
-  var doneBadge = isDone ? '<span class="sbadge sbadge-done">✓ Concluído</span>' : '';
-  var textStyle = isDone ? 'text-decoration: line-through; opacity: 0.6;' : '';
-  
-  return '<div class="slot-filled" style="' + textStyle + '">' +
-    '<div class="slot-nome" title="'+nome+'">'+nome+'</div>' +
-    '<div class="slot-badges">'+sk+m+lp+actualBadge+doneBadge+'<span class="slot-x" title="Remover">✕</span></div>' +
-  '</div>';
-}
-
-function updateSummary(){
-  var totMeta=0,totSlots=0,diasOk=0;
-  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
-  for(var i=0;i<7;i++){
-    var date=toYMD(addDays(currentWeekStart,i));
-    if(!isWorkingDay(parsYMD(date)))continue;
-    var dayData=weekData[date]||{};
-    var hasSlot=false;
-    activeH.forEach(function(h){
-      var hd=dayData[h]||{};
-      configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
-        var sl=hd['env'+l];
-        if(sl&&sl.pedidoKey){
-          totSlots++;hasSlot=true;
-          var p=pedidos[sl.pedidoKey];
-          var sku=sl.sku || (p && p.sku) || '';
-          var prod=allProdutos[sku] || {};
-          var rate=sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
-          totMeta+=rate;
-        }
-      });
-    });
-    if(hasSlot)diasOk++;
-  }
-  document.getElementById('sumMeta').textContent=fmtNum(totMeta)+' un';
-  document.getElementById('sumSlots').textContent=totSlots;
-  document.getElementById('sumDias').textContent=diasOk;
-  
-  updateWeeklySummaryTable();
-}
-
-function updateWeeklySummaryTable() {
-  var tbody = document.getElementById('weeklySummaryBody');
-  if (!tbody) return;
-  
-  var scheduledKeys = {};
-  var scheduledMetas = {};
-  
-  var activeH = config.horasAtivas.filter(function(h){ return !config.pausas.includes(h); });
-  for (var i = 0; i < 7; i++) {
-    var date = toYMD(addDays(currentWeekStart, i));
-    if (!isWorkingDay(parsYMD(date))) continue;
-    var dayData = weekData[date] || {};
-    
-    activeH.forEach(function(h) {
-      var hd = dayData[h] || {};
-      configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l) {
-        var sl = hd['env' + l];
-        if (sl && sl.pedidoKey) {
-          scheduledKeys[sl.pedidoKey] = 1;
-          var p = pedidos[sl.pedidoKey];
-          var sku = sl.sku || (p && p.sku) || '';
-          var prod = allProdutos[sku] || {};
-          var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
-          scheduledMetas[sl.pedidoKey] = (scheduledMetas[sl.pedidoKey] || 0) + rate;
-        }
-      });
-    });
-  }
-  
-  var keys = Object.keys(scheduledKeys);
-  if (keys.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>';
-    return;
-  }
-  
-  tbody.innerHTML = '';
-  keys.forEach(function(key) {
-    var p = pedidos[key];
-    if (!p) return;
-    
-    var isOP = (key.indexOf('OP_') === 0) || (p.parentPedidoId);
-    var parentIdDisplay = p.parentPedidoId ? '#' + p.parentPedidoId : '—';
-    var opDisplay = isOP ? p.id : '—';
-    
-    var plannedThisWeek = scheduledMetas[key] || 0;
-    var totalBatch = p.qtdTotal || 0;
-    var produced = p.produzido || 0;
-    
-    var pct = totalBatch ? Math.round((produced / totalBatch) * 100) : 0;
-    var pctClamped = Math.min(100, pct);
-    
-    var tr = document.createElement('tr');
-    tr.innerHTML = 
-      '<td><strong>' + p.produto + '</strong>' + (p.sku ? ' <code style="font-size:10px;">' + p.sku + '</code>' : '') + '</td>' +
-      '<td><span class="status-pill" style="background:#e0f2fe; color:#0369a1; border-radius:4px; font-weight:700; padding:2px 6px;">' + opDisplay + '</span></td>' +
-      '<td><strong>' + parentIdDisplay + '</strong></td>' +
-      '<td style="text-align:right; font-weight:600;">' + fmtNum(totalBatch) + ' un</td>' +
-      '<td style="text-align:right; color:#7c3aed; font-weight:700;">' + fmtNum(plannedThisWeek) + ' un</td>' +
-      '<td style="text-align:right; color:#059669; font-weight:700;">' + fmtNum(produced) + ' un</td>' +
-      '<td>' +
-        '<div style="display:flex; align-items:center; gap:8px;">' +
-          '<div style="flex:1; height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; min-width:80px;"><div style="height:100%; border-radius:3px; background:#10b981; width:' + pctClamped + '%"></div></div>' +
-          '<span style="font-size:11px; font-weight:700; color:var(--muted);">' + pct + '%</span>' +
-        '</div>' +
-      '</td>';
-    
-    tbody.appendChild(tr);
-  });
-}
-
-function populateAgdClientFilter() {
-  var sel = document.getElementById('agdFilterClient');
-  if (!sel) return;
-  var currentVal = sel.value;
-  var clientsSet = new Set();
-  Object.values(pedidos).forEach(function(p) {
-    if (p.cliente) clientsSet.add(p.cliente);
-  });
-  var sortedClients = Array.from(clientsSet).sort();
-  sel.innerHTML = '<option value="">Todos os clientes</option>';
-  sortedClients.forEach(function(c) {
-    var opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
-    sel.appendChild(opt);
-  });
-  sel.value = currentVal;
-}
-
-function renderAgendaTab(){
-  var container=document.getElementById('pedQueue');
-  var list=Object.values(pedidos);
-  var search = document.getElementById('agdSearchInput') ? document.getElementById('agdSearchInput').value.toLowerCase().trim() : '';
-  var cli = document.getElementById('agdFilterClient') ? document.getElementById('agdFilterClient').value : '';
-  if (search || cli) {
-    list = list.filter(function(p) {
-      if (cli && p.cliente !== cli) return false;
-      if (search) {
-        var haystack = String(p.produto || '').toLowerCase() + ' ' + String(p.sku || '').toLowerCase() + ' ' + String(p.id || '').toLowerCase();
-        if (haystack.indexOf(search) === -1) return false;
-      }
-      return true;
-    });
-  }
-  var ativos=list.filter(function(p){return!p._isDone;}).sort(function(a,b){
-    var pa = a.priority || 999, pb = b.priority || 999;
-    if (pa !== pb) return pa - pb;
-    return (a.ordenacao||999999999)-(b.ordenacao||999999999);
-  });
-  var concluidos=list.filter(function(p){return p._isDone;}).sort(function(a,b){
-    var pa = a.priority || 999, pb = b.priority || 999;
-    if (pa !== pb) return pa - pb;
-    return (a.ordenacao||999999999)-(b.ordenacao||999999999);
-  });
-  if(!ativos.length&&!concluidos.length){
-    container.innerHTML='<div style="color:var(--muted);font-size:13px;padding:20px">Nenhum pedido. Importe via <a href="ops.html">OPs</a>.</div>';return;
-  }
-  container.innerHTML='';
-  ativos.forEach(function(p){container.appendChild(makePedCard(p));});
-  if(concluidos.length){
-    var sep=document.createElement('div');
-    sep.style.cssText='font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:10px 4px 4px';
-    sep.textContent='✅ Concluídos';container.appendChild(sep);
-    concluidos.forEach(function(p){container.appendChild(makePedCard(p));});
-  }
-}
-
-function makePedCard(p){
-  var pct=Math.round(p._pct*100);
-  var isDone=p._isDone;
-  var card=document.createElement('div');
-  var pctClass=isDone?'pct-done':pct>=90?'pct-high':pct>=50?'pct-mid':'pct-low';
-  card.className='ped-card '+pctClass;
-  var prioBadge=p.priority?'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--primary);color:white;font-size:10px;font-weight:800">'+p.priority+'</span> ':'';
-  var stBadge='';
-  if(p.status){var sc=STATUS_CORES[p.status]||{bg:'#f1f5f9',cl:'#64748b'};stBadge='<span style="background:'+sc.bg+';color:'+sc.cl+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+p.status+'</span>';}
-  var clientText = p.cliente ? '<span style="background:#e0f2fe;color:#0369a1;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;margin-left:4px">' + p.cliente + '</span>' : '';
-  var sku = p.sku || '';
-  var prod = allProdutos[sku] || {};
-  var speed = p.mediaPorHora || prod.prodHoraRef || 0;
-  var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
-  var hText = hoursNeeded ? hoursNeeded + 'h restantes' : '--';
-  var mStr = speed ? '⚡ ' + fmtNum(speed) + '/h' : '';
-  var barFill=Math.min(pct,100);
-  card.innerHTML='<div class="ped-info"><div class="ped-nome">'+prioBadge+p.produto+' '+stBadge+clientText+'</div><div class="ped-meta"><span>'+p.id+'</span><span>'+mStr+'</span><span>Falta: '+fmtNum(p._falta)+' un · '+hText+'</span></div><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill'+(pct>100?' over':'')+'" style="width:'+barFill+'%"></div></div><span class="prog-pct">'+pct+'%</span></div></div><div class="ped-actions">'+(isDone?'<span style="font-size:12px;color:var(--muted)">Concluído</span>':'<button class="btn btn-primary btn-sm" data-agd="'+p._key+'">🗓 Agendar</button>')+'</div>';
-  if(!isDone){card.querySelector('[data-agd]').addEventListener('click',function(){openAgdModal(p._key);});}
-  return card;
-}
-
-function openProdModal(date,hora,linha,currentSlot){
-  mSlot={date:date,hora:hora,linha:linha};
-  mSelected=currentSlot&&currentSlot.pedidoKey?currentSlot.pedidoKey:null;
-  document.getElementById('prodModalTitle').textContent='Slot: '+hora+' · Envase '+linha;
-  document.getElementById('prodModalSub').textContent=fmtBR(parsYMD(date))+' '+date.slice(0,4);
-  document.getElementById('prodSearch').value='';
-  renderProdList('');
-  document.getElementById('prodModal').classList.add('open');
-}
-
-function renderProdList(q){
-  var keys=Object.keys(pedidos).filter(function(k){
-    var p=pedidos[k];
-    if(p._isDone&&k!==mSelected)return false;
-    if(!q)return true;
-    var qs=q.toLowerCase();
-    return (p.produto&&p.produto.toLowerCase().includes(qs))||(p.sku&&p.sku.toLowerCase().includes(qs))||(p.id&&p.id.toLowerCase().includes(qs));
-  });
-  keys.sort(function(a,b){
-    if(a===mSelected)return -1;if(b===mSelected)return 1;
-    return (pedidos[a].ordenacao||999999999)-(pedidos[b].ordenacao||999999999);
-  });
-  var list=document.getElementById('prodList');list.innerHTML='';
-  if(!keys.length){list.innerHTML='<div style="color:var(--muted);font-size:13px;padding:12px">Nenhum produto.</div>';return;}
-  keys.forEach(function(k){
-    var p=pedidos[k];var isSel=k===mSelected;
-    var div=document.createElement('div');div.className='prod-item'+(isSel?' sel':'');
-    div.innerHTML='<div class="prod-item-name">'+(p.priority?'#'+p.priority+' ':'')+p.produto+'</div><div class="prod-item-meta"><span>'+p.id+'</span>'+(p.sku?'<span>SKU: '+p.sku+'</span>':'')+(p.mediaPorHora?'<span>⚡ '+fmtNum(p.mediaPorHora)+'/h</span>':'')+(p.status?'<span>'+p.status+'</span>':'')+'</div>';
-    (function(key){div.addEventListener('click',function(){document.querySelectorAll('.prod-item').forEach(function(x){x.classList.remove('sel');});div.classList.add('sel');mSelected=key;});})(k);
-    list.appendChild(div);
-  });
-}
-
-function setupProdModal(){
-  document.getElementById('prodModalClose').addEventListener('click',function(){document.getElementById('prodModal').classList.remove('open');});
-  document.getElementById('prodCancelBtn').addEventListener('click',function(){document.getElementById('prodModal').classList.remove('open');});
-  document.getElementById('prodModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
-  document.getElementById('prodSearch').addEventListener('input',function(){renderProdList(this.value);});
-  document.getElementById('prodClearBtn').addEventListener('click',function(){
-    if(!mSlot)return;
-    clearSlot(mSlot.date,mSlot.hora,mSlot.linha);
-    document.getElementById('prodModal').classList.remove('open');
-  });
-  document.getElementById('prodConfirmBtn').addEventListener('click',function(){
-    if(!mSlot||!mSelected)return;
-    var p=pedidos[mSelected];if(!p)return;
-    var sku = p.sku || '';
-    var prod = allProdutos[sku] || {};
-    var speed = p.mediaPorHora || prod.prodHoraRef || 0;
-    var path='programacao/'+mSlot.date+'/'+hKey(mSlot.hora)+'/env'+mSlot.linha;
-    db.ref(path).set({pedidoKey:mSelected,produto:p.produto,sku:p.sku||'',mediaPorHora:speed},function(e){
-      if(e){showToast('Erro ao salvar.');return;}
-      if (window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(mSelected);
-      showToast('Slot salvo!');document.getElementById('prodModal').classList.remove('open');
-    });
-  });
-}
-
-function clearSlot(date,hora,linha){
-  var slot = weekData[date] && weekData[date][hora] ? weekData[date][hora]['env'+linha] : null;
-  var pk = slot ? slot.pedidoKey : null;
-  db.ref('programacao/'+date+'/'+hKey(hora)+'/env'+linha).remove(function(e){
-    if(!e) {
-      showToast('Slot limpo!');
-      if (pk && window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pk);
-    }
-  });
-}
-
-function setupAgdModal(){
-  document.getElementById('agdClose').addEventListener('click',function(){document.getElementById('agdModal').classList.remove('open');});
-  document.getElementById('agdCancelBtn').addEventListener('click',function(){document.getElementById('agdModal').classList.remove('open');});
-  document.getElementById('agdModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
-  // Linha buttons listeners are handled dynamically in updateDynamicLinhasUI()
-  document.getElementById('agdHoras').addEventListener('input',function(){updateAgdPreview();});
-  document.getElementById('agdDataInicio').addEventListener('change',function(){updateAgdPreview();});
-  document.getElementById('agdConfirmBtn').addEventListener('click',doAgendamento);
-}
-
-function openAgdModal(key){
-  var p=pedidos[key];if(!p)return;
-  agdPedidoKey=key;
-  var lineMatch = String(p.linha || '').match(/\d+/);
-  var lineNum = lineMatch ? parseInt(lineMatch[0]) : 1;
-  agdLinha = (lineNum >= 1 && lineNum <= configLinhas.length) ? lineNum : 1;
-  document.getElementById('agdTitle').textContent=p.produto;
-  var sku = p.sku || '';
-  var prod = allProdutos[sku] || {};
-  var speed = p.mediaPorHora || prod.prodHoraRef || 0;
-  var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
-  var hoursText = hoursNeeded ? hoursNeeded + 'h' : '--';
-  document.getElementById('agdSub').textContent=p.id+(p.sku?' • SKU '+p.sku:'');
-  document.getElementById('agdInfoGrid').innerHTML='<div class="agd-info-box"><div class="agd-info-val">'+fmtNum(speed)+'/h</div><div class="agd-info-lbl">Média/hora</div></div><div class="agd-info-box"><div class="agd-info-val">'+fmtNum(p._falta)+'</div><div class="agd-info-lbl">Faltam (un.)</div></div><div class="agd-info-box"><div class="agd-info-val">'+hoursText+'</div><div class="agd-info-lbl">Horas estim.</div></div><div class="agd-info-box"><div class="agd-info-val">'+Math.round(p._pct*100)+'%</div><div class="agd-info-lbl">Produzido</div></div>';
-  document.getElementById('agdHoras').value=hoursNeeded||0;
-  document.getElementById('agdDataInicio').value=toYMD(nextWorkingDay(new Date()));
-  document.querySelectorAll('.linha-btn').forEach(function(b){b.className='linha-btn';});
-  var ab=document.querySelector('.linha-btn[data-linha="'+agdLinha+'"]');if(ab)ab.className='linha-btn active-e'+agdLinha;
-  document.getElementById('agdPreview').style.display='none';
-  document.getElementById('agdModal').classList.add('open');
-  updateAgdPreview();
-}
-
-function updateAgdPreview(){
-  var horas=parseInt(document.getElementById('agdHoras').value)||0;
-  var startStr=document.getElementById('agdDataInicio').value;
-  var prev=document.getElementById('agdPreview');
-  if(!horas||!startStr){prev.style.display='none';return;}
-  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
-  if(!activeH.length){prev.innerHTML='Nenhuma hora ativa configurada.';prev.style.display='block';return;}
-  var daysNeeded=Math.ceil(horas/activeH.length);
-  prev.innerHTML='~<strong>'+horas+'</strong> slots em <strong>'+daysNeeded+' dia(s)</strong> úteis a partir de <strong>'+fmtBR(parsYMD(startStr))+'</strong>.';
-  prev.style.display='block';
-}
-
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planejamento · Kuryos</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#1e3a8a;--success:#059669;--danger:#e02424;--warning:#d97706;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:var(--primary);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(10,28,105,.3);position:sticky;top:0;z-index:100}
+    .header h1{font-size:18px;font-weight:700}
+    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600}
+    .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3)}
+    .dot.on{background:#34d399;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:16px;max-width:96%;margin:0 auto}
+    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
+    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
+    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
+    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+    /* Top tabs */
+    .top-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--card);border-radius:12px;padding:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);width:fit-content}
+    .top-tab{padding:8px 20px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s}
+    .top-tab.active{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(10,28,105,.25)}
+    .top-tab:hover:not(.active){background:var(--bg);color:var(--text)}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    /* Buttons */
+    .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{background:var(--primary-light)}
+    .btn-success{background:var(--success);color:white}.btn-success:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--bg);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{background:#e2e8f0}
+    .btn-danger-sm{background:#fee2e2;color:var(--danger);padding:5px 12px;font-size:12px}.btn-danger-sm:hover{background:var(--danger);color:white}
+    .btn-sm{padding:6px 14px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    /* Grade tab */
+    .week-bar{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .week-label{font-size:15px;font-weight:800;color:var(--text);flex:1;min-width:160px}
+    .week-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .week-nav-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
+    .week-nav-btn:hover{background:var(--primary);color:white;border-color:var(--primary)}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
+    .sum-card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);text-align:center;border-top:3px solid var(--primary)}
+    .sum-val{font-size:22px;font-weight:800;color:var(--primary)}
+    .sum-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+    .day-tabs{display:flex;gap:5px;overflow-x:auto;padding-bottom:0}
+    .day-tab{padding:9px 16px;border-radius:9px 9px 0 0;font-size:12px;font-weight:700;cursor:pointer;background:#e2e8f0;color:var(--muted);border:none;transition:all .15s;white-space:nowrap}
+    .day-tab.active{background:var(--primary);color:white}
+    .day-tab:hover:not(.active){background:#cbd5e1;color:var(--text)}
+    .day-tab.is-today{box-shadow:inset 0 -2px 0 #34d399}
+    .grid-card{background:var(--card);border-radius:0 12px 12px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;margin-bottom:14px}
+    .plan-table-wrap{overflow-x:auto}
+    .plan-table{width:100%;border-collapse:collapse;min-width:660px}
+    .plan-table th{background:#f8fafc;padding:10px 12px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center}
+    .plan-table th.col-hora{text-align:left;width:72px}
+    .plan-table td{padding:5px 7px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .plan-table tr:last-child td{border-bottom:none}
+    .plan-table tr.row-pausa td{background:#fafafa}
+    .plan-table tr.row-total td{background:#f0fdf4}
+    .col-e1{border-top:3px solid var(--env1)}
+    .col-e2{border-top:3px solid var(--env2)}
+    .col-e3{border-top:3px solid var(--env3)}
+    .col-e4{border-top:3px solid var(--env4)}
+    .col-e5{border-top:3px solid var(--env5)}
+    .col-e6{border-top:3px solid var(--env6)}
+    .col-e7{border-top:3px solid var(--env7)}
+    .col-e8{border-top:3px solid var(--env8)}
+    .hora-cell{font-size:12px;font-weight:700;color:var(--text);width:72px;white-space:nowrap;padding:5px 8px}
+    .hora-cell.is-pausa{color:var(--muted);font-style:italic;font-weight:500;font-size:11px}
+    .slot-cell{cursor:pointer;border-radius:7px;padding:6px 9px;transition:background .12s;user-select:none;min-width:160px}
+    .slot-cell:hover:not(.is-pausa){background:#eff6ff}
+    .slot-cell.is-pausa{cursor:default;text-align:center;color:var(--muted);font-size:11px;font-style:italic}
+    .slot-cell[data-l="1"]{border-left:3px solid var(--env1)}
+    .slot-cell[data-l="2"]{border-left:3px solid var(--env2)}
+    .slot-cell[data-l="3"]{border-left:3px solid var(--env3)}
+    .slot-cell[data-l="4"]{border-left:3px solid var(--env4)}
+    .slot-cell[data-l="5"]{border-left:3px solid var(--env5)}
+    .slot-cell[data-l="6"]{border-left:3px solid var(--env6)}
+    .slot-cell[data-l="7"]{border-left:3px solid var(--env7)}
+    .slot-cell[data-l="8"]{border-left:3px solid var(--env8)}
+    .slot-empty{color:#bfdbfe;font-size:11px;text-align:center;padding:4px 0}
+    .slot-empty::after{content:'＋ produto'}
+    .slot-filled{display:flex;flex-direction:column;gap:2px}
+    .slot-nome{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+    .slot-badges{display:flex;gap:5px;align-items:center;margin-top:2px;flex-wrap:wrap}
+    .sbadge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;white-space:nowrap}
+    .sbadge-meta{background:#dbeafe;color:#1e40af}
+    .sbadge-lp{background:#fef3c7;color:#92400e}
+    .sbadge-sku{background:#f1f5f9;color:var(--muted)}
+    .sbadge-actual{background:#e0f2fe;color:#0369a1}
+    .sbadge-actual-ok{background:#d1fae5;color:#065f46;font-weight:700}
+    .sbadge-actual-warn{background:#fee2e2;color:#991b1b}
+    .sbadge-actual-zero{background:#f1f5f9;color:#94a3b8}
+    .sbadge-done{background:#10b981;color:white;font-weight:bold}
+    .slot-x{font-size:10px;color:var(--muted);cursor:pointer;margin-left:auto;opacity:0;padding:1px 4px;border-radius:3px;transition:opacity .12s}
+    .slot-cell:hover .slot-x{opacity:1}
+    .total-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
+    .total-v{font-size:12px;font-weight:800;color:var(--success)}
+    /* Agendamento tab */
+    .ped-queue{display:grid;gap:10px}
+    .ped-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid var(--border)}
+    .ped-card.pct-low{border-left-color:var(--success)}
+    .ped-card.pct-mid{border-left-color:var(--warning)}
+    .ped-card.pct-high{border-left-color:var(--danger)}
+    .ped-card.pct-done{border-left-color:#94a3b8;opacity:.55}
+    .ped-info{flex:1;min-width:180px}
+    .ped-nome{font-size:13px;font-weight:800;color:var(--text);margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .ped-meta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+    .prog-wrap{display:flex;align-items:center;gap:8px}
+    .prog-bar{height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden;flex:1;min-width:80px}
+    .prog-fill{height:100%;border-radius:3px;background:var(--success)}
+    .prog-fill.over{background:var(--danger)}
+    .prog-pct{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+    .ped-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+    /* Config tab */
+    .config-section{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .config-title{font-size:13px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+    .hours-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+    .hour-chip{padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
+    .hour-chip.active{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
+    .hour-chip.pausa{background:#fef3c7;border-color:#fcd34d;color:#92400e}
+    .hour-chip-hint{font-size:9px;font-weight:500;margin-top:2px;opacity:.7}
+    .days-grid{display:flex;gap:8px;flex-wrap:wrap}
+    .day-chip{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
+    .day-chip.active{background:#d1fae5;border-color:#6ee7b7;color:#065f46}
+    .day-chip.weekend.active{background:#ede9fe;border-color:#c4b5fd;color:#5b21b6}
+    .feriado-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;max-height:200px;overflow-y:auto}
+    .feriado-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;font-size:13px}
+    .feriado-date{font-weight:700;color:var(--text);width:90px}
+    .feriado-label{flex:1;color:var(--muted)}
+    .feriado-rm{color:var(--danger);cursor:pointer;font-size:14px;font-weight:700;padding:2px 6px;border-radius:4px}
+    .feriado-rm:hover{background:#fee2e2}
+    .feriado-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .feriado-add input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none}
+    .feriado-add input:focus{border-color:var(--primary)}
+    .legend-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--muted)}
+    .legend-chip{display:flex;align-items:center;gap:5px}
+    .legend-dot{width:12px;height:12px;border-radius:3px}
+    /* Modals */
+    .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.open{display:flex}
+    .modal{background:var(--card);border-radius:16px;width:100%;max-width:500px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 60px rgba(0,0,0,.2)}
+    .modal-hdr{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;flex-shrink:0}
+    .modal-ttl{font-size:15px;font-weight:800;color:var(--text)}
+    .modal-sub{font-size:12px;color:var(--muted);margin-top:3px}
+    .modal-x{width:28px;height:28px;border-radius:50%;border:none;background:var(--bg);cursor:pointer;font-size:14px;color:var(--muted);flex-shrink:0}
+    .modal-x:hover{background:#e2e8f0}
+    .modal-body{flex:1;overflow-y:auto;padding:16px 20px}
+    .modal-ftr{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+    .prod-search input{width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none;margin-bottom:10px}
+    .prod-search input:focus{border-color:var(--primary)}
+    .prod-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto}
+    .prod-item{padding:11px 14px;border-radius:10px;cursor:pointer;border:1.5px solid transparent;transition:all .12s}
+    .prod-item:hover{background:#f0f9ff;border-color:#bae6fd}
+    .prod-item.sel{background:#eff6ff;border-color:var(--primary)}
+    .prod-item-name{font-size:13px;font-weight:700;color:var(--text)}
+    .prod-item-meta{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+    .agd-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+    .agd-info-box{background:var(--bg);border-radius:8px;padding:12px;text-align:center}
+    .agd-info-val{font-size:18px;font-weight:800;color:var(--primary)}
+    .agd-info-lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    .agd-field{margin-bottom:14px}
+    .agd-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+    .agd-field input[type=number],.agd-field input[type=date]{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;outline:none}
+    .agd-field input:focus{border-color:var(--primary)}
+    .linha-btns{display:flex;gap:8px}
+    .linha-btn{flex:1;padding:10px 8px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid var(--border);background:var(--bg);color:var(--muted);transition:all .12s;text-align:center}
+    .linha-btn.active-e1{border-color:var(--env1);background:#eff6ff;color:#1e40af}
+    .linha-btn.active-e2{border-color:var(--env2);background:#f5f3ff;color:#5b21b6}
+    .linha-btn.active-e3{border-color:var(--env3);background:#fdf2f8;color:#9d174d}
+    .linha-btn.active-e4{border-color:var(--env4);background:#fef3c7;color:#b45309}
+    .linha-btn.active-e5{border-color:var(--env5);background:#d1fae5;color:#065f46}
+    .linha-btn.active-e6{border-color:var(--env6);background:#ecfeff;color:#0891b2}
+    .linha-btn.active-e7{border-color:var(--env7);background:#f1f5f9;color:#475569}
+    .linha-btn.active-e8{border-color:var(--env8);background:#f0fdfa;color:#0d9488}
+    .agd-preview{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;font-size:12px;color:#065f46;margin-top:4px;display:none}
+    .toast{position:fixed;bottom:20px;right:20px;background:#0f172a;color:white;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:2000;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+    .toast.show{display:flex}
+    .toast-dot{width:7px;height:7px;border-radius:50%;background:#34d399;animation:pulse 1s infinite}
+    @media(max-width:640px){.hours-grid{grid-template-columns:repeat(4,1fr)}.agd-info-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
+    <h1>Planejamento de Produção</h1>
+    <div class="header-sub" id="headerSub">Carregando...</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="toolbar">
+  <div class="nav-links">
+    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
+    <a href="form.html">Formulário</a>
+    <a href="planejamento.html" class="active">Planejamento</a>
+    <a href="pedidos.html">Pedidos</a>
+    <a href="historico.html">Histórico</a>
+    <a href="produtos.html">Produtos</a>
+    <a href="insumos.html">Insumos</a>
+    <a href="ops.html">OPs</a>
+    <a href="admin.html">Admin</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="top-tabs">
+    <button class="top-tab active" data-tab="grade">📅 Grade Semanal</button>
+    <button class="top-tab" data-tab="agendamento">📋 Agendamento</button>
+    <button class="top-tab" data-tab="config">⚙️ Configurações</button>
+  </div>
+
+  <!-- GRADE -->
+  <div class="tab-content active" id="tabGrade">
+    <div class="week-bar">
+      <div style="flex:1"><div class="week-label" id="weekLabel">—</div><div class="week-sub" id="weekRange">—</div></div>
+      <button class="week-nav-btn" id="btnPrev">← Anterior</button>
+      <button class="week-nav-btn" id="btnToday" style="background:#eff6ff;border-color:#bfdbfe;color:var(--primary)">Hoje</button>
+      <button class="week-nav-btn" id="btnNext">Próxima →</button>
+    </div>
+    <div class="summary-grid">
+      <div class="sum-card"><div class="sum-val" id="sumMeta">—</div><div class="sum-lbl">Meta semana</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumSlots">—</div><div class="sum-lbl">Slots planejados</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumDias">—</div><div class="sum-lbl">Dias com prog.</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumPeds">—</div><div class="sum-lbl">Pedidos ativos</div></div>
+    </div>
+    <div class="day-tabs" id="dayTabs"></div>
+    <div class="grid-card">
+      <div class="plan-table-wrap">
+        <table class="plan-table">
+          <thead><tr id="gridHeaderRow">
+            <th class="col-hora">Hora</th>
+          </tr></thead>
+          <tbody id="planBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Resumo Semanal Consolidado para Produção -->
+    <div class="grid-card" id="weeklySummaryCard" style="margin-top: 14px; padding: 16px;">
+      <div style="font-size: 15px; font-weight: 800; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span>📋 Programação Semanal Consolidada (Produção)</span>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="plan-table" style="min-width: 100%;">
+          <thead>
+            <tr>
+              <th>Produto / Item</th>
+              <th>OP / Lote</th>
+              <th>Pedido Comercial</th>
+              <th style="text-align:right">Total do Lote (OP)</th>
+              <th style="text-align:right">Programado na Semana</th>
+              <th style="text-align:right">Apontado (Realizado)</th>
+              <th>Progresso</th>
+            </tr>
+          </thead>
+          <tbody id="weeklySummaryBody">
+            <tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENDAMENTO -->
+  <div class="tab-content" id="tabAgendamento">
+    <div style="margin-bottom:12px">
+      <div style="font-size:15px;font-weight:800;color:var(--text)">Pedidos em Aberto</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">Ordenados por prioridade da planilha. Clique em "Agendar" para distribuir automaticamente nos slots livres.</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+      <input type="text" id="agdSearchInput" placeholder="Buscar por produto, SKU, ID..." style="flex:1; min-width:200px; padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; transition:border-color .15s;">
+      <select id="agdFilterClient" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; max-width:220px; transition:border-color .15s; background:white;">
+        <option value="">Todos os clientes</option>
+      </select>
+    </div>
+    <div class="ped-queue" id="pedQueue"><div style="color:var(--muted);font-size:13px;padding:20px">Carregando...</div></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="tab-content" id="tabConfig">
+    <!-- 📤 Importador Integrado de Programação Semanal -->
+    <div class="config-section" style="border-left: 4px solid var(--primary);">
+      <div class="config-title">📤 Importar Programação Semanal (Previsão de Envase)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Selecione ou arraste a planilha semanal para importar todos os slots planejados.</div>
+      
+      <div class="drop-zone" id="dropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom:12px;">
+        <div style="font-size:32px; margin-bottom:8px">📂</div>
+        <div id="dropText" style="font-size:14px; font-weight:600; color:var(--text)">Clique ou arraste o arquivo da planilha aqui</div>
+        <div style="font-size:11px; color:var(--muted); margin-top:4px">Aceita: .xlsm e .xlsx — aba "Previsao Envase"</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsm,.xlsx" style="display:none">
+      
+      <!-- Info (após parse) -->
+      <div id="infoCard" style="display:none; margin-bottom:16px;">
+        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px">
+          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSemanas">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Semanas</div></div>
+          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statDias">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Dias</div></div>
+          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSlots">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Slots Horários</div></div>
+        </div>
+        <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px">Mapeamento de Linhas</div>
+        <div id="mappingContainer" style="display:flex; flex-direction:column; gap:4px; font-size:12px; margin-bottom:12px"></div>
+      </div>
+
+      <!-- Filtro + Preview -->
+      <div id="filterCard" style="display:none; margin-bottom:16px;">
+        <div class="filter-options" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
+          <button class="filter-btn active" data-filter="future" id="fltFuture" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">A partir de hoje</button>
+          <button class="filter-btn" data-filter="all" id="fltAll" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">Todas as datas</button>
+        </div>
+        <div id="filterInfo" style="font-size:12px; color:var(--muted); margin-bottom:8px">—</div>
+      </div>
+
+      <!-- Confirmar -->
+      <div id="importCard" style="display:none">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px">
+          <button class="btn btn-success" id="btnImport" style="background:#10b981; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">✓ Importar no Planejamento</button>
+        </div>
+        <div id="progressWrap" style="display:none">
+          <div style="height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-bottom:4px"><div id="progressFill" style="height:100%; border-radius:3px; background:#10b981; width:0%"></div></div>
+          <div id="progressText" style="font-size:11px; color:var(--muted)">Salvando...</div>
+        </div>
+      </div>
+    </div>
+    <div class="config-section">
+      <div class="config-title">🕐 Horas de Produção</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px"><strong>1 clique</strong> = ativa, <strong>2 cliques</strong> = marca como intervalo, <strong>3 cliques</strong> = desativa.</div>
+      <div class="hours-grid" id="hoursGrid"></div>
+      <div class="legend-row">
+        <div class="legend-chip"><div class="legend-dot" style="background:#dbeafe;border:1.5px solid #93c5fd"></div> Produção</div>
+        <div class="legend-chip"><div class="legend-dot" style="background:#fef3c7;border:1.5px solid #fcd34d"></div> Intervalo</div>
+        <div class="legend-chip"><div class="legend-dot" style="background:var(--bg);border:1.5px solid var(--border)"></div> Inativo</div>
+      </div>
+    </div>
+    <div class="config-section">
+      <div class="config-title">📅 Dias de Trabalho</div>
+      <div class="days-grid" id="daysGrid"></div>
+    </div>
+    <div class="config-section">
+      <div class="config-title">🚫 Feriados e Dias Bloqueados</div>
+      <div class="feriado-list" id="feriadoList"></div>
+      <div class="feriado-add" style="margin-bottom:12px;">
+        <input type="date" id="feriadoData" style="width:160px">
+        <input type="text" id="feriadoNome" placeholder="Descrição (ex: Corpus Christi)" style="flex:1;min-width:160px">
+        <button class="btn btn-primary btn-sm" id="addFeriadoBtn">Adicionar</button>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+        <button class="btn btn-ghost btn-sm" id="btnImportFeriados" style="border:1.5px solid #10b981; color:#047857; font-size:12px; font-weight:700;">✨ Sugerir e Importar Feriados Nacionais 2026</button>
+      </div>
+    </div>
+    <div class="config-section" style="border-left: 4px solid var(--danger);">
+      <div class="config-title" style="color: var(--danger);">🧹 Limpar Programação em Lote</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Selecione o intervalo de datas, a linha e os horários para apagar as programações correspondentes no Firebase.</div>
+      
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
+          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Linha</label>
+          <select id="clearLinha" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
+            <option value="all">Todas as Linhas</option>
+            <option value="1">Envase 1 (Linha 1)</option>
+            <option value="2">Envase 2 (Linha 2)</option>
+            <option value="3">Envase 3 (Linha 3)</option>
+          </select>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
+          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Data de Início</label>
+          <input type="date" id="clearDataInicio" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px;">
+          <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Data de Término</label>
+          <input type="date" id="clearDataFim" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600;">
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;">Intervalo de Horários</label>
+        <select id="clearHorarioTipo" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; outline: none; font-size: 13px; font-weight: 600; margin-bottom: 8px;">
+          <option value="all">Todo o Dia (Todos os horários ativos)</option>
+          <option value="range">Range Específico de Horas</option>
+        </select>
+        
+        <div id="clearHorasRangeWrap" style="display: none; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+            <label style="font-size: 10px; color: var(--muted);">Hora Início (ex: 06:00)</label>
+            <select id="clearHoraInicio" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600;"></select>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+            <label style="font-size: 10px; color: var(--muted);">Hora Fim (ex: 15:00)</label>
+            <select id="clearHoraFim" style="padding: 8px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600;"></select>
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn" id="clearPeriodBtn" style="background: #fee2e2; color: var(--danger); font-size: 13px; border: 1px solid #fecaca; width: 100%; justify-content: center;">🧹 Apagar Programação do Período</button>
+    </div>
+
+    <button class="btn btn-success" id="saveConfigBtn" style="font-size:14px;padding:12px 28px">💾 Salvar Configurações</button>
+  </div>
+</div>
+
+<!-- Modal: Produto -->
+<div class="modal-overlay" id="prodModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div><div class="modal-ttl" id="prodModalTitle">Selecionar produto</div><div class="modal-sub" id="prodModalSub">—</div></div>
+      <button class="modal-x" id="prodModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="prod-search"><input type="text" id="prodSearch" placeholder="Buscar produto ou SKU..."></div>
+      <div class="prod-list" id="prodList"></div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-danger-sm" id="prodClearBtn">🗑 Limpar</button>
+      <button class="btn btn-ghost" id="prodCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="prodConfirmBtn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Agendamento -->
+<div class="modal-overlay" id="agdModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hdr">
+      <div><div class="modal-ttl" id="agdTitle">Agendar Produção</div><div class="modal-sub" id="agdSub">—</div></div>
+      <button class="modal-x" id="agdClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="agd-info-grid" id="agdInfoGrid"></div>
+      <div class="agd-field">
+        <label>Linha de Envase</label>
+        <div class="linha-btns" id="linhaSelector">
+          <div class="linha-btn" data-linha="1">Envase 1</div>
+          <div class="linha-btn" data-linha="2">Envase 2</div>
+          <div class="linha-btn" data-linha="3">Envase 3</div>
+        </div>
+      </div>
+      <div class="agd-field">
+        <label>Horas a agendar</label>
+        <input type="number" id="agdHoras" min="1" max="500" step="1">
+      </div>
+      <div class="agd-field">
+        <label>Data de início</label>
+        <input type="date" id="agdDataInicio">
+      </div>
+      <div class="agd-preview" id="agdPreview"></div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-ghost" id="agdCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="agdConfirmBtn">🗓 Agendar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg">Salvando...</span></div>
+
+<script>
+var firebaseConfig={apiKey:"AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",authDomain:"prod-kuryos.firebaseapp.com",databaseURL:"https://prod-kuryos-default-rtdb.firebaseio.com",projectId:"prod-kuryos",storageBucket:"prod-kuryos.firebasestorage.app",messagingSenderId:"323674581733",appId:"1:323674581733:web:e283a491c0c2bd6025420c"};
+firebase.initializeApp(firebaseConfig);
+var db=firebase.database();
+db.ref('.info/connected').on('value',function(s){var on=s.val();document.getElementById('sDot').className='dot'+(on?' on':'');document.getElementById('sTxt').textContent=on?'Online':'Offline';});
+
+var ALL_HOURS=[];for(var _h=0;_h<24;_h++)ALL_HOURS.push(String(_h).padStart(2,'0')+':00');
+var DIAS_SHORT=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+var DIAS_NOMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+var DEFAULT_CONFIG={horasAtivas:['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'],pausas:['12:00','17:00'],diasSemana:[1,2,3,4,5],feriados:{}};
+var config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+var configLinhas=["Linha 1","Linha 2","Linha 3"];
+var pedidos={}; var allProdutos={};
+var weekData={};
+var weekRegs={};
+var weekListeners=[];
+var regsListeners=[];
+var currentWeekStart=null;
+var currentDayIdx=0;
+var mSlot=null,mSelected=null;
+var agdPedidoKey=null,agdLinha=1;
+var firstLoad=true;
+
+var STATUS_CORES={'Em Produção':{bg:'#dbeafe',cl:'#1e40af'},'Produção Parcial':{bg:'#d1fae5',cl:'#065f46'},'Programado':{bg:'#fef3c7',cl:'#92400e'},'Não Iniciado':{bg:'#f1f5f9',cl:'#64748b'},'Concluído':{bg:'#dcfce7',cl:'#166534'}};
+
+// Date helpers
+function getMon(d){var c=new Date(d);c.setHours(0,0,0,0);var dw=c.getDay();c.setDate(c.getDate()+(dw===0?-6:1-dw));return c;}
+function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function parsYMD(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
+function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function weekNum(d){var j1=new Date(d.getFullYear(),0,1);return Math.ceil(((d-j1)/86400000+j1.getDay()+1)/7);}
+function fmtNum(n){return Math.round(n).toLocaleString('pt-BR');}
+function hKey(h){return h.replace(':','_');}
+function fmtHoraRange(hora) {
+  if (!hora) return '—';
+  var cleanHora = hora.replace('_', ':');
+  var parts = cleanHora.split(':');
+  var h = parseInt(parts[0]);
+  if (isNaN(h)) return hora;
+  var nextH = (h + 1) % 24;
+  var nextHStr = String(nextH).padStart(2, '0') + ':00';
+  return cleanHora + 'h - ' + nextHStr + 'h';
+}
+function dowToConfig(dw){return dw===0?7:dw;}
+function isWorkingDay(date){var ymd=toYMD(date);var dw=dowToConfig(date.getDay());if(!config.diasSemana.includes(dw))return false;if(config.feriados&&config.feriados[ymd])return false;return true;}
+function nextWorkingDay(from){var d=new Date(from);d.setHours(0,0,0,0);for(var i=0;i<365;i++){if(isWorkingDay(d))return d;d=addDays(d,1);}return from;}
+function isConcluido(status){
+  if(!status)return false;
+  var s=String(status).toLowerCase().trim();
+  return s.indexOf('conclu')===0;
+}
+
+// Init
+window.addEventListener('DOMContentLoaded',function(){
+  currentWeekStart=getMon(new Date());
+  var dw=new Date().getDay();
+  currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;
+  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupConfigTab();
+  
+  var agdSearch = document.getElementById('agdSearchInput');
+  var agdFilter = document.getElementById('agdFilterClient');
+  if (agdSearch) agdSearch.addEventListener('input', function() { renderAgendaTab(); });
+  if (agdFilter) agdFilter.addEventListener('change', function() { renderAgendaTab(); });
+
+  loadConfig();
+});
+
+function setupTabBar(){
+  document.querySelectorAll('.top-tab').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var tab=this.getAttribute('data-tab');
+      document.querySelectorAll('.top-tab').forEach(function(b){b.classList.remove('active');});
+      document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
+      this.classList.add('active');
+      document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
+    });
+  });
+}
+
+function loadConfig(){
+  db.ref('produtos').on('value', function(pSnap) {
+    allProdutos = pSnap.val() || {};
+    if (!firstLoad) {
+      renderGrid();
+      updateSummary();
+      renderAgendaTab();
+    }
+  });
+
+  db.ref('config').once('value', function(cSnap) {
+    var cVal = cSnap.val() || {};
+    if (cVal.linhas && cVal.linhas.length) {
+      configLinhas = cVal.linhas;
+    }
+    updateDynamicLinhasUI();
+    
+    db.ref('config/planejamento').once('value',function(snap){
+      var s=snap.val()||{};
+      if(s.horasAtivas&&s.horasAtivas.length)config.horasAtivas=s.horasAtivas;
+      if(s.pausas)config.pausas=s.pausas;
+      if(s.diasSemana&&s.diasSemana.length)config.diasSemana=s.diasSemana;
+      config.feriados=s.feriados||{};
+      renderConfigTab();loadPedidos();
+    });
+  });
+}
+
+function updateDynamicLinhasUI() {
+  // 1. Rebuild table headers
+  var headerRow = document.getElementById('gridHeaderRow');
+  if (headerRow) {
+    while (headerRow.cells.length > 1) {
+      headerRow.deleteCell(1);
+    }
+    configLinhas.forEach(function(lineName, index) {
+      var th = document.createElement('th');
+      th.className = 'col-e' + (index + 1);
+      th.textContent = lineName;
+      headerRow.appendChild(th);
+    });
+  }
+
+  // 2. Rebuild modal buttons
+  var selector = document.getElementById('linhaSelector');
+  if (selector) {
+    selector.innerHTML = '';
+    configLinhas.forEach(function(lineName, index) {
+      var lNum = index + 1;
+      var btn = document.createElement('div');
+      btn.className = 'linha-btn';
+      btn.setAttribute('data-linha', lNum);
+      btn.textContent = lineName;
+      
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.linha-btn').forEach(function(b){b.className='linha-btn';});
+        agdLinha = lNum;
+        btn.className = 'linha-btn active-e' + lNum;
+        updateAgdPreview();
+      });
+      
+      selector.appendChild(btn);
+    });
+  }
+
+  // 3. Rebuild batch clear options
+  var clearSel = document.getElementById('clearLinha');
+  if (clearSel) {
+    clearSel.innerHTML = '<option value="all">Todas as Linhas</option>';
+    configLinhas.forEach(function(lineName, index) {
+      var opt = document.createElement('option');
+      opt.value = index + 1;
+      opt.textContent = lineName;
+      clearSel.appendChild(opt);
+    });
+  }
+}
+
+function loadPedidos(){
+  db.ref('pedidos').on('value',function(snap){
+    pedidos={};
+    snap.forEach(function(ch){
+      var v=ch.val();if(!v||!v.produto)return;
+      v._key=ch.key;
+      v._falta=Math.max((v.qtdTotal||0)-(v.produzido||0),0);
+      v._pct=v.qtdTotal>0?(v.produzido||0)/v.qtdTotal:0;
+      v._horas=v.mediaPorHora>0?Math.ceil(v._falta/v.mediaPorHora):null;
+      v._isDone=isConcluido(v.status)||Math.round(v._pct*100)>=95;
+      pedidos[ch.key]=v;
+    });
+    var ativos=Object.values(pedidos).filter(function(p){return!p._isDone;});
+    document.getElementById('sumPeds').textContent=ativos.length;
+    populateAgdClientFilter();
+    renderAgendaTab();
+    if(firstLoad){
+      firstLoad=false;
+      loadWeek();
+    } else {
+      renderGrid();
+      updateSummary();
+    }
+  });
+}
+
+function setupGradeControls(){
+  document.getElementById('btnPrev').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,-7);loadWeek();});
+  document.getElementById('btnNext').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,7);loadWeek();});
+  document.getElementById('btnToday').addEventListener('click',function(){
+    currentWeekStart=getMon(new Date());var dw=new Date().getDay();
+    currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;loadWeek();
+  });
+}
+
+function loadWeek(){
+  var wn=weekNum(currentWeekStart);var fri=addDays(currentWeekStart,4);
+  document.getElementById('weekLabel').textContent=wn+'ª SEMANA DE '+currentWeekStart.getFullYear();
+  document.getElementById('weekRange').textContent=fmtBR(currentWeekStart)+' — '+fmtBR(fri);
+  var hs=document.getElementById('headerSub');if(hs)hs.textContent=wn+'ª Semana · '+fmtBR(currentWeekStart)+' a '+fmtBR(fri);
+  weekListeners.forEach(function(r){try{r.off();}catch(e){}});weekListeners=[];weekData={};
+  regsListeners.forEach(function(r){try{r.off();}catch(e){}});regsListeners=[];weekRegs={};
+  var dates=[];for(var i=0;i<7;i++)dates.push(toYMD(addDays(currentWeekStart,i)));
+  var loaded=0;
+  dates.forEach(function(date){
+    var ref=db.ref('programacao/'+date);weekListeners.push(ref);
+    ref.on('value',function(snap){
+      weekData[date]={};
+      snap.forEach(function(hSnap){weekData[date][hSnap.key.replace('_',':')]=hSnap.val()||{};});
+      loaded++;if(loaded>=7){buildDayTabs();renderGrid();updateSummary();}
+    });
+    
+    var regRef=db.ref('registros/'+date);regsListeners.push(regRef);
+    regRef.on('value',function(snap){
+      weekRegs[date]=snap.val()||{};
+      if(loaded>=7){renderGrid();updateSummary();}
+    });
+  });
+}
+
+function buildDayTabs(){
+  var container=document.getElementById('dayTabs');container.innerHTML='';
+  var today=toYMD(new Date());
+  var workDays=[];
+  for(var i=0;i<7;i++){var d=addDays(currentWeekStart,i);if(config.diasSemana.includes(dowToConfig(d.getDay())))workDays.push({idx:i,date:d});}
+  workDays.forEach(function(wd){
+    var ds=toYMD(wd.date);var isBlocked=config.feriados&&config.feriados[ds];
+    var btn=document.createElement('button');
+    btn.className='day-tab'+(wd.idx===currentDayIdx?' active':'')+(ds===today?' is-today':'');
+    var dowIdx=(wd.date.getDay()+6)%7;
+    btn.textContent=DIAS_SHORT[dowIdx]+' '+fmtBR(wd.date)+(isBlocked?' 🚫':'');
+    if(isBlocked)btn.title=config.feriados[ds];
+    (function(idx){btn.addEventListener('click',function(){currentDayIdx=idx;buildDayTabs();renderGrid();});})(wd.idx);
+    container.appendChild(btn);
+  });
+}
+
+function renderGrid(){
+  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
+  var dayData=weekData[date]||{};
+  var tbody=document.getElementById('planBody');tbody.innerHTML='';
+  var activeHours=config.horasAtivas.filter(function(h){return ALL_HOURS.includes(h);});
+  if(!activeHours.length){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td colspan="' + (configLinhas.length + 1) + '" style="text-align:center;padding:30px;color:var(--muted)">Nenhuma hora configurada. Ajuste em <strong>Configurações</strong>.</td>';
+    tbody.appendChild(tr);return;
+  }
+  activeHours.forEach(function(hora){
+    var isPausa=config.pausas.includes(hora);
+    var tr=document.createElement('tr');if(isPausa)tr.className='row-pausa';
+    var tdH=document.createElement('td');tdH.className='hora-cell'+(isPausa?' is-pausa':'');tdH.textContent=fmtHoraRange(hora);tr.appendChild(tdH);
+    var horaData=dayData[hora]||{};
+    configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
+      var td=document.createElement('td');td.className='slot-cell'+(isPausa?' is-pausa':'');td.setAttribute('data-l',l);
+      if(isPausa){td.textContent='—';tr.appendChild(td);return;}
+      var slot=(horaData['env'+l])||null;
+      if(slot&&slot.pedidoKey){
+        var ped=pedidos[slot.pedidoKey];
+        var isDone=ped&&ped._isDone;
+        if(isDone){
+          td.style.background='#f0fdf4';
+          td.style.borderLeftColor='#10b981';
+        } else {
+          td.style.background='';
+          td.style.borderLeftColor='';
+        }
+        
+        // Sum actual registrations
+        var actualQty=0;
+        var lineName='Linha '+l;
+        if(weekRegs[date]){
+          Object.values(weekRegs[date]).forEach(function(r){
+            if(r.hora===hora&&r.linha===lineName){
+              actualQty+=(r.quantidade||0);
+            }
+          });
+        }
+        
+        td.innerHTML=buildSlotHTML(slot,ped,actualQty);
+      }
+      else{
+        td.style.background='';
+        td.style.borderLeftColor='';
+        td.innerHTML='<div class="slot-empty"></div>';
+      }
+      (function(h,ln,s){
+        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x'))return;openProdModal(date,h,ln,s);});
+        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x')){e.stopPropagation();clearSlot(date,h,ln);}});
+      })(hora,l,slot);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  // Total row
+  var trT=document.createElement('tr');trT.className='row-total';
+  var tdL=document.createElement('td');tdL.innerHTML='<span class="total-lbl">Total dia</span>';trT.appendChild(tdL);
+  configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
+    var sum=0;
+    activeHours.forEach(function(hora){
+      if(config.pausas.includes(hora))return;
+      var sl=(dayData[hora]||{})['env'+l];
+      if(sl&&sl.pedidoKey&&pedidos[sl.pedidoKey]){
+        var p = pedidos[sl.pedidoKey];
+        var sku = sl.sku || (p && p.sku) || '';
+        var prod = allProdutos[sku] || {};
+        var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
+        sum += rate;
+      }
+    });
+    var td=document.createElement('td');
+    td.innerHTML=sum>0?'<span class="total-v">'+fmtNum(sum)+' un</span>':'<span style="color:var(--muted);font-size:11px">—</span>';
+    trT.appendChild(td);
+  });
+  tbody.appendChild(trT);
+}
+
+function buildSlotHTML(slot,ped,actualQty){
+  var nome=slot.produto||'?';
+  var isDone=ped&&ped._isDone;
+  
+  var sku = slot.sku || (ped && ped.sku) || '';
+  var prod = allProdutos[sku] || {};
+  var metaVal = slot.mediaPorHora || (ped && ped.mediaPorHora) || prod.prodHoraRef || 0;
+  var m=metaVal?'<span class="sbadge sbadge-meta">⚡ '+fmtNum(metaVal)+'/h</span>':'';
+  
+  var lp=ped&&ped.lp&&metaVal?'<span class="sbadge sbadge-lp">LP/h '+fmtNum(ped.lp*metaVal)+'</span>':'';
+  var sk=ped&&ped.sku?'<span class="sbadge sbadge-sku">'+escapeHtml(ped.sku)+'</span>':'';
+  
+  var actualBadge = '';
+  if (actualQty > 0) {
+    var badgeClass = 'sbadge-actual';
+    if (metaVal > 0) {
+      if (actualQty >= metaVal) {
+        badgeClass = 'sbadge-actual-ok'; // Met or exceeded
+      } else {
+        badgeClass = 'sbadge-actual-warn'; // Below meta
+      }
+    }
+    actualBadge = '<span class="sbadge ' + badgeClass + '">📦 ' + fmtNum(actualQty) + '</span>';
+  } else if (metaVal > 0 && !isDone) {
+    actualBadge = '<span class="sbadge sbadge-actual-zero">📦 0</span>';
+  }
+  
+  var doneBadge = isDone ? '<span class="sbadge sbadge-done">✔ Concluído</span>' : '';
+  var textStyle = isDone ? 'text-decoration: line-through; opacity: 0.6;' : '';
+  
+  return '<div class="slot-filled" style="' + textStyle + '">' +
+    '<div class="slot-nome" title="'+escapeAttr(nome)+'">'+escapeHtml(nome)+'</div>' +
+    '<div class="slot-badges">'+sk+m+lp+actualBadge+doneBadge+'<span class="slot-x" title="Remover">✕</span></div>' +
+  '</div>';
+}
+
+function updateSummary(){
+  var totMeta=0,totSlots=0,diasOk=0;
+  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
+  for(var i=0;i<7;i++){
+    var date=toYMD(addDays(currentWeekStart,i));
+    if(!isWorkingDay(parsYMD(date)))continue;
+    var dayData=weekData[date]||{};
+    var hasSlot=false;
+    activeH.forEach(function(h){
+      var hd=dayData[h]||{};
+      configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
+        var sl=hd['env'+l];
+        if(sl&&sl.pedidoKey){
+          totSlots++;hasSlot=true;
+          var p=pedidos[sl.pedidoKey];
+          var sku=sl.sku || (p && p.sku) || '';
+          var prod=allProdutos[sku] || {};
+          var rate=sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
+          totMeta+=rate;
+        }
+      });
+    });
+    if(hasSlot)diasOk++;
+  }
+  document.getElementById('sumMeta').textContent=fmtNum(totMeta)+' un';
+  document.getElementById('sumSlots').textContent=totSlots;
+  document.getElementById('sumDias').textContent=diasOk;
+  
+  updateWeeklySummaryTable();
+}
+
+function updateWeeklySummaryTable() {
+  var tbody = document.getElementById('weeklySummaryBody');
+  if (!tbody) return;
+  
+  var scheduledKeys = {};
+  var scheduledMetas = {};
+  
+  var activeH = config.horasAtivas.filter(function(h){ return !config.pausas.includes(h); });
+  for (var i = 0; i < 7; i++) {
+    var date = toYMD(addDays(currentWeekStart, i));
+    if (!isWorkingDay(parsYMD(date))) continue;
+    var dayData = weekData[date] || {};
+    
+    activeH.forEach(function(h) {
+      var hd = dayData[h] || {};
+      configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l) {
+        var sl = hd['env' + l];
+        if (sl && sl.pedidoKey) {
+          scheduledKeys[sl.pedidoKey] = 1;
+          var p = pedidos[sl.pedidoKey];
+          var sku = sl.sku || (p && p.sku) || '';
+          var prod = allProdutos[sku] || {};
+          var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
+          scheduledMetas[sl.pedidoKey] = (scheduledMetas[sl.pedidoKey] || 0) + rate;
+        }
+      });
+    });
+  }
+  
+  var keys = Object.keys(scheduledKeys);
+  if (keys.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = '';
+  keys.forEach(function(key) {
+    var p = pedidos[key];
+    if (!p) return;
+    
+    var isOP = (key.indexOf('OP_') === 0) || (p.parentPedidoId);
+    var parentIdDisplay = p.parentPedidoId ? '#' + p.parentPedidoId : '?';
+    var opDisplay = isOP ? p.id : '?';
+    
+    var plannedThisWeek = scheduledMetas[key] || 0;
+    var totalBatch = p.qtdTotal || 0;
+    var produced = p.produzido || 0;
+    
+    var pct = totalBatch ? Math.round((produced / totalBatch) * 100) : 0;
+    var pctClamped = Math.min(100, pct);
+    
+    var tr = document.createElement('tr');
+    tr.innerHTML = 
+      '<td><strong>' + escapeHtml(p.produto) + '</strong>' + (p.sku ? ' <code style="font-size:10px;">' + escapeHtml(p.sku) + '</code>' : '') + '</td>' +
+      '<td><span class="status-pill" style="background:#e0f2fe; color:#0369a1; border-radius:4px; font-weight:700; padding:2px 6px;">' + escapeHtml(opDisplay) + '</span></td>' +
+      '<td><strong>' + escapeHtml(parentIdDisplay) + '</strong></td>' +
+      '<td style="text-align:right; font-weight:600;">' + fmtNum(totalBatch) + ' un</td>' +
+      '<td style="text-align:right; color:#7c3aed; font-weight:700;">' + fmtNum(plannedThisWeek) + ' un</td>' +
+      '<td style="text-align:right; color:#059669; font-weight:700;">' + fmtNum(produced) + ' un</td>' +
+      '<td>' +
+        '<div style="display:flex; align-items:center; gap:8px;">' +
+          '<div style="flex:1; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden;">' +
+            '<div style="width:' + pctClamped + '%; height:100%; background:var(--success);"></div>' +
+          '</div>' +
+          '<span style="font-size:11px; font-weight:600; min-width:30px; text-align:right;">' + pct + '%</span>' +
+        '</div>' +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function populateAgdClientFilter() {
+  var sel = document.getElementById('agdFilterClient');
+  if (!sel) return;
+  var currentVal = sel.value;
+  var clientsSet = new Set();
+  Object.values(pedidos).forEach(function(p) {
+    if (p.cliente) clientsSet.add(p.cliente);
+  });
+  var sortedClients = Array.from(clientsSet).sort();
+  sel.innerHTML = '<option value="">Todos os clientes</option>';
+  sortedClients.forEach(function(c) {
+    var opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    sel.appendChild(opt);
+  });
+  sel.value = currentVal;
+}
+
+function renderAgendaTab(){
+  var container=document.getElementById('pedQueue');
+  var list=Object.values(pedidos);
+  var search = document.getElementById('agdSearchInput') ? document.getElementById('agdSearchInput').value.toLowerCase().trim() : '';
+  var cli = document.getElementById('agdFilterClient') ? document.getElementById('agdFilterClient').value : '';
+  if (search || cli) {
+    list = list.filter(function(p) {
+      if (cli && p.cliente !== cli) return false;
+      if (search) {
+        var haystack = String(p.produto || '').toLowerCase() + ' ' + String(p.sku || '').toLowerCase() + ' ' + String(p.id || '').toLowerCase();
+        if (haystack.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+  }
+  var ativos=list.filter(function(p){return!p._isDone;}).sort(function(a,b){
+    var pa = a.priority || 999, pb = b.priority || 999;
+    if (pa !== pb) return pa - pb;
+    return (a.ordenacao||999999999)-(b.ordenacao||999999999);
+  });
+  var concluidos=list.filter(function(p){return p._isDone;}).sort(function(a,b){
+    var pa = a.priority || 999, pb = b.priority || 999;
+    if (pa !== pb) return pa - pb;
+    return (a.ordenacao||999999999)-(b.ordenacao||999999999);
+  });
+  if(!ativos.length&&!concluidos.length){
+    container.innerHTML='<div style="color:var(--muted);font-size:13px;padding:20px">Nenhum pedido. Importe via <a href="ops.html">OPs</a>.</div>';return;
+  }
+  container.innerHTML='';
+  ativos.forEach(function(p){container.appendChild(makePedCard(p));});
+  if(concluidos.length){
+    var sep=document.createElement('div');
+    sep.style.cssText='font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:10px 4px 4px';
+    sep.textContent='✅ Concluídos';container.appendChild(sep);
+    concluidos.forEach(function(p){container.appendChild(makePedCard(p));});
+  }
+}
+
+function makePedCard(p){
+  var pct=Math.round(p._pct*100);
+  var isDone=p._isDone;
+  var card=document.createElement('div');
+  var pctClass=isDone?'pct-done':pct>=90?'pct-high':pct>=50?'pct-mid':'pct-low';
+  card.className='ped-card '+pctClass;
+  var prioBadge=p.priority?'<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--primary);color:white;font-size:10px;font-weight:800">'+p.priority+'</span> ':'';
+  var stBadge='';
+  if(p.status){var sc=STATUS_CORES[p.status]||{bg:'#f1f5f9',cl:'#64748b'};stBadge='<span style="background:'+sc.bg+';color:'+sc.cl+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+p.status+'</span>';}
+  var clientText = p.cliente ? '<span style="background:#e0f2fe;color:#0369a1;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;margin-left:4px">' + p.cliente + '</span>' : '';
+  var sku = p.sku || '';
+  var prod = allProdutos[sku] || {};
+  var speed = p.mediaPorHora || prod.prodHoraRef || 0;
+  var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
+  var hText = hoursNeeded ? hoursNeeded + 'h restantes' : '--';
+  var mStr = speed ? '⚡ ' + fmtNum(speed) + '/h' : '';
+  var barFill=Math.min(pct,100);
+  card.innerHTML='<div class="ped-info"><div class="ped-nome">'+prioBadge+p.produto+' '+stBadge+clientText+'</div><div class="ped-meta"><span>'+p.id+'</span><span>'+mStr+'</span><span>Falta: '+fmtNum(p._falta)+' un · '+hText+'</span></div><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill'+(pct>100?' over':'')+'" style="width:'+barFill+'%"></div></div><span class="prog-pct">'+pct+'%</span></div></div><div class="ped-actions">'+(isDone?'<span style="font-size:12px;color:var(--muted)">Concluído</span>':'<button class="btn btn-primary btn-sm" data-agd="'+p._key+'">🗓 Agendar</button>')+'</div>';
+  if(!isDone){card.querySelector('[data-agd]').addEventListener('click',function(){openAgdModal(p._key);});}
+  return card;
+}
+
+function openProdModal(date,hora,linha,currentSlot){
+  mSlot={date:date,hora:hora,linha:linha};
+  mSelected=currentSlot&&currentSlot.pedidoKey?currentSlot.pedidoKey:null;
+  document.getElementById('prodModalTitle').textContent='Slot: '+hora+' · Envase '+linha;
+  document.getElementById('prodModalSub').textContent=fmtBR(parsYMD(date))+' '+date.slice(0,4);
+  document.getElementById('prodSearch').value='';
+  renderProdList('');
+  document.getElementById('prodModal').classList.add('open');
+}
+
+function renderProdList(q){
+  var keys=Object.keys(pedidos).filter(function(k){
+    var p=pedidos[k];
+    if(p._isDone&&k!==mSelected)return false;
+    if(!q)return true;
+    var qs=q.toLowerCase();
+    return (p.produto&&p.produto.toLowerCase().includes(qs))||(p.sku&&p.sku.toLowerCase().includes(qs))||(p.id&&p.id.toLowerCase().includes(qs));
+  });
+  keys.sort(function(a,b){
+    if(a===mSelected)return -1;if(b===mSelected)return 1;
+    return (pedidos[a].ordenacao||999999999)-(pedidos[b].ordenacao||999999999);
+  });
+  var list=document.getElementById('prodList');list.innerHTML='';
+  if(!keys.length){list.innerHTML='<div style="color:var(--muted);font-size:13px;padding:12px">Nenhum produto.</div>';return;}
+  keys.forEach(function(k){
+    var p=pedidos[k];var isSel=k===mSelected;
+    var div=document.createElement('div');div.className='prod-item'+(isSel?' sel':'');
+    div.innerHTML='<div class="prod-item-name">'+(p.priority?'#'+p.priority+' ':'')+p.produto+'</div><div class="prod-item-meta"><span>'+p.id+'</span>'+(p.sku?'<span>SKU: '+p.sku+'</span>':'')+(p.mediaPorHora?'<span>⚡ '+fmtNum(p.mediaPorHora)+'/h</span>':'')+(p.status?'<span>'+p.status+'</span>':'')+'</div>';
+    (function(key){div.addEventListener('click',function(){document.querySelectorAll('.prod-item').forEach(function(x){x.classList.remove('sel');});div.classList.add('sel');mSelected=key;});})(k);
+    list.appendChild(div);
+  });
+}
+
+function setupProdModal(){
+  document.getElementById('prodModalClose').addEventListener('click',function(){document.getElementById('prodModal').classList.remove('open');});
+  document.getElementById('prodCancelBtn').addEventListener('click',function(){document.getElementById('prodModal').classList.remove('open');});
+  document.getElementById('prodModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  document.getElementById('prodSearch').addEventListener('input',function(){renderProdList(this.value);});
+  document.getElementById('prodClearBtn').addEventListener('click',function(){
+    if(!mSlot)return;
+    clearSlot(mSlot.date,mSlot.hora,mSlot.linha);
+    document.getElementById('prodModal').classList.remove('open');
+  });
+  document.getElementById('prodConfirmBtn').addEventListener('click',function(){
+    if(!mSlot||!mSelected)return;
+    var p=pedidos[mSelected];if(!p)return;
+    var sku = p.sku || '';
+    var prod = allProdutos[sku] || {};
+    var speed = p.mediaPorHora || prod.prodHoraRef || 0;
+    var path='programacao/'+mSlot.date+'/'+hKey(mSlot.hora)+'/env'+mSlot.linha;
+    db.ref(path).set({pedidoKey:mSelected,produto:p.produto,sku:p.sku||'',mediaPorHora:speed},function(e){
+      if(e){showToast('Erro ao salvar.');return;}
+      if (window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(mSelected);
+      showToast('Slot salvo!');document.getElementById('prodModal').classList.remove('open');
+    });
+  });
+}
+
+function clearSlot(date,hora,linha){
+  var slot = weekData[date] && weekData[date][hora] ? weekData[date][hora]['env'+linha] : null;
+  var pk = slot ? slot.pedidoKey : null;
+  db.ref('programacao/'+date+'/'+hKey(hora)+'/env'+linha).remove(function(e){
+    if(!e) {
+      showToast('Slot limpo!');
+      if (pk && window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pk);
+    }
+  });
+}
+
+function setupAgdModal(){
+  document.getElementById('agdClose').addEventListener('click',function(){document.getElementById('agdModal').classList.remove('open');});
+  document.getElementById('agdCancelBtn').addEventListener('click',function(){document.getElementById('agdModal').classList.remove('open');});
+  document.getElementById('agdModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+  // Linha buttons listeners are handled dynamically in updateDynamicLinhasUI()
+  document.getElementById('agdHoras').addEventListener('input',function(){updateAgdPreview();});
+  document.getElementById('agdDataInicio').addEventListener('change',function(){updateAgdPreview();});
+  document.getElementById('agdConfirmBtn').addEventListener('click',doAgendamento);
+}
+
+function openAgdModal(key){
+  var p=pedidos[key];if(!p)return;
+  agdPedidoKey=key;
+  var lineMatch = String(p.linha || '').match(/\d+/);
+  var lineNum = lineMatch ? parseInt(lineMatch[0]) : 1;
+  agdLinha = (lineNum >= 1 && lineNum <= configLinhas.length) ? lineNum : 1;
+  document.getElementById('agdTitle').textContent=p.produto;
+  var sku = p.sku || '';
+  var prod = allProdutos[sku] || {};
+  var speed = p.mediaPorHora || prod.prodHoraRef || 0;
+  var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
+  var hoursText = hoursNeeded ? hoursNeeded + 'h' : '--';
+  document.getElementById('agdSub').textContent=p.id+(p.sku?' • SKU '+p.sku:'');
+  document.getElementById('agdInfoGrid').innerHTML='<div class="agd-info-box"><div class="agd-info-val">'+fmtNum(speed)+'/h</div><div class="agd-info-lbl">Média/hora</div></div><div class="agd-info-box"><div class="agd-info-val">'+fmtNum(p._falta)+'</div><div class="agd-info-lbl">Faltam (un.)</div></div><div class="agd-info-box"><div class="agd-info-val">'+hoursText+'</div><div class="agd-info-lbl">Horas estim.</div></div><div class="agd-info-box"><div class="agd-info-val">'+Math.round(p._pct*100)+'%</div><div class="agd-info-lbl">Produzido</div></div>';
+  document.getElementById('agdHoras').value=hoursNeeded||0;
+  document.getElementById('agdDataInicio').value=toYMD(nextWorkingDay(new Date()));
+  document.querySelectorAll('.linha-btn').forEach(function(b){b.className='linha-btn';});
+  var ab=document.querySelector('.linha-btn[data-linha="'+agdLinha+'"]');if(ab)ab.className='linha-btn active-e'+agdLinha;
+  document.getElementById('agdPreview').style.display='none';
+  document.getElementById('agdModal').classList.add('open');
+  updateAgdPreview();
+}
+
+function updateAgdPreview(){
+  var horas=parseInt(document.getElementById('agdHoras').value)||0;
+  var startStr=document.getElementById('agdDataInicio').value;
+  var prev=document.getElementById('agdPreview');
+  if(!horas||!startStr){prev.style.display='none';return;}
+  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
+  if(!activeH.length){prev.innerHTML='Nenhuma hora ativa configurada.';prev.style.display='block';return;}
+  var daysNeeded=Math.ceil(horas/activeH.length);
+  prev.innerHTML='~<strong>'+horas+'</strong> slots em <strong>'+daysNeeded+' dia(s)</strong> úteis a partir de <strong>'+fmtBR(parsYMD(startStr))+'</strong>.';
+  prev.style.display='block';
+}
+
 function doAgendamento(){
   var p=pedidos[agdPedidoKey];if(!p)return;
   var horasTotal=parseInt(document.getElementById('agdHoras').value)||0;
@@ -1195,544 +1197,544 @@ function doAgendamento(){
 
     tryNextCandidate();
   }).catch(function(e){showToast('Erro: '+e.message);btn.disabled=false;btn.textContent='⚡ Agendar';});
-}
-
-function setupConfigTab(){
-  document.getElementById('saveConfigBtn').addEventListener('click',saveConfig);
-  document.getElementById('addFeriadoBtn').addEventListener('click',function(){
-    var data=document.getElementById('feriadoData').value;
-    var nome=document.getElementById('feriadoNome').value.trim()||'Feriado';
-    if(!data){showToast('Selecione uma data.');return;}
-    if(!config.feriados)config.feriados={};
-    config.feriados[data]=nome;
-    document.getElementById('feriadoData').value='';
-    document.getElementById('feriadoNome').value='';
-    renderFeriados();
-  });
-  document.getElementById('btnImportFeriados').addEventListener('click', function() {
-    var feri2026 = {
-      "2026-01-01": "Ano Novo",
-      "2026-02-16": "Carnaval (Segunda)",
-      "2026-02-17": "Carnaval (Terça)",
-      "2026-04-03": "Sexta-feira Santa",
-      "2026-04-21": "Tiradentes",
-      "2026-05-01": "Dia do Trabalho",
-      "2026-06-04": "Corpus Christi",
-      "2026-09-07": "Independência do Brasil",
-      "2026-10-12": "Nossa Senhora Aparecida",
-      "2026-11-02": "Finados",
-      "2026-11-15": "Proclamação da República",
-      "2026-11-20": "Consciência Negra",
-      "2026-12-25": "Natal"
-    };
-    if (!config.feriados) config.feriados = {};
-    var count = 0;
-    Object.keys(feri2026).forEach(function(dt) {
-      if (!config.feriados[dt]) {
-        config.feriados[dt] = feri2026[dt];
-        count++;
-      }
-    });
-    if (count > 0) {
-      renderFeriados();
-      showToast(count + ' feriados nacionais de 2026 sugeridos! Não se esqueça de Salvar.');
-    } else {
-      showToast('Todos os feriados nacionais de 2026 já estão adicionados.');
-    }
-  });
-  document.getElementById('clearHorarioTipo').addEventListener('change', function() {
-    document.getElementById('clearHorasRangeWrap').style.display = this.value === 'range' ? 'flex' : 'none';
-  });
-  document.getElementById('clearPeriodBtn').addEventListener('click', clearPeriodProgramacao);
-}
-
-function renderConfigTab(){renderHoursGrid();renderDaysGrid();renderFeriados();fillClearHoraSelects();}
-
-
-function renderHoursGrid(){
-  var grid=document.getElementById('hoursGrid');grid.innerHTML='';
-  ALL_HOURS.forEach(function(h){
-    var isActive=config.horasAtivas.includes(h);
-    var isPausa=config.pausas.includes(h);
-    var chip=document.createElement('div');
-    chip.className='hour-chip'+(isPausa?' pausa':isActive?' active':'');
-    chip.innerHTML=fmtHoraRange(h)+'<div class="hour-chip-hint">'+(isPausa?'intervalo':isActive?'ativo':'inativo')+'</div>';
-    (function(hour){
-      chip.addEventListener('click',function(){
-        var a=config.horasAtivas.includes(hour);var pa=config.pausas.includes(hour);
-        if(!a&&!pa){config.horasAtivas.push(hour);config.horasAtivas.sort();}
-        else if(a&&!pa){config.pausas.push(hour);}
-        else{config.pausas=config.pausas.filter(function(x){return x!==hour;});config.horasAtivas=config.horasAtivas.filter(function(x){return x!==hour;});}
-        renderHoursGrid();
-      });
-    })(h);
-    grid.appendChild(chip);
-  });
-}
-
-function renderDaysGrid(){
-  var grid=document.getElementById('daysGrid');grid.innerHTML='';
-  var NAMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-  [1,2,3,4,5,6,7].forEach(function(n,i){
-    var isActive=config.diasSemana.includes(n);var isWE=n>=6;
-    var chip=document.createElement('div');
-    chip.className='day-chip'+(isActive?' active'+(isWE?' weekend':''):'');
-    chip.textContent=NAMES[i];
-    (function(num){
-      chip.addEventListener('click',function(){
-        if(config.diasSemana.includes(num)){config.diasSemana=config.diasSemana.filter(function(x){return x!==num;});}
-        else{config.diasSemana.push(num);config.diasSemana.sort();}
-        renderDaysGrid();
-      });
-    })(n);
-    grid.appendChild(chip);
-  });
-}
-
-function renderFeriados(){
-  var list=document.getElementById('feriadoList');list.innerHTML='';
-  var feriados=config.feriados||{};
-  var keys=Object.keys(feriados).sort();
-  if(!keys.length){list.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhum feriado cadastrado.</div>';return;}
-  keys.forEach(function(data){
-    var nome=feriados[data];
-    var item=document.createElement('div');item.className='feriado-item';
-    item.innerHTML='<span class="feriado-date">'+fmtBR(parsYMD(data))+'</span><span class="feriado-label">'+nome+'</span><span class="feriado-rm">✕</span>';
-    (function(d){item.querySelector('.feriado-rm').addEventListener('click',function(){delete config.feriados[d];renderFeriados();});})(data);
-    list.appendChild(item);
-  });
-}
-
-function saveConfig(){
-  var btn=document.getElementById('saveConfigBtn');btn.disabled=true;btn.textContent='Salvando...';
-  db.ref('config/planejamento').set({
-    horasAtivas:config.horasAtivas,pausas:config.pausas,
-    diasSemana:config.diasSemana,feriados:config.feriados||{}
-  },function(e){
-    btn.disabled=false;btn.textContent='💾 Salvar Configurações';
-    if(e)showToast('Erro: '+e.message);
-    else{showToast('Configurações salvas!');buildDayTabs();renderGrid();}
-  });
-}
-
-function fillClearHoraSelects() {
-  var startSel = document.getElementById('clearHoraInicio');
-  var endSel = document.getElementById('clearHoraFim');
-  if(!startSel || !endSel) return;
-  startSel.innerHTML = '';
-  endSel.innerHTML = '';
-  var hours = config.horasAtivas && config.horasAtivas.length ? config.horasAtivas : ALL_HOURS;
-  hours.forEach(function(h) {
-    var opt1 = document.createElement('option');
-    opt1.value = h;
-    opt1.textContent = fmtHoraRange(h);
-    startSel.appendChild(opt1);
-    
-    var opt2 = document.createElement('option');
-    opt2.value = h;
-    opt2.textContent = fmtHoraRange(h);
-    endSel.appendChild(opt2);
-  });
-}
-
-function clearPeriodProgramacao() {
-  var linha = document.getElementById('clearLinha').value;
-  var startStr = document.getElementById('clearDataInicio').value;
-  var endStr = document.getElementById('clearDataFim').value;
-  var horTipo = document.getElementById('clearHorarioTipo').value;
-  
-  if(!startStr || !endStr) {
-    alert('Por favor, selecione as datas de início e término.');
-    return;
-  }
-  
-  var start = parsYMD(startStr);
-  var end = parsYMD(endStr);
-  
-  if (end < start) {
-    alert('A data de término deve ser igual ou posterior à data de início.');
-    return;
-  }
-  
-  var hoursToClear = [];
-  if (horTipo === 'all') {
-    hoursToClear = config.horasAtivas;
-  } else {
-    var hStart = document.getElementById('clearHoraInicio').value;
-    var hEnd = document.getElementById('clearHoraFim').value;
-    if(!hStart || !hEnd) {
-      alert('Por favor, selecione os horários de início e término.');
-      return;
-    }
-    var startNum = parseInt(hStart.replace(':', ''));
-    var endNum = parseInt(hEnd.replace(':', ''));
-    if (endNum < startNum) {
-      alert('O horário de término deve ser posterior ao horário de início.');
-      return;
-    }
-    hoursToClear = config.horasAtivas.filter(function(h) {
-      var hNum = parseInt(h.replace(':', ''));
-      return hNum >= startNum && hNum <= endNum;
-    });
-  }
-  
-  if (!hoursToClear.length) {
-    alert('Nenhum horário ativo selecionado para limpeza.');
-    return;
-  }
-  
-  var dates = [];
-  var current = new Date(start);
-  while(current <= end) {
-    dates.push(toYMD(current));
-    current = addDays(current, 1);
-  }
-  
-  var lines = [];
-  if (linha === 'all') {
-    lines = configLinhas.map(function(_, i){ return i + 1; });
-  } else {
-    lines = [parseInt(linha)];
-  }
-  
-  var lineLabel = linha === 'all' ? 'todas as linhas' : 'a Linha ' + linha;
-  var dateLabel = dates.length === 1 ? 'o dia ' + fmtBR(start) : 'o período de ' + fmtBR(start) + ' a ' + fmtBR(end);
-  var hourLabel = horTipo === 'all' ? 'todos os horários ativos' : 'o intervalo das ' + hStart + ' às ' + hEnd;
-  
-  var confirmMsg = 'ATENÇÃO!\n\nVocê está prestes a APAGAR toda a programação para:\n- Linha: ' + lineLabel.toUpperCase() + '\n- Período: ' + dateLabel + '\n- Horários: ' + hourLabel + '\n\nEsta ação apagará os dados do Firebase permanentemente e não pode ser desfeita. Confirma?';
-  
-  if (!confirm(confirmMsg)) return;
-  
-  var btn = document.getElementById('clearPeriodBtn');
-  var oldText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Apagando...';
-  
-  var updates = {};
-  dates.forEach(function(date) {
-    hoursToClear.forEach(function(hora) {
-      lines.forEach(function(l) {
-        var path = 'programacao/' + date + '/' + hKey(hora) + '/env' + l;
-        updates[path] = null;
-      });
-    });
-  });
-  
-  db.ref().update(updates, function(e) {
-    btn.disabled = false;
-    btn.textContent = oldText;
-    if (e) {
-      alert('Erro ao apagar programação: ' + e.message);
-    } else {
-      showToast('Programação limpa com sucesso!');
-      loadWeek();
-    }
-  });
-}
-
-
-// ── SISTEMA DE IMPORTAÇÃO DE PLANILHA SEMANAL DO PCP ────────────────
-var parsedData = [];
-var filteredData = [];
-var currentFilter = 'future';
-
-function cleanProduto(v) {
-  if (!v || typeof v !== 'string') return '';
-  var s = v.split('>')[0];
-  s = s.split(' - ')[0];
-  return s.trim();
-}
-
-function extractPedidoId(v) {
-  if (!v || typeof v !== 'string') return '';
-  var parts = v.split('>');
-  if (parts.length < 2) return '';
-  return parts[1].trim();
-}
-
-function excelDateToStr(d) {
-  if (!(d instanceof Date)) return null;
-  var offset = d.getTimezoneOffset() * 60000;
-  var local = new Date(d.getTime() - offset);
-  return local.toISOString().slice(0, 10);
-}
-
-function horaToKey(h) {
-  if (!h) return '';
-  return String(h).split('-')[0].trim();
-}
-
-function getWeekKey(date) {
-  var d = new Date(date + 'T12:00:00');
-  var day = d.getDay();
-  var mon = new Date(d);
-  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  return mon.toISOString().slice(0, 10);
-}
-
-function parseFile(file) {
-  document.getElementById('dropText').textContent = '⏳ Lendo ' + file.name + '...';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-      var sheetName = 'Previsão Envase';
-      if (wb.SheetNames.indexOf(sheetName) === -1) {
-        sheetName = wb.SheetNames.find(function(s) { return s.toLowerCase().indexOf('previs') !== -1 && s.toLowerCase().indexOf('envase') !== -1; });
-      }
-      if (!sheetName) {
-        alert('Aba "Previsao Envase" nao encontrada. Abas disponíveis: ' + wb.SheetNames.join(', '));
-        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-        return;
-      }
-      var ws = wb.Sheets[sheetName];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      parsedData = [];
-
-      rows.forEach(function(row) {
-        if (!row) return;
-        var dateVal = row[3];
-        var hora = row[4];
-        if (!dateVal || !hora || typeof hora !== 'string') return;
-
-        var d = excelDateToStr(dateVal);
-        if (!d) return;
-
-        var env1 = cleanProduto(row[5]);
-        var env2 = cleanProduto(row[6]);
-        var env3 = cleanProduto(row[7]);
-        var meta1 = Math.round(parseFloat(row[8]) || 0);
-        var meta2 = Math.round(parseFloat(row[9]) || 0);
-        var meta3 = Math.round(parseFloat(row[10]) || 0);
-        var horaKey = horaToKey(hora);
-        if (!horaKey) return;
-
-        var pedidoId1 = extractPedidoId(row[5]);
-        var pedidoId2 = extractPedidoId(row[6]);
-        var pedidoId3 = extractPedidoId(row[7]);
-
-        parsedData.push({
-          date: d,
-          hora: hora.trim(),
-          horaKey: horaKey,
-          env1: env1, env2: env2, env3: env3,
-          meta1: meta1, meta2: meta2, meta3: meta3,
-          pedidoId1: pedidoId1, pedidoId2: pedidoId2, pedidoId3: pedidoId3
-        });
-      });
-
-      if (!parsedData.length) {
-        alert('Nenhum dado encontrado na aba "Previsao Envase". Verifique o formato do arquivo.');
-        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-        return;
-      }
-
-      document.getElementById('dropText').textContent = '✓ ' + file.name;
-      onParsed();
-    } catch (err) {
-      alert('Erro ao ler arquivo: ' + err.message);
-      document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-      console.error(err);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function onParsed() {
-  var dates = {};
-  var semanas = {};
-  parsedData.forEach(function(r) {
-    dates[r.date] = 1;
-    semanas[getWeekKey(r.date)] = 1;
-  });
-  document.getElementById('statSemanas').textContent = Object.keys(semanas).length;
-  document.getElementById('statDias').textContent = Object.keys(dates).length;
-  document.getElementById('statSlots').textContent = parsedData.length;
-
-  var mc = document.getElementById('mappingContainer');
-  mc.innerHTML = '';
-  ['Envase 1', 'Envase 2', 'Envase 3'].forEach(function(e, i) {
-    var linhaName = configLinhas[i] || null;
-    var row = document.createElement('div');
-    row.className = 'mapping-row';
-    row.innerHTML = '<span class="mapping-badge" style="background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;white-space:nowrap">' + e + '</span>' +
-      '<span class="mapping-arrow" style="color:var(--muted);font-weight:700;margin:0 10px;">→</span>' +
-      (linhaName
-        ? '<span class="mapping-linha" style="font-weight:600;color:var(--text);">' + linhaName + '</span>'
-        : '<span class="mapping-none" style="color:var(--muted);font-style:italic;">Linha ' + (i + 1) + ' (configurada no Admin)</span>');
-    mc.appendChild(row);
-  });
-
-  document.getElementById('infoCard').style.display = 'block';
-  document.getElementById('filterCard').style.display = 'block';
-  document.getElementById('importCard').style.display = 'block';
-
-  applyFilter(currentFilter);
-}
-
-function applyFilter(filter) {
-  currentFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(function(b) {
-    b.classList.toggle('active', b.getAttribute('data-filter') === filter);
-  });
-
-  var todayDate = toYMD(new Date());
-  if (filter === 'future') {
-    filteredData = parsedData.filter(function(r) { return r.date >= todayDate; });
-  } else {
-    filteredData = parsedData.slice();
-  }
-
-  var uniqueDates = {};
-  filteredData.forEach(function(r) { uniqueDates[r.date] = 1; });
-  var nDias = Object.keys(uniqueDates).length;
-  document.getElementById('filterInfo').innerHTML =
-    '<strong>' + filteredData.length + '</strong> slots em <strong>' + nDias + '</strong> dia(s) selecionados.';
-}
-
-function doImport() {
-  if (!db) { alert('Sem conexao com Firebase.'); return; }
-  if (!filteredData.length) { alert('Nenhum dado para importar no periodo selecionado.'); return; }
-
-  var lines = [
-    configLinhas[0] || 'Linha 1',
-    configLinhas[1] || 'Linha 2',
-    configLinhas[2] || 'Linha 3'
-  ];
-
-  var bySlotUpdates = {};
-  var datesSet = {};
-
-  filteredData.forEach(function(r) {
-    datesSet[r.date] = 1;
-    for (var l = 1; l <= 3; l++) {
-      var envVal = r['env' + l];
-      var pedIdVal = r['pedidoId' + l];
-      var metaVal = r['meta' + l] || 0;
-      
-      if (envVal || pedIdVal) {
-        var pedKey = findPedidoKey(pedIdVal, envVal, pedidos);
-        var slotObj = null;
-        if (pedKey && pedidos[pedKey]) {
-          var p = pedidos[pedKey];
-          var sku = p.sku || '';
-          var prodInfo = allProdutos[sku] || {};
-          var speed = p.mediaPorHora || prodInfo.prodHoraRef || metaVal || 0;
-          slotObj = {
-            pedidoKey: pedKey,
-            produto: p.produto,
-            sku: sku,
-            mediaPorHora: speed
-          };
-        } else if (envVal) {
-          slotObj = {
-            pedidoKey: pedIdVal ? ('OP_' + sanitizeKey(pedIdVal) + '__' + sanitizeKey(envVal)) : '',
-            produto: envVal,
-            sku: '',
-            mediaPorHora: metaVal
-          };
-        }
-        
-        if (slotObj) {
-          var path = 'programacao/' + r.date + '/' + hKey(r.horaKey) + '/env' + l;
-          bySlotUpdates[path] = slotObj;
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/meta' + l] = metaVal;
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/linha' + l] = lines[l - 1];
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/pedidoId' + l] = pedIdVal || '';
-        }
-      }
-    }
-  });
-
-  var dates = Object.keys(datesSet).sort();
-  var total = dates.length;
-  var done = 0;
-
-  var btn = document.getElementById('btnImport');
-  btn.disabled = true;
-  document.getElementById('progressWrap').style.display = 'block';
-
-  function next() {
-    if (done >= total) {
-      document.getElementById('progressFill').style.width = '100%';
-      document.getElementById('progressText').textContent = '✔ Concluído! ' + total + ' dias importados com sucesso.';
-      btn.disabled = false;
-      showToast('Programacao importada! ' + total + ' dias salvos.');
-      loadWeek();
-      return;
-    }
-    var date = dates[done];
-    var dateUpdates = {};
-    var hasUpdates = false;
-    Object.keys(bySlotUpdates).forEach(function(path) {
-      if (path.indexOf('programacao/' + date + '/') === 0) {
-        dateUpdates[path] = bySlotUpdates[path];
-        hasUpdates = true;
-      }
-    });
-
-    var promise = hasUpdates ? db.ref().update(dateUpdates) : Promise.resolve();
-    promise.then(function() {
-      done++;
-      var pct = Math.round(done / total * 100);
-      document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressText').textContent = 'Salvando ' + done + ' / ' + total + ' dias...';
-      next();
-    })
-    .catch(function(err) {
-      alert('Erro ao salvar ' + date + ': ' + err.message);
-      btn.disabled = false;
-    });
-  }
-  next();
-}
-
-function showToast(msg){
-  var t=document.getElementById('toast');
-  if(t) {
-    document.getElementById('toastMsg').textContent=msg;
-    t.classList.add('show');
-    setTimeout(function(){t.classList.remove('show');},2500);
-  } else {
-    console.log('Toast: ' + msg);
-  }
-}
-
-// Event Listeners setup
-document.addEventListener('DOMContentLoaded', function() {
-  var dropZone = document.getElementById('dropZone');
-  var fileInput = document.getElementById('fileInput');
-  if (dropZone && fileInput) {
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = '#eff6ff'; });
-    dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor = 'var(--border)'; dropZone.style.background = 'transparent'; });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-      var f = e.dataTransfer.files[0];
-      if (f) parseFile(f);
-    });
-    fileInput.addEventListener('change', function() {
-      if (fileInput.files[0]) parseFile(fileInput.files[0]);
-    });
-  }
-
-  var btnFltFuture = document.getElementById('fltFuture');
-  var btnFltAll = document.getElementById('fltAll');
-  if (btnFltFuture) {
-    btnFltFuture.addEventListener('click', function() { applyFilter('future'); });
-  }
-  if (btnFltAll) {
-    btnFltAll.addEventListener('click', function() { applyFilter('all'); });
-  }
-
-  var btnImport = document.getElementById('btnImport');
-  if (btnImport) {
-    btnImport.addEventListener('click', doImport);
-  }
-});
-</script>
-</body>
-</html>
-
+}
+
+function setupConfigTab(){
+  document.getElementById('saveConfigBtn').addEventListener('click',saveConfig);
+  document.getElementById('addFeriadoBtn').addEventListener('click',function(){
+    var data=document.getElementById('feriadoData').value;
+    var nome=document.getElementById('feriadoNome').value.trim()||'Feriado';
+    if(!data){showToast('Selecione uma data.');return;}
+    if(!config.feriados)config.feriados={};
+    config.feriados[data]=nome;
+    document.getElementById('feriadoData').value='';
+    document.getElementById('feriadoNome').value='';
+    renderFeriados();
+  });
+  document.getElementById('btnImportFeriados').addEventListener('click', function() {
+    var feri2026 = {
+      "2026-01-01": "Ano Novo",
+      "2026-02-16": "Carnaval (Segunda)",
+      "2026-02-17": "Carnaval (Terça)",
+      "2026-04-03": "Sexta-feira Santa",
+      "2026-04-21": "Tiradentes",
+      "2026-05-01": "Dia do Trabalho",
+      "2026-06-04": "Corpus Christi",
+      "2026-09-07": "Independência do Brasil",
+      "2026-10-12": "Nossa Senhora Aparecida",
+      "2026-11-02": "Finados",
+      "2026-11-15": "Proclamação da República",
+      "2026-11-20": "Consciência Negra",
+      "2026-12-25": "Natal"
+    };
+    if (!config.feriados) config.feriados = {};
+    var count = 0;
+    Object.keys(feri2026).forEach(function(dt) {
+      if (!config.feriados[dt]) {
+        config.feriados[dt] = feri2026[dt];
+        count++;
+      }
+    });
+    if (count > 0) {
+      renderFeriados();
+      showToast(count + ' feriados nacionais de 2026 sugeridos! Não se esqueça de Salvar.');
+    } else {
+      showToast('Todos os feriados nacionais de 2026 já estão adicionados.');
+    }
+  });
+  document.getElementById('clearHorarioTipo').addEventListener('change', function() {
+    document.getElementById('clearHorasRangeWrap').style.display = this.value === 'range' ? 'flex' : 'none';
+  });
+  document.getElementById('clearPeriodBtn').addEventListener('click', clearPeriodProgramacao);
+}
+
+function renderConfigTab(){renderHoursGrid();renderDaysGrid();renderFeriados();fillClearHoraSelects();}
+
+
+function renderHoursGrid(){
+  var grid=document.getElementById('hoursGrid');grid.innerHTML='';
+  ALL_HOURS.forEach(function(h){
+    var isActive=config.horasAtivas.includes(h);
+    var isPausa=config.pausas.includes(h);
+    var chip=document.createElement('div');
+    chip.className='hour-chip'+(isPausa?' pausa':isActive?' active':'');
+    chip.innerHTML=fmtHoraRange(h)+'<div class="hour-chip-hint">'+(isPausa?'intervalo':isActive?'ativo':'inativo')+'</div>';
+    (function(hour){
+      chip.addEventListener('click',function(){
+        var a=config.horasAtivas.includes(hour);var pa=config.pausas.includes(hour);
+        if(!a&&!pa){config.horasAtivas.push(hour);config.horasAtivas.sort();}
+        else if(a&&!pa){config.pausas.push(hour);}
+        else{config.pausas=config.pausas.filter(function(x){return x!==hour;});config.horasAtivas=config.horasAtivas.filter(function(x){return x!==hour;});}
+        renderHoursGrid();
+      });
+    })(h);
+    grid.appendChild(chip);
+  });
+}
+
+function renderDaysGrid(){
+  var grid=document.getElementById('daysGrid');grid.innerHTML='';
+  var NAMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
+  [1,2,3,4,5,6,7].forEach(function(n,i){
+    var isActive=config.diasSemana.includes(n);var isWE=n>=6;
+    var chip=document.createElement('div');
+    chip.className='day-chip'+(isActive?' active'+(isWE?' weekend':''):'');
+    chip.textContent=NAMES[i];
+    (function(num){
+      chip.addEventListener('click',function(){
+        if(config.diasSemana.includes(num)){config.diasSemana=config.diasSemana.filter(function(x){return x!==num;});}
+        else{config.diasSemana.push(num);config.diasSemana.sort();}
+        renderDaysGrid();
+      });
+    })(n);
+    grid.appendChild(chip);
+  });
+}
+
+function renderFeriados(){
+  var list=document.getElementById('feriadoList');list.innerHTML='';
+  var feriados=config.feriados||{};
+  var keys=Object.keys(feriados).sort();
+  if(!keys.length){list.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhum feriado cadastrado.</div>';return;}
+  keys.forEach(function(data){
+    var nome=feriados[data];
+    var item=document.createElement('div');item.className='feriado-item';
+    item.innerHTML='<span class="feriado-date">'+fmtBR(parsYMD(data))+'</span><span class="feriado-label">'+nome+'</span><span class="feriado-rm">✕</span>';
+    (function(d){item.querySelector('.feriado-rm').addEventListener('click',function(){delete config.feriados[d];renderFeriados();});})(data);
+    list.appendChild(item);
+  });
+}
+
+function saveConfig(){
+  var btn=document.getElementById('saveConfigBtn');btn.disabled=true;btn.textContent='Salvando...';
+  db.ref('config/planejamento').set({
+    horasAtivas:config.horasAtivas,pausas:config.pausas,
+    diasSemana:config.diasSemana,feriados:config.feriados||{}
+  },function(e){
+    btn.disabled=false;btn.textContent='💾 Salvar Configurações';
+    if(e)showToast('Erro: '+e.message);
+    else{showToast('Configurações salvas!');buildDayTabs();renderGrid();}
+  });
+}
+
+function fillClearHoraSelects() {
+  var startSel = document.getElementById('clearHoraInicio');
+  var endSel = document.getElementById('clearHoraFim');
+  if(!startSel || !endSel) return;
+  startSel.innerHTML = '';
+  endSel.innerHTML = '';
+  var hours = config.horasAtivas && config.horasAtivas.length ? config.horasAtivas : ALL_HOURS;
+  hours.forEach(function(h) {
+    var opt1 = document.createElement('option');
+    opt1.value = h;
+    opt1.textContent = fmtHoraRange(h);
+    startSel.appendChild(opt1);
+    
+    var opt2 = document.createElement('option');
+    opt2.value = h;
+    opt2.textContent = fmtHoraRange(h);
+    endSel.appendChild(opt2);
+  });
+}
+
+function clearPeriodProgramacao() {
+  var linha = document.getElementById('clearLinha').value;
+  var startStr = document.getElementById('clearDataInicio').value;
+  var endStr = document.getElementById('clearDataFim').value;
+  var horTipo = document.getElementById('clearHorarioTipo').value;
+  
+  if(!startStr || !endStr) {
+    alert('Por favor, selecione as datas de início e término.');
+    return;
+  }
+  
+  var start = parsYMD(startStr);
+  var end = parsYMD(endStr);
+  
+  if (end < start) {
+    alert('A data de término deve ser igual ou posterior à data de início.');
+    return;
+  }
+  
+  var hoursToClear = [];
+  if (horTipo === 'all') {
+    hoursToClear = config.horasAtivas;
+  } else {
+    var hStart = document.getElementById('clearHoraInicio').value;
+    var hEnd = document.getElementById('clearHoraFim').value;
+    if(!hStart || !hEnd) {
+      alert('Por favor, selecione os horários de início e término.');
+      return;
+    }
+    var startNum = parseInt(hStart.replace(':', ''));
+    var endNum = parseInt(hEnd.replace(':', ''));
+    if (endNum < startNum) {
+      alert('O horário de término deve ser posterior ao horário de início.');
+      return;
+    }
+    hoursToClear = config.horasAtivas.filter(function(h) {
+      var hNum = parseInt(h.replace(':', ''));
+      return hNum >= startNum && hNum <= endNum;
+    });
+  }
+  
+  if (!hoursToClear.length) {
+    alert('Nenhum horário ativo selecionado para limpeza.');
+    return;
+  }
+  
+  var dates = [];
+  var current = new Date(start);
+  while(current <= end) {
+    dates.push(toYMD(current));
+    current = addDays(current, 1);
+  }
+  
+  var lines = [];
+  if (linha === 'all') {
+    lines = configLinhas.map(function(_, i){ return i + 1; });
+  } else {
+    lines = [parseInt(linha)];
+  }
+  
+  var lineLabel = linha === 'all' ? 'todas as linhas' : 'a Linha ' + linha;
+  var dateLabel = dates.length === 1 ? 'o dia ' + fmtBR(start) : 'o período de ' + fmtBR(start) + ' a ' + fmtBR(end);
+  var hourLabel = horTipo === 'all' ? 'todos os horários ativos' : 'o intervalo das ' + hStart + ' às ' + hEnd;
+  
+  var confirmMsg = 'ATENÇÃO!\n\nVocê está prestes a APAGAR toda a programação para:\n- Linha: ' + lineLabel.toUpperCase() + '\n- Período: ' + dateLabel + '\n- Horários: ' + hourLabel + '\n\nEsta ação apagará os dados do Firebase permanentemente e não pode ser desfeita. Confirma?';
+  
+  if (!confirm(confirmMsg)) return;
+  
+  var btn = document.getElementById('clearPeriodBtn');
+  var oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Apagando...';
+  
+  var updates = {};
+  dates.forEach(function(date) {
+    hoursToClear.forEach(function(hora) {
+      lines.forEach(function(l) {
+        var path = 'programacao/' + date + '/' + hKey(hora) + '/env' + l;
+        updates[path] = null;
+      });
+    });
+  });
+  
+  db.ref().update(updates, function(e) {
+    btn.disabled = false;
+    btn.textContent = oldText;
+    if (e) {
+      alert('Erro ao apagar programação: ' + e.message);
+    } else {
+      showToast('Programação limpa com sucesso!');
+      loadWeek();
+    }
+  });
+}
+
+
+// ── SISTEMA DE IMPORTAÇÃO DE PLANILHA SEMANAL DO PCP ────────────────
+var parsedData = [];
+var filteredData = [];
+var currentFilter = 'future';
+
+function cleanProduto(v) {
+  if (!v || typeof v !== 'string') return '';
+  var s = v.split('>')[0];
+  s = s.split(' - ')[0];
+  return s.trim();
+}
+
+function extractPedidoId(v) {
+  if (!v || typeof v !== 'string') return '';
+  var parts = v.split('>');
+  if (parts.length < 2) return '';
+  return parts[1].trim();
+}
+
+function excelDateToStr(d) {
+  if (!(d instanceof Date)) return null;
+  var offset = d.getTimezoneOffset() * 60000;
+  var local = new Date(d.getTime() - offset);
+  return local.toISOString().slice(0, 10);
+}
+
+function horaToKey(h) {
+  if (!h) return '';
+  return String(h).split('-')[0].trim();
+}
+
+function getWeekKey(date) {
+  var d = new Date(date + 'T12:00:00');
+  var day = d.getDay();
+  var mon = new Date(d);
+  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return mon.toISOString().slice(0, 10);
+}
+
+function parseFile(file) {
+  document.getElementById('dropText').textContent = '⏳ Lendo ' + file.name + '...';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      var sheetName = 'Previsão Envase';
+      if (wb.SheetNames.indexOf(sheetName) === -1) {
+        sheetName = wb.SheetNames.find(function(s) { return s.toLowerCase().indexOf('previs') !== -1 && s.toLowerCase().indexOf('envase') !== -1; });
+      }
+      if (!sheetName) {
+        alert('Aba "Previsao Envase" nao encontrada. Abas disponíveis: ' + wb.SheetNames.join(', '));
+        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
+        return;
+      }
+      var ws = wb.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+      parsedData = [];
+
+      rows.forEach(function(row) {
+        if (!row) return;
+        var dateVal = row[3];
+        var hora = row[4];
+        if (!dateVal || !hora || typeof hora !== 'string') return;
+
+        var d = excelDateToStr(dateVal);
+        if (!d) return;
+
+        var env1 = cleanProduto(row[5]);
+        var env2 = cleanProduto(row[6]);
+        var env3 = cleanProduto(row[7]);
+        var meta1 = Math.round(parseFloat(row[8]) || 0);
+        var meta2 = Math.round(parseFloat(row[9]) || 0);
+        var meta3 = Math.round(parseFloat(row[10]) || 0);
+        var horaKey = horaToKey(hora);
+        if (!horaKey) return;
+
+        var pedidoId1 = extractPedidoId(row[5]);
+        var pedidoId2 = extractPedidoId(row[6]);
+        var pedidoId3 = extractPedidoId(row[7]);
+
+        parsedData.push({
+          date: d,
+          hora: hora.trim(),
+          horaKey: horaKey,
+          env1: env1, env2: env2, env3: env3,
+          meta1: meta1, meta2: meta2, meta3: meta3,
+          pedidoId1: pedidoId1, pedidoId2: pedidoId2, pedidoId3: pedidoId3
+        });
+      });
+
+      if (!parsedData.length) {
+        alert('Nenhum dado encontrado na aba "Previsao Envase". Verifique o formato do arquivo.');
+        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
+        return;
+      }
+
+      document.getElementById('dropText').textContent = '✓ ' + file.name;
+      onParsed();
+    } catch (err) {
+      alert('Erro ao ler arquivo: ' + err.message);
+      document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function onParsed() {
+  var dates = {};
+  var semanas = {};
+  parsedData.forEach(function(r) {
+    dates[r.date] = 1;
+    semanas[getWeekKey(r.date)] = 1;
+  });
+  document.getElementById('statSemanas').textContent = Object.keys(semanas).length;
+  document.getElementById('statDias').textContent = Object.keys(dates).length;
+  document.getElementById('statSlots').textContent = parsedData.length;
+
+  var mc = document.getElementById('mappingContainer');
+  mc.innerHTML = '';
+  ['Envase 1', 'Envase 2', 'Envase 3'].forEach(function(e, i) {
+    var linhaName = configLinhas[i] || null;
+    var row = document.createElement('div');
+    row.className = 'mapping-row';
+    row.innerHTML = '<span class="mapping-badge" style="background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;white-space:nowrap">' + e + '</span>' +
+      '<span class="mapping-arrow" style="color:var(--muted);font-weight:700;margin:0 10px;">→</span>' +
+      (linhaName
+        ? '<span class="mapping-linha" style="font-weight:600;color:var(--text);">' + linhaName + '</span>'
+        : '<span class="mapping-none" style="color:var(--muted);font-style:italic;">Linha ' + (i + 1) + ' (configurada no Admin)</span>');
+    mc.appendChild(row);
+  });
+
+  document.getElementById('infoCard').style.display = 'block';
+  document.getElementById('filterCard').style.display = 'block';
+  document.getElementById('importCard').style.display = 'block';
+
+  applyFilter(currentFilter);
+}
+
+function applyFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-filter') === filter);
+  });
+
+  var todayDate = toYMD(new Date());
+  if (filter === 'future') {
+    filteredData = parsedData.filter(function(r) { return r.date >= todayDate; });
+  } else {
+    filteredData = parsedData.slice();
+  }
+
+  var uniqueDates = {};
+  filteredData.forEach(function(r) { uniqueDates[r.date] = 1; });
+  var nDias = Object.keys(uniqueDates).length;
+  document.getElementById('filterInfo').innerHTML =
+    '<strong>' + filteredData.length + '</strong> slots em <strong>' + nDias + '</strong> dia(s) selecionados.';
+}
+
+function doImport() {
+  if (!db) { alert('Sem conexao com Firebase.'); return; }
+  if (!filteredData.length) { alert('Nenhum dado para importar no periodo selecionado.'); return; }
+
+  var lines = [
+    configLinhas[0] || 'Linha 1',
+    configLinhas[1] || 'Linha 2',
+    configLinhas[2] || 'Linha 3'
+  ];
+
+  var bySlotUpdates = {};
+  var datesSet = {};
+
+  filteredData.forEach(function(r) {
+    datesSet[r.date] = 1;
+    for (var l = 1; l <= 3; l++) {
+      var envVal = r['env' + l];
+      var pedIdVal = r['pedidoId' + l];
+      var metaVal = r['meta' + l] || 0;
+      
+      if (envVal || pedIdVal) {
+        var pedKey = findPedidoKey(pedIdVal, envVal, pedidos);
+        var slotObj = null;
+        if (pedKey && pedidos[pedKey]) {
+          var p = pedidos[pedKey];
+          var sku = p.sku || '';
+          var prodInfo = allProdutos[sku] || {};
+          var speed = p.mediaPorHora || prodInfo.prodHoraRef || metaVal || 0;
+          slotObj = {
+            pedidoKey: pedKey,
+            produto: p.produto,
+            sku: sku,
+            mediaPorHora: speed
+          };
+        } else if (envVal) {
+          slotObj = {
+            pedidoKey: pedIdVal ? ('OP_' + sanitizeKey(pedIdVal) + '__' + sanitizeKey(envVal)) : '',
+            produto: envVal,
+            sku: '',
+            mediaPorHora: metaVal
+          };
+        }
+        
+        if (slotObj) {
+          var path = 'programacao/' + r.date + '/' + hKey(r.horaKey) + '/env' + l;
+          bySlotUpdates[path] = slotObj;
+          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/meta' + l] = metaVal;
+          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/linha' + l] = lines[l - 1];
+          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/pedidoId' + l] = pedIdVal || '';
+        }
+      }
+    }
+  });
+
+  var dates = Object.keys(datesSet).sort();
+  var total = dates.length;
+  var done = 0;
+
+  var btn = document.getElementById('btnImport');
+  btn.disabled = true;
+  document.getElementById('progressWrap').style.display = 'block';
+
+  function next() {
+    if (done >= total) {
+      document.getElementById('progressFill').style.width = '100%';
+      document.getElementById('progressText').textContent = '✔ Concluído! ' + total + ' dias importados com sucesso.';
+      btn.disabled = false;
+      showToast('Programacao importada! ' + total + ' dias salvos.');
+      loadWeek();
+      return;
+    }
+    var date = dates[done];
+    var dateUpdates = {};
+    var hasUpdates = false;
+    Object.keys(bySlotUpdates).forEach(function(path) {
+      if (path.indexOf('programacao/' + date + '/') === 0) {
+        dateUpdates[path] = bySlotUpdates[path];
+        hasUpdates = true;
+      }
+    });
+
+    var promise = hasUpdates ? db.ref().update(dateUpdates) : Promise.resolve();
+    promise.then(function() {
+      done++;
+      var pct = Math.round(done / total * 100);
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = 'Salvando ' + done + ' / ' + total + ' dias...';
+      next();
+    })
+    .catch(function(err) {
+      alert('Erro ao salvar ' + date + ': ' + err.message);
+      btn.disabled = false;
+    });
+  }
+  next();
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  if(t) {
+    document.getElementById('toastMsg').textContent=msg;
+    t.classList.add('show');
+    setTimeout(function(){t.classList.remove('show');},2500);
+  } else {
+    console.log('Toast: ' + msg);
+  }
+}
+
+// Event Listeners setup
+document.addEventListener('DOMContentLoaded', function() {
+  var dropZone = document.getElementById('dropZone');
+  var fileInput = document.getElementById('fileInput');
+  if (dropZone && fileInput) {
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = '#eff6ff'; });
+    dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor = 'var(--border)'; dropZone.style.background = 'transparent'; });
+    dropZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border)';
+      dropZone.style.background = 'transparent';
+      var f = e.dataTransfer.files[0];
+      if (f) parseFile(f);
+    });
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files[0]) parseFile(fileInput.files[0]);
+    });
+  }
+
+  var btnFltFuture = document.getElementById('fltFuture');
+  var btnFltAll = document.getElementById('fltAll');
+  if (btnFltFuture) {
+    btnFltFuture.addEventListener('click', function() { applyFilter('future'); });
+  }
+  if (btnFltAll) {
+    btnFltAll.addEventListener('click', function() { applyFilter('all'); });
+  }
+
+  var btnImport = document.getElementById('btnImport');
+  if (btnImport) {
+    btnImport.addEventListener('click', doImport);
+  }
+});
+</script>
+</body>
+</html>
+
