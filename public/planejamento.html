@@ -9,7 +9,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="shared/utils.js"></script>
-  <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
   <style>
     :root{--primary:#0a1c69;--primary-light:#1e3a8a;--success:#059669;--danger:#e02424;--warning:#d97706;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
@@ -941,13 +940,13 @@ function populateAgdClientFilter() {
 function renderAgendaTab(){
   var container=document.getElementById('pedQueue');
   var list=Object.values(pedidos);
-  var search = document.getElementById('agdSearchInput') ? document.getElementById('agdSearchInput').value.toLowerCase().trim() : '';
+  var search = document.getElementById('agdSearchInput') ? normalizeSearch(document.getElementById('agdSearchInput').value) : '';
   var cli = document.getElementById('agdFilterClient') ? document.getElementById('agdFilterClient').value : '';
   if (search || cli) {
     list = list.filter(function(p) {
       if (cli && p.cliente !== cli) return false;
       if (search) {
-        var haystack = String(p.produto || '').toLowerCase() + ' ' + String(p.sku || '').toLowerCase() + ' ' + String(p.id || '').toLowerCase();
+        var haystack = normalizeSearch(p.produto || '') + ' ' + normalizeSearch(p.sku || '') + ' ' + normalizeSearch(p.id || '');
         if (haystack.indexOf(search) === -1) return false;
       }
       return true;
@@ -1013,8 +1012,8 @@ function renderProdList(q){
     var p=pedidos[k];
     if(p._isDone&&k!==mSelected)return false;
     if(!q)return true;
-    var qs=q.toLowerCase();
-    return (p.produto&&p.produto.toLowerCase().includes(qs))||(p.sku&&p.sku.toLowerCase().includes(qs))||(p.id&&p.id.toLowerCase().includes(qs));
+    var qs=normalizeSearch(q);
+    return (p.produto&&normalizeSearch(p.produto).indexOf(qs)!==-1)||(p.sku&&normalizeSearch(p.sku).indexOf(qs)!==-1)||(p.id&&normalizeSearch(p.id).indexOf(qs)!==-1);
   });
   keys.sort(function(a,b){
     if(a===mSelected)return -1;if(b===mSelected)return 1;

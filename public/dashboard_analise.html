@@ -853,8 +853,8 @@ function filterProducao() {
     if (filters.viscosidade.length && !filters.viscosidade.includes(p.visc)) return false;
     if (filters.linha.length && !filters.linha.includes(p.lin || 'S/LINHA')) return false;
     if (filters.search) {
-      const q = filters.search.toLowerCase();
-      if (!(p.sku||'').toLowerCase().includes(q) && !(p.desc||'').toLowerCase().includes(q)) return false;
+      const q = normalizeSearch(filters.search);
+      if (!normalizeSearch(p.sku||'').includes(q) && !normalizeSearch(p.desc||'').includes(q)) return false;
     }
     return true;
   });
@@ -869,8 +869,8 @@ function filterPedidos() {
     if (filters.servico.length && !filters.servico.includes(p.serv)) return false;
     if (filters.linha.length && !filters.linha.includes(p.lin || 'S/LINHA')) return false;
     if (filters.search) {
-      const q = filters.search.toLowerCase();
-      if (!((p.sku||'').toLowerCase().includes(q) || (p.prod||'').toLowerCase().includes(q) || (p.id||'').toLowerCase().includes(q))) return false;
+      const q = normalizeSearch(filters.search);
+      if (!(normalizeSearch(p.sku||'').includes(q) || normalizeSearch(p.prod||'').includes(q) || normalizeSearch(p.id||'').includes(q))) return false;
     }
     return true;
   });
@@ -886,8 +886,8 @@ function filterExpedicoes() {
     }
     if (filters.cliente.length && !filters.cliente.includes(p.cli)) return false;
     if (filters.search) {
-      const q = filters.search.toLowerCase();
-      if (!((p.sku||'').toLowerCase().includes(q) || (p.cli||'').toLowerCase().includes(q) || (p.nf||'').toLowerCase().includes(q) || (p.lot||'').toLowerCase().includes(q))) return false;
+      const q = normalizeSearch(filters.search);
+      if (!(normalizeSearch(p.sku||'').includes(q) || normalizeSearch(p.cli||'').includes(q) || normalizeSearch(p.nf||'').includes(q) || normalizeSearch(p.lot||'').includes(q))) return false;
     }
     return true;
   });
@@ -1201,8 +1201,8 @@ function renderAll() {
     if (!(e.status || '').toLowerCase().includes('estoque')) return false;
     if (filters.cliente.length && !filters.cliente.includes(e.cli)) return false;
     if (filters.search) {
-      const q = filters.search.toLowerCase();
-      if (!((e.sku||'').toLowerCase().includes(q) || (e.cli||'').toLowerCase().includes(q) || (e.nf||'').toLowerCase().includes(q) || (e.lot||'').toLowerCase().includes(q))) return false;
+      const q = normalizeSearch(filters.search);
+      if (!(normalizeSearch(e.sku||'').includes(q) || normalizeSearch(e.cli||'').includes(q) || normalizeSearch(e.nf||'').includes(q) || normalizeSearch(e.lot||'').includes(q))) return false;
     }
     return true;
   });
