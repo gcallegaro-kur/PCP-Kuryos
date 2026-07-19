@@ -396,6 +396,11 @@ function loadFirebaseAndRun() {
     subtitleEl.textContent = 'Carregando dados em tempo real do Firebase...';
   }
   
+  db.ref('pedidos_comerciais').once('value', function(pcSnap) {
+    RAW.pedidosComerciais = Object.values(pcSnap.val() || {});
+    if (typeof apply === 'function') apply(); // re-renderiza o KPI assim que chegar (chega depois do restante)
+  });
+
   db.ref('produtos').once('value', function(prodSnap) {
     const produtos = prodSnap.val() || {};
     const skuMap = {};
@@ -1107,13 +1112,15 @@ function renderAll() {
 
   const pedStCount = {};
   ped.forEach(p => pedStCount[p.status] = (pedStCount[p.status]||0) + 1);
+  const pedidosComerciais = RAW.pedidosComerciais || [];
   renderKpis('kpi-pedidos', [
-    {label: 'Pedidos', value: fmt(ped.length)},
-    {label: 'Concluídos', value: fmt(pedStCount['Concluído'] || 0)},
+    {label: 'OPs (produção)', value: fmt(ped.length)},
+    {label: 'Concluídas', value: fmt(pedStCount['Concluído'] || 0)},
     {label: 'Em produção', value: fmt((pedStCount['Em Produção']||0) + (pedStCount['Produção Parcial']||0))},
-    {label: 'Programados', value: fmt(pedStCount['Programado'] || 0)},
-    {label: 'Não iniciados', value: fmt(pedStCount['Não Iniciado'] || 0)},
-    {label: 'Qtd. total', value: fmtK(totalQ), sub: 'unidades'},
+    {label: 'Programadas', value: fmt(pedStCount['Programado'] || 0)},
+    {label: 'Não iniciadas', value: fmt(pedStCount['Não Iniciado'] || 0)},
+    {label: 'Qtd. total (OPs)', value: fmtK(totalQ), sub: 'unidades'},
+    {label: 'Pedidos Comerciais', value: fmt(pedidosComerciais.length), sub: 'backlog do Comercial'},
   ]);
   const pedStKeys = STATUS_ORDER.filter(s => pedStCount[s]).concat(Object.keys(pedStCount).filter(s => !STATUS_ORDER.includes(s)));
   if (pedStKeys.length) {
