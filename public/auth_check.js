@@ -248,8 +248,8 @@ function renderUnifiedNavbar(user) {
       <button class="nav-dropdown-btn">🗓 PCP ▾</button>
       <div class="nav-dropdown-content">
         <a href="planejamento.html" class="${activePage === 'planejamento.html' ? 'active' : ''}">🗓 Planejamento</a>
-        <a href="ops.html" class="${activePage === 'ops.html' ? 'active' : ''}">⚙️ Controle de OPs / Lotes</a>
-        ${isPcpAdmin ? `<a href="pedidos.html" class="${activePage === 'pedidos.html' ? 'active' : ''}">📦 Pedidos</a>` : ''}
+        <a href="ops.html" class="${activePage === 'ops.html' ? 'active' : ''}">⚙️ Controle de OPs</a>
+        ${isPcpAdmin ? `<a href="pedidos.html" class="${activePage === 'pedidos.html' ? 'active' : ''}">📦 Pedidos &amp; OPs</a>` : ''}
         ${isPcpAdmin ? `<a href="produtos.html" class="${activePage === 'produtos.html' ? 'active' : ''}">🏷 Cadastro de Produtos</a>` : ''}
         ${isPcpAdmin ? `<a href="insumos.html" class="${activePage === 'insumos.html' ? 'active' : ''}">📦 Matriz de Insumos</a>` : ''}
         ${isPcpAdmin ? `<a href="admin.html" class="${activePage === 'admin.html' ? 'active' : ''}">⚙️ Ajuste de Metas / Configurações</a>` : ''}

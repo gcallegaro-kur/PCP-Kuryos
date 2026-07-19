@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Controle de OPs / Lotes · Kuryos PCP</title>
+  <title>Controle de OPs · Kuryos PCP</title>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
@@ -344,8 +344,8 @@
 <div class="container">
   <div class="head">
     <div>
-      <h1>⚙️ Controle de OPs / Lotes Ativos</h1>
-      <div class="subtitle">Acompanhe o progresso físico dos pedidos e gerencie as OPs / Lotes ativos em produção</div>
+      <h1>⚙️ Controle de OPs Ativas</h1>
+      <div class="subtitle">Acompanhe o progresso físico e gerencie as OPs ativas em produção</div>
     </div>
     <div style="display: flex; gap: 8px;">
       <button class="btn-sync" onclick="toggleImportSection()" style="background: var(--primary);">
@@ -610,7 +610,7 @@
         </td>
         <td>
           ${isAdmin 
-            ? `<input type="text" value="${escapedLoteAttr}" onblur="updateOpField('${escapedKeyAttr}', 'lote', this.value)" placeholder="Sem OP/Lote">`
+            ? `<input type="text" value="${escapedLoteAttr}" onblur="updateOpField('${escapedKeyAttr}', 'lote', this.value)" placeholder="Sem OP">`
             : `<span>${escapedLote}</span>`}
         </td>
         <td>
@@ -645,7 +645,7 @@
         </td>
         <td style="text-align: center;">
           ${isAdmin
-            ? `<button class="btn-delete" onclick="deleteOp('${escapedKeyAttr}')" title="Excluir OP/Lote">
+            ? `<button class="btn-delete" onclick="deleteOp('${escapedKeyAttr}')" title="Excluir OP">
                  <i class="fas fa-trash-alt"></i>
                </button>`
             : `-`}
@@ -676,7 +676,7 @@
         .then(() => {
           // Remove todos os agendamentos desta OP no planejamento (slots futuros)
           cleanFutureSlots(pedidoId, database);
-          showToast('OP/Lote concluída e slots de planejamento limpos com sucesso!');
+          showToast('OP concluída e slots de planejamento limpos com sucesso!');
         })
         .catch(err => {
           console.error(err);
@@ -686,7 +686,7 @@
       // Atualizações de campo normais
       database.ref('pedidos/' + pedidoId).update({ [field]: value })
         .then(() => {
-          showToast('OP/Lote atualizada com sucesso!');
+          showToast('OP atualizada com sucesso!');
         })
         .catch(err => {
           console.error(err);
@@ -701,7 +701,7 @@
       return;
     }
 
-    const confirmAction = confirm('ATENÇÃO: Deseja realmente excluir permanentemente esta OP/Lote do sistema? Isso removerá o pedido e os agendamentos associados.');
+    const confirmAction = confirm('ATENÇÃO: Deseja realmente excluir permanentemente esta OP do sistema? Isso removerá a OP e os agendamentos associados.');
     if (!confirmAction) return;
     
     // 1. Remove de pedidos
@@ -709,7 +709,7 @@
       .then(() => {
         // 2. Remove agendamentos de slots
         cleanFutureSlots(pedidoId, database);
-        showToast('OP/Lote excluída com sucesso!');
+        showToast('OP excluída com sucesso!');
       })
       .catch(err => {
         console.error(err);

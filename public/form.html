@@ -293,7 +293,7 @@
           <span id="scheduleBannerText"></span>
         </div>
 
-        <!-- OP / Lote: apenas para Linhas de Producao. Lote = nº da OP, auto-preenchido. -->
+        <!-- OP: apenas para Linhas de Producao. Lote = nº da OP, auto-preenchido. -->
         <div class="linha-extra" id="fLinhaExtra">
           <div class="form-group">
             <label>Lote (= nº da OP)</label>
@@ -382,7 +382,7 @@
             <input type="text" id="opLinha" readonly style="background:#f9fafb;color:var(--muted)">
           </div>
           <div class="form-group">
-            <label>OP / Lote</label>
+            <label>OP</label>
             <input type="text" id="opLote" placeholder="Confirme o lote...">
           </div>
         </div>
@@ -392,7 +392,7 @@
           <select id="opProduto" required><option value="">Selecione...</option></select>
         </div>
         <div class="form-group">
-          <label>Qtd. Total da OP / Lote (soma de todas as horas)</label>
+          <label>Qtd. Total da OP (soma de todas as horas)</label>
           <input type="number" id="opQtdTotal" min="0" placeholder="Ex: 2400">
           <div class="form-hint prog" id="opCalcHint"></div>
         </div>
@@ -409,7 +409,7 @@
           <label style="color:#dc2626;font-weight:700">Justificativa do Desvio (Obrigatório)</label>
           <textarea id="opJustificativa" rows="3" placeholder="Explique o motivo do desvio (ex: quebras de embalagens, rendimento do lote de bulk, refugo, etc.)" style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white;font-family:inherit;resize:vertical;"></textarea>
         </div>
-        <button type="submit" class="btn-retro" id="btnFinalizarOP" style="background:#059669">&#127937; Finalizar OP / Lote</button>
+        <button type="submit" class="btn-retro" id="btnFinalizarOP" style="background:#059669">&#127937; Finalizar OP</button>
       </form>
     </div>
   </div>
@@ -457,11 +457,11 @@
           <select id="rLinha" required><option value="">Selecione...</option></select>
         </div>
 
-        <!-- OP / Lote: apenas para Linhas de Producao -->
+        <!-- OP: apenas para Linhas de Producao -->
         <div class="linha-extra" id="rLinhaExtra">
           <div class="form-group">
-            <label>OP / Lote</label>
-            <input type="text" id="rLote" placeholder="Cod. da OP / Lote...">
+            <label>OP</label>
+            <input type="text" id="rLote" placeholder="Cod. da OP...">
           </div>
         </div>
         <!-- Colaboradores: para Linhas e Postos -->
@@ -1879,7 +1879,7 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     rememberOPForLine(linha, pedidoId, produto);
   }
 
-  // Reset form fields imediatamente (preserva OP/Lote se a linha tem OP travada)
+  // Reset form fields imediatamente (preserva OP se a linha tem OP travada)
   var fieldsToClear = isLinhaAtual ? ['fQtd','fObs','fColaboradores'] : ['fQtd','fObs','fLote','fColaboradores','fPedidoId'];
   fieldsToClear.forEach(function(id) {
     var el = document.getElementById(id);
@@ -2207,7 +2207,7 @@ function collectPerdas() {
   return perdas;
 }
 
-// ── Finalizar OP / Lote submit ───────────────────────────────────────────
+// ── Finalizar OP submit ───────────────────────────────────────────
 document.getElementById('opForm').addEventListener('submit', function(e) {
   e.preventDefault();
   var btn = document.getElementById('btnFinalizarOP');
@@ -2223,15 +2223,15 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
 
   var qtdFinal = Math.max(qtdTotal - apontado, 0);
 
-  if (!produto) { btn.disabled=false; btn.textContent='🏁 Finalizar OP / Lote'; alert('Selecione o produto.'); return; }
-  if (!qtdTotal) { btn.disabled=false; btn.textContent='🏁 Finalizar OP / Lote'; alert('Informe a quantidade total da OP.'); return; }
+  if (!produto) { btn.disabled=false; btn.textContent='🏁 Finalizar OP'; alert('Selecione o produto.'); return; }
+  if (!qtdTotal) { btn.disabled=false; btn.textContent='🏁 Finalizar OP'; alert('Informe a quantidade total da OP.'); return; }
 
   // Validar justificativa se houver desvio
   var qtdEsperada = parseInt(this.dataset.opQtdEsperada || 0) || 0;
   var hasDeviation = (qtdEsperada > 0) && (qtdTotal !== qtdEsperada);
   var justificativa = document.getElementById('opJustificativa').value.trim();
   if (hasDeviation && !justificativa) {
-    btn.disabled = false; btn.textContent = '🏁 Finalizar OP / Lote';
+    btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
     alert('Por favor, insira a justificativa para o desvio de quantidade.');
     document.getElementById('opJustificativa').focus();
     return;
@@ -2269,9 +2269,9 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   };
   queueOfflineWrite(item);
 
-  btn.disabled = false; btn.textContent = '🏁 Finalizar OP / Lote';
+  btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
   document.getElementById('opForm').style.display = 'none';
-  showSuccess('OP / Lote Finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—'));
+  showSuccess('OP Finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—'));
   buildOpSuggestions();
 });
 
