@@ -358,7 +358,7 @@
           </div>
           <div class="form-group">
             <label>LP</label>
-            <input type="number" id="fLp" min="0" step="0.01" placeholder="Ex: 0,45">
+            <input type="number" id="fLp" min="0" step="0.01" placeholder="Ex: 0.45">
           </div>
           <div class="form-group full">
             <label>Observações</label>
@@ -752,9 +752,10 @@ function parseExcelProdutos(file) {
         if (String(sku || '').trim() === '' || String(sku || '').trim() === '-') sku = null;
 
         var ativoBool = row[22];
+        var ativoNorm = String(ativoBool == null ? '' : ativoBool).trim().toLowerCase();
+        var inativoValues = ['false', 'inativo', 'não', 'nao', 'n', '0'];
         var ativoStr;
-        if (ativoBool === false || String(ativoBool).toLowerCase() === 'inativo') ativoStr = 'Inativo';
-        else if (ativoBool === true || String(ativoBool).toLowerCase() === 'ativo') ativoStr = 'Ativo';
+        if (ativoBool === false || inativoValues.indexOf(ativoNorm) !== -1) ativoStr = 'Inativo';
         else ativoStr = 'Ativo';
 
         var lpVal = row[24];
@@ -820,13 +821,9 @@ function doImportProdutos(list) {
     }
     var p = list[done];
     var key = p.sku ? sanitizeKey(p.sku) : sanitizeKey(p.descricao.slice(0, 40));
-    // Preserva prodHoraCalc se já existir no Firebase
-    db.ref('produtos/' + key).once('value').then(function(snap) {
-      var existing = snap.val() || {};
-      var data = Object.assign({}, p);
-      if (existing.prodHoraCalc) data.prodHoraCalc = existing.prodHoraCalc;
-      return db.ref('produtos/' + key).set(data);
-    }).then(function() {
+    // prodHoraCalc é calculado sob demanda em memória (botão "Recalcular"),
+    // não é persistido no Firebase — nada a preservar aqui.
+    db.ref('produtos/' + key).set(p).then(function() {
       done++;
       var pct = Math.round(done / total * 100);
       document.getElementById('importFill').style.width = pct + '%';

@@ -858,16 +858,6 @@
     <!-- Pedido info strip -->
     <div class="ped-info" id="pedidoInfo"></div>
 
-    <!-- Drag and Drop for OP sheet -->
-    <div class="card" id="opImportCard" style="display:none; border: 2px dashed #bfdbfe; background: #f0f9ff; margin-top: 0; margin-bottom:14px;">
-      <div style="padding: 20px; text-align: center; cursor: pointer;" id="dropZoneOP">
-        <div style="font-size: 32px; margin-bottom: 6px;">📄</div>
-        <div style="font-weight: 700; font-size: 14px; color: var(--primary);">Arraste a Ficha OP (.xlsx) aqui para este SKU</div>
-        <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Atualiza as necessidades físicas de materiais a partir da aba 'OP 1' da ficha de produto</div>
-        <input type="file" id="fileInputOP" accept=".xlsx,.xlsm" style="display: none;">
-      </div>
-    </div>
-
     <!-- Stats (hidden until pedido selected) -->
     <div class="stats" id="statsBlock" style="display:none">
       <div class="stat"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Insumos</div></div>
@@ -996,47 +986,6 @@
   </div>
 </div>
 
-<!-- Modal: OP Import Preview -->
-<div class="modal-bg" id="opImportPreviewModalBg">
-  <div class="modal" style="max-width: 600px;">
-    <div class="modal-header">
-      <h2>Visualizar Importação de Insumos da OP</h2>
-      <button class="modal-close" id="opImportClose" onclick="closeOPImportPreviewModal()">×</button>
-    </div>
-    <div class="modal-body" style="max-height: 440px; overflow-y: auto;">
-      <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; border: 1px solid var(--border);">
-        <p style="margin-bottom: 4px;"><strong>Pedido da OP (Excel):</strong> <span id="opPrevPedidoId">—</span></p>
-        <p style="margin-bottom: 4px;"><strong>Produto (Excel):</strong> <span id="opPrevProduto">—</span> (SKU: <span id="opPrevSku">—</span>, Qtd: <span id="opPrevQtd">—</span>)</p>
-        <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--border);">
-        <p><strong>Destino da Importação:</strong> <span id="opPrevDestino">—</span></p>
-        <div id="opPrevSelectDestinoWrap" style="display: none; margin-top: 8px;">
-          <label class="form-label" style="margin-bottom: 2px;">Selecione o pedido de destino no Firebase:</label>
-          <select id="opPrevSelPedidoDestino" class="form-ctrl" style="margin-bottom: 0;"></select>
-        </div>
-      </div>
-      <label class="form-label">Lista de Insumos e Materiais a importar:</label>
-      <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 12px; overflow-x: auto;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px; min-width: 480px;">
-          <thead>
-            <tr style="background: #f8fafc; border-bottom: 1px solid var(--border);">
-              <th style="padding: 8px; text-align: left; font-weight: 700; color: var(--muted);">Insumo</th>
-              <th style="padding: 8px; text-align: right; font-weight: 700; color: var(--muted);">Qtd OP (Nec.)</th>
-              <th style="padding: 8px; text-align: center; font-weight: 700; color: var(--muted);">Ação</th>
-            </tr>
-          </thead>
-          <tbody id="opPrevTableBody"></tbody>
-        </table>
-      </div>
-      <div style="font-size: 11px; color: var(--muted); font-weight: 500;">
-        * Os recebimentos físicos (`qtdRecebida`) e históricos de observações já digitados serão preservados!
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost btn-sm" id="opImportCancel" onclick="closeOPImportPreviewModal()">Cancelar</button>
-      <button class="btn btn-success btn-sm" id="opImportConfirm">✓ Confirmar Importação</button>
-    </div>
-  </div>
-</div>
 
 <script>
   var firebaseConfig = {
@@ -1063,13 +1012,6 @@
   
   // Batch Receipt State
   var brCurrentPedidoInsumos = [];
-  
-  // OP Import State
-  var opParsedMaterials = [];
-  var opParsedSku = "";
-  var opParsedDesc = "";
-  var opParsedQty = 0;
-  var opParsedPedidoId = "";
 
   // ── Connection ───────────────────────────────────────────────────
   db.ref('.info/connected').on('value', function(snap) {
@@ -1361,7 +1303,6 @@
     var key = document.getElementById('selPedido').value;
     currentPedKey = key || null;
     document.getElementById('btnNovoInsumo').disabled = !key;
-    document.getElementById('opImportCard').style.display = key ? 'block' : 'none';
 
     if (!key) {
       document.getElementById('pedidoInfo').className = 'ped-info';
@@ -1642,6 +1583,7 @@
   document.getElementById('recvModalSave').addEventListener('click', function() {
     if (!recvInsumoKey || !currentPedKey) return;
     var qtdRec = parseFloat(document.getElementById('rQtdRec').value) || 0;
+    if (qtdRec < 0) { alert('Quantidade recebida não pode ser negativa.'); return; }
     var obsText = document.getElementById('rObs').value.trim();
     var item = insumosData[recvInsumoKey];
     
@@ -1790,20 +1732,26 @@
     updateBatchRecvPreview();
   }
 
+  // Casa "word" como palavra inteira (delimitada por não-letras), evitando
+  // falsos positivos tipo "mp" dentro de "compra" ou "ativo" dentro de "decorativo".
+  function hasWord(text, word) {
+    return new RegExp('(^|[^a-zà-ÿ])' + word + '([^a-zà-ÿ]|$)', 'i').test(text);
+  }
+
   function guessChecklistColumn(name) {
     var n = name.toLowerCase();
-    if (n.indexOf('rótulo') !== -1 || n.indexOf('rotulo') !== -1) return 'rotulos';
-    if (n.indexOf('frasco') !== -1 || n.indexOf('pote') !== -1 || n.indexOf('bisnaga') !== -1) return 'frascos';
-    if (n.indexOf('tampa') !== -1 || n.indexOf('batoque') !== -1) return 'tampas';
-    if (n.indexOf('cartucho') !== -1) return 'cartucho';
-    if (n.indexOf('válvula') !== -1 || n.indexOf('valvula') !== -1 || n.indexOf('pump') !== -1 || n.indexOf('spray') !== -1) return 'valvulas';
-    if (n.indexOf('celofane') !== -1) return 'celofane';
-    if (n.indexOf('display') !== -1) return 'display';
-    if (n.indexOf('caixa') !== -1 || n.indexOf('papelão') !== -1) return 'caixas';
-    if (n.indexOf('essência') !== -1 || n.indexOf('essencia') !== -1 || n.indexOf('fragrância') !== -1 || n.indexOf('fragrancia') !== -1) return 'essencia';
-    if (n.indexOf('matéria') !== -1 || n.indexOf('materia') !== -1 || n.indexOf('mp') !== -1 || n.indexOf('químico') !== -1 || n.indexOf('quimico') !== -1 || n.indexOf('base ') === 0 || n.indexOf('ativo') !== -1) return 'mp';
-    if (n.indexOf('anvisa') !== -1 || n.indexOf('notificação') !== -1) return 'anvisa';
-    if (n.indexOf('arte') !== -1) return 'artes';
+    if (hasWord(n, 'rótulo') || hasWord(n, 'rotulo')) return 'rotulos';
+    if (hasWord(n, 'frasco') || hasWord(n, 'pote') || hasWord(n, 'bisnaga')) return 'frascos';
+    if (hasWord(n, 'tampa') || hasWord(n, 'batoque')) return 'tampas';
+    if (hasWord(n, 'cartucho')) return 'cartucho';
+    if (hasWord(n, 'válvula') || hasWord(n, 'valvula') || hasWord(n, 'pump') || hasWord(n, 'spray')) return 'valvulas';
+    if (hasWord(n, 'celofane')) return 'celofane';
+    if (hasWord(n, 'display')) return 'display';
+    if (hasWord(n, 'caixa') || hasWord(n, 'papelão')) return 'caixas';
+    if (hasWord(n, 'essência') || hasWord(n, 'essencia') || hasWord(n, 'fragrância') || hasWord(n, 'fragrancia')) return 'essencia';
+    if (hasWord(n, 'matéria') || hasWord(n, 'materia') || hasWord(n, 'mp') || hasWord(n, 'químico') || hasWord(n, 'quimico') || n.indexOf('base ') === 0 || hasWord(n, 'ativo')) return 'mp';
+    if (hasWord(n, 'anvisa') || hasWord(n, 'notificação')) return 'anvisa';
+    if (hasWord(n, 'arte')) return 'artes';
     return '';
   }
 
@@ -2047,11 +1995,8 @@
     });
   }
 
-  // Initial drag & drop setup for OP
-    
-    
-    // Default switch to matrix
-    switchTab('matriz');
+  // Default switch to matrix
+  switchTab('matriz');
 </script>
 </body>
 </html>
