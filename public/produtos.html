@@ -166,25 +166,14 @@
   <div class="card">
     <div class="card-title">
       <span id="tableCount">Produtos</span>
-      <button class="btn btn-ghost btn-sm" id="btnImportExcel">📥 Importar do Excel</button>
     </div>
 
-    <!-- Import section (hidden by default) -->
-    <div id="importSection" style="display:none;padding:16px;border-bottom:1px solid var(--border)">
-      <div class="recalc-bar">
-        ℹ️ Importe a aba <strong>"Produtos"</strong> do arquivo <em>Controle de Produtos.xlsx</em>.
-        Registros já existentes serão atualizados; o campo "produzido" é preservado.
-      </div>
-      <div class="import-card" id="dropZone">
-        <div class="import-icon">📂</div>
-        <div class="import-text" id="dropText">Clique ou arraste o arquivo aqui</div>
-        <div class="import-hint">Aceita: .xlsx e .xlsm — aba "Produtos"</div>
-      </div>
-      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
-      <div id="importProgress" style="display:none">
-        <div class="progress-bar"><div class="progress-fill" id="importFill" style="width:0%"></div></div>
-        <div style="font-size:12px;color:var(--muted)" id="importText">Importando...</div>
-      </div>
+    <!-- Import manual desabilitado: o cadastro agora sincroniza automaticamente
+         (mão única) a partir da aba PRODUTOS do Criador de OPs vF.xlsm, via
+         produtos_watcher.py. Editar produto aqui ou por essa importação
+         antiga divergiria da fonte única — por isso a via manual foi retirada. -->
+    <div class="recalc-bar" style="margin:12px 16px">
+      ℹ️ O cadastro de produtos agora sincroniza automaticamente da planilha <strong>Criador de OPs vF.xlsm</strong> (aba PRODUTOS). Para corrigir um produto, edite na planilha — a importação manual por Excel foi desativada aqui pra evitar divergência entre as duas fontes.
     </div>
 
     <div class="table-wrap">
@@ -231,15 +220,15 @@
         <div class="form-grid">
           <div class="form-group">
             <label>SKU *</label>
-            <input type="text" id="fSku" placeholder="Ex: GZLBBS02">
+            <input type="text" id="fSku" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Ex: GZLBBS02">
           </div>
           <div class="form-group">
             <label>Cód. Cliente</label>
-            <input type="text" id="fCodCliente" placeholder="Ex: MRARBS05">
+            <input type="text" id="fCodCliente" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Ex: MRARBS05">
           </div>
           <div class="form-group full">
             <label>Descrição do Item *</label>
-            <input type="text" id="fDescricao" placeholder="Nome completo do produto">
+            <input type="text" id="fDescricao" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Nome completo do produto">
           </div>
           <div class="form-group">
             <label>Linha do Produto</label>
@@ -248,7 +237,7 @@
           <div class="form-group" style="display:grid;grid-template-columns:2fr 1fr;gap:6px;align-items:end">
             <div>
               <label>Volume</label>
-              <input type="number" id="fVolume" min="0" step="any" placeholder="Ex: 200">
+              <input type="number" id="fVolume" readonly style="background:#f9fafb;color:var(--muted)" min="0" step="any" placeholder="Ex: 200">
             </div>
             <div>
               <label>U.M.</label>
@@ -263,7 +252,7 @@
           </div>
           <div class="form-group">
             <label>Status</label>
-            <select id="fAtivo">
+            <select id="fAtivo" disabled style="background:#f9fafb;color:var(--muted)">
               <option value="Ativo">Ativo</option>
               <option value="Inativo">Inativo</option>
             </select>
@@ -302,7 +291,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Cliente</label>
-            <input type="text" id="fCliente" list="clientesList" placeholder="Ex: MISS ROSE" autocomplete="off">
+            <input type="text" id="fCliente" readonly style="background:#f9fafb;color:var(--muted)" list="clientesList" placeholder="Ex: MISS ROSE" autocomplete="off">
             <datalist id="clientesList"></datalist>
           </div>
           <div class="form-group">
@@ -335,7 +324,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Un. / Caixa</label>
-            <input type="number" id="fUnCx" min="1" step="1" placeholder="Ex: 12">
+            <input type="number" id="fUnCx" readonly style="background:#f9fafb;color:var(--muted)" min="1" step="1" placeholder="Ex: 12">
           </div>
           <div class="form-group">
             <label>Qtd. Lote Padrão (unidades)</label>
@@ -730,126 +719,6 @@ function calcProdHora() {
   });
 }
 
-/* ── Import do Excel ── */
-function parseExcelProdutos(file) {
-  document.getElementById('dropText').textContent = '⏳ Lendo ' + file.name + '...';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-      var ws = wb.Sheets['Produtos'];
-      if (!ws) {
-        var found = wb.SheetNames.find(function(s) { return s.toLowerCase().indexOf('produto') !== -1; });
-        if (found) ws = wb.Sheets[found]; else { showAlert('Aba "Produtos" não encontrada.', 'danger'); return; }
-      }
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      var toImport = [];
-
-      // Confere que as colunas críticas (SKU, Descrição, Ativo, LP) ainda têm
-      // cabeçalho preenchido na linha esperada antes de confiar nos índices
-      // fixos abaixo — evita importar dado deslocado silenciosamente.
-      var prodHeaderRow = rows[1] || [];
-      var prodHeaderIdx = [1, 2, 22, 24];
-      var prodHeaderMissing = prodHeaderIdx.filter(function(idx) {
-        return prodHeaderRow[idx] == null || String(prodHeaderRow[idx]).trim() === '';
-      });
-      if (prodHeaderMissing.length) {
-        showAlert('O cabeçalho da planilha (linha 2) parece incompleto ou fora do layout esperado nas colunas ' + prodHeaderMissing.map(function(i){return String.fromCharCode(65+i);}).join(', ') + '. Confirme o layout antes de importar.', 'danger');
-        return;
-      }
-
-      // Header na linha índice 1 (linha 2 do Excel); dados a partir do índice 2
-      for (var i = 2; i < rows.length; i++) {
-        var row = rows[i];
-        if (!row) continue;
-        var sku = row[1];
-        var descricao = row[2];
-        if (!descricao || String(descricao).trim() === '' || String(descricao).trim() === '-') continue;
-        if (String(sku || '').trim() === '' || String(sku || '').trim() === '-') sku = null;
-
-        var ativoBool = row[22];
-        var ativoNorm = String(ativoBool == null ? '' : ativoBool).trim().toLowerCase();
-        var inativoValues = ['false', 'inativo', 'não', 'nao', 'n', '0'];
-        var ativoStr;
-        if (ativoBool === false || inativoValues.indexOf(ativoNorm) !== -1) ativoStr = 'Inativo';
-        else ativoStr = 'Ativo';
-
-        var lpVal = row[24];
-        var lpStr = typeof lpVal === 'number' ? lpVal : (parseFloat(String(lpVal || '').replace(',', '.')) || 0);
-
-        var prodHora = typeof row[10] === 'number' ? Math.round(row[10]) : 0;
-
-        toImport.push({
-          sku: sku ? String(sku).trim() : null,
-          descricao: String(descricao).trim(),
-          linhaProduto: row[3] && String(row[3]).trim() !== '-' ? String(row[3]).trim() : '',
-          volume: typeof row[4] === 'number' ? row[4] : (parseFloat(row[4]) || 0),
-          unidadeVolume: row[5] ? String(row[5]).trim() : 'ml',
-          cliente: row[6] && String(row[6]).trim() !== '-' ? String(row[6]).trim() : '',
-          categoria: row[7] ? String(row[7]).trim() : '',
-          subcategoria: row[8] ? String(row[8]).trim() : '',
-          viscosidade: row[9] ? String(row[9]).trim() : '',
-          prodHoraRef: prodHora,
-          unCx: typeof row[12] === 'number' ? Math.round(row[12]) : (parseInt(row[12]) || 0),
-          lotePadrao: typeof row[13] === 'number' ? Math.round(row[13]) : (parseInt(row[13]) || 0),
-          codCliente: row[14] ? String(row[14]).trim() : '',
-          ean13: row[15] ? String(row[15]).trim() : '',
-          dum14: row[16] ? String(row[16]).trim() : '',
-          ativo: ativoStr,
-          msAnvisa: row[23] ? String(row[23]).trim() : '',
-          lp: lpStr,
-          cq: {
-            cor: row[25] ? String(row[25]).trim() : '',
-            odor: row[26] ? String(row[26]).trim() : '',
-            aspecto: row[27] ? String(row[27]).trim() : '',
-            densidade: row[28] ? String(row[28]).trim() : '',
-            ph: row[29] ? String(row[29]).trim() : '',
-            teorAlcool: row[30] ? String(row[30]).trim() : '',
-            viscosidade: row[31] ? String(row[31]).trim() : '',
-            faixaPeso: row[32] ? String(row[32]).trim() : ''
-          }
-        });
-      }
-
-      if (!toImport.length) { showAlert('Nenhum produto encontrado na aba Produtos.', 'danger'); return; }
-      document.getElementById('dropText').textContent = '✓ ' + file.name + ' — ' + toImport.length + ' produtos encontrados';
-      doImportProdutos(toImport);
-    } catch (err) {
-      showAlert('Erro ao ler arquivo: ' + err.message, 'danger');
-      document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-      console.error(err);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function doImportProdutos(list) {
-  var total = list.length;
-  var done = 0;
-  document.getElementById('importProgress').style.display = 'block';
-
-  function next() {
-    if (done >= total) {
-      document.getElementById('importFill').style.width = '100%';
-      document.getElementById('importText').textContent = '✓ ' + total + ' produtos importados!';
-      showAlert(total + ' produtos importados com sucesso.', 'success');
-      return;
-    }
-    var p = list[done];
-    var key = p.sku ? sanitizeSkuKey(p.sku) : sanitizeSkuKey(p.descricao.slice(0, 40));
-    // prodHoraCalc é calculado sob demanda em memória (botão "Recalcular"),
-    // não é persistido no Firebase — nada a preservar aqui.
-    db.ref('produtos/' + key).set(p).then(function() {
-      done++;
-      var pct = Math.round(done / total * 100);
-      document.getElementById('importFill').style.width = pct + '%';
-      document.getElementById('importText').textContent = 'Importando ' + done + ' / ' + total + '...';
-      next();
-    }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
-  }
-  next();
-}
-
 /* ── DOMContentLoaded ── */
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -883,27 +752,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('filterCategoria').addEventListener('change', renderTable);
   document.getElementById('filterCliente').addEventListener('change', renderTable);
 
-  /* Import toggle */
-  document.getElementById('btnImportExcel').addEventListener('click', function() {
-    var sec = document.getElementById('importSection');
-    sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
-  });
-
-  /* Import drop zone */
-  var dropZone = document.getElementById('dropZone');
-  var fileInput = document.getElementById('fileInput');
-  dropZone.addEventListener('click', function() { fileInput.click(); });
-  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
-  dropZone.addEventListener('drop', function(e) {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    var f = e.dataTransfer.files[0];
-    if (f) parseExcelProdutos(f);
-  });
-  fileInput.addEventListener('change', function() {
-    if (fileInput.files[0]) parseExcelProdutos(fileInput.files[0]);
-  });
+  /* Import manual por Excel desativado (Fase E) — cadastro agora sincroniza
+     automaticamente da planilha Criador de OPs vF.xlsm via produtos_watcher.py */
 
   /* Recalcular prod/hora */
   document.getElementById('btnRecalc').addEventListener('click', calcProdHora);
