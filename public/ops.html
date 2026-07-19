@@ -378,6 +378,7 @@
             <th>Produto / Descrição</th>
             <th style="width: 110px;">Lote Físico</th>
             <th style="width: 120px;">Linha</th>
+            <th style="width: 150px;">Pedido Comercial</th>
             <th style="width: 180px;">Progresso Realizado</th>
             <th style="width: 160px;">Status da OP</th>
             <th style="width: 60px; text-align: center;">Excluir</th>
@@ -385,7 +386,7 @@
         </thead>
         <tbody id="ops-tbody">
           <tr>
-            <td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
+            <td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
           </tr>
         </tbody>
       </table>
@@ -458,6 +459,7 @@
   let currentRole = 'production';
   let pedidosGlobal = {};
   let produtosGlobal = {};
+  let pedidosComerciaisGlobal = {};
   
   // Wait for user authentication to determine role permissions
   firebase.auth().onAuthStateChanged(user => {
@@ -482,6 +484,11 @@
     // Escuta produtos
     database.ref('produtos').on('value', snap => {
       produtosGlobal = snap.val() || {};
+    });
+
+    database.ref('pedidos_comerciais').on('value', snap => {
+      pedidosComerciaisGlobal = snap.val() || {};
+      recalculateAndRenderOps();
     });
 
     database.ref('config').on('value', snap => {
@@ -521,6 +528,20 @@
     renderActiveOps(globalPedidos, producedMap);
   }
   
+  // Opções do select de vínculo com o Pedido Comercial que essa OP atende
+  // (parentPedidoId). op_watcher.py não sabe fazer esse vínculo sozinho porque
+  // a numeração de OP e a de Pedido são espaços diferentes — por isso é manual.
+  function pedidosComerciaisOptionsHtml(currentValue) {
+    var ids = Object.keys(pedidosComerciaisGlobal).sort(function(a, b) { return Number(b) - Number(a); });
+    var html = '<option value="">Sem vínculo</option>';
+    ids.forEach(function(id) {
+      var pc = pedidosComerciaisGlobal[id] || {};
+      var sel = String(currentValue || '') === String(id) ? 'selected' : '';
+      html += '<option value="' + escapeAttr(id) + '" ' + sel + '>#' + escapeHtml(id) + ' — ' + escapeHtml(pc.cliente || '') + '</option>';
+    });
+    return html;
+  }
+
   function renderActiveOps(pedidos, producedMap) {
     const tbody = document.getElementById('ops-tbody');
     tbody.innerHTML = '';
@@ -530,10 +551,10 @@
     const activeOps = keys.map(k => ({
       key: k,
       ...pedidos[k]
-    })).filter(p => !isConcluido(p.status));
+    })).filter(p => !isConcluido(p));
     
     if (activeOps.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nenhuma OP ativa no momento. Todas concluídas!</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nenhuma OP ativa no momento. Todas concluídas!</td></tr>';
       return;
     }
     
@@ -594,14 +615,13 @@
         </td>
         <td>
           ${isAdmin
-            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">
-                 <option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>
-                 <option value="Linha 01" ${op.linha === 'Linha 01' ? 'selected' : ''}>Linha 01</option>
-                 <option value="Linha 02" ${op.linha === 'Linha 02' ? 'selected' : ''}>Linha 02</option>
-                 <option value="Linha 03" ${op.linha === 'Linha 03' ? 'selected' : ''}>Linha 03</option>
-                 <option value="Linha 04" ${op.linha === 'Linha 04' ? 'selected' : ''}>Linha 04</option>
-               </select>`
+            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">${optionsHtml}</select>`
             : `<span>${escapedLinha}</span>`}
+        </td>
+        <td>
+          ${isAdmin
+            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'parentPedidoId', this.value)">${pedidosComerciaisOptionsHtml(op.parentPedidoId)}</select>`
+            : `<span>${op.parentPedidoId ? '#' + escapeHtml(String(op.parentPedidoId)) : '—'}</span>`}
         </td>
         <td>
           <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 11.5px;">
@@ -652,11 +672,11 @@
       }
       
       // Hook de conclusão
-      database.ref('pedidos/' + pedidoId).update({ status: 'Conclu?do' })
+      database.ref('pedidos/' + pedidoId).update({ status: 'Concluído' })
         .then(() => {
           // Remove todos os agendamentos desta OP no planejamento (slots futuros)
           cleanFutureSlots(pedidoId, database);
-          showToast('OP/Lote conclu?da e slots de planejamento limpos com sucesso!');
+          showToast('OP/Lote concluída e slots de planejamento limpos com sucesso!');
         })
         .catch(err => {
           console.error(err);
