@@ -433,7 +433,7 @@ window.updateOpStatusAutomatically = function(pedidoId, callback) {
 window.syncAllActiveOpsStatus = function() {
   if (typeof firebase === 'undefined') return;
   const db = firebase.database();
-  
+
   db.ref('pedidos').once('value', snapshot => {
     const pedidos = snapshot.val() || {};
     Object.keys(pedidos).forEach(key => {
@@ -441,6 +441,223 @@ window.syncAllActiveOpsStatus = function() {
       if (p.status !== 'Concluído') {
         window.updateOpStatusAutomatically(key);
       }
+    });
+  });
+};
+
+// --- AUTO-AJUSTE DE PLANEJAMENTO ---
+// Compara o ritmo real de produção de uma OP (últimas 3h de registros) com o
+// planejado, e reajusta automaticamente os slots futuros dela e da fila de
+// OPs da mesma linha na grade de programação, registrando cada mudança em
+// ajustes_planejamento/{data}. Nunca toca no passado nem na hora corrente;
+// nunca move OP entre linhas diferentes; sem limite de alcance da cascata
+// dentro da capacidade já existente na grade (se a grade não tiver slots
+// futuros suficientes, registra um aviso de capacidade esgotada em vez de
+// inventar novos dias/horas fora da configuração do calendário).
+window._autoAjusteCooldown = {};
+
+function _kuryosTodayStr() {
+  var d = new Date();
+  var local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().split('T')[0];
+}
+
+function _kuryosLineIndexForSlot(hourData, linha) {
+  for (var i = 1; i <= 10; i++) {
+    var nome = hourData['linha' + i];
+    if (!nome) {
+      if (linha === 'Linha ' + i) return i;
+    } else if (nome === linha) {
+      return i;
+    }
+  }
+  return null;
+}
+
+function _kuryosIsConcluidoLike(p) {
+  if (!p) return true;
+  if (p.statusManual === 'encerrado') return true;
+  var st = String(p.status || '').toLowerCase().trim();
+  return st.indexOf('conclu') === 0;
+}
+
+// Slots futuros (hoje após a hora atual + dias seguintes) de uma linha,
+// ordenados cronologicamente. Cada item: { date, hourKey, envKey, pedidoKey }
+function _kuryosFutureSlotsForLinha(programacao, linha, todayStr, nowHour) {
+  var out = [];
+  Object.keys(programacao).sort().forEach(function(date) {
+    if (date < todayStr) return;
+    var dayData = programacao[date] || {};
+    Object.keys(dayData).sort().forEach(function(hourKey) {
+      if (date === todayStr) {
+        var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
+        if (isNaN(h) || h <= nowHour) return; // nunca toca hoje ate a hora atual
+      }
+      var hourData = dayData[hourKey] || {};
+      var idx = _kuryosLineIndexForSlot(hourData, linha);
+      if (!idx) return;
+      var envKey = 'env' + idx;
+      var slot = hourData[envKey];
+      out.push({
+        date: date,
+        hourKey: hourKey,
+        envKey: envKey,
+        pedidoKey: slot && slot.pedidoKey ? slot.pedidoKey : null
+      });
+    });
+  });
+  return out;
+}
+
+window.autoAjustarPlanejamento = function(pedidoKey) {
+  if (typeof firebase === 'undefined' || !pedidoKey) return;
+  var db = firebase.database();
+
+  db.ref('pedidos/' + pedidoKey).once('value').then(function(pedSnap) {
+    var pedidoOrigem = pedSnap.val();
+    if (!pedidoOrigem) return;
+
+    Promise.all([
+      db.ref('programacao').once('value'),
+      db.ref('pedidos').once('value')
+    ]).then(function(results) {
+      var programacao = results[0].val() || {};
+      var todosPedidos = results[1].val() || {};
+      var todayStr = _kuryosTodayStr();
+      var nowHour = new Date().getHours();
+
+      // 1. Descobre em qual linha essa OP tem slot futuro agendado
+      var linha = null;
+      Object.keys(programacao).sort().some(function(date) {
+        if (date < todayStr) return false;
+        var dayData = programacao[date] || {};
+        return Object.keys(dayData).some(function(hourKey) {
+          if (date === todayStr) {
+            var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
+            if (isNaN(h) || h <= nowHour) return false;
+          }
+          var hourData = dayData[hourKey] || {};
+          for (var i = 1; i <= 10; i++) {
+            var slot = hourData['env' + i];
+            if (slot && slot.pedidoKey === pedidoKey) {
+              linha = hourData['linha' + i] || ('Linha ' + i);
+              return true;
+            }
+          }
+          return false;
+        });
+      });
+      if (!linha) return; // sem slot futuro pra essa OP, nada a reajustar
+
+      // Cooldown por linha — evita recalcular a cada apontamento isolado
+      var now = Date.now();
+      var lastRun = window._autoAjusteCooldown[linha] || 0;
+      if (now - lastRun < 3 * 60 * 1000) return;
+      window._autoAjusteCooldown[linha] = now;
+
+      // 2. Fila de OPs ativas dessa linha, por prioridade
+      var filaLinha = Object.keys(todosPedidos)
+        .map(function(k) { return { key: k, p: todosPedidos[k] }; })
+        .filter(function(x) { return x.p && x.p.linha === linha && !_kuryosIsConcluidoLike(x.p); })
+        .sort(function(a, b) {
+          var pa = a.p.priority || 999, pb = b.p.priority || 999;
+          if (pa !== pb) return pa - pb;
+          return String(a.p.id || '').localeCompare(String(b.p.id || ''), undefined, { numeric: true });
+        });
+      if (!filaLinha.length) return;
+
+      db.ref('registros').once('value').then(function(regSnap) {
+        var registros = regSnap.val() || {};
+        var corte = now - 3 * 60 * 60 * 1000; // ritmo real = últimas 3h
+
+        function ritmoReal(p) {
+          var totalQtd = 0;
+          var horasComRegistro = {};
+          var targetId = String(p.id || '').trim().toUpperCase();
+          var targetProd = String(p.produto || '').trim().toUpperCase();
+          Object.keys(registros).forEach(function(date) {
+            var dayRegs = registros[date] || {};
+            Object.keys(dayRegs).forEach(function(regId) {
+              var r = dayRegs[regId];
+              if (!r || !r.pedidoId || !r.produto) return;
+              if (String(r.pedidoId).trim().toUpperCase() !== targetId) return;
+              if (String(r.produto).trim().toUpperCase() !== targetProd) return;
+              var ts = r.timestamp ? new Date(r.timestamp).getTime() : 0;
+              if (ts < corte) return;
+              totalQtd += parseFloat(r.quantidade) || 0;
+              horasComRegistro[date + '_' + r.hora] = true;
+            });
+          });
+          var nHoras = Object.keys(horasComRegistro).length;
+          return nHoras > 0 ? (totalQtd / nHoras) : 0;
+        }
+
+        // 3. Slots futuros já existentes na grade pra essa linha
+        var slotsLinha = _kuryosFutureSlotsForLinha(programacao, linha, todayStr, nowHour);
+        if (!slotsLinha.length) return;
+
+        // 4. Relineariza a fila sobre os slots existentes, na ordem de prioridade —
+        //    isso já implementa tanto "puxar pra frente" (OP adiantada libera slot,
+        //    próxima da fila ocupa) quanto "empurrar" (OP atrasada consome mais slots,
+        //    empurrando as seguintes) como resultado natural do mesmo recálculo.
+        var updates = {};
+        var logEntries = [];
+        var ponteiro = 0;
+        var semCapacidade = [];
+
+        filaLinha.forEach(function(item) {
+          var p = item.p;
+          var falta = Math.max((p.qtdTotal || 0) - (p.produzido || 0), 0);
+          if (falta <= 0) return;
+
+          var ritmo = ritmoReal(p) || p.mediaPorHora || 0;
+          var horasNecessarias = ritmo > 0 ? Math.ceil(falta / ritmo) : 1;
+
+          for (var i = 0; i < horasNecessarias; i++) {
+            if (ponteiro >= slotsLinha.length) {
+              if (semCapacidade.indexOf(p.id || item.key) === -1) semCapacidade.push(p.id || item.key);
+              break;
+            }
+            var slot = slotsLinha[ponteiro];
+            if (slot.pedidoKey !== item.key) {
+              var path = 'programacao/' + slot.date + '/' + slot.hourKey + '/' + slot.envKey;
+              updates[path] = { pedidoKey: item.key, produto: p.produto || '', sku: p.sku || '', mediaPorHora: ritmo || p.mediaPorHora || 0 };
+              logEntries.push({
+                timestamp: new Date().toISOString(),
+                linha: linha,
+                data: slot.date,
+                hora: slot.hourKey.replace('_', ':'),
+                de: slot.pedidoKey ? (todosPedidos[slot.pedidoKey] ? todosPedidos[slot.pedidoKey].id : slot.pedidoKey) : null,
+                para: p.id || item.key,
+                motivo: 'reajuste automático de ritmo'
+              });
+            }
+            ponteiro++;
+          }
+        });
+
+        // Slots sobrando no fim da grade (ninguém mais precisa deles) ficam livres
+        for (var j = ponteiro; j < slotsLinha.length; j++) {
+          if (slotsLinha[j].pedidoKey) {
+            var freePath = 'programacao/' + slotsLinha[j].date + '/' + slotsLinha[j].hourKey + '/' + slotsLinha[j].envKey;
+            updates[freePath] = null;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          db.ref().update(updates).then(function() {
+            var logRef = db.ref('ajustes_planejamento/' + todayStr);
+            logEntries.forEach(function(entry) { logRef.push(entry); });
+            if (semCapacidade.length) {
+              logRef.push({
+                timestamp: new Date().toISOString(),
+                linha: linha,
+                motivo: 'Capacidade esgotada: OP(s) ' + semCapacidade.join(', ') + ' não têm slot futuro suficiente na grade atual. Amplie a programação manualmente.'
+              });
+            }
+          });
+        }
+      });
     });
   });
 };

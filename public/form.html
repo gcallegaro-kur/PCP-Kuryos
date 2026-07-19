@@ -1362,10 +1362,6 @@ function findProductByPedidoId(pedidoId) {
   return null;
 }
 
-function cleanFutureSlots(pedidoKey) {
-  return window.cleanFutureSlots(pedidoKey, db);
-}
-
 // Bind interactive events
 function handlePedidoIdInput(prefix) {
   var inputEl = document.getElementById(prefix + 'PedidoId');
@@ -1710,11 +1706,12 @@ function syncNextItem() {
               var val = res.snapshot.val();
               if (typeof window.updateOpStatusAutomatically === 'function') {
                 window.updateOpStatusAutomatically(pedKey);
+              if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
               }
               var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
               var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
               if (isDone) {
-                return cleanFutureSlots(pedKey);
+                return cleanFutureSlots(pedKey, db);
               }
             }
           });
@@ -1738,10 +1735,11 @@ function syncNextItem() {
               if (typeof window.updateOpStatusAutomatically === 'function') {
                 window.updateOpStatusAutomatically(pedKey);
               }
+              if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
               var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
               var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
               if (isDone) {
-                return cleanFutureSlots(pedKey);
+                return cleanFutureSlots(pedKey, db);
               }
             }
           }));

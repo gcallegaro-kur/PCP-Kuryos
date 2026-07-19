@@ -235,6 +235,15 @@
       <div class="sum-card"><div class="sum-val" id="sumDias">—</div><div class="sum-lbl">Dias com prog.</div></div>
       <div class="sum-card"><div class="sum-val" id="sumPeds">—</div><div class="sum-lbl">Pedidos ativos</div></div>
     </div>
+    <!-- Log de ajustes automáticos de planejamento -->
+    <div class="grid-card" id="ajustesLogCard" style="margin-bottom:12px;display:none">
+      <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" id="ajustesLogHeader">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">🔄 <span id="ajustesLogCount">0</span> ajuste(s) automático(s) hoje</span>
+        <span id="ajustesLogChevron" style="font-size:12px;color:var(--muted)">▶</span>
+      </div>
+      <div id="ajustesLogBody" style="display:none;padding:0 14px 12px;font-size:12px;color:var(--muted);max-height:220px;overflow-y:auto"></div>
+    </div>
+
     <div class="day-tabs" id="dayTabs"></div>
     <div class="grid-card">
       <div class="plan-table-wrap">
@@ -531,6 +540,7 @@ window.addEventListener('DOMContentLoaded',function(){
   if (agdSearch) agdSearch.addEventListener('input', function() { renderAgendaTab(); });
   if (agdFilter) agdFilter.addEventListener('change', function() { renderAgendaTab(); });
 
+  setupAjustesLog();
   loadConfig();
 });
 
@@ -543,6 +553,43 @@ function setupTabBar(){
       this.classList.add('active');
       document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
     });
+  });
+}
+
+// Log de ajustes automáticos de planejamento (Fase B) — mostra o que o
+// auto-ajuste de ritmo mudou na grade hoje, pra não ser uma mudança silenciosa.
+function setupAjustesLog(){
+  var card = document.getElementById('ajustesLogCard');
+  var header = document.getElementById('ajustesLogHeader');
+  var body = document.getElementById('ajustesLogBody');
+  var countEl = document.getElementById('ajustesLogCount');
+  var chevron = document.getElementById('ajustesLogChevron');
+  if (!card || !header) return;
+
+  header.addEventListener('click', function() {
+    var open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    chevron.textContent = open ? '▶' : '▼';
+  });
+
+  db.ref('ajustes_planejamento/' + todayLocal()).on('value', function(snap) {
+    var val = snap.val() || {};
+    var entries = Object.values(val).sort(function(a, b) {
+      return (a.timestamp || '').localeCompare(b.timestamp || '');
+    }).reverse();
+    if (!entries.length) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+    countEl.textContent = entries.length;
+    body.innerHTML = entries.map(function(e) {
+      var hora = e.timestamp ? new Date(e.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '';
+      if (e.para) {
+        return '<div style="padding:4px 0;border-bottom:1px solid var(--border)">' + escapeHtml(hora) + ' — ' + escapeHtml(e.linha||'') +
+          ': slot ' + escapeHtml(e.hora||'') + ' de ' + escapeHtml(e.data||'') +
+          (e.de ? ' passou de OP #' + escapeHtml(String(e.de)) : ' foi preenchido') +
+          ' pra OP #' + escapeHtml(String(e.para)) + '</div>';
+      }
+      return '<div style="padding:4px 0;border-bottom:1px solid var(--border);color:#b45309">⚠️ ' + escapeHtml(hora) + ' — ' + escapeHtml(e.motivo||'') + '</div>';
+    }).join('');
   });
 }
 
@@ -809,10 +856,21 @@ function buildSlotHTML(slot,ped,actualQty){
   
   var doneBadge = isDone ? '<span class="sbadge sbadge-done">✔ Concluído</span>' : '';
   var textStyle = isDone ? 'text-decoration: line-through; opacity: 0.6;' : '';
-  
+
+  // Indicador visual (não bloqueante) de insumo pendente — só avisa, não trava
+  // o auto-ajuste nem impede a alocação manual do slot.
+  var insumoBadge = '';
+  if (!isDone && ped) {
+    var chk = ped.insumosChecklist || {};
+    var insumoOk = chk.ok === 'True' || chk.ok === true;
+    if (!insumoOk) {
+      insumoBadge = '<span class="sbadge" style="background:#fef3c7;color:#92400e" title="Insumo ainda não liberado no checklist">⚠️ insumo pendente</span>';
+    }
+  }
+
   return '<div class="slot-filled" style="' + textStyle + '">' +
     '<div class="slot-nome" title="'+escapeAttr(nome)+'">'+escapeHtml(nome)+'</div>' +
-    '<div class="slot-badges">'+sk+m+lp+actualBadge+doneBadge+'<span class="slot-x" title="Remover">✕</span></div>' +
+    '<div class="slot-badges">'+sk+m+lp+actualBadge+doneBadge+insumoBadge+'<span class="slot-x" title="Remover">✕</span></div>' +
   '</div>';
 }
 
