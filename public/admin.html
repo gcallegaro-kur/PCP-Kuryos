@@ -191,6 +191,42 @@
     </div>
   </div>
 
+  <!-- HORARIOS DOS TURNOS + APONTAMENTO -->
+  <div class="card">
+    <div class="card-title">Horários dos Turnos e Apontamento</div>
+    <div class="section-note">Informe o horário de início de cada turno cadastrado acima (usado para deduzir o turno automaticamente ao fechar uma OP).</div>
+    <div id="turnoHorariosContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px"></div>
+    <div class="fg" style="max-width:320px">
+      <label>Checkpoints de apontamento por turno</label>
+      <input type="number" id="iCheckpointsPorTurno" min="0" placeholder="0 = usar grade horária completa (padrão)">
+      <div class="section-note" style="margin-top:6px">Deixe em 0 para manter o apontamento hora a hora. Um número menor (ex: 2 ou 3) reduz a quantidade de checkpoints exigidos por turno — útil pra introduzir o hábito aos poucos.</div>
+    </div>
+    <div style="margin-top:14px"><button class="btn btn-success" id="btnSalvarApontamento">Salvar</button></div>
+  </div>
+
+  <!-- NOTIFICACOES -->
+  <div class="card">
+    <div class="card-title">Notificações por E-mail</div>
+    <div class="section-note">Alertas em tempo real (linha parada, OP atrasada) e o resumo de fim de turno são enviados para os e-mails cadastrados abaixo.</div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="fg">
+        <label>Avisar linha parada após (minutos)</label>
+        <input type="number" id="iAndonParadaMinutos" min="1" placeholder="15">
+      </div>
+      <div class="fg">
+        <label>Avisar OP atrasada após desvio de (horas)</label>
+        <input type="number" id="iOpAtrasoHoras" min="1" placeholder="1">
+      </div>
+    </div>
+    <label style="display:block;margin-bottom:6px">Destinatários</label>
+    <div class="tag-area" id="tEmails"></div>
+    <div class="tag-add">
+      <input type="text" id="iEmail" placeholder="nome@kuryos.com.br">
+      <button class="btn btn-primary btn-sm" id="btnAddEmail">+ Adicionar</button>
+    </div>
+    <div style="margin-top:14px"><button class="btn btn-success" id="btnSalvarNotificacoes">Salvar</button></div>
+  </div>
+
   <div style="text-align:center;padding:12px;font-size:12px;color:var(--muted)">Clique em ✏ para editar um item. Alteracoes salvas no Firebase.</div>
 </div>
 
@@ -214,7 +250,12 @@ var configData = {
   postosTrabalho: [],
   produtos: [],
   operadores: [],
-  turnos: []
+  turnos: [],
+  turnoHorarios: {},
+  checkpointsPorTurno: 0,
+  andonParadaMinutos: 15,
+  opAtrasoHoras: 1,
+  emailNotificacoes: []
 };
 
 function fmtNum(n){ return Number(n||0).toLocaleString('pt-BR'); }
@@ -310,6 +351,95 @@ function saveConfig() {
   dataToSave.postos = configData.postosTrabalho; // Mantém compatibilidade com a chave legada
   return db.ref('config').set(dataToSave);
 }
+
+// ── Horários dos turnos + checkpoints de apontamento ────────────────
+function renderTurnoHorarios() {
+  var container = document.getElementById('turnoHorariosContainer');
+  if (!container) return;
+  var turnos = configData.turnos || [];
+  if (!turnos.length) {
+    container.innerHTML = '<div class="empty-metas">Cadastre turnos primeiro.</div>';
+  } else {
+    container.innerHTML = turnos.map(function(t) {
+      var val = (configData.turnoHorarios && configData.turnoHorarios[t]) || '';
+      return '<div class="fg"><label>' + t + '</label><input type="time" class="turno-horario-input" data-turno="' + t + '" value="' + val + '"></div>';
+    }).join('');
+  }
+  var cpEl = document.getElementById('iCheckpointsPorTurno');
+  if (cpEl) cpEl.value = configData.checkpointsPorTurno || '';
+}
+
+document.getElementById('btnSalvarApontamento').addEventListener('click', function() {
+  var horarios = {};
+  document.querySelectorAll('.turno-horario-input').forEach(function(inp) {
+    if (inp.value) horarios[inp.getAttribute('data-turno')] = inp.value;
+  });
+  configData.turnoHorarios = horarios;
+  configData.checkpointsPorTurno = parseInt(document.getElementById('iCheckpointsPorTurno').value) || 0;
+  saveConfig().then(function() {
+    showAlert('Configuração de apontamento salva.', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+});
+
+// ── Notificações por e-mail ──────────────────────────────────────────
+function renderNotificacoesConfig() {
+  var el = document.getElementById('tEmails');
+  if (!el) return;
+  var emails = configData.emailNotificacoes || [];
+  if (!emails.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:13px">Nenhum destinatário cadastrado.</span>';
+  } else {
+    el.innerHTML = '';
+    emails.forEach(function(email, i) {
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      var nm = document.createElement('span');
+      nm.textContent = email;
+      span.appendChild(nm);
+      var del = document.createElement('button');
+      del.className = 'tag-btn';
+      del.textContent = '×';
+      del.style.marginLeft = '6px';
+      del.addEventListener('click', function() {
+        configData.emailNotificacoes.splice(i, 1);
+        saveConfig().then(renderNotificacoesConfig);
+      });
+      span.appendChild(del);
+      el.appendChild(span);
+    });
+  }
+  var pEl = document.getElementById('iAndonParadaMinutos');
+  var oEl = document.getElementById('iOpAtrasoHoras');
+  if (pEl) pEl.value = configData.andonParadaMinutos || 15;
+  if (oEl) oEl.value = configData.opAtrasoHoras || 1;
+}
+
+document.getElementById('btnAddEmail').addEventListener('click', function() {
+  var input = document.getElementById('iEmail');
+  var val = input.value.trim();
+  if (!val || val.indexOf('@') === -1) { showAlert('Informe um e-mail válido.', 'danger'); return; }
+  if (!configData.emailNotificacoes) configData.emailNotificacoes = [];
+  if (configData.emailNotificacoes.indexOf(val) === -1) {
+    configData.emailNotificacoes.push(val);
+    saveConfig().then(function() {
+      renderNotificacoesConfig();
+      input.value = '';
+      showAlert('Destinatário adicionado.', 'success');
+    });
+  }
+});
+
+document.getElementById('btnSalvarNotificacoes').addEventListener('click', function() {
+  configData.andonParadaMinutos = parseInt(document.getElementById('iAndonParadaMinutos').value) || 15;
+  configData.opAtrasoHoras = parseFloat(document.getElementById('iOpAtrasoHoras').value) || 1;
+  saveConfig().then(function() {
+    showAlert('Configuração de notificações salva.', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+});
 
 function addItem(tipo, inputId) {
   var val = document.getElementById(inputId).value.trim();
@@ -654,7 +784,14 @@ try {
     configData.operadores = val.operadores || [];
     configData.turnos = val.turnos || [];
     configData.planejamento = val.planejamento || {};
+    configData.turnoHorarios = val.turnoHorarios || {};
+    configData.checkpointsPorTurno = val.checkpointsPorTurno || 0; // 0 = usa a grade horária completa (comportamento atual)
+    configData.andonParadaMinutos = val.andonParadaMinutos || 15;
+    configData.opAtrasoHoras = val.opAtrasoHoras || 1;
+    configData.emailNotificacoes = val.emailNotificacoes || [];
     renderAll();
+    renderTurnoHorarios();
+    renderNotificacoesConfig();
 
     if (!val.linhas || val.linhas.length === 0) {
       document.getElementById('seedCard').style.display = 'block';
