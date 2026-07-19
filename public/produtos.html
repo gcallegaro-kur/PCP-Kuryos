@@ -742,6 +742,19 @@ function parseExcelProdutos(file) {
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
       var toImport = [];
 
+      // Confere que as colunas críticas (SKU, Descrição, Ativo, LP) ainda têm
+      // cabeçalho preenchido na linha esperada antes de confiar nos índices
+      // fixos abaixo — evita importar dado deslocado silenciosamente.
+      var prodHeaderRow = rows[1] || [];
+      var prodHeaderIdx = [1, 2, 22, 24];
+      var prodHeaderMissing = prodHeaderIdx.filter(function(idx) {
+        return prodHeaderRow[idx] == null || String(prodHeaderRow[idx]).trim() === '';
+      });
+      if (prodHeaderMissing.length) {
+        showAlert('O cabeçalho da planilha (linha 2) parece incompleto ou fora do layout esperado nas colunas ' + prodHeaderMissing.map(function(i){return String.fromCharCode(65+i);}).join(', ') + '. Confirme o layout antes de importar.', 'danger');
+        return;
+      }
+
       // Header na linha índice 1 (linha 2 do Excel); dados a partir do índice 2
       for (var i = 2; i < rows.length; i++) {
         var row = rows[i];

@@ -609,6 +609,24 @@ function parsePedidosFile(file) {
       // header na linha 4 (índice 3) — lê sem header para ter controle total
       var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
+      // Valida se o cabeçalho ainda bate com as colunas esperadas antes de
+      // confiar em índices fixos — evita importar dado na coluna errada
+      // silenciosamente se alguém alterar o layout da planilha.
+      var headerRow = rows[3] || [];
+      var headerChecks = [
+        { idx: 3, expect: 'sku' },
+        { idx: 7, expect: 'qtd' },
+        { idx: 27, expect: 'status' }
+      ];
+      var headerProblems = headerChecks.filter(function(c) {
+        return String(headerRow[c.idx] || '').toLowerCase().indexOf(c.expect) === -1;
+      });
+      if (headerProblems.length) {
+        showAlert('O cabeçalho da planilha (linha 4) não bate com o esperado — colunas podem ter mudado de lugar. Confirme se o layout da planilha ainda é o padrão antes de importar.', 'danger');
+        document.getElementById('dropTextPedidos').textContent = 'Clique ou arraste o arquivo de Pedidos aqui';
+        return;
+      }
+
       parsedPedidos = [];
       // Linha de cabeçalho está no índice 3; dados a partir do índice 4
       for (var i = 4; i < rows.length; i++) {
@@ -628,7 +646,21 @@ function parsePedidosFile(file) {
         var sku         = row[3]  ? String(row[3]).trim()  : '';   // col D — SKU
         var qtdTotal    = Math.round(parseFloat(row[7])  || 0);    // col H — Qtd. pedida
         var dataProdRaw = row[9];
-        var dataProd    = dataProdRaw instanceof Date ? excelDateToStr(dataProdRaw) : (dataProdRaw ? String(dataProdRaw).slice(0, 10) : '');
+        var dataProd    = '';
+        if (dataProdRaw instanceof Date) {
+          dataProd = excelDateToStr(dataProdRaw);
+        } else if (dataProdRaw) {
+          // Só aceita se já vier como texto no formato de data (YYYY-MM-DD ou
+          // DD/MM/YYYY) — um número serial do Excel não reconhecido como Date
+          // (ex: célula formatada como texto/número) não vira data inventada.
+          var raw = String(dataProdRaw).trim();
+          if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+            dataProd = raw.slice(0, 10);
+          } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+            var dp = raw.split('/');
+            dataProd = dp[2] + '-' + dp[1].padStart(2, '0') + '-' + dp[0].padStart(2, '0');
+          }
+        }
         var linha       = row[10] ? String(row[10]).trim() : '';   // col K
         var lp          = parseFloat(row[16]) || 0;                // col Q — LPD
         var mediaPorHora= Math.round(parseFloat(row[18]) || 0);    // col S — Produção / hora
