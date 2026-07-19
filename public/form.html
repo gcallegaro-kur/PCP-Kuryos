@@ -547,6 +547,7 @@ var todayListener = null;
 var configPostos = [];
 var configLinhas = [];
 var configTurnos = [];
+var configTurnoHorarios = {}; // { "manhã": "06:00", "tarde": "14:00", "noite": "22:00" }
 var paradaCount = 0;
 var progData = {};      // programacao do dia indexada por horaKey
 var pedidosCache = {};  // todos os pedidos do Firebase
@@ -770,6 +771,9 @@ function resumeLine(linha, state) {
   
   Promise.all([p1, p2]).then(function() {
     showSuccess('Produção Retomada!', linha + ' ativa novamente. ' + duration + ' min registrados.');
+  }).catch(function(err) {
+    console.error('Erro ao retomar produção:', err);
+    alert('Erro ao registrar retomada de produção: ' + err.message + '. Tente novamente.');
   });
 }
 
@@ -1003,6 +1007,30 @@ fillTurnoSelect('f');
 fillTurnoSelect('r');
 
 function guessShift() {
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+
+  // Preferência: horários reais configurados em admin.html (config.turnoHorarios).
+  // Escolhe o turno cujo horário de início é o mais recente já passado (com
+  // suporte a turno que atravessa a meia-noite).
+  if (configTurnos && configTurnos.length > 0 && configTurnoHorarios) {
+    var withStart = configTurnos
+      .filter(function(t) { return configTurnoHorarios[t]; })
+      .map(function(t) {
+        var parts = String(configTurnoHorarios[t]).split(':');
+        var startMin = (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
+        return { nome: t, startMin: startMin };
+      });
+    if (withStart.length === configTurnos.length) {
+      withStart.sort(function(a, b) { return a.startMin - b.startMin; });
+      var chosen = withStart[withStart.length - 1].nome; // fallback: último turno do dia (cobre virada da meia-noite)
+      for (var i = 0; i < withStart.length; i++) {
+        if (nowMin >= withStart[i].startMin) chosen = withStart[i].nome;
+      }
+      return chosen;
+    }
+  }
+
+  // Fallback: sem horários configurados, usa heurística por quantidade de turnos.
   var hour = new Date().getHours();
   if (configTurnos && configTurnos.length > 0) {
     if (configTurnos.length === 2) {
@@ -1147,6 +1175,7 @@ db.ref('config').on('value', function(snap) {
   configLinhas  = cfg.linhas         || [];
   configPostos  = cfg.postosTrabalho || cfg.postos || [];
   configTurnos  = cfg.turnos         || [];
+  configTurnoHorarios = cfg.turnoHorarios || {};
   rebuildAndonFormGrid();
   fillLinhaSelect('f');
   fillLinhaSelect('r');
@@ -1743,21 +1772,26 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
   var paradas = collectParadas();
   var totalParada = paradas.reduce(function(s,p){ return s+(p.duracao||0); }, 0);
 
-  // Calculate pointing delay audit
+  if (qtd < 0) {
+    btn.disabled = false; btn.textContent = 'Salvar Registro';
+    alert('Quantidade não pode ser negativa.');
+    return;
+  }
+
+  // Calculate pointing delay audit: em atraso somente se o momento real do
+  // envio for depois de targetHour:10 do dia de referência (não pune envio
+  // adiantado, e trata corretamente a virada de meia-noite para o slot 23h).
   var parts = hora.split(':');
   var pointedHour = parseInt(parts[0]);
   var targetHour = (pointedHour + 1) % 24;
-  
+  var rollsToNextDay = (pointedHour === 23);
+
   var now = new Date();
-  var currentHour = now.getHours();
-  var currentMin = now.getMinutes();
-  
-  var onTime = (currentHour === targetHour && currentMin <= 10);
-  var localToday = today();
-  if (data !== localToday) {
-    onTime = false;
-  }
-  var isDelayed = !onTime;
+  var dParts = data.split('-');
+  var deadline = new Date(parseInt(dParts[0]), parseInt(dParts[1]) - 1, parseInt(dParts[2]), targetHour, 10, 0, 0);
+  if (rollsToNextDay) deadline.setDate(deadline.getDate() + 1);
+
+  var isDelayed = now.getTime() > deadline.getTime();
 
   var registro = {
     data: data, hora: hora, linha: linha, produto: produto,

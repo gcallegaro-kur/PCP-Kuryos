@@ -9,7 +9,7 @@ function sanitizeKey(str) {
 }
 
 function pedidoFirebaseKey(id, produto) {
-  return 'OP_' + sanitizeKey(id) + '__' + sanitizeKey(produto);
+  return sanitizeKey(id) + '__' + sanitizeKey(produto);
 }
 
 function normalizeForMatch(s) {
