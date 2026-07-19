@@ -433,7 +433,10 @@ var prodHoraCalcMap = {}; // descricao normalizada → avg prod/hora (from regis
 var editingKey = null;
 
 /* ── Utilitários ── */
-function sanitizeKey(str) {
+// Chave de SKU tem convenção própria (diferente de sanitizeKey de shared/utils.js,
+// que é para chaves de pedido/OP) — por isso o nome diferente, para não colidir
+// com a função global do mesmo nome vinda de shared/utils.js.
+function sanitizeSkuKey(str) {
   return String(str || '').replace(/[./[\]#$\s]/g, '-').replace(/-+/g, '-').trim().slice(0, 80);
 }
 function norm(s) { return String(s || '').toLowerCase().trim(); }
@@ -641,7 +644,7 @@ function saveModal() {
   var descricao = document.getElementById('fDescricao').value.trim();
   if (!sku || !descricao) { showAlert('SKU e Descrição são obrigatórios.', 'danger'); return; }
 
-  var key = editingKey || sanitizeKey(sku);
+  var key = editingKey || sanitizeSkuKey(sku);
   if (!key) { showAlert('SKU inválido.', 'danger'); return; }
 
   var data = {
@@ -833,7 +836,7 @@ function doImportProdutos(list) {
       return;
     }
     var p = list[done];
-    var key = p.sku ? sanitizeKey(p.sku) : sanitizeKey(p.descricao.slice(0, 40));
+    var key = p.sku ? sanitizeSkuKey(p.sku) : sanitizeSkuKey(p.descricao.slice(0, 40));
     // prodHoraCalc é calculado sob demanda em memória (botão "Recalcular"),
     // não é persistido no Firebase — nada a preservar aqui.
     db.ref('produtos/' + key).set(p).then(function() {

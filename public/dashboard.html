@@ -339,16 +339,7 @@ function today() {
 function fmtNum(n) { return Number(n||0).toLocaleString('pt-BR'); }
 function fmtDate(d) { if(!d)return'—'; var p=d.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function fmtTime() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
-function fmtHoraRange(hora) {
-  if (!hora) return '—';
-  var cleanHora = hora.replace('_', ':');
-  var parts = cleanHora.split(':');
-  var h = parseInt(parts[0]);
-  if (isNaN(h)) return hora;
-  var nextH = (h + 1) % 24;
-  var nextHStr = String(nextH).padStart(2, '0') + ':00';
-  return cleanHora + 'h - ' + nextHStr + 'h';
-}
+// fmtHoraRange vem de shared/utils.js
 
 var lastTodayDate = today();
 function updateClock() {
@@ -1072,11 +1063,7 @@ function renderFeed(regs) {
   }).join('');
 }
 
-function isConcluido(status) {
-  if (!status) return false;
-  var s = String(status).toLowerCase().trim();
-  return s.indexOf('conclu') === 0;
-}
+// isConcluido vem de shared/utils.js (recebe o pedido inteiro, não só o status)
 
 function renderPedidos(regs) {
   var card = document.getElementById('pedidosCard');
@@ -1084,7 +1071,7 @@ function renderPedidos(regs) {
   // Only show active (andamento) pedidos
   var ativos = Object.values(pedidosCache).filter(function(p) {
     var pct = p.qtdTotal ? Math.round((p.produzido||0)/p.qtdTotal*100) : 0;
-    return p.statusManual !== 'encerrado' && !isConcluido(p.status) && pct < 95 && (!p._key || p._key.indexOf('OP_') !== 0);
+    return !isConcluido(p) && pct < 95 && (!p._key || p._key.indexOf('OP_') !== 0);
   });
   if (!ativos.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
@@ -1150,9 +1137,7 @@ var pedidosCache = {};
 firebase.initializeApp(firebaseConfig);
 db = firebase.database();
 
-function sanitizeKey(str) {
-  return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-}
+// sanitizeKey vem de shared/utils.js
 
 var latestAndonStates = {};
 
