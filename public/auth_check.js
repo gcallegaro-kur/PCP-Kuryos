@@ -519,10 +519,12 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
 
     Promise.all([
       db.ref('programacao').once('value'),
-      db.ref('pedidos').once('value')
+      db.ref('pedidos').once('value'),
+      db.ref('config/opAtrasoHoras').once('value')
     ]).then(function(results) {
       var programacao = results[0].val() || {};
       var todosPedidos = results[1].val() || {};
+      var opAtrasoHoras = results[2].val() || 1;
       var todayStr = _kuryosTodayStr();
       var nowHour = new Date().getHours();
 
@@ -612,6 +614,27 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
 
           var ritmo = ritmoReal(p) || p.mediaPorHora || 0;
           var horasNecessarias = ritmo > 0 ? Math.ceil(falta / ritmo) : 1;
+
+          // OP atrasada: ritmo real pior que o planejado a ponto de faltar
+          // mais horas do que faltariam no ritmo planejado, além do limiar
+          // configurado em admin.html (config.opAtrasoHoras) — dispara alerta
+          // por e-mail (email_notifications_daemon.py consome alertas_pendentes/).
+          if (p.mediaPorHora > 0 && ritmo > 0 && ritmo < p.mediaPorHora) {
+            var horasNoRitmoPlanejado = Math.ceil(falta / p.mediaPorHora);
+            var desvioHoras = horasNecessarias - horasNoRitmoPlanejado;
+            if (desvioHoras >= opAtrasoHoras) {
+              db.ref('alertas_pendentes').push({
+                tipo: 'op_atrasada',
+                timestamp: new Date().toISOString(),
+                linha: linha,
+                pedidoId: p.id || item.key,
+                produto: p.produto || '',
+                ritmoReal: Math.round(ritmo),
+                ritmoPlanejado: Math.round(p.mediaPorHora),
+                desvioHoras: desvioHoras
+              });
+            }
+          }
 
           for (var i = 0; i < horasNecessarias; i++) {
             if (ponteiro >= slotsLinha.length) {

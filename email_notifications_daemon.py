@@ -1,0 +1,247 @@
+"""
+Daemon de notificacoes por e-mail do PCP Kuryos.
+
+Fica de olho em tres coisas no Firebase:
+  1. Linha parada (estado_linhas/{linha}) ha mais tempo que o limiar configurado
+     em admin.html (config.andonParadaMinutos) -> alerta em tempo real.
+  2. Alertas de OP atrasada empurrados pelo motor de auto-ajuste de planejamento
+     (alertas_pendentes/, tipo 'op_atrasada') -> alerta em tempo real.
+  3. Fim de turno (config.turnoHorarios) -> resumo de tudo que foi apontado
+     naquele turno, UM e-mail so (nao um por apontamento individual).
+
+Envia via automacao COM do Outlook local (mesmo mecanismo de
+"02. Comercial/01. Pedidos/Gerador de Pedidos/email_sender.py"), sem precisar
+gerenciar credencial de SMTP separada -- usa a sessao do Outlook ja logada
+na maquina onde este script roda.
+"""
+
+import os
+import time
+import json
+import urllib.request
+from datetime import datetime, timedelta
+
+DB_URL = "https://prod-kuryos-default-rtdb.firebaseio.com"
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "email_notifications_state.json")
+COOLDOWN_MESMO_ALERTA_MIN = 60  # nao reenvia o mesmo alerta (linha/OP) antes disso
+
+
+def fb_get(path):
+    url = f"{DB_URL}/{path}.json"
+    try:
+        with urllib.request.urlopen(url) as resp:
+            data = resp.read()
+            if not data or data == b'null':
+                return None
+            return json.loads(data.decode('utf-8'))
+    except Exception as e:
+        print(f"  -> Erro ao ler {path}:", e)
+        return None
+
+
+def fb_delete(path):
+    url = f"{DB_URL}/{path}.json"
+    req = urllib.request.Request(url, method='DELETE')
+    try:
+        urllib.request.urlopen(req)
+    except Exception as e:
+        print(f"  -> Erro ao apagar {path}:", e)
+
+
+def load_state():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"last_sent": {}, "last_digest": {}}
+
+
+def save_state(state):
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        print("Erro ao salvar estado:", e)
+
+
+def send_email(to_list, subject, body):
+    """Abre e envia o e-mail via Outlook local (auto_send=True — são alertas
+    automáticos, não há revisão manual antes de sair)."""
+    if not to_list:
+        print("  -> Sem destinatários configurados (admin.html > Notificações). E-mail não enviado.")
+        return False
+    try:
+        import win32com.client as win32
+    except ImportError:
+        print("  -> pywin32 não instalado (pip install pywin32). E-mail não enviado.")
+        return False
+
+    try:
+        outlook = win32.Dispatch("Outlook.Application")
+        mail = outlook.CreateItem(0)  # olMailItem
+        mail.To = "; ".join(to_list)
+        mail.Subject = subject
+        mail.Body = body
+        mail.Send()
+        print(f"  -> E-mail enviado: {subject}")
+        return True
+    except Exception as e:
+        print("  -> Erro ao enviar e-mail via Outlook:", e)
+        return False
+
+
+def cooldown_ok(state, key):
+    last = state["last_sent"].get(key)
+    if not last:
+        return True
+    last_dt = datetime.fromisoformat(last)
+    return (datetime.now() - last_dt) > timedelta(minutes=COOLDOWN_MESMO_ALERTA_MIN)
+
+
+def mark_sent(state, key):
+    state["last_sent"][key] = datetime.now().isoformat()
+
+
+def check_linhas_paradas(state, config, destinatarios):
+    limite_min = config.get("andonParadaMinutos", 15)
+    estado_linhas = fb_get("estado_linhas") or {}
+
+    for linha_key, info in estado_linhas.items():
+        if not info or info.get("status") != "parada":
+            continue
+        inicio = info.get("inicioParada")
+        if not inicio:
+            continue
+        try:
+            inicio_dt = datetime.fromisoformat(inicio.replace("Z", ""))
+        except Exception:
+            continue
+        minutos_parada = (datetime.now() - inicio_dt).total_seconds() / 60
+        if minutos_parada < limite_min:
+            continue
+
+        key = f"parada_{linha_key}_{inicio}"
+        if not cooldown_ok(state, key):
+            continue
+
+        assunto = f"🔴 Linha parada há {int(minutos_parada)} min — {info.get('motivoParada', 'motivo não informado')}"
+        corpo = (
+            f"A linha (chave: {linha_key}) está parada há {int(minutos_parada)} minutos.\n\n"
+            f"Motivo: {info.get('motivoParada', 'não informado')}\n"
+            f"OP: #{info.get('pedidoId', '—')}\n"
+            f"Produto: {info.get('produto', '—')}\n"
+            f"Lote: {info.get('lote', '—')}\n"
+            f"Parada iniciada em: {inicio}\n\n"
+            f"Sistema PCP Kuryos — alerta automático."
+        )
+        if send_email(destinatarios, assunto, corpo):
+            mark_sent(state, key)
+
+
+def check_ops_atrasadas(state, destinatarios):
+    alertas = fb_get("alertas_pendentes") or {}
+    for alert_id, alert in alertas.items():
+        if not alert or alert.get("tipo") != "op_atrasada":
+            continue
+
+        key = f"op_atrasada_{alert.get('linha')}_{alert.get('pedidoId')}"
+        if cooldown_ok(state, key):
+            assunto = f"⚠️ OP #{alert.get('pedidoId')} atrasada — {alert.get('desvioHoras')}h de desvio"
+            corpo = (
+                f"A OP #{alert.get('pedidoId')} ({alert.get('produto', '—')}) na {alert.get('linha', '—')} "
+                f"está produzindo a {alert.get('ritmoReal', 0)} un/h, abaixo do ritmo planejado de "
+                f"{alert.get('ritmoPlanejado', 0)} un/h — desvio projetado de {alert.get('desvioHoras')} hora(s).\n\n"
+                f"O planejamento já foi reajustado automaticamente; este e-mail é só um aviso.\n\n"
+                f"Sistema PCP Kuryos — alerta automático."
+            )
+            if send_email(destinatarios, assunto, corpo):
+                mark_sent(state, key)
+
+        # Consumido (emailado ou não — não deixa a fila de alertas crescer pra sempre)
+        fb_delete(f"alertas_pendentes/{alert_id}")
+
+
+def check_fim_de_turno(state, config, destinatarios):
+    turno_horarios = config.get("turnoHorarios") or {}
+    if not turno_horarios:
+        return
+
+    turnos_ordenados = sorted(turno_horarios.items(), key=lambda kv: kv[1])
+    now = datetime.now()
+    hoje_str = now.strftime("%Y-%m-%d")
+
+    for i, (turno_nome, hora_inicio) in enumerate(turnos_ordenados):
+        # Fim do turno = início do próximo (ou meia-noite se for o último)
+        if i + 1 < len(turnos_ordenados):
+            hora_fim = turnos_ordenados[i + 1][1]
+        else:
+            hora_fim = "23:59"
+
+        try:
+            fim_dt = datetime.strptime(f"{hoje_str} {hora_fim}", "%Y-%m-%d %H:%M")
+        except Exception:
+            continue
+
+        digest_key = f"{hoje_str}_{turno_nome}"
+        if state["last_digest"].get(digest_key):
+            continue  # já mandou o resumo desse turno hoje
+        if now < fim_dt or (now - fim_dt) > timedelta(hours=2):
+            continue  # ainda não chegou no fim do turno, ou já passou muito tempo (evita resumo de turno antigo ao ligar o daemon)
+
+        registros_hoje = fb_get(f"registros/{hoje_str}") or {}
+        do_turno = [r for r in registros_hoje.values() if r and r.get("turno") == turno_nome]
+
+        if not do_turno:
+            state["last_digest"][digest_key] = True
+            continue
+
+        total_qtd = sum(r.get("quantidade", 0) or 0 for r in do_turno)
+        linhas = sorted(set(r.get("linha", "—") for r in do_turno))
+        linhas_txt = "\n".join(
+            f"  - {l}: {sum(r.get('quantidade', 0) or 0 for r in do_turno if r.get('linha') == l)} un. em {sum(1 for r in do_turno if r.get('linha') == l)} apontamento(s)"
+            for l in linhas
+        )
+
+        assunto = f"📋 Resumo do turno {turno_nome} — {hoje_str}"
+        corpo = (
+            f"Resumo do turno {turno_nome} ({hoje_str}):\n\n"
+            f"Total produzido: {total_qtd} un. em {len(do_turno)} apontamento(s)\n\n"
+            f"Por linha:\n{linhas_txt}\n\n"
+            f"Sistema PCP Kuryos — resumo automático de fim de turno."
+        )
+        if send_email(destinatarios, assunto, corpo):
+            state["last_digest"][digest_key] = True
+
+
+def run_once():
+    config = fb_get("config") or {}
+    destinatarios = config.get("emailNotificacoes") or []
+    state = load_state()
+
+    check_linhas_paradas(state, config, destinatarios)
+    check_ops_atrasadas(state, destinatarios)
+    check_fim_de_turno(state, config, destinatarios)
+
+    save_state(state)
+
+
+if __name__ == "__main__":
+    print("==========================================================")
+    print("     KURYOS PCP - DAEMON DE NOTIFICACOES POR E-MAIL       ")
+    print("==========================================================")
+    print("Monitorando: linha parada, OP atrasada, resumo de turno.")
+    print("Destinatarios configurados em admin.html > Notificacoes.")
+    print("Pressione Ctrl+C para encerrar.")
+    print("----------------------------------------------------------")
+    while True:
+        try:
+            run_once()
+            time.sleep(120)  # varre a cada 2 min
+        except KeyboardInterrupt:
+            print("\nEncerrado pelo usuário.")
+            break
+        except Exception as e:
+            print("Erro de varredura:", e)
+            time.sleep(120)
