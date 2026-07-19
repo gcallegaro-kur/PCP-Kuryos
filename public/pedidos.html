@@ -7,6 +7,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
@@ -221,111 +222,11 @@
     <option value="Linha 3">Linha 3</option>
   </select>
   <button class="btn btn-green" id="btnNovo">+ Novo Pedido</button>
-  <button class="btn btn-ghost" id="btnToggleImport">📥 Importar Pedidos / OPs</button>
 </div>
 
 <div class="main">
   <div id="alertBox" class="alert alert-success"></div>
 
-  <!-- Import from OP Excel -->
-  <div class="import-section" id="importSection" style="display:none">
-    <div class="import-section-header" id="importToggleHeader">
-      <span class="import-section-title">📥 Importar Pedido Comercial</span>
-      <span id="importChevron" style="font-size:16px;color:var(--muted)">▼</span>
-    </div>
-    <div class="import-section-body open" id="importBody">
-
-      <!-- Tabs -->
-      <div class="import-tabs">
-        <button class="import-tab active" id="tabPlanilha">📊 Controle de Pedidos (PCP)</button>
-        <button class="import-tab" id="tabComercial">📊 Fechamento Comercial (Vendas)</button>
-      </div>
-
-      <!-- ── TAB 1: Controle de Pedidos (planilha) ── -->
-      <div class="import-tab-panel active" id="panelPlanilha">
-        <div id="planDropWrap">
-          <div class="drop-zone" id="planDropZone">
-            <div class="drop-icon">📊</div>
-            <div class="drop-text" id="planDropText">Clique ou arraste "Controle de Insumos e Pedidos.xlsm"</div>
-            <div class="drop-hint">Aceita: .xlsx e .xlsm — lê a aba "Pedidos"</div>
-          </div>
-          <input type="file" id="planFileInput" accept=".xlsx,.xlsm">
-        </div>
-
-        <div id="planPreview" style="display:none">
-          <div class="preview-card">
-            <div class="plan-stats">
-              <div class="plan-stat"><div class="plan-stat-val" id="planStatTotal">—</div><div class="plan-stat-lbl">Pedidos</div></div>
-              <div class="plan-stat"><div class="plan-stat-val" id="planStatLinhas">—</div><div class="plan-stat-lbl">Linhas</div></div>
-              <div class="plan-stat"><div class="plan-stat-val" id="planStatQtd">—</div><div class="plan-stat-lbl">Total un.</div></div>
-            </div>
-            <div class="preview-note">ℹ️ Os pedidos abaixo serão importados para o Firebase. Registros já existentes terão apenas a <strong>quantidade total</strong> atualizada — o campo "produzido" é preservado. Confirme antes de salvar.</div>
-            <div style="max-height:320px;overflow-y:auto;margin-bottom:12px">
-              <table class="preview-table">
-                <thead><tr><th>ID do Pedido</th><th>Produto</th><th>Linha</th><th>Data Prod.</th><th style="text-align:right">Qtd. Total</th></tr></thead>
-                <tbody id="planPreviewBody"></tbody>
-              </table>
-            </div>
-            <div class="preview-actions">
-              <div class="preview-summary" id="planSummary"></div>
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-ghost" id="btnPlanClear">✕ Limpar</button>
-                <button class="btn btn-green" id="btnPlanConfirm">✔ Confirmar e Importar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── TAB 3: Fechamento Comercial ── -->
-      <div class="import-tab-panel" id="panelComercial">
-        <div id="comDropWrap">
-          <div class="drop-zone" id="comDropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 30px 20px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom:12px;">
-            <div style="font-size:32px; margin-bottom:8px">📋</div>
-            <div id="comDropText" style="font-size:14px; font-weight:600; color:var(--text)">Clique ou arraste o arquivo do Pedido Comercial aqui</div>
-            <div style="font-size:11px; color:var(--muted); margin-top:4px">Aceita: fechamentos de Pedido Comercial (.xlsx)</div>
-          </div>
-          <input type="file" id="comFileInput" accept=".xlsx" style="display:none">
-        </div>
-
-        <div id="comPreview" style="display:none">
-          <div class="preview-card">
-            <div class="plan-stats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px">
-              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatTotal">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Pedidos/Linhas</div></div>
-              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatLinhas">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Linhas Ativas</div></div>
-              <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:#7c3aed" id="comStatQtd">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Qtd Total un.</div></div>
-            </div>
-            
-            <div id="comWarningMissing" style="display:none; margin: 12px 0; background: #fff5f5; border: 1px solid #feb2b2; border-left: 4px solid #f56565; color: #9b2c2c; border-radius: 6px; padding: 10px; font-size:12px;">
-              ⚠️ <strong>Atenção:</strong> Os produtos abaixo não constam no cadastro de produtos ativos. Cadastre-os para evitar falhas:
-              <ul style="margin:6px 0 0 16px; padding:0;" id="comMissingList"></ul>
-            </div>
-
-            <div style="max-height:300px; overflow-y:auto; margin-bottom:12px">
-              <table class="preview-table">
-                <thead><tr><th>ID do Pedido</th><th>SKU</th><th>Produto</th><th>Data Prod.</th><th style="text-align:right">Qtd. Pedida</th></tr></thead>
-                <tbody id="comPreviewBody"></tbody>
-              </table>
-            </div>
-
-            <div class="preview-actions">
-              <div class="preview-summary" id="comSummary"></div>
-              <div style="display:flex; gap:8px">
-                <button class="btn btn-ghost" id="btnComClear">✕ Limpar</button>
-                <button class="btn btn-green" id="btnComConfirm">✔ Confirmar e Importar</button>
-              </div>
-            </div>
-            
-            <div class="progress-wrap" id="comProgressWrap" style="display:none; margin-top:10px">
-              <div style="height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-bottom:4px"><div id="comProgressFill" style="height:100%; border-radius:3px; background:#10b981; width:0%"></div></div>
-              <div id="comProgressText" style="font-size:11px; color:var(--muted)">Salvando...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
 
   <div class="stats">
     <div class="stat">
@@ -509,23 +410,13 @@
   var deleteKey = null;      // key pending delete
 
   // ── Helpers ─────────────────────────────────────────────────────
-  function isConcluido(status) {
-    if (!status) return false;
-    var s = String(status).toLowerCase().trim();
-    return s.indexOf('conclu') === 0;
-  }
-  function sanitizeKey(str) {
-    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-  }
-  function pedidoFirebaseKey(id, produto) {
-    return sanitizeKey(id) + '__' + sanitizeKey(produto);
-  }
+  // isConcluido, sanitizeKey, pedidoFirebaseKey e cleanFutureSlots vêm de shared/utils.js
   function pct(p) {
     return p && p.qtdTotal ? Math.round((p.produzido || 0) / p.qtdTotal * 100) : 0;
   }
   function pedidoStatus(p) {
     if (p.statusManual === 'encerrado') return 'encerrado';
-    if (isConcluido(p.status)) return 'concluido'; // marcado pelo import quando sumiu da planilha ou concluído na planilha
+    if (isConcluido(p)) return 'concluido'; // marcado pelo import quando sumiu da planilha ou concluído na planilha
     if (pct(p) >= 95) return 'concluido';
     return 'andamento';
   }
@@ -841,6 +732,7 @@
       var shiftsUpdates = {};
       if (priorityVal > 0) {
         var pMap = {};
+        var preExistingCollisions = [];
         Object.entries(allPedidos).forEach(function(entry) {
           var k = entry[0], p = entry[1];
           if (k === oldKey || k === newKey) return;
@@ -848,9 +740,15 @@
           if (st === 'concluido' || st === 'encerrado') return;
           var prio = parseInt(p.priority);
           if (prio > 0) {
+            if (pMap[prio] && pMap[prio] !== k) {
+              preExistingCollisions.push('prioridade ' + prio + ': #' + (allPedidos[pMap[prio]].id || pMap[prio]) + ' e #' + (p.id || k));
+            }
             pMap[prio] = k;
           }
         });
+        if (preExistingCollisions.length) {
+          console.warn('Pedidos com prioridade duplicada detectados (não ajustados automaticamente): ' + preExistingCollisions.join('; '));
+        }
 
         var checkPrio = priorityVal;
         var shifts = {};
@@ -922,55 +820,13 @@
     el.className = 'alert alert-danger show';
   }
 
-  function cleanFutureSlots(pedidoKey) {
-    if (!pedidoKey) return Promise.resolve();
-    return db.ref('programacao').once('value').then(function(snap) {
-      var prog = snap.val() || {};
-      var updates = {};
-      var d = new Date();
-      var localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
-      var todayStr = localDate.toISOString().split('T')[0];
-      var currentHour = new Date().getHours();
-      
-      Object.entries(prog).forEach(function(dayEntry) {
-        var date = dayEntry[0];
-        var dayData = dayEntry[1];
-        if (date < todayStr) return;
-        
-        Object.entries(dayData).forEach(function(hourEntry) {
-          var hourKey = hourEntry[0];
-          var hourData = hourEntry[1];
-          
-          if (date === todayStr) {
-            var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
-            if (h < currentHour) return;
-          }
-          
-          for (var l = 1; l <= 3; l++) {
-            var env = hourData['env' + l];
-            if (env && env.pedidoKey === pedidoKey) {
-              updates['programacao/' + date + '/' + hourKey + '/env' + l] = null;
-            }
-          }
-        });
-      });
-      
-      if (Object.keys(updates).length > 0) {
-        console.log('Cleaning future planning slots for completed/deleted order:', pedidoKey, updates);
-        return db.ref().update(updates);
-      }
-    }).catch(function(err) {
-      console.error('Error cleaning future slots:', err);
-    });
-  }
-
   // ── Encerrar pedido ──────────────────────────────────────────────
   document.getElementById('btnEncerrar').addEventListener('click', function() {
     if (!editingKey) return;
     var p = allPedidos[editingKey];
     if (!confirm('Encerrar o pedido #' + (p ? p.id : editingKey) + '?\nIso marcará o pedido como encerrado manualmente.')) return;
     db.ref('pedidos/' + editingKey + '/statusManual').set('encerrado').then(function() {
-      return cleanFutureSlots(editingKey);
+      return cleanFutureSlots(editingKey, db);
     }).then(function() {
       closeModal();
       showAlert('Pedido encerrado manualmente e slots futuros limpos.', 'success');
@@ -1004,7 +860,7 @@
     btn.textContent = 'Excluindo...';
     var k = deleteKey;
     db.ref('pedidos/' + k).remove().then(function() {
-      return cleanFutureSlots(k);
+      return cleanFutureSlots(k, db);
     }).then(function() {
       btn.disabled = false;
       btn.textContent = 'Excluir';
@@ -1017,334 +873,6 @@
     });
   });
 
-  // ══════════════════════════════════════════════
-  // IMPORT FROM OP EXCEL
-  // ══════════════════════════════════════════════
-
-  var importedItems = []; // parsed items from Excel
-
-  // Toggle import section visibility
-  document.getElementById('btnToggleImport').addEventListener('click', function() {
-    var sec = document.getElementById('importSection');
-    sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
-  });
-  document.getElementById('importToggleHeader').addEventListener('click', function() {
-    var body = document.getElementById('importBody');
-    var chev = document.getElementById('importChevron');
-    var open = body.classList.toggle('open');
-    chev.textContent = open ? '▼' : '▶';
-  });
-
-  // ── Import tabs ──────────────────────────────────────────────────
-  document.getElementById('tabPlanilha').addEventListener('click', function() {
-    document.getElementById('tabPlanilha').classList.add('active');
-    document.getElementById('tabComercial').classList.remove('active');
-    document.getElementById('panelPlanilha').classList.add('active');
-    document.getElementById('panelComercial').classList.remove('active');
-  });
-  document.getElementById('tabComercial').addEventListener('click', function() {
-    document.getElementById('tabComercial').classList.add('active');
-    document.getElementById('tabPlanilha').classList.remove('active');
-    document.getElementById('panelComercial').classList.add('active');
-    document.getElementById('panelPlanilha').classList.remove('active');
-  });
-
-  // ── Normalize string for fuzzy matching ─────────────────────────
-  function normMatch(s) {
-    return String(s || '').toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ').trim();
-  }
-
-  // Score how well two strings match (higher = better)
-  function matchScore(a, b) {
-    var na = normMatch(a), nb = normMatch(b);
-    if (na === nb) return 100;
-    // Check word overlap
-    var wa = na.split(' '), wb = nb.split(' ');
-    var common = wa.filter(function(w){ return wb.indexOf(w) !== -1 && w.length > 2; }).length;
-    var score = common / Math.max(wa.length, wb.length) * 100;
-    return score;
-  }
-
-  // Find best matching produto in catalog for a given description
-  function findBestMatch(descricao) {
-    var best = null, bestScore = 0;
-    Object.values(produtosCache).forEach(function(p) {
-      var s = matchScore(descricao, p.descricao);
-      if (s > bestScore) { bestScore = s; best = p; }
-    });
-    return { produto: best, score: bestScore };
-  }
-
-  // ── Parse the OP Excel file ──────────────────────────────────────
-  
-  // --- Fechamento Comercial (Vendas) Import ---
-  var parsedComercial = [];
-
-  function cleanProduto(v) {
-    if (!v || typeof v !== 'string') return '';
-    var s = v.split('>')[0];
-    s = s.split(' - ')[0];
-    return s.trim();
-  }
-
-  function sanitizeKey(str) {
-    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-  }
-
-  function parseComercialFile(file) {
-    document.getElementById('comDropText').textContent = '⏳ Lendo ' + file.name + '...';
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true, cellFormula: false });
-        var sheetName = wb.SheetNames[0];
-        var ws = wb.Sheets[sheetName];
-        if (!ws) {
-          alert('Planilha vazia ou sem abas válidas.');
-          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
-          return;
-        }
-
-        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
-        
-        var client = '';
-        var pedidoNum = '';
-        var dateStr = '';
-
-        // Scan first 15 rows dynamically for headers
-        for (var r = 0; r < Math.min(rows.length, 15); r++) {
-          var row = rows[r] || [];
-          for (var c = 0; c < row.length; c++) {
-            var val = String(row[c] || '').trim().toUpperCase();
-            if (val === 'CLIENTE:' && !client) client = String(row[c+1] || '').trim();
-            if (val === 'PEDIDO:' && !pedidoNum) pedidoNum = String(row[c+1] || '').trim();
-            if (val === 'DATA:' && !dateStr) {
-              var dateVal = row[c+1];
-              if (dateVal instanceof Date) {
-                var offset = dateVal.getTimezoneOffset() * 60000;
-                var local = new Date(dateVal.getTime() - offset);
-                dateStr = local.toISOString().slice(0, 10);
-              } else if (dateVal) {
-                dateStr = String(dateVal).slice(0, 10);
-              }
-            }
-          }
-        }
-
-        // Fallback to F6, F7, F8 cells if headers not found dynamically
-        if (!client && ws['F6']) client = String(ws['F6'].v || ws['F6'].w || '').trim();
-        if (!pedidoNum && ws['F7']) pedidoNum = String(ws['F7'].v || ws['F7'].w || '').trim();
-        if (!dateStr && ws['F8']) {
-          var dateRaw = ws['F8'].v;
-          if (dateRaw instanceof Date) {
-            var offset = dateRaw.getTimezoneOffset() * 60000;
-            var local = new Date(dateRaw.getTime() - offset);
-            dateStr = local.toISOString().slice(0, 10);
-          } else if (dateRaw) {
-            dateStr = String(dateRaw).slice(0, 10);
-          }
-        }
-
-        if (!pedidoNum) {
-          alert('Número do Pedido não localizado na planilha comercial.');
-          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
-          return;
-        }
-
-        // Search for item headers row
-        var startRow = 26; // default line 27 (index 26)
-        for (var r = 0; r < Math.min(rows.length, 45); r++) {
-          var row = rows[r] || [];
-          var colD = row[3] ? String(row[3]).trim().toUpperCase() : '';
-          if (colD === '#') {
-            startRow = r + 1;
-            break;
-          }
-        }
-
-        parsedComercial = [];
-        for (var r = startRow; r < rows.length; r++) {
-          var row = rows[r];
-          if (!row || row.length === 0) continue;
-
-          var idx = row[3] ? String(row[3]).trim() : ''; // Col D (index 3) is '#'
-          if (!idx || isNaN(parseInt(idx))) {
-            if (r > startRow + 50) break; // stop at empty or totals rows
-            continue;
-          }
-
-          var sku = row[4] ? String(row[4]).trim() : ''; // Col E (index 4) is SKU
-          var productDesc = row[8] ? String(row[8]).trim() : ''; // Col I (index 8) is Item description
-          var qty = row[23] ? Math.round(parseFloat(String(row[23]).replace(',', '.')) || 0) : 0; // Col X (index 23) is Qty
-
-          if (productDesc && qty > 0) {
-            var cleanProdName = cleanProduto(productDesc);
-            var firebaseKey = sanitizeKey(pedidoNum) + '__' + sanitizeKey(sku || cleanProdName);
-
-            parsedComercial.push({
-              id: pedidoNum, // Just use the pedidoNum directly as requested by the user!
-              produto: cleanProdName,
-              sku: sku,
-              qtdTotal: qty,
-              dataProd: dateStr,
-              linha: '',
-              status: 'Não Iniciado',
-              priority: 999,
-              ordenacao: 999999999,
-              produzido: 0,
-              insumosChecklist: {},
-              cliente: client,
-              firebaseKey: firebaseKey
-            });
-          }
-        }
-
-        if (!parsedComercial.length) {
-          alert('Nenhum item com quantidade encontrada.');
-          document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
-          return;
-        }
-
-        document.getElementById('comDropText').textContent = '✓ ' + file.name + ' (Pedido #' + pedidoNum + ')';
-        onComercialParsed();
-      } catch(err) {
-        alert('Erro ao analisar planilha comercial: ' + err.message);
-        document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function onComercialParsed() {
-    // Check for missing catalog products
-    var missingList = [];
-    parsedComercial.forEach(function(p) {
-      var found = false;
-      var pSku = String(p.sku || '').trim().toUpperCase();
-      var pProd = String(p.produto || '').trim().toUpperCase();
-      
-      // 'produtos' is loaded globally in pedidos.html
-      Object.values(produtosCache).forEach(function(cat) {
-        if (cat.ativo !== 'Ativo') return;
-        var catSku = String(cat.sku || '').trim().toUpperCase();
-        var catDesc = String(cat.descricao || '').trim().toUpperCase();
-        if (pSku && catSku && pSku === catSku) {
-          found = true;
-        } else if (pProd === catDesc) {
-          found = true;
-        }
-      });
-      
-      if (!found) {
-        var itemStr = (p.sku ? '[' + p.sku + '] ' : '') + p.produto;
-        if (missingList.indexOf(itemStr) === -1) {
-          missingList.push(itemStr);
-        }
-      }
-    });
-
-    var warningDiv = document.getElementById('comWarningMissing');
-    var warningUl = document.getElementById('comMissingList');
-    if (missingList.length > 0) {
-      warningUl.innerHTML = missingList.map(function(item) {
-        return '<li>' + item + '</li>';
-      }).join('');
-      warningDiv.style.display = 'block';
-    } else {
-      warningDiv.style.display = 'none';
-    }
-
-    // Render Stats
-    var totalQtd = 0;
-    parsedComercial.forEach(function(p) { totalQtd += p.qtdTotal; });
-    document.getElementById('comStatTotal').textContent = parsedComercial.length;
-    document.getElementById('comStatCliente').textContent = parsedComercial[0].cliente || '—';
-    document.getElementById('comStatQtd').textContent = totalQtd.toLocaleString('pt-BR');
-
-    // Preview tbody
-    var tbody = document.getElementById('comPreviewBody');
-    tbody.innerHTML = '';
-    parsedComercial.forEach(function(p) {
-      var tr = document.createElement('tr');
-      tr.innerHTML = 
-        '<td><strong>#' + p.id + '</strong></td>' +
-        '<td><code>' + (p.sku || '—') + '</code></td>' +
-        '<td>' + p.produto + '</td>' +
-        '<td>' + (p.dataProd ? fmtDate(p.dataProd) : '—') + '</td>' +
-        '<td style="text-align:right"><strong>' + p.qtdTotal.toLocaleString('pt-BR') + '</strong></td>';
-      tbody.appendChild(tr);
-    });
-
-    document.getElementById('comDropWrap').style.display = 'none';
-    document.getElementById('comPreview').style.display = 'block';
-    document.getElementById('comSummary').textContent = parsedComercial.length + ' item(ns) pronto(s) para importar';
-  }
-
-  function doImportComercial() {
-    if (!parsedComercial.length) return;
-    var btn = document.getElementById('btnComConfirm');
-    btn.disabled = true;
-    document.getElementById('comProgressWrap').style.display = 'block';
-    
-    // Check existing records to preserve produced quantities
-    db.ref('pedidos').once('value').then(function(snapshot) {
-      var existing = snapshot.val() || {};
-      var total = parsedComercial.length;
-      var done = 0;
-
-      function next() {
-        if (done >= total) {
-          document.getElementById('comProgressFill').style.width = '100%';
-          document.getElementById('comProgressText').textContent = '✓ Concluído!';
-          btn.disabled = false;
-          alert('Pedido comercial importado com sucesso!');
-          doComClear();
-          document.getElementById('importSection').style.display = 'none';
-          return;
-        }
-        var p = parsedComercial[done];
-        var ex = existing[p.firebaseKey] || {};
-        
-        var data = {
-          id: p.id,
-          produto: p.produto,
-          sku: p.sku || '',
-          qtdTotal: p.qtdTotal,
-          linha: ex.linha || '',
-          dataProd: p.dataProd || ex.dataProd || '',
-          lp: ex.lp || 0,
-          mediaPorHora: ex.mediaPorHora || 0,
-          produzido: ex.produzido || 0,
-          priority: ex.priority || 999,
-          status: ex.status || 'Não Iniciado',
-          ordenacao: ex.ordenacao || 999999999,
-          ultimoApontamento: ex.ultimoApontamento || '',
-          insumosChecklist: ex.insumosChecklist || {},
-          cliente: p.cliente || ex.cliente || ''
-        };
-        
-        db.ref('pedidos/' + p.firebaseKey).set(data).then(function() {
-          done++;
-          var pct = Math.round(done / total * 100);
-          document.getElementById('comProgressFill').style.width = pct + '%';
-          document.getElementById('comProgressText').textContent = 'Salvando ' + done + ' / ' + total + '...';
-          next();
-        });
-      }
-      next();
-    });
-  }
-
-  function doComClear() {
-    parsedComercial = [];
-    document.getElementById('comPreview').style.display = 'none';
-    document.getElementById('comDropWrap').style.display = 'block';
-    document.getElementById('comDropText').textContent = 'Clique ou arraste o arquivo do Pedido Comercial (.xlsx) aqui';
-    document.getElementById('comFileInput').value = '';
-  }
 </script>
 
 </body>
