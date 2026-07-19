@@ -260,7 +260,10 @@
   <div class="form-tabs">
     <button type="button" class="form-tab active" id="tabNormalBtn" onclick="switchFormTab('normal')">⏱️ Apontamento Horário</button>
     <button type="button" class="form-tab" id="tabFinalizarBtn" onclick="switchFormTab('finalizar')">🏁 Fechar Lote (OP)</button>
-    <button type="button" class="form-tab" id="tabRetroBtn" onclick="switchFormTab('retro')">📅 Turno Retroativo</button>
+  </div>
+  <!-- Turno Retroativo: uso raro/exceção, por isso fora das abas principais -->
+  <div style="text-align:right;margin:-6px 0 12px">
+    <a href="javascript:void(0)" id="tabRetroBtn" onclick="switchFormTab('retro')" style="font-size:12px;color:var(--muted);text-decoration:underline;cursor:pointer">📅 Lançar registro atrasado (turno retroativo)</a>
   </div>
 
   <!-- PAINEL 1: APONTAMENTO NORMAL -->
@@ -290,11 +293,11 @@
           <span id="scheduleBannerText"></span>
         </div>
 
-        <!-- OP / Lote: apenas para Linhas de Producao -->
+        <!-- OP / Lote: apenas para Linhas de Producao. Lote = nº da OP, auto-preenchido. -->
         <div class="linha-extra" id="fLinhaExtra">
           <div class="form-group">
-            <label>OP / Lote</label>
-            <input type="text" id="fLote" placeholder="Cod. da OP / Lote...">
+            <label>Lote (= nº da OP)</label>
+            <input type="text" id="fLote" placeholder="Selecione a OP acima..." readonly style="background:#f9fafb;color:var(--muted)">
           </div>
         </div>
         <!-- Colaboradores: para Linhas e Postos -->
@@ -313,6 +316,11 @@
 
         <div class="form-group" id="fPedidoIdGroup" style="display:none">
           <label>Ordem de Produção (OP)</label>
+          <!-- Exibido quando a linha já tem uma OP "travada" (lembrada) -->
+          <div id="fPedidoIdLocked" style="display:none;padding:10px 12px;background:#ecfdf5;border:1.5px solid #10b981;border-radius:8px;font-size:14px;color:#065f46;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span id="fPedidoIdLockedText">—</span>
+            <button type="button" id="btnTrocarOP" style="background:none;border:1px solid #10b981;color:#065f46;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">Trocar OP desta linha</button>
+          </div>
           <input type="text" id="fPedidoId" list="pedidosList" placeholder="Ex: Pedido-Item" autocomplete="off">
           <div class="form-hint" id="fPedidoIdHint"></div>
         </div>
@@ -510,26 +518,6 @@
   </div>
 </div>
 
-<!-- MODAL DE FEEDBACK DE META -->
-<div class="modal-bg" id="metaFeedbackModal" style="display:flex; align-items:center; justify-content:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; display:none;">
-  <div id="metaFeedbackContent" class="card" style="width:100%; max-width:420px; padding:24px; text-align:center; box-shadow:0 15px 30px rgba(0,0,0,0.25); border-radius:12px; border-top:8px solid #10b981;">
-    <div style="font-size:48px; margin-bottom:12px;" id="metaFeedbackIcon">🎉</div>
-    <div style="font-weight:900; font-size:22px; margin-bottom:8px;" id="metaFeedbackTitle">DENTRO DA META!</div>
-    <div style="font-size:14px; line-height:1.5; margin-bottom:18px; color:#4b5563; text-align:left;" id="metaFeedbackText"></div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:#f9fafb; padding:12px; border-radius:8px; margin-bottom:18px; border:1px solid var(--border);">
-      <div>
-        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700;">Apontado</div>
-        <div style="font-weight:800; font-size:18px; color:var(--primary);" id="metaFeedbackQtyVal">0</div>
-      </div>
-      <div>
-        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; font-weight:700;">Meta do PCP</div>
-        <div style="font-weight:800; font-size:18px; color:var(--primary);" id="metaFeedbackTargetVal">0</div>
-      </div>
-    </div>
-    <button type="button" style="width:100%; background:var(--primary); color:white; padding:10px; border:none; border-radius:6px; font-weight:700; cursor:pointer;" onclick="closeMetaFeedbackModal()">Ok, continuar</button>
-  </div>
-</div>
-
 <script>
 var firebaseConfig = {
   apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
@@ -548,6 +536,7 @@ var configPostos = [];
 var configLinhas = [];
 var configTurnos = [];
 var configTurnoHorarios = {}; // { "manhã": "06:00", "tarde": "14:00", "noite": "22:00" }
+var configCheckpointsPorTurno = 0; // 0 = grade horária completa (5h-22h)
 var paradaCount = 0;
 var progData = {};      // programacao do dia indexada por horaKey
 var pedidosCache = {};  // todos os pedidos do Firebase
@@ -572,11 +561,7 @@ function fmtHoraRange(hora) {
   return cleanHora + 'h - ' + nextHStr + 'h';
 }
 
-function isConcluido(status) {
-  if (!status) return false;
-  var s = String(status).toLowerCase().trim();
-  return s.indexOf('conclu') === 0;
-}
+// isConcluido vem de shared/utils.js — recebe o pedido inteiro (checa status E statusManual)
 
 // ── Pedido helpers ──
 function sanitizeKey(str) {
@@ -777,57 +762,9 @@ function resumeLine(linha, state) {
   });
 }
 
-// ── Meta Feedback Modal functions ──
-var feedbackTimer = null;
-function showMetaFeedbackModal(pointedQty, targetQty) {
-  if (feedbackTimer) clearTimeout(feedbackTimer);
-  
-  var modal = document.getElementById('metaFeedbackModal');
-  var content = document.getElementById('metaFeedbackContent');
-  var icon = document.getElementById('metaFeedbackIcon');
-  var title = document.getElementById('metaFeedbackTitle');
-  var text = document.getElementById('metaFeedbackText');
-  var qtyVal = document.getElementById('metaFeedbackQtyVal');
-  var targetVal = document.getElementById('metaFeedbackTargetVal');
-  
-  qtyVal.textContent = fmtNum(pointedQty);
-  targetVal.textContent = fmtNum(targetQty);
-  
-  var isAtTarget = pointedQty >= targetQty * 0.95;
-  
-  if (isAtTarget) {
-    content.style.borderTopColor = '#10b981'; // Green
-    icon.textContent = '🎉';
-    title.textContent = 'DENTRO DA META!';
-    title.style.color = '#065f46';
-    text.innerHTML = 'Excelente desempenho! O apontamento de <strong>' + fmtNum(pointedQty) + ' un.</strong> bateu a meta planejada de <strong>' + fmtNum(targetQty) + ' un.</strong> para este período.';
-  } else {
-    content.style.borderTopColor = '#ef4444'; // Red
-    icon.textContent = '⚠️';
-    title.textContent = 'ABAIXO DA META!';
-    title.style.color = '#991b1b';
-    var diff = targetQty - pointedQty;
-    text.innerHTML = 'Atenção! O apontamento de <strong>' + fmtNum(pointedQty) + ' un.</strong> ficou abaixo da meta planejada de <strong>' + fmtNum(targetQty) + ' un.</strong> (Faltaram <strong>' + fmtNum(diff) + ' un.</strong> para atingir a meta).';
-  }
-  
-  modal.style.display = 'flex';
-  
-  feedbackTimer = setTimeout(function() {
-    closeMetaFeedbackModal();
-  }, 8000);
-}
-
-function closeMetaFeedbackModal() {
-  if (feedbackTimer) clearTimeout(feedbackTimer);
-  document.getElementById('metaFeedbackModal').style.display = 'none';
-}
-
 // ── Firebase init ──────────────────────────────────────────────────
 firebase.initializeApp(firebaseConfig);
 db = firebase.database();
-
-// Initialize OP Select Change listeners
-setupOPSelectListeners();
 
 var latestAndonStates = {};
 
@@ -893,6 +830,7 @@ function updateAndonFormUI() {
 db.ref('estado_linhas').on('value', function(snap) {
   latestAndonStates = snap.val() || {};
   updateAndonFormUI();
+  updateOPLockUI();
 });
 
 // ── ANDON Stop Form Submit Listener ────────────────────────────────
@@ -957,17 +895,49 @@ updateClock();
 setInterval(updateClock, 30000);
 
 // ── Hora select ───────────────────────────────────────────────────
+// Calcula quais horas (5h-22h) ficam disponíveis no select. Se checkpoints
+// por turno estiver configurado (>0) e os turnos tiverem horário de início
+// cadastrado, reduz pra N horários espaçados por turno em vez da grade
+// completa — introdução gradual do hábito de apontamento, sem exigir hora
+// em hora desde o primeiro dia.
+function computeActiveHours() {
+  var all = [];
+  for (var h = 5; h <= 22; h++) all.push(h);
+
+  if (!configCheckpointsPorTurno || !configTurnos.length) return all;
+  var comHorario = configTurnos.filter(function(t) { return configTurnoHorarios[t]; });
+  if (comHorario.length !== configTurnos.length) return all; // turnos sem horário configurado: usa grade completa
+
+  var starts = comHorario.map(function(t) {
+    return parseInt(String(configTurnoHorarios[t]).split(':')[0]) || 0;
+  }).sort(function(a, b) { return a - b; });
+
+  var picked = {};
+  for (var i = 0; i < starts.length; i++) {
+    var winStart = starts[i];
+    var winEnd = (i + 1 < starts.length) ? starts[i + 1] : 23; // último turno vai até o fim da grade ativa
+    var span = Math.max(winEnd - winStart, 1);
+    var n = Math.min(configCheckpointsPorTurno, span);
+    for (var k = 0; k < n; k++) {
+      var hour = winStart + Math.floor((k * span) / n);
+      if (hour >= 5 && hour <= 22) picked[hour] = true;
+    }
+  }
+  var result = Object.keys(picked).map(Number).sort(function(a, b) { return a - b; });
+  return result.length ? result : all;
+}
+
 function fillHoraSelect() {
   var sel = document.getElementById('fHora');
   var cur = sel.value;
   sel.innerHTML = '';
-  for (var h = 5; h <= 22; h++) {
+  computeActiveHours().forEach(function(h) {
     var v = pad(h) + ':00';
     var o = document.createElement('option');
     o.value = v; o.textContent = fmtHoraRange(v);
     if (!cur && v === currentHourValue()) o.selected = true;
     sel.appendChild(o);
-  }
+  });
   if (cur) sel.value = cur;
 }
 fillHoraSelect();
@@ -1139,7 +1109,7 @@ function fillProdutoSelects() {
     var pedidos = pedSnap.val() || {};
     var freq = {};
     Object.values(pedidos).forEach(function(ped) {
-      if (ped.produto && !isConcluido(ped.status) && ped.statusManual !== 'encerrado') {
+      if (ped.produto && !isConcluido(ped)) {
         var normProd = String(ped.produto).trim().toLowerCase();
         freq[normProd] = (freq[normProd] || 0) + 1;
       }
@@ -1176,11 +1146,13 @@ db.ref('config').on('value', function(snap) {
   configPostos  = cfg.postosTrabalho || cfg.postos || [];
   configTurnos  = cfg.turnos         || [];
   configTurnoHorarios = cfg.turnoHorarios || {};
+  configCheckpointsPorTurno = cfg.checkpointsPorTurno || 0;
   rebuildAndonFormGrid();
   fillLinhaSelect('f');
   fillLinhaSelect('r');
   fillTurnoSelect('f');
   fillTurnoSelect('r');
+  fillHoraSelect();
   var dl = document.getElementById('operadoresList');
   dl.innerHTML = '';
   var operadores = cfg.operadores    || [];
@@ -1230,6 +1202,53 @@ function onLinhaChange(prefix) {
     if (pedIdGroup) pedIdGroup.style.display = 'none';
     if (pedIdInput) pedIdInput.required = false;
   }
+
+  if (prefix === 'f') updateOPLockUI();
+}
+
+// ── OP "lembrada" por linha ─────────────────────────────────────────
+// Guarda a última OP usada em cada linha em estado_linhas/{linha}/opAtual,
+// pra não pedir pro líder reselecionar a OP a cada apontamento horário —
+// só quando ele explicitamente clicar em "Trocar OP desta linha".
+function updateOPLockUI() {
+  var linha = document.getElementById('fLinha').value;
+  var isLinha = configLinhas.indexOf(linha) >= 0;
+  var lockedBox = document.getElementById('fPedidoIdLocked');
+  var freeInput = document.getElementById('fPedidoId');
+  if (!lockedBox || !freeInput) return;
+
+  var lineKey = linha ? sanitizeKey(linha) : '';
+  var state = lineKey ? (latestAndonStates[lineKey] || {}) : {};
+  var opAtual = state.opAtual;
+
+  if (isLinha && opAtual && opAtual.pedidoKey && pedidosCache[opAtual.pedidoKey] && !isConcluido(pedidosCache[opAtual.pedidoKey])) {
+    lockedBox.style.display = 'flex';
+    freeInput.style.display = 'none';
+    document.getElementById('fPedidoIdLockedText').textContent = '#' + opAtual.pedidoId + ' — ' + opAtual.produto;
+    freeInput.value = '[OP #' + opAtual.pedidoId + '] ' + opAtual.produto;
+    freeInput.required = false;
+    handlePedidoIdInput('f');
+  } else {
+    lockedBox.style.display = 'none';
+    freeInput.style.display = '';
+    if (isLinha) freeInput.required = true;
+  }
+}
+
+document.getElementById('btnTrocarOP').addEventListener('click', function() {
+  document.getElementById('fPedidoIdLocked').style.display = 'none';
+  var freeInput = document.getElementById('fPedidoId');
+  freeInput.style.display = '';
+  freeInput.value = '';
+  freeInput.focus();
+  updatePedidoHint('', '');
+  document.getElementById('fLote').value = '';
+});
+
+function rememberOPForLine(linha, pedidoId, produto) {
+  if (!linha || !pedidoId || configLinhas.indexOf(linha) < 0) return;
+  var lineKey = sanitizeKey(linha);
+  db.ref('estado_linhas/' + lineKey + '/opAtual').set({ pedidoId: pedidoId, produto: produto || '', pedidoKey: findPedidoKey(pedidoId, produto, pedidosCache) || null });
 }
 // ── Autocomplete search listeners ─────────────────────────────────
 ['fProduto','rProduto','opProduto'].forEach(function(id) {
@@ -1250,8 +1269,7 @@ document.getElementById('rLinha').addEventListener('change', function(){ onLinha
 // ── Pedidos listener ──────────────────────────────────────────────
 db.ref('pedidos').on('value', function(snap) {
   pedidosCache = snap.val() || {};
-  fillOPSelects();
-  
+
   var pid = document.getElementById('fPedidoId').value.trim();
   if (pid) updatePedidoHint(pid, document.getElementById('fProduto').value);
   var rpid = document.getElementById('rPedidoId').value.trim();
@@ -1294,6 +1312,11 @@ function updatePedidoHintGeneral(prefix, pedidoId, produto) {
     hint.className = 'form-hint manual';
     hint.textContent = 'Pedido não encontrado no cadastro — será associado como texto livre.';
   }
+  // Lote = nº da OP (mesmo identificador) — auto-preenche, não pede pra digitar de novo
+  if (prefix === 'f') {
+    var loteEl = document.getElementById('fLote');
+    if (loteEl) loteEl.value = pedidoId || '';
+  }
 }
 function updatePedidoHint(pedidoId, produto) { updatePedidoHintGeneral('f', pedidoId, produto); }
 function updateRetroPedidoHint(pedidoId, produto) { updatePedidoHintGeneral('r', pedidoId, produto); }
@@ -1304,7 +1327,7 @@ function updatePedidosDatalist(selectedProduto) {
   if (!dl) return;
   dl.innerHTML = '';
   var activePeds = Object.values(pedidosCache).filter(function(p) {
-    return p && p.id && !isConcluido(p.status) && p.statusManual !== 'encerrado';
+    return p && p.id && !isConcluido(p);
   });
   
   if (selectedProduto) {
@@ -1851,26 +1874,43 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     }
   }
 
-  // Reset form fields immediately
-  ['fQtd','fObs','fLote','fColaboradores','fPedidoId'].forEach(function(id) {
+  // "OP lembrada por linha": grava a OP usada como padrão da linha, pra não
+  // pedir pro líder reselecionar a cada apontamento — só limpa Qtd/Obs/etc.
+  var isLinhaAtual = configLinhas.indexOf(linha) >= 0;
+  if (isLinhaAtual && pedidoId) {
+    rememberOPForLine(linha, pedidoId, produto);
+  }
+
+  // Reset form fields imediatamente (preserva OP/Lote se a linha tem OP travada)
+  var fieldsToClear = isLinhaAtual ? ['fQtd','fObs','fColaboradores'] : ['fQtd','fObs','fLote','fColaboradores','fPedidoId'];
+  fieldsToClear.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
-  var hint = document.getElementById('fPedidoIdHint');
-  if (hint) { hint.textContent = ''; hint.className = 'form-hint'; }
+  if (!isLinhaAtual) {
+    var hint = document.getElementById('fPedidoIdHint');
+    if (hint) { hint.textContent = ''; hint.className = 'form-hint'; }
+  }
   document.querySelectorAll('.parada-entry').forEach(function(el){ el.remove(); });
   var noMsg = document.getElementById('noParadasMsg');
   if (noMsg) noMsg.style.display = '';
   paradaCount = 0;
 
   btn.disabled = false; btn.textContent = 'Salvar Registro';
-  
+
+  // Toast leve, não-bloqueante (substitui o modal de meta que exigia toque) —
+  // ainda mostra se bateu a meta ou não, mas sem interromper o fluxo do líder.
   if (targetQty > 0) {
-    showMetaFeedbackModal(qtd, targetQty);
+    var hitMeta = qtd >= targetQty * 0.95;
+    var metaMsg = hitMeta
+      ? fmtNum(qtd) + ' un. — meta de ' + fmtNum(targetQty) + ' batida! 🎉'
+      : fmtNum(qtd) + ' un. — faltaram ' + fmtNum(Math.max(targetQty - qtd, 0)) + ' un. pra meta de ' + fmtNum(targetQty);
+    showSuccess(hitMeta ? 'Dentro da meta!' : 'Registrado (abaixo da meta)', metaMsg);
   } else {
     showSuccess('Registrado!', fmtNum(qtd) + ' un. de ' + produto + ' — ' + hora);
   }
   fillHoraSelect();
+  if (isLinhaAtual) updateOPLockUI();
 });
 
 // ── Success overlay ───────────────────────────────────────────────
