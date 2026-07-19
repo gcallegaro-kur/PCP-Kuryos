@@ -655,7 +655,7 @@
       database.ref('pedidos/' + pedidoId).update({ status: 'Conclu?do' })
         .then(() => {
           // Remove todos os agendamentos desta OP no planejamento (slots futuros)
-          cleanFutureSlots(pedidoId);
+          cleanFutureSlots(pedidoId, database);
           showToast('OP/Lote conclu?da e slots de planejamento limpos com sucesso!');
         })
         .catch(err => {
@@ -675,10 +675,6 @@
     }
   }
   
-  function cleanFutureSlots(pedidoId) {
-    return window.cleanFutureSlots(pedidoId, database);
-  }
-
   function deleteOp(pedidoId) {
     if (!window.currentUser || window.currentUser.role !== 'admin') {
       alert('Acesso Negado: Apenas administradores podem excluir OPs.');
@@ -692,7 +688,7 @@
     database.ref('pedidos/' + pedidoId).remove()
       .then(() => {
         // 2. Remove agendamentos de slots
-        cleanFutureSlots(pedidoId);
+        cleanFutureSlots(pedidoId, database);
         showToast('OP/Lote excluída com sucesso!');
       })
       .catch(err => {

@@ -1003,16 +1003,12 @@
         var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
         var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
         if (isDone) {
-          return cleanFutureSlots(pedKey).then(function() { return res; });
+          return cleanFutureSlots(pedKey, db).then(function() { return res; });
         }
       }
       return res;
     });
   }
-  function cleanFutureSlots(pedidoKey) {
-    return window.cleanFutureSlots(pedidoKey, db);
-  }
-
   // ── Save edit ────────────────────────────────────────────────────
   document.getElementById('editBtnSave').addEventListener('click', function() {
     var newDate = document.getElementById('eData').value;
