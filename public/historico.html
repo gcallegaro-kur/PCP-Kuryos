@@ -410,7 +410,7 @@
   })();
 
   function toISO(d) {
-    return d.toISOString().slice(0, 10);
+    return toLocalISODate(d); // shared/utils.js — evita deslocar 1 dia por causa de UTC a noite
   }
   function fmtDate(s) {
     if (!s) return '—';
@@ -944,7 +944,11 @@
     editingDate = date; editingKey = key;
     document.getElementById('editModalTitle').textContent = 'Editar Registro · ' + fmtDate(date);
     document.getElementById('eData').value = date;
-    document.getElementById('eHora').value = r.hora !== '—' ? r.hora : '';
+    // <input type="time"> exige HH:MM — normaliza o formato legado com
+    // underscore (ex: "14_00") em vez de deixar o campo vazio e depois
+    // gravar '—' por cima do horário original ao salvar.
+    var horaNormalizada = (r.hora && r.hora !== '—') ? String(r.hora).replace('_', ':') : '';
+    document.getElementById('eHora').value = horaNormalizada;
     document.getElementById('eProduto').value = r.produto;
     document.getElementById('eLinha').value = r.linha !== '—' ? r.linha : '';
     document.getElementById('eTurno').value = r.turno || '';
@@ -1077,8 +1081,15 @@
           var diff = qtyNew - qtyOld;
           syncPromise = adjustPedidoProduzido(pedIdNew, prodNew, diff);
         } else {
+          // Troca de pedido/produto: se o segundo passo falhar, desfaz o
+          // primeiro (devolve a qtyOld pro pedido antigo) em vez de deixar a
+          // quantidade "sumir" dos dois contadores até alguém reconciliar manualmente.
           syncPromise = adjustPedidoProduzido(pedIdOld, prodOld, -qtyOld).then(function() {
-            return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew);
+            return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew).catch(function(err) {
+              return adjustPedidoProduzido(pedIdOld, prodOld, qtyOld).then(function() {
+                throw err; // reverte, mas ainda propaga o erro original pro usuário
+              });
+            });
           });
         }
         tasks.push(syncPromise);
