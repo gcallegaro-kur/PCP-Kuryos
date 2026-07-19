@@ -270,6 +270,10 @@ table tr:hover { background: #f8fafc; }
   </section>
 
   <section id="logistica" class="pane hidden">
+    <div class="card" style="margin-bottom:12px;border-left:3px solid #dc2626;background:#fef2f2">
+      <strong style="color:#991b1b">⚠️ Dados congelados:</strong>
+      <span style="color:#991b1b">esta aba (estoque, expedições, entradas) mostra um retrato exportado manualmente em <strong id="snapshot-date-logistica">—</strong> e NÃO reflete movimentações depois dessa data. A integração ao vivo de estoque de produto acabado ainda não existe neste sistema.</span>
+    </div>
     <!-- Qualidade dos cadastros -->
     <div class="card" style="margin-bottom:12px;border-left:3px solid #f59e0b">
       <h3>Qualidade dos cadastros <small id="qual-summary"></small></h3>
@@ -333,6 +337,10 @@ table tr:hover { background: #f8fafc; }
 
   <!-- ===== Aba OPs (acompanhamento de OPs emitidas vs preenchidas) ===== -->
   <section id="ops" class="pane hidden">
+    <div class="card" style="margin-bottom:12px;border-left:3px solid #dc2626;background:#fef2f2">
+      <strong style="color:#991b1b">⚠️ Dados congelados:</strong>
+      <span style="color:#991b1b">a comparação de OPs emitidas x preenchidas usa um retrato exportado manualmente em <strong id="snapshot-date-ops">—</strong> e NÃO inclui OPs emitidas depois dessa data.</span>
+    </div>
     <div class="kpi-grid" id="kpi-ops"></div>
     <div class="row">
       <div class="card"><h3>Emitidas x preenchidas por mês</h3><div class="chart-wrap tall"><canvas id="c_ops_mes"></canvas></div></div>
@@ -408,13 +416,21 @@ function loadFirebaseAndRun() {
         Object.keys(pedidosDb).forEach(key => {
           const p = pedidosDb[key];
           
-          // Map Checklist
-          const frascos = (p.insumosChecklist && p.insumosChecklist.frascos) ? 'ok' : 'pend';
-          const rotulos = (p.insumosChecklist && p.insumosChecklist.rotulos) ? 'ok' : 'pend';
-          const valvulas = (p.insumosChecklist && p.insumosChecklist.valvulas) ? 'ok' : 'pend';
-          const tampas = (p.insumosChecklist && p.insumosChecklist.tampas) ? 'ok' : 'pend';
-          const caixa = (p.insumosChecklist && p.insumosChecklist.caixa) ? 'ok' : 'pend';
-          const essencia = (p.insumosChecklist && p.insumosChecklist.essencia) ? 'ok' : 'pend';
+          // Map Checklist — campos batem com CHECKLIST_COLS de insumos.html
+          // ('True' ou '-' contam como ok, igual ao checkIfAllInsumosOk de lá)
+          const chk = p.insumosChecklist || {};
+          const insOk = function(v) { return v === 'True' || v === '-' || v === true; };
+          const frascos  = insOk(chk.frascos)  ? 'ok' : 'pend';
+          const rotulos  = insOk(chk.rotulos)  ? 'ok' : 'pend';
+          const valvulas = insOk(chk.valvulas) ? 'ok' : 'pend';
+          const tampas   = insOk(chk.tampas)   ? 'ok' : 'pend';
+          const caixa    = insOk(chk.caixas)   ? 'ok' : 'pend';
+          const essencia = insOk(chk.essencia) ? 'ok' : 'pend';
+          const celofane = insOk(chk.celofane) ? 'ok' : 'pend';
+          const cartucho = insOk(chk.cartucho) ? 'ok' : 'pend';
+          const display  = insOk(chk.display)  ? 'ok' : 'pend';
+          const anvisa   = insOk(chk.anvisa)   ? 'ok' : 'pend';
+          const arte     = insOk(chk.artes)    ? 'ok' : 'pend';
           
           const horasVal = p.mediaPorHora > 0 ? ((p.qtdTotal || 0) / p.mediaPorHora) : 0;
           const horas = isNaN(horasVal) ? 0 : horasVal;
@@ -441,7 +457,7 @@ function loadFirebaseAndRun() {
             tampas: tampas,
             caixa: caixa,
             essencia: essencia,
-            celofane: 'na', cartucho: 'na', display: 'na', anvisa: 'ok', arte: 'ok'
+            celofane: celofane, cartucho: cartucho, display: display, anvisa: anvisa, arte: arte
           });
         });
         
@@ -515,7 +531,18 @@ function loadFirebaseAndRun() {
         
         // Preprocess all raw data fields (setting up _d, _ymd, etc.)
         preprocessRawData();
-        
+
+        // Produção/Pedidos são recarregados ao vivo do Firebase a cada load;
+        // Logística/OPs continuam presas ao retrato estático de RAW.generated_at
+        // (ver banners de aviso nessas duas abas) até existir uma integração real.
+        if (subtitleEl) {
+          subtitleEl.textContent = 'Produção/Pedidos atualizados agora (' + new Date().toLocaleString('pt-BR') + ') · Logística/OPs: retrato de ' + fmtSnapshotDate(RAW.generated_at);
+        }
+        var snapLog = document.getElementById('snapshot-date-logistica');
+        var snapOps = document.getElementById('snapshot-date-ops');
+        if (snapLog) snapLog.textContent = fmtSnapshotDate(RAW.generated_at);
+        if (snapOps) snapOps.textContent = fmtSnapshotDate(RAW.generated_at);
+
         // Trigger dashboard initialization
         initDashboard();
       });
@@ -765,7 +792,7 @@ function setupMultiSelect(field, options) {
   pop.innerHTML = `<div class="ms-actions">
     <button data-act="all">Todos</button><button data-act="none">Nenhum</button>
     </div><input type="text" placeholder="filtrar...">
-    <div class="ms-list">${options.map(o => `<label><input type="checkbox" value="${o}"> ${o}</label>`).join('')}</div>`;
+    <div class="ms-list">${options.map(o => `<label><input type="checkbox" value="${escapeHtml(o)}"> ${escapeHtml(o)}</label>`).join('')}</div>`;
   wrap.appendChild(pop);
   const btn = wrap.querySelector('.ms-btn');
   btn.addEventListener('click', e => { e.stopPropagation(); pop.classList.toggle('open'); });
@@ -800,13 +827,20 @@ function updateMsButton(field) {
   const btn = wrap.querySelector('.ms-btn');
   const sel = filters[field] || [];
   if (!sel.length) btn.innerHTML = 'Todos';
-  else if (sel.length === 1) btn.innerHTML = sel[0];
+  else if (sel.length === 1) btn.innerHTML = escapeHtml(sel[0]);
   else btn.innerHTML = `${sel.length} selecionados`;
 }
 
 function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmtSnapshotDate(iso) {
+  if (!iso) return 'data desconhecida';
+  const d = new Date(iso);
+  if (isNaN(d)) return 'data desconhecida';
+  return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
 }
 
 function filterProducao() {
@@ -876,7 +910,7 @@ function renderKpis(elId, items) {
   const el = document.getElementById(elId);
   if (!el) return;
   el.innerHTML = items.map(i => `
-    <div class="kpi"><div class="kpi-label">${i.label}</div><div class="kpi-value">${i.value}</div>${i.sub ? `<div class="kpi-sub">${i.sub}</div>` : ''}</div>
+    <div class="kpi"><div class="kpi-label">${escapeHtml(i.label)}</div><div class="kpi-value">${escapeHtml(String(i.value))}</div>${i.sub ? `<div class="kpi-sub">${escapeHtml(String(i.sub))}</div>` : ''}</div>
   `).join('');
 }
 
@@ -1407,7 +1441,7 @@ function renderAll() {
   // === Aba OPs (acompanhamento emitidas vs preenchidas) ===
   const opsEmitidas = (RAW.ops_emitidas || []);
   // Normaliza lote: troca / por . para casar com formato do nome de arquivo
-  const _normLote = l => (l || '').toString().trim().replace('/', '.');
+  const _normLote = l => (l || '').toString().trim().replace(/\//g, '.');
   const lotesPreenchidos = new Set(RAW.producao.map(p => _normLote(p.lot)).filter(Boolean));
   const lotesEmitidos = new Set(opsEmitidas.map(o => o.lote_norm));
 
@@ -1519,8 +1553,8 @@ function applyPreset(days) {
   else if (days === 'ytd') { from = new Date(today.getFullYear(), 0, 1); to = today; }
   else if (days === 'month') { from = new Date(today.getFullYear(), today.getMonth(), 1); to = today; }
   else { from = new Date(today); from.setDate(from.getDate() - days); to = today; }
-  filters.dateFrom = from ? from.toISOString().slice(0,10) : null;
-  filters.dateTo = to ? to.toISOString().slice(0,10) : null;
+  filters.dateFrom = from ? toLocalISODate(from) : null;
+  filters.dateTo = to ? toLocalISODate(to) : null;
   document.getElementById('f-from').value = filters.dateFrom || '';
   document.getElementById('f-to').value = filters.dateTo || '';
   apply();
