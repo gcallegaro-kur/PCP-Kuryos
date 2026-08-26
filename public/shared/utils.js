@@ -836,3 +836,23 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
 
   return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: Math.round(volumeGranelL * 1000) / 1000 };
 }
+
+// ── Padrão de etiqueta de identificação do fornecedor ───────────────────
+// Campos obrigatórios na etiqueta que o fornecedor cola nas caixas/fardos
+// entregues -- usado por compras.html (mostra o padrão + manda no e-mail de
+// cotação) e logistica.html (checklist de conferência no recebimento).
+// ATENÇÃO: existe uma cópia equivalente em functions/index.js (o corpo do
+// e-mail de cotação é montado no servidor) -- se mudar aqui, muda lá também.
+var PADRAO_ETIQUETA_FORNECEDOR = [
+  { campo: 'codigoMaterial', label: 'Código do material (o mesmo do cadastro Kuryos)' },
+  { campo: 'descricao', label: 'Descrição do material' },
+  { campo: 'loteDataFabricacao', label: 'Lote e data de fabricação' },
+  { campo: 'quantidadeUnidade', label: 'Quantidade, com a unidade explícita (kg/L/un)' },
+  { campo: 'pesoBrutoLiquido', label: 'Peso bruto × peso líquido (quando vendido por peso)' },
+  { campo: 'fornecedor', label: 'Fornecedor (razão social ou nome fantasia)' },
+  { campo: 'referenciaPC', label: 'Referência do Pedido de Compra Kuryos' },
+  { campo: 'clientePedido', label: 'Cliente dono do pedido' },
+  { campo: 'validade', label: 'Validade do material' },
+  { campo: 'numeroVolumes', label: 'Número de volumes (ex: 2 de 5), se a entrega vier fracionada' },
+  { campo: 'codigoBarras', label: 'Código de barras ou QR (material + lote)' }
+];

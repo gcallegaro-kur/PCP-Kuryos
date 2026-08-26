@@ -158,6 +158,7 @@
         <option value="recente">Mais recentes primeiro</option>
         <option value="antigo">Mais antigos primeiro</option>
       </select>
+      <button class="btn btn-ghost" id="btnVerPadraoEtiqueta">🏷️ Padrão de Etiqueta</button>
       <button class="btn btn-primary" id="btnConsolidar">+ Consolidar Pedido de Compra</button>
     </div>
     <div class="section-note">Gerenciar fornecedores (cadastro, contato, condição de pagamento) → <a href="cadastros.html?tab=fornecedores">Cadastros</a>.</div>
@@ -199,6 +200,20 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalScCancel">Cancelar</button>
       <button class="btn btn-green" id="modalScSave">Enviar Solicitação</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Padrão de Etiqueta -->
+<div class="modal-bg" id="modalPadraoEtiqueta">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header"><h2>🏷️ Padrão de Etiqueta de Identificação</h2><button class="modal-close" id="modalPadraoEtiquetaClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="section-note">O que todo fornecedor deve imprimir e colar em cada caixa/fardo entregue à Kuryos. Isso entra automaticamente no e-mail de cotação (📨 Solicitar Cotação) e é conferido no recebimento (Logística).</div>
+      <ol id="peList" style="margin:0;padding-left:20px;font-size:13px;line-height:1.9"></ol>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalPadraoEtiquetaClose2">Fechar</button>
     </div>
   </div>
 </div>
@@ -995,6 +1010,17 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalScSave').addEventListener('click', saveSolicitacao);
   document.getElementById('btnAddScItem').addEventListener('click', function() { scItensBuilder.push({materialCodigo: '', qtd: null, obs: ''}); renderScItensBuilder(); });
   document.getElementById('modalSc').addEventListener('click', function(e) { if (e.target === this) closeModalSolicitacao(); });
+
+  document.getElementById('btnVerPadraoEtiqueta').addEventListener('click', function() {
+    document.getElementById('peList').innerHTML = PADRAO_ETIQUETA_FORNECEDOR.map(function(f) {
+      return '<li>' + escapeHtml(f.label) + '</li>';
+    }).join('');
+    document.getElementById('modalPadraoEtiqueta').classList.add('open');
+  });
+  var fecharPadraoEtiqueta = function() { document.getElementById('modalPadraoEtiqueta').classList.remove('open'); };
+  document.getElementById('modalPadraoEtiquetaClose').addEventListener('click', fecharPadraoEtiqueta);
+  document.getElementById('modalPadraoEtiquetaClose2').addEventListener('click', fecharPadraoEtiqueta);
+  document.getElementById('modalPadraoEtiqueta').addEventListener('click', function(e) { if (e.target === this) fecharPadraoEtiqueta(); });
 
   document.getElementById('btnGerarDePedido').addEventListener('click', openModalGerarPedido);
   document.getElementById('modalGerarPedidoClose').addEventListener('click', closeModalGerarPedido);

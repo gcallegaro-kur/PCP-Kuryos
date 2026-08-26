@@ -423,6 +423,22 @@ exports.criarRascunhoCotacao = onCall(
     const linhasItens = itens.map((it) =>
       `- ${it.materialCodigo || "?"} — ${it.materialNome || ""}: ${it.qtd || 0} ${it.unidade || ""}`,
     ).join("\n");
+    // Mesma lista de PADRAO_ETIQUETA_FORNECEDOR em public/shared/utils.js --
+    // Cloud Function não compartilha código com o cliente, então é uma cópia
+    // deliberada. Mudou um lado, muda o outro.
+    const padraoEtiqueta = [
+      "Código do material (o mesmo do cadastro Kuryos)",
+      "Descrição do material",
+      "Lote e data de fabricação",
+      "Quantidade, com a unidade explícita (kg/L/un)",
+      "Peso bruto × peso líquido (quando vendido por peso)",
+      "Fornecedor (razão social ou nome fantasia)",
+      "Referência do Pedido de Compra Kuryos",
+      "Cliente dono do pedido",
+      "Validade do material",
+      "Número de volumes (ex: 2 de 5), se a entrega vier fracionada",
+      "Código de barras ou QR (material + lote)",
+    ].map((l, i) => `${i + 1}. ${l}`).join("\n");
     const corpo = [
       "Solicitamos cotação para os itens abaixo:",
       "",
@@ -431,6 +447,9 @@ exports.criarRascunhoCotacao = onCall(
       data.prazoDesejado ? `Prazo desejado: ${data.prazoDesejado}` : null,
       data.precoMeta ? `Preço de referência: ${data.precoMeta}` : null,
       data.observacoes ? `Observações: ${data.observacoes}` : null,
+      "",
+      "Toda caixa/fardo entregue precisa vir com etiqueta de identificação contendo:",
+      padraoEtiqueta,
       "",
       "Aguardamos retorno com valores e prazo de entrega.",
       "",

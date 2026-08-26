@@ -190,6 +190,26 @@
   </div>
 </div>
 
+<!-- MODAL: Checklist de Etiqueta (padrão de identificação do fornecedor) -->
+<div class="modal-bg" id="modalChecklist">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><h2>Checklist de Etiqueta</h2><button class="modal-close" id="modalChecklistClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="clPcInfo" class="field-hint" style="margin-bottom:6px"></div>
+      <div class="field-hint" style="margin-bottom:14px">Confira, na etiqueta que veio na caixa/fardo, se cada campo abaixo está presente e correto -- não trava o recebimento, só registra o que foi conferido.</div>
+      <div id="clItensList"></div>
+      <div class="form-group full" style="margin-top:14px">
+        <label>Observações</label>
+        <textarea id="clObservacoes" rows="2" placeholder="Ex: etiqueta sem lote, código de material trocado, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalChecklistCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalChecklistSave">Salvar Checklist</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var firebaseConfig = {
   apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
@@ -333,8 +353,10 @@ function renderReceberList() {
       '<div class="field-hint">' + fmtNum(prog.totalRecebido) + ' de ' + fmtNum(prog.totalPedido) + ' unidades recebidas (' + prog.pct + '%)</div>' +
       agendamentoHtml +
       '<table><thead><tr><th>Material</th><th>Pedido</th><th>Recebido</th><th>Status</th></tr></thead><tbody>' + itensRows + '</tbody></table>' +
+      checklistBadgeHtml(p) +
       '<div style="display:flex;gap:8px;margin-top:12px">' +
         '<button class="btn btn-ghost btn-sm btn-agendar" data-key="' + escapeAttr(key) + '">📅 Agendar Entrega</button>' +
+        '<button class="btn btn-ghost btn-sm btn-checklist" data-key="' + escapeAttr(key) + '">🏷️ Checklist de Etiqueta</button>' +
         '<button class="btn btn-green btn-sm btn-receber" data-key="' + escapeAttr(key) + '">📦 Registrar Recebimento</button>' +
       '</div>' +
     '</div>';
@@ -346,6 +368,22 @@ function renderReceberList() {
   document.querySelectorAll('.btn-receber').forEach(function(btn) {
     btn.addEventListener('click', function() { openModalReceber(btn.getAttribute('data-key')); });
   });
+  document.querySelectorAll('.btn-checklist').forEach(function(btn) {
+    btn.addEventListener('click', function() { openModalChecklist(btn.getAttribute('data-key')); });
+  });
+}
+
+// Resumo visual do checklist de etiqueta direto no card do PC -- não trava
+// nada, só dá visibilidade de quem já conferiu e se sobrou pendência.
+function checklistBadgeHtml(p) {
+  var cl = p.checklistEtiqueta;
+  if (!cl) return '<div class="field-hint" style="margin:6px 0">🏷️ Etiqueta ainda não conferida.</div>';
+  var total = PADRAO_ETIQUETA_FORNECEDOR.length;
+  var okCount = Object.values(cl.campos || {}).filter(Boolean).length;
+  var completo = okCount === total;
+  return '<div class="field-hint" style="margin:6px 0">🏷️ Etiqueta conferida por ' + escapeHtml(cl.conferidoPor || '—') +
+    ' (' + fmtData(cl.conferidoEm) + ') -- ' + okCount + '/' + total + ' campos' +
+    (completo ? ' <span style="color:var(--success)">✓ completo</span>' : ' <span style="color:var(--warning)">⚠ pendência</span>') + '</div>';
 }
 
 /* ══════════════ Aba Histórico ══════════════ */
@@ -530,6 +568,49 @@ function saveReceber() {
     .finally(function() { document.getElementById('modalReceberSave').disabled = false; });
 }
 
+/* ══════════════ Modal Checklist de Etiqueta ══════════════ */
+// Confere se a etiqueta de identificação do fornecedor (PADRAO_ETIQUETA_FORNECEDOR,
+// shared/utils.js) trouxe cada campo, presente e correto. Não bloqueia o
+// recebimento -- é um registro à parte, `.update()` simples (não mexe em
+// quantidade/status do PC, que já tem sua própria proteção transacional
+// em saveReceber() acima).
+var checklistKey = null;
+function openModalChecklist(key) {
+  checklistKey = key;
+  var p = allPedidosCompra[key];
+  if (!p) return;
+  document.getElementById('clPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || '');
+  var atual = (p.checklistEtiqueta && p.checklistEtiqueta.campos) || {};
+  document.getElementById('clObservacoes').value = (p.checklistEtiqueta && p.checklistEtiqueta.observacoes) || '';
+
+  var box = document.getElementById('clItensList');
+  box.innerHTML = PADRAO_ETIQUETA_FORNECEDOR.map(function(f) {
+    return '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--tint-gray-bg,#f3f4f6);font-size:13px">' +
+      '<input type="checkbox" class="cl-campo" data-campo="' + escapeAttr(f.campo) + '" style="margin-top:3px"' + (atual[f.campo] ? ' checked' : '') + '>' +
+      '<span>' + escapeHtml(f.label) + '</span>' +
+    '</label>';
+  }).join('');
+  document.getElementById('modalChecklist').classList.add('open');
+}
+function closeModalChecklist() { document.getElementById('modalChecklist').classList.remove('open'); checklistKey = null; }
+function saveChecklist() {
+  if (!checklistKey) return;
+  var campos = {};
+  document.querySelectorAll('.cl-campo').forEach(function(cb) { campos[cb.getAttribute('data-campo')] = cb.checked; });
+
+  document.getElementById('modalChecklistSave').disabled = true;
+  db.ref('pedidos_compra/' + checklistKey + '/checklistEtiqueta').set({
+    campos: campos,
+    observacoes: document.getElementById('clObservacoes').value.trim(),
+    conferidoPor: currentUserNome(),
+    conferidoEm: new Date().toISOString()
+  }).then(function() {
+    showAlert('Checklist de etiqueta salvo!', 'success');
+    closeModalChecklist();
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalChecklistSave').disabled = false; });
+}
+
 /* ══════════════ Boot ══════════════ */
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalAgendarClose').addEventListener('click', closeModalAgendar);
@@ -541,6 +622,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalReceberCancel').addEventListener('click', closeModalReceber);
   document.getElementById('modalReceberSave').addEventListener('click', saveReceber);
   document.getElementById('modalReceber').addEventListener('click', function(e) { if (e.target === this) closeModalReceber(); });
+
+  document.getElementById('modalChecklistClose').addEventListener('click', closeModalChecklist);
+  document.getElementById('modalChecklistCancel').addEventListener('click', closeModalChecklist);
+  document.getElementById('modalChecklistSave').addEventListener('click', saveChecklist);
+  document.getElementById('modalChecklist').addEventListener('click', function(e) { if (e.target === this) closeModalChecklist(); });
 
   try {
     db.ref('.info/connected').on('value', function(snap) {
