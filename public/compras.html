@@ -53,6 +53,9 @@
     .table-wrap{overflow:auto;max-height:calc(100vh - 320px)}
     table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
     thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    .th-sortable{cursor:pointer;user-select:none}
+    .th-sortable:hover{color:var(--primary)}
+    .th-sort-active{color:var(--primary)}
     td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
     tr:hover td{background:var(--surface-2)}
     .code-cell{font-family:monospace;font-weight:700;color:var(--primary);white-space:nowrap}
@@ -111,6 +114,8 @@
 <div class="tabs">
   <button class="tab active" data-tab="solicitacoes">Solicitações</button>
   <button class="tab" data-tab="pedidos">Pedidos de Compra</button>
+  <button class="tab" data-tab="precos">📊 Histórico de Preços</button>
+  <button class="tab" data-tab="fornecedores-analise">📈 Análise de Fornecedores</button>
 </div>
 
 <div class="main">
@@ -175,6 +180,50 @@
             <th style="min-width:110px">Ações</th>
           </tr></thead>
           <tbody id="pcBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ HISTÓRICO DE PREÇOS ═══════════ -->
+  <div class="tab-panel" id="tab-precos">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="phSearch" placeholder="Buscar por código ou nome do material..."></div>
+    </div>
+    <div class="section-note">Todo item que já teve preço negociado num Pedido de Compra, mais recente primeiro -- use como referência antes de fechar a próxima negociação. <span style="color:var(--success);font-weight:700">✓ menor preço</span> marca o menor valor já pago por aquele material entre os itens exibidos.</div>
+    <div class="card">
+      <div class="card-title" id="phCount">Histórico de Preços</div>
+      <div class="table-wrap">
+        <table>
+          <thead id="phThead"><tr>
+            <th data-sort="data">Data</th>
+            <th data-sort="materialCodigo">Material</th>
+            <th data-sort="fornecedorNome">Fornecedor</th>
+            <th data-sort="qtd" style="text-align:right">Qtd.</th>
+            <th data-sort="precoUnit" style="text-align:right">Preço Unit.</th>
+            <th data-sort="numeroFormatado">Pedido de Compra</th>
+          </tr></thead>
+          <tbody id="phBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ ANÁLISE DE FORNECEDORES ═══════════ -->
+  <div class="tab-panel" id="tab-fornecedores-analise">
+    <div class="section-note">Agregado de todos os Pedidos de Compra por fornecedor. % No Prazo compara a data do último recebimento com a data agendada (só conta pedidos com os dois preenchidos). % Etiqueta Completa é sobre os pedidos que já tiveram checklist de etiqueta conferido em Logística.</div>
+    <div class="card">
+      <div class="card-title" id="faCount">Análise de Fornecedores</div>
+      <div class="table-wrap">
+        <table>
+          <thead id="faThead"><tr>
+            <th data-sort="nome">Fornecedor</th>
+            <th data-sort="totalPCs" style="text-align:right">Pedidos</th>
+            <th data-sort="valorTotal" style="text-align:right">Valor Total Comprado</th>
+            <th data-sort="pctPrazo" style="text-align:right">% No Prazo</th>
+            <th data-sort="pctEtiqueta" style="text-align:right">% Etiqueta Completa</th>
+          </tr></thead>
+          <tbody id="faBody"><tr><td colspan="5" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -674,6 +723,133 @@ function openModalGerarPedido() {
 function closeModalGerarPedido() { document.getElementById('modalGerarPedido').classList.remove('open'); }
 
 /* ══════════════ PEDIDOS DE COMPRA ══════════════ */
+/* ══════════════ Histórico de Preços ══════════════ */
+var phSortable = makeSortableTable(document.getElementById('phThead'), 'data', 'desc');
+function historicoPrecosLinhas() {
+  var linhas = [];
+  Object.values(allPedidosCompra).forEach(function(pc) {
+    Object.values(pc.itens || {}).forEach(function(it) {
+      if (it.precoUnit == null || it.precoUnit === '') return; // só itens com preço negociado
+      linhas.push({
+        data: pc.dataEmissao || pc.dataCriacao || '',
+        materialCodigo: it.materialCodigo || '?', materialNome: it.materialNome || '',
+        fornecedorNome: pc.fornecedorNome || '—',
+        qtd: parseFloat(it.qtd) || 0, unidade: it.unidade || '',
+        precoUnit: parseFloat(it.precoUnit) || 0,
+        numeroFormatado: pc.numeroFormatado || '—'
+      });
+    });
+  });
+  return linhas;
+}
+function renderHistoricoPrecos() {
+  var search = norm(document.getElementById('phSearch').value);
+  var linhas = historicoPrecosLinhas().filter(function(l) {
+    if (!search) return true;
+    return (norm(l.materialCodigo) + ' ' + norm(l.materialNome)).indexOf(search) !== -1;
+  });
+
+  // Menor preço já pago por material, calculado sobre o que está sendo
+  // exibido agora (respeita o filtro de busca).
+  var menorPorMaterial = {};
+  linhas.forEach(function(l) {
+    if (menorPorMaterial[l.materialCodigo] == null || l.precoUnit < menorPorMaterial[l.materialCodigo]) {
+      menorPorMaterial[l.materialCodigo] = l.precoUnit;
+    }
+  });
+
+  linhas = phSortable.applySort(linhas, function(l, field) { return l[field]; });
+
+  document.getElementById('phCount').textContent = 'Histórico de Preços (' + linhas.length + ' itens)';
+  var tbody = document.getElementById('phBody');
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (search ? 'Nenhum item encontrado com esse filtro.' : 'Nenhum item com preço negociado ainda -- preços entram aqui ao consolidar um Pedido de Compra.') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = linhas.map(function(l) {
+    var ehMenor = l.precoUnit === menorPorMaterial[l.materialCodigo];
+    return '<tr>' +
+      '<td style="font-size:12px;white-space:nowrap">' + fmtData(l.data) + '</td>' +
+      '<td>' + escapeHtml(l.materialCodigo) + ' — ' + escapeHtml(l.materialNome) + '</td>' +
+      '<td>' + escapeHtml(l.fornecedorNome) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(l.qtd) + ' ' + escapeHtml(l.unidade) + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(l.precoUnit) + (ehMenor ? ' <span style="color:var(--success)" title="Menor preço já pago por esse material entre os itens exibidos">✓ menor</span>' : '') + '</td>' +
+      '<td class="code-cell">' + escapeHtml(l.numeroFormatado) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ══════════════ Análise de Fornecedores ══════════════ */
+var faSortable = makeSortableTable(document.getElementById('faThead'), 'valorTotal', 'desc');
+function analiseFornecedoresLinhas() {
+  var porFornecedor = {};
+  Object.values(allPedidosCompra).forEach(function(pc) {
+    var fKey = pc.fornecedorKey;
+    if (!fKey) return;
+    if (!porFornecedor[fKey]) porFornecedor[fKey] = { nome: pc.fornecedorNome || fKey, totalPCs: 0, valorTotal: 0, prazoOk: 0, prazoTotal: 0, etiquetaOk: 0, etiquetaTotal: 0 };
+    var agg = porFornecedor[fKey];
+    agg.totalPCs++;
+
+    Object.values(pc.itens || {}).forEach(function(it) {
+      if (it.precoUnit != null && it.precoUnit !== '') {
+        agg.valorTotal += (parseFloat(it.qtd) || 0) * (parseFloat(it.precoUnit) || 0);
+      }
+    });
+
+    // No prazo = data do último recebimento <= data agendada -- só entra na
+    // conta quem tem os dois (senão não dá pra avaliar prazo nenhum).
+    var ag = pc.agendamento;
+    var recebimentos = Object.values(pc.recebimentos || {});
+    if (ag && ag.dataAgendada && recebimentos.length) {
+      var datasRec = recebimentos.map(function(r) { return r.data; }).filter(Boolean).sort();
+      var ultimaData = datasRec[datasRec.length - 1];
+      if (ultimaData) {
+        agg.prazoTotal++;
+        if (ultimaData <= ag.dataAgendada) agg.prazoOk++;
+      }
+    }
+
+    if (pc.checklistEtiqueta) {
+      agg.etiquetaTotal++;
+      var campos = pc.checklistEtiqueta.campos || {};
+      var okCount = Object.values(campos).filter(Boolean).length;
+      if (okCount === PADRAO_ETIQUETA_FORNECEDOR.length) agg.etiquetaOk++;
+    }
+  });
+
+  return Object.values(porFornecedor).map(function(agg) {
+    return {
+      nome: agg.nome, totalPCs: agg.totalPCs, valorTotal: agg.valorTotal,
+      pctPrazo: agg.prazoTotal ? Math.round(agg.prazoOk / agg.prazoTotal * 100) : null,
+      prazoTotal: agg.prazoTotal,
+      pctEtiqueta: agg.etiquetaTotal ? Math.round(agg.etiquetaOk / agg.etiquetaTotal * 100) : null,
+      etiquetaTotal: agg.etiquetaTotal
+    };
+  });
+}
+function renderAnaliseFornecedores() {
+  var linhas = analiseFornecedoresLinhas();
+  linhas = faSortable.applySort(linhas, function(l, field) { return l[field]; });
+
+  document.getElementById('faCount').textContent = 'Análise de Fornecedores (' + linhas.length + ')';
+  var tbody = document.getElementById('faBody');
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhum Pedido de Compra vinculado a fornecedor ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = linhas.map(function(l) {
+    var prazoTxt = l.pctPrazo == null ? '<span style="color:var(--muted)">sem dado</span>' : l.pctPrazo + '% (' + l.prazoTotal + ')';
+    var etiquetaTxt = l.pctEtiqueta == null ? '<span style="color:var(--muted)">sem dado</span>' : l.pctEtiqueta + '% (' + l.etiquetaTotal + ')';
+    return '<tr>' +
+      '<td>' + escapeHtml(l.nome) + '</td>' +
+      '<td style="text-align:right">' + l.totalPCs + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(l.valorTotal) + '</td>' +
+      '<td style="text-align:right">' + prazoTxt + '</td>' +
+      '<td style="text-align:right">' + etiquetaTxt + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
 function refreshPcFornecedorFilter() {
   ['pcFilterFornecedor', 'pcFornecedor', 'cotFornecedor'].forEach(function(id) {
     var sel = document.getElementById(id);
@@ -1051,6 +1227,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('pcFilterFornecedor').addEventListener('change', renderPedidos);
   document.getElementById('pcSort').addEventListener('change', renderPedidos);
 
+  var _tph = null;
+  document.getElementById('phSearch').addEventListener('input', function() { clearTimeout(_tph); _tph = setTimeout(renderHistoricoPrecos, 200); });
+  phSortable.wireHeaders(renderHistoricoPrecos);
+  faSortable.wireHeaders(renderAnaliseFornecedores);
+
   try {
     db.ref('.info/connected').on('value', function(snap) {
       setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
@@ -1071,6 +1252,8 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('pedidos_compra'), function(snap) {
       allPedidosCompra = snap.val() || {};
       renderPedidos();
+      renderHistoricoPrecos();
+      renderAnaliseFornecedores();
     });
     // Só leitura -- pra "Gerar de Pedido" (explosão de Fórmula/BOM contra o
     // saldo em aberto do pedido). Nenhuma dessas 5 tem CRUD aqui.
