@@ -91,6 +91,15 @@
     input[type=text],input[type=number],input[type=date],input[type=tel],input[type=email],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color .2s}
     input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     input[readonly]{background:var(--surface-2);color:var(--muted)}
+    /* Autocomplete (attachAutocomplete, shared/utils.js) -- mesmo CSS de form.html, não vem de shared/theme.css */
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
+    .dup-hint{display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#92400e;font-size:12px}
+    .dup-hint.show{display:block}
+    .dup-hint a{color:#92400e;font-weight:700;text-decoration:underline;cursor:pointer}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
     label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
     label.chk input{width:auto}
@@ -245,11 +254,11 @@
             </div>
             <div class="form-group full">
               <label>Nome / Descrição *</label>
-              <input type="text" id="fNome-mat" placeholder="Ex: FRASCO AIRLESS 120ML 24/410 ALTO TRANSPARENTE">
+              <input type="text" id="fNome-mat" class="uc" placeholder="Ex: FRASCO AIRLESS 120ML 24/410 ALTO TRANSPARENTE">
             </div>
             <div class="form-group">
               <label>Marca / Modelo</label>
-              <input type="text" id="fMarcaModelo-mat" placeholder="Quando aplicável">
+              <input type="text" id="fMarcaModelo-mat" class="uc" placeholder="Quando aplicável">
             </div>
             <div class="form-group">
               <label>Código de barras</label>
@@ -276,10 +285,10 @@
           <div class="tipo-fields" data-tipo-for="MPGR">
             <div class="section-label">Matéria-Prima -- Geral</div>
             <div class="form-grid">
-              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInci-mat" placeholder="Ex: Glycerin"></div>
-              <div class="form-group"><label>Função na fórmula</label><input type="text" id="fFuncaoFormula-mat" placeholder="Ex: umectante, emulsificante..."></div>
-              <div class="form-group"><label>Aparência</label><input type="text" id="fAparencia-mat" placeholder="Ex: líquido viscoso incolor"></div>
-              <div class="form-group"><label>Cor</label><input type="text" id="fCor-mat" placeholder="Ex: incolor, amarelo claro..."></div>
+              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInci-mat" class="uc" placeholder="Ex: Glycerin"></div>
+              <div class="form-group"><label>Função na fórmula</label><input type="text" id="fFuncaoFormula-mat" class="uc" placeholder="Ex: umectante, emulsificante..."></div>
+              <div class="form-group"><label>Aparência</label><input type="text" id="fAparencia-mat" class="uc" placeholder="Ex: líquido viscoso incolor"></div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCor-mat" class="uc" placeholder="Ex: incolor, amarelo claro..."></div>
               <div class="form-group"><label>Densidade de referência (g/ml)</label>
                 <input type="number" id="fDensidade" min="0" step="any" placeholder="Deixe vazio até ter valor medido de verdade">
                 <div class="field-hint">Nunca usar 1,0 como padrão. É o valor de referência do padrão homologado -- tolerância de aceite é definida pela Qualidade, não aqui.</div>
@@ -291,9 +300,9 @@
           <div class="tipo-fields" data-tipo-for="MPES">
             <div class="section-label">Fragrância / Essência</div>
             <div class="form-grid">
-              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInciFrag-mat" placeholder="Quando aplicável"></div>
-              <div class="form-group"><label>Casa de fragrância</label><input type="text" id="fCasaFragrancia-mat" placeholder="Ex: Givaudan, Firmenich..."></div>
-              <div class="form-group full"><label>Inspiração</label><input type="text" id="fInspiracao-mat" placeholder="Ex: inspirado em [referência de mercado]"></div>
+              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInciFrag-mat" class="uc" placeholder="Quando aplicável"></div>
+              <div class="form-group"><label>Casa de fragrância</label><input type="text" id="fCasaFragrancia-mat" class="uc" placeholder="Ex: Givaudan, Firmenich..."></div>
+              <div class="form-group full"><label>Inspiração</label><input type="text" id="fInspiracao-mat" class="uc" placeholder="Ex: inspirado em [referência de mercado]"></div>
               <div class="form-group"><label>Custo target (USD/kg)</label><input type="number" id="fCustoTargetUsd-mat" min="0" step="any"></div>
             </div>
           </div>
@@ -302,8 +311,8 @@
           <div class="tipo-fields" data-tipo-for="EP">
             <div class="section-label">Embalagem Primária</div>
             <div class="form-grid">
-              <div class="form-group"><label>Formato</label><input type="text" id="fFormato-mat" placeholder="Ex: cilíndrico alto, oval achatado..."></div>
-              <div class="form-group"><label>Gargalo / rosca (GPI/SPI)</label><input type="text" id="fGargalo-mat" placeholder="Ex: 24/410"></div>
+              <div class="form-group"><label>Formato</label><input type="text" id="fFormato-mat" class="uc" placeholder="Ex: cilíndrico alto, oval achatado..."></div>
+              <div class="form-group"><label>Gargalo / rosca (GPI/SPI)</label><input type="text" id="fGargalo-mat" class="uc" placeholder="Ex: 24/410"></div>
               <div class="form-group"><label>Material</label>
                 <select id="fMaterialResina-mat">
                   <option value="">Selecione...</option>
@@ -320,7 +329,7 @@
                   <option value="OUTRO">Outro</option>
                 </select>
               </div>
-              <div class="form-group"><label>Cor</label><input type="text" id="fCorEp-mat"></div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCorEp-mat" class="uc"></div>
               <div class="form-group"><label>Volume nominal (ml)</label><input type="number" id="fVolumeNominal-mat" min="0" step="any"></div>
               <div class="form-group"><label>Volume interno total (ml)</label><input type="number" id="fVolumeInterno-mat" min="0" step="any"></div>
               <div class="form-group"><label>Head space</label><input type="text" id="fHeadSpace-mat" readonly placeholder="Calculado automaticamente"></div>
@@ -350,7 +359,7 @@
                   <option value="OUTRO">Outro</option>
                 </select>
               </div>
-              <div class="form-group"><label>Cor</label><input type="text" id="fCorSt-mat"></div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCorSt-mat" class="uc"></div>
               <div class="form-group"><label>Comprimento (mm)</label><input type="number" id="fComprimentoSt-mat" min="0" step="any"></div>
               <div class="form-group"><label>Largura (mm)</label><input type="number" id="fLarguraSt-mat" min="0" step="any"></div>
               <div class="form-group"><label>Altura (mm)</label><input type="number" id="fAlturaSt-mat" min="0" step="any"></div>
@@ -362,7 +371,7 @@
           <div class="form-grid">
             <div class="form-group full">
               <label>Observações / especificações técnicas livres</label>
-              <textarea id="fEspecificacoes" rows="2" placeholder="Qualquer coisa relevante que não caiba nos campos acima"></textarea>
+              <textarea id="fEspecificacoes" class="uc" rows="2" placeholder="Qualquer coisa relevante que não caiba nos campos acima"></textarea>
             </div>
           </div>
 
@@ -399,9 +408,13 @@
             </table>
           </div>
           <div class="form-grid" style="align-items:end">
-            <div class="form-group"><label>Fornecedor</label><select id="fhFornecedor-mat"><option value="">Selecione...</option></select></div>
-            <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fhNomeComercial-mat"></div>
-            <div class="form-group"><label>Código deles</label><input type="text" id="fhCodigoFornecedor-mat"></div>
+            <div class="form-group">
+              <label>Fornecedor</label>
+              <input type="text" id="fhFornecedor-mat" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="fhFornecedorKey-mat">
+            </div>
+            <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fhNomeComercial-mat" class="uc"></div>
+            <div class="form-group"><label>Código deles</label><input type="text" id="fhCodigoFornecedor-mat" class="uc"></div>
             <div class="form-group"><label>Status</label>
               <select id="fhStatus-mat">
                 <option value="aguardando_homologacao">Aguardando homologação</option>
@@ -517,20 +530,20 @@
             <div class="form-grid">
               <div class="form-group">
                 <label>SKU * <button type="button" id="btnUnlockSku-prod" class="btn btn-ghost btn-sm" style="display:none;padding:2px 8px;font-size:11px;margin-left:6px">✏ Alterar código</button></label>
-                <input type="text" id="fSku-prod" placeholder="Ex: BSPL-AFEE-0001 (ou digite manualmente)">
+                <input type="text" id="fSku-prod" class="uc" placeholder="Ex: BSPL-AFEE-0001 (ou digite manualmente)">
                 <div class="field-hint" id="skuRenameHint-prod" style="display:none">Atenção: isso troca a chave do produto no banco (renomeação atômica) -- referências antigas por esse SKU em OPs/fórmulas já emitidas não são atualizadas automaticamente.</div>
               </div>
               <div class="form-group">
                 <label>Cód. Cliente</label>
-                <input type="text" id="fCodCliente-prod" placeholder="Ex: MRARBS05 (código próprio do cliente pro item, se houver)">
+                <input type="text" id="fCodCliente-prod" class="uc" placeholder="Ex: MRARBS05 (código próprio do cliente pro item, se houver)">
               </div>
               <div class="form-group full">
                 <label>Descrição do Item *</label>
-                <input type="text" id="fDescricao-prod" placeholder="Nome completo do produto">
+                <input type="text" id="fDescricao-prod" class="uc" placeholder="Nome completo do produto">
               </div>
               <div class="form-group">
                 <label>Linha do Produto</label>
-                <input type="text" id="fLinhaProduto-prod" placeholder="Ex: ARABY'S">
+                <input type="text" id="fLinhaProduto-prod" class="uc" placeholder="Ex: ARABY'S">
               </div>
               <div class="form-group" style="display:grid;grid-template-columns:2fr 1fr;gap:6px;align-items:end">
                 <div>
@@ -592,7 +605,7 @@
             <div class="form-grid">
               <div class="form-group">
                 <label>Cliente</label>
-                <input type="text" id="fCliente-prod" list="clientesList-prod" placeholder="Ex: MISS ROSE" autocomplete="off">
+                <input type="text" id="fCliente-prod" class="uc" list="clientesList-prod" placeholder="Ex: MISS ROSE" autocomplete="off">
                 <datalist id="clientesList-prod"></datalist>
               </div>
               <div class="form-group">
@@ -609,12 +622,12 @@
               </div>
               <div class="form-group">
                 <label>Categoria do Produto</label>
-                <input type="text" id="fCategoria-prod" list="categoriasList-prod" placeholder="Ex: CORPORAL" autocomplete="off">
+                <input type="text" id="fCategoria-prod" class="uc" list="categoriasList-prod" placeholder="Ex: CORPORAL" autocomplete="off">
                 <datalist id="categoriasList-prod"></datalist>
               </div>
               <div class="form-group">
                 <label>Subcategoria do Produto</label>
-                <input type="text" id="fSubcategoria-prod" list="subcategoriasList-prod" placeholder="Ex: BODY SPLASH" autocomplete="off">
+                <input type="text" id="fSubcategoria-prod" class="uc" list="subcategoriasList-prod" placeholder="Ex: BODY SPLASH" autocomplete="off">
                 <datalist id="subcategoriasList-prod"></datalist>
               </div>
             </div>
@@ -642,7 +655,7 @@
             <div class="form-grid">
               <div class="form-group">
                 <label>MS Anvisa</label>
-                <input type="text" id="fMsAnvisa-prod" placeholder="Número do registro">
+                <input type="text" id="fMsAnvisa-prod" class="uc" placeholder="Número do registro">
               </div>
               <div class="form-group">
                 <label>LP</label>
@@ -650,7 +663,7 @@
               </div>
               <div class="form-group full">
                 <label>Observações</label>
-                <textarea id="fObs-prod" rows="3" placeholder="Informações adicionais..."></textarea>
+                <textarea id="fObs-prod" class="uc" rows="3" placeholder="Informações adicionais..."></textarea>
               </div>
             </div>
           </div>
@@ -662,15 +675,15 @@
             <div class="form-grid">
               <div class="form-group">
                 <label>Aspecto</label>
-                <input type="text" id="fCqAspecto-prod" placeholder="Ex: Líquido">
+                <input type="text" id="fCqAspecto-prod" class="uc" placeholder="Ex: Líquido">
               </div>
               <div class="form-group">
                 <label>Cor</label>
-                <input type="text" id="fCqCor-prod" placeholder="Ex: Translúcido">
+                <input type="text" id="fCqCor-prod" class="uc" placeholder="Ex: Translúcido">
               </div>
               <div class="form-group">
                 <label>Odor</label>
-                <input type="text" id="fCqOdor-prod" placeholder="Ex: Característico">
+                <input type="text" id="fCqOdor-prod" class="uc" placeholder="Ex: Característico">
               </div>
               <div class="form-group">
                 <label>Densidade (faixa)</label>
@@ -814,8 +827,8 @@
       <div class="section-label" style="margin-top:18px">Adicionar categoria fora da lista</div>
       <div class="field-hint" style="margin-bottom:8px">A lista acima já cobre as categorias oficiais da ANVISA -- normalmente não deveria ser preciso adicionar. Use isto só se surgir um tipo de produto genuinamente novo (ex: uma categoria nova criada pela própria ANVISA).</div>
       <div class="tag-add">
-        <input type="text" id="iCategoriaNome-cat" placeholder="Nome (ex: BODY SPLASH)" style="flex:2">
-        <input type="text" id="iCategoriaCodigo-cat" placeholder="Código, 3 letras (ex: BSP)" style="flex:1" maxlength="3">
+        <input type="text" id="iCategoriaNome-cat" class="uc" placeholder="Nome (ex: BODY SPLASH)" style="flex:2">
+        <input type="text" id="iCategoriaCodigo-cat" class="uc" placeholder="Código, 3 letras (ex: BSP)" style="flex:1" maxlength="3">
         <button class="btn btn-ghost btn-sm" id="btnAddCategoriaProduto-cat">+ Adicionar</button>
       </div>
     </div>
@@ -842,11 +855,14 @@
             <tr>
               <th style="min-width:100px" data-sort="codigo">Código</th>
               <th style="min-width:220px" data-sort="nome">Nome</th>
+              <th style="min-width:140px" data-sort="cnpj">CNPJ</th>
+              <th style="min-width:100px" data-sort="cidade">Local</th>
+              <th style="min-width:160px" data-sort="contatoComNome">Contato Comercial</th>
               <th style="min-width:80px" data-sort="ativo">Status</th>
               <th style="min-width:50px"></th>
             </tr>
           </thead>
-          <tbody id="tableBody-cli"><tr><td colspan="4" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="tableBody-cli"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -858,21 +874,109 @@
           <button class="modal-close" id="modalClose-cli" title="Fechar" aria-label="Fechar">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label>Nome *</label>
-            <input type="text" id="fNome-cli" placeholder="Ex: AFEER OF ARABIAN">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Nome *</label>
+              <input type="text" id="fNome-cli" class="uc" placeholder="Ex: AFEER OF ARABIAN">
+            </div>
+            <div class="form-group">
+              <label>Código *</label>
+              <input type="text" id="fCodigo-cli" class="uc" placeholder="Ex: AFEE" maxlength="8">
+              <div class="field-hint">Curto, sem espaço, maiúsculo -- vira parte do SKU dos produtos desse cliente. Evite mudar depois de já ter produto cadastrado.</div>
+            </div>
+            <div class="form-group">
+              <label>CNPJ</label>
+              <input type="text" id="fCnpj-cli" placeholder="00.000.000/0000-00">
+            </div>
           </div>
-          <div class="form-group">
-            <label>Código *</label>
-            <input type="text" id="fCodigo-cli" placeholder="Ex: AFEE" maxlength="8">
-            <div class="field-hint">Curto, sem espaço, maiúsculo -- vira parte do SKU dos produtos desse cliente. Evite mudar depois de já ter produto cadastrado.</div>
+          <div class="section-label">Contato Comercial</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Nome do contato</label>
+              <input type="text" id="fContatoComNome-cli" class="uc">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" id="fContatoComTelefone-cli">
+            </div>
+            <div class="form-group full">
+              <label>E-mail</label>
+              <input type="text" id="fContatoComEmail-cli" placeholder="comercial@cliente.com.br">
+            </div>
           </div>
-          <div class="form-group">
-            <label>Status</label>
-            <select id="fAtivo-cli">
-              <option value="ativo">Ativo</option>
-              <option value="inativo">Inativo</option>
-            </select>
+          <div class="section-label">Contato Técnico / Desenvolvimento</div>
+          <div class="field-hint" style="margin-bottom:8px">Quem aprova fórmula, embalagem e arte -- geralmente uma pessoa diferente de quem negocia.</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Nome do contato</label>
+              <input type="text" id="fContatoTecNome-cli" class="uc">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" id="fContatoTecTelefone-cli">
+            </div>
+            <div class="form-group full">
+              <label>E-mail</label>
+              <input type="text" id="fContatoTecEmail-cli" placeholder="desenvolvimento@cliente.com.br">
+            </div>
+          </div>
+          <div class="section-label">Localização</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cidade</label>
+              <input type="text" id="fCidade-cli" class="uc">
+            </div>
+            <div class="form-group">
+              <label>UF</label>
+              <input type="text" id="fUf-cli" maxlength="2" style="text-transform:uppercase">
+            </div>
+          </div>
+          <div class="section-label">Comercial</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Condição de pagamento</label>
+              <input type="text" id="fCondicaoPagamento-cli" class="uc" placeholder="Ex: 30/60/90 dias">
+            </div>
+            <div class="form-group">
+              <label>Site</label>
+              <input type="text" id="fSite-cli" placeholder="www.cliente.com.br">
+            </div>
+          </div>
+          <div class="section-label">Regulatório</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Detentor do registro ANVISA</label>
+              <select id="fDetentorAnvisa-cli">
+                <option value="cliente">Cliente</option>
+                <option value="kuryos">Kuryos</option>
+              </select>
+              <div class="field-hint">Quem responde legalmente pelo registro dos produtos deste cliente.</div>
+            </div>
+          </div>
+          <div class="section-label">Vínculos</div>
+          <div class="field-hint" style="margin-bottom:8px">Use isto quando este cliente é filial/matriz de outro cliente já cadastrado, ou quando ele também é fornecedor (ex: pra emitir nota de devolução) -- evita cadastro duplicado da mesma empresa.</div>
+          <div id="cliDupHint-cli" class="dup-hint"></div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Matriz (se este for filial de outro cliente)</label>
+              <input type="text" id="cliMatriz-cli" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="cliMatrizKey-cli">
+            </div>
+            <div class="form-group full">
+              <label>Também é fornecedor (mesma empresa, cadastro em Fornecedores)</label>
+              <input type="text" id="cliFornecedorVinculado-cli" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="cliFornecedorVinculadoKey-cli">
+            </div>
+          </div>
+          <div class="section-label">Status</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Status</label>
+              <select id="fAtivo-cli">
+                <option value="ativo">Ativo</option>
+                <option value="inativo">Inativo</option>
+              </select>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -933,11 +1037,11 @@
           <div class="form-grid">
             <div class="form-group full">
               <label>Razão Social *</label>
-              <input type="text" id="fnRazaoSocial-forn" placeholder="Ex: Distribuidora ABC Ltda">
+              <input type="text" id="fnRazaoSocial-forn" class="uc" placeholder="Ex: Distribuidora ABC Ltda">
             </div>
             <div class="form-group full">
               <label>Nome Fantasia</label>
-              <input type="text" id="fnNomeFantasia-forn">
+              <input type="text" id="fnNomeFantasia-forn" class="uc">
             </div>
             <div class="form-group">
               <label>CNPJ</label>
@@ -964,14 +1068,14 @@
             </div>
             <div class="form-group full">
               <label>Condição de pagamento</label>
-              <input type="text" id="fnCondicaoPagamento-forn" placeholder="Ex: 30/60/90 dias">
+              <input type="text" id="fnCondicaoPagamento-forn" class="uc" placeholder="Ex: 30/60/90 dias">
             </div>
           </div>
           <div class="section-label">Contato</div>
           <div class="form-grid">
             <div class="form-group">
               <label>Nome do contato</label>
-              <input type="text" id="fnContatoNome-forn">
+              <input type="text" id="fnContatoNome-forn" class="uc">
             </div>
             <div class="form-group">
               <label>Telefone</label>
@@ -990,7 +1094,7 @@
           <div class="form-grid">
             <div class="form-group">
               <label>Cidade</label>
-              <input type="text" id="fnCidade-forn">
+              <input type="text" id="fnCidade-forn" class="uc">
             </div>
             <div class="form-group">
               <label>UF</label>
@@ -998,7 +1102,22 @@
             </div>
             <div class="form-group full">
               <label>Certificações</label>
-              <input type="text" id="fnCertificacoes-forn" placeholder="Ex: BPF/GMP, ISO 9001...">
+              <input type="text" id="fnCertificacoes-forn" class="uc" placeholder="Ex: BPF/GMP, ISO 9001...">
+            </div>
+          </div>
+          <div class="section-label">Vínculos</div>
+          <div class="field-hint" style="margin-bottom:8px">Use isto quando esta empresa é filial/matriz de outro fornecedor já cadastrado, ou quando ela também é cliente (ex: pra emitir nota de devolução) -- evita cadastro duplicado da mesma empresa.</div>
+          <div id="fnDupHint-forn" class="dup-hint"></div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Matriz (se esta for filial de outro fornecedor)</label>
+              <input type="text" id="fnMatriz-forn" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="fnMatrizKey-forn">
+            </div>
+            <div class="form-group full">
+              <label>Também é cliente (mesma empresa, cadastro em Clientes)</label>
+              <input type="text" id="fnClienteVinculado-forn" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="fnClienteVinculadoKey-forn">
             </div>
           </div>
           <div class="section-label">Status</div>
@@ -1037,6 +1156,66 @@ var db = firebase.database();
 // `editingKey`/`renderTable`/`openModal`/etc. de cada seção, presos no
 // IIFE dela -- ver comentário na seção de cada aba).
 function norm(s) { return String(s || '').toLowerCase().trim(); }
+
+// ── Detecção de cadastro duplicado (matriz/filial, fornecedor×cliente) ──
+// Pedido do usuário: cadastros repetidos da mesma empresa (filial com CNPJ
+// diferente, ou fornecedor recadastrado como cliente pra emitir nota de
+// devolução) causavam divergência no sistema antigo. Em vez de proibir --
+// CNPJs diferentes são pessoas jurídicas de verdade, cada filial PRECISA do
+// próprio registro pra nota fiscal -- só avisa quando o nome bate/é muito
+// parecido com outro já cadastrado, oferecendo vincular em vez de duplicar
+// sem perceber. Remove sufixo de razão social (Ltda/S.A./filial/matriz)
+// antes de comparar, senão "Distribuidora ABC" e "Distribuidora ABC Ltda"
+// não bateriam.
+var SUFIXOS_RAZAO_SOCIAL = ['ltda', 'eireli', 'me', 'epp', 'sa', 's a', 'cia', 'filial', 'matriz'];
+function normalizarNomeEmpresa(nome) {
+  var s = String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  s = s.replace(/[^a-z0-9\s]/g, ' ');
+  var palavras = s.split(/\s+/).filter(function(w) { return w && SUFIXOS_RAZAO_SOCIAL.indexOf(w) === -1; });
+  return palavras.join(' ').trim();
+}
+// `colecao` é o dict inteiro (allFornecedores/allClientes); `campoNome` é
+// 'razaoSocial' (fornecedor) ou 'nome' (cliente). Retorna o 1º achado ou null.
+function possivelDuplicata(nomeDigitado, colecao, campoNome, excludeKey) {
+  var alvo = normalizarNomeEmpresa(nomeDigitado);
+  if (alvo.length < 4) return null; // nome curto demais pra comparar com segurança
+  var achado = null;
+  Object.keys(colecao).some(function(key) {
+    if (key === excludeKey) return false;
+    var reg = colecao[key];
+    if (!reg || reg.ativo === false) return false;
+    var normReg = normalizarNomeEmpresa(reg[campoNome]);
+    if (!normReg || normReg.length < 4) return false;
+    if (normReg === alvo || normReg.indexOf(alvo) !== -1 || alvo.indexOf(normReg) !== -1) {
+      achado = { key: key, nome: reg[campoNome], cnpj: reg.cnpj || '' };
+      return true;
+    }
+    return false;
+  });
+  return achado;
+}
+
+// ── Maiúsculas forçadas em campo de cadastro (pedido do usuário: nome/
+// endereço/etc. digitados em caixa mista causavam problema de correspondência
+// -- ex: o mesmo bug já corrigido em historico.html, onde "BODY SPLASH
+// LUNAR 120ml" vs "Body Splash Lunar 120 ml" nunca batiam no reconcile).
+// Todo campo que deve ficar em maiúsculo leva `class="uc"` no HTML (estático
+// ou nas linhas geradas dinamicamente, ex: itens de Especificações) -- um
+// único listener delegado no documento cobre os dois casos, sem precisar
+// religar a cada linha nova renderizada. E-mail e site/URL NUNCA levam essa
+// classe (ficam como digitados).
+document.addEventListener('input', function(e) {
+  var el = e.target;
+  if (!el || !el.classList || !el.classList.contains('uc')) return;
+  var pos = el.selectionStart;
+  var upper = el.value.toUpperCase();
+  if (upper === el.value) return; // evita mexer no cursor à toa quando não muda nada
+  el.value = upper;
+  if (pos != null && el.setSelectionRange) {
+    try { el.setSelectionRange(pos, pos); } catch (e2) { /* alguns tipos de input não suportam -- ignora */ }
+  }
+});
+
 function showAlert(msg, type) {
   var box = document.getElementById('alertBox');
   box.className = 'alert alert-' + (type || 'success') + ' show';
@@ -1108,18 +1287,40 @@ document.addEventListener('DOMContentLoaded', function() {
     ET: 'Embalagem Terciária -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).'
   };
 
+  // Só faz sentido homologar fornecedor do TIPO certo pro material -- MP/
+  // fragrância (MPGR/MPES) só recebe fornecedor cadastrado como "Matéria-
+  // Prima"; embalagem (EP/ES/ET) só recebe "Embalagem". Pedido explícito do
+  // usuário: antes a lista misturava transportadora/serviços/etc. junto.
+  function tipoFornecedorParaMaterial(tipoMaterial) {
+    if (tipoMaterial === 'MPGR' || tipoMaterial === 'MPES') return 'mp';
+    if (tipoMaterial === 'EP' || tipoMaterial === 'ES' || tipoMaterial === 'ET') return 'embalagem';
+    return null;
+  }
+
+  var fhFornecedorItems = [];
   function refreshFhFornecedorOptions() {
-    var sel = document.getElementById('fhFornecedor-mat');
-    var cur = sel.value;
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
+    var tipoAlvo = tipoFornecedorParaMaterial(document.getElementById('fTipo').value);
+    fhFornecedorItems = Object.entries(allFornecedores)
+      .filter(function(e) {
+        if (e[1].ativo === false) return false;
+        // Só filtra quem JÁ tem tipo cadastrado -- um fornecedor ainda não
+        // classificado não pode sumir da lista, só não teria prioridade.
+        if (tipoAlvo && e[1].tipo && e[1].tipo !== tipoAlvo) return false;
+        return true;
+      })
       .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
-      .forEach(function(entry) {
-        var o = document.createElement('option');
-        o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
-        sel.appendChild(o);
+      .map(function(entry) {
+        var nome = entry[1].nomeFantasia || entry[1].razaoSocial;
+        return { key: entry[0], value: nome, label: nome };
       });
-    if (cur) sel.value = cur;
+
+    // Trocou o tipo do material e o fornecedor selecionado saiu do filtro --
+    // limpa em vez de deixar um vínculo escondido da lista atual.
+    var keyAtual = document.getElementById('fhFornecedorKey-mat').value;
+    if (keyAtual && !fhFornecedorItems.some(function(it) { return it.key === keyAtual; })) {
+      document.getElementById('fhFornecedor-mat').value = '';
+      document.getElementById('fhFornecedorKey-mat').value = '';
+    }
   }
 
   // Só entram debaixo do mesmo tipo campos que fazem sentido pra aquele
@@ -1132,6 +1333,7 @@ document.addEventListener('DOMContentLoaded', function() {
       el.classList.toggle('show', fors.indexOf(tipo) !== -1);
     });
     document.getElementById('tipoDescricaoHint-mat').textContent = TIPO_DESCRICOES[tipo] || '';
+    refreshFhFornecedorOptions(); // MP/fragrância x Embalagem pedem fornecedor de tipo diferente
   }
 
   function updateHeadSpace() {
@@ -1172,8 +1374,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   function addFornecedorHomologado() {
-    var fKey = document.getElementById('fhFornecedor-mat').value;
-    if (!fKey) { showAlert('Selecione um fornecedor.', 'danger'); return; }
+    var fKey = document.getElementById('fhFornecedorKey-mat').value;
+    if (!fKey) { showAlert('Digite e selecione um fornecedor da lista.', 'danger'); return; }
     var custoVal = document.getElementById('fhCustoRef-mat').value;
     fornecedoresHomologadosStaged[fKey] = {
       nomeComercial: document.getElementById('fhNomeComercial-mat').value.trim(),
@@ -1181,6 +1383,8 @@ document.addEventListener('DOMContentLoaded', function() {
       statusHomologacao: document.getElementById('fhStatus-mat').value,
       custoReferencia: custoVal !== '' ? parseFloat(custoVal) : null
     };
+    document.getElementById('fhFornecedor-mat').value = '';
+    document.getElementById('fhFornecedorKey-mat').value = '';
     document.getElementById('fhNomeComercial-mat').value = '';
     document.getElementById('fhCodigoFornecedor-mat').value = '';
     document.getElementById('fhCustoRef-mat').value = '';
@@ -1296,6 +1500,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fPesoBrutoCompra-mat').value = m.pesoBrutoCompra != null ? m.pesoBrutoCompra : '';
     document.getElementById('fPesoLiquidoCompra-mat').value = m.pesoLiquidoCompra != null ? m.pesoLiquidoCompra : '';
 
+    document.getElementById('fhFornecedor-mat').value = '';
+    document.getElementById('fhFornecedorKey-mat').value = '';
     refreshFhFornecedorOptions();
     document.getElementById('fhNomeComercial-mat').value = '';
     document.getElementById('fhCodigoFornecedor-mat').value = '';
@@ -1427,6 +1633,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fVolumeInterno-mat').addEventListener('input', updateHeadSpace);
     document.getElementById('btnAddFornHomolog-mat').addEventListener('click', addFornecedorHomologado);
 
+    // Fornecedor homologado: digita pra filtrar, igual ao campo de OP no
+    // apontamento (attachAutocomplete, shared/utils.js). A chave real do
+    // fornecedor só é gravada em onSelect -- digitar sem escolher da lista
+    // não conta como seleção válida (ver addFornecedorHomologado).
+    attachAutocomplete(document.getElementById('fhFornecedor-mat'), function() { return fhFornecedorItems; }, {
+      onSelect: function(it) { document.getElementById('fhFornecedorKey-mat').value = it.key; }
+    });
+    document.getElementById('fhFornecedor-mat').addEventListener('input', function() {
+      document.getElementById('fhFornecedorKey-mat').value = '';
+    });
+
     var _t = null;
     document.getElementById('searchInput-mat').addEventListener('input', function() {
       clearTimeout(_t); _t = setTimeout(renderTable, 200);
@@ -1452,8 +1669,37 @@ document.addEventListener('DOMContentLoaded', function() {
 // ════════════════════════════════════════════════════════════════════
 (function() {
   var allClientes = {};
+  var allFornecedoresCli = {}; // cópia local só de leitura, pro vínculo cliente×fornecedor
   var editingKey = null;
   var cliSortable = makeSortableTable(document.getElementById('cliThead-cli'), 'nome', 'asc');
+
+  /* ── Vínculos: matriz/filial e cliente×fornecedor ── */
+  var cliMatrizItems = [], cliFornecedorItems = [];
+  function refreshCliVinculoItems() {
+    cliMatrizItems = Object.entries(allClientes)
+      .filter(function(e) { return e[1].ativo !== false && e[0] !== editingKey; })
+      .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+      .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome + (e[1].cnpj ? ' — ' + e[1].cnpj : '') }; });
+    cliFornecedorItems = Object.entries(allFornecedoresCli)
+      .filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
+      .map(function(e) { var nome = e[1].nomeFantasia || e[1].razaoSocial; return { key: e[0], value: nome, label: nome + (e[1].cnpj ? ' — ' + e[1].cnpj : '') }; });
+  }
+  function checkCliDuplicata() {
+    var nome = document.getElementById('fNome-cli').value.trim();
+    var box = document.getElementById('cliDupHint-cli');
+    var achado = possivelDuplicata(nome, allClientes, 'nome', editingKey);
+    if (!achado) { box.classList.remove('show'); box.innerHTML = ''; return; }
+    box.innerHTML = '⚠ Já existe um cliente parecido: <strong>' + escapeHtml(achado.nome) + '</strong>' +
+      (achado.cnpj ? ' (CNPJ ' + escapeHtml(achado.cnpj) + ')' : '') +
+      '. É filial/matriz dessa empresa? <a id="cliUsarComoMatriz-cli">Vincular como matriz</a>';
+    box.classList.add('show');
+    document.getElementById('cliUsarComoMatriz-cli').addEventListener('click', function() {
+      document.getElementById('cliMatriz-cli').value = achado.nome;
+      document.getElementById('cliMatrizKey-cli').value = achado.key;
+      box.classList.remove('show');
+    });
+  }
 
   function renderTable() {
     var search = norm(document.getElementById('searchInput-cli').value);
@@ -1463,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var c = entry[1];
       var ativo = c.ativo === false ? 'inativo' : 'ativo';
       if (filtAtivo && ativo !== filtAtivo) return false;
-      if (search && (norm(c.nome) + ' ' + norm(c.codigo)).indexOf(search) === -1) return false;
+      if (search && (norm(c.nome) + ' ' + norm(c.codigo) + ' ' + norm(c.cnpj)).indexOf(search) === -1) return false;
       return true;
     });
     rows = cliSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
@@ -1472,7 +1718,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var tbody = document.getElementById('tableBody-cli');
     if (!rows.length) {
       var semNenhumCadastrado = !Object.keys(allClientes).length;
-      tbody.innerHTML = '<tr><td colspan="4" class="no-data">' + (semNenhumCadastrado
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + (semNenhumCadastrado
         ? 'Nenhum cliente cadastrado ainda. Clique em "+ Novo Cliente" pra começar.'
         : 'Nenhum cliente encontrado com esse filtro/busca.') + '</td></tr>';
       return;
@@ -1480,9 +1726,20 @@ document.addEventListener('DOMContentLoaded', function() {
     tbody.innerHTML = rows.map(function(entry) {
       var key = entry[0], c = entry[1];
       var ativo = c.ativo !== false;
+      var local = [c.cidade, c.uf].filter(Boolean).join('/');
+      var vinculoBadges = '';
+      if (c.matrizKey && allClientes[c.matrizKey]) {
+        vinculoBadges += ' <span class="badge badge-purple" title="Filial de ' + escapeAttr(allClientes[c.matrizKey].nome) + '">🔗 Filial</span>';
+      }
+      if (c.fornecedorVinculadoKey) {
+        vinculoBadges += ' <span class="badge badge-blue" title="Também cadastrado como fornecedor">🔗 Também fornecedor</span>';
+      }
       return '<tr>' +
         '<td class="code-cell">' + escapeHtml(c.codigo || '—') + '</td>' +
-        '<td>' + escapeHtml(c.nome || '—') + '</td>' +
+        '<td>' + escapeHtml(c.nome || '—') + vinculoBadges + '</td>' +
+        '<td>' + escapeHtml(c.cnpj || '—') + '</td>' +
+        '<td>' + escapeHtml(local || '—') + '</td>' +
+        '<td>' + escapeHtml(c.contatoComNome || '—') + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-cli" data-key="' + key + '" title="Editar cliente" aria-label="Editar cliente">✏</button></td>' +
       '</tr>';
@@ -1498,7 +1755,29 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalTitle-cli').textContent = key ? 'Editar Cliente' : 'Novo Cliente';
     document.getElementById('fNome-cli').value = c.nome || '';
     document.getElementById('fCodigo-cli').value = c.codigo || '';
+    document.getElementById('fCnpj-cli').value = c.cnpj || '';
+    document.getElementById('fContatoComNome-cli').value = c.contatoComNome || '';
+    document.getElementById('fContatoComTelefone-cli').value = c.contatoComTelefone || '';
+    document.getElementById('fContatoComEmail-cli').value = c.contatoComEmail || '';
+    document.getElementById('fContatoTecNome-cli').value = c.contatoTecNome || '';
+    document.getElementById('fContatoTecTelefone-cli').value = c.contatoTecTelefone || '';
+    document.getElementById('fContatoTecEmail-cli').value = c.contatoTecEmail || '';
+    document.getElementById('fCidade-cli').value = c.cidade || '';
+    document.getElementById('fUf-cli').value = c.uf || '';
+    document.getElementById('fCondicaoPagamento-cli').value = c.condicaoPagamento || '';
+    document.getElementById('fSite-cli').value = c.site || '';
+    document.getElementById('fDetentorAnvisa-cli').value = c.detentorAnvisa === 'kuryos' ? 'kuryos' : 'cliente';
     document.getElementById('fAtivo-cli').value = c.ativo === false ? 'inativo' : 'ativo';
+
+    refreshCliVinculoItems(); // depende de editingKey já atualizado, ver topo da função
+    var matrizAtual = c.matrizKey ? allClientes[c.matrizKey] : null;
+    document.getElementById('cliMatriz-cli').value = matrizAtual ? matrizAtual.nome : '';
+    document.getElementById('cliMatrizKey-cli').value = c.matrizKey || '';
+    var fornAtual = c.fornecedorVinculadoKey ? allFornecedoresCli[c.fornecedorVinculadoKey] : null;
+    document.getElementById('cliFornecedorVinculado-cli').value = fornAtual ? (fornAtual.nomeFantasia || fornAtual.razaoSocial) : '';
+    document.getElementById('cliFornecedorVinculadoKey-cli').value = c.fornecedorVinculadoKey || '';
+    document.getElementById('cliDupHint-cli').classList.remove('show');
+
     document.getElementById('modalBg-cli').classList.add('open');
   }
   function closeModal() {
@@ -1516,7 +1795,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     if (duplicado) { showAlert('Já existe um cliente com esse código.', 'danger'); return; }
 
-    var data = { nome: nome, codigo: codigo, ativo: document.getElementById('fAtivo-cli').value === 'ativo' };
+    var data = {
+      nome: nome,
+      codigo: codigo,
+      cnpj: document.getElementById('fCnpj-cli').value.trim(),
+      contatoComNome: document.getElementById('fContatoComNome-cli').value.trim(),
+      contatoComTelefone: document.getElementById('fContatoComTelefone-cli').value.trim(),
+      contatoComEmail: document.getElementById('fContatoComEmail-cli').value.trim(),
+      contatoTecNome: document.getElementById('fContatoTecNome-cli').value.trim(),
+      contatoTecTelefone: document.getElementById('fContatoTecTelefone-cli').value.trim(),
+      contatoTecEmail: document.getElementById('fContatoTecEmail-cli').value.trim(),
+      cidade: document.getElementById('fCidade-cli').value.trim(),
+      uf: document.getElementById('fUf-cli').value.trim().toUpperCase(),
+      condicaoPagamento: document.getElementById('fCondicaoPagamento-cli').value.trim(),
+      site: document.getElementById('fSite-cli').value.trim(),
+      detentorAnvisa: document.getElementById('fDetentorAnvisa-cli').value,
+      ativo: document.getElementById('fAtivo-cli').value === 'ativo',
+      matrizKey: document.getElementById('cliMatrizKey-cli').value || null,
+      fornecedorVinculadoKey: document.getElementById('cliFornecedorVinculadoKey-cli').value || null
+    };
     document.getElementById('modalSaveBtn-cli').disabled = true;
 
     var promise;
@@ -1548,9 +1845,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('filterAtivo-cli').addEventListener('change', renderTable);
     cliSortable.wireHeaders(renderTable);
 
+    var _dupT = null;
+    document.getElementById('fNome-cli').addEventListener('input', function() {
+      clearTimeout(_dupT); _dupT = setTimeout(checkCliDuplicata, 300);
+    });
+    attachAutocomplete(document.getElementById('cliMatriz-cli'), function() { return cliMatrizItems; }, {
+      onSelect: function(it) { document.getElementById('cliMatrizKey-cli').value = it.key; }
+    });
+    document.getElementById('cliMatriz-cli').addEventListener('input', function() { document.getElementById('cliMatrizKey-cli').value = ''; });
+    attachAutocomplete(document.getElementById('cliFornecedorVinculado-cli'), function() { return cliFornecedorItems; }, {
+      onSelect: function(it) { document.getElementById('cliFornecedorVinculadoKey-cli').value = it.key; }
+    });
+    document.getElementById('cliFornecedorVinculado-cli').addEventListener('input', function() { document.getElementById('cliFornecedorVinculadoKey-cli').value = ''; });
+
     dbOnValue(db.ref('clientes'), function(snap) {
       allClientes = snap.val() || {};
+      refreshCliVinculoItems();
       renderTable();
+    });
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedoresCli = snap.val() || {};
+      refreshCliVinculoItems();
     });
   });
 })();
@@ -1563,10 +1878,39 @@ document.addEventListener('DOMContentLoaded', function() {
 // ════════════════════════════════════════════════════════════════════
 (function() {
   var allFornecedores = {};
+  var allClientesForn = {}; // cópia local só de leitura, pro vínculo fornecedor×cliente
   var editingKey = null;
   var fnSortable = makeSortableTable(document.getElementById('fnThead-forn'), 'razaoSocial', 'asc');
 
   var TIPO_FORNECEDOR_LABELS = { mp: 'Matéria-Prima', embalagem: 'Embalagem', transportadora: 'Transportadora', consumo: 'Material de Uso e Consumo', servicos: 'Serviços', tecnologia: 'Tecnologia', equipamentos: 'Equipamentos e Manutenção', publico: 'Órgão Público / Regulatório', outro: 'Outro' };
+
+  /* ── Vínculos: matriz/filial e fornecedor×cliente ── */
+  var fnMatrizItems = [], fnClienteItems = [];
+  function refreshFnVinculoItems() {
+    fnMatrizItems = Object.entries(allFornecedores)
+      .filter(function(e) { return e[1].ativo !== false && e[0] !== editingKey; })
+      .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
+      .map(function(e) { var nome = e[1].nomeFantasia || e[1].razaoSocial; return { key: e[0], value: nome, label: nome + (e[1].cnpj ? ' — ' + e[1].cnpj : '') }; });
+    fnClienteItems = Object.entries(allClientesForn)
+      .filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+      .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome + (e[1].cnpj ? ' — ' + e[1].cnpj : '') }; });
+  }
+  function checkFnDuplicata() {
+    var nome = document.getElementById('fnRazaoSocial-forn').value.trim();
+    var box = document.getElementById('fnDupHint-forn');
+    var achado = possivelDuplicata(nome, allFornecedores, 'razaoSocial', editingKey);
+    if (!achado) { box.classList.remove('show'); box.innerHTML = ''; return; }
+    box.innerHTML = '⚠ Já existe um fornecedor parecido: <strong>' + escapeHtml(achado.nome) + '</strong>' +
+      (achado.cnpj ? ' (CNPJ ' + escapeHtml(achado.cnpj) + ')' : '') +
+      '. É filial/matriz dessa empresa? <a id="fnUsarComoMatriz-forn">Vincular como matriz</a>';
+    box.classList.add('show');
+    document.getElementById('fnUsarComoMatriz-forn').addEventListener('click', function() {
+      document.getElementById('fnMatriz-forn').value = achado.nome;
+      document.getElementById('fnMatrizKey-forn').value = achado.key;
+      box.classList.remove('show');
+    });
+  }
 
   function renderFornecedores() {
     var search = norm(document.getElementById('fnSearch-forn').value);
@@ -1603,8 +1947,16 @@ document.addEventListener('DOMContentLoaded', function() {
       var revisadoBadge = revisado
         ? '<span class="badge badge-green fn-toggle-revisado" data-key="' + escapeAttr(key) + '" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
         : '<span class="badge badge-orange fn-toggle-revisado" data-key="' + escapeAttr(key) + '" style="cursor:pointer" title="Clique pra marcar como revisado">Pendente</span>';
+      var vinculoBadges = '';
+      if (f.matrizKey && allFornecedores[f.matrizKey]) {
+        var matrizNome = allFornecedores[f.matrizKey].nomeFantasia || allFornecedores[f.matrizKey].razaoSocial;
+        vinculoBadges += ' <span class="badge badge-purple" title="Filial de ' + escapeAttr(matrizNome) + '">🔗 Filial</span>';
+      }
+      if (f.clienteVinculadoKey) {
+        vinculoBadges += ' <span class="badge badge-blue" title="Também cadastrado como cliente">🔗 Também cliente</span>';
+      }
       return '<tr>' +
-        '<td>' + escapeHtml(f.razaoSocial || '—') + '</td>' +
+        '<td>' + escapeHtml(f.razaoSocial || '—') + vinculoBadges + '</td>' +
         '<td>' + escapeHtml(f.nomeFantasia || '—') + '</td>' +
         '<td style="font-family:monospace;font-size:12px">' + escapeHtml(f.cnpj || '—') + '</td>' +
         '<td style="font-size:12px">' + escapeHtml(tipoLabel) + '</td>' +
@@ -1651,6 +2003,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // nasce revisado -- só quem vem de importação em lote precisa da
     // flag desmarcada por padrão (feita no próprio script de import).
     document.getElementById('fnRevisado-forn').checked = key ? f.revisado !== false : true;
+
+    refreshFnVinculoItems(); // depende de editingKey já atualizado, ver topo da função
+    var matrizAtual = f.matrizKey ? allFornecedores[f.matrizKey] : null;
+    document.getElementById('fnMatriz-forn').value = matrizAtual ? (matrizAtual.nomeFantasia || matrizAtual.razaoSocial) : '';
+    document.getElementById('fnMatrizKey-forn').value = f.matrizKey || '';
+    var clienteAtual = f.clienteVinculadoKey ? allClientesForn[f.clienteVinculadoKey] : null;
+    document.getElementById('fnClienteVinculado-forn').value = clienteAtual ? clienteAtual.nome : '';
+    document.getElementById('fnClienteVinculadoKey-forn').value = f.clienteVinculadoKey || '';
+    document.getElementById('fnDupHint-forn').classList.remove('show');
+
     document.getElementById('modalFornecedor-forn').classList.add('open');
   }
   function closeModalFornecedor() { document.getElementById('modalFornecedor-forn').classList.remove('open'); editingKey = null; }
@@ -1673,7 +2035,9 @@ document.addEventListener('DOMContentLoaded', function() {
       uf: document.getElementById('fnUf-forn').value.trim().toUpperCase(),
       certificacoes: document.getElementById('fnCertificacoes-forn').value.trim(),
       ativo: document.getElementById('fnAtivo-forn').checked,
-      revisado: document.getElementById('fnRevisado-forn').checked
+      revisado: document.getElementById('fnRevisado-forn').checked,
+      matrizKey: document.getElementById('fnMatrizKey-forn').value || null,
+      clienteVinculadoKey: document.getElementById('fnClienteVinculadoKey-forn').value || null
     };
     var key = editingKey || db.ref('fornecedores').push().key;
     document.getElementById('modalFornecedorSave-forn').disabled = true;
@@ -1698,9 +2062,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fnFilterTipo-forn').addEventListener('change', renderFornecedores);
     fnSortable.wireHeaders(renderFornecedores);
 
+    var _dupT = null;
+    document.getElementById('fnRazaoSocial-forn').addEventListener('input', function() {
+      clearTimeout(_dupT); _dupT = setTimeout(checkFnDuplicata, 300);
+    });
+    attachAutocomplete(document.getElementById('fnMatriz-forn'), function() { return fnMatrizItems; }, {
+      onSelect: function(it) { document.getElementById('fnMatrizKey-forn').value = it.key; }
+    });
+    document.getElementById('fnMatriz-forn').addEventListener('input', function() { document.getElementById('fnMatrizKey-forn').value = ''; });
+    attachAutocomplete(document.getElementById('fnClienteVinculado-forn'), function() { return fnClienteItems; }, {
+      onSelect: function(it) { document.getElementById('fnClienteVinculadoKey-forn').value = it.key; }
+    });
+    document.getElementById('fnClienteVinculado-forn').addEventListener('input', function() { document.getElementById('fnClienteVinculadoKey-forn').value = ''; });
+
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allFornecedores = snap.val() || {};
+      refreshFnVinculoItems();
       renderFornecedores();
+    });
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientesForn = snap.val() || {};
+      refreshFnVinculoItems();
     });
   });
 })();
@@ -2730,11 +3112,11 @@ document.addEventListener('DOMContentLoaded', function() {
           return '<tr><td>' + escapeHtml(it.ensaio || '') + '</td><td>' + escapeHtml(it.especificacaoTexto || '') + '</td><td>' + escapeHtml(it.minimo || '') + '</td><td>' + escapeHtml(it.maximo || '') + '</td><td>' + escapeHtml(it.metodo || '') + '</td><td>' + (it.critico ? 'Sim' : 'Não') + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-          '<td><input type="text" class="e-ensaio" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.ensaio || '') + '"></td>' +
-          '<td><input type="text" class="e-texto" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.especificacaoTexto || '') + '"></td>' +
+          '<td><input type="text" class="e-ensaio uc" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.ensaio || '') + '"></td>' +
+          '<td><input type="text" class="e-texto uc" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.especificacaoTexto || '') + '"></td>' +
           '<td><input type="text" class="e-min" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.minimo || '') + '"></td>' +
           '<td><input type="text" class="e-max" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.maximo || '') + '"></td>' +
-          '<td><input type="text" class="e-metodo" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.metodo || '') + '"></td>' +
+          '<td><input type="text" class="e-metodo uc" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.metodo || '') + '"></td>' +
           '<td style="text-align:center"><input type="checkbox" class="e-critico" data-item="' + escapeAttr(itemKey) + '"' + (it.critico ? ' checked' : '') + '></td>' +
           '<td><button class="btn btn-danger-ghost btn-sm e-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover ensaio" aria-label="Remover ensaio">×</button></td></tr>';
       }).join('');

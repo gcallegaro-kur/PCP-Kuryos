@@ -2645,6 +2645,17 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
   });
 }
 
+// pedidos/{key}.produzido representa venda/entrega ao cliente -- só o
+// envase (setor 'linha') gera unidade acabada nova; Rotulagem e Posto são
+// etapas seguintes do MESMO lote que a Linha já contou (rotular não cria
+// unidade nova) e, no caso da Rotulagem, o apontamento em si ainda não é
+// confiável pra virar número oficial (mesma decisão já tomada em
+// computeOpStatus, ver shared/utils.js). Sem esse filtro, um lote que passa
+// por Linha E Rotulagem soma a mesma produção duas vezes no total do
+// pedido -- bug real encontrado investigando o pedido 0022 (Briá Beauty):
+// produzido gravado em 18.657 quando a soma real de envase era 13.170.
+function isSetorEnvase(tipo) { return !tipo || tipo === 'linha'; }
+
 function syncNextItem() {
   var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
   if (pending.length === 0 || !isOnline) {
@@ -2674,7 +2685,7 @@ function syncNextItem() {
           perdas: item.perdas, timestamp: new Date().toISOString()
         }));
       }
-      if (item.pedidoId && item.qtd && item.produto) {
+      if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
         var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
         if (pedKey) {
           saves.push(opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
@@ -2715,7 +2726,7 @@ function syncNextItem() {
       if (item.registro && item.registro.lote) {
         updateOpRecordOnApontamento(item.registro.lote, item.qtd, item.mediaPorHoraCalculada, regTimestampIso(item.registro), item.tipo);
       }
-      if (item.pedidoId && item.qtd && item.produto) {
+      if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
         var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
         if (pedKey) {
           return opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
@@ -2767,7 +2778,7 @@ function syncNextItem() {
           return op;
         }));
       }
-      if (item.pedidoId && item.qtdFinal && item.produto) {
+      if (item.pedidoId && item.qtdFinal && item.produto && isSetorEnvase(item.tipo)) {
         var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
         if (pedKey) {
           saves.push(opAindaAtivaAsync(item.lote).then(function(ativa) {
