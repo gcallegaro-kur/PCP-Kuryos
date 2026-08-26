@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logística</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 12px}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .tabs{display:flex;gap:2px;max-width:96%;margin:0 auto 14px;border-bottom:2px solid var(--border)}
+    .tab{padding:10px 18px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .pc-card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-bottom:14px;padding:16px}
+    .pc-card-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+    .pc-titulo{font-size:15px;font-weight:700}
+    .pc-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .progresso-bar-wrap{background:var(--tint-gray-bg);border-radius:20px;height:8px;overflow:hidden;margin:8px 0}
+    .progresso-bar{background:var(--success);height:100%;border-radius:20px;transition:width .3s}
+    table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .agendamento-box{background:color-mix(in srgb, var(--primary) 6%, var(--card));border:1px solid color-mix(in srgb, var(--primary) 20%, var(--border));border-radius:10px;padding:10px 12px;font-size:12.5px;margin:8px 0}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .empty-hint{color:var(--muted);font-size:12.5px;padding:10px 0}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:640px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header.blue{background:linear-gradient(135deg,#1e3a8a,var(--primary))}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    @media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Logística</h1>
+    <div class="header-sub">Agendamento de entrega e recebimento de materiais dos Pedidos de Compra</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main" style="padding-top:6px">
+  <div id="alertBox" class="alert alert-success"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="receber">A Receber</button>
+  <button class="tab" data-tab="historico">Histórico</button>
+</div>
+
+<div class="main">
+  <div class="tab-panel active" id="tab-receber">
+    <div id="receberList"></div>
+  </div>
+  <div class="tab-panel" id="tab-historico">
+    <div id="historicoList"></div>
+  </div>
+</div>
+
+<!-- MODAL: Agendar Entrega -->
+<div class="modal-bg" id="modalAgendar">
+  <div class="modal">
+    <div class="modal-header blue"><h2>Agendar Entrega</h2><button class="modal-close" id="modalAgendarClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="agendarPcInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data agendada *</label>
+          <input type="date" id="agData">
+        </div>
+        <div class="form-group">
+          <label>Janela</label>
+          <select id="agJanela">
+            <option value="dia_todo">Dia todo</option>
+            <option value="manha">Manhã</option>
+            <option value="tarde">Tarde</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Transportadora</label>
+          <select id="agTransportadora">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Motorista</label>
+          <input type="text" id="agMotorista">
+        </div>
+        <div class="form-group">
+          <label>Placa do veículo</label>
+          <input type="text" id="agPlaca">
+        </div>
+        <div class="form-group full">
+          <label>Observações</label>
+          <textarea id="agObservacoes" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalAgendarCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalAgendarSave">Salvar Agendamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Registrar Recebimento -->
+<div class="modal-bg" id="modalReceber">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header"><h2>Registrar Recebimento</h2><button class="modal-close" id="modalReceberClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="receberPcInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Data do recebimento *</label>
+          <input type="date" id="rcData">
+        </div>
+        <div class="form-group">
+          <label>Nota fiscal</label>
+          <input type="text" id="rcNotaFiscal" placeholder="Número da NF">
+        </div>
+      </div>
+      <div class="section-label" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Itens recebidos nesta entrega</div>
+      <table>
+        <thead><tr><th>Material</th><th>Pedido</th><th>Já recebido</th><th style="min-width:110px">Recebendo agora</th></tr></thead>
+        <tbody id="rcItensBody"></tbody>
+      </table>
+      <div class="form-group full" style="margin-top:14px">
+        <label>Observações</label>
+        <textarea id="rcObservacoes" rows="2" placeholder="Ex: divergência de quantidade, avaria, etc."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalReceberCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalReceberSave">Confirmar Recebimento</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+var allPedidosCompra = {};
+var allTransportadoras = {};
+var agendandoKey = null;
+var recebendoKey = null;
+
+// Transportadora é um Tipo dentro do cadastro de Fornecedores (aba
+// Cadastros) -- não tem coleção própria, era redundante com Fornecedores
+// (mesmos campos, e cadastro separado não tinha nada que Fornecedor não
+// já tivesse). allTransportadoras aqui é só fornecedores filtrado por
+// tipo==='transportadora'. Preserva o valor legado como opção extra se
+// ele não bater com nenhuma cadastrada, pra não perder dado de
+// agendamentos já salvos ao simplesmente trocar pra <select>.
+function refreshTransportadoraSelect(desiredValue) {
+  var el = document.getElementById('agTransportadora');
+  var atual = desiredValue != null ? desiredValue : el.value;
+  var nomes = Object.values(allTransportadoras).filter(function(t) { return t.tipo === 'transportadora' && t.ativo !== false; })
+    .map(function(t) { return t.nomeFantasia || t.razaoSocial; }).filter(Boolean).sort(function(a, b) { return norm(a).localeCompare(norm(b)); });
+  var opts = '<option value="">Selecione...</option>';
+  nomes.forEach(function(nome) { opts += '<option value="' + escapeAttr(nome) + '">' + escapeHtml(nome) + '</option>'; });
+  if (atual && nomes.indexOf(atual) === -1) {
+    opts += '<option value="' + escapeAttr(atual) + '">' + escapeHtml(atual) + ' (não cadastrada)</option>';
+  }
+  el.innerHTML = opts;
+  el.value = atual;
+}
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  setTimeout(function() { box.classList.remove('show'); }, 6000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Usuário';
+}
+function fmtData(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('pt-BR'); } catch (e) { return '—'; }
+}
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return '—'; }
+}
+var statusBadges = {
+  ABERTO: '<span class="badge badge-orange">Aberto</span>',
+  ENVIADO: '<span class="badge badge-blue">Enviado</span>',
+  RECEBIDO_PARCIAL: '<span class="badge badge-purple">Recebido parcial</span>',
+  RECEBIDO_TOTAL: '<span class="badge badge-green">Recebido total</span>',
+  CANCELADO: '<span class="badge badge-red">Cancelado</span>'
+};
+
+/* ══════════════ Tabs ══════════════ */
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    var target = tab.getAttribute('data-tab');
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  });
+});
+
+/* ══════════════ Progresso de recebimento por PC ══════════════ */
+function progressoPc(p) {
+  var itens = Object.values(p.itens || {});
+  var totalPedido = itens.reduce(function(s, it) { return s + (parseFloat(it.qtd) || 0); }, 0);
+  var totalRecebido = itens.reduce(function(s, it) { return s + Math.min(parseFloat(it.qtdRecebida) || 0, parseFloat(it.qtd) || 0); }, 0);
+  var pctPorQtd = totalPedido > 0 ? (totalRecebido / totalPedido) * 100 : 0;
+  // Achado do Auditor: somar quantidade em unidades DIFERENTES (kg + un no
+  // mesmo total) deixa um item pequeno "invisível" -- ex: 10.000un completas
+  // + 1kg de um insumo crítico ainda zerado dava 100% de progresso, quando
+  // na verdade falta um item inteiro. A barra agora usa o MENOR entre o
+  // progresso por quantidade e o progresso por CONTAGEM de itens completos
+  // -- um item zerado sempre puxa a porcentagem pra baixo, nos dois casos.
+  var itensCompletos = itens.filter(function(it) { return (parseFloat(it.qtdRecebida) || 0) >= (parseFloat(it.qtd) || 0) - 0.0001; }).length;
+  var pctPorContagem = itens.length > 0 ? (itensCompletos / itens.length) * 100 : 0;
+  var pct = Math.round(Math.min(pctPorQtd, pctPorContagem));
+  return {totalPedido: totalPedido, totalRecebido: totalRecebido, pct: pct};
+}
+
+/* ══════════════ Aba "A Receber" ══════════════ */
+function renderReceberList() {
+  var box = document.getElementById('receberList');
+  var pcs = Object.entries(allPedidosCompra).filter(function(e) {
+    return e[1].status === 'ENVIADO' || e[1].status === 'RECEBIDO_PARCIAL';
+  }).sort(function(a, b) { return (a[1].dataCriacao || '').localeCompare(b[1].dataCriacao || ''); });
+
+  if (!pcs.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Nenhum Pedido de Compra aguardando entrega ou recebimento no momento.</div></div>';
+    return;
+  }
+
+  box.innerHTML = pcs.map(function(entry) {
+    var key = entry[0], p = entry[1];
+    var prog = progressoPc(p);
+    var itens = Object.entries(p.itens || {});
+    var ag = p.agendamento;
+    var agendamentoHtml = ag
+      ? '<div class="agendamento-box">📅 <b>Agendado:</b> ' + fmtData(ag.dataAgendada) + ' (' +
+        (ag.janela === 'manha' ? 'manhã' : ag.janela === 'tarde' ? 'tarde' : 'dia todo') + ')' +
+        (ag.transportadora ? ' · ' + escapeHtml(ag.transportadora) : '') +
+        (ag.placa ? ' · placa ' + escapeHtml(ag.placa) : '') + '</div>'
+      : '<div class="field-hint" style="margin:8px 0">Nenhuma entrega agendada ainda.</div>';
+
+    var itensRows = itens.map(function(itEntry) {
+      var it = itEntry[1];
+      var qtd = parseFloat(it.qtd) || 0;
+      var qtdRec = parseFloat(it.qtdRecebida) || 0;
+      var restante = Math.max(0, qtd - qtdRec);
+      var itemBadge = restante <= 0 ? '<span class="badge badge-green">Completo</span>' : (qtdRec > 0 ? '<span class="badge badge-purple">Parcial</span>' : '<span class="badge badge-gray">Pendente</span>');
+      return '<tr><td>' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + '</td>' +
+        '<td>' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
+        '<td>' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
+        '<td>' + itemBadge + '</td></tr>';
+    }).join('');
+
+    return '<div class="pc-card">' +
+      '<div class="pc-card-head">' +
+        '<div><div class="pc-titulo">' + escapeHtml(p.numeroFormatado) + ' — ' + escapeHtml(p.fornecedorNome || '') + '</div>' +
+        '<div class="pc-sub">Criado em ' + fmtData(p.dataCriacao) + (p.dataEmissao ? ' · Enviado em ' + fmtData(p.dataEmissao) : '') + '</div></div>' +
+        '<div>' + (statusBadges[p.status] || '') + '</div>' +
+      '</div>' +
+      '<div class="progresso-bar-wrap"><div class="progresso-bar" style="width:' + prog.pct + '%"></div></div>' +
+      '<div class="field-hint">' + fmtNum(prog.totalRecebido) + ' de ' + fmtNum(prog.totalPedido) + ' unidades recebidas (' + prog.pct + '%)</div>' +
+      agendamentoHtml +
+      '<table><thead><tr><th>Material</th><th>Pedido</th><th>Recebido</th><th>Status</th></tr></thead><tbody>' + itensRows + '</tbody></table>' +
+      '<div style="display:flex;gap:8px;margin-top:12px">' +
+        '<button class="btn btn-ghost btn-sm btn-agendar" data-key="' + escapeAttr(key) + '">📅 Agendar Entrega</button>' +
+        '<button class="btn btn-green btn-sm btn-receber" data-key="' + escapeAttr(key) + '">📦 Registrar Recebimento</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  document.querySelectorAll('.btn-agendar').forEach(function(btn) {
+    btn.addEventListener('click', function() { openModalAgendar(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.btn-receber').forEach(function(btn) {
+    btn.addEventListener('click', function() { openModalReceber(btn.getAttribute('data-key')); });
+  });
+}
+
+/* ══════════════ Aba Histórico ══════════════ */
+function renderHistoricoList() {
+  var box = document.getElementById('historicoList');
+  var pcs = Object.entries(allPedidosCompra).filter(function(e) {
+    return e[1].status === 'RECEBIDO_TOTAL' || e[1].status === 'CANCELADO';
+  }).sort(function(a, b) { return (b[1].dataCriacao || '').localeCompare(a[1].dataCriacao || ''); });
+
+  if (!pcs.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Nenhum Pedido de Compra finalizado ainda.</div></div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="card"><div class="card-title">Pedidos finalizados (' + pcs.length + ')</div><div style="padding:0 16px 16px">' +
+    '<table><thead><tr><th>Número</th><th>Fornecedor</th><th>Criado em</th><th>Itens</th><th>Status</th></tr></thead><tbody>' +
+    pcs.map(function(entry) {
+      var p = entry[1];
+      var itensResumo = Object.values(p.itens || {}).map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+      return '<tr><td class="code-cell" style="font-family:monospace;font-weight:700;color:var(--primary)">' + escapeHtml(p.numeroFormatado) + '</td>' +
+        '<td>' + escapeHtml(p.fornecedorNome || '') + '</td>' +
+        '<td>' + fmtData(p.dataCriacao) + '</td>' +
+        '<td style="font-size:12px">' + itensResumo + '</td>' +
+        '<td>' + (statusBadges[p.status] || '') + '</td></tr>';
+    }).join('') +
+    '</tbody></table></div></div>';
+}
+
+/* ══════════════ Modal Agendar ══════════════ */
+function openModalAgendar(key) {
+  agendandoKey = key;
+  var p = allPedidosCompra[key];
+  if (!p) return;
+  document.getElementById('agendarPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || '');
+  var ag = p.agendamento || {};
+  document.getElementById('agData').value = ag.dataAgendada ? ag.dataAgendada.slice(0, 10) : '';
+  document.getElementById('agJanela').value = ag.janela || 'dia_todo';
+  refreshTransportadoraSelect(ag.transportadora || '');
+  document.getElementById('agMotorista').value = ag.motorista || '';
+  document.getElementById('agPlaca').value = ag.placa || '';
+  document.getElementById('agObservacoes').value = ag.observacoes || '';
+  document.getElementById('modalAgendar').classList.add('open');
+}
+function closeModalAgendar() { document.getElementById('modalAgendar').classList.remove('open'); agendandoKey = null; }
+function saveAgendar() {
+  var data = document.getElementById('agData').value;
+  if (!data) { showAlert('Informe a data agendada.', 'danger'); return; }
+  var payload = {
+    dataAgendada: data,
+    janela: document.getElementById('agJanela').value,
+    transportadora: document.getElementById('agTransportadora').value.trim(),
+    motorista: document.getElementById('agMotorista').value.trim(),
+    placa: document.getElementById('agPlaca').value.trim(),
+    observacoes: document.getElementById('agObservacoes').value.trim(),
+    agendadoPor: currentUserNome(),
+    agendadoEm: new Date().toISOString()
+  };
+  document.getElementById('modalAgendarSave').disabled = true;
+  db.ref('pedidos_compra/' + agendandoKey + '/agendamento').set(payload)
+    .then(function() { showAlert('Entrega agendada com sucesso!', 'success'); closeModalAgendar(); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalAgendarSave').disabled = false; });
+}
+
+/* ══════════════ Modal Receber ══════════════ */
+function openModalReceber(key) {
+  recebendoKey = key;
+  var p = allPedidosCompra[key];
+  if (!p) return;
+  document.getElementById('receberPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || '');
+  document.getElementById('rcData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('rcNotaFiscal').value = '';
+  document.getElementById('rcObservacoes').value = '';
+
+  var tbody = document.getElementById('rcItensBody');
+  var itens = Object.entries(p.itens || {});
+  tbody.innerHTML = itens.map(function(entry) {
+    var itemKey = entry[0], it = entry[1];
+    var qtd = parseFloat(it.qtd) || 0;
+    var qtdRec = parseFloat(it.qtdRecebida) || 0;
+    var restante = Math.max(0, qtd - qtdRec);
+    return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+      '<td>' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + '</td>' +
+      '<td>' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
+      '<td>' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
+      '<td><input type="number" class="rc-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (restante > 0 ? restante : '') + '"></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('modalReceber').classList.add('open');
+}
+function closeModalReceber() { document.getElementById('modalReceber').classList.remove('open'); recebendoKey = null; }
+// Achado do Auditor: a versão anterior lia `qtdRecebida` do estado em
+// memória (`allPedidosCompra`, populado pelo listener) e gravava um valor
+// ABSOLUTO novo via `.update()` simples -- sem proteção contra dois usuários
+// de logística registrando recebimento do MESMO Pedido de Compra quase ao
+// mesmo tempo. Isso perdia atualizações de duas formas: (1) soma de
+// quantidade do MESMO item (o segundo `update()` sobrescrevia o total do
+// primeiro); (2) recálculo de `status` mesmo entre itens DIFERENTES do
+// mesmo PC (cada usuário calculava "RECEBIDO_PARCIAL" com base no que via
+// localmente, e o último a escrever vencia, podendo travar o status mesmo
+// com todos os itens 100% recebidos). Agora tudo -- soma dos itens,
+// registro do recebimento e recálculo de status -- acontece dentro de
+// `.transaction()` no nó INTEIRO do Pedido de Compra: o Firebase reexecuta
+// a função automaticamente com o dado mais recente do servidor sempre que
+// há conflito, então o resultado final sempre reflete TODOS os
+// recebimentos concorrentes, não só o último a chegar.
+function saveReceber() {
+  var p = allPedidosCompra[recebendoKey];
+  if (!p) return;
+  var data = document.getElementById('rcData').value;
+  if (!data) { showAlert('Informe a data do recebimento.', 'danger'); return; }
+
+  var linhas = Array.from(document.querySelectorAll('.rc-qtd'));
+  var qtdsDigitadas = {}; // itemKey -> quantidade recebida nesta entrega
+  var erroLocal = null;
+  linhas.forEach(function(input) {
+    var qtdAgora = parseFloat(input.value) || 0;
+    if (qtdAgora === 0) return; // não registra item sem quantidade recebida nesta entrega
+    if (qtdAgora < 0) { erroLocal = 'Quantidade recebida não pode ser negativa.'; return; }
+    qtdsDigitadas[input.getAttribute('data-item')] = qtdAgora;
+  });
+  if (erroLocal) { showAlert(erroLocal, 'danger'); return; }
+  if (!Object.keys(qtdsDigitadas).length) { showAlert('Informe ao menos uma quantidade recebida maior que zero.', 'danger'); return; }
+
+  document.getElementById('modalReceberSave').disabled = true;
+  var recKey = db.ref('pedidos_compra/' + recebendoKey + '/recebimentos').push().key;
+  var notaFiscal = document.getElementById('rcNotaFiscal').value.trim();
+  var observacoes = document.getElementById('rcObservacoes').value.trim();
+  var recebidoPor = currentUserNome();
+  var erroExcedente = null; // preenchido dentro da transaction se algum item passar do total pedido
+
+  db.ref('pedidos_compra/' + recebendoKey).transaction(function(atual) {
+    if (!atual) return atual; // PC sumiu do banco entretanto -- aborta sem tocar em nada
+    erroExcedente = null; // a função pode rodar mais de uma vez em caso de conflito -- reseta a cada tentativa
+    var itens = atual.itens || {};
+    var itensRecebidos = {};
+
+    var itemKeys = Object.keys(qtdsDigitadas);
+    for (var i = 0; i < itemKeys.length; i++) {
+      var itemKey = itemKeys[i];
+      var it = itens[itemKey];
+      if (!it) continue;
+      var qtdAgora = qtdsDigitadas[itemKey];
+      var qtd = parseFloat(it.qtd) || 0;
+      var qtdRecAtual = parseFloat(it.qtdRecebida) || 0;
+      var novoTotal = qtdRecAtual + qtdAgora;
+      // Recebimento não pode ultrapassar o que foi pedido -- checado contra
+      // o valor mais atual do SERVIDOR (dentro da transaction), não contra
+      // o snapshot local que pode estar desatualizado por outro recebimento
+      // concorrente já commitado.
+      if (novoTotal > qtd + 0.0001) {
+        erroExcedente = 'Recebendo ' + fmtNum(qtdAgora) + ' de ' + it.materialCodigo + ' passaria do total pedido (' + fmtNum(qtd) + '). Máximo permitido agora: ' + fmtNum(Math.max(0, qtd - qtdRecAtual)) + '.';
+        return; // aborta a transaction sem gravar nada
+      }
+      itensRecebidos[itemKey] = {materialCodigo: it.materialCodigo, materialNome: it.materialNome || '', qtdRecebidaAgora: qtdAgora, unidade: it.unidade || ''};
+      itens[itemKey] = Object.assign({}, it, {qtdRecebida: novoTotal});
+    }
+
+    atual.itens = itens;
+    if (!atual.recebimentos) atual.recebimentos = {};
+    atual.recebimentos[recKey] = {
+      data: data, notaFiscal: notaFiscal, itensRecebidos: itensRecebidos,
+      observacoes: observacoes, recebidoPor: recebidoPor, criadoEm: new Date().toISOString()
+    };
+
+    var todosCompletos = true, algumRecebido = false;
+    Object.values(itens).forEach(function(it) {
+      var qtd = parseFloat(it.qtd) || 0;
+      var qtdRecFinal = parseFloat(it.qtdRecebida) || 0;
+      if (qtdRecFinal > 0) algumRecebido = true;
+      if (qtdRecFinal < qtd - 0.0001) todosCompletos = false;
+    });
+    atual.status = todosCompletos ? 'RECEBIDO_TOTAL' : (algumRecebido ? 'RECEBIDO_PARCIAL' : atual.status);
+
+    return atual;
+  }).then(function(result) {
+    if (erroExcedente) { showAlert(erroExcedente, 'danger'); return; }
+    if (!result.committed) { showAlert('Não foi possível registrar o recebimento (o pedido pode ter sido removido). Atualize a lista e tente de novo.', 'danger'); return; }
+    showAlert('Recebimento registrado com sucesso!', 'success');
+    closeModalReceber();
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalReceberSave').disabled = false; });
+}
+
+/* ══════════════ Boot ══════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('modalAgendarClose').addEventListener('click', closeModalAgendar);
+  document.getElementById('modalAgendarCancel').addEventListener('click', closeModalAgendar);
+  document.getElementById('modalAgendarSave').addEventListener('click', saveAgendar);
+  document.getElementById('modalAgendar').addEventListener('click', function(e) { if (e.target === this) closeModalAgendar(); });
+
+  document.getElementById('modalReceberClose').addEventListener('click', closeModalReceber);
+  document.getElementById('modalReceberCancel').addEventListener('click', closeModalReceber);
+  document.getElementById('modalReceberSave').addEventListener('click', saveReceber);
+  document.getElementById('modalReceber').addEventListener('click', function(e) { if (e.target === this) closeModalReceber(); });
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allTransportadoras = snap.val() || {};
+      refreshTransportadoraSelect();
+    });
+    dbOnValue(db.ref('pedidos_compra'), function(snap) {
+      allPedidosCompra = snap.val() || {};
+      renderReceberList();
+      renderHistoricoList();
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

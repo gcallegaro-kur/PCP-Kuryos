@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compras</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 12px}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .alert-info{background:var(--tint-blue-bg);color:var(--primary);border:1px solid color-mix(in srgb, var(--primary) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-purple{background:var(--purple);color:white}.btn-purple:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .tabs{display:flex;gap:2px;max-width:96%;margin:0 auto 14px;border-bottom:2px solid var(--border)}
+    .tab{padding:10px 18px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .table-wrap{overflow:auto;max-height:calc(100vh - 320px)}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+    thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    tr:hover td{background:var(--surface-2)}
+    .code-cell{font-family:monospace;font-weight:700;color:var(--primary);white-space:nowrap}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:680px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header.purple{background:linear-gradient(135deg,#4c1d95,var(--purple))}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .section-note a{color:var(--primary);font-weight:600;text-decoration:none}
+    .section-note a:hover{text-decoration:underline}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    .item-row{display:grid;grid-template-columns:2fr 1fr .7fr 1.5fr auto;gap:8px;align-items:center;margin-bottom:8px}
+    .item-row-head{display:grid;grid-template-columns:2fr 1fr .7fr 1.5fr auto;gap:8px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+    .chk-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--tint-gray-bg)}
+    .chk-row input{width:auto;margin-top:3px}
+    .chk-row-body{flex:1;font-size:12.5px}
+    .chk-row-body b{font-size:13px}
+    .empty-hint{color:var(--muted);font-size:12.5px;padding:10px 0}
+    @media(max-width:700px){.form-grid{grid-template-columns:1fr}.item-row,.item-row-head{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Compras</h1>
+    <div class="header-sub">Solicitações, consolidação por fornecedor e cotação — alimentado pelo cadastro de Materiais</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main" style="padding-top:6px">
+  <div id="alertBox" class="alert alert-success"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="solicitacoes">Solicitações</button>
+  <button class="tab" data-tab="pedidos">Pedidos de Compra</button>
+</div>
+
+<div class="main">
+
+  <!-- ═══════════ SOLICITAÇÕES ═══════════ -->
+  <div class="tab-panel active" id="tab-solicitacoes">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="scSearch" placeholder="Buscar por número, material ou solicitante..."></div>
+      <select class="kt-select" id="scFilterStatus">
+        <option value="">Todos os status</option>
+        <option value="PENDENTE">Pendente</option>
+        <option value="APROVADA">Aprovada</option>
+        <option value="REJEITADA">Rejeitada</option>
+        <option value="CONSOLIDADA">Consolidada em PC</option>
+      </select>
+      <button class="btn btn-purple btn-sm" id="btnCotacao" disabled>📨 Solicitar Cotação (0)</button>
+      <button class="btn btn-primary" id="btnNovaSolicitacao">+ Nova Solicitação</button>
+    </div>
+    <div class="card">
+      <div class="card-title" id="scCount">Solicitações</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:30px"></th>
+            <th>Número</th>
+            <th>Data</th>
+            <th>Solicitante</th>
+            <th style="min-width:260px">Itens</th>
+            <th>Justificativa</th>
+            <th>Status</th>
+            <th style="min-width:150px">Ações</th>
+          </tr></thead>
+          <tbody id="scBody"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ PEDIDOS DE COMPRA ═══════════ -->
+  <div class="tab-panel" id="tab-pedidos">
+    <div class="kt-toolbar">
+      <select class="kt-select" id="pcFilterFornecedor"><option value="">Todos os fornecedores</option></select>
+      <select class="kt-select" id="pcSort">
+        <option value="recente">Mais recentes primeiro</option>
+        <option value="antigo">Mais antigos primeiro</option>
+      </select>
+      <button class="btn btn-primary" id="btnConsolidar">+ Consolidar Pedido de Compra</button>
+    </div>
+    <div class="section-note">Gerenciar fornecedores (cadastro, contato, condição de pagamento) → <a href="cadastros.html?tab=fornecedores">Cadastros</a>.</div>
+    <div class="card">
+      <div class="card-title" id="pcCount">Pedidos de Compra</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Número</th>
+            <th>Fornecedor</th>
+            <th>Criado em</th>
+            <th style="min-width:220px">Itens</th>
+            <th>Status</th>
+            <th style="min-width:110px">Ações</th>
+          </tr></thead>
+          <tbody id="pcBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: Nova Solicitação -->
+<div class="modal-bg" id="modalSc">
+  <div class="modal">
+    <div class="modal-header"><h2>Nova Solicitação de Compra</h2><button class="modal-close" id="modalScClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="section-label">Itens solicitados</div>
+      <div class="item-row-head"><div>Material</div><div>Quantidade</div><div>Un.</div><div>Observação</div><div></div></div>
+      <div id="scItensBuilder"></div>
+      <button class="btn btn-ghost btn-sm" id="btnAddScItem">+ Item</button>
+
+      <div class="section-label">Justificativa</div>
+      <div class="form-group full">
+        <textarea id="scJustificativa" rows="3" placeholder="Por que essa compra é necessária (ex: reposição de estoque mínimo, novo pedido do cliente X, etc.)"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalScCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalScSave">Enviar Solicitação</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Consolidar Pedido de Compra -->
+<div class="modal-bg" id="modalConsolidar">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header"><h2>Consolidar Pedido de Compra</h2><button class="modal-close" id="modalConsolidarClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Fornecedor *</label>
+        <select id="pcFornecedor"><option value="">Selecione...</option></select>
+      </div>
+
+      <div class="section-label">Solicitações aprovadas disponíveis</div>
+      <div id="pcSolicitacoesList"></div>
+
+      <div class="section-label" id="pcItensPreviewLabel" style="display:none">Itens do pedido (confira e informe o preço negociado)</div>
+      <div id="pcItensPreview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalConsolidarCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalConsolidarSave">Criar Pedido de Compra</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Solicitar Cotação -->
+<div class="modal-bg" id="modalCotacao">
+  <div class="modal">
+    <div class="modal-header purple"><h2>Solicitar Cotação</h2><button class="modal-close" id="modalCotacaoClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Fornecedor *</label>
+        <select id="cotFornecedor"><option value="">Selecione...</option></select>
+        <div class="field-hint" id="cotFornecedorEmailHint"></div>
+      </div>
+      <div class="section-label">Itens (das solicitações selecionadas)</div>
+      <div id="cotItensPreview" class="empty-hint">Nenhuma solicitação selecionada.</div>
+
+      <div class="form-grid" style="margin-top:14px">
+        <div class="form-group">
+          <label>Prazo desejado</label>
+          <input type="text" id="cotPrazo" placeholder="Ex: até 15/09">
+        </div>
+        <div class="form-group">
+          <label>Preço meta (opcional)</label>
+          <input type="text" id="cotPrecoMeta" placeholder="Ex: R$ 12,50/kg">
+        </div>
+        <div class="form-group full">
+          <label>Observações</label>
+          <textarea id="cotObservacoes" rows="2" placeholder="Alguma condição adicional pro fornecedor..."></textarea>
+        </div>
+      </div>
+      <div class="field-hint" style="margin-top:8px">Isso cria um <b>rascunho</b> de e-mail na caixa da Kuryos pra você revisar e enviar manualmente — nada é enviado automaticamente.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalCotacaoCancel">Cancelar</button>
+      <button class="btn btn-purple" id="modalCotacaoSave">Criar Rascunho de Cotação</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+// firebase.functions() só é usada no clique de "Solicitar Cotação" -- se o SDK
+// de functions não estiver disponível por algum motivo, o resto da página
+// (Solicitações/Pedidos/Fornecedores) continua funcionando normalmente.
+var functionsInstance = null;
+try {
+  functionsInstance = firebase.functions();
+  if (kuryosIsLocalDev()) functionsInstance.useEmulator('127.0.0.1', 5001);
+} catch (err) { console.warn('Firebase Functions indisponível:', err); }
+
+var allFornecedores = {};
+var allSolicitacoes = {};
+var allPedidosCompra = {};
+var allMateriais = {};
+
+var scItensBuilder = []; // [{materialCodigo, qtd, obs}] -- só em memória até salvar
+var cotacaoSelecionadas = {}; // scKey -> true
+var consolidarSelecionadas = {}; // scKey -> true
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  setTimeout(function() { box.classList.remove('show'); }, 6000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Usuário';
+}
+function fmtData(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return '—'; }
+}
+function materiaisOptionsSimple(selecionado) {
+  var opts = '<option value="">Selecione...</option>';
+  Object.values(allMateriais).filter(function(m) { return m.ativo !== false; })
+    .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
+    .forEach(function(m) {
+      opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
+    });
+  return opts;
+}
+function findMaterialByCodigo(codigo) {
+  return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
+}
+
+/* ══════════════ Tabs ══════════════ */
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    var target = tab.getAttribute('data-tab');
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  });
+});
+
+/* ══════════════ SOLICITAÇÕES ══════════════ */
+function renderSolicitacoes() {
+  var search = norm(document.getElementById('scSearch').value);
+  var filtStatus = document.getElementById('scFilterStatus').value;
+
+  var rows = Object.entries(allSolicitacoes).filter(function(entry) {
+    var s = entry[1];
+    if (filtStatus && s.status !== filtStatus) return false;
+    if (search) {
+      var itensTxt = Object.values(s.itens || {}).map(function(i) { return norm(i.materialCodigo) + ' ' + norm(i.materialNome); }).join(' ');
+      var haystack = norm(s.numeroFormatado) + ' ' + norm(s.solicitante) + ' ' + itensTxt;
+      if (haystack.indexOf(search) === -1) return false;
+    }
+    return true;
+  }).sort(function(a, b) { return (b[1].criadoEm || '').localeCompare(a[1].criadoEm || ''); });
+
+  document.getElementById('scCount').textContent = 'Solicitações (' + rows.length + ' exibidas)';
+
+  var tbody = document.getElementById('scBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (Object.keys(allSolicitacoes).length
+      ? 'Nenhuma solicitação encontrada com esse filtro/busca.'
+      : 'Nenhuma solicitação de compra ainda. Clique em "+ Nova Solicitação" pra começar.') + '</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], s = entry[1];
+      var itens = Object.values(s.itens || {});
+      var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+      var statusBadge = {
+        PENDENTE: '<span class="badge badge-orange">Pendente</span>',
+        APROVADA: '<span class="badge badge-green">Aprovada</span>',
+        REJEITADA: '<span class="badge badge-red">Rejeitada</span>',
+        CONSOLIDADA: '<span class="badge badge-blue">Consolidada em PC</span>'
+      }[s.status] || '<span class="badge badge-gray">' + escapeHtml(s.status || '—') + '</span>';
+      var podeSelecionar = s.status === 'APROVADA';
+      var checkbox = podeSelecionar
+        ? '<input type="checkbox" class="sc-check" data-key="' + escapeAttr(key) + '"' + (cotacaoSelecionadas[key] ? ' checked' : '') + '>'
+        : '';
+      var acoes = '';
+      if (s.status === 'PENDENTE') {
+        acoes = '<button class="btn btn-green btn-sm sc-aprovar" data-key="' + escapeAttr(key) + '">Aprovar</button> ' +
+                '<button class="btn btn-danger-ghost btn-sm sc-rejeitar" data-key="' + escapeAttr(key) + '">Rejeitar</button>';
+      } else if (s.status === 'REJEITADA' && s.rejeicao) {
+        acoes = '<span class="field-hint">Motivo: ' + escapeHtml(s.rejeicao.motivo || '—') + '</span>';
+      }
+      return '<tr>' +
+        '<td>' + checkbox + '</td>' +
+        '<td class="code-cell">' + escapeHtml(s.numeroFormatado || '—') + '</td>' +
+        '<td style="font-size:12px">' + fmtData(s.criadoEm) + '</td>' +
+        '<td>' + escapeHtml(s.solicitante || '—') + '</td>' +
+        '<td style="font-size:12.5px">' + (itensResumo || '—') + '</td>' +
+        '<td style="font-size:12px;max-width:200px">' + escapeHtml(s.justificativa || '—') + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + acoes + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+  document.querySelectorAll('.sc-check').forEach(function(el) {
+    el.addEventListener('change', function() {
+      var key = el.getAttribute('data-key');
+      if (el.checked) cotacaoSelecionadas[key] = true; else delete cotacaoSelecionadas[key];
+      updateBtnCotacao();
+    });
+  });
+  document.querySelectorAll('.sc-aprovar').forEach(function(btn) {
+    btn.addEventListener('click', function() { aprovarSolicitacao(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.sc-rejeitar').forEach(function(btn) {
+    btn.addEventListener('click', function() { rejeitarSolicitacao(btn.getAttribute('data-key')); });
+  });
+}
+function updateBtnCotacao() {
+  var n = Object.keys(cotacaoSelecionadas).length;
+  var btn = document.getElementById('btnCotacao');
+  btn.textContent = '📨 Solicitar Cotação (' + n + ')';
+  btn.disabled = n === 0;
+}
+// Achado do Auditor: um `.update()` direto no status não protege contra dois
+// admins agindo quase ao mesmo tempo na mesma solicitação (ex: um Aprova
+// enquanto outro Rejeita) -- o registro final podia ficar com status e
+// motivo/aprovação contraditórios, o que venceu por último. `.transaction()`
+// no campo status faz compare-and-swap: só aceita a mudança se o status
+// ainda for o esperado (PENDENTE) no momento da escrita no servidor.
+function aprovarSolicitacao(key) {
+  if (!confirm('Aprovar essa solicitação de compra?')) return;
+  db.ref('solicitacoes_compra/' + key + '/status').transaction(function(atual) {
+    if (atual !== 'PENDENTE') return; // aborta -- outra ação já decidiu essa solicitação
+    return 'APROVADA';
+  }).then(function(result) {
+    if (!result.committed) { showAlert('Essa solicitação já foi decidida por outra ação (aprovada/rejeitada). Atualize a lista.', 'danger'); return; }
+    return db.ref('solicitacoes_compra/' + key + '/aprovacao').set({aprovadoPor: currentUserNome(), aprovadoEm: new Date().toISOString()})
+      .then(function() { showAlert('Solicitação aprovada.', 'success'); });
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+function rejeitarSolicitacao(key) {
+  var motivo = prompt('Motivo da rejeição:');
+  if (motivo === null) return;
+  db.ref('solicitacoes_compra/' + key + '/status').transaction(function(atual) {
+    if (atual !== 'PENDENTE') return;
+    return 'REJEITADA';
+  }).then(function(result) {
+    if (!result.committed) { showAlert('Essa solicitação já foi decidida por outra ação (aprovada/rejeitada). Atualize a lista.', 'danger'); return; }
+    return db.ref('solicitacoes_compra/' + key + '/rejeicao').set({rejeitadoPor: currentUserNome(), rejeitadoEm: new Date().toISOString(), motivo: motivo.trim()})
+      .then(function() { showAlert('Solicitação rejeitada.', 'success'); });
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+/* ── Modal Nova Solicitação ── */
+function renderScItensBuilder() {
+  var box = document.getElementById('scItensBuilder');
+  if (!scItensBuilder.length) {
+    box.innerHTML = '<div class="empty-hint">Nenhum item ainda -- clique em "+ Item".</div>';
+    return;
+  }
+  box.innerHTML = scItensBuilder.map(function(it, idx) {
+    var mat = findMaterialByCodigo(it.materialCodigo);
+    var unidade = mat ? mat.unidade : '';
+    return '<div class="item-row" data-idx="' + idx + '">' +
+      '<select class="sci-mat" data-idx="' + idx + '">' + materiaisOptionsSimple(it.materialCodigo) + '</select>' +
+      '<input type="number" class="sci-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
+      '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
+      '<input type="text" class="sci-obs" data-idx="' + idx + '" value="' + escapeAttr(it.obs || '') + '" placeholder="Opcional">' +
+      '<button class="btn btn-danger-ghost btn-sm sci-remove" data-idx="' + idx + '" title="Remover item" aria-label="Remover item">×</button>' +
+    '</div>';
+  }).join('');
+  document.querySelectorAll('.sci-mat').forEach(function(el) {
+    el.addEventListener('change', function() { scItensBuilder[+el.getAttribute('data-idx')].materialCodigo = el.value; renderScItensBuilder(); });
+  });
+  document.querySelectorAll('.sci-qtd').forEach(function(el) {
+    el.addEventListener('input', function() { scItensBuilder[+el.getAttribute('data-idx')].qtd = parseFloat(el.value) || 0; });
+  });
+  document.querySelectorAll('.sci-obs').forEach(function(el) {
+    el.addEventListener('input', function() { scItensBuilder[+el.getAttribute('data-idx')].obs = el.value; });
+  });
+  document.querySelectorAll('.sci-remove').forEach(function(el) {
+    el.addEventListener('click', function() { scItensBuilder.splice(+el.getAttribute('data-idx'), 1); renderScItensBuilder(); });
+  });
+}
+function openModalSolicitacao() {
+  scItensBuilder = [{materialCodigo: '', qtd: null, obs: ''}];
+  document.getElementById('scJustificativa').value = '';
+  renderScItensBuilder();
+  document.getElementById('modalSc').classList.add('open');
+}
+function closeModalSolicitacao() { document.getElementById('modalSc').classList.remove('open'); }
+function saveSolicitacao() {
+  var itensValidos = scItensBuilder.filter(function(it) { return it.materialCodigo && it.qtd > 0; });
+  if (!itensValidos.length) { showAlert('Adicione ao menos um item com material e quantidade válidos.', 'danger'); return; }
+
+  // Achado do Auditor: o mesmo material em duas linhas não é bloqueado (pode
+  // ser intencional -- observações diferentes pro mesmo material), mas hoje
+  // não avisava nada, então um duplicado por engano passava batido.
+  var codigosVistos = {};
+  var temDuplicado = itensValidos.some(function(it) {
+    var k = norm(it.materialCodigo);
+    if (codigosVistos[k]) return true;
+    codigosVistos[k] = true;
+    return false;
+  });
+  if (temDuplicado && !confirm('Você adicionou o mesmo material mais de uma vez nesta solicitação. Continuar mesmo assim?')) return;
+
+  var itensObj = {};
+  itensValidos.forEach(function(it) {
+    var mat = findMaterialByCodigo(it.materialCodigo);
+    var itemKey = db.ref('solicitacoes_compra').push().key;
+    itensObj[itemKey] = {
+      materialCodigo: it.materialCodigo,
+      materialNome: mat ? mat.mpNome : '',
+      qtd: it.qtd,
+      unidade: mat ? mat.unidade : '',
+      obs: (it.obs || '').trim()
+    };
+  });
+
+  document.getElementById('modalScSave').disabled = true;
+  nextSequential(db, 'config/contadores/solicitacaoCompra', 'SC', 4).then(function(seq) {
+    var key = db.ref('solicitacoes_compra').push().key;
+    return db.ref('solicitacoes_compra/' + key).set({
+      numero: seq.numero,
+      numeroFormatado: seq.formatado,
+      itens: itensObj,
+      justificativa: document.getElementById('scJustificativa').value.trim(),
+      solicitante: currentUserNome(),
+      status: 'PENDENTE',
+      aprovacao: null,
+      rejeicao: null,
+      criadoPor: currentUserNome(),
+      criadoEm: new Date().toISOString()
+    });
+  }).then(function() {
+    showAlert('Solicitação enviada com sucesso!', 'success');
+    closeModalSolicitacao();
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalScSave').disabled = false; });
+}
+
+/* ══════════════ PEDIDOS DE COMPRA ══════════════ */
+function refreshPcFornecedorFilter() {
+  ['pcFilterFornecedor', 'pcFornecedor', 'cotFornecedor'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    var cur = sel.value;
+    var isFilter = id === 'pcFilterFornecedor';
+    sel.innerHTML = isFilter ? '<option value="">Todos os fornecedores</option>' : '<option value="">Selecione...</option>';
+    Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
+      .forEach(function(entry) {
+        var o = document.createElement('option');
+        o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
+        sel.appendChild(o);
+      });
+    if (cur) sel.value = cur;
+  });
+}
+function renderPedidos() {
+  var filtFornecedor = document.getElementById('pcFilterFornecedor').value;
+  var sortMode = document.getElementById('pcSort').value;
+
+  var rows = Object.entries(allPedidosCompra).filter(function(entry) {
+    if (filtFornecedor && entry[1].fornecedorKey !== filtFornecedor) return false;
+    return true;
+  }).sort(function(a, b) {
+    var cmp = (a[1].dataCriacao || '').localeCompare(b[1].dataCriacao || '');
+    return sortMode === 'antigo' ? cmp : -cmp;
+  });
+
+  document.getElementById('pcCount').textContent = 'Pedidos de Compra (' + rows.length + ' exibidos)';
+
+  var tbody = document.getElementById('pcBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allPedidosCompra).length
+      ? 'Nenhum pedido de compra encontrado com esse filtro.'
+      : 'Nenhum pedido de compra ainda. Consolide uma solicitação aprovada pra criar o primeiro.') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(entry) {
+    var key = entry[0], p = entry[1];
+    var itens = Object.values(p.itens || {});
+    var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+    var statusBadge = {
+      ABERTO: '<span class="badge badge-orange">Aberto</span>',
+      ENVIADO: '<span class="badge badge-blue">Enviado</span>',
+      RECEBIDO_PARCIAL: '<span class="badge badge-purple">Recebido parcial</span>',
+      RECEBIDO_TOTAL: '<span class="badge badge-green">Recebido total</span>',
+      CANCELADO: '<span class="badge badge-red">Cancelado</span>'
+    }[p.status] || '<span class="badge badge-gray">' + escapeHtml(p.status || '—') + '</span>';
+    var acoes = p.status === 'ABERTO'
+      ? '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button>'
+      : '';
+    return '<tr>' +
+      '<td class="code-cell">' + escapeHtml(p.numeroFormatado || '—') + '</td>' +
+      '<td>' + escapeHtml(p.fornecedorNome || '—') + '</td>' +
+      '<td style="font-size:12px">' + fmtData(p.dataCriacao) + '</td>' +
+      '<td style="font-size:12.5px">' + (itensResumo || '—') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td>' + acoes + '</td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('.pc-enviar').forEach(function(btn) {
+    btn.addEventListener('click', function() { marcarPedidoEnviado(btn.getAttribute('data-key')); });
+  });
+}
+function marcarPedidoEnviado(key) {
+  if (!confirm('Marcar esse pedido como enviado ao fornecedor?')) return;
+  db.ref('pedidos_compra/' + key).update({status: 'ENVIADO', dataEmissao: new Date().toISOString()})
+    .then(function() { showAlert('Pedido marcado como enviado.', 'success'); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+/* ── Modal Consolidar ── */
+function solicitacoesAprovadasDisponiveis() {
+  return Object.entries(allSolicitacoes).filter(function(e) { return e[1].status === 'APROVADA'; })
+    .sort(function(a, b) { return (a[1].criadoEm || '').localeCompare(b[1].criadoEm || ''); });
+}
+function renderPcSolicitacoesList() {
+  var disponiveis = solicitacoesAprovadasDisponiveis();
+  var box = document.getElementById('pcSolicitacoesList');
+  if (!disponiveis.length) {
+    box.innerHTML = '<div class="empty-hint">Nenhuma solicitação aprovada disponível pra consolidar no momento.</div>';
+  } else {
+    box.innerHTML = disponiveis.map(function(entry) {
+      var key = entry[0], s = entry[1];
+      var itens = Object.values(s.itens || {});
+      var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+      return '<label class="chk-row" style="cursor:pointer">' +
+        '<input type="checkbox" class="pc-sc-check" data-key="' + escapeAttr(key) + '"' + (consolidarSelecionadas[key] ? ' checked' : '') + '>' +
+        '<div class="chk-row-body"><b>' + escapeHtml(s.numeroFormatado) + '</b> — ' + escapeHtml(s.solicitante || '') + '<br>' + itensResumo + '</div>' +
+      '</label>';
+    }).join('');
+  }
+  document.querySelectorAll('.pc-sc-check').forEach(function(el) {
+    el.addEventListener('change', function() {
+      var key = el.getAttribute('data-key');
+      if (el.checked) consolidarSelecionadas[key] = true; else delete consolidarSelecionadas[key];
+      renderPcItensPreview();
+    });
+  });
+}
+// Achado do Auditor: os preços digitados eram lidos por ÍNDICE POSICIONAL
+// (`window.__pcPreviewRows[idx]` casado com o N-ésimo `.pc-preco` do DOM).
+// Isso quebra silenciosamente sempre que a prévia é re-renderizada entre a
+// digitação e o salvar (ex: usuário marca mais uma solicitação depois de já
+// ter digitado um preço) -- os `<input>` são recriados em branco e o preço
+// digitado "desaparece" sem aviso. Agora os preços ficam numa estrutura
+// própria, chaveada por scKey+itemKey (sobrevive a qualquer re-render).
+var precosDigitados = {}; // 'scKey|itemKey' -> string digitada
+function renderPcItensPreview() {
+  var keys = Object.keys(consolidarSelecionadas);
+  var label = document.getElementById('pcItensPreviewLabel');
+  var box = document.getElementById('pcItensPreview');
+  if (!keys.length) { label.style.display = 'none'; box.innerHTML = ''; return; }
+  label.style.display = 'block';
+  var rows = [];
+  keys.forEach(function(scKey) {
+    var s = allSolicitacoes[scKey];
+    if (!s) return;
+    Object.entries(s.itens || {}).forEach(function(itEntry) {
+      rows.push({scKey: scKey, itemKey: itEntry[0], it: itEntry[1]});
+    });
+  });
+  if (!rows.length) { box.innerHTML = '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>'; return; }
+  box.innerHTML = '<div class="item-row-head"><div>Material</div><div>Quantidade</div><div>Un.</div><div>Preço unit. (opcional)</div><div></div></div>' +
+    rows.map(function(r) {
+      var precoKey = r.scKey + '|' + r.itemKey;
+      var valorAtual = precosDigitados[precoKey] != null ? escapeAttr(precosDigitados[precoKey]) : '';
+      return '<div class="item-row">' +
+        '<div style="font-size:12.5px">' + escapeHtml(r.it.materialCodigo) + ' — ' + escapeHtml(r.it.materialNome || '') + '</div>' +
+        '<div style="font-size:12.5px">' + fmtNum(r.it.qtd) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(r.it.unidade || '') + '</div>' +
+        '<input type="number" class="pc-preco" data-preco-key="' + escapeAttr(precoKey) + '" min="0" step="any" placeholder="0,00" value="' + valorAtual + '">' +
+        '<div></div>' +
+      '</div>';
+    }).join('');
+  document.querySelectorAll('.pc-preco').forEach(function(el) {
+    el.addEventListener('input', function() { precosDigitados[el.getAttribute('data-preco-key')] = el.value; });
+  });
+  window.__pcPreviewRows = rows; // usado só pra montar itensObj no save -- os preços vêm de precosDigitados, não de índice
+}
+function openModalConsolidar() {
+  consolidarSelecionadas = {};
+  precosDigitados = {};
+  document.getElementById('pcFornecedor').value = '';
+  renderPcSolicitacoesList();
+  renderPcItensPreview();
+  document.getElementById('modalConsolidar').classList.add('open');
+}
+function closeModalConsolidar() { document.getElementById('modalConsolidar').classList.remove('open'); }
+function saveConsolidar() {
+  var fornecedorKey = document.getElementById('pcFornecedor').value;
+  if (!fornecedorKey) { showAlert('Selecione um fornecedor.', 'danger'); return; }
+  var scKeys = Object.keys(consolidarSelecionadas);
+  if (!scKeys.length) { showAlert('Selecione ao menos uma solicitação aprovada.', 'danger'); return; }
+  var rows = window.__pcPreviewRows || [];
+  if (!rows.length) { showAlert('As solicitações selecionadas não têm itens.', 'danger'); return; }
+
+  // Achado do Auditor: preço unitário negativo não era validado -- o
+  // atributo min="0" do <input> é só uma dica visual, não impede o valor
+  // de chegar aqui via JS.
+  for (var i = 0; i < rows.length; i++) {
+    var pv = precosDigitados[rows[i].scKey + '|' + rows[i].itemKey];
+    if (pv !== undefined && pv !== '' && parseFloat(pv) < 0) {
+      showAlert('Preço unitário não pode ser negativo (item ' + rows[i].it.materialCodigo + ').', 'danger');
+      return;
+    }
+  }
+
+  var fornecedor = allFornecedores[fornecedorKey];
+  document.getElementById('modalConsolidarSave').disabled = true;
+
+  // Achado do Auditor: dois admins consolidando quase ao mesmo tempo podiam
+  // incluir a MESMA solicitação aprovada em dois Pedidos de Compra
+  // diferentes (compra em dobro), porque a gravação do status só usava
+  // `.update()` sem checar o valor atual no servidor. Agora cada solicitação
+  // é "reservada" via `.transaction()` (compare-and-swap: só aceita se ainda
+  // estiver APROVADA) ANTES de criar o Pedido de Compra. Se alguma reserva
+  // falhar (porque outra ação já mudou o status entretanto), desfaz as que
+  // deram certo e avisa o usuário, sem criar um PC parcial/incoerente.
+  var reservas = scKeys.map(function(scKey) {
+    return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) {
+      if (atual !== 'APROVADA') return; // aborta -- já foi consolidada/alterada por outra ação
+      return 'CONSOLIDADA';
+    });
+  });
+
+  Promise.all(reservas).then(function(results) {
+    var falharam = [];
+    results.forEach(function(r, idx) { if (!r.committed) falharam.push(scKeys[idx]); });
+
+    if (falharam.length) {
+      var reverts = {};
+      results.forEach(function(r, idx) { if (r.committed) reverts['solicitacoes_compra/' + scKeys[idx] + '/status'] = 'APROVADA'; });
+      return db.ref().update(reverts).then(function() {
+        var nums = falharam.map(function(k) { return (allSolicitacoes[k] || {}).numeroFormatado || k; }).join(', ');
+        throw new Error('As solicitações ' + nums + ' já foram consolidadas ou alteradas por outra ação enquanto este pedido era montado. Feche e abra o modal de novo pra ver a lista atualizada.');
+      });
+    }
+
+    var itensObj = {};
+    rows.forEach(function(r) {
+      var precoVal = precosDigitados[r.scKey + '|' + r.itemKey];
+      var itemKey = db.ref('pedidos_compra').push().key;
+      itensObj[itemKey] = {
+        materialCodigo: r.it.materialCodigo,
+        materialNome: r.it.materialNome || '',
+        qtd: r.it.qtd,
+        unidade: r.it.unidade || '',
+        precoUnit: (precoVal !== undefined && precoVal !== '') ? parseFloat(precoVal) : null,
+        obs: r.it.obs || '',
+        qtdRecebida: 0,
+        origemSolicitacaoKey: r.scKey
+      };
+    });
+    var solicitacoesOrigem = {};
+    scKeys.forEach(function(scKey) {
+      var s = allSolicitacoes[scKey];
+      if (s) solicitacoesOrigem[scKey] = {numero: s.numero, numeroFormatado: s.numeroFormatado};
+    });
+
+    return nextSequential(db, 'config/contadores/pedidoCompra', 'PC', 4).then(function(seq) {
+      var key = db.ref('pedidos_compra').push().key;
+      return db.ref('pedidos_compra/' + key).set({
+        numero: seq.numero,
+        numeroFormatado: seq.formatado,
+        status: 'ABERTO',
+        fornecedorKey: fornecedorKey,
+        fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '',
+        dataCriacao: new Date().toISOString(),
+        dataEmissao: null,
+        solicitacoesOrigem: solicitacoesOrigem,
+        itens: itensObj,
+        criadoPor: currentUserNome(),
+        criadoEm: new Date().toISOString()
+      });
+      // status das solicitações já foi gravado (CONSOLIDADA) na fase de reserva acima -- não repete aqui.
+    });
+  }).then(function() {
+    showAlert('Pedido de Compra criado com sucesso!', 'success');
+    closeModalConsolidar();
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalConsolidarSave').disabled = false; });
+}
+
+/* ══════════════ COTAÇÃO (rascunho de e-mail) ══════════════ */
+function renderCotItensPreview() {
+  var keys = Object.keys(cotacaoSelecionadas);
+  var box = document.getElementById('cotItensPreview');
+  if (!keys.length) { box.innerHTML = '<div class="empty-hint">Nenhuma solicitação selecionada.</div>'; return; }
+  var rows = [];
+  keys.forEach(function(scKey) {
+    var s = allSolicitacoes[scKey];
+    if (!s) return;
+    Object.values(s.itens || {}).forEach(function(it) { rows.push(it); });
+  });
+  box.innerHTML = rows.length
+    ? '<ul style="padding-left:18px;font-size:12.5px">' + rows.map(function(it) {
+        return '<li>' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + ': ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</li>';
+      }).join('') + '</ul>'
+    : '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>';
+}
+function openModalCotacao() {
+  if (!Object.keys(cotacaoSelecionadas).length) return;
+  document.getElementById('cotFornecedor').value = '';
+  document.getElementById('cotFornecedorEmailHint').textContent = '';
+  document.getElementById('cotPrazo').value = '';
+  document.getElementById('cotPrecoMeta').value = '';
+  document.getElementById('cotObservacoes').value = '';
+  renderCotItensPreview();
+  document.getElementById('modalCotacao').classList.add('open');
+}
+function closeModalCotacao() { document.getElementById('modalCotacao').classList.remove('open'); }
+function enviarCotacao() {
+  var fornecedorKey = document.getElementById('cotFornecedor').value;
+  if (!fornecedorKey) { showAlert('Selecione um fornecedor.', 'danger'); return; }
+  var fornecedor = allFornecedores[fornecedorKey];
+  if (!fornecedor || !fornecedor.contatoEmail) { showAlert('Esse fornecedor não tem e-mail de contato cadastrado.', 'danger'); return; }
+  if (!functionsInstance) { showAlert('Recurso de e-mail indisponível nesta sessão (Firebase Functions não carregou).', 'danger'); return; }
+
+  var scKeys = Object.keys(cotacaoSelecionadas);
+  var itens = [];
+  scKeys.forEach(function(scKey) {
+    var s = allSolicitacoes[scKey];
+    if (!s) return;
+    Object.values(s.itens || {}).forEach(function(it) {
+      itens.push({materialCodigo: it.materialCodigo, materialNome: it.materialNome, qtd: it.qtd, unidade: it.unidade});
+    });
+  });
+  if (!itens.length) { showAlert('As solicitações selecionadas não têm itens.', 'danger'); return; }
+
+  var payload = {
+    fornecedorEmail: fornecedor.contatoEmail,
+    fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial,
+    itens: itens,
+    prazoDesejado: document.getElementById('cotPrazo').value.trim(),
+    precoMeta: document.getElementById('cotPrecoMeta').value.trim(),
+    observacoes: document.getElementById('cotObservacoes').value.trim()
+  };
+
+  var btn = document.getElementById('modalCotacaoSave');
+  btn.disabled = true;
+  btn.textContent = 'Criando rascunho...';
+  functionsInstance.httpsCallable('criarRascunhoCotacao')(payload).then(function(result) {
+    var key = db.ref('cotacoes').push().key;
+    return db.ref('cotacoes/' + key).set({
+      fornecedorKey: fornecedorKey,
+      fornecedorNome: payload.fornecedorNome,
+      itensSolicitados: itens,
+      solicitacoesOrigem: scKeys,
+      prazoDesejado: payload.prazoDesejado,
+      precoMeta: payload.precoMeta,
+      rascunhoWebLink: (result.data && result.data.webLink) || null,
+      criadoPor: currentUserNome(),
+      criadoEm: new Date().toISOString()
+    });
+  }).then(function() {
+    showAlert('Rascunho de cotação criado! Revise e envie manualmente pela caixa de e-mail da Kuryos.', 'success');
+    cotacaoSelecionadas = {};
+    updateBtnCotacao();
+    closeModalCotacao();
+  }).catch(function(err) {
+    showAlert('Erro ao criar rascunho: ' + (err.message || err), 'danger');
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Criar Rascunho de Cotação';
+  });
+}
+
+/* ══════════════ Boot ══════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('btnNovaSolicitacao').addEventListener('click', openModalSolicitacao);
+  document.getElementById('modalScClose').addEventListener('click', closeModalSolicitacao);
+  document.getElementById('modalScCancel').addEventListener('click', closeModalSolicitacao);
+  document.getElementById('modalScSave').addEventListener('click', saveSolicitacao);
+  document.getElementById('btnAddScItem').addEventListener('click', function() { scItensBuilder.push({materialCodigo: '', qtd: null, obs: ''}); renderScItensBuilder(); });
+  document.getElementById('modalSc').addEventListener('click', function(e) { if (e.target === this) closeModalSolicitacao(); });
+
+  document.getElementById('btnConsolidar').addEventListener('click', openModalConsolidar);
+  document.getElementById('modalConsolidarClose').addEventListener('click', closeModalConsolidar);
+  document.getElementById('modalConsolidarCancel').addEventListener('click', closeModalConsolidar);
+  document.getElementById('modalConsolidarSave').addEventListener('click', saveConsolidar);
+  document.getElementById('modalConsolidar').addEventListener('click', function(e) { if (e.target === this) closeModalConsolidar(); });
+
+  document.getElementById('btnCotacao').addEventListener('click', openModalCotacao);
+  document.getElementById('modalCotacaoClose').addEventListener('click', closeModalCotacao);
+  document.getElementById('modalCotacaoCancel').addEventListener('click', closeModalCotacao);
+  document.getElementById('modalCotacaoSave').addEventListener('click', enviarCotacao);
+  document.getElementById('modalCotacao').addEventListener('click', function(e) { if (e.target === this) closeModalCotacao(); });
+  document.getElementById('cotFornecedor').addEventListener('change', function() {
+    var f = allFornecedores[this.value];
+    document.getElementById('cotFornecedorEmailHint').textContent = f ? (f.contatoEmail ? 'E-mail: ' + f.contatoEmail : '⚠️ Esse fornecedor não tem e-mail cadastrado.') : '';
+  });
+
+  var _t = null;
+  document.getElementById('scSearch').addEventListener('input', function() { clearTimeout(_t); _t = setTimeout(renderSolicitacoes, 200); });
+  document.getElementById('scFilterStatus').addEventListener('change', renderSolicitacoes);
+  document.getElementById('pcFilterFornecedor').addEventListener('change', renderPedidos);
+  document.getElementById('pcSort').addEventListener('change', renderPedidos);
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    // Fornecedores agora é gerenciado só em cadastros.html -- compras.html
+    // mantém este listener de LEITURA (popula os selects de pedido/cotação
+    // e denormaliza nome/e-mail), sem CRUD próprio.
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedores = snap.val() || {};
+      refreshPcFornecedorFilter();
+    });
+    dbOnValue(db.ref('solicitacoes_compra'), function(snap) {
+      allSolicitacoes = snap.val() || {};
+      renderSolicitacoes();
+      updateBtnCotacao();
+    });
+    dbOnValue(db.ref('pedidos_compra'), function(snap) {
+      allPedidosCompra = snap.val() || {};
+      renderPedidos();
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

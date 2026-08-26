@@ -4,44 +4,71 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Controle de OPs · Kuryos PCP</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
     :root {
       --primary: #0a1c69;
-      --bg: #f1f5f9;
+      --primary-light: #2456d6;
+      --bg: #f5f5f7;
       --card: #ffffff;
-      --border: #cbd5e1;
-      --text: #0f172a;
-      --muted: #64748b;
-      --success: #16a34a;
-      --danger: #dc2626;
-      --warning: #f59e0b;
-      --info: #3b82f6;
+      --border: #d2d2d7;
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --success: #0ca30c;
+      --danger: #d03b3b;
+      --warning: #c9910a;
+      --info: #0a1c69;
     }
-    
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --primary: #5e83ea;
+        --bg: #000000;
+        --card: #1c1c1e;
+        --border: #38383a;
+        --text: #f5f5f7;
+        --muted: #98989d;
+        --info: #5e83ea;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --primary: #5e83ea;
+      --bg: #000000;
+      --card: #1c1c1e;
+      --border: #38383a;
+      --text: #f5f5f7;
+      --muted: #98989d;
+      --info: #5e83ea;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-ui);
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
     }
-    
+
     .container {
       max-width: 96%;
       margin: 0 auto;
-      padding: 24px 20px;
+      padding: 30px 20px 40px;
     }
-    
+
     .head {
       display: flex;
       justify-content: space-between;
@@ -50,10 +77,11 @@
       flex-wrap: wrap;
       gap: 12px;
     }
-    
+
     h1 {
-      font-size: 22px;
-      font-weight: 800;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.02em;
     }
     
     .subtitle {
@@ -83,10 +111,10 @@
     
     .card {
       background: var(--card);
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: none;
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: var(--shadow);
     }
     
     .table-container {
@@ -117,6 +145,110 @@
     tr:hover {
       background: #f8fafc;
     }
+
+    .group-header td {
+      background: color-mix(in srgb, var(--text) 4%, var(--card));
+      font-weight: 700;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: .3px;
+      color: var(--muted);
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .group-header.pending td { color: var(--warning); }
+    .badge-sem-op {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .pedido-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge-pedido {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 700;
+      background: #eef2ff;
+      color: #3730a3;
+      white-space: nowrap;
+    }
+    .badge-pedido.is-vazio {
+      background: transparent;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 3px 0;
+    }
+    .cl-status-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: var(--muted);
+      transition: all .12s;
+    }
+    .cl-status-chip:hover { border-color: var(--muted); }
+    .cl-status-chip.active[data-status="pending"] { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+    .cl-status-chip.active[data-status="partial"] { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+    .cl-status-chip.active[data-status="done"] { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+
+    #checklistThead th[data-col] {
+      cursor: pointer;
+      user-select: none;
+    }
+    #checklistThead th[data-col]:hover { color: var(--primary); }
+    #checklistThead th.sorted-asc::after { content: ' ↑'; }
+    #checklistThead th.sorted-desc::after { content: ' ↓'; }
+
+    .cl-check {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: white;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      transition: all .1s;
+    }
+    .cl-check:hover { border-color: var(--success); }
+    .cl-check.cl-check-recebido { background: var(--success); border-color: var(--success); }
+    .cl-check.cl-check-na { background: transparent; border-style: dashed; color: #cbd5e1; }
+    .cl-check.is-readonly { cursor: default; }
+    .cl-check.is-readonly:hover { border-color: var(--border); }
+    .cl-check.cl-check-na.is-readonly:hover { border-color: #cbd5e1; }
+
+    .btn-edit-inline {
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: .5;
+      padding: 2px 4px;
+      line-height: 1;
+      transition: opacity .15s;
+    }
+    .btn-edit-inline:hover { opacity: 1; }
     
     .progress-bar-container {
       width: 100%;
@@ -147,7 +279,7 @@
       border: 1.5px solid var(--border);
       border-radius: 6px;
       font-size: 13px;
-      background: white;
+      background:var(--card);
       color: var(--text);
       font-family: inherit;
       width: 100%;
@@ -167,27 +299,17 @@
       display: inline-block;
     }
     
-    .badge-status.nao-iniciado { background: #fee2e2; color: #dc2626; }
-    .badge-status.programado { background: #dbeafe; color: #2563eb; }
-    .badge-status.em-producao { background: #fef3c7; color: #d97706; }
+    .badge-status.nao-iniciado { background: #fee2e2; color: #991b1b; }
+    .badge-status.programado { background: #dbeafe; color: #1e40af; }
+    .badge-status.em-producao { background: #fef3c7; color: #92400e; }
     .badge-status.producao-parcial { background: #f3e8ff; color: #7c3aed; }
-    
-    .btn-delete {
-      padding: 6px 10px;
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--danger);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.15s;
-    }
-    
-    .btn-delete:hover {
-      background: #fee2e2;
-      border-color: #fca5a5;
-    }
-    
+    .badge-status.cancelado { background: #e5e7eb; color: #4b5563; text-decoration: line-through; }
+    .btn-cancel-op { background: none; border: 1px solid #e5e7eb; border-radius: 6px; color: #4b5563; cursor: pointer; padding: 4px 7px; font-size: 12px; margin-right: 4px; }
+    .btn-cancel-op:hover { background: #f3f4f6; }
+    .badge-status.cl-done { background: #d1fae5; color: #065f46; }
+    .badge-status.cl-partial { background: #fef3c7; color: #92400e; }
+    .badge-status.cl-pending { background: #fee2e2; color: #991b1b; }
+
     .toast {
       position: fixed;
       bottom: 20px;
@@ -203,141 +325,13 @@
       z-index: 11000;
     }
   
-    /* Import & Dropzone */
-    .drop-zone {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      padding: 30px 20px;
-      text-align: center;
-      cursor: pointer;
-      transition: all .2s;
-    }
-    .drop-zone:hover {
-      border-color: var(--primary);
-      background: #eff6ff;
-    }
-    
-    /* Modal styles */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 9999;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .modal-overlay.open {
-      display: flex;
-    }
-    .modal {
-      background: white;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 480px;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
-      overflow: hidden;
-    }
-    .modal-hdr {
-      padding: 16px 20px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-ttl {
-      font-size: 15px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .modal-sub {
-      font-size: 11px;
-      color: var(--muted);
-    }
-    .modal-body {
-      padding: 16px;
-    }
-    .modal-footer {
-      padding: 12px 16px;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .form-group {
-      margin-bottom: 12px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      font-size: 13px;
-    }
 
 
-    /* Navbar styles */
-    .header {
-      background: white;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 10px 20px;
-    }
-    .nav-links {
-      display: flex;
-      gap: 8px;
-      font-size: 13px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .nav-links a {
-      color: var(--primary);
-      text-decoration: none;
-      font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 20px;
-      background: #f3f4f6;
-      border: 1px solid #e2e8f0;
-      transition: all .15s;
-    }
-    .nav-links a:hover {
-      background: #e5e7eb;
-    }
-    .nav-links a.active {
-      color: white !important;
-      background: #10b981 !important;
-      border-color: #10b981 !important;
-      box-shadow: 0 2px 6px rgba(16,185,129,.3);
-    }
+
 
 </style>
 </head>
-<body>
-
-  <!-- Header Navbar -->
-  <div class="header">
-    <div class="nav-links">
-      <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-      <a href="form.html">Formulário</a>
-      <a href="planejamento.html">Planejamento</a>
-      <a href="pedidos.html">Pedidos</a>
-      <a href="historico.html">Histórico</a>
-      <a href="produtos.html">Produtos</a>
-      <a href="insumos.html">Insumos</a>
-      <a href="ops.html" class="active">OPs</a>
-      <a href="admin.html">Admin</a>
-    </div>
-  </div>
-
+<body class="kuryos-theme has-sidebar">
 
 <!-- Unified Navbar will be dynamically injected here by auth_check.js -->
 
@@ -348,106 +342,126 @@
       <div class="subtitle">Acompanhe o progresso físico e gerencie as OPs ativas em produção</div>
     </div>
     <div style="display: flex; gap: 8px;">
-      <button class="btn-sync" onclick="toggleImportSection()" style="background: var(--primary);">
-        📤 Importar Nova OP <span id="importToggleIcon">▼</span>
-      </button>
       <button class="btn-sync" onclick="forceSyncAllStatus()">
         🔄 Recalcular Status de Todas as OPs / Lotes
       </button>
     </div>
   </div>
 
-  <!-- Seção de Importação de OP (Drag & Drop) -->
-  <div class="card" id="importSectionBody" style="display: none; margin-bottom: 20px; border-left: 4px solid var(--info);">
-    <h2 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">📤 Importador de OPs Físicas (Planilhas de Envase)</h2>
-    <div class="drop-zone" id="opImportDropZone">
-      <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
-      <div id="opImportDropText" style="font-size: 14px; font-weight: 600; color: var(--text);">Clique ou arraste o arquivo da OP física aqui</div>
-      <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Aceita planilhas de OP (.xlsx)</div>
-    </div>
-    <input type="file" id="opImportFileInput" accept=".xlsx" style="display: none;">
+  <!-- OPs ativas x checklist de recebimento das ordens físicas são duas
+       visões diferentes do mesmo dado -- mesmo padrão de abas já usado em
+       Pedidos (SKUs para Produção x Pedidos Comerciais). -->
+  <div style="display:flex;gap:6px;background:#f3f4f6;padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;max-width:480px">
+    <button type="button" class="btn-sync" id="tabBtnAtivas" onclick="switchOpsTab('ativas')" style="flex:1;background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)">⚙️ OPs Ativas</button>
+    <button type="button" class="btn-sync" id="tabBtnChecklist" onclick="switchOpsTab('checklist')" style="flex:1;background:none;box-shadow:none;color:var(--muted)">✅ Checklist de Ordens</button>
   </div>
-  
-  <div class="card">
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 100px;">Carga / OP</th>
-            <th>Cliente</th>
-            <th>Produto / Descrição</th>
-            <th style="width: 110px;">Lote Físico</th>
-            <th style="width: 120px;">Linha</th>
-            <th style="width: 150px;">Pedido Comercial</th>
-            <th style="width: 180px;">Progresso Realizado</th>
-            <th style="width: 160px;">Status da OP</th>
-            <th style="width: 60px; text-align: center;">Excluir</th>
-          </tr>
-        </thead>
-        <tbody id="ops-tbody">
-          <tr>
-            <td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
-          </tr>
-        </tbody>
-      </table>
+
+  <div id="tabPanelAtivas">
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 110px;">OP / Lote</th>
+              <th>Cliente</th>
+              <th>Produto / Descrição</th>
+              <th style="width: 120px;">Linha</th>
+              <th style="width: 150px;">Pedido Comercial</th>
+              <th style="width: 180px;">Progresso Realizado</th>
+              <th style="width: 160px;">Status da OP</th>
+              <th style="width: 60px; text-align: center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="ops-tbody">
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tabPanelChecklist" style="display:none">
+    <div class="stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+      <div class="stat" style="background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)">
+        <div class="stat-val" id="clTotal" style="font-size:24px;font-weight:700">—</div>
+        <div class="stat-lbl" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px">Total de OPs</div>
+      </div>
+      <div class="stat" style="background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)">
+        <div class="stat-val" id="clConcluidas" style="font-size:24px;font-weight:700;color:var(--success)">—</div>
+        <div class="stat-lbl" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px">Concluídas</div>
+      </div>
+      <div class="stat" style="background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)">
+        <div class="stat-val" id="clAndamento" style="font-size:24px;font-weight:700;color:var(--warning)">—</div>
+        <div class="stat-lbl" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px">Em Andamento</div>
+      </div>
+      <div class="stat" style="background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)">
+        <div class="stat-val" id="clNaoIniciadas" style="font-size:24px;font-weight:700;color:var(--danger)">—</div>
+        <div class="stat-lbl" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px">Não Iniciadas</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="clBusca" placeholder="🔍 Buscar por OP ou produto..." style="flex:1;min-width:200px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+      <div id="clFiltroStatus" style="display:flex;gap:6px">
+        <span class="cl-status-chip" data-status="pending" title="Não iniciada">Não iniciada</span>
+        <span class="cl-status-chip" data-status="partial" title="Em andamento">Em andamento</span>
+        <span class="cl-status-chip" data-status="done" title="Concluída (100%)">Concluída</span>
+      </div>
+      <select id="clFiltroEtapa" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+        <option value="">Etapa pendente: Todas</option>
+        <option value="sep">Separação</option>
+        <option value="fab">Fabricação</option>
+        <option value="env">Envase</option>
+        <option value="rot">Rotulagem</option>
+        <option value="qua">Qualidade</option>
+      </select>
+      <button class="btn-sync" onclick="exportChecklistCSV()" style="background:var(--card);color:var(--text);border:1.5px solid var(--border)">⬇️ Exportar CSV</button>
+    </div>
+
+    <div class="card">
+      <div class="table-container">
+        <table>
+          <thead id="checklistThead">
+            <tr>
+              <th style="width: 110px;" data-col="lote">Nº OP</th>
+              <th data-col="produto">Produto</th>
+              <th style="width: 60px; text-align:center">Sep.</th>
+              <th style="width: 60px; text-align:center">Fab.</th>
+              <th style="width: 60px; text-align:center">Env.</th>
+              <th style="width: 60px; text-align:center">Rot.</th>
+              <th style="width: 60px; text-align:center">Qual.</th>
+              <th style="width: 140px;" data-col="pct">Progresso</th>
+              <th style="width: 120px;" data-col="status">Status</th>
+              <th style="width: 110px; text-align:center" data-col="apontamento" title="Se já existe alguma produção lançada pra essa OP no sistema (form.html/historico.html)">Apontamento</th>
+            </tr>
+          </thead>
+          <tbody id="checklist-tbody">
+            <tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 30px;">Carregando checklist...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="clPagination" style="display:flex;gap:6px;justify-content:center;align-items:center;padding:14px;flex-wrap:wrap"></div>
     </div>
   </div>
 </div>
 
 <div id="toast" class="toast"></div>
 
-<!-- Modal de Vinculação de OP -->
-<div class="modal-overlay" id="linkOpModal">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div>
-        <div class="modal-ttl">Vincular OP Importada</div>
-        <div class="modal-sub">Defina as informações e o vínculo com pedido comercial</div>
-      </div>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label>Código da OP / Lote Físico</label>
-        <input type="text" id="linkOpLote" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>Produto / Descrição</label>
-        <input type="text" id="linkOpProduto" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>SKU</label>
-        <input type="text" id="linkOpSku" readonly style="background: #f1f5f9; color: var(--muted);">
-      </div>
-      <div class="form-group">
-        <label>Quantidade de Peças Sugerida (Volume -> Unidade)</label>
-        <input type="number" id="linkOpQtd" min="1" required>
-      </div>
-      <div class="form-group">
-        <label>Vincular ao Pedido Comercial</label>
-        <select id="linkOpPedidoSelect">
-          <option value="">Nenhum (OP Avulsa)</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-delete" id="linkOpCancelBtn" style="padding: 8px 16px;">Cancelar</button>
-      <button class="btn-sync" id="linkOpConfirmBtn" style="padding: 8px 16px; background: var(--success); color: white;">Confirmar e Importar</button>
-    </div>
-  </div>
-</div>
-
 <!-- Firebase Config -->
 <script>
   var firebaseConfig = {
     apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
     authDomain: "prod-kuryos.firebaseapp.com",
-    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
     projectId: "prod-kuryos",
     storageBucket: "prod-kuryos.firebasestorage.app",
     messagingSenderId: "323674581733",
     appId: "1:323674581733:web:e283a491c0c2bd6025420c"
   };
   firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
 </script>
 
 <!-- Security Check -->
@@ -458,6 +472,7 @@
   const database = firebase.database();
   let currentRole = 'production';
   let pedidosGlobal = {};
+  let opsGlobal = {};
   let produtosGlobal = {};
   let pedidosComerciaisGlobal = {};
   
@@ -478,20 +493,19 @@
     linhas: ['Linha 1', 'Linha 2', 'Linha 3', 'Linha 4']
   };
   let globalPedidos = {};
-  let globalRegistros = {};
 
   function listenToActiveOps() {
     // Escuta produtos
-    database.ref('produtos').on('value', snap => {
+    dbOnValue(database.ref('produtos'), snap => {
       produtosGlobal = snap.val() || {};
     });
 
-    database.ref('pedidos_comerciais').on('value', snap => {
+    dbOnValue(database.ref('pedidos_comerciais'), snap => {
       pedidosComerciaisGlobal = snap.val() || {};
       recalculateAndRenderOps();
     });
 
-    database.ref('config').on('value', snap => {
+    dbOnValue(database.ref('config'), snap => {
       const val = snap.val();
       if (val && val.linhas) {
         configGlobal.linhas = val.linhas;
@@ -499,35 +513,51 @@
       recalculateAndRenderOps();
     });
 
-    database.ref('pedidos').on('value', pedSnap => {
+    dbOnValue(database.ref('pedidos'), pedSnap => {
       pedidosGlobal = pedSnap.val() || {};
       globalPedidos = pedSnap.val() || {};
       recalculateAndRenderOps();
     });
 
-    database.ref('registros').on('value', regSnap => {
-      globalRegistros = regSnap.val() || {};
+    // OPs de verdade (1 OP = 1 lote = 1 envase corrido). "pedidos" é o nível
+    // acima (SKU alocado dentro do pedido comercial) — controlar OP aqui
+    // significa ler desta coleção, não mais de "pedidos".
+    dbOnValue(database.ref('ops'), opsSnap => {
+      opsGlobal = opsSnap.val() || {};
       recalculateAndRenderOps();
     });
   }
 
   function recalculateAndRenderOps() {
-    const producedMap = {};
-    Object.keys(globalRegistros).forEach(date => {
-      const dayRegs = globalRegistros[date] || {};
-      Object.keys(dayRegs).forEach(regId => {
-        const r = dayRegs[regId];
-        if (r.pedidoId && r.produto) {
-          const pedKey = findPedidoKey(r.pedidoId, r.produto);
-          if (pedKey) {
-            producedMap[pedKey] = (producedMap[pedKey] || 0) + (parseFloat(r.quantidade) || 0);
-          }
-        }
-      });
-    });
-    renderActiveOps(globalPedidos, producedMap);
+    renderOpsPanel();
+    renderChecklist(); // no-op se a aba Checklist não estiver visível no momento
   }
   
+  // Normaliza a parte numérica do id do pedido (antes do "__sku") removendo
+  // zeros à esquerda -- corrige casos onde a OP foi emitida com o id do
+  // pedido sem o padding original (ex: "12__SKU" vs "0012__SKU").
+  function normalizePedidoKey(key) {
+    if (!key) return key;
+    var parts = String(key).split('__');
+    if (parts.length < 2) return key;
+    var idPart = parts[0];
+    if (/^\d+$/.test(idPart)) idPart = String(parseInt(idPart, 10));
+    return idPart + '__' + parts.slice(1).join('__');
+  }
+
+  // O pedido (nível SKU) que a OP referencia via skuPedidoKey -- já carrega
+  // o parentPedidoId (o pedido comercial de verdade), então não precisa que
+  // alguém selecione isso manualmente pra toda OP emitida normalmente; o
+  // vínculo manual (parentPedidoId direto na OP) continua existindo como
+  // override, pra OPs avulsas importadas sem skuPedidoKey.
+  function pedidoBySkuKey(skuPedidoKey) {
+    if (!skuPedidoKey) return null;
+    if (pedidosGlobal[skuPedidoKey]) return pedidosGlobal[skuPedidoKey];
+    var alvo = normalizePedidoKey(skuPedidoKey);
+    var foundKey = Object.keys(pedidosGlobal).find(function(k) { return normalizePedidoKey(k) === alvo; });
+    return foundKey ? pedidosGlobal[foundKey] : null;
+  }
+
   // Opções do select de vínculo com o Pedido Comercial que essa OP atende
   // (parentPedidoId). op_watcher.py não sabe fazer esse vínculo sozinho porque
   // a numeração de OP e a de Pedido são espaços diferentes — por isso é manual.
@@ -542,23 +572,30 @@
     return html;
   }
 
-  function renderActiveOps(pedidos, producedMap) {
+  function renderOpsPanel() {
     const tbody = document.getElementById('ops-tbody');
-    tbody.innerHTML = '';
-    
-    const keys = Object.keys(pedidos);
-    
-    const activeOps = keys.map(k => ({
-      key: k,
-      ...pedidos[k]
-    })).filter(p => !isConcluido(p));
-    
-    if (activeOps.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nenhuma OP ativa no momento. Todas concluídas!</td></tr>';
+
+    const activeOps = Object.keys(opsGlobal)
+      .map(k => ({ key: k, ...opsGlobal[k] }))
+      .filter(o => opEstaAtiva(o));
+
+    // Pedidos (SKU alocado no pedido comercial) que ainda não têm nenhuma OP
+    // emitida vinculada — o indicativo visual de "falta emitir OP". Só conta
+    // OP ATIVA (opEstaAtiva) -- uma OP cancelada não deve "esconder" o
+    // pedido da lista de pendentes, senão ninguém percebe que precisa
+    // reemitir.
+    const linkedSkuKeys = new Set(
+      activeOps.map(o => o.skuPedidoKey).filter(Boolean)
+    );
+    const pedidosSemOp = Object.keys(pedidosGlobal)
+      .map(k => ({ key: k, ...pedidosGlobal[k] }))
+      .filter(p => !isConcluido(p) && !linkedSkuKeys.has(p.key));
+
+    if (activeOps.length === 0 && pedidosSemOp.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. Todas as OPs concluídas!</td></tr>';
       return;
     }
-    
-    // Ordena por prioridade de status e ID
+
     activeOps.sort((a, b) => {
       const statusOrder = { 'Em Produção': 1, 'Produção Parcial': 2, 'Programado': 3, 'Não Iniciado': 4 };
       const aVal = statusOrder[a.status] || 9;
@@ -566,125 +603,481 @@
       if (aVal !== bVal) return aVal - bVal;
       return a.key.localeCompare(b.key);
     });
-    
-    const isAdmin = currentRole === 'admin';
-    const disableAttr = isAdmin ? '' : 'disabled';
-    
-    activeOps.forEach(op => {
-      let optionsHtml = `<option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>`;
-      configGlobal.linhas.forEach(lName => {
-        optionsHtml += `<option value="${escapeAttr(lName)}" ${op.linha === lName ? 'selected' : ''}>${escapeHtml(lName)}</option>`;
-      });
-      const tr = document.createElement('tr');
-      
-      const produced = producedMap[op.key] || op.produzido || 0;
-      const planned = op.qtdTotal || 0;
-      const pct = planned > 0 ? Math.min(100, Math.round((produced / planned) * 100)) : 0;
-      
-      // Status formatting for read-only mode
-      const statusMap = {
-        'Não Iniciado': 'nao-iniciado',
-        'Programado': 'programado',
-        'Em Produção': 'em-producao',
-        'Produção Parcial': 'producao-parcial'
-      };
-      const statusClass = statusMap[op.status] || 'nao-iniciado';
-      
-      const escapedKey = escapeHtml(op.key);
-      const escapedCliente = escapeHtml(op.cliente || '-');
-      const escapedProduto = escapeHtml(op.produto || '-');
-      const escapedSku = escapeHtml(op.sku || '-');
-      const escapedVolume = escapeHtml(op.volume || '-');
-      const escapedLote = escapeHtml(op.lote || '-');
-      const escapedLoteAttr = escapeAttr(op.lote || '');
-      const escapedLinha = escapeHtml(op.linha || 'Não definida');
-      const escapedStatus = escapeHtml(op.status || '');
-      const escapedKeyAttr = escapeAttr(op.key);
+    pedidosSemOp.sort((a, b) => String(a.cliente || '').localeCompare(String(b.cliente || '')));
 
-      tr.innerHTML = `
-        <td><strong>#${escapedKey}</strong></td>
+    let html = '';
+    if (activeOps.length) {
+      html += '<tr class="group-header"><td colspan="8">⚙️ OPs Emitidas em Aberto (' + activeOps.length + ')</td></tr>';
+      html += activeOps.map(renderOpRow).join('');
+    }
+    if (pedidosSemOp.length) {
+      html += '<tr class="group-header pending"><td colspan="8">⚠️ Aguardando Emissão de OP (' + pedidosSemOp.length + ')</td></tr>';
+      html += pedidosSemOp.map(renderPendingRow).join('');
+    }
+    tbody.innerHTML = html;
+  }
+
+  // ── Aba: Checklist de Ordens ────────────────────────────────────────
+  // Réplica do checklist externo (quiet-sunflower-2b4fbf.netlify.app) que já
+  // era usado pra esse controle -- mesmas 5 etapas, mesma lógica de
+  // progresso/status, mesmos filtros. Cada etapa é um checkbox simples de 2
+  // estados (recebido ou não) gravado em ops/{lote}.recebidaPapel.{tipo}.
+  const CL_TIPOS = [
+    { key: 'sep', label: 'Sep.', nome: 'Separação' },
+    { key: 'fab', label: 'Fab.', nome: 'Fabricação' },
+    { key: 'env', label: 'Env.', nome: 'Envase' },
+    { key: 'rot', label: 'Rot.', nome: 'Rotulagem' },
+    { key: 'qua', label: 'Qual.', nome: 'Qualidade' }
+  ];
+  const CL_PAGE_SIZE = 40;
+  let clPage = 1;
+  let clSortCol = null, clSortDir = 1; // null = ordena por mais recente (padrão); definido = usuário clicou num cabeçalho
+  // Filtro de status multi-seleção -- concluída começa desmarcada (oculta
+  // por padrão), as outras duas começam marcadas.
+  let clStatusFilter = { pending: true, partial: true, done: false };
+
+  function renderClStatusChips() {
+    document.querySelectorAll('#clFiltroStatus .cl-status-chip').forEach(chip => {
+      chip.classList.toggle('active', !!clStatusFilter[chip.dataset.status]);
+    });
+  }
+
+  // 3 estados por etapa: 'recebido' (valor true), 'na' (valor 'na' -- não se
+  // aplica a esta OP, ex: uma OP que não passa por Rotulagem), ou 'pendente'
+  // (qualquer outra coisa, inclusive nunca marcado). Ciclo de clique:
+  // pendente -> recebido -> na -> pendente.
+  function clEstado(op, tipoKey) {
+    const v = op.recebidaPapel && op.recebidaPapel[tipoKey];
+    if (v === true) return 'recebido';
+    if (v === 'na') return 'na';
+    return 'pendente';
+  }
+  const CL_CICLO = { pendente: 'recebido', recebido: 'na', na: 'pendente' };
+
+  // Progresso conta só as etapas que se aplicam (exclui as marcadas 'na') --
+  // uma OP sem Rotulagem pode chegar a 100% com as outras 4. Se todas as 5
+  // forem 'na' (nada se aplica), não sobra nada pendente -- conta como 100%.
+  function clProgresso(op) {
+    const aplicaveis = CL_TIPOS.filter(t => clEstado(op, t.key) !== 'na');
+    const checked = aplicaveis.filter(t => clEstado(op, t.key) === 'recebido').length;
+    const total = aplicaveis.length;
+    const pct = total ? Math.round(checked / total * 100) : 100;
+    return { checked, total, pct };
+  }
+  function clStatus(pct) {
+    if (pct >= 100) return 'done';
+    if (pct <= 0) return 'pending';
+    return 'partial';
+  }
+  const CL_STATUS_LABEL = { done: 'Concluída', partial: 'Em andamento', pending: 'Não iniciada' };
+  const CL_STATUS_CLASS = { done: 'cl-done', partial: 'cl-partial', pending: 'cl-pending' };
+
+  // Uma OP entra no checklist se JÁ TEM histórico de recebimento (as 423
+  // importadas/marcadas) OU se ainda está ativa na produção (não concluída)
+  // -- essa segunda condição é o que faltava: só olhar "tem histórico"
+  // escondia as OPs novas que ainda nem chegaram a ser marcadas, que são
+  // justamente as que mais importa ver aqui. Só fica de fora o histórico
+  // antigo já concluído e sem dado nenhum -- ruído de antes desse controle existir.
+  function clEmEscopo(op) {
+    const temHistorico = op.recebidaPapel && Object.keys(op.recebidaPapel).length > 0;
+    const estaAtiva = opEstaAtiva(op);
+    return temHistorico || estaAtiva;
+  }
+
+  function switchOpsTab(tab) {
+    const btnAtivas = document.getElementById('tabBtnAtivas');
+    const btnChecklist = document.getElementById('tabBtnChecklist');
+    const panelAtivas = document.getElementById('tabPanelAtivas');
+    const panelChecklist = document.getElementById('tabPanelChecklist');
+    if (tab === 'checklist') {
+      panelAtivas.style.display = 'none';
+      panelChecklist.style.display = 'block';
+      btnChecklist.style.background = 'var(--card)'; btnChecklist.style.boxShadow = '0 1px 3px rgba(0,0,0,.1)'; btnChecklist.style.color = 'var(--text)';
+      btnAtivas.style.background = 'none'; btnAtivas.style.boxShadow = 'none'; btnAtivas.style.color = 'var(--muted)';
+      renderChecklist();
+    } else {
+      panelChecklist.style.display = 'none';
+      panelAtivas.style.display = 'block';
+      btnAtivas.style.background = 'var(--card)'; btnAtivas.style.boxShadow = '0 1px 3px rgba(0,0,0,.1)'; btnAtivas.style.color = 'var(--text)';
+      btnChecklist.style.background = 'none'; btnChecklist.style.boxShadow = 'none'; btnChecklist.style.color = 'var(--muted)';
+    }
+  }
+
+  function renderChecklist() {
+    const tbody = document.getElementById('checklist-tbody');
+    if (!tbody || document.getElementById('tabPanelChecklist').style.display === 'none') return;
+
+    const busca = (document.getElementById('clBusca').value || '').toLowerCase().trim();
+    const filtroEtapa = document.getElementById('clFiltroEtapa').value;
+
+    // Só entram aqui as OPs que já têm algum histórico de recebimento (as
+    // 421 importadas do checklist externo, mais qualquer uma nova marcada
+    // daqui pra frente) -- o restante das ~1142 OPs do sistema é histórico
+    // antigo de antes desse controle existir, sem dado nenhum pra mostrar,
+    // e só teria virado ruído "Não iniciada" pra sempre.
+    let all = Object.keys(opsGlobal)
+      .map(k => ({ key: k, ...opsGlobal[k] }))
+      .filter(clEmEscopo);
+
+    let nTotal = all.length, nDone = 0, nPartial = 0, nPending = 0;
+    all.forEach(op => {
+      const st = clStatus(clProgresso(op).pct);
+      if (st === 'done') nDone++; else if (st === 'partial') nPartial++; else nPending++;
+    });
+    document.getElementById('clTotal').textContent = nTotal.toLocaleString('pt-BR');
+    document.getElementById('clConcluidas').textContent = nDone.toLocaleString('pt-BR');
+    document.getElementById('clAndamento').textContent = nPartial.toLocaleString('pt-BR');
+    document.getElementById('clNaoIniciadas').textContent = nPending.toLocaleString('pt-BR');
+
+    // A busca alcança TODAS as OPs do sistema, não só as do escopo padrão --
+    // senão uma OP antiga concluída e sem histórico nenhum (ex: já finalizada
+    // antes de existir esse controle) ficaria impossível de achar mesmo
+    // digitando o número certinho, sem nenhum jeito de começar a marcar o
+    // checklist dela. Os cartões de estatística continuam sempre baseados no
+    // escopo padrão (all), a busca só amplia o que aparece NA TABELA.
+    const searchBase = busca
+      ? Object.keys(opsGlobal).map(k => ({ key: k, ...opsGlobal[k] }))
+      : all;
+
+    let filtered = searchBase.filter(op => {
+      if (busca) {
+        const alvo = (String(op.lote || op.key || '') + ' ' + String(op.produto || '')).toLowerCase();
+        if (alvo.indexOf(busca) === -1) return false;
+      }
+      if (!clStatusFilter[clStatus(clProgresso(op).pct)]) return false;
+      if (filtroEtapa && clEstado(op, filtroEtapa) !== 'pendente') return false; // já recebida ou marcada N/A -- não é mais "pendente" nessa etapa
+      return true;
+    });
+
+    if (clSortCol) {
+      filtered.sort((a, b) => {
+        if (clSortCol === 'pct') return (clProgresso(a).pct - clProgresso(b).pct) * clSortDir;
+        if (clSortCol === 'status') return clStatus(clProgresso(a).pct).localeCompare(clStatus(clProgresso(b).pct)) * clSortDir;
+        if (clSortCol === 'lote') return String(a.lote || a.key || '').localeCompare(String(b.lote || b.key || ''), undefined, { numeric: true }) * clSortDir;
+        return String(a[clSortCol] || '').localeCompare(String(b[clSortCol] || ''), undefined, { numeric: true }) * clSortDir;
+      });
+    } else {
+      // Sem coluna escolhida: mais recente primeiro -- é o que mais importa
+      // no dia a dia (backlog de digitação), diferente do checklist original
+      // que ordenava por nº de OP.
+      filtered.sort((a, b) => String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')));
+    }
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / CL_PAGE_SIZE));
+    if (clPage > totalPages) clPage = totalPages;
+    const pageItems = filtered.slice((clPage - 1) * CL_PAGE_SIZE, clPage * CL_PAGE_SIZE);
+
+    if (!pageItems.length) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma OP encontrada com esses filtros.</td></tr>';
+    } else {
+      const isAdmin = currentRole === 'admin';
+      tbody.innerHTML = pageItems.map(op => renderChecklistRow(op, isAdmin)).join('');
+    }
+
+    renderClPagination(totalPages, filtered.length);
+  }
+
+  function renderChecklistRow(op, isAdmin) {
+    const escapedKeyAttr = escapeAttr(op.key);
+    const { checked, total, pct } = clProgresso(op);
+    const st = clStatus(pct);
+    const chips = CL_TIPOS.map(t => {
+      const estado = clEstado(op, t.key);
+      const meta = op.recebidaPapel || {};
+      let tooltip = t.nome + ': ' + (estado === 'recebido' ? 'Recebido' : estado === 'na' ? 'Não necessária pra esta OP' : 'Pendente');
+      if (estado === 'recebido' && meta[t.key + 'Em']) tooltip += ' em ' + new Date(meta[t.key + 'Em']).toLocaleString('pt-BR');
+      if (estado === 'recebido' && meta[t.key + 'Por']) tooltip += ' por ' + meta[t.key + 'Por'];
+      const cls = 'cl-check cl-check-' + estado + (isAdmin ? '' : ' is-readonly');
+      const onclick = isAdmin ? ` onclick="cycleClChecklist('${escapedKeyAttr}', '${t.key}')"` : '';
+      const symbol = estado === 'recebido' ? '✓' : estado === 'na' ? '–' : '';
+      return `<td style="text-align:center"><span class="${cls}" title="${escapeAttr(tooltip)}"${onclick}>${symbol}</span></td>`;
+    }).join('');
+    return `
+      <tr>
+        <td><strong>${escapeHtml(op.lote || op.key || '-')}</strong></td>
+        <td>${escapeHtml(op.produto || '-')}</td>
+        ${chips}
+        <td>
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${checked}/${total} · ${pct}%</div>
+        </td>
+        <td><span class="badge-status ${CL_STATUS_CLASS[st]}">${CL_STATUS_LABEL[st]}</span></td>
+        <td style="text-align:center">${clApontamentoBadge(op)}</td>
+      </tr>`;
+  }
+
+  // getProduzido (shared/utils.js) é incrementado por TODO fluxo de
+  // apontamento do app (tempo real, retroativo, apontamento por total,
+  // painel de turno) -- checar esses campos é equivalente a vasculhar
+  // registros/*, só que sem precisar varrer o histórico inteiro dia a dia
+  // pra cada OP da lista. Linha/Rotulagem/Posto nunca somados -- "existe
+  // apontamento" é OU um OU outro OU outro, nunca a soma dos três.
+  function temApontamento(op) {
+    return getProduzido(op, 'linha') > 0 || getProduzido(op, 'rotulagem') > 0 || getProduzido(op, 'posto') > 0;
+  }
+  function clApontamentoBadge(op) {
+    if (!temApontamento(op)) return '<span style="color:var(--muted);font-size:12px">— Não</span>';
+    var partes = [];
+    if (getProduzido(op, 'linha') > 0) partes.push('Linha: ' + fmtNum(getProduzido(op, 'linha')));
+    if (getProduzido(op, 'rotulagem') > 0) partes.push('Rotulagem: ' + fmtNum(getProduzido(op, 'rotulagem')));
+    if (getProduzido(op, 'posto') > 0) partes.push('Posto: ' + fmtNum(getProduzido(op, 'posto')));
+    return '<span class="badge-status cl-done" title="' + escapeAttr(partes.join(' · ') + ' un. já apontadas') + '">✓ Sim</span>';
+  }
+
+  function cycleClChecklist(opKey, tipoKey) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+      alert('Acesso Negado: Apenas administradores podem confirmar o recebimento das ordens.');
+      listenToActiveOps();
+      return;
+    }
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    const atual = clEstado(op, tipoKey);
+    const novo = CL_CICLO[atual];
+    const updates = {};
+    updates['recebidaPapel/' + tipoKey] = novo === 'recebido' ? true : (novo === 'na' ? 'na' : false);
+    updates['recebidaPapel/' + tipoKey + 'Em'] = novo === 'recebido' ? new Date().toISOString() : null;
+    updates['recebidaPapel/' + tipoKey + 'Por'] = novo === 'recebido' ? (window.currentUser.nome || window.currentUser.email || '') : null;
+    database.ref('ops/' + opKey).update(updates).catch(err => {
+      console.error(err);
+      showToast('Erro ao atualizar: ' + err.message);
+    });
+  }
+
+  function renderClPagination(totalPages, totalItems) {
+    const el = document.getElementById('clPagination');
+    if (!el) return;
+    if (totalPages <= 1) { el.innerHTML = '<span style="font-size:12px;color:var(--muted)">' + totalItems.toLocaleString('pt-BR') + ' OP(s)</span>'; return; }
+    let html = '<span style="font-size:12px;color:var(--muted);margin-right:8px">' + totalItems.toLocaleString('pt-BR') + ' OP(s)</span>';
+    html += `<button class="btn-sync" style="padding:4px 10px" ${clPage <= 1 ? 'disabled' : ''} onclick="clGoToPage(${clPage - 1})">‹</button>`;
+    const windowSize = 5;
+    let start = Math.max(1, clPage - Math.floor(windowSize / 2));
+    let end = Math.min(totalPages, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    if (start > 1) html += `<button class="btn-sync" style="padding:4px 10px" onclick="clGoToPage(1)">1</button>` + (start > 2 ? '<span>…</span>' : '');
+    for (let p = start; p <= end; p++) {
+      html += `<button class="btn-sync" style="padding:4px 10px;${p === clPage ? 'background:var(--primary);color:white' : ''}" onclick="clGoToPage(${p})">${p}</button>`;
+    }
+    if (end < totalPages) html += (end < totalPages - 1 ? '<span>…</span>' : '') + `<button class="btn-sync" style="padding:4px 10px" onclick="clGoToPage(${totalPages})">${totalPages}</button>`;
+    html += `<button class="btn-sync" style="padding:4px 10px" ${clPage >= totalPages ? 'disabled' : ''} onclick="clGoToPage(${clPage + 1})">›</button>`;
+    el.innerHTML = html;
+  }
+  function clGoToPage(p) { clPage = p; renderChecklist(); }
+
+  function exportChecklistCSV() {
+    const rows = [['Nº OP', 'Produto', 'Separação', 'Fabricação', 'Envase', 'Rotulagem', 'Qualidade', 'Progresso', 'Status', 'Apontamento']];
+    Object.values(opsGlobal).filter(clEmEscopo).forEach(op => {
+      const { pct } = clProgresso(op);
+      const st = CL_STATUS_LABEL[clStatus(pct)];
+      rows.push([
+        op.lote || '', op.produto || '',
+        ...CL_TIPOS.map(t => { const e = clEstado(op, t.key); return e === 'recebido' ? 'Sim' : (e === 'na' ? 'N/A' : 'Não'); }),
+        pct + '%', st, temApontamento(op) ? 'Sim' : 'Não'
+      ]);
+    });
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'checklist_ops_' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  ['clBusca', 'clFiltroEtapa'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => { clPage = 1; renderChecklist(); });
+  });
+
+  document.getElementById('clFiltroStatus').addEventListener('click', (e) => {
+    const chip = e.target.closest('.cl-status-chip');
+    if (!chip) return;
+    const status = chip.dataset.status;
+    clStatusFilter[status] = !clStatusFilter[status];
+    renderClStatusChips();
+    clPage = 1;
+    renderChecklist();
+  });
+  renderClStatusChips(); // aplica o estado inicial (concluída desmarcada) nos chips já na primeira renderização
+
+  document.getElementById('checklistThead').addEventListener('click', (e) => {
+    const th = e.target.closest('th[data-col]');
+    if (!th) return;
+    const col = th.dataset.col;
+    if (col === clSortCol) { clSortDir *= -1; }
+    else { clSortCol = col; clSortDir = 1; }
+    document.querySelectorAll('#checklistThead th').forEach(t => t.classList.remove('sorted-asc', 'sorted-desc'));
+    th.classList.add(clSortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+    clPage = 1;
+    renderChecklist();
+  });
+
+  // Linha/Rotulagem/Posto são somatórias sempre distintas (getProduzido,
+  // shared/utils.js) -- nunca um único progresso somado. Uma OP comum (só
+  // Linha, o caso histórico) mostra 1 barra igual sempre mostrou; só uma OP
+  // com mais de um setor tocado (ex: aberta em Linha E Rotulagem ao mesmo
+  // tempo) mostra as barras lado a lado, rotuladas.
+  function produzidoBreakdownHtml(op) {
+    var planned = op.qtdPlanejada || 0;
+    var setores = [
+      { tipo: 'linha', label: 'Linha' },
+      { tipo: 'rotulagem', label: 'Rotulagem' },
+      { tipo: 'posto', label: 'Posto' }
+    ].map(function(s) { return { label: s.label, produced: getProduzido(op, s.tipo) }; })
+      .filter(function(s) { return s.produced > 0; });
+    if (!setores.length) setores = [{ label: 'Linha', produced: 0 }];
+
+    return setores.map(function(s) {
+      var pct = planned > 0 ? Math.min(100, Math.round(s.produced / planned * 100)) : 0;
+      return '<div style="margin-bottom:4px">' +
+        (setores.length > 1 ? '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">' + escapeHtml(s.label) + '</div>' : '') +
+        '<div style="display:flex;justify-content:space-between;font-weight:600;font-size:11.5px">' +
+        '<span>' + s.produced.toLocaleString('pt-BR') + ' / ' + planned.toLocaleString('pt-BR') + ' un</span><span>' + pct + '%</span></div>' +
+        '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderOpRow(op) {
+    const isAdmin = currentRole === 'admin';
+    let optionsHtml = `<option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>`;
+    configGlobal.linhas.forEach(lName => {
+      optionsHtml += `<option value="${escapeAttr(lName)}" ${op.linha === lName ? 'selected' : ''}>${escapeHtml(lName)}</option>`;
+    });
+
+    const statusMap = {
+      'Não Iniciado': 'nao-iniciado',
+      'Programado': 'programado',
+      'Em Produção': 'em-producao',
+      'Produção Parcial': 'producao-parcial',
+      'Cancelado': 'cancelado'
+    };
+    const statusClass = statusMap[op.status] || 'nao-iniciado';
+    const isCancelada = op.status === 'Cancelado';
+
+    // Pedido comercial: se não foi vinculado manualmente na própria OP,
+    // deriva do skuPedidoKey (que toda OP emitida pelo Gerador de OPs já
+    // carrega) -- não precisa mais selecionar isso à mão pro caso comum.
+    const linkedPedido = pedidoBySkuKey(op.skuPedidoKey);
+    const derivedParentId = op.parentPedidoId || (linkedPedido && linkedPedido.parentPedidoId) || '';
+
+    const escapedKeyAttr = escapeAttr(op.key);
+    const escapedCliente = escapeHtml(op.cliente || '-');
+    const escapedProduto = escapeHtml(op.produto || '-');
+    const escapedSku = escapeHtml(op.sku || '-');
+    const escapedLote = escapeHtml(op.lote || op.key || '-');
+    const escapedLinha = escapeHtml(op.linha || 'Não definida');
+    const escapedStatus = escapeHtml(op.status || '');
+
+    return `
+      <tr>
+        <td><strong>${escapedLote}</strong></td>
         <td>${escapedCliente}</td>
         <td>
           <div style="font-weight: 600;">${escapedProduto}</div>
-          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku} | Vol: ${escapedVolume}</div>
-        </td>
-        <td>
-          ${isAdmin 
-            ? `<input type="text" value="${escapedLoteAttr}" onblur="updateOpField('${escapedKeyAttr}', 'lote', this.value)" placeholder="Sem OP">`
-            : `<span>${escapedLote}</span>`}
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku}</div>
         </td>
         <td>
           ${isAdmin
             ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">${optionsHtml}</select>`
             : `<span>${escapedLinha}</span>`}
         </td>
-        <td>
-          ${isAdmin
-            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'parentPedidoId', this.value)">${pedidosComerciaisOptionsHtml(op.parentPedidoId)}</select>`
-            : `<span>${op.parentPedidoId ? '#' + escapeHtml(String(op.parentPedidoId)) : '—'}</span>`}
-        </td>
-        <td>
-          <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 11.5px;">
-            <span>${produced.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un</span>
-            <span>${pct}%</span>
-          </div>
-          <div class="progress-bar-container">
-            <div class="progress-bar-fill" style="width: ${pct}%"></div>
+        <td id="pedidoCell-${escapedKeyAttr}">
+          <div class="pedido-cell">
+            ${derivedParentId
+              ? `<span class="badge-pedido">#${escapeHtml(String(derivedParentId))}</span>`
+              : `<span class="badge-pedido is-vazio">Sem vínculo</span>`}
+            ${isAdmin
+              ? `<button type="button" class="btn-edit-inline" title="Alterar vínculo com pedido comercial" onclick="showPedidoSelect('${escapedKeyAttr}')">✏️</button>`
+              : ``}
           </div>
         </td>
+        <td>${produzidoBreakdownHtml(op)}</td>
         <td>
-          ${isAdmin
-            ? `<select onchange="updateOpField('${escapedKeyAttr}', 'status', this.value)">
-                 <option value="Não Iniciado" ${op.status === 'Não Iniciado' ? 'selected' : ''}>Não Iniciado</option>
-                 <option value="Programado" ${op.status === 'Programado' ? 'selected' : ''}>Programado</option>
-                 <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
-                 <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
-                 <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
-               </select>`
-            : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`}
+          ${isCancelada
+            ? `<span class="badge-status cancelado" title="${escapeAttr('Cancelada' + (op.motivoCancelamento ? ': ' + op.motivoCancelamento : ''))}">Cancelada</span>`
+            : (isAdmin
+              ? `<select onchange="updateOpField('${escapedKeyAttr}', 'status', this.value)">
+                   <option value="Não Iniciado" ${op.status === 'Não Iniciado' ? 'selected' : ''}>Não Iniciado</option>
+                   <option value="Programado" ${op.status === 'Programado' ? 'selected' : ''}>Programado</option>
+                   <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
+                   <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
+                   <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
+                 </select>`
+              : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`)}
         </td>
-        <td style="text-align: center;">
+        <td style="text-align: center; white-space: nowrap;">
           ${isAdmin
-            ? `<button class="btn-delete" onclick="deleteOp('${escapedKeyAttr}')" title="Excluir OP">
-                 <i class="fas fa-trash-alt"></i>
-               </button>`
+            ? (!isCancelada
+                ? `<button class="btn-cancel-op" onclick="cancelOp('${escapedKeyAttr}')" title="Cancelar OP (mantém o registro, some das listas ativas)">🚫</button>`
+                : `-`)
             : `-`}
         </td>
-      `;
-      
-      tbody.appendChild(tr);
-    });
+      </tr>
+    `;
+  }
+
+  // O vínculo com pedido comercial agora vem preenchido sozinho (derivado do
+  // skuPedidoKey) na maioria dos casos -- deixar um <select> sempre visível
+  // parecia pedir pra usuário escolher algo que já estava certo. Troca pra
+  // um badge compacto (não corta o texto do id) com edição sob demanda: só
+  // vira dropdown quando alguém clica no lápis.
+  function showPedidoSelect(opKey) {
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    const linkedPedido = pedidoBySkuKey(op.skuPedidoKey);
+    const derivedParentId = op.parentPedidoId || (linkedPedido && linkedPedido.parentPedidoId) || '';
+    const cell = document.getElementById('pedidoCell-' + escapeAttr(opKey));
+    if (!cell) return;
+    cell.innerHTML = `<select onchange="updateOpField('${escapeAttr(opKey)}', 'parentPedidoId', this.value)">${pedidosComerciaisOptionsHtml(derivedParentId)}</select>`;
+    const sel = cell.querySelector('select');
+    if (sel) sel.focus();
+  }
+
+  function renderPendingRow(p) {
+    const escapedCliente = escapeHtml(p.cliente || '-');
+    const escapedProduto = escapeHtml(p.produto || '-');
+    const escapedSku = escapeHtml(p.sku || '-');
+    const planned = p.qtdTotal || 0;
+    return `
+      <tr style="opacity:.85">
+        <td colspan="2"><span class="badge-sem-op">Sem OP</span></td>
+        <td>
+          <div style="font-weight: 600;">${escapedProduto}</div>
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku} · ${escapedCliente}</div>
+        </td>
+        <td>—</td>
+        <td>${p.parentPedidoId ? '#' + escapeHtml(String(p.parentPedidoId)) : '—'}</td>
+        <td>${planned.toLocaleString('pt-BR')} un planejadas</td>
+        <td colspan="2" style="color: var(--muted); font-size: 12px;">Rodar o Gerador de OPs pra este item</td>
+      </tr>
+    `;
   }
   
-  function updateOpField(pedidoId, field, value) {
+  function updateOpField(opKey, field, value) {
     if (!window.currentUser || window.currentUser.role !== 'admin') {
       alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
       listenToActiveOps();
       return;
     }
 
-    // Se mudou o status para Concluído manualmente, podemos executar o hook de limpeza de slots futuros
     if (field === 'status' && value === 'Concluído') {
-      const confirmAction = confirm('Tem certeza de que deseja concluir esta OP? Isso arquivará a OP e removerá todos os seus agendamentos futuros automaticamente.');
+      const confirmAction = confirm('Tem certeza de que deseja concluir esta OP? Isso a arquivará (vai aparecer no Histórico).');
       if (!confirmAction) {
         listenToActiveOps(); // recarrega os dropdowns originais
         return;
       }
-      
-      // Hook de conclusão
-      database.ref('pedidos/' + pedidoId).update({ status: 'Concluído' })
+      database.ref('ops/' + opKey).update({ status: 'Concluído' })
         .then(() => {
-          // Remove todos os agendamentos desta OP no planejamento (slots futuros)
-          cleanFutureSlots(pedidoId, database);
-          showToast('OP concluída e slots de planejamento limpos com sucesso!');
+          showToast('OP concluída com sucesso!');
         })
         .catch(err => {
           console.error(err);
           showToast('Erro ao concluir OP: ' + err.message);
         })
     } else {
-      // Atualizações de campo normais
-      database.ref('pedidos/' + pedidoId).update({ [field]: value })
+      database.ref('ops/' + opKey).update({ [field]: value })
         .then(() => {
           showToast('OP atualizada com sucesso!');
         })
@@ -694,29 +1087,158 @@
         });
     }
   }
-  
-  function deleteOp(pedidoId) {
+
+  // Cancela sem apagar -- mantém o registro em ops/{lote} com o motivo e
+  // quem cancelou, marcando status:'Cancelado'. opEstaAtiva (shared/utils.js)
+  // garante que uma OP cancelada some das listas de "ativa" em todo o app.
+  //
+  // Crítico: também limpa abertaDesde/abertaLinha (e o par Rotulagem,
+  // abertaDesdeRot/abertaRotulagem -- Linha e Rotulagem são setores
+  // diferentes com estado de abertura independente, form.html). Sem isso,
+  // uma OP que já estava alocada numa linha e/ou rotulagem (via "Alocar OP"
+  // ou "Abrir OP" em form.html) continuava aparecendo como card ativo e
+  // clicável no Painel de Turno mesmo depois de cancelada -- o cancelamento
+  // só mudava o status, nunca tirava a OP do "estado aberto" que todo o
+  // resto do app usa pra decidir o que mostrar como ação disponível.
+  // OP com apontamento real (qualquer setor) nunca pode ser cancelada no
+  // fluxo normal -- isso já aconteceu de verdade e cancelar "escondendo"
+  // esse trabalho seria perder rastro de produção de verdade. Só libera com
+  // uma segunda confirmação de identidade (senha) + justificativa.
+  function cancelOp(opKey) {
     if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem excluir OPs.');
+      alert('Acesso Negado: Apenas administradores podem cancelar OPs.');
+      return;
+    }
+    const op = opsGlobal[opKey];
+    if (!op) return;
+
+    const temApontamento = getProduzido(op, 'linha') > 0 || getProduzido(op, 'rotulagem') > 0 || getProduzido(op, 'posto') > 0;
+
+    if (temApontamento) {
+      abrirCancelamentoComSenhaModal(opKey, op);
       return;
     }
 
-    const confirmAction = confirm('ATENÇÃO: Deseja realmente excluir permanentemente esta OP do sistema? Isso removerá a OP e os agendamentos associados.');
-    if (!confirmAction) return;
-    
-    // 1. Remove de pedidos
-    database.ref('pedidos/' + pedidoId).remove()
+    const motivo = prompt('Motivo do cancelamento da OP ' + (op.lote || opKey) + ':', 'Emitida com quantidade maior que a necessária');
+    if (motivo === null) return; // cancelou o prompt, não a OP
+    if (!motivo.trim()) {
+      alert('Informe um motivo pra cancelar a OP.');
+      return;
+    }
+    executarCancelamentoOp(opKey, op, motivo.trim());
+  }
+
+  // Modal simples (DOM direto, sem markup estático) pro caso raro de
+  // cancelar uma OP que já tem produção real -- pede a senha da própria
+  // conta (reautenticação Firebase, não uma senha nova pra inventar) +
+  // justificativa, os dois obrigatórios.
+  function abrirCancelamentoComSenhaModal(opKey, op) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--card);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:var(--shadow)';
+    const produzidoResumo = ['linha', 'rotulagem', 'posto']
+      .map(t => ({t, v: getProduzido(op, t)}))
+      .filter(x => x.v > 0)
+      .map(x => (x.t === 'linha' ? 'Linha' : x.t === 'rotulagem' ? 'Rotulagem' : 'Posto') + ': ' + fmtNum(x.v))
+      .join(' · ');
+    box.innerHTML = `
+      <div style="font-weight:800;font-size:16px;margin-bottom:6px">⚠️ Essa OP já tem produção registrada</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Lote ${escapeHtml(op.lote || opKey)} — ${escapeHtml(produzidoResumo)}. Cancelar mesmo assim exige confirmar sua senha e o motivo.</div>
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Sua senha</label>
+      <input type="password" id="cancelOpSenha" autocomplete="current-password" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:12px;background:var(--card);color:var(--text)">
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Justificativa</label>
+      <textarea id="cancelOpJustificativa" rows="3" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:14px;background:var(--card);color:var(--text);resize:vertical"></textarea>
+      <div id="cancelOpErro" style="color:var(--danger);font-size:12px;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="cancelOpCancelarBtn" class="btn-sync" style="background:var(--card);color:var(--text);border:1.5px solid var(--border)">Voltar</button>
+        <button type="button" id="cancelOpConfirmarBtn" class="btn-sync" style="background:var(--danger)">Cancelar OP mesmo assim</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const fechar = () => document.body.removeChild(overlay);
+    document.getElementById('cancelOpCancelarBtn').onclick = fechar;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+
+    document.getElementById('cancelOpConfirmarBtn').onclick = () => {
+      const senha = document.getElementById('cancelOpSenha').value;
+      const justificativa = document.getElementById('cancelOpJustificativa').value.trim();
+      const erroEl = document.getElementById('cancelOpErro');
+      erroEl.style.display = 'none';
+      if (!senha) { erroEl.textContent = 'Informe sua senha.'; erroEl.style.display = 'block'; return; }
+      if (!justificativa) { erroEl.textContent = 'Informe a justificativa.'; erroEl.style.display = 'block'; return; }
+
+      const btn = document.getElementById('cancelOpConfirmarBtn');
+      btn.disabled = true; btn.textContent = 'Confirmando...';
+
+      const user = firebase.auth().currentUser;
+      const cred = firebase.auth.EmailAuthProvider.credential(user.email, senha);
+      user.reauthenticateWithCredential(cred)
+        .then(() => {
+          fechar();
+          executarCancelamentoOp(opKey, op, justificativa + ' (cancelada com produção já registrada, confirmado por senha)');
+        })
+        .catch((err) => {
+          btn.disabled = false; btn.textContent = 'Cancelar OP mesmo assim';
+          erroEl.textContent = err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'
+            ? 'Senha incorreta.' : 'Erro ao confirmar: ' + err.message;
+          erroEl.style.display = 'block';
+        });
+    };
+  }
+
+  // Cascata completa -- uma OP cancelada some de TODO lugar que ainda a
+  // trata como capacidade/compromisso real (alocacoes_planejamento,
+  // programacao), ficando só o registro histórico em ops/{lote} de que foi
+  // cancelada.
+  function executarCancelamentoOp(opKey, op, motivo) {
+    const lote = op.lote;
+    database.ref('ops/' + opKey).update({
+      status: 'Cancelado',
+      motivoCancelamento: motivo,
+      canceladoEm: new Date().toISOString(),
+      canceladoPor: (window.currentUser.nome || window.currentUser.email || 'desconhecido'),
+      abertaDesde: null,
+      abertaLinha: null,
+      abertaDesdeRot: null,
+      abertaRotulagem: null
+    })
       .then(() => {
-        // 2. Remove agendamentos de slots
-        cleanFutureSlots(pedidoId, database);
-        showToast('OP excluída com sucesso!');
+        const cascatas = [];
+        if (lote) {
+          // 1. Desvincula qualquer alocacoes_planejamento presa a essa OP --
+          // sem isso, horizonte.html continuaria contando a capacidade como
+          // "já comprometida" pra sempre.
+          cascatas.push(database.ref('alocacoes_planejamento').once('value').then((snap) => {
+            const upd = {};
+            snap.forEach((child) => {
+              const v = child.val();
+              if (v && v.opLote === lote && v.status === 'vinculado') {
+                upd[child.key + '/status'] = 'cancelado';
+              }
+            });
+            if (Object.keys(upd).length) return database.ref('alocacoes_planejamento').update(upd);
+          }));
+          // 2. Limpa o lote de qualquer slot futuro em programacao -- o
+          // pedido pode continuar precisando daquela capacidade, só não
+          // mais coberta por essa OP cancelada.
+          if (typeof clearLoteFromFutureSlots === 'function') {
+            cascatas.push(clearLoteFromFutureSlots(lote, database));
+          }
+        }
+        return Promise.all(cascatas);
+      })
+      .then(() => {
+        showToast('OP cancelada. O registro continua salvo, com o motivo.');
       })
       .catch(err => {
         console.error(err);
-        showToast('Erro ao excluir OP.');
+        showToast('Erro ao cancelar OP.');
       });
   }
-  
+
   function forceSyncAllStatus() {
     if (typeof window.syncAllActiveOpsStatus === 'function') {
       window.syncAllActiveOpsStatus();
@@ -725,252 +1247,6 @@
   }
   
   
-  // --- OP Import System ---
-  let currentParsedOp = null;
-
-  function toggleImportSection() {
-    var body = document.getElementById('importSectionBody');
-    var icon = document.getElementById('importToggleIcon');
-    if (body.style.display === 'none') {
-      body.style.display = 'block';
-      icon.textContent = '▲';
-    } else {
-      body.style.display = 'none';
-      icon.textContent = '▼';
-    }
-  }
-
-  function sanitizeKey(str) {
-    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-  }
-
-  function pedidoFirebaseKey(id, produto) {
-    return sanitizeKey(id) + '__' + sanitizeKey(produto);
-  }
-
-  function normalizeForMatch(s) {
-    if (!s) return '';
-    return String(s).toLowerCase().replace(/\s+/g, ' ').trim().split(' ').slice(0, 5).join(' ');
-  }
-
-  function findPedidoKey(pedidoId, produto) {
-    if (!pedidosGlobal || !pedidoId) return null;
-    var keys = Object.keys(pedidosGlobal);
-    var exactKey = pedidoFirebaseKey(pedidoId, produto);
-    if (pedidosGlobal[exactKey]) return exactKey;
-    for (var i = 0; i < keys.length; i++) {
-      var p = pedidosGlobal[keys[i]];
-      if (String(p.id||'') === String(pedidoId)) return keys[i];
-    }
-    return null;
-  }
-
-  function parseIndividualOPFile(file) {
-    document.getElementById('opImportDropText').textContent = '⏳ Lendo ' + file.name + '...';
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var data = new Uint8Array(e.target.result);
-        var wb = XLSX.read(data, { type: 'array', cellDates: true });
-        var ws = wb.Sheets[wb.SheetNames[0]];
-        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
-
-        var rawProduct = '';
-        var rawLote = '';
-
-        // Search rows for Product and Lote
-        for (var i = 0; i < Math.min(rows.length, 12); i++) {
-          var r = rows[i] || [];
-          for (var c = 0; c < r.length; c++) {
-            var valStr = String(r[c] || '').trim().toUpperCase();
-            if (valStr === 'PRODUTO:' && !rawProduct) rawProduct = String(r[c+2] || '').trim();
-            if (valStr === 'LOTE' && !rawLote) rawLote = String(r[c+1] || '').trim();
-            if (valStr === 'LOTE' && !rawLote && r[c+2]) rawLote = String(r[c+2] || '').trim();
-          }
-        }
-
-        var row6 = rows[5] || [];
-        var rawCliente = String(row6[2] || '').trim();
-        var rawQty = parseFloat(row6[6]) || 0;
-
-        var row7 = rows[6] || [];
-        var rawSku = String(row7[2] || '').trim();
-
-        var cleanLote = rawLote.replace(/[.\/[\]#$]/g, '-').trim();
-        if (!cleanLote) {
-          alert('Código de OP / Lote não localizado na planilha.');
-          document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-          return;
-        }
-
-        currentParsedOp = {
-          lote: cleanLote,
-          produto: rawProduct,
-          sku: rawSku,
-          cliente: rawCliente,
-          qtdKg: rawQty
-        };
-
- // Suggested conversion
-        var suggestedQty = rawQty;
-        // Search in local catalog if possible, otherwise use fallback
-        var prodCatalog = produtosGlobal[rawSku] || {};
-        var lpVal = parseFloat(prodCatalog.lp) || 0;
-        if (lpVal > 0) {
-          suggestedQty = Math.round(rawQty / lpVal);
-        } else if (rawQty > 0 && rawQty < 1500) {
-          suggestedQty = Math.round(rawQty / 0.2); // assume 200ml
-        }
-
-        // Show link modal
-        document.getElementById('linkOpLote').value = cleanLote;
-        document.getElementById('linkOpProduto').value = rawProduct;
-        document.getElementById('linkOpSku').value = rawSku;
-        document.getElementById('linkOpQtd').value = suggestedQty;
-
-        // Populate Pedidos select dropdown
-        var sel = document.getElementById('linkOpPedidoSelect');
-        sel.innerHTML = '<option value="">Nenhum (OP Avulsa)</option>';
-
-        var skuUpper = rawSku.toUpperCase();
-        var matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
-          var k = entry[0], p = entry[1];
-          return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0 && (p.sku || '').toUpperCase() === skuUpper;
-        }).map(function(entry) {
-          var p = entry[1];
-          p.key = entry[0];
-          return p;
-        });
-
-        if (matchingPeds.length === 0) {
-          matchingPeds = Object.entries(pedidosGlobal).filter(function(entry) {
-            var k = entry[0], p = entry[1];
-            return p && p.id && p.status !== 'Concluído' && p.statusManual !== 'encerrado' && k.indexOf('OP_') !== 0;
-          }).map(function(entry) {
-            var p = entry[1];
-            p.key = entry[0];
-            return p;
-          });
-        }
-
-        matchingPeds.forEach(function(p) {
-          var opt = document.createElement('option');
-          opt.value = p.firebaseKey || p.key; // Use key or firebaseKey
-          opt.textContent = 'Pedido #' + p.id + ' - ' + p.produto + ' (Saldo: ' + ((p.qtdTotal||0)-(p.produzido||0)) + ' un)';
-          if ((p.sku || '').toUpperCase() === skuUpper) opt.selected = true;
-          sel.appendChild(opt);
-        });
-
-        document.getElementById('linkOpModal').classList.add('open');
-        document.getElementById('opImportDropText').textContent = '✓ OP ' + cleanLote + ' carregada!';
-      } catch(err) {
-        alert('Erro ao analisar arquivo de OP: ' + err.message);
-        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  // Setup drag and drop event listeners
-  function setupOPImportListeners() {
-    var dropZone = document.getElementById('opImportDropZone');
-    var fileInput = document.getElementById('opImportFileInput');
-    
-    if (!dropZone || !fileInput) return;
-    
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-    dropZone.addEventListener('dragover', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--primary)';
-      dropZone.style.background = '#eff6ff';
-    });
-    dropZone.addEventListener('dragleave', function() {
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-    });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-      var f = e.dataTransfer.files[0];
-      if (f) parseIndividualOPFile(f);
-    });
-    fileInput.addEventListener('change', function() {
-      if (this.files[0]) parseIndividualOPFile(this.files[0]);
-    });
-
-    document.getElementById('linkOpCancelBtn').addEventListener('click', function() {
-      document.getElementById('linkOpModal').classList.remove('open');
-      document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-      fileInput.value = '';
-      currentParsedOp = null;
-    });
-
-    document.getElementById('linkOpConfirmBtn').addEventListener('click', function() {
-      if (!currentParsedOp) return;
-      var btn = this;
-      btn.disabled = true;
-      btn.textContent = 'Importando...';
-
-      var lote = currentParsedOp.lote;
-      var produto = currentParsedOp.produto;
-      var sku = currentParsedOp.sku;
-      var cliente = currentParsedOp.cliente;
-      var qtdTotal = parseInt(document.getElementById('linkOpQtd').value) || 0;
-      var parentKey = document.getElementById('linkOpPedidoSelect').value;
-
-      var parentPedidoId = '';
-      if (parentKey && pedidosGlobal[parentKey]) {
-        parentPedidoId = pedidosGlobal[parentKey].id || '';
-      }
-
-      var prod = produtosGlobal[sku] || {};
-      var mediaPorHora = prod.prodHoraRef || 0;
-      var lp = prod.lp || 0;
-
-      var firebaseKey = 'OP_' + sanitizeKey(lote) + '__' + sanitizeKey(produto);
-
-      var opData = {
-        id: lote,
-        produto: produto,
-        sku: sku,
-        qtdTotal: qtdTotal,
-        linha: '',
-        dataProd: '',
-        lp: lp,
-        mediaPorHora: mediaPorHora,
-        produzido: 0,
-        priority: 999,
-        status: 'Não Iniciado',
-        ordenacao: 999999999,
-        ultimoApontamento: '',
-        insumosChecklist: {},
-        cliente: cliente,
-        parentPedidoId: parentPedidoId,
-        parentPedidoKey: parentKey
-      };
-
-      database.ref('pedidos/' + firebaseKey).set(opData).then(function() {
-        btn.disabled = false;
-        btn.textContent = 'Confirmar e Importar';
-        document.getElementById('linkOpModal').classList.remove('open');
-        document.getElementById('opImportDropText').textContent = 'Clique ou arraste o arquivo da OP física aqui';
-        fileInput.value = '';
-        currentParsedOp = null;
-        alert('OP ' + lote + ' importada e vinculada com sucesso!');
-        
-        if (parentKey && typeof window.updateOpStatusAutomatically === 'function') {
-          window.updateOpStatusAutomatically(parentKey);
-        }
-      }).catch(function(err) {
-        btn.disabled = false;
-        btn.textContent = 'Confirmar e Importar';
-        alert('Erro ao importar OP: ' + err.message);
-      });
-    });
-  }
-
-  setupOPImportListeners();
 
   function showToast(text) {
     const toast = document.getElementById('toast');

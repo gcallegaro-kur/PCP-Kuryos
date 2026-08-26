@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Horizonte de Produção · Kuryos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --primary-light:#8fa8ec; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --primary-light:#8fa8ec; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 8px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--muted)}
+    .dot{width:7px;height:7px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .hz-bar{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow);margin-bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .hz-bar-label{font-size:13px;color:var(--muted);font-weight:600}
+    .hz-weeks-ctrl{display:flex;align-items:center;gap:8px}
+    .hz-weeks-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;font-weight:700;cursor:pointer;color:var(--text)}
+    .hz-weeks-btn:hover{background:var(--primary);color:white;border-color:var(--primary)}
+    .hz-weeks-val{font-size:14px;font-weight:800;min-width:70px;text-align:center}
+    .hz-legend{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+    .hz-legend span{display:inline-flex;align-items:center;gap:5px}
+    .hz-legend .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+    .grid-card{background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+    .hz-cap-bar{height:4px;border-radius:2px;background:#e2e8f0;overflow:hidden;margin-bottom:5px}
+    .hz-cap-fill{height:100%;background:var(--primary)}
+    .hz-cap-fill.over{background:var(--danger)}
+    .hz-insumo-dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:4px}
+    .hz-insumo-dot.ok{background:var(--success)}
+    .hz-insumo-dot.pendente{background:var(--warning)}
+    .hz-empty{color:var(--muted);opacity:.5;font-size:10px}
+    .hz-unassigned-card{padding:14px 16px}
+    .hz-unassigned-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px}
+    .hz-unassigned-sub{font-size:11px;color:var(--muted);margin-bottom:10px}
+    .hz-unassigned-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+    .hz-unassigned-row:last-child{border-bottom:none}
+    .hz-unassigned-nome{font-weight:700;flex:1;display:flex;align-items:center;gap:6px}
+    .hz-unassigned-meta{color:var(--muted);font-size:11px}
+    .hz-capsum-card{padding:16px 18px}
+    .hz-capsum-header{margin-bottom:10px}
+    .hz-capsum-title{font-size:15px;font-weight:800;color:var(--text)}
+    .hz-capsum-row{display:flex;align-items:center;gap:12px;padding:7px 0}
+    .hz-capsum-linha{font-size:12.5px;font-weight:700;color:var(--text);width:110px;flex:none}
+    .hz-capsum-barwrap{flex:1;min-width:60px}
+    .hz-capsum-label{font-size:11px;color:var(--muted);width:150px;flex:none;text-align:right}
+    @media(max-width:600px){.hz-capsum-label{width:auto;text-align:left}}
+    .hz-sim-card{padding:16px 18px}
+    .hz-sim-header{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+    .hz-sim-title{font-size:15px;font-weight:800;color:var(--text)}
+    .hz-sim-chevron{font-size:13px;color:var(--muted);transition:transform .15s}
+    .hz-sim-chevron.open{transform:rotate(90deg)}
+    .hz-sim-sub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5;max-width:800px}
+    .hz-sim-body{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+    .hz-sim-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:14px}
+    .hz-sim-fg{display:flex;flex-direction:column;gap:4px}
+    .hz-sim-fg-wide{grid-column:1/-1}
+    .hz-sim-fg label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.02em}
+    .hz-sim-fg input,.hz-sim-fg select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;font-family:inherit}
+    .hz-sim-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer}
+    .hz-sim-btn:hover{filter:brightness(.92)}
+    .hz-sim-result{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+    .hz-sim-result-card{background:var(--bg);border-radius:10px;padding:12px 14px}
+    .hz-sim-result-lbl{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.02em;margin-bottom:4px}
+    .hz-sim-result-val{font-size:20px;font-weight:800;color:var(--text)}
+    .hz-sim-result-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .hz-sim-result-val.gain{color:var(--success)}
+    .hz-sim-note{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5}
+    .hz-backlog-card{padding:16px 18px}
+    .hz-backlog-header{margin-bottom:12px}
+    .hz-backlog-title{font-size:15px;font-weight:800;color:var(--text)}
+    .hz-backlog-card-sub{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5;max-width:680px}
+    .hz-backlog-empty{color:var(--muted);font-size:12.5px;padding:8px 0}
+    .hz-backlog-list{display:flex;flex-direction:column;gap:8px}
+    .hz-backlog-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;transition:background .12s,box-shadow .12s;flex-wrap:wrap}
+    .hz-backlog-row.dragging{opacity:.4}
+    .hz-backlog-handle{cursor:grab;color:var(--muted);font-size:16px;padding:2px 4px;user-select:none;touch-action:none;flex:none}
+    .hz-backlog-handle:active{cursor:grabbing}
+    .hz-backlog-rank{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:800;flex:none}
+    .hz-backlog-info{flex:1 1 200px;min-width:0}
+    .hz-backlog-nome{font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;font-size:13px}
+    .hz-backlog-item-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .hz-backlog-linha{font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px;background:#eff6ff;color:var(--primary);white-space:nowrap;flex:none}
+    .hz-backlog-linha.auto{background:#faf5ff;color:#a78bfa}
+    .hz-backlog-eta{font-size:11px;color:var(--muted);white-space:nowrap;flex:none;min-width:110px}
+    .hz-backlog-pos-field{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+    .hz-backlog-pos-field label{font-size:9.5px;color:var(--muted);white-space:nowrap}
+    .hz-backlog-pos-input{width:54px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;text-align:center;font-family:var(--font-ui);background:var(--card);color:var(--text)}
+    .hz-backlog-freeze-btn{background:var(--primary);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none;font-family:var(--font-ui)}
+    .hz-backlog-freeze-btn:hover{opacity:.88}
+    .hz-backlog-freeze-btn:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;opacity:.6}
+    @media(max-width:900px){.hz-backlog-row{gap:8px}.hz-backlog-eta{min-width:0}.hz-backlog-pos-field label{display:none}}
+    .hz-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:200}
+    .hz-modal-overlay.open{display:flex}
+    .hz-modal{background:var(--card);border-radius:14px;box-shadow:var(--shadow);width:420px;max-width:92vw;max-height:86vh;overflow-y:auto}
+    .hz-modal-hdr{padding:16px 20px;border-bottom:1px solid var(--border)}
+    .hz-modal-ttl{font-size:16px;font-weight:800;color:var(--text)}
+    .hz-modal-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .hz-modal-body{padding:16px 20px;font-size:13px;color:var(--text)}
+    .hz-modal-alert{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#92400e;margin-bottom:12px}
+    :root[data-theme="dark"] .hz-modal-alert{background:#3a2e10;border-color:#7a5b13;color:#fcd34d}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .hz-modal-alert{background:#3a2e10;border-color:#7a5b13;color:#fcd34d}}
+    .hz-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+    .hz-btn{border:none;border-radius:8px;padding:9px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--font-ui)}
+    .hz-btn-cancel{background:var(--bg);color:var(--text);border:1px solid var(--border)}
+    .hz-btn-primary{background:var(--primary);color:#fff}
+    .hz-btn-warn{background:var(--warning);color:#fff}
+    .hz-nec-card{padding:16px 18px;margin-bottom:14px;border:1.5px solid var(--primary)}
+    .hz-nec-header{margin-bottom:10px}
+    .hz-nec-title{font-size:15px;font-weight:800;color:var(--text)}
+    .hz-nec-sub{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5;max-width:680px}
+    .hz-nec-row{display:grid;grid-template-columns:140px 1fr 130px 100px 130px 170px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+    .hz-nec-row:last-child{border-bottom:none}
+    .hz-nec-codigo{display:flex;align-items:center;gap:6px}
+    .hz-nec-codigo code{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:11.5px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--primary)}
+    .hz-copy-btn{background:none;border:1px solid var(--border);border-radius:6px;width:24px;height:24px;font-size:11px;cursor:pointer;color:var(--muted);flex:none}
+    .hz-copy-btn:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .hz-nec-nome{font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;min-width:0}
+    .hz-nec-meta{color:var(--muted)}
+    .hz-nec-qtd{font-weight:700;color:var(--text);text-align:right}
+    @media(max-width:900px){.hz-nec-row{grid-template-columns:1fr 1fr;row-gap:4px}.hz-nec-qtd{text-align:left}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Horizonte de Produção</h1>
+    <div class="header-sub" id="headerSub">Fila de pedidos ainda não programados, por prioridade — congele um bloco pra virar compromisso real de agenda.</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div class="hz-bar">
+    <div class="hz-bar-label">Horizonte:</div>
+    <div class="hz-weeks-ctrl">
+      <button class="hz-weeks-btn" id="btnWeeksMinus">−</button>
+      <div class="hz-weeks-val" id="weeksVal">10 semanas</div>
+      <button class="hz-weeks-btn" id="btnWeeksPlus">+</button>
+    </div>
+    <div class="hz-legend">
+      <span><span class="sw" style="background:#eff6ff;border:1px solid var(--primary)"></span> Linha própria do pedido</span>
+      <span><span class="sw" style="background:#faf5ff;border:1px solid #a78bfa"></span> Linha sugerida automaticamente</span>
+      <span><span class="hz-insumo-dot ok"></span> Insumo OK</span>
+      <span><span class="hz-insumo-dot pendente"></span> Insumo pendente</span>
+    </div>
+  </div>
+
+  <div class="grid-card hz-capsum-card">
+    <div class="hz-capsum-header">
+      <div class="hz-capsum-title">📊 Capacidade por linha</div>
+    </div>
+    <div id="hzCapSumBody"></div>
+  </div>
+
+  <div class="grid-card hz-sim-card">
+    <div class="hz-sim-header" id="hzSimToggle">
+      <div class="hz-sim-title">🧪 Simulador de Capacidade</div>
+      <div class="hz-sim-chevron" id="hzSimChevron">▸</div>
+    </div>
+    <div class="hz-sim-sub">Sandbox solto, sem ligação com o planejamento real -- só lê os dados de hoje (linhas, turnos, ritmo demonstrado dos pedidos ativos), não grava nada em lugar nenhum. Use pra simular "e se eu abrisse mais uma linha", "e se rodássemos 2 turnos por 3 semanas", "e se fizéssemos hora extra todo dia" -- e ver o ganho de capacidade projetado antes de decidir de verdade.</div>
+    <div class="hz-sim-body" id="hzSimBody" style="display:none">
+      <div class="hz-sim-grid">
+        <div class="hz-sim-fg">
+          <label>Horizonte da simulação (dias corridos)</label>
+          <input type="number" id="simDias" min="1" max="180" value="30">
+        </div>
+        <div class="hz-sim-fg">
+          <label>Linhas extras (hipotéticas)</label>
+          <input type="number" id="simLinhasExtras" min="0" max="20" value="0">
+        </div>
+        <div class="hz-sim-fg">
+          <label>Horas extras por dia útil (em toda linha, real + extra)</label>
+          <input type="number" id="simHorasExtras" min="0" max="12" value="0">
+        </div>
+        <div class="hz-sim-fg">
+          <label>Sábados extras de turno completo (dentro do horizonte)</label>
+          <input type="number" id="simSabadosExtras" min="0" max="20" value="0">
+        </div>
+        <div class="hz-sim-fg hz-sim-fg-wide">
+          <label>Converter em unidades usando o ritmo de (opcional)</label>
+          <select id="simRefPedido"><option value="">— só mostrar em horas —</option></select>
+        </div>
+      </div>
+      <button class="hz-sim-btn" id="btnCalcularSim">Calcular capacidade projetada</button>
+      <div id="hzSimResult"></div>
+    </div>
+  </div>
+
+  <div class="grid-card hz-backlog-card">
+    <div class="hz-backlog-header">
+      <div class="hz-backlog-title">📋 Fila de Backlog (Prioridade)</div>
+      <div class="hz-backlog-card-sub">Arraste pela alça pra reordenar, ou use "Classificar Prioridade" pra saltos grandes. Congele quando estiver pronto pra virar compromisso real.</div>
+    </div>
+    <div class="hz-backlog-empty" id="hzBacklogEmpty" style="display:none">Nenhum pedido em aberto no momento.</div>
+    <div class="hz-backlog-list" id="hzBacklogList"></div>
+  </div>
+
+  <div class="grid-card hz-nec-card" id="hzNecessidadesCard" style="display:none">
+    <div class="hz-nec-header">
+      <div class="hz-nec-title">🎯 Necessidades de Emissão</div>
+      <div class="hz-nec-sub">Blocos já congelados, esperando a OP real ser emitida no Gerador de OPs. Copie o código e cole no campo de referência na hora de emitir — o vínculo fica exato, sem depender de adivinhar por quantidade.</div>
+    </div>
+    <div id="hzNecessidadesBody"></div>
+  </div>
+
+  <div class="grid-card hz-unassigned-card" id="hzUnassignedCard" style="display:none">
+    <div id="hzUnassignedBody"></div>
+  </div>
+</div>
+
+<div class="hz-modal-overlay" id="congelarOverlay">
+  <div class="hz-modal">
+    <div class="hz-modal-hdr">
+      <div class="hz-modal-ttl">🧊 Congelar bloco</div>
+      <div class="hz-modal-sub" id="congelarSub">—</div>
+    </div>
+    <div class="hz-modal-body" id="congelarBody"></div>
+    <div class="hz-modal-footer" id="congelarFooter"></div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig={apiKey:"AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",authDomain:"prod-kuryos.firebaseapp.com",databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),projectId:"prod-kuryos",storageBucket:"prod-kuryos.firebasestorage.app",messagingSenderId:"323674581733",appId:"1:323674581733:web:e283a491c0c2bd6025420c"};
+firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
+var db=firebase.database();
+db.ref('.info/connected').on('value',function(s){var on=s.val();document.getElementById('sDot').className='dot'+(on?' on':'');document.getElementById('sTxt').textContent=on?'Online':'Offline';});
+
+var DEFAULT_CONFIG={diasSemana:[1,2,3,4,5],feriados:{}};
+var config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+// Horas de produção vêm da configuração de turno (admin.html), não de um
+// horário guardado à parte -- mesmo motivo/mesma implementação do
+// planejamento.html (ver comentário lá em horasEPausasDoDia).
+var configTurnos=[];
+var configTurnoHorarios={};
+var configTurnoHorariosFim={};
+var configTurnoHorariosFimSexta={};
+var configTurnoPausas={};
+var configModoOperacaoTurno='auto';
+var configTurnoFixoNome='';
+var configTurnosExtras={};
+var configLinhas=["Linha 1","Linha 2","Linha 3"];
+var pedidosCache={};
+var programacaoCache={};
+var allProdutos={};
+// Mesmo mecanismo de planejamento.html: produto renomeado (troca de SKU em
+// cadastros.html) não reescreve pedido antigo -- allProdutos[pedido.sku]
+// direto falha assim que o SKU muda. getProdutoBySku resolve pelo atual
+// ou por qualquer apelido antigo (sku_historico).
+var skuHistorico={};
+function getProdutoBySku(sku){
+  if(!sku) return {};
+  if(allProdutos[sku]) return allProdutos[sku];
+  var atual=skuHistorico[sku];
+  return (atual && allProdutos[atual]) || {};
+}
+var insumosCache={};
+var alocacoesCache={};
+var numWeeks=10;
+var MIN_WEEKS=4, MAX_WEEKS=16;
+var FREEZE_WINDOW_START=1; // semana corrente (w=0) fica de fora -- já em andamento, tarde pra planejar
+var FREEZE_WINDOW_WEEKS=3; // quantas semanas a partir da próxima ficam disponíveis pra congelar
+var firstLoad=true;
+var lastOrderedKeys=[];
+var lastSpecBlocksMatrix=[];
+var lastWeeksMeta=[];
+var lastBacklogPedidos=[];
+
+// ── Date helpers (mesmo padrão de planejamento.html) ────────────────
+function getMon(d){var c=new Date(d);c.setHours(0,0,0,0);var dw=c.getDay();c.setDate(c.getDate()+(dw===0?-6:1-dw));return c;}
+function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+// Override deliberado do fmtNum de shared/utils.js -- aqui os números são
+// sempre quantidade inteira (un./h), então arredonda antes de formatar; a
+// versão compartilhada não arredonda. Mantido local de propósito.
+function fmtNum(n){return Math.round(n).toLocaleString('pt-BR');}
+function dowToConfig(dw){return dw===0?7:dw;}
+function isWorkingDay(date){var ymd=toYMD(date);var dw=dowToConfig(date.getDay());if(!config.diasSemana.includes(dw))return false;if(config.feriados&&config.feriados[ymd])return false;return true;}
+
+function insumoStatusOf(pedido){
+  var chk=(pedido&&pedido.insumosChecklist)||{};
+  return (chk.ok==='True'||chk.ok===true) ? 'ok' : 'pendente';
+}
+// Cobertura granular de insumo (não é o checklist booleano) -- usada só na
+// hora de Congelar, pra saber quanto da quantidade do pedido os insumos já
+// recebidos sustentam. Sem itens cadastrados em insumos/{pedKey}, retorna
+// null (desconhecido) em vez de bloquear -- nem todo pedido tem isso hoje.
+function insumoCoverageOf(pedKey){
+  var itens=insumosCache[pedKey];
+  if(!itens) return null;
+  var keys=Object.keys(itens);
+  if(!keys.length) return null;
+  var minFrac=1;
+  keys.forEach(function(k){
+    var it=itens[k]||{};
+    var nec=it.qtdNecessaria||0;
+    if(nec<=0) return; // item sem necessidade cadastrada, ignora na conta
+    var rec=it.qtdRecebida||0;
+    var frac=Math.max(0,Math.min(1,rec/nec));
+    if(frac<minFrac) minFrac=frac;
+  });
+  return minFrac;
+}
+// Quanto já está congelado/vinculado pra um pedido (não pode contar de novo
+// na hora de calcular quanto ainda dá pra congelar).
+function qtdJaAlocada(pedKey){
+  var total=0;
+  Object.values(alocacoesCache).forEach(function(a){
+    if(a&&a.pedidoKey===pedKey&&(a.status==='congelado'||a.status==='vinculado')) total+=(a.qtd||0);
+  });
+  return total;
+}
+function speedOf(pedido){
+  if(!pedido) return 0;
+  return pedido.mediaPorHora||getProdutoBySku(pedido.sku).prodHoraRef||0;
+}
+// Acha o status ('congelado'/'vinculado') da alocação por trás de um slot
+// real, se houver -- pra badge na grade. null = slot manual de sempre, sem
+// alocação rastreada (comportamento de hoje, continua funcionando igual).
+function alocStatusFor(pedidoKey,weekStart,linhaNome){
+  var semanaISO=toYMD(weekStart);
+  var found=Object.values(alocacoesCache).find(function(a){
+    return a&&a.pedidoKey===pedidoKey&&a.semanaISO===semanaISO&&a.linha===linhaNome&&(a.status==='congelado'||a.status==='vinculado');
+  });
+  return found?found.status:null;
+}
+function leastLoadedLinha(remainingPool,numWeeksVal,numLinhas){
+  var best=-1, bestVal=-1;
+  for(var l=0;l<numLinhas;l++){
+    var sum=0;
+    for(var w=0;w<numWeeksVal;w++) sum+=remainingPool[w][l];
+    if(sum>bestVal){ bestVal=sum; best=l; }
+  }
+  return best; // 0-based, -1 se não houver nenhuma linha configurada
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',function(){
+  document.getElementById('btnWeeksMinus').addEventListener('click',function(){
+    numWeeks=Math.max(MIN_WEEKS,numWeeks-2);
+    document.getElementById('weeksVal').textContent=numWeeks+' semanas';
+    computeAndRender();
+  });
+  document.getElementById('btnWeeksPlus').addEventListener('click',function(){
+    numWeeks=Math.min(MAX_WEEKS,numWeeks+2);
+    document.getElementById('weeksVal').textContent=numWeeks+' semanas';
+    computeAndRender();
+  });
+  document.getElementById('hzSimToggle').addEventListener('click',function(){
+    var body=document.getElementById('hzSimBody');
+    var chev=document.getElementById('hzSimChevron');
+    var opening=body.style.display==='none';
+    body.style.display=opening?'block':'none';
+    chev.classList.toggle('open',opening);
+  });
+  document.getElementById('btnCalcularSim').addEventListener('click',simularCapacidade);
+  loadConfig();
+});
+
+function loadConfig(){
+  dbOnValue(db.ref('produtos'),function(pSnap){
+    allProdutos=pSnap.val()||{};
+    if(!firstLoad) computeAndRender();
+  });
+  dbOnValue(db.ref('sku_historico'),function(shSnap){
+    skuHistorico=shSnap.val()||{};
+  });
+
+  dbOnValue(db.ref('insumos'),function(iSnap){
+    insumosCache=iSnap.val()||{};
+    if(!firstLoad) computeAndRender();
+  });
+
+  dbOnValue(db.ref('alocacoes_planejamento'),function(aSnap){
+    alocacoesCache=aSnap.val()||{};
+    if(!firstLoad) computeAndRender();
+  });
+
+  db.ref('config').once('value',function(cSnap){
+    var cVal=cSnap.val()||{};
+    if(cVal.linhas&&cVal.linhas.length) configLinhas=cVal.linhas;
+    configTurnos=cVal.turnos||[];
+    configTurnoHorarios=cVal.turnoHorarios||{};
+    configTurnoHorariosFim=cVal.turnoHorariosFim||{};
+    configTurnoHorariosFimSexta=cVal.turnoHorariosFimSexta||{};
+    configTurnoPausas=cVal.turnoPausas||{};
+    configModoOperacaoTurno=cVal.modoOperacaoTurno||'auto';
+    configTurnoFixoNome=cVal.turnoFixoNome||'';
+    configTurnosExtras=cVal.turnosExtras||{};
+
+    db.ref('config/planejamento').once('value',function(snap){
+      var s=snap.val()||{};
+      if(s.diasSemana&&s.diasSemana.length) config.diasSemana=s.diasSemana;
+      config.feriados=s.feriados||{};
+
+      dbOnValue(db.ref('programacao'),function(snap){
+        programacaoCache=snap.val()||{};
+        if(!firstLoad) computeAndRender();
+      });
+
+      dbOnValue(db.ref('pedidos'),function(snap){
+        pedidosCache=snap.val()||{};
+        firstLoad=false;
+        computeAndRender();
+      });
+    });
+  });
+}
+
+// ── Capacidade ────────────────────────────────────────────────────
+// Horas ativas e pausa do dia vêm da configuração de turno (admin.html) --
+// mesma fonte e mesma implementação que planejamento.html usa (ver
+// comentário lá em horasEPausasDoDia).
+function pad2(n){return String(n).padStart(2,'0');}
+// Expande [startH, endHExclusive) em horas cheias -- ex: (7,16) -> 07:00..15:00.
+function expandHourRange(startH,endHExclusive){
+  var hours=[];
+  var h=((startH%24)+24)%24;
+  var endH=((endHExclusive%24)+24)%24;
+  var guard=0;
+  while(h!==endH&&guard<24){
+    hours.push(pad2(h)+':00');
+    h=(h+1)%24;
+    guard++;
+  }
+  return hours;
+}
+function turnosParaCapacidade(){
+  if(configModoOperacaoTurno==='fixo'&&configTurnoFixoNome) return [configTurnoFixoNome];
+  return configTurnos&&configTurnos.length?configTurnos:[];
+}
+function horasEPausasDoDia(date){
+  var isSexta=dowToConfig(date.getDay())===5;
+  var horasSet={}, pausasSet={};
+  turnosParaCapacidade().forEach(function(t){
+    var inicio=configTurnoHorarios[t];
+    var fim=(isSexta&&configTurnoHorariosFimSexta[t])||configTurnoHorariosFim[t];
+    if(!inicio||!fim) return;
+    var hIni=parseInt(inicio.split(':')[0],10);
+    var fimParts=fim.split(':');
+    var hFim=parseInt(fimParts[0],10)+(parseInt(fimParts[1]||'0',10)>0?1:0);
+    expandHourRange(hIni,hFim).forEach(function(h){horasSet[h]=true;});
+    var pausa=configTurnoPausas[t];
+    if(pausa&&pausa.inicio&&pausa.fim){
+      var hp=parseInt(pausa.inicio.split(':')[0],10);
+      var pFimParts=pausa.fim.split(':');
+      var hpFim=parseInt(pFimParts[0],10)+(parseInt(pFimParts[1]||'0',10)>0?1:0);
+      expandHourRange(hp,hpFim).forEach(function(h){horasSet[h]=true;pausasSet[h]=true;});
+    }
+  });
+  var extras=kuryosHorasExtrasDoDia(date,configTurnosExtras);
+  extras.horasAtivas.forEach(function(h){horasSet[h]=true;});
+  extras.pausas.forEach(function(h){pausasSet[h]=true;});
+  return {horasAtivas:Object.keys(horasSet).sort(),pausas:Object.keys(pausasSet).sort()};
+}
+function horasAtivasPorDia(date){
+  var hp=horasEPausasDoDia(date);
+  return hp.horasAtivas.filter(function(h){return !hp.pausas.includes(h);}).length;
+}
+function capacidadeSemana(weekStart){
+  var total=0;
+  for(var i=0;i<7;i++){
+    var d=addDays(weekStart,i);
+    if(isWorkingDay(d)) total+=horasAtivasPorDia(d);
+  }
+  return total;
+}
+
+// ── Cálculo principal ─────────────────────────────────────────────
+function computeAndRender(){
+  var weekStart0=getMon(new Date());
+  var weeksMeta=[];
+  for(var w=0;w<numWeeks;w++){
+    var ws=addDays(weekStart0,w*7);
+    weeksMeta.push({start:ws,label:fmtBR(ws)+' – '+fmtBR(addDays(ws,4))});
+  }
+
+  var numLinhas=configLinhas.length;
+  var capMatrix=[], remainingPool=[], realBlocksMatrix=[], specBlocksMatrix=[];
+  for(var w=0;w<numWeeks;w++){
+    var capRow=[], poolRow=[], realRow=[], specRow=[];
+    for(var l=0;l<numLinhas;l++){
+      var cap=capacidadeSemana(weeksMeta[w].start);
+      capRow.push(cap); poolRow.push(cap); realRow.push([]); specRow.push([]);
+    }
+    capMatrix.push(capRow); remainingPool.push(poolRow); realBlocksMatrix.push(realRow); specBlocksMatrix.push(specRow);
+  }
+
+  // 1) Varre programacao real dentro do horizonte, agrupando por pedido/semana/linha
+  var realHoursByPedido={}; // pedidoKey -> total horas reais no horizonte
+  var lastRealLinhaByPedido={}; // pedidoKey -> índice de linha (1-based) do slot real mais recente
+  var lastRealWeekByPedido={}; // pedidoKey -> índice de semana do slot real mais recente
+
+  for(var w=0;w<numWeeks;w++){
+    for(var d=0;d<7;d++){
+      var date=addDays(weeksMeta[w].start,d);
+      var ymd=toYMD(date);
+      var dayData=programacaoCache[ymd];
+      if(!dayData) continue;
+      Object.keys(dayData).forEach(function(hk){
+        var hourSlots=dayData[hk];
+        for(var l=1;l<=numLinhas;l++){
+          var slot=hourSlots['env'+l];
+          if(!slot||!slot.pedidoKey) continue;
+          var pk=slot.pedidoKey;
+          var linhaIdx=l-1;
+          var group=realBlocksMatrix[w][linhaIdx].find(function(b){return b.pedidoKey===pk;});
+          if(!group){
+            var alocStatus=alocStatusFor(pk,weeksMeta[w].start,configLinhas[linhaIdx]);
+            group={pedidoKey:pk,produto:slot.produto||'?',sku:slot.sku||'',hours:0,qty:0,alocStatus:alocStatus};
+            realBlocksMatrix[w][linhaIdx].push(group);
+          }
+          group.hours++;
+          group.qty+=speedOf(pedidosCache[pk]);
+          remainingPool[w][linhaIdx]=Math.max(remainingPool[w][linhaIdx]-1,0);
+          realHoursByPedido[pk]=(realHoursByPedido[pk]||0)+1;
+          lastRealLinhaByPedido[pk]=l;
+          lastRealWeekByPedido[pk]=w;
+        }
+      });
+    }
+  }
+
+  // 2) Pedidos ativos, ordenados por prioridade (mesmo padrão de planejamento.html)
+  var activePedidos=Object.keys(pedidosCache).map(function(k){
+    var p=pedidosCache[k]; p._key=k; return p;
+  }).filter(function(p){ return p&&p.produto&&!isConcluido(p); })
+    .sort(function(a,b){
+      var pa=a.priority||999, pb=b.priority||999;
+      if(pa!==pb) return pa-pb;
+      // Mesma prioridade -- sugestão da automação: insumo mais disponível
+      // primeiro (não decide sozinha, só ordena dentro do empate; o usuário
+      // ainda pode arrastar pra mudar a prioridade de verdade).
+      var ca=insumoCoverageOf(a._key), cb=insumoCoverageOf(b._key);
+      ca=(ca===null)?0:ca; cb=(cb===null)?0:cb;
+      return cb-ca;
+    });
+
+  var semRitmo=[]; // falta>0 mas sem mediaPorHora/prodHoraRef -- não dá pra estimar semana nenhuma
+  var semLinha=[]; // só acontece se não houver nenhuma linha configurada
+
+  activePedidos.forEach(function(p){
+    var speed=speedOf(p);
+    var falta=Math.max((p.qtdTotal||0)-(p.produzido||0),0);
+    p._faltaQtd=falta;
+
+    if(falta>0&&speed<=0&&!(realHoursByPedido[p._key]>0)){
+      semRitmo.push({p:p, restanteQtd:falta});
+    }
+
+    var totalRestante=speed>0?Math.ceil(falta/speed):0;
+    var realHours=realHoursByPedido[p._key]||0;
+    var spec=Math.max(totalRestante-realHours,0);
+
+    var effLinhaIdx=null; // 1-based
+    var autoAssigned=false;
+    if(p.linha){
+      var idx=configLinhas.indexOf(p.linha);
+      if(idx>=0) effLinhaIdx=idx+1;
+    }
+    if(!effLinhaIdx&&lastRealLinhaByPedido[p._key]) effLinhaIdx=lastRealLinhaByPedido[p._key];
+
+    p._etaWeek=lastRealWeekByPedido[p._key]!==undefined?lastRealWeekByPedido[p._key]:null;
+
+    if(spec<=0) return; // já totalmente coberto por slots reais
+
+    if(!effLinhaIdx){
+      // Sem linha própria nem histórico de slot real -- popula automaticamente
+      // na linha com mais capacidade livre no momento, só pra dar uma visão
+      // completa de quando tudo seria atendido. Marcado visualmente como
+      // "linha sugerida", não é um compromisso de agenda.
+      var chosen=leastLoadedLinha(remainingPool,numWeeks,numLinhas);
+      if(chosen<0){ semLinha.push({p:p, restanteQtd:Math.round(spec*speed)}); return; }
+      effLinhaIdx=chosen+1;
+      autoAssigned=true;
+    }
+
+    var linhaIdx=effLinhaIdx-1;
+    p._effLinha=configLinhas[linhaIdx];
+    p._linhaAuto=autoAssigned;
+    p._temBacklog=true; // só os pedidos que de fato entram no specBlocksMatrix
+    var w=0;
+    while(spec>0&&w<numWeeks){
+      var pool=remainingPool[w][linhaIdx];
+      if(pool>0){
+        var take=Math.min(pool,spec);
+        specBlocksMatrix[w][linhaIdx].push({pedido:p,hours:take,qty:Math.round(take*speed),auto:autoAssigned});
+        remainingPool[w][linhaIdx]-=take;
+        spec-=take;
+        p._etaWeek=w;
+      }
+      w++;
+    }
+    p._semCapacidadeHorizonte=spec>0;
+  });
+
+  lastSpecBlocksMatrix=specBlocksMatrix;
+  lastWeeksMeta=weeksMeta;
+  lastBacklogPedidos=activePedidos.filter(function(p){ return p._temBacklog; });
+  lastOrderedKeys=lastBacklogPedidos.map(function(p){ return p._key; });
+  renderCapSummary(weeksMeta,capMatrix,remainingPool);
+  renderBacklog(lastBacklogPedidos,weeksMeta);
+  renderUnassigned(semLinha,semRitmo);
+  renderNecessidades();
+  renderSimRefOptions(activePedidos);
+}
+
+// ── Necessidades de Emissão: lista de blocos "congelado" (já reservados na
+// grade, ainda sem OP real) -- o código de cada linha é derivado do próprio
+// ID da alocação (últimos 6 caracteres), não é gravado em lugar nenhum, então
+// não precisa de migração pra alocações antigas. Ver linkAlocacaoToOP em
+// functions/index.js pro lado que consome esse código na hora de vincular.
+function codigoDaAlocacao(id){
+  return 'NEC-'+id.slice(-6).toUpperCase();
+}
+function renderNecessidades(){
+  var card=document.getElementById('hzNecessidadesCard');
+  var items=Object.keys(alocacoesCache).filter(function(id){
+    var a=alocacoesCache[id];
+    return a&&a.status==='congelado'&&!a.opLote;
+  }).map(function(id){
+    return {id:id,a:alocacoesCache[id]};
+  }).sort(function(x,y){
+    return (x.a.semanaISO||'').localeCompare(y.a.semanaISO||'');
+  });
+
+  if(!items.length){
+    card.style.display='none';
+    document.getElementById('hzNecessidadesBody').innerHTML='';
+    return;
+  }
+  card.style.display='';
+
+  // Quando o mesmo pedido tem mais de uma parcela congelada ao mesmo tempo
+  // (esparçado no tempo ou paralelo em linhas diferentes), mostra fração do
+  // total pendente em vez de só a quantidade isolada -- não é numeração de
+  // sequência (#1/#2/#3), porque a ordem de congelamento não é garantidamente
+  // a ordem de produção.
+  var countByPedido={}, totalByPedido={};
+  items.forEach(function(it){
+    countByPedido[it.a.pedidoKey]=(countByPedido[it.a.pedidoKey]||0)+1;
+    totalByPedido[it.a.pedidoKey]=(totalByPedido[it.a.pedidoKey]||0)+(it.a.qtd||0);
+  });
+
+  document.getElementById('hzNecessidadesBody').innerHTML=items.map(function(it){
+    var ped=pedidosCache[it.a.pedidoKey]||{};
+    var codigo=codigoDaAlocacao(it.id);
+    var semanaLabel=fmtBR(new Date(it.a.semanaISO+'T12:00:00'));
+    var qtdLabel=countByPedido[it.a.pedidoKey]>=2
+      ? fmtNum(it.a.qtd)+' de '+fmtNum(totalByPedido[it.a.pedidoKey])+' un. do pedido'
+      : fmtNum(it.a.qtd)+' un.';
+    return '<div class="hz-nec-row">'+
+      '<div class="hz-nec-codigo"><code>'+escapeHtml(codigo)+'</code>'+
+        '<button type="button" class="hz-copy-btn" onclick="copyCodigo(\''+escapeAttr(codigo)+'\',this)" title="Copiar código">📋</button></div>'+
+      '<div class="hz-nec-nome">'+insumoDotHtml(ped)+escapeHtml(ped.produto||'?')+'</div>'+
+      '<div class="hz-nec-meta">'+escapeHtml(ped.cliente||'—')+'</div>'+
+      '<div class="hz-nec-meta">'+escapeHtml(it.a.linha||'—')+'</div>'+
+      '<div class="hz-nec-meta">Semana de '+semanaLabel+'</div>'+
+      '<div class="hz-nec-qtd">'+qtdLabel+'</div>'+
+      '</div>';
+  }).join('');
+}
+function copyCodigo(codigo,btnEl){
+  function feedback(){
+    var orig=btnEl.textContent;
+    btnEl.textContent='✓';
+    setTimeout(function(){ btnEl.textContent=orig; },1200);
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(codigo).then(feedback).catch(function(){ fallbackCopyCodigo(codigo,feedback); });
+  } else {
+    fallbackCopyCodigo(codigo,feedback);
+  }
+}
+function fallbackCopyCodigo(codigo,cb){
+  var ta=document.createElement('textarea');
+  ta.value=codigo;
+  ta.style.position='fixed';
+  ta.style.opacity='0';
+  document.body.appendChild(ta);
+  ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta);
+  if(cb) cb();
+}
+
+function insumoDotHtml(pedido){
+  var st=insumoStatusOf(pedido);
+  return '<span class="hz-insumo-dot '+st+'" title="Insumo: '+(st==='ok'?'OK':'pendente')+'"></span>';
+}
+
+// ── Resumo de capacidade: uma linha por linha de produção, só relatório,
+// sem interação -- responde "quanto de capacidade eu tenho" de relance, sem
+// precisar ler uma grade. Mesmos capMatrix/remainingPool que a fila de
+// backlog já usa, nenhum cálculo novo.
+function renderCapSummary(weeksMeta,capMatrix,remainingPool){
+  if(!configLinhas.length){
+    document.getElementById('hzCapSumBody').innerHTML='<div class="hz-empty">Nenhuma linha configurada.</div>';
+    return;
+  }
+  document.getElementById('hzCapSumBody').innerHTML=configLinhas.map(function(lname,l){
+    var lastCommittedWeek=-1;
+    var totalCap=0, totalUsed=0;
+    for(var w=0;w<weeksMeta.length;w++){
+      totalCap+=capMatrix[w][l];
+      totalUsed+=(capMatrix[w][l]-remainingPool[w][l]);
+      if(remainingPool[w][l]<capMatrix[w][l]) lastCommittedWeek=w;
+    }
+    var ateLabel=lastCommittedWeek>=0
+      ? ('ocupada até '+fmtBR(addDays(weeksMeta[lastCommittedWeek].start,4)))
+      : 'livre em todo o horizonte';
+    var pct=totalCap>0?Math.min(Math.round(totalUsed/totalCap*100),100):0;
+    var overClass=totalUsed>totalCap?' over':'';
+    return '<div class="hz-capsum-row">'+
+      '<div class="hz-capsum-linha">'+escapeHtml(lname)+'</div>'+
+      '<div class="hz-capsum-barwrap"><div class="hz-cap-bar"><div class="hz-cap-fill'+overClass+'" style="width:'+pct+'%"></div></div></div>'+
+      '<div class="hz-capsum-label">'+ateLabel+'</div>'+
+      '</div>';
+  }).join('');
+}
+
+// ── Simulador de Capacidade (Fase F) ────────────────────────────────
+// Sandbox 100% cliente, sem escrita nenhuma no Firebase (nem em
+// alocacoes_planejamento, nem em config, nem em nada) -- só lê o que já
+// está carregado (configLinhas/turno via horasEPausasDoDia, pedidosCache
+// pro ritmo de referência). "Recebe inputs, mas não gera outputs" no
+// planejamento real, exatamente como pedido pelo usuário: é pra explorar
+// "e se" antes de decidir de verdade (abrir linha, rodar 2 turnos, etc),
+// não pra comprometer nada na grade.
+function renderSimRefOptions(activePedidos){
+  var sel=document.getElementById('simRefPedido');
+  if(!sel) return;
+  var prevVal=sel.value;
+  var opts=activePedidos.filter(function(p){return speedOf(p)>0;})
+    .sort(function(a,b){return (a.produto||'').localeCompare(b.produto||'');});
+  sel.innerHTML='<option value="">— só mostrar em horas —</option>'+opts.map(function(p){
+    return '<option value="'+escapeAttr(p._key)+'">'+escapeHtml(p.produto||'?')+' ('+fmtNum(speedOf(p))+' un/h)</option>';
+  }).join('');
+  if(opts.some(function(p){return p._key===prevVal;})) sel.value=prevVal;
+}
+
+// Horas de turno "normais" nessa data, ignorando se o dia da semana é
+// útil ou não -- horasEPausasDoDia só olha horário de turno (e sexta como
+// caso especial), não o calendário de dias úteis; é exatamente o que
+// queremos pra simular "e se esse sábado virasse um dia de turno completo".
+function simHorasTurnoCompleto(date){
+  var hp=horasEPausasDoDia(date);
+  return hp.horasAtivas.filter(function(h){return !hp.pausas.includes(h);}).length;
+}
+
+function simularCapacidade(){
+  var dias=Math.max(1,parseInt(document.getElementById('simDias').value,10)||30);
+  var linhasExtras=Math.max(0,parseInt(document.getElementById('simLinhasExtras').value,10)||0);
+  var horasExtras=Math.max(0,parseInt(document.getElementById('simHorasExtras').value,10)||0);
+  var sabadosExtras=Math.max(0,parseInt(document.getElementById('simSabadosExtras').value,10)||0);
+  var refKey=document.getElementById('simRefPedido').value;
+  var refPedido=refKey?pedidosCache[refKey]:null;
+  var refRate=refPedido?speedOf(refPedido):0;
+
+  var numLinhasReal=configLinhas.length||1;
+  var numLinhasSim=numLinhasReal+linhasExtras;
+  var baselineHoras=0, simHoras=0;
+  var sabadosUsados=0;
+  var hoje=new Date();
+
+  for(var i=0;i<dias;i++){
+    var date=addDays(hoje,i);
+    var isSabado=date.getDay()===6;
+    if(isWorkingDay(date)){
+      var hReal=horasAtivasPorDia(date);
+      baselineHoras+=hReal*numLinhasReal;
+      simHoras+=(hReal+horasExtras)*numLinhasSim;
+    } else if(isSabado&&sabadosUsados<sabadosExtras){
+      sabadosUsados++;
+      simHoras+=simHorasTurnoCompleto(date)*numLinhasSim;
+    }
+  }
+
+  var ganhoHoras=simHoras-baselineHoras;
+  var ganhoPct=baselineHoras>0?Math.round(ganhoHoras/baselineHoras*100):null;
+
+  var cards=[
+    {lbl:'Capacidade atual',val:fmtNum(baselineHoras)+'h',sub:numLinhasReal+' linha(s) · '+dias+' dias'},
+    {lbl:'Capacidade simulada',val:fmtNum(simHoras)+'h',sub:numLinhasSim+' linha(s) equivalentes'},
+    {lbl:'Ganho de capacidade',val:(ganhoHoras>=0?'+':'')+fmtNum(ganhoHoras)+'h',sub:(ganhoPct!=null?((ganhoPct>=0?'+':'')+ganhoPct+'% sobre o atual'):'—'),gain:true}
+  ];
+  if(refRate>0){
+    cards.push({lbl:'Em unidades (ref. '+escapeHtml(refPedido.produto||'')+')',val:fmtNum(simHoras*refRate)+' un',sub:'atual: '+fmtNum(baselineHoras*refRate)+' un · ganho: +'+fmtNum(ganhoHoras*refRate)+' un'});
+  }
+
+  document.getElementById('hzSimResult').innerHTML=
+    '<div class="hz-sim-result">'+cards.map(function(c){
+      return '<div class="hz-sim-result-card"><div class="hz-sim-result-lbl">'+c.lbl+'</div>'+
+        '<div class="hz-sim-result-val'+(c.gain?' gain':'')+'">'+c.val+'</div>'+
+        '<div class="hz-sim-result-sub">'+c.sub+'</div></div>';
+    }).join('')+'</div>'+
+    '<div class="hz-sim-note">Baseado no calendário de turnos configurado hoje (Ajuste de Metas/Config.) + o ritmo demonstrado já gravado nos pedidos ativos. Não considera disponibilidade de insumo, mão de obra pra tocar a linha extra, nem limite de máquina -- é só a conta de horas disponíveis, ponto de partida pra avaliar a decisão, não a decisão pronta.</div>';
+}
+
+// ── Fila de Backlog: uma linha por pedido (não uma por semana -- resolve a
+// confusão de vários cartõezinhos empilhados numa célula de matriz pequena).
+// Reordenar por arraste de linha inteira + campo numérico pra saltos
+// grandes, adaptado do padrão que já funciona bem em pedidos.html ("Ordenar
+// Prioridades"), não uma implementação nova do zero.
+function renderBacklog(backlogPedidos,weeksMeta){
+  var listEl=document.getElementById('hzBacklogList');
+  var emptyEl=document.getElementById('hzBacklogEmpty');
+  if(!backlogPedidos.length){
+    listEl.innerHTML='';
+    emptyEl.style.display='block';
+    return;
+  }
+  emptyEl.style.display='none';
+  var n=backlogPedidos.length;
+  listEl.innerHTML=backlogPedidos.map(function(p,idx){
+    var rank=idx+1;
+    var etaLabel=p._etaWeek!=null?('semana de '+fmtBR(weeksMeta[p._etaWeek].start)):(p._semCapacidadeHorizonte?'sem capacidade no horizonte':'—');
+    var canFreeze=p._etaWeek!=null&&p._etaWeek>=FREEZE_WINDOW_START&&p._etaWeek<FREEZE_WINDOW_START+FREEZE_WINDOW_WEEKS;
+    var freezeAttrs=canFreeze?'':' disabled title="Disponível quando a semana estimada entrar na janela de congelamento"';
+    var linhaCls=p._linhaAuto?'hz-backlog-linha auto':'hz-backlog-linha';
+    var linhaTitle=p._linhaAuto?'Linha sugerida automaticamente':'Linha própria do pedido';
+    return '<div class="hz-backlog-row" draggable="true" data-key="'+escapeAttr(p._key)+'">'+
+      '<span class="hz-backlog-handle" title="Arraste pra reordenar">⠿</span>'+
+      '<span class="hz-backlog-rank">'+rank+'</span>'+
+      '<div class="hz-backlog-info">'+
+        '<div class="hz-backlog-nome">'+insumoDotHtml(p)+escapeHtml(p.produto||'?')+'</div>'+
+        '<div class="hz-backlog-item-sub">'+escapeHtml(p.cliente||'—')+' · '+fmtNum(p._faltaQtd)+' un. restantes</div>'+
+      '</div>'+
+      '<div class="'+linhaCls+'" title="'+escapeAttr(linhaTitle)+'">'+escapeHtml(p._effLinha||'—')+'</div>'+
+      '<div class="hz-backlog-eta">'+escapeHtml(etaLabel)+'</div>'+
+      '<div class="hz-backlog-pos-field">'+
+        '<label>Classificar Prioridade</label>'+
+        '<input type="number" class="hz-backlog-pos-input" min="1" max="'+n+'" value="'+rank+'" data-key="'+escapeAttr(p._key)+'">'+
+      '</div>'+
+      '<button type="button" class="hz-backlog-freeze-btn" onclick="openCongelarModal(\''+escapeAttr(p._key)+'\')"'+freezeAttrs+'>🧊 Congelar</button>'+
+      '</div>';
+  }).join('');
+
+  listEl.querySelectorAll('.hz-backlog-pos-input').forEach(function(input){
+    input.addEventListener('keydown',function(e){ if(e.key==='Enter') input.blur(); });
+    input.addEventListener('blur',function(){ commitBacklogPosition(input.dataset.key,parseInt(input.value,10)); });
+  });
+
+  setupBacklogDrag(listEl);
+}
+
+function setupBacklogDrag(list){
+  var draggingEl=null;
+  list.querySelectorAll('.hz-backlog-row').forEach(function(row){
+    row.addEventListener('dragstart',function(){
+      draggingEl=row;
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend',function(){
+      row.classList.remove('dragging');
+      draggingEl=null;
+      commitBacklogOrderFromDOM();
+    });
+    row.addEventListener('dragover',function(e){
+      e.preventDefault();
+      if(!draggingEl||draggingEl===row) return;
+      var rect=row.getBoundingClientRect();
+      var before=(e.clientY-rect.top)<rect.height/2;
+      list.insertBefore(draggingEl,before?row:row.nextSibling);
+    });
+  });
+}
+function commitBacklogOrderFromDOM(){
+  var list=document.getElementById('hzBacklogList');
+  var newOrder=Array.prototype.map.call(list.querySelectorAll('.hz-backlog-row'),function(row){ return row.dataset.key; });
+  if(newOrder.join(',')===lastOrderedKeys.join(',')) return; // nada mudou, evita escrita à toa
+  lastOrderedKeys=newOrder;
+  saveBacklogPriorityOrder();
+  reorderBacklogDisplay();
+}
+function commitBacklogPosition(key,novaPos){
+  var idx=lastOrderedKeys.indexOf(key);
+  if(idx===-1) return;
+  var n=lastOrderedKeys.length;
+  if(!novaPos||isNaN(novaPos)){ reorderBacklogDisplay(); return; }
+  novaPos=Math.max(1,Math.min(n,novaPos));
+  var novoIdx=novaPos-1;
+  if(novoIdx===idx){ reorderBacklogDisplay(); return; }
+  var order=lastOrderedKeys.slice();
+  order.splice(idx,1);
+  order.splice(novoIdx,0,key);
+  lastOrderedKeys=order;
+  saveBacklogPriorityOrder();
+  reorderBacklogDisplay();
+}
+function saveBacklogPriorityOrder(){
+  var updates={};
+  lastOrderedKeys.forEach(function(key,idx){
+    var novaPrio=idx+1;
+    if(pedidosCache[key]&&pedidosCache[key].priority!==novaPrio){
+      updates['pedidos/'+key+'/priority']=novaPrio;
+    }
+  });
+  if(!Object.keys(updates).length) return;
+  db.ref().update(updates).catch(function(e){
+    alert('Erro ao salvar nova ordem de prioridade: '+e.message);
+  });
+}
+// Re-renderiza a lista já reordenada em memória, sem esperar o round-trip do
+// Firebase -- a fonte real (pedidosCache) só reflete a nova ordem depois que
+// o listener de 'pedidos' disparar de novo, o que traria ETA/linha
+// recalculados; entretanto, forçar um computeAndRender() aqui usaria a
+// prioridade ainda velha (a escrita é assíncrona) e faria a lista "voltar"
+// pra ordem antiga por um instante antes de corrigir -- pisca. Reordenar só
+// os objetos já computados evita esse flicker; a correção fina (ETA/linha
+// recalculados pra quem foi auto-atribuído) chega sozinha no próximo
+// computeAndRender real.
+function reorderBacklogDisplay(){
+  var byKey={};
+  lastBacklogPedidos.forEach(function(p){ byKey[p._key]=p; });
+  lastBacklogPedidos=lastOrderedKeys.map(function(k){ return byKey[k]; }).filter(Boolean);
+  renderBacklog(lastBacklogPedidos,lastWeeksMeta);
+}
+
+function unassignedRowHtml(u){
+  var p=u.p;
+  return '<div class="hz-unassigned-row">'+
+    '<div class="hz-unassigned-nome">'+insumoDotHtml(p)+escapeHtml(p.produto||'?')+'</div>'+
+    '<div class="hz-unassigned-meta">'+escapeHtml(p.cliente||'—')+'</div>'+
+    '<div class="hz-unassigned-meta">'+fmtNum(u.restanteQtd)+' un. restantes</div>'+
+    '</div>';
+}
+
+// Localiza o bloco especulativo por trás de um pedido do backlog -- usa
+// _etaWeek/_effLinha que o computeAndRender já deixou gravado no próprio
+// objeto de pedidosCache (mesma referência, não uma cópia).
+function findSpecBlock(pedidoKey){
+  var p=pedidosCache[pedidoKey];
+  if(!p||p._etaWeek==null||!p._effLinha) return null;
+  var weekIdx=p._etaWeek;
+  var linhaIdx=configLinhas.indexOf(p._effLinha);
+  if(linhaIdx<0) return null;
+  var specs=(lastSpecBlocksMatrix[weekIdx]&&lastSpecBlocksMatrix[weekIdx][linhaIdx])||[];
+  var s=specs.find(function(sp){ return sp.pedido._key===pedidoKey; });
+  return s?{s:s,weekIdx:weekIdx,linhaIdx:linhaIdx}:null;
+}
+
+// ── Congelar: cria o compromisso real (slots em programacao + registro em
+// alocacoes_planejamento) a partir de um bloco especulativo dentro da janela
+// de congelamento. "Automação vigiada": calcula/sugere, mas sempre pede
+// confirmação explícita antes de escrever qualquer coisa. A quantidade é um
+// campo editável (não mais dois botões fixos) -- quem quer congelar só uma
+// parte do bloco por escolha própria (não por limite de insumo) agora pode.
+function openCongelarModal(pedidoKey){
+  var found=findSpecBlock(pedidoKey);
+  if(!found) return;
+  var s=found.s, weekIdx=found.weekIdx, linhaIdx=found.linhaIdx;
+  var p=s.pedido;
+  var coverage=insumoCoverageOf(pedidoKey);
+  var jaAlocada=qtdJaAlocada(pedidoKey);
+  var availableTotal=(coverage===null)?Infinity:Math.floor(coverage*(p.qtdTotal||0));
+  var availableForBlock=(availableTotal===Infinity)?Infinity:Math.max(availableTotal-jaAlocada,0);
+  var defaultQty=(availableForBlock===Infinity||availableForBlock>=s.qty)?s.qty:Math.max(availableForBlock,1);
+
+  document.getElementById('congelarSub').textContent=escapeHtml(p.produto||'?')+' · '+escapeHtml(p.cliente||'—')+' · até '+fmtNum(s.qty)+' un. na semana de '+fmtBR(lastWeeksMeta[weekIdx].start);
+
+  var infoHtml=(availableForBlock===Infinity)
+    ? '<div style="margin-bottom:8px;color:var(--muted);font-size:11.5px">Sem dados de insumo cadastrados pra esse pedido em Matriz de Insumos — congelando sem checagem de quantidade.</div>'
+    : '';
+
+  document.getElementById('congelarBody').innerHTML=
+    '<div id="congelarAlertWrap"></div>'+
+    infoHtml+
+    '<div>Isso vai criar programação real em <strong>'+escapeAttr(configLinhas[linhaIdx])+'</strong> pra essa semana, e marcar como pronto pra emissão de OP.</div>'+
+    '<label style="display:block;margin-top:12px;font-size:11px;font-weight:700;color:var(--muted)">Quantidade a congelar (máx. '+fmtNum(s.qty)+')</label>'+
+    '<input type="number" id="congelarQtyInput" min="1" max="'+s.qty+'" value="'+defaultQty+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--font-ui);background:var(--card);color:var(--text);margin-top:4px">';
+
+  document.getElementById('congelarFooter').innerHTML=
+    '<button type="button" class="hz-btn hz-btn-cancel" onclick="closeCongelarModal()">Cancelar</button>'+
+    '<button type="button" class="hz-btn hz-btn-primary" id="congelarConfirmBtn"></button>';
+
+  var qtyInput=document.getElementById('congelarQtyInput');
+  var alertWrap=document.getElementById('congelarAlertWrap');
+  var confirmBtn=document.getElementById('congelarConfirmBtn');
+
+  function updateModalState(){
+    var qty=parseInt(qtyInput.value,10);
+    if(isNaN(qty)||qty<1) qty=1;
+    if(qty>s.qty) qty=s.qty;
+    if(availableForBlock!==Infinity&&qty>availableForBlock){
+      alertWrap.innerHTML='<div class="hz-modal-alert">⚠️ Só há insumo recebido pra sustentar <strong>'+fmtNum(availableForBlock)+'</strong> un. desse pedido (conferindo Matriz de Insumos) — congelando '+fmtNum(qty)+' mesmo assim, sabendo do risco.</div>';
+    } else {
+      alertWrap.innerHTML='';
+    }
+    confirmBtn.textContent='🧊 Congelar '+fmtNum(qty)+' un.';
+  }
+  qtyInput.addEventListener('input',updateModalState);
+  confirmBtn.addEventListener('click',function(){
+    var qty=parseInt(qtyInput.value,10);
+    if(isNaN(qty)) qty=defaultQty;
+    qty=Math.max(1,Math.min(s.qty,qty));
+    executarCongelamento(pedidoKey,weekIdx,linhaIdx,qty);
+  });
+  updateModalState();
+
+  document.getElementById('congelarOverlay').classList.add('open');
+}
+function closeCongelarModal(){
+  document.getElementById('congelarOverlay').classList.remove('open');
+}
+
+function executarCongelamento(pedidoKey,weekIdx,linhaIdx,qtyAlvo){
+  var p=pedidosCache[pedidoKey];
+  if(!p) return;
+  var speed=speedOf(p);
+  if(speed<=0){ closeCongelarModal(); return; }
+  var linhaNome=configLinhas[linhaIdx];
+  var linhaNum=linhaIdx+1;
+  var weekStart=lastWeeksMeta[weekIdx].start;
+  var hoursNeeded=Math.ceil(qtyAlvo/speed);
+
+  var dates=[];
+  for(var d=0;d<7;d++){ var dt=addDays(weekStart,d); if(isWorkingDay(dt)) dates.push(toYMD(dt)); }
+
+  Promise.all(dates.map(function(date){ return db.ref('programacao/'+date).once('value'); })).then(function(snaps){
+    var candidates=[];
+    snaps.forEach(function(snap,i){
+      var dayData=snap.val()||{};
+      var hp=horasEPausasDoDia(new Date(dates[i]+'T12:00:00'));
+      var activeH=hp.horasAtivas.filter(function(h){ return !hp.pausas.includes(h); });
+      activeH.forEach(function(hora){
+        var hk=hora.replace(':','_');
+        var hd=dayData[hk]||{};
+        var slotKey='env'+linhaNum;
+        if(!hd[slotKey]||!hd[slotKey].pedidoKey){
+          candidates.push({date:dates[i],hora:hora,slotKey:slotKey});
+        }
+      });
+    });
+
+    var filled=0, idx=0;
+    function next(){
+      if(filled>=hoursNeeded||idx>=candidates.length){ finish(); return; }
+      var c=candidates[idx]; idx++;
+      var path='programacao/'+c.date+'/'+c.hora.replace(':','_')+'/'+c.slotKey;
+      db.ref(path).transaction(function(cur){
+        if(cur&&cur.pedidoKey) return;
+        return {pedidoKey:pedidoKey,produto:p.produto,sku:p.sku||'',mediaPorHora:speed};
+      },function(err,committed){
+        if(!err&&committed) filled++;
+        next();
+      });
+    }
+    function finish(){
+      if(filled<=0){ closeCongelarModal(); return; }
+      var qtdReal=Math.round(filled*speed);
+      var congeladoPor=(window.currentUser&&window.currentUser.nome)||(window.currentUser&&window.currentUser.email)||'desconhecido';
+      db.ref('alocacoes_planejamento').push({
+        pedidoKey:pedidoKey,
+        qtd:qtdReal,
+        linha:linhaNome,
+        semanaISO:toYMD(weekStart),
+        status:'congelado',
+        criadoEm:new Date().toISOString(),
+        congeladoEm:new Date().toISOString(),
+        congeladoPor:congeladoPor
+      }).then(function(){
+        closeCongelarModal();
+        if(filled<hoursNeeded){
+          alert('Congelado parcialmente: só '+fmtNum(qtdReal)+' de '+fmtNum(qtyAlvo)+' un. por falta de slots livres na semana.');
+        }
+      });
+    }
+    next();
+  });
+}
+
+function renderUnassigned(semLinha,semRitmo){
+  var card=document.getElementById('hzUnassignedCard');
+  if(!semLinha.length&&!semRitmo.length){ card.style.display='none'; return; }
+  card.style.display='block';
+
+  var html='';
+  if(semLinha.length){
+    semLinha.sort(function(a,b){ return (a.p.priority||999)-(b.p.priority||999); });
+    html+='<div class="hz-unassigned-title">⚠️ Sem nenhuma linha configurada</div>'+
+      '<div class="hz-unassigned-sub">Cadastre as linhas de produção em Admin &gt; Configurações pra esses pedidos entrarem na projeção.</div>'+
+      semLinha.map(unassignedRowHtml).join('');
+  }
+  if(semRitmo.length){
+    semRitmo.sort(function(a,b){ return (a.p.priority||999)-(b.p.priority||999); });
+    html+='<div class="hz-unassigned-title" style="margin-top:'+(semLinha.length?'16px':'0')+'">⏱️ Sem ritmo de produção definido</div>'+
+      '<div class="hz-unassigned-sub">Sem "un./h" cadastrado (no pedido ou no produto) não dá pra estimar quantas semanas vão levar — defina em Cadastro de Produtos ou no pedido pra entrarem na projeção.</div>'+
+      semRitmo.map(unassignedRowHtml).join('');
+  }
+  document.getElementById('hzUnassignedBody').innerHTML=html;
+}
+</script>
+</body>
+</html>

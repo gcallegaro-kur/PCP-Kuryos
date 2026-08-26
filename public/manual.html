@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
+      color-scheme: light;
       --primary: #5c3fa1;
       --primary-light: #f5f3ff;
       --success: #10b981;
@@ -16,7 +17,15 @@
       --text: #1f2937;
       --muted: #4b5563;
       --bg: #f9fafb;
+      --card: #ffffff;
       --border: #e5e7eb;
+    }
+    /* Achado da auditoria de modo escuro: página autônoma (sem
+       auth_check.js), nunca teve modo escuro -- os selos (badge-*) agora
+       usam color-mix() sobre a cor semântica de base em vez das variáveis
+       "-light" fixas, então acompanham o tema sozinhos. */
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; --primary:#a58fe0; --primary-light:#241c3d; --success:#34c98f; --success-light:#0f2e1e; --danger:#ff6b6b; --danger-light:#3a1613; --text:#f5f5f7; --muted:#98989d; --bg:#000000; --card:#1c1c1e; --border:#38383a; }
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -29,7 +38,7 @@
     .container {
       max-width: 720px;
       margin: 0 auto;
-      background: white;
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 30px;
@@ -83,13 +92,13 @@
       font-weight: 700;
       margin-bottom: 6px;
     }
-    .badge-green { background: var(--success-light); color: #065f46; }
-    .badge-red { background: var(--danger-light); color: #991b1b; }
-    .badge-purple { background: var(--primary-light); color: #5b21b6; }
-    
+    .badge-green { background: color-mix(in srgb, var(--success) 22%, var(--card)); color: var(--success); }
+    .badge-red { background: color-mix(in srgb, var(--danger) 18%, var(--card)); color: var(--danger); }
+    .badge-purple { background: color-mix(in srgb, var(--primary) 20%, var(--card)); color: var(--primary); }
+
     .gold-rule {
-      background: #fffbeb;
-      border: 1px solid #fef3c7;
+      background: color-mix(in srgb, #d97706 14%, var(--card));
+      border: 1px solid color-mix(in srgb, #d97706 35%, var(--card));
       border-left: 5px solid #d97706;
       padding: 16px;
       border-radius: 8px;
@@ -97,7 +106,7 @@
       font-size: 13px;
     }
     .gold-rule strong {
-      color: #92400e;
+      color: color-mix(in srgb, #d97706 65%, var(--text));
     }
     .footer {
       text-align: center;

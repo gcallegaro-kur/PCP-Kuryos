@@ -1,9 +1,18 @@
+# DEPRECATED (2026-07-21): substituído pela sincronização embutida no
+# `criarOP` (functions/index.js, syncProdutoFromOP), chamada pelo próprio
+# Gerador de OPs a cada emissão de OP -- não precisa mais de um PC rodando
+# este script continuamente, nem de um botão/fluxo separado pra "sincronizar
+# produtos". Mantido só como referência do mapeamento de colunas da aba
+# PRODUTOS. Também tinha um bug real: usava ref.set() (sobrescrevia o nó
+# inteiro), o que apagava prodHoraRef e qualquer outro campo só-do-Firebase
+# a cada sincronização -- o substituto faz update() só dos campos que a
+# planilha realmente é dona.
 import os
 import time
 import json
-import urllib.request
-import urllib.parse
 import openpyxl
+import firebase_admin
+from firebase_admin import credentials, db as fb_db
 
 # ── CONFIGURAÇÕES ──────────────────────────────────────────────────
 # Aba PRODUTOS do Criador de OPs vF.xlsm é a fonte única de cadastro de
@@ -13,8 +22,21 @@ import openpyxl
 WATCH_FILE = r"C:\Users\gcall\Kuryos\Servidor Kuryos - Documentos\04. Design de Produtos e PCP\2. Ordens de Produção\Criador de OPs vF.xlsm"
 SHEET_NAME = "PRODUTOS"
 DB_URL = "https://prod-kuryos-default-rtdb.firebaseio.com"
+SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firebase-service-account.json")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "produtos_watcher_state.json")
 # ───────────────────────────────────────────────────────────────────
+
+def init_firebase():
+    if firebase_admin._apps:
+        return
+    if not os.path.exists(SERVICE_ACCOUNT_PATH):
+        raise SystemExit(
+            f"Chave de service account nao encontrada em: {SERVICE_ACCOUNT_PATH}\n"
+            "Gere em: Firebase Console > Configuracoes do projeto > Contas de servico > "
+            "Gerar nova chave privada, e salve o .json baixado com esse nome nessa pasta."
+        )
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+    firebase_admin.initialize_app(cred, {"databaseURL": DB_URL})
 
 # Cabeçalho esperado na linha 1 (uma coluna por campo, nessa ordem) — se a
 # planilha mudar de layout, o script para e avisa em vez de importar dado
@@ -138,26 +160,19 @@ def sync_produtos():
         }
 
         key = sanitize_key(cod_produto)
-        url = f"{DB_URL}/produtos/{key}.json"
+        ref = fb_db.reference(f"produtos/{key}")
 
         # Preserva campos calculados só pelo Firebase (ex: prodHoraCalc) se existirem
         try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req) as response:
-                res = response.read()
-                if res and res != b'null':
-                    existing = json.loads(res.decode('utf-8'))
-                    if existing.get("prodHoraCalc"):
-                        data["prodHoraCalc"] = existing["prodHoraCalc"]
+            existing = ref.get()
+            if existing and existing.get("prodHoraCalc"):
+                data["prodHoraCalc"] = existing["prodHoraCalc"]
         except Exception:
             pass
 
-        data_json = json.dumps(data).encode('utf-8')
-        req = urllib.request.Request(url, data=data_json, method='PUT')
-        req.add_header('Content-Type', 'application/json')
         try:
-            with urllib.request.urlopen(req):
-                synced += 1
+            ref.set(data)
+            synced += 1
         except Exception as e:
             print(f"  -> Falha ao sincronizar {cod_produto}:", e)
 
@@ -170,6 +185,7 @@ if __name__ == "__main__":
     print("==========================================================")
     print("   KURYOS PCP - WATCHER DE PRODUTOS (Criador de OPs vF)   ")
     print("==========================================================")
+    init_firebase()
     print(f"Monitorando: {WATCH_FILE}")
     print(f"Aba: {SHEET_NAME}")
     print("Sincronização é MÃO ÚNICA: a planilha manda, o Firebase só espelha.")

@@ -4,34 +4,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerenciamento de Usuários - PCP Kuryos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root {
-      --b: #0f172a;
-      --m: #475569;
-      --l: #64748b;
-      --bd: #e2e8f0;
-      --bg: #f8fafc;
-      --c: #fff;
-      --p: #2563eb;
-      --g: #16a34a;
-      --r: #dc2626;
-      --y: #f59e0b;
-    }
-    
+    /* Achado da auditoria de modo escuro: esta página tinha seu próprio
+       conjunto de tokens (--b/--m/--l/--bd/--bg/--c/--p/--g/--r/--y),
+       paralelo ao de shared/theme.css -- e como auth_check.js injeta
+       shared/theme.css em toda página (pra sidebar funcionar), o nome
+       "--bg" colidia com o de lá e sempre perdia pro dele, e o seletor
+       "body.kuryos-theme" de lá (mais específico que o "body" simples
+       daqui) sempre vencia pra cor de texto/fundo do body. Resultado: o
+       body ficava escuro (herdado de shared/theme.css) mas .card/select/
+       badges continuavam sólidos em branco -- texto branco em fundo
+       branco. Corrigido consumindo direto os tokens de shared/theme.css
+       (--ink/--panel/--bg/--line/--accent/--good/--critical/--warn), sem
+       manter um segundo sistema de cores por trás.
+       Ver tokens completos, incluindo modo escuro, em shared/theme.css. */
+    :root { --purple: #7c3aed; }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --purple: #a78bfa; } }
+    :root[data-theme="dark"] { --purple: #a78bfa; }
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--b);
+      font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
       font-size: 14px;
     }
     
@@ -54,46 +59,50 @@
     }
     
     .subtitle {
-      color: var(--l);
+      color: var(--ink-mute);
       font-size: 13px;
       margin-top: 4px;
     }
-    
+
     .card {
-      background: var(--c);
-      border: 1px solid var(--bd);
-      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg, 12px);
       padding: 20px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--shadow, 0 1px 3px rgba(0,0,0,.05));
     }
-    
+
     .table-container {
       overflow-x: auto;
     }
-    
+
     table {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
     }
-    
+
     th, td {
       padding: 14px 16px;
-      border-bottom: 1px solid var(--bd);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
     }
-    
+
     th {
       font-weight: 600;
-      color: var(--l);
+      color: var(--ink-mute);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
-    tr:hover {
-      background: #f8fafc;
+
+    tr:hover td {
+      background: color-mix(in srgb, var(--ink) 4%, transparent);
     }
-    
+
+    /* Selos de status/perfil: fundo é o tom semântico bem diluído sobre o
+       painel (color-mix com var(--panel)), então acompanha o tema sozinho
+       -- sem precisar de um par claro/escuro hardcoded por selo. */
     .badge {
       padding: 4px 8px;
       border-radius: 6px;
@@ -101,37 +110,47 @@
       font-weight: 600;
       display: inline-block;
     }
-    
+
     .badge.pending {
-      background: #fef3c7;
-      color: #d97706;
+      background: color-mix(in srgb, var(--warn) 20%, var(--panel));
+      color: var(--warn);
     }
-    
+
     .badge.production {
-      background: #dbeafe;
-      color: #2563eb;
+      background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+      color: var(--accent);
     }
-    
+
     .badge.admin {
-      background: #dcfce7;
-      color: #16a34a;
+      background: color-mix(in srgb, var(--good) 18%, var(--panel));
+      color: var(--good);
     }
-    
+
+    .badge.rotulagem {
+      background: color-mix(in srgb, var(--purple, #7c3aed) 18%, var(--panel));
+      color: var(--purple, #7c3aed);
+    }
+
     select {
       padding: 6px 10px;
-      border: 1px solid #cbd5e1;
+      border: 1px solid var(--line);
       border-radius: 6px;
       font-size: 13px;
-      background: white;
+      color: var(--ink);
+      background: var(--panel);
       cursor: pointer;
       font-family: inherit;
     }
-    
+
     select:focus {
       outline: none;
-      border-color: var(--p);
+      border-color: var(--accent);
     }
-    
+
+    /* Toast: mantido escuro de propósito nos dois temas (HUD flutuante
+       curto, mesmo tratamento que o macOS usa pra esse tipo de aviso --
+       não é um cartão que fica na tela, então não precisa acompanhar o
+       tema da página; o par de cores é fixo e sempre legível sozinho). */
     .toast {
       position: fixed;
       bottom: 20px;
@@ -154,21 +173,7 @@
     }
   </style>
 </head>
-<body>
-
-<!-- Header Navigation Bar -->
-<div style="background:#0f172a; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; border-bottom:1px solid #1e293b;">
-  <div style="display:flex; align-items:center; gap:8px;">
-    <span style="font-size:16px;">👥</span>
-    <span style="letter-spacing:0.5px; text-transform:uppercase; font-size:12px; color:#94a3b8;">Gerenciamento de Acessos</span>
-  </div>
-  <div style="display:flex; gap:16px;" id="nav-links">
-    <a href="dashboard.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">🏠 Daily Dashboard</a>
-    <a href="dashboard_analise.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">📊 Histórico</a>
-    <a href="planejamento.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">🗓 Planejamento</a>
-    <a href="form.html" style="color:#cbd5e1; text-decoration:none; transition:color 0.15s;">📝 Formulário</a>
-  </div>
-</div>
+<body class="kuryos-theme has-sidebar">
 
 <div class="container">
   <div class="head">
@@ -192,7 +197,7 @@
         </thead>
         <tbody id="users-tbody">
           <tr>
-            <td colspan="5" style="text-align:center; color:var(--l); padding:30px;">Carregando lista de usuários...</td>
+            <td colspan="5" style="text-align:center; color:var(--ink-mute); padding:30px;">Carregando lista de usuários...</td>
           </tr>
         </tbody>
       </table>
@@ -207,13 +212,14 @@
   var firebaseConfig = {
     apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
     authDomain: "prod-kuryos.firebaseapp.com",
-    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
     projectId: "prod-kuryos",
     storageBucket: "prod-kuryos.firebasestorage.app",
     messagingSenderId: "323674581733",
     appId: "1:323674581733:web:e283a491c0c2bd6025420c"
   };
   firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
 </script>
 
 <!-- Security Auth Check -->
@@ -226,10 +232,16 @@
   // Wait for auth to be confirmed and load users
   firebase.auth().onAuthStateChanged(user => {
     if (user) {
-      // Check if role is admin (secured by auth_check.js, but let's run here too)
-      database.ref('usuarios/' + user.uid).once('value', snap => {
+      // Check if role is admin (secured by auth_check.js, but let's run here too).
+      // dbOnValue (não .once) porque essa leitura roda logo após a
+      // navegação, na mesma janela de corrida entre o token de auth e a
+      // conexão nova do RTDB -- sem retentativa, uma falha aqui deixava a
+      // tabela presa em "Carregando..." pra sempre, sem nenhum aviso.
+      var jaEscutandoUsuarios = false;
+      dbOnValue(database.ref('usuarios/' + user.uid), snap => {
         const p = snap.val();
-        if (p && p.role === 'admin') {
+        if (p && p.role === 'admin' && !jaEscutandoUsuarios) {
+          jaEscutandoUsuarios = true;
           listenToUsers();
         }
       });
@@ -237,14 +249,14 @@
   });
   
   function listenToUsers() {
-    database.ref('usuarios').on('value', snapshot => {
+    dbOnValue(database.ref('usuarios'), snapshot => {
       const users = snapshot.val() || {};
       const tbody = document.getElementById('users-tbody');
       tbody.innerHTML = '';
       
       const uids = Object.keys(users);
       if (uids.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--l);">Nenhum usuário cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--ink-mute);">Nenhum usuário cadastrado.</td></tr>';
         return;
       }
       
@@ -263,8 +275,8 @@
         
         const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-';
         
-        const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin' };
-        const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador' };
+        const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin', 'rotulagem': 'rotulagem' };
+        const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador', 'rotulagem': 'Rotulagem' };
         
         const badgeClass = badgeClasses[u.role] || 'pending';
         const badgeLabel = badgeLabels[u.role] || u.role;
@@ -272,7 +284,7 @@
         // Disable dropdown for the logged-in administrator itself to prevent accidental lockouts!
         const selfLogged = firebase.auth().currentUser.uid === u.uid;
         const disableAttr = selfLogged ? 'disabled' : '';
-        const noteSelf = selfLogged ? ' <span style="font-size:10px; color:var(--l); font-style:italic;">(Você)</span>' : '';
+        const noteSelf = selfLogged ? ' <span style="font-size:10px; color:var(--ink-mute); font-style:italic;">(Você)</span>' : '';
         
         tr.innerHTML = `
           <td><strong>${escapeHtml(u.nome || '-')}</strong>${noteSelf}</td>
@@ -283,6 +295,7 @@
             <select onchange="updateUserRole('${u.uid}', this.value)" ${disableAttr}>
               <option value="pending" ${u.role === 'pending' ? 'selected' : ''}>Pendente</option>
               <option value="production" ${u.role === 'production' ? 'selected' : ''}>Produção</option>
+              <option value="rotulagem" ${u.role === 'rotulagem' ? 'selected' : ''}>Rotulagem</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
             </select>
           </td>
@@ -296,7 +309,7 @@
   function updateUserRole(uid, newRole) {
     if (!window.currentUser || window.currentUser.role !== 'admin') {
       alert('Acesso Negado: Apenas administradores podem gerenciar perfis de acesso.');
-      renderUsers();
+      listenToUsers();
       return;
     }
     database.ref('usuarios/' + uid).update({

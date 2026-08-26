@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Materiais</title>
+  <script>location.replace('cadastros.html?tab=materiais');</script>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 16px;padding-top:10px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .table-wrap{overflow:auto;max-height:calc(100vh - 300px)}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+    thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    tr:hover td{background:var(--surface-2)}
+    .code-cell{font-family:monospace;font-weight:700;color:var(--primary);white-space:nowrap}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:600px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
+    label.chk input{width:auto}
+    @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Cadastro de Materiais</h1>
+    <div class="header-sub">Matérias-primas e embalagens · base do BOM/Fórmula e do Compras</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="kt-toolbar">
+  <div class="kt-search">
+    <span class="icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Buscar por código ou nome...">
+  </div>
+  <select class="kt-select" id="filterTipo">
+    <option value="">Todos os tipos</option>
+    <option value="MP">Matéria-Prima</option>
+    <option value="EMBALAGEM">Embalagem</option>
+  </select>
+  <select class="kt-select" id="filterAtivo">
+    <option value="">Todos</option>
+    <option value="ativo">Ativos</option>
+    <option value="inativo">Inativos</option>
+  </select>
+  <button class="btn btn-primary" id="btnNovo">+ Novo Material</button>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Total</div></div>
+    <div class="stat"><div class="stat-val" id="statMP" style="color:var(--primary)">—</div><div class="stat-lbl">Matéria-Prima</div></div>
+    <div class="stat"><div class="stat-val" id="statEmbalagem" style="color:var(--purple)">—</div><div class="stat-lbl">Embalagem</div></div>
+    <div class="stat"><div class="stat-val" id="statControlado" style="color:var(--danger)">—</div><div class="stat-lbl">Controlados</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span id="tableCount">Materiais</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:100px">Código</th>
+            <th style="min-width:200px">Nome</th>
+            <th style="min-width:90px">Tipo</th>
+            <th style="min-width:60px">Un.</th>
+            <th style="min-width:110px">Proprietário</th>
+            <th style="min-width:90px">Controlado</th>
+            <th style="min-width:80px">Status</th>
+            <th style="min-width:50px"></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Novo Material</h2>
+      <button class="modal-close" id="modalClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-label">Identificação</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Código *</label>
+          <input type="text" id="fCodigo" placeholder="Ex: MPGR001">
+        </div>
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select id="fTipo">
+            <option value="MP">Matéria-Prima</option>
+            <option value="EMBALAGEM">Embalagem</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Nome *</label>
+          <input type="text" id="fNome" placeholder="Ex: VITAMINA E OLEOSA">
+        </div>
+        <div class="form-group">
+          <label>Unidade *</label>
+          <select id="fUnidade">
+            <option value="kg">kg</option>
+            <option value="un">un</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Densidade (g/ml)</label>
+          <input type="number" id="fDensidade" min="0" step="any" placeholder="Só MP líquida -- deixe vazio até medir">
+          <div class="field-hint">Nunca usar 1,0 como padrão -- deixe vazio até ter valor medido de verdade.</div>
+        </div>
+      </div>
+
+      <div class="section-label">Origem e propriedade</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Fornecedor</label>
+          <select id="fFornecedor"><option value="">Nenhum selecionado</option></select>
+          <div class="field-hint">Cadastro em Compras &gt; Fornecedores.</div>
+        </div>
+        <div class="form-group">
+          <label>Proprietário do material</label>
+          <select id="fProprietario">
+            <option value="Kuryos">Kuryos</option>
+          </select>
+          <div class="field-hint">"Kuryos" por padrão. Escolha um cliente quando o material é consignado (fica em nossa posse, mas é do cliente).</div>
+        </div>
+        <div class="form-group full">
+          <label>Especificações técnicas</label>
+          <textarea id="fEspecificacoes" rows="2" placeholder="Ex: tampa flip-top, pescante 8mm, cor âmbar..."></textarea>
+        </div>
+      </div>
+
+      <div class="section-label">Status</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="chk"><input type="checkbox" id="fControlado"> Controlado (ex: álcool -- controle PF)</label>
+        </div>
+        <div class="form-group">
+          <label class="chk"><input type="checkbox" id="fAtivo" checked> Ativo</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalCancelBtn">Cancelar</button>
+      <button class="btn btn-green" id="modalSaveBtn">Salvar Material</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+var allMateriais = {};
+var allClientes = {};
+var allFornecedores = {};
+var editingKey = null;
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+
+// Achado do Auditor: guardar o proprietário pelo NOME do cliente (mutável)
+// deixava o material órfão se alguém corrigisse o nome do cliente depois --
+// o <select> perdia a seleção válida e reabrir/salvar o material voltava
+// silenciosamente pra "Kuryos", perdendo a marcação de material consignado.
+// Agora o valor do <select> é a CHAVE de clientes/ (estável), com um
+// sentinela fixo pra "Kuryos" (que não é um registro em clientes/).
+var PROPRIETARIO_KURYOS = '__KURYOS__';
+function refreshProprietarioOptions() {
+  var sel = document.getElementById('fProprietario');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="' + PROPRIETARIO_KURYOS + '">Kuryos</option>';
+  Object.entries(allClientes).sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); }).forEach(function(entry) {
+    var key = entry[0], c = entry[1];
+    var o = document.createElement('option');
+    o.value = key; o.textContent = c.nome;
+    sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+}
+
+// Cadastro de Fornecedores agora existe (Compras) -- o campo deixou de ser
+// texto livre. Mesmo padrão de chave estável que proprietarioMaterialKey
+// (não o nome, que muda).
+function refreshFornecedorOptions() {
+  var sel = document.getElementById('fFornecedor');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Nenhum selecionado</option>';
+  Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
+    .forEach(function(entry) {
+      var o = document.createElement('option');
+      o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
+      sel.appendChild(o);
+    });
+  if (cur) sel.value = cur;
+}
+
+function renderTable() {
+  var search = norm(document.getElementById('searchInput').value);
+  var filtTipo = document.getElementById('filterTipo').value;
+  var filtAtivo = document.getElementById('filterAtivo').value;
+
+  var rows = Object.entries(allMateriais).filter(function(entry) {
+    var m = entry[1];
+    var ativo = m.ativo === false ? 'inativo' : 'ativo';
+    if (filtTipo && m.tipo !== filtTipo) return false;
+    if (filtAtivo && ativo !== filtAtivo) return false;
+    if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome)).indexOf(search) === -1) return false;
+    return true;
+  }).sort(function(a, b) { return norm(a[1].mpCodigo).localeCompare(norm(b[1].mpCodigo)); });
+
+  var total = Object.keys(allMateriais).length;
+  var mp = Object.values(allMateriais).filter(function(m) { return m.tipo === 'MP'; }).length;
+  var emb = Object.values(allMateriais).filter(function(m) { return m.tipo === 'EMBALAGEM'; }).length;
+  var ctrl = Object.values(allMateriais).filter(function(m) { return m.controlado; }).length;
+  document.getElementById('statTotal').textContent = fmtNum(total);
+  document.getElementById('statMP').textContent = fmtNum(mp);
+  document.getElementById('statEmbalagem').textContent = fmtNum(emb);
+  document.getElementById('statControlado').textContent = fmtNum(ctrl);
+  document.getElementById('tableCount').textContent = 'Materiais (' + rows.length + ' exibidos)';
+
+  var tbody = document.getElementById('tableBody');
+  if (!rows.length) {
+    var semNenhumCadastrado = !total;
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhumCadastrado
+      ? 'Nenhum material cadastrado ainda. Clique em "+ Novo Material" pra começar.'
+      : 'Nenhum material encontrado com esse filtro/busca.') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(entry) {
+    var key = entry[0], m = entry[1];
+    var ativo = m.ativo !== false;
+    var tipoBadge = m.tipo === 'EMBALAGEM' ? '<span class="badge badge-purple">Embalagem</span>' : '<span class="badge badge-blue">Matéria-Prima</span>';
+    // Achado do Tester: usar o nome DENORMALIZADO (m.proprietarioMaterial)
+    // direto na listagem deixava o valor desatualizado depois que o cliente
+    // era renomeado, até o material ser reaberto e salvo de novo. A listagem
+    // agora resolve o nome ao vivo pela chave estável, com o denormalizado
+    // só como fallback pra material legado sem proprietarioMaterialKey.
+    var propNomeVivo = m.proprietarioMaterialKey === PROPRIETARIO_KURYOS || !m.proprietarioMaterialKey
+      ? (m.proprietarioMaterial || 'Kuryos')
+      : ((allClientes[m.proprietarioMaterialKey] || {}).nome || m.proprietarioMaterial || 'Kuryos');
+    return '<tr>' +
+      '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
+      '<td>' + escapeHtml(m.mpNome || '—') + '</td>' +
+      '<td>' + tipoBadge + '</td>' +
+      '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
+      '<td style="font-size:12px">' + escapeHtml(propNomeVivo) + '</td>' +
+      '<td>' + (m.controlado ? '<span class="badge badge-orange">Sim</span>' : '<span class="badge badge-gray">Não</span>') + '</td>' +
+      '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm btn-edit" data-key="' + key + '" title="Editar material" aria-label="Editar material">✏</button></td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('.btn-edit').forEach(function(btn) {
+    btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+  });
+}
+
+function openModal(key) {
+  editingKey = key || null;
+  var m = key ? (allMateriais[key] || {}) : {};
+  document.getElementById('modalTitle').textContent = key ? 'Editar Material' : 'Novo Material';
+  document.getElementById('fCodigo').value = m.mpCodigo || '';
+  document.getElementById('fCodigo').readOnly = !!key;
+  document.getElementById('fTipo').value = m.tipo || 'MP';
+  document.getElementById('fNome').value = m.mpNome || '';
+  document.getElementById('fUnidade').value = m.unidade || 'kg';
+  document.getElementById('fDensidade').value = m.densidade != null ? m.densidade : '';
+  refreshFornecedorOptions();
+  document.getElementById('fFornecedor').value = m.fornecedorKey || '';
+  refreshProprietarioOptions();
+  document.getElementById('fProprietario').value = m.proprietarioMaterialKey || PROPRIETARIO_KURYOS;
+  document.getElementById('fEspecificacoes').value = m.especificacoesTecnicas || '';
+  document.getElementById('fControlado').checked = !!m.controlado;
+  document.getElementById('fAtivo').checked = m.ativo !== false;
+  document.getElementById('modalBg').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modalBg').classList.remove('open');
+  editingKey = null;
+}
+function saveModal() {
+  var codigo = document.getElementById('fCodigo').value.trim();
+  var nome = document.getElementById('fNome').value.trim();
+  if (!codigo || !nome) { showAlert('Código e nome são obrigatórios.', 'danger'); return; }
+
+  var key = editingKey || sanitizeKey(codigo);
+  if (!editingKey && allMateriais[key]) { showAlert('Já existe um material com esse código.', 'danger'); return; }
+
+  var densVal = document.getElementById('fDensidade').value;
+  var propKey = document.getElementById('fProprietario').value || PROPRIETARIO_KURYOS;
+  var propNome = propKey === PROPRIETARIO_KURYOS ? 'Kuryos' : ((allClientes[propKey] || {}).nome || propKey);
+  var fornecedorKey = document.getElementById('fFornecedor').value || '';
+  var fornecedorObj = fornecedorKey ? (allFornecedores[fornecedorKey] || {}) : {};
+  var data = {
+    mpCodigo: codigo,
+    mpNome: nome,
+    tipo: document.getElementById('fTipo').value,
+    unidade: document.getElementById('fUnidade').value,
+    densidade: densVal !== '' ? parseFloat(densVal) : null,
+    fornecedorKey: fornecedorKey,
+    fornecedor: fornecedorKey ? (fornecedorObj.nomeFantasia || fornecedorObj.razaoSocial || '') : '', // denormalizado só pra exibição
+    proprietarioMaterialKey: propKey,
+    proprietarioMaterial: propNome, // denormalizado só pra exibição na tabela
+    especificacoesTecnicas: document.getElementById('fEspecificacoes').value.trim(),
+    controlado: document.getElementById('fControlado').checked,
+    ativo: document.getElementById('fAtivo').checked
+  };
+
+  document.getElementById('modalSaveBtn').disabled = true;
+  db.ref('materiais/' + key).update(data)
+    .then(function() { showAlert('Material salvo com sucesso!', 'success'); closeModal(); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalSaveBtn').disabled = false; });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('btnNovo').addEventListener('click', function() { openModal(null); });
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+  document.getElementById('modalSaveBtn').addEventListener('click', saveModal);
+  document.getElementById('modalBg').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+  var _t = null;
+  document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(_t); _t = setTimeout(renderTable, 200);
+  });
+  document.getElementById('filterTipo').addEventListener('change', renderTable);
+  document.getElementById('filterAtivo').addEventListener('change', renderTable);
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('materiais'), function(snap) {
+      allMateriais = snap.val() || {};
+      renderTable();
+    });
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientes = snap.val() || {};
+      refreshProprietarioOptions();
+      renderTable(); // nomes de proprietário resolvidos ao vivo -- reflete rename de cliente na hora
+    });
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedores = snap.val() || {};
+      refreshFornecedorOptions();
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

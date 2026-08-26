@@ -4,31 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Planejamento · Kuryos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--primary-light:#1e3a8a;--success:#059669;--danger:#e02424;--warning:#d97706;--bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--env1:#3b82f6;--env2:#8b5cf6;--env3:#ec4899;--env4:#f59e0b;--env5:#10b981;--env6:#06b6d4;--env7:#64748b;--env8:#14b8a6}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --primary-light:#8fa8ec; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --primary-light:#8fa8ec; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .header{background:var(--primary);color:white;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(10,28,105,.3);position:sticky;top:0;z-index:100}
-    .header h1{font-size:18px;font-weight:700}
-    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600}
-    .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.3)}
-    .dot.on{background:#34d399;animation:pulse 2s infinite}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 8px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--muted)}
+    .dot{width:7px;height:7px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    .main{padding:16px;max-width:96%;margin:0 auto}
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
     /* Top tabs */
-    .top-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--card);border-radius:12px;padding:4px;box-shadow:0 1px 4px rgba(0,0,0,.06);width:fit-content}
+    .top-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--card);border-radius:14px;padding:4px;box-shadow:var(--shadow);width:fit-content}
     .top-tab{padding:8px 20px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s}
     .top-tab.active{background:var(--primary);color:white;box-shadow:0 2px 8px rgba(10,28,105,.25)}
     .top-tab:hover:not(.active){background:var(--bg);color:var(--text)}
@@ -43,13 +44,13 @@
     .btn-sm{padding:6px 14px;font-size:12px}
     .btn:disabled{opacity:.45;cursor:not-allowed}
     /* Grade tab */
-    .week-bar{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .week-bar{background:var(--card);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow);margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .week-label{font-size:15px;font-weight:800;color:var(--text);flex:1;min-width:160px}
     .week-sub{font-size:11px;color:var(--muted);margin-top:2px}
     .week-nav-btn{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);transition:all .15s}
     .week-nav-btn:hover{background:var(--primary);color:white;border-color:var(--primary)}
     .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px}
-    .sum-card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);text-align:center;border-top:3px solid var(--primary)}
+    .sum-card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);text-align:center;border-top:3px solid var(--primary)}
     .sum-val{font-size:22px;font-weight:800;color:var(--primary)}
     .sum-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
     .day-tabs{display:flex;gap:5px;overflow-x:auto;padding-bottom:0}
@@ -57,12 +58,12 @@
     .day-tab.active{background:var(--primary);color:white}
     .day-tab:hover:not(.active){background:#cbd5e1;color:var(--text)}
     .day-tab.is-today{box-shadow:inset 0 -2px 0 #34d399}
-    .grid-card{background:var(--card);border-radius:0 12px 12px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;margin-bottom:14px}
+    .grid-card{background:var(--card);border-radius:0 12px 12px 12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
     .plan-table-wrap{overflow-x:auto}
     .plan-table{width:100%;border-collapse:collapse;min-width:660px}
-    .plan-table th{background:#f8fafc;padding:10px 12px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center}
-    .plan-table th.col-hora{text-align:left;width:72px}
-    .plan-table td{padding:5px 7px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .plan-table th{background:color-mix(in srgb, var(--text) 4%, var(--card));padding:10px 12px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:center}
+    .plan-table th.col-hora{text-align:left;width:80px}
+    .plan-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
     .plan-table tr:last-child td{border-bottom:none}
     .plan-table tr.row-pausa td{background:#fafafa}
     .plan-table tr.row-total td{background:#f0fdf4}
@@ -74,9 +75,9 @@
     .col-e6{border-top:3px solid var(--env6)}
     .col-e7{border-top:3px solid var(--env7)}
     .col-e8{border-top:3px solid var(--env8)}
-    .hora-cell{font-size:12px;font-weight:700;color:var(--text);width:72px;white-space:nowrap;padding:5px 8px}
+    .hora-cell{font-size:13px;font-weight:700;color:var(--text);width:80px;white-space:nowrap;padding:8px 10px}
     .hora-cell.is-pausa{color:var(--muted);font-style:italic;font-weight:500;font-size:11px}
-    .slot-cell{cursor:pointer;border-radius:7px;padding:6px 9px;transition:background .12s;user-select:none;min-width:160px}
+    .slot-cell{cursor:pointer;border-radius:8px;padding:8px 11px;transition:background .12s;user-select:none;min-width:210px}
     .slot-cell:hover:not(.is-pausa){background:#eff6ff}
     .slot-cell.is-pausa{cursor:default;text-align:center;color:var(--muted);font-size:11px;font-style:italic}
     .slot-cell[data-l="1"]{border-left:3px solid var(--env1)}
@@ -87,27 +88,100 @@
     .slot-cell[data-l="6"]{border-left:3px solid var(--env6)}
     .slot-cell[data-l="7"]{border-left:3px solid var(--env7)}
     .slot-cell[data-l="8"]{border-left:3px solid var(--env8)}
-    .slot-empty{color:#bfdbfe;font-size:11px;text-align:center;padding:4px 0}
+    .slot-empty{color:var(--muted);opacity:.55;font-size:11px;text-align:center;padding:4px 0}
     .slot-empty::after{content:'＋ produto'}
-    .slot-filled{display:flex;flex-direction:column;gap:2px}
-    .slot-nome{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-    .slot-badges{display:flex;gap:5px;align-items:center;margin-top:2px;flex-wrap:wrap}
-    .sbadge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;white-space:nowrap}
+    .slot-filled{display:flex;flex-direction:column;gap:3px}
+    .slot-nome{font-size:12.5px;font-weight:700;color:var(--text);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .slot-badges{display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap}
+    .sbadge{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:8px;white-space:nowrap}
     .sbadge-meta{background:#dbeafe;color:#1e40af}
     .sbadge-lp{background:#fef3c7;color:#92400e}
-    .sbadge-sku{background:#f1f5f9;color:var(--muted)}
+    .sbadge-sku{background:color-mix(in srgb, var(--text) 8%, var(--card));color:var(--muted)}
     .sbadge-actual{background:#e0f2fe;color:#0369a1}
     .sbadge-actual-ok{background:#d1fae5;color:#065f46;font-weight:700}
     .sbadge-actual-warn{background:#fee2e2;color:#991b1b}
-    .sbadge-actual-zero{background:#f1f5f9;color:#94a3b8}
+    .sbadge-actual-zero{background:#f1f5f9;color:#5b6472}
     .sbadge-done{background:#10b981;color:white;font-weight:bold}
     .slot-x{font-size:10px;color:var(--muted);cursor:pointer;margin-left:auto;opacity:0;padding:1px 4px;border-radius:3px;transition:opacity .12s}
     .slot-cell:hover .slot-x{opacity:1}
     .total-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase}
     .total-v{font-size:12px;font-weight:800;color:var(--success)}
+    /* Grade Semanal — Gantt de blocos (linha = eixo Y, hora = eixo X; um
+       bloco = uma sequência contínua de horas do mesmo pedido/lote, largura
+       proporcional à duração, em vez de uma célula por hora) */
+    .gantt-grid{display:grid;row-gap:8px;column-gap:3px;padding:16px;min-width:900px}
+    .gantt-corner{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;display:flex;align-items:center}
+    .gantt-hour-hdr{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;text-align:center;padding:2px;white-space:nowrap;align-self:end;padding-bottom:6px}
+    .gantt-hour-hdr.is-pausa{opacity:.45;font-style:italic}
+    .gantt-hour-hdr.gantt-total-hdr{color:var(--primary);border-left:1px solid var(--border);padding-left:8px}
+    .gantt-day-total{display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid var(--border);background:color-mix(in srgb, var(--text) 4%, var(--card));font-weight:800;color:var(--primary);font-size:12.5px;padding:4px 2px;text-align:center}
+    .gantt-day-total small{font-weight:600;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.02em;margin-top:1px}
+    .gantt-linha-label{display:flex;flex-direction:column;justify-content:center;padding-right:10px;gap:4px}
+    .gantt-linha-nome{font-size:13px;font-weight:800;color:var(--text);white-space:nowrap}
+    .gantt-linha-live{font-size:9px;font-weight:700;color:var(--success);display:flex;align-items:center;gap:4px;white-space:nowrap}
+    .gantt-linha-live.parada{color:var(--danger)}
+    .gantt-linha-live-bar{width:40px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden;flex:none}
+    .gantt-linha-live-fill{height:100%;background:var(--success);border-radius:2px}
+    .gantt-cell-pausa{background:repeating-linear-gradient(45deg,transparent,transparent 4px,color-mix(in srgb, var(--text) 5%, transparent) 4px,color-mix(in srgb, var(--text) 5%, transparent) 8px);border-radius:6px;min-height:48px}
+    .gantt-cell-empty{border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:48px;border:1.5px dashed transparent;transition:all .12s}
+    .gantt-cell-empty:hover{border-color:var(--primary);background:#eff6ff}
+    .gantt-cell-empty::after{content:'+';color:var(--muted);opacity:.35;font-size:16px;font-weight:300}
+    .gantt-cell-empty:hover::after{opacity:1;color:var(--primary)}
+    .gantt-block{border-radius:8px;padding:6px 9px;min-height:48px;cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:center;border-left:4px solid var(--primary);background:#eff6ff;transition:filter .12s}
+    .gantt-block:hover{filter:brightness(.96)}
+    .gantt-block.locked{cursor:default}
+    .gantt-block.locked:hover{filter:none}
+    .gantt-block.done{background:#f0fdf4;border-left-color:#10b981;opacity:.65}
+    .gantt-block.vinculado{background:#dbeafe;border-left-color:#1e40af}
+    .gantt-block.congelado{background:#ede9fe;border-left-color:#7c3aed}
+    .gantt-block.zona-fixa{background:#fef3c7;border-left-color:#b45309}
+    .gantt-block.past:not(.done):not(.vinculado){opacity:.6}
+    .gantt-block-nome{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .gantt-block-meta{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+    .gantt-lote-pill{font-size:9.5px;font-weight:700;background:#e0f2fe;color:#0369a1;border-radius:6px;padding:1px 5px}
+    .gantt-insumo-dot{width:6px;height:6px;border-radius:50%;flex:none;display:inline-block}
+    .gantt-insumo-dot.pendente{background:var(--warning)}
+    .gantt-block-x{position:absolute;top:3px;right:5px;font-size:10px;color:var(--muted);opacity:0;padding:1px 4px;border-radius:3px;line-height:1}
+    .gantt-block:hover .gantt-block-x{opacity:.7}
+    .gantt-block-x:hover{opacity:1 !important;background:rgba(0,0,0,.08)}
+    .gantt-lock-icon{position:absolute;top:4px;right:6px;font-size:10px;opacity:.5}
+    .gantt-block-unlock{position:absolute;top:4px;right:6px;font-size:11px;cursor:pointer;opacity:.55;padding:1px 3px;border-radius:3px}
+    .gantt-block-unlock:hover{opacity:1;background:rgba(0,0,0,.08)}
+    @media(max-width:900px){.gantt-grid{min-width:1100px}}
+    /* Resumo Semanal por Linha -- "semana inteira num olhar só", ao contrário
+       da Grade (um dia por vez) e da Programação Consolidada (lista plana).
+       Reaproveita o mesmo vocabulário visual dos blocos do Gantt (cor por
+       alocStatus, ponto de insumo pendente) em vez de inventar um novo. */
+    .week-board{display:grid;grid-template-columns:110px repeat(7,minmax(120px,1fr)) 92px;min-width:990px}
+    .wb-hdr-corner{background:color-mix(in srgb, var(--text) 4%, var(--card));border-bottom:2px solid var(--border)}
+    .wb-hdr{background:color-mix(in srgb, var(--text) 4%, var(--card));padding:8px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;text-align:center;border-bottom:2px solid var(--border)}
+    .wb-hdr.is-today{background:#eff6ff;color:var(--primary)}
+    .wb-hdr.wb-total-hdr{background:#eef2ff;color:var(--primary)}
+    .wb-linha-lbl{padding:8px 10px;font-size:12.5px;font-weight:800;color:var(--text);display:flex;align-items:center;border-top:1px solid var(--border)}
+    .wb-cell{padding:6px;border-top:1px solid var(--border);border-left:1px solid var(--border);display:flex;flex-direction:column;gap:4px}
+    .wb-cell.is-today{background:#f8fbff}
+    /* Linha/coluna de totais -- soma da semana por linha (coluna da direita)
+       e soma do dia por todas as linhas (linha de baixo), fechando no total
+       geral da semana no canto. */
+    .wb-total-col{background:color-mix(in srgb, var(--text) 4%, var(--card));border-top:1px solid var(--border);border-left:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:var(--primary)}
+    .wb-total-row-lbl{background:color-mix(in srgb, var(--text) 4%, var(--card));padding:8px 10px;font-size:12.5px;font-weight:800;color:var(--text);border-top:2px solid var(--border)}
+    .wb-total-cell{background:color-mix(in srgb, var(--text) 4%, var(--card));border-top:2px solid var(--border);border-left:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;color:var(--primary)}
+    .wb-grand-total{background:#eef2ff;border-top:2px solid var(--border);border-left:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--primary)}
+    .wb-chip{border-left:3px solid var(--primary);background:#eff6ff;border-radius:5px;padding:4px 6px;font-size:11px}
+    .wb-chip.vinculado{background:#dbeafe;border-left-color:#1e40af}
+    .wb-chip.congelado{background:#ede9fe;border-left-color:#7c3aed}
+    .wb-chip.done{background:#f0fdf4;border-left-color:#10b981;opacity:.65}
+    .wb-chip-top{display:flex;align-items:center;gap:4px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .wb-chip-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .wb-chip-qty{font-size:10px;color:var(--muted);opacity:.8;margin-top:1px;white-space:nowrap}
+    .wb-cell-real{font-size:10px;color:var(--muted);margin-top:3px;padding-top:3px;border-top:1px dashed var(--border);white-space:nowrap}
+    .wb-cell-total{font-size:11px;font-weight:800;color:var(--primary);margin-top:4px;padding-top:4px;border-top:1px solid var(--border);white-space:nowrap}
+    .wb-more-btn{font-size:10.5px;font-weight:700;color:var(--primary);background:none;border:none;cursor:pointer;text-align:left;padding:2px 0}
+    .wb-extra{display:none;flex-direction:column;gap:4px}
+
     /* Agendamento tab */
     .ped-queue{display:grid;gap:10px}
-    .ped-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.06);display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid var(--border)}
+    .ped-card{background:var(--card);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-left:4px solid var(--border)}
     .ped-card.pct-low{border-left-color:var(--success)}
     .ped-card.pct-mid{border-left-color:var(--warning)}
     .ped-card.pct-high{border-left-color:var(--danger)}
@@ -122,13 +196,8 @@
     .prog-pct{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
     .ped-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
     /* Config tab */
-    .config-section{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .config-section{background:var(--card);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:14px}
     .config-title{font-size:13px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
-    .hours-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-    .hour-chip{padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
-    .hour-chip.active{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
-    .hour-chip.pausa{background:#fef3c7;border-color:#fcd34d;color:#92400e}
-    .hour-chip-hint{font-size:9px;font-weight:500;margin-top:2px;opacity:.7}
     .days-grid{display:flex;gap:8px;flex-wrap:wrap}
     .day-chip{padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:var(--bg);border:1.5px solid var(--border);color:var(--muted);transition:all .12s;user-select:none}
     .day-chip.active{background:#d1fae5;border-color:#6ee7b7;color:#065f46}
@@ -142,9 +211,6 @@
     .feriado-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .feriado-add input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;outline:none}
     .feriado-add input:focus{border-color:var(--primary)}
-    .legend-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--muted)}
-    .legend-chip{display:flex;align-items:center;gap:5px}
-    .legend-dot{width:12px;height:12px;border-radius:3px}
     /* Modals */
     .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
     .modal-overlay.open{display:flex}
@@ -179,38 +245,23 @@
     .linha-btn.active-e3{border-color:var(--env3);background:#fdf2f8;color:#9d174d}
     .linha-btn.active-e4{border-color:var(--env4);background:#fef3c7;color:#b45309}
     .linha-btn.active-e5{border-color:var(--env5);background:#d1fae5;color:#065f46}
-    .linha-btn.active-e6{border-color:var(--env6);background:#ecfeff;color:#0891b2}
+    .linha-btn.active-e6{border-color:var(--env6);background:#ecfeff;color:#0e7490}
     .linha-btn.active-e7{border-color:var(--env7);background:#f1f5f9;color:#475569}
-    .linha-btn.active-e8{border-color:var(--env8);background:#f0fdfa;color:#0d9488}
+    .linha-btn.active-e8{border-color:var(--env8);background:#f0fdfa;color:#0f766e}
     .agd-preview{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;font-size:12px;color:#065f46;margin-top:4px;display:none}
     .toast{position:fixed;bottom:20px;right:20px;background:#0f172a;color:white;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:2000;display:none;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,.25)}
     .toast.show{display:flex}
     .toast-dot{width:7px;height:7px;border-radius:50%;background:#34d399;animation:pulse 1s infinite}
-    @media(max-width:640px){.hours-grid{grid-template-columns:repeat(4,1fr)}.agd-info-grid{grid-template-columns:1fr}}
+    @media(max-width:640px){.agd-info-grid{grid-template-columns:1fr}}
   </style>
 </head>
-<body>
+<body class="kuryos-theme has-sidebar">
 <div class="header">
   <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
     <h1>Planejamento de Produção</h1>
     <div class="header-sub" id="headerSub">Carregando...</div>
   </div>
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
-</div>
-
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html" class="active">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
 </div>
 
 <div class="main">
@@ -228,6 +279,8 @@
       <button class="week-nav-btn" id="btnPrev">← Anterior</button>
       <button class="week-nav-btn" id="btnToday" style="background:#eff6ff;border-color:#bfdbfe;color:var(--primary)">Hoje</button>
       <button class="week-nav-btn" id="btnNext">Próxima →</button>
+      <button class="week-nav-btn" id="btnPrevDay" title="Volta pro dia útil anterior -- de segunda volta direto pra sexta da semana passada">← Dia Anterior</button>
+      <button class="week-nav-btn" id="btnNextDay" title="Avança pro próximo dia útil -- de sexta pula direto pra segunda da semana seguinte">Próximo Dia →</button>
     </div>
     <div class="summary-grid">
       <div class="sum-card"><div class="sum-val" id="sumMeta">—</div><div class="sum-lbl">Meta semana</div></div>
@@ -247,12 +300,7 @@
     <div class="day-tabs" id="dayTabs"></div>
     <div class="grid-card">
       <div class="plan-table-wrap">
-        <table class="plan-table">
-          <thead><tr id="gridHeaderRow">
-            <th class="col-hora">Hora</th>
-          </tr></thead>
-          <tbody id="planBody"></tbody>
-        </table>
+        <div id="ganttGrid" class="gantt-grid"></div>
       </div>
     </div>
 
@@ -269,15 +317,30 @@
               <th>OP / Lote</th>
               <th>Pedido Comercial</th>
               <th style="text-align:right">Total do Lote (OP)</th>
+              <th style="text-align:right">Horas Programadas</th>
+              <th style="text-align:right">Meta Atual</th>
               <th style="text-align:right">Programado na Semana</th>
               <th style="text-align:right">Apontado (Realizado)</th>
               <th>Progresso</th>
             </tr>
           </thead>
           <tbody id="weeklySummaryBody">
-            <tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>
+            <tr><td colspan="9" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Resumo Semanal por Linha -- a semana inteira num olhar só (linha x
+         dia), abaixo da Grade diária e da Consolidada, sem substituir
+         nenhuma das duas. Sáb/Dom sempre aparecem (fábrica roda esses dias
+         de vez em quando) -- só ficam vazios quando não há nada programado. -->
+    <div class="grid-card" id="weekBoardCard" style="margin-top:14px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:15px;font-weight:800;color:var(--text)">
+        🗓️ Resumo Semanal por Linha
+      </div>
+      <div style="overflow-x:auto">
+        <div id="weekBoardGrid" class="week-board"></div>
       </div>
     </div>
   </div>
@@ -288,9 +351,12 @@
       <div style="font-size:15px;font-weight:800;color:var(--text)">Pedidos em Aberto</div>
       <div style="font-size:12px;color:var(--muted);margin-top:2px">Ordenados por prioridade da planilha. Clique em "Agendar" para distribuir automaticamente nos slots livres.</div>
     </div>
-    <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
-      <input type="text" id="agdSearchInput" placeholder="Buscar por produto, SKU, ID..." style="flex:1; min-width:200px; padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; transition:border-color .15s;">
-      <select id="agdFilterClient" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:13px; outline:none; max-width:220px; transition:border-color .15s; background:white;">
+    <div class="kt-toolbar" style="margin-bottom:12px">
+      <div class="kt-search">
+        <span class="icon">🔍</span>
+        <input type="text" id="agdSearchInput" placeholder="Buscar por produto, SKU, ID...">
+      </div>
+      <select class="kt-select" id="agdFilterClient" style="max-width:220px">
         <option value="">Todos os clientes</option>
       </select>
     </div>
@@ -299,57 +365,10 @@
 
   <!-- CONFIG -->
   <div class="tab-content" id="tabConfig">
-    <!-- 📤 Importador Integrado de Programação Semanal -->
-    <div class="config-section" style="border-left: 4px solid var(--primary);">
-      <div class="config-title">📤 Importar Programação Semanal (Previsão de Envase)</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Selecione ou arraste a planilha semanal para importar todos os slots planejados.</div>
-      
-      <div class="drop-zone" id="dropZone" style="border: 2px dashed var(--border); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all .2s; margin-bottom:12px;">
-        <div style="font-size:32px; margin-bottom:8px">📂</div>
-        <div id="dropText" style="font-size:14px; font-weight:600; color:var(--text)">Clique ou arraste o arquivo da planilha aqui</div>
-        <div style="font-size:11px; color:var(--muted); margin-top:4px">Aceita: .xlsm e .xlsx — aba "Previsao Envase"</div>
-      </div>
-      <input type="file" id="fileInput" accept=".xlsm,.xlsx" style="display:none">
-      
-      <!-- Info (após parse) -->
-      <div id="infoCard" style="display:none; margin-bottom:16px;">
-        <div class="stats-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px">
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSemanas">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Semanas</div></div>
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statDias">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Dias</div></div>
-          <div style="background:#f9fafb; border-radius:8px; padding:10px; text-align:center"><div style="font-size:20px; font-weight:800; color:var(--primary)" id="statSlots">—</div><div style="font-size:9px; color:var(--muted); font-weight:600; text-transform:uppercase">Slots Horários</div></div>
-        </div>
-        <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px">Mapeamento de Linhas</div>
-        <div id="mappingContainer" style="display:flex; flex-direction:column; gap:4px; font-size:12px; margin-bottom:12px"></div>
-      </div>
-
-      <!-- Filtro + Preview -->
-      <div id="filterCard" style="display:none; margin-bottom:16px;">
-        <div class="filter-options" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
-          <button class="filter-btn active" data-filter="future" id="fltFuture" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">A partir de hoje</button>
-          <button class="filter-btn" data-filter="all" id="fltAll" style="padding: 5px 12px; font-size: 11.5px; border-radius: 20px; border: 1.5px solid var(--border); background:white; cursor:pointer;">Todas as datas</button>
-        </div>
-        <div id="filterInfo" style="font-size:12px; color:var(--muted); margin-bottom:8px">—</div>
-      </div>
-
-      <!-- Confirmar -->
-      <div id="importCard" style="display:none">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px">
-          <button class="btn btn-success" id="btnImport" style="background:#10b981; color:white; border:none; padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;">✓ Importar no Planejamento</button>
-        </div>
-        <div id="progressWrap" style="display:none">
-          <div style="height:6px; border-radius:3px; background:#e5e7eb; overflow:hidden; margin-bottom:4px"><div id="progressFill" style="height:100%; border-radius:3px; background:#10b981; width:0%"></div></div>
-          <div id="progressText" style="font-size:11px; color:var(--muted)">Salvando...</div>
-        </div>
-      </div>
-    </div>
     <div class="config-section">
       <div class="config-title">🕐 Horas de Produção</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px"><strong>1 clique</strong> = ativa, <strong>2 cliques</strong> = marca como intervalo, <strong>3 cliques</strong> = desativa.</div>
-      <div class="hours-grid" id="hoursGrid"></div>
-      <div class="legend-row">
-        <div class="legend-chip"><div class="legend-dot" style="background:#dbeafe;border:1.5px solid #93c5fd"></div> Produção</div>
-        <div class="legend-chip"><div class="legend-dot" style="background:#fef3c7;border:1.5px solid #fcd34d"></div> Intervalo</div>
-        <div class="legend-chip"><div class="legend-dot" style="background:var(--bg);border:1.5px solid var(--border)"></div> Inativo</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.5">
+        As horas de produção não são mais configuradas aqui — vêm direto do horário de turno (início, fim, fim às sextas e pausa), que já é a fonte de verdade pra isso. Ajuste em <a href="admin.html" style="color:var(--primary);font-weight:700">Configurações → Horários dos Turnos e Apontamento</a>. Se um turno não tiver horário de fim cadastrado, ele não entra na Grade nem no cálculo de capacidade do Horizonte.
       </div>
     </div>
     <div class="config-section">
@@ -457,6 +476,11 @@
         </div>
       </div>
       <div class="agd-field">
+        <label>Quantidade a produzir</label>
+        <input type="number" id="agdQtd" min="1" step="1">
+        <div class="form-hint" id="agdQtdHint" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+      </div>
+      <div class="agd-field">
         <label>Horas a agendar</label>
         <input type="number" id="agdHoras" min="1" max="500" step="1">
       </div>
@@ -476,18 +500,45 @@
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg">Salvando...</span></div>
 
 <script>
-var firebaseConfig={apiKey:"AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",authDomain:"prod-kuryos.firebaseapp.com",databaseURL:"https://prod-kuryos-default-rtdb.firebaseio.com",projectId:"prod-kuryos",storageBucket:"prod-kuryos.firebasestorage.app",messagingSenderId:"323674581733",appId:"1:323674581733:web:e283a491c0c2bd6025420c"};
+var firebaseConfig={apiKey:"AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",authDomain:"prod-kuryos.firebaseapp.com",databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),projectId:"prod-kuryos",storageBucket:"prod-kuryos.firebasestorage.app",messagingSenderId:"323674581733",appId:"1:323674581733:web:e283a491c0c2bd6025420c"};
 firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
 var db=firebase.database();
 db.ref('.info/connected').on('value',function(s){var on=s.val();document.getElementById('sDot').className='dot'+(on?' on':'');document.getElementById('sTxt').textContent=on?'Online':'Offline';});
 
 var ALL_HOURS=[];for(var _h=0;_h<24;_h++)ALL_HOURS.push(String(_h).padStart(2,'0')+':00');
 var DIAS_SHORT=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 var DIAS_NOMES=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'];
-var DEFAULT_CONFIG={horasAtivas:['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'],pausas:['12:00','17:00'],diasSemana:[1,2,3,4,5],feriados:{}};
+var DEFAULT_CONFIG={diasSemana:[1,2,3,4,5],feriados:{}};
 var config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 var configLinhas=["Linha 1","Linha 2","Linha 3"];
-var pedidos={}; var allProdutos={};
+// Horas de produção não são mais um horário editado à parte -- são
+// derivadas direto da configuração de turno (admin.html > Apontamento:
+// início/fim/fim-às-sextas/pausa por turno). Rodar diferente só acontece se
+// o PCP mudar o turno; não faz sentido manter um segundo horário pra manter
+// sincronizado com esse.
+var configTurnos=[];
+var configTurnoHorarios={};
+var configTurnoHorariosFim={};
+var configTurnoHorariosFimSexta={};
+var configTurnoPausas={};
+var configModoOperacaoTurno='auto';
+var configTurnoFixoNome='';
+var configTurnosExtras={};
+var configCongelamentoDiasFixos=7;
+var pedidos={}; var allProdutos={}; var alocacoesCache={}; var opsCache={}; var lotesMemo={};
+// Produto renomeado (troca de SKU em cadastros.html) -- um pedido em
+// aberto pode ter sido criado com o SKU antigo e ainda estar sendo
+// programado quando a troca acontece. Sem isso, allProdutos[sku] falhava
+// silenciosamente (prodHoraRef virava 0) assim que o SKU mudasse. Ver
+// getProdutoBySku, usada em vez de allProdutos[sku] direto.
+var skuHistorico={};
+function getProdutoBySku(sku){
+  if(!sku) return {};
+  if(allProdutos[sku]) return allProdutos[sku];
+  var atual=skuHistorico[sku];
+  return (atual && allProdutos[atual]) || {};
+}
 var weekData={};
 var weekRegs={};
 var weekListeners=[];
@@ -503,10 +554,18 @@ var STATUS_CORES={'Em Produção':{bg:'#dbeafe',cl:'#1e40af'},'Produção Parcia
 // Date helpers
 function getMon(d){var c=new Date(d);c.setHours(0,0,0,0);var dw=c.getDay();c.setDate(c.getDate()+(dw===0?-6:1-dw));return c;}
 function addDays(d,n){var r=new Date(d);r.setDate(r.getDate()+n);return r;}
+// Mesma janela que auth_check.js (autoAjustarPlanejamento) usa pra decidir o
+// que o robô de reajuste pode mexer -- aqui só espelha visualmente (🔒) e
+// oferece o botão de romper (🔓), a leitura de "está fixo" é a mesma conta.
+function zonaFixaLimiteStr(){return toYMD(addDays(new Date(),configCongelamentoDiasFixos));}
+function dentroZonaFixa(dateStr){return dateStr<zonaFixaLimiteStr();}
 function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function parsYMD(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
 function fmtBR(d){return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
 function weekNum(d){var j1=new Date(d.getFullYear(),0,1);return Math.ceil(((d-j1)/86400000+j1.getDay()+1)/7);}
+// Override deliberado do fmtNum de shared/utils.js -- aqui os números são
+// sempre quantidade inteira (un./h), então arredonda antes de formatar; a
+// versão compartilhada não arredonda. Mantido local de propósito.
 function fmtNum(n){return Math.round(n).toLocaleString('pt-BR');}
 function hKey(h){return h.replace(':','_');}
 function fmtHoraRange(hora) {
@@ -520,13 +579,62 @@ function fmtHoraRange(hora) {
   return cleanHora + 'h - ' + nextHStr + 'h';
 }
 function dowToConfig(dw){return dw===0?7:dw;}
+// Horas ativas e pausa do dia vêm da configuração de turno (admin.html),
+// não de um horário próprio guardado aqui -- inclui a exceção de sexta que
+// já existia lá (turnoHorariosFimSexta). Todo lugar que precisa saber quais
+// horas a fábrica roda num dia específico deve chamar horasEPausasDoDia(date)
+// em vez de ler algum "horário padrão" fixo.
+function pad2(n){return String(n).padStart(2,'0');}
+// Expande [startH, endHExclusive) em horas cheias -- ex: (7,16) -> 07:00..15:00.
+function expandHourRange(startH,endHExclusive){
+  var hours=[];
+  var h=((startH%24)+24)%24;
+  var endH=((endHExclusive%24)+24)%24;
+  var guard=0;
+  while(h!==endH&&guard<24){
+    hours.push(pad2(h)+':00');
+    h=(h+1)%24;
+    guard++;
+  }
+  return hours;
+}
+function turnosParaCapacidade(){
+  if(configModoOperacaoTurno==='fixo'&&configTurnoFixoNome) return [configTurnoFixoNome];
+  return configTurnos&&configTurnos.length?configTurnos:[];
+}
+function horasEPausasDoDia(date){
+  var isSexta=dowToConfig(date.getDay())===5;
+  var horasSet={}, pausasSet={};
+  turnosParaCapacidade().forEach(function(t){
+    var inicio=configTurnoHorarios[t];
+    var fim=(isSexta&&configTurnoHorariosFimSexta[t])||configTurnoHorariosFim[t];
+    if(!inicio||!fim) return;
+    var hIni=parseInt(inicio.split(':')[0],10);
+    var fimParts=fim.split(':');
+    var hFim=parseInt(fimParts[0],10)+(parseInt(fimParts[1]||'0',10)>0?1:0);
+    expandHourRange(hIni,hFim).forEach(function(h){horasSet[h]=true;});
+    var pausa=configTurnoPausas[t];
+    if(pausa&&pausa.inicio&&pausa.fim){
+      var hp=parseInt(pausa.inicio.split(':')[0],10);
+      var pFimParts=pausa.fim.split(':');
+      var hpFim=parseInt(pFimParts[0],10)+(parseInt(pFimParts[1]||'0',10)>0?1:0);
+      expandHourRange(hp,hpFim).forEach(function(h){horasSet[h]=true;pausasSet[h]=true;});
+    }
+  });
+  // Turnos extras (config.turnosExtras, admin.html) -- reforço pontual
+  // (2º turno por N semanas, sábado extra por M sábados) somado por cima
+  // do turno normal do dia, sem mexer no padrão semanal permanente.
+  var extras=kuryosHorasExtrasDoDia(date,configTurnosExtras);
+  extras.horasAtivas.forEach(function(h){horasSet[h]=true;});
+  extras.pausas.forEach(function(h){pausasSet[h]=true;});
+  return {horasAtivas:Object.keys(horasSet).sort(),pausas:Object.keys(pausasSet).sort()};
+}
 function isWorkingDay(date){var ymd=toYMD(date);var dw=dowToConfig(date.getDay());if(!config.diasSemana.includes(dw))return false;if(config.feriados&&config.feriados[ymd])return false;return true;}
 function nextWorkingDay(from){var d=new Date(from);d.setHours(0,0,0,0);for(var i=0;i<365;i++){if(isWorkingDay(d))return d;d=addDays(d,1);}return from;}
-function isConcluido(status){
-  if(!status)return false;
-  var s=String(status).toLowerCase().trim();
-  return s.indexOf('conclu')===0;
-}
+// isConcluido(pedido) vem de shared/utils.js (checa status E statusManual==='encerrado').
+// Antes havia uma função local isConcluido(status) que só olhava o texto de
+// status e ignorava o encerramento manual -- por isso um pedido encerrado
+// manualmente continuava aparecendo como ativo no Agendamento.
 
 // Init
 window.addEventListener('DOMContentLoaded',function(){
@@ -537,7 +645,11 @@ window.addEventListener('DOMContentLoaded',function(){
   
   var agdSearch = document.getElementById('agdSearchInput');
   var agdFilter = document.getElementById('agdFilterClient');
-  if (agdSearch) agdSearch.addEventListener('input', function() { renderAgendaTab(); });
+  var _agdSearchDebounceT = null;
+  if (agdSearch) agdSearch.addEventListener('input', function() {
+    clearTimeout(_agdSearchDebounceT);
+    _agdSearchDebounceT = setTimeout(function() { renderAgendaTab(); }, 200);
+  });
   if (agdFilter) agdFilter.addEventListener('change', function() { renderAgendaTab(); });
 
   setupAjustesLog();
@@ -572,7 +684,7 @@ function setupAjustesLog(){
     chevron.textContent = open ? '▶' : '▼';
   });
 
-  db.ref('ajustes_planejamento/' + todayLocal()).on('value', function(snap) {
+  dbOnValue(db.ref('ajustes_planejamento/' + todayLocal()), function(snap) {
     var val = snap.val() || {};
     var entries = Object.values(val).sort(function(a, b) {
       return (a.timestamp || '').localeCompare(b.timestamp || '');
@@ -594,7 +706,7 @@ function setupAjustesLog(){
 }
 
 function loadConfig(){
-  db.ref('produtos').on('value', function(pSnap) {
+  dbOnValue(db.ref('produtos'), function(pSnap) {
     allProdutos = pSnap.val() || {};
     if (!firstLoad) {
       renderGrid();
@@ -603,38 +715,39 @@ function loadConfig(){
     }
   });
 
+  dbOnValue(db.ref('sku_historico'), function(shSnap) {
+    skuHistorico = shSnap.val() || {};
+  });
+
   db.ref('config').once('value', function(cSnap) {
     var cVal = cSnap.val() || {};
     if (cVal.linhas && cVal.linhas.length) {
       configLinhas = cVal.linhas;
     }
+    configTurnos = cVal.turnos || [];
+    configTurnoHorarios = cVal.turnoHorarios || {};
+    configTurnoHorariosFim = cVal.turnoHorariosFim || {};
+    configTurnoHorariosFimSexta = cVal.turnoHorariosFimSexta || {};
+    configTurnoPausas = cVal.turnoPausas || {};
+    configModoOperacaoTurno = cVal.modoOperacaoTurno || 'auto';
+    configTurnoFixoNome = cVal.turnoFixoNome || '';
+    configTurnosExtras = cVal.turnosExtras || {};
+    configCongelamentoDiasFixos = (cVal.congelamento && cVal.congelamento.diasFixos != null) ? cVal.congelamento.diasFixos : 7;
     updateDynamicLinhasUI();
-    
+
     db.ref('config/planejamento').once('value',function(snap){
       var s=snap.val()||{};
-      if(s.horasAtivas&&s.horasAtivas.length)config.horasAtivas=s.horasAtivas;
-      if(s.pausas)config.pausas=s.pausas;
       if(s.diasSemana&&s.diasSemana.length)config.diasSemana=s.diasSemana;
       config.feriados=s.feriados||{};
-      renderConfigTab();loadPedidos();
+      renderConfigTab();loadPedidos();loadAlocacoes();loadOps();loadAndon();
     });
   });
 }
 
 function updateDynamicLinhasUI() {
-  // 1. Rebuild table headers
-  var headerRow = document.getElementById('gridHeaderRow');
-  if (headerRow) {
-    while (headerRow.cells.length > 1) {
-      headerRow.deleteCell(1);
-    }
-    configLinhas.forEach(function(lineName, index) {
-      var th = document.createElement('th');
-      th.className = 'col-e' + (index + 1);
-      th.textContent = lineName;
-      headerRow.appendChild(th);
-    });
-  }
+  // Cabeçalho da Grade agora é montado direto dentro de renderGrid() (é um
+  // Gantt de blocos, eixo de linhas x eixo de horas, não uma tabela com uma
+  // coluna fixa por linha) -- nada a fazer aqui por conta disso.
 
   // 2. Rebuild modal buttons
   var selector = document.getElementById('linhaSelector');
@@ -672,7 +785,7 @@ function updateDynamicLinhasUI() {
 }
 
 function loadPedidos(){
-  db.ref('pedidos').on('value',function(snap){
+  dbOnValue(db.ref('pedidos'),function(snap){
     pedidos={};
     snap.forEach(function(ch){
       var v=ch.val();if(!v||!v.produto)return;
@@ -680,7 +793,7 @@ function loadPedidos(){
       v._falta=Math.max((v.qtdTotal||0)-(v.produzido||0),0);
       v._pct=v.qtdTotal>0?(v.produzido||0)/v.qtdTotal:0;
       v._horas=v.mediaPorHora>0?Math.ceil(v._falta/v.mediaPorHora):null;
-      v._isDone=isConcluido(v.status)||Math.round(v._pct*100)>=95;
+      v._isDone=isConcluido(v)||Math.round(v._pct*100)>=95;
       pedidos[ch.key]=v;
     });
     var ativos=Object.values(pedidos).filter(function(p){return!p._isDone;});
@@ -697,6 +810,167 @@ function loadPedidos(){
   });
 }
 
+function loadAlocacoes(){
+  dbOnValue(db.ref('alocacoes_planejamento'),function(snap){
+    alocacoesCache=snap.val()||{};
+    if(!firstLoad) renderGrid();
+  });
+}
+
+// OPs reais emitidas (Gerador de OPs) -- só usado pra mostrar o lote de
+// verdade na Programação Semanal Consolidada. Antes essa coluna mostrava
+// pedidos[key].id (o número do pedido, não da OP), o que estava errado.
+function loadOps(){
+  dbOnValue(db.ref('ops'),function(snap){
+    opsCache=snap.val()||{};
+    lotesMemo={};
+    weekLoteAssignMemo={};
+    if(!firstLoad){ updateWeeklySummaryTable(); renderWeekBoard(); renderGrid(); }
+  });
+}
+
+// Status ao vivo das linhas (ativa/parada) -- só pra mostrar a faixa de OP
+// em andamento no topo da Grade de hoje, mesmo padrão do ANDON do dashboard.
+var latestAndonStates={};
+function loadAndon(){
+  dbOnValue(db.ref('estado_linhas'),function(snap){
+    latestAndonStates=snap.val()||{};
+    if(!firstLoad) renderGrid();
+  });
+}
+
+// OP realmente alocada agora nessa linha (ops/{lote}.abertaLinha) -- é o
+// sinal ao vivo de verdade desde que a captura virou por alocação de OP no
+// Painel de Turno, não mais por apontamento horário. Mesma lógica usada no
+// dashboard e no form.html.
+function opAlocadoEmLinha(nome){
+  var found=null;
+  Object.keys(opsCache).forEach(function(k){
+    var op=opsCache[k];
+    // opEstaAtiva como defesa em profundidade -- mesma razão do dashboard.html.
+    if(op&&op.abertaDesde&&op.abertaLinha===nome&&opEstaAtiva(op)) found=op;
+  });
+  return found;
+}
+
+// Uma OP de produção é 1-N com o pedido (uma OP fecha, mas 1 pedido pode
+// levar mais de uma OP até completar) -- devolve os lotes EM ABERTO emitidos
+// pra esse pedidoKey, mais recente primeiro. Um pedido comercial recorrente
+// (mesmo cliente/produto ao longo de meses) pode ter dezenas de OPs já
+// concluídas no histórico -- essas não interessam aqui, só as que ainda
+// estão rodando ou aguardando início.
+// Normaliza a parte numérica do id do pedido (antes do "__sku") removendo
+// zeros à esquerda -- corrige casos onde a OP foi emitida com o id do
+// pedido sem o padding original (ex: "12__SKU" vs "0012__SKU").
+function normalizePedidoKey(key){
+  if(!key) return key;
+  var parts = String(key).split('__');
+  if(parts.length<2) return key;
+  var idPart = parts[0];
+  if(/^\d+$/.test(idPart)) idPart = String(parseInt(idPart,10));
+  return idPart + '__' + parts.slice(1).join('__');
+}
+
+function lotesDoPedido(pedidoKey){
+  if(lotesMemo.hasOwnProperty(pedidoKey)) return lotesMemo[pedidoKey];
+  var alvo = normalizePedidoKey(pedidoKey);
+  var result = Object.values(opsCache)
+    .filter(function(o){ return o && normalizePedidoKey(o.skuPedidoKey)===alvo && opEstaAtiva(o); })
+    .sort(function(a,b){ return String(b.dataEmissao||'').localeCompare(String(a.dataEmissao||'')); })
+    .map(function(o){ return o.lote; });
+  lotesMemo[pedidoKey] = result;
+  return result;
+}
+
+// Status da alocação (congelado/vinculado) por trás de um slot da semana
+// visível, se houver -- null = slot manual de sempre, sem alocação
+// rastreada (comportamento de hoje).
+function alocRecordForSlot(pedidoKey,linhaNum){
+  if(!pedidoKey) return null;
+  var semanaISO=toYMD(currentWeekStart);
+  var linhaNome=configLinhas[linhaNum-1];
+  return Object.values(alocacoesCache).find(function(a){
+    return a&&a.pedidoKey===pedidoKey&&a.semanaISO===semanaISO&&a.linha===linhaNome&&(a.status==='congelado'||a.status==='vinculado');
+  })||null;
+}
+
+function alocStatusForSlot(pedidoKey,linhaNum){
+  var rec=alocRecordForSlot(pedidoKey,linhaNum);
+  return rec?rec.status:null;
+}
+
+// OP exata por trás de um slot da grade horária -- não só "alguma OP em
+// aberto desse pedido", mas QUAL delas deveria estar rodando naquela
+// hora específica. Duas fontes, por ordem de confiança:
+//  1) alocacoes_planejamento vinculado (veio do horizonte rolante -- já é
+//     um vínculo real feito no momento da emissão da OP, sem ambiguidade).
+//  2) Sem vínculo explícito (agendamento direto, caminho de hoje): estima
+//     por FIFO -- consome as OPs abertas na ordem de emissão (mais antiga
+//     primeira, como se produz normalmente), abatendo o saldo
+//     (qtdPlanejada - produzido) conforme os slots da SEMANA VISÍVEL vão
+//     passando, na mesma linha. É uma estimativa honesta a partir do que dá
+//     pra saber -- se a ordem real de produção no chão de fábrica for
+//     diferente, o jeito de corrigir isto de vez é vincular via horizonte.
+var weekLoteAssignMemo={};
+
+function opsAbertasAsc(pedidoKey){
+  var alvo=normalizePedidoKey(pedidoKey);
+  return Object.values(opsCache)
+    .filter(function(o){ return o && normalizePedidoKey(o.skuPedidoKey)===alvo && opEstaAtiva(o); })
+    .sort(function(a,b){ return String(a.dataEmissao||'').localeCompare(String(b.dataEmissao||'')); });
+}
+
+// Apontado só da(s) OP(s) em aberto desse pedido -- diferente de
+// pedidos/{key}.produzido, que é o total histórico do pedido (soma de TODAS
+// as OPs já rodadas, inclusive concluídas). Um pedido antigo/recorrente pode
+// ter produzido muito no passado com OPs já fechadas; o que interessa aqui é
+// só o que já saiu da OP que está rodando agora.
+// getProduzido(o,'linha') -- este planejamento é de capacidade de Linha
+// (envase), nunca Rotulagem/Posto (ver campoProduzido, shared/utils.js).
+function producedAbertoDoPedido(pedidoKey){
+  return opsAbertasAsc(pedidoKey).reduce(function(sum,o){ return sum + getProduzido(o, 'linha'); }, 0);
+}
+
+function buildWeekLoteAssignment(pedidoKey,linhaNum){
+  var cacheKey=pedidoKey+'|'+linhaNum;
+  if(weekLoteAssignMemo.hasOwnProperty(cacheKey)) return weekLoteAssignMemo[cacheKey];
+
+  var fila=opsAbertasAsc(pedidoKey).map(function(o){
+    return {lote:o.lote, restante:Math.max((o.qtdPlanejada||0)-getProduzido(o, 'linha'),0)};
+  });
+
+  var slots=[];
+  for(var i=0;i<7;i++){
+    var d=toYMD(addDays(currentWeekStart,i));
+    var dayData=weekData[d]||{};
+    var hp=horasEPausasDoDia(parsYMD(d));
+    var activeH=hp.horasAtivas.filter(function(h){return!hp.pausas.includes(h);});
+    activeH.forEach(function(hora){
+      var sl=(dayData[hora]||{})['env'+linhaNum];
+      if(sl&&sl.pedidoKey===pedidoKey) slots.push({key:d+'|'+hora, mediaPorHora:sl.mediaPorHora||0});
+    });
+  }
+
+  var assign={};
+  var qi=0;
+  slots.forEach(function(s){
+    while(qi<fila.length-1 && fila[qi].restante<=0) qi++;
+    var cur=fila[qi];
+    assign[s.key]=cur?cur.lote:null;
+    if(cur) cur.restante-=s.mediaPorHora;
+  });
+
+  weekLoteAssignMemo[cacheKey]=assign;
+  return assign;
+}
+
+function exactLoteForSlot(date,hora,pedidoKey,linhaNum){
+  var rec=alocRecordForSlot(pedidoKey,linhaNum);
+  if(rec&&rec.status==='vinculado'&&rec.opLote) return rec.opLote;
+  var assign=buildWeekLoteAssignment(pedidoKey,linhaNum);
+  return assign[date+'|'+hora]||null;
+}
+
 function setupGradeControls(){
   document.getElementById('btnPrev').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,-7);loadWeek();});
   document.getElementById('btnNext').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,7);loadWeek();});
@@ -704,6 +978,46 @@ function setupGradeControls(){
     currentWeekStart=getMon(new Date());var dw=new Date().getDay();
     currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;loadWeek();
   });
+  document.getElementById('btnPrevDay').addEventListener('click',goToPrevDay);
+  document.getElementById('btnNextDay').addEventListener('click',goToNextDay);
+}
+
+// Pula pro próximo/anterior dia ÚTIL, não pro próximo dia do calendário --
+// de sexta "Próximo Dia" vai direto pra segunda da semana seguinte, e de
+// segunda "Dia Anterior" volta direto pra sexta da semana passada. Dentro
+// da mesma semana só troca a aba ativa, sem recarregar nada; cruzando o
+// limite da semana, troca currentWeekStart e recarrega (igual
+// "Anterior"/"Próxima →").
+function goToNextDay(){
+  var workDays=workDaysOfWeek(currentWeekStart);
+  var pos=workDays.findIndex(function(wd){return wd.idx===currentDayIdx;});
+  if(pos!==-1&&pos+1<workDays.length){
+    currentDayIdx=workDays[pos+1].idx;
+    buildDayTabs();renderGrid();
+    return;
+  }
+  // Já era o último dia útil da semana (ou o dia atual nem é útil) -- avança
+  // pra semana seguinte e pousa no primeiro dia útil dela.
+  currentWeekStart=addDays(currentWeekStart,7);
+  var nextWorkDays=workDaysOfWeek(currentWeekStart);
+  currentDayIdx=nextWorkDays.length?nextWorkDays[0].idx:0;
+  loadWeek();
+}
+
+function goToPrevDay(){
+  var workDays=workDaysOfWeek(currentWeekStart);
+  var pos=workDays.findIndex(function(wd){return wd.idx===currentDayIdx;});
+  if(pos>0){
+    currentDayIdx=workDays[pos-1].idx;
+    buildDayTabs();renderGrid();
+    return;
+  }
+  // Já era o primeiro dia útil da semana (ou o dia atual nem é útil) --
+  // volta pra semana anterior e pousa no último dia útil dela.
+  currentWeekStart=addDays(currentWeekStart,-7);
+  var prevWorkDays=workDaysOfWeek(currentWeekStart);
+  currentDayIdx=prevWorkDays.length?prevWorkDays[prevWorkDays.length-1].idx:0;
+  loadWeek();
 }
 
 function loadWeek(){
@@ -714,28 +1028,49 @@ function loadWeek(){
   weekListeners.forEach(function(r){try{r.off();}catch(e){}});weekListeners=[];weekData={};
   regsListeners.forEach(function(r){try{r.off();}catch(e){}});regsListeners=[];weekRegs={};
   var dates=[];for(var i=0;i<7;i++)dates.push(toYMD(addDays(currentWeekStart,i)));
-  var loaded=0;
+  var loaded=0;var initialRenderDone=false;
+  function isCurrentDay(date){ return date===toYMD(addDays(currentWeekStart,currentDayIdx)); }
+  // Só refaz a grade quando a data que mudou é a que está visível (ou no
+  // carregamento inicial da semana) — evita reconstruir a tabela inteira a
+  // cada atualização em outro dia da semana que não o exibido no momento.
+  function maybeRenderGrid(date){
+    if(!initialRenderDone){initialRenderDone=true;renderGrid();return;}
+    if(isCurrentDay(date))renderGrid();
+  }
   dates.forEach(function(date){
     var ref=db.ref('programacao/'+date);weekListeners.push(ref);
-    ref.on('value',function(snap){
+    dbOnValue(ref,function(snap){
       weekData[date]={};
       snap.forEach(function(hSnap){weekData[date][hSnap.key.replace('_',':')]=hSnap.val()||{};});
-      loaded++;if(loaded>=7){buildDayTabs();renderGrid();updateSummary();}
+      loaded++;
+      if(loaded>=7){
+        buildDayTabs();updateSummary();maybeRenderGrid(date);
+      }
     });
-    
+
     var regRef=db.ref('registros/'+date);regsListeners.push(regRef);
-    regRef.on('value',function(snap){
+    dbOnValue(regRef,function(snap){
       weekRegs[date]=snap.val()||{};
-      if(loaded>=7){renderGrid();updateSummary();}
+      if(loaded>=7){
+        updateSummary();maybeRenderGrid(date);
+      }
     });
   });
+}
+
+// Dias úteis (conforme config.diasSemana) de uma semana começando em
+// weekStart -- usado tanto pelas abas de dia quanto pelo botão "Próximo
+// Dia" (precisam enxergar exatamente a mesma lista pra não desalinhar).
+function workDaysOfWeek(weekStart){
+  var workDays=[];
+  for(var i=0;i<7;i++){var d=addDays(weekStart,i);if(config.diasSemana.includes(dowToConfig(d.getDay())))workDays.push({idx:i,date:d});}
+  return workDays;
 }
 
 function buildDayTabs(){
   var container=document.getElementById('dayTabs');container.innerHTML='';
   var today=toYMD(new Date());
-  var workDays=[];
-  for(var i=0;i<7;i++){var d=addDays(currentWeekStart,i);if(config.diasSemana.includes(dowToConfig(d.getDay())))workDays.push({idx:i,date:d});}
+  var workDays=workDaysOfWeek(currentWeekStart);
   workDays.forEach(function(wd){
     var ds=toYMD(wd.date);var isBlocked=config.feriados&&config.feriados[ds];
     var btn=document.createElement('button');
@@ -748,140 +1083,434 @@ function buildDayTabs(){
   });
 }
 
-function renderGrid(){
-  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
-  var dayData=weekData[date]||{};
-  var tbody=document.getElementById('planBody');tbody.innerHTML='';
-  var activeHours=config.horasAtivas.filter(function(h){return ALL_HOURS.includes(h);});
-  if(!activeHours.length){
-    var tr=document.createElement('tr');
-    tr.innerHTML='<td colspan="' + (configLinhas.length + 1) + '" style="text-align:center;padding:30px;color:var(--muted)">Nenhuma hora configurada. Ajuste em <strong>Configurações</strong>.</td>';
-    tbody.appendChild(tr);return;
-  }
-  activeHours.forEach(function(hora){
-    var isPausa=config.pausas.includes(hora);
-    var tr=document.createElement('tr');if(isPausa)tr.className='row-pausa';
-    var tdH=document.createElement('td');tdH.className='hora-cell'+(isPausa?' is-pausa':'');tdH.textContent=fmtHoraRange(hora);tr.appendChild(tdH);
-    var horaData=dayData[hora]||{};
-    configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
-      var td=document.createElement('td');td.className='slot-cell'+(isPausa?' is-pausa':'');td.setAttribute('data-l',l);
-      if(isPausa){td.textContent='—';tr.appendChild(td);return;}
-      var slot=(horaData['env'+l])||null;
-      if(slot&&slot.pedidoKey){
-        var ped=pedidos[slot.pedidoKey];
-        var isDone=ped&&ped._isDone;
-        if(isDone){
-          td.style.background='#f0fdf4';
-          td.style.borderLeftColor='#10b981';
-        } else {
-          td.style.background='';
-          td.style.borderLeftColor='';
-        }
-        
-        // Sum actual registrations
-        var actualQty=0;
-        var lineName='Linha '+l;
-        if(weekRegs[date]){
-          Object.values(weekRegs[date]).forEach(function(r){
-            if(r.hora===hora&&r.linha===lineName){
-              actualQty+=(r.quantidade||0);
-            }
-          });
-        }
-        
-        td.innerHTML=buildSlotHTML(slot,ped,actualQty);
+// Agrupa os slots horários (programacao/{data}/{hora}/env{N}) contíguos do
+// mesmo pedido+lote numa linha em UM bloco -- é a peça central da Grade
+// virar um Gantt de verdade (largura = duração real) em vez de uma parede
+// de células de 1h. Não muda em nada o formato salvo no Firebase (continua
+// sendo slot por hora, compatível com import de XLSX, auto-ajuste,
+// doAgendamento e a Programação Semanal Consolidada) -- é só a
+// apresentação que passa a agrupar o que já está lá.
+function buildDayGanttModel(dayData,dateObj){
+  var hp=horasEPausasDoDia(dateObj);
+  var allH=hp.horasAtivas.filter(function(h){return ALL_HOURS.includes(h);})
+    .slice().sort(function(a,b){return ALL_HOURS.indexOf(a)-ALL_HOURS.indexOf(b);});
+  var pausas=hp.pausas;
+  var rows=configLinhas.map(function(linhaName,idx){
+    var l=idx+1;
+    var blocks=[];
+    var i=0;
+    while(i<allH.length){
+      var hora=allH[i];
+      if(pausas.includes(hora)){i++;continue;}
+      var slot=(dayData[hora]||{})['env'+l];
+      if(!slot||!slot.pedidoKey){i++;continue;}
+      var startIdx=i;
+      var pk=slot.pedidoKey;
+      var lote=slot.lote||null;
+      var liberado=!!slot.congelamentoLiberado;
+      var span=1;
+      var j=i+1;
+      while(j<allH.length&&!pausas.includes(allH[j])){
+        var s2=(dayData[allH[j]]||{})['env'+l];
+        if(s2&&s2.pedidoKey===pk&&(s2.lote||null)===lote&&!!s2.congelamentoLiberado===liberado){span++;j++;}else break;
       }
-      else{
-        td.style.background='';
-        td.style.borderLeftColor='';
-        td.innerHTML='<div class="slot-empty"></div>';
-      }
-      (function(h,ln,s){
-        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x'))return;openProdModal(date,h,ln,s);});
-        td.addEventListener('click',function(e){if(e.target.classList.contains('slot-x')){e.stopPropagation();clearSlot(date,h,ln);}});
-      })(hora,l,slot);
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
+      blocks.push({startIdx:startIdx,span:span,hours:allH.slice(startIdx,startIdx+span),pedidoKey:pk,produto:slot.produto,sku:slot.sku,mediaPorHora:slot.mediaPorHora,lote:lote,congelamentoLiberado:liberado});
+      i=j;
+    }
+    return {linhaNum:l,linhaName:linhaName,blocks:blocks};
   });
-  // Total row
-  var trT=document.createElement('tr');trT.className='row-total';
-  var tdL=document.createElement('td');tdL.innerHTML='<span class="total-lbl">Total dia</span>';trT.appendChild(tdL);
-  configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
-    var sum=0;
-    activeHours.forEach(function(hora){
-      if(config.pausas.includes(hora))return;
-      var sl=(dayData[hora]||{})['env'+l];
-      if(sl&&sl.pedidoKey&&pedidos[sl.pedidoKey]){
-        var p = pedidos[sl.pedidoKey];
-        var sku = sl.sku || (p && p.sku) || '';
-        var prod = allProdutos[sku] || {};
-        var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
-        sum += rate;
-      }
-    });
-    var td=document.createElement('td');
-    td.innerHTML=sum>0?'<span class="total-v">'+fmtNum(sum)+' un</span>':'<span style="color:var(--muted);font-size:11px">—</span>';
-    trT.appendChild(td);
-  });
-  tbody.appendChild(trT);
+  return {allH:allH,pausas:pausas,rows:rows};
 }
 
-function buildSlotHTML(slot,ped,actualQty){
-  var nome=slot.produto||'?';
-  var isDone=ped&&ped._isDone;
-  
-  var sku = slot.sku || (ped && ped.sku) || '';
-  var prod = allProdutos[sku] || {};
-  var metaVal = slot.mediaPorHora || (ped && ped.mediaPorHora) || prod.prodHoraRef || 0;
-  var m=metaVal?'<span class="sbadge sbadge-meta">⚡ '+fmtNum(metaVal)+'/h</span>':'';
-  
-  var lp=ped&&ped.lp&&metaVal?'<span class="sbadge sbadge-lp">LP/h '+fmtNum(ped.lp*metaVal)+'</span>':'';
-  var sk=ped&&ped.sku?'<span class="sbadge sbadge-sku">'+escapeHtml(ped.sku)+'</span>':'';
-  
-  var actualBadge = '';
-  if (actualQty > 0) {
-    var badgeClass = 'sbadge-actual';
-    if (metaVal > 0) {
-      if (actualQty >= metaVal) {
-        badgeClass = 'sbadge-actual-ok'; // Met or exceeded
-      } else {
-        badgeClass = 'sbadge-actual-warn'; // Below meta
+function renderGrid(){
+  weekLoteAssignMemo={};
+  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
+  var todayYMD=toYMD(new Date());
+  var isToday=date===todayYMD;
+  var isPast=date<todayYMD;
+  var dayData=weekData[date]||{};
+  var container=document.getElementById('ganttGrid');
+
+  var model=buildDayGanttModel(dayData,parsYMD(date));
+  var allH=model.allH;
+  if(!allH.length){
+    container.style.display='block';
+    container.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">Nenhuma hora configurada. Ajuste em <strong>Configurações</strong>.</div>';
+    return;
+  }
+
+  container.style.display='grid';
+  container.style.gridTemplateColumns='170px repeat('+allH.length+', minmax(56px,1fr)) 84px';
+
+  var html='<div class="gantt-corner">Linha</div>';
+  allH.forEach(function(h){
+    var isPausa=model.pausas.includes(h);
+    html+='<div class="gantt-hour-hdr'+(isPausa?' is-pausa':'')+'">'+escapeHtml(h)+'</div>';
+  });
+  html+='<div class="gantt-hour-hdr gantt-total-hdr">Total<br>do dia</div>';
+
+  model.rows.forEach(function(row){
+    var op=isToday?opAlocadoEmLinha(row.linhaName):null;
+    var liveHtml='';
+    if(op){
+      var pct=op.qtdPlanejada?Math.min(100,Math.round(getProduzido(op,'linha')/op.qtdPlanejada*100)):0;
+      var lineKey=sanitizeKey(row.linhaName);
+      var andonState=latestAndonStates[lineKey];
+      var parada=andonState&&andonState.status==='parada';
+      liveHtml='<div class="gantt-linha-live'+(parada?' parada':'')+'" title="OP ao vivo (Painel de Turno)">'+(parada?'🔴':'🟢')+' '+escapeHtml(op.lote||'')+' · '+pct+'%'+
+        '<span class="gantt-linha-live-bar"><span class="gantt-linha-live-fill" style="width:'+pct+'%"></span></span></div>';
+    }
+    html+='<div class="gantt-linha-label"><span class="gantt-linha-nome">'+escapeHtml(row.linhaName)+'</span>'+liveHtml+'</div>';
+
+    var covered={};
+    row.blocks.forEach(function(b){for(var k=0;k<b.span;k++)covered[b.startIdx+k]=b;});
+
+    var ci=0;
+    while(ci<allH.length){
+      var h=allH[ci];
+      if(model.pausas.includes(h)){
+        html+='<div class="gantt-cell-pausa" style="grid-column:'+(ci+2)+'"></div>';
+        ci++;continue;
       }
+      var block=covered[ci];
+      if(!block){
+        html+='<div class="gantt-cell-empty" data-open-date="'+escapeAttr(date)+'" data-open-hora="'+escapeAttr(h)+'" data-open-linha="'+row.linhaNum+'" style="grid-column:'+(ci+2)+'"></div>';
+        ci++;continue;
+      }
+      html+=buildBlockHTML(block,row,date,isToday,isPast);
+      ci+=block.span;
     }
-    actualBadge = '<span class="sbadge ' + badgeClass + '">📦 ' + fmtNum(actualQty) + '</span>';
-  } else if (metaVal > 0 && !isDone) {
-    actualBadge = '<span class="sbadge sbadge-actual-zero">📦 0</span>';
-  }
-  
-  var doneBadge = isDone ? '<span class="sbadge sbadge-done">✔ Concluído</span>' : '';
-  var textStyle = isDone ? 'text-decoration: line-through; opacity: 0.6;' : '';
 
-  // Indicador visual (não bloqueante) de insumo pendente — só avisa, não trava
-  // o auto-ajuste nem impede a alocação manual do slot.
-  var insumoBadge = '';
-  if (!isDone && ped) {
-    var chk = ped.insumosChecklist || {};
-    var insumoOk = chk.ok === 'True' || chk.ok === true;
-    if (!insumoOk) {
-      insumoBadge = '<span class="sbadge" style="background:#fef3c7;color:#92400e" title="Insumo ainda não liberado no checklist">⚠️ insumo pendente</span>';
-    }
+    // Somatória do dia por linha (pedido do usuário): soma a produção
+    // esperada de todos os blocos da linha nesse dia -- mesma conta que
+    // cada bloco já mostra individualmente (blockQty), só agregada no fim
+    // da linha em vez de por bloco. Não conta apontamento real, só o
+    // programado -- pra comparar com o realizado, ver "📦" dentro de cada
+    // bloco e o Resumo Semanal por Linha, que já tem essa comparação.
+    var diaTotal=row.blocks.reduce(function(s,b){return s+blockQty(b);},0);
+    html+='<div class="gantt-day-total">'+(diaTotal>0?fmtNum(diaTotal):'—')+(diaTotal>0?'<small>un</small>':'')+'</div>';
+  });
+
+  container.innerHTML=html;
+  wireGanttEvents();
+}
+
+// Quantidade esperada de um bloco (meta x horas do bloco) -- mesma conta
+// usada tanto dentro do card individual (buildBlockHTML) quanto na
+// somatória do dia por linha (renderGrid), pra nunca divergir entre os dois.
+function blockQty(block){
+  var ped=pedidos[block.pedidoKey];
+  var sku=block.sku||(ped&&ped.sku)||'';
+  var prod=getProdutoBySku(sku);
+  var metaVal=block.mediaPorHora||(ped&&ped.mediaPorHora)||prod.prodHoraRef||0;
+  return metaVal*block.span;
+}
+
+function buildBlockHTML(block,row,date,isToday,isPast){
+  var ped=pedidos[block.pedidoKey];
+  var isDone=ped&&ped._isDone;
+  var alocStatus=alocStatusForSlot(block.pedidoKey,row.linhaNum);
+  // Zona fixa: só entra em jogo se não houver vínculo real de OP (esse já é
+  // mais forte, tem processo próprio) nem já ter sido explicitamente
+  // liberada nesse bloco -- ver zonaFixaLimiteStr()/"🔓 Liberar" abaixo.
+  var emZonaFixa=!isDone&&alocStatus!=='vinculado'&&!block.congelamentoLiberado&&dentroZonaFixa(date);
+  var locked=!!(isDone||isPast||alocStatus==='vinculado'||emZonaFixa);
+
+  var totalQty=blockQty(block);
+
+  var lote=block.lote||exactLoteForSlot(date,block.hours[0],block.pedidoKey,row.linhaNum);
+  var lotePill=lote?'<span class="gantt-lote-pill">🏷️ '+escapeHtml(lote)+'</span>':'';
+
+  var insumoDot='';
+  if(!isDone&&ped){
+    var chk=ped.insumosChecklist||{};
+    var ok=chk.ok==='True'||chk.ok===true;
+    if(!ok) insumoDot='<span class="gantt-insumo-dot pendente" title="Insumo pendente no checklist"></span>';
   }
 
-  return '<div class="slot-filled" style="' + textStyle + '">' +
-    '<div class="slot-nome" title="'+escapeAttr(nome)+'">'+escapeHtml(nome)+'</div>' +
-    '<div class="slot-badges">'+sk+m+lp+actualBadge+doneBadge+insumoBadge+'<span class="slot-x" title="Remover">✕</span></div>' +
+  // Realizado x meta -- soma os apontamentos das horas cobertas pelo bloco,
+  // mesma comparação que já existia por hora, agora agregada pro bloco todo.
+  var actualQty=0;
+  var lineName='Linha '+row.linhaNum;
+  if(weekRegs[date]){
+    Object.values(weekRegs[date]).forEach(function(r){
+      if(r.linha===lineName&&block.hours.indexOf(r.hora)!==-1) actualQty+=(r.quantidade||0);
+    });
+  }
+  var actualTxt=actualQty>0?(' · 📦 '+fmtNum(actualQty)+(totalQty>0?(actualQty>=totalQty?' ✓':' de '+fmtNum(totalQty)):'')):'';
+
+  var cls='gantt-block';
+  if(isDone) cls+=' done';
+  else if(alocStatus==='vinculado') cls+=' vinculado';
+  else if(alocStatus==='congelado') cls+=' congelado';
+  else if(emZonaFixa) cls+=' zona-fixa';
+  if(isPast) cls+=' past';
+  if(locked) cls+=' locked';
+
+  var xBtn=locked?'':'<span class="gantt-block-x" data-x-date="'+escapeAttr(date)+'" data-x-hours="'+escapeAttr(block.hours.join(','))+'" data-x-linha="'+row.linhaNum+'" data-x-pedido="'+escapeAttr(block.pedidoKey)+'" title="Remover bloco">✕</span>';
+  var lockReason=isDone?'Pedido concluído':(alocStatus==='vinculado'?'OP emitida — fixo, o reajuste automático não move mais':(emZonaFixa?('Dentro da zona fixa ('+configCongelamentoDiasFixos+' dias) — clique em 🔓 pra liberar'):'Já passou'));
+  var lockIcon=(locked&&!emZonaFixa)?'<span class="gantt-lock-icon" title="'+escapeAttr(lockReason)+'">🔒</span>':'';
+  var unlockBtn=emZonaFixa?'<span class="gantt-block-unlock" data-unlock-date="'+escapeAttr(date)+'" data-unlock-hours="'+escapeAttr(block.hours.join(','))+'" data-unlock-linha="'+row.linhaNum+'" title="'+escapeAttr(lockReason)+'">🔓</span>':'';
+  var openAttrs=locked?'':(' data-open-date="'+escapeAttr(date)+'" data-open-hora="'+escapeAttr(block.hours[0])+'" data-open-linha="'+row.linhaNum+'"');
+
+  return '<div class="'+cls+'" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'"'+openAttrs+'>'+
+    xBtn+lockIcon+unlockBtn+
+    '<div class="gantt-block-nome" title="'+escapeAttr(block.produto||'?')+'">'+escapeHtml(block.produto||'?')+'</div>'+
+    '<div class="gantt-block-meta">'+insumoDot+lotePill+'<span>'+fmtNum(totalQty)+' un · '+block.span+'h'+actualTxt+'</span></div>'+
   '</div>';
+}
+
+// Delegação de eventos (montada uma única vez) -- o Gantt é reconstruído via
+// innerHTML a cada render, então listeners individuais morreriam a cada
+// atualização; delegar no container pai resolve sem precisar reatachar.
+function wireGanttEvents(){
+  var container=document.getElementById('ganttGrid');
+  if(container._wired) return;
+  container._wired=true;
+  container.addEventListener('click',function(e){
+    var xEl=e.target.closest('.gantt-block-x');
+    if(xEl){
+      e.stopPropagation();
+      clearBlock(xEl.dataset.xDate,xEl.dataset.xHours.split(','),parseInt(xEl.dataset.xLinha),xEl.dataset.xPedido);
+      return;
+    }
+    var unlockEl=e.target.closest('.gantt-block-unlock');
+    if(unlockEl){
+      e.stopPropagation();
+      liberarZonaFixa(unlockEl.dataset.unlockDate,unlockEl.dataset.unlockHours.split(','),parseInt(unlockEl.dataset.unlockLinha));
+      return;
+    }
+    var openEl=e.target.closest('[data-open-date]');
+    if(openEl){
+      var d=openEl.dataset.openDate,h=openEl.dataset.openHora,l=parseInt(openEl.dataset.openLinha);
+      var slot=weekData[d]&&weekData[d][h]?weekData[d][h]['env'+l]:null;
+      openProdModal(d,h,l,slot);
+    }
+  });
+}
+
+// Remove todas as horas cobertas por um bloco de uma vez -- clicar no ✕ de
+// um bloco de 3h deve apagar o bloco inteiro, não só a primeira hora.
+function clearBlock(date,hours,linha,pedidoKey){
+  var updates={};
+  hours.forEach(function(h){updates['programacao/'+date+'/'+hKey(h)+'/env'+linha]=null;});
+  db.ref().update(updates,function(e){
+    if(e){showToast('Erro ao remover bloco.');return;}
+    showToast('Bloco removido ('+hours.length+'h)!');
+    if(pedidoKey&&window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pedidoKey);
+  });
+}
+
+// Rompe a zona fixa (Fase C) só pro(s) slot(s) desse bloco específico -- não
+// mexe em vínculo real de OP nem em outros blocos da mesma linha/OP. Exige
+// motivo (mesmo padrão de "Motivos de Atraso no Encerramento" já usado em
+// form.html): fica registrado em programacao/.../congelamentoLiberado, que
+// tanto a Grade (aqui) quanto o auto-ajuste (auth_check.js) já sabem ler.
+function liberarZonaFixa(date,hours,linha){
+  var motivo=prompt('Motivo pra liberar este bloco da zona fixa (obrigatório):');
+  if(motivo===null) return; // cancelou
+  motivo=motivo.trim();
+  if(!motivo){showToast('Motivo é obrigatório pra romper a zona fixa.');return;}
+  var registro={motivo:motivo,por:(window.currentUser&&window.currentUser.nome)||'?',em:new Date().toISOString()};
+  var updates={};
+  hours.forEach(function(h){updates['programacao/'+date+'/'+hKey(h)+'/env'+linha+'/congelamentoLiberado']=registro;});
+  db.ref().update(updates,function(e){
+    if(e){showToast('Erro ao liberar bloco.');return;}
+    showToast('Bloco liberado pra replanejamento.');
+    renderGrid();renderWeekBoard();
+  });
+}
+
+// Resumo Semanal por Linha -- linha x dia (Seg..Dom, sempre os 7, mesmo que
+// Sáb/Dom fiquem vazios na maioria das semanas), até 3 OPs visíveis por
+// célula, "+N mais" pro resto. Reaproveita buildDayGanttModel (a mesma
+// função que já monta os blocos da Grade diária) em vez de duplicar a
+// leitura/agrupamento dos slots -- só reagrupa por linha+dia inteiro em vez
+// de linha+hora, e funde blocos do mesmo pedido+lote que se repetem no
+// mesmo dia (ex: interrompido e retomado depois) num chip só.
+var WB_VISIBLE_LIMIT = 3;
+
+function mergeChipsForDay(blocks,linhaNum,date){
+  var byKey={};var order=[];
+  blocks.forEach(function(b){
+    var lote=b.lote||exactLoteForSlot(date,b.hours[0],b.pedidoKey,linhaNum);
+    var k=b.pedidoKey+'|'+(lote||'');
+    if(!byKey[k]){byKey[k]={pedidoKey:b.pedidoKey,lote:lote,produto:b.produto,firstIdx:b.startIdx,qtd:0,horas:0};order.push(k);}
+    // Mesma conta da Grade diária (buildBlockHTML: metaVal*block.span) --
+    // soma se o mesmo pedido+lote aparecer em mais de um bloco no dia
+    // (ex: interrompido e retomado depois na mesma linha).
+    byKey[k].qtd+=(b.mediaPorHora||0)*b.span;
+    byKey[k].horas+=b.span;
+  });
+  return order.map(function(k){return byKey[k];}).sort(function(a,b){return a.firstIdx-b.firstIdx;});
+}
+
+function wbChipHtml(c,linhaNum){
+  var ped=pedidos[c.pedidoKey];
+  var isDone=ped&&ped._isDone;
+  var alocStatus=alocStatusForSlot(c.pedidoKey,linhaNum);
+  var cls='wb-chip';
+  if(isDone)cls+=' done';
+  else if(alocStatus==='vinculado')cls+=' vinculado';
+  else if(alocStatus==='congelado')cls+=' congelado';
+  var insumoDot='';
+  if(!isDone&&ped){
+    var chk=ped.insumosChecklist||{};
+    var ok=chk.ok==='True'||chk.ok===true;
+    if(!ok)insumoDot='<span class="gantt-insumo-dot pendente" title="Insumo pendente no checklist"></span>';
+  }
+  // Sem lote ainda (OP não emitida pra esse slot) -- mostra o produto, não o
+  // número do pedido comercial. Mesma prioridade que o bloco da Grade diária
+  // já usa (buildBlockHTML): produto sempre aparece; a etiqueta de lote é
+  // que fica ausente quando não há OP. Antes caía pro "#pedido", que é um
+  // identificador interno pouco reconhecível -- lido, na prática, como se
+  // fosse "o número da OP" errado.
+  var label=c.lote||c.produto||(ped?('#'+ped.id):'')||'?';
+  var cliente=(ped&&ped.cliente)||c.produto||'';
+  var qtyHtml=c.qtd>0?'<div class="wb-chip-qty">'+fmtNum(c.qtd)+' un · '+c.horas+'h</div>':'';
+  return '<div class="'+cls+'"><div class="wb-chip-top">'+insumoDot+escapeHtml(label)+'</div><div class="wb-chip-sub">'+escapeHtml(cliente)+'</div>'+qtyHtml+'</div>';
+}
+
+function wbCellHtml(chips,date,linhaNum){
+  if(!chips.length)return '';
+  var visible=chips.slice(0,WB_VISIBLE_LIMIT);
+  var extra=chips.slice(WB_VISIBLE_LIMIT);
+  var html=visible.map(function(c){return wbChipHtml(c,linhaNum);}).join('');
+  if(extra.length){
+    var extraId='wbx_'+date+'_'+linhaNum;
+    html+='<div class="wb-extra" id="'+extraId+'">'+extra.map(function(c){return wbChipHtml(c,linhaNum);}).join('')+'</div>';
+    html+='<button type="button" class="wb-more-btn" data-target="'+extraId+'">+'+extra.length+' mais</button>';
+  }
+  // Somatória da célula (pedido do usuário): total programado pra essa
+  // linha, nesse dia -- soma os chips já mesclados (mesma conta que
+  // alimenta o Total da linha/dia mais abaixo, só exibida aqui também, por
+  // célula). Sempre que houver ao menos um chip, mesmo que seja só um --
+  // deixa explícito sem precisar somar de cabeça quando há vários.
+  var cellQty=chips.reduce(function(s,c){return s+c.qtd;},0);
+  if(cellQty>0) html+='<div class="wb-cell-total">'+fmtNum(cellQty)+' un</div>';
+  return html;
+}
+
+function wbTotalTxt(n){
+  return n>0?(fmtNum(n)+' un'):'<span style="opacity:.4">—</span>';
+}
+
+// Planejado x Realizado (Fase D / bonus do item 10 -- "sinto que não
+// conseguimos monitorar bem planejado vs realizado"): mesma comparação que
+// buildBlockHTML já faz por bloco na Grade diária, aqui agregada por
+// linha/dia/semana usando os mesmos registros já carregados em weekRegs
+// (nenhuma leitura nova do Firebase). Só aparece quando já existe algum
+// apontamento pra comparar -- dias futuros ficam só com o "programado".
+function wbTotalPairTxt(prog,real){
+  var progHtml=wbTotalTxt(prog);
+  if(!real)return progHtml;
+  var pct=prog>0?Math.round(real/prog*100):null;
+  var pctHtml=pct!=null?(' <span style="opacity:.65">('+pct+'%)</span>'):'';
+  var cor=pct!=null&&pct<80?'#dc2626':(pct!=null&&pct>=100?'#16a34a':'#b45309');
+  return progHtml+'<div style="font-size:10px;color:'+cor+';font-weight:600;margin-top:1px">📦 '+fmtNum(real)+' un'+pctHtml+'</div>';
+}
+
+function renderWeekBoard(){
+  var container=document.getElementById('weekBoardGrid');
+  if(!container)return;
+  weekLoteAssignMemo={}; // mesma proteção contra memo de outra semana que renderGrid() já faz
+  var todayYMD=toYMD(new Date());
+  var dates=[];for(var i=0;i<7;i++)dates.push(toYMD(addDays(currentWeekStart,i)));
+
+  // Monta os chips de cada célula (linha x dia) uma vez só -- a célula e os
+  // totais (linha da semana, dia de todas as linhas, geral) usam o mesmo
+  // cálculo, sem duplicar a leitura/agrupamento dos slots.
+  var cellChips={};
+  var cellReal={};
+  var dayTotals={};var dayReal={};dates.forEach(function(d){dayTotals[d]=0;dayReal[d]=0;});
+  var linhaTotals=[];var linhaReal=[];
+  var grandTotal=0;var grandReal=0;
+
+  configLinhas.forEach(function(linhaName,idx){
+    var linhaNum=idx+1;
+    cellChips[linhaNum]={};
+    cellReal[linhaNum]={};
+    linhaTotals[idx]=0;
+    linhaReal[idx]=0;
+    dates.forEach(function(date){
+      var dayData=weekData[date]||{};
+      var model=buildDayGanttModel(dayData,parsYMD(date));
+      var row=model.rows[idx];
+      var chips=mergeChipsForDay(row?row.blocks:[],linhaNum,date);
+      cellChips[linhaNum][date]=chips;
+      var cellQty=chips.reduce(function(s,c){return s+c.qtd;},0);
+      dayTotals[date]+=cellQty;
+      linhaTotals[idx]+=cellQty;
+      grandTotal+=cellQty;
+
+      // Realizado -- mesma convenção de nome de linha que buildBlockHTML já
+      // usa pra casar registro x linha ('Linha N', não o nome customizado).
+      var realQty=0;
+      if(weekRegs[date]){
+        var lineName='Linha '+linhaNum;
+        Object.values(weekRegs[date]).forEach(function(r){
+          if(r.linha===lineName)realQty+=(r.quantidade||0);
+        });
+      }
+      cellReal[linhaNum][date]=realQty;
+      dayReal[date]+=realQty;
+      linhaReal[idx]+=realQty;
+      grandReal+=realQty;
+    });
+  });
+
+  var html='<div class="wb-hdr-corner"></div>';
+  dates.forEach(function(date,i){
+    var isToday=date===todayYMD;
+    html+='<div class="wb-hdr'+(isToday?' is-today':'')+'">'+DIAS_SHORT[i]+' '+fmtBR(parsYMD(date))+'</div>';
+  });
+  html+='<div class="wb-hdr wb-total-hdr">Total</div>';
+
+  configLinhas.forEach(function(linhaName,idx){
+    var linhaNum=idx+1;
+    html+='<div class="wb-linha-lbl">'+escapeHtml(linhaName)+'</div>';
+    dates.forEach(function(date){
+      var isToday=date===todayYMD;
+      var realTxt=cellReal[linhaNum][date]>0?('<div class="wb-cell-real">📦 '+fmtNum(cellReal[linhaNum][date])+' un</div>'):'';
+      html+='<div class="wb-cell'+(isToday?' is-today':'')+'">'+wbCellHtml(cellChips[linhaNum][date],date,linhaNum)+realTxt+'</div>';
+    });
+    html+='<div class="wb-total-col">'+wbTotalPairTxt(linhaTotals[idx],linhaReal[idx])+'</div>';
+  });
+
+  html+='<div class="wb-total-row-lbl">Total</div>';
+  dates.forEach(function(date){
+    html+='<div class="wb-total-cell">'+wbTotalPairTxt(dayTotals[date],dayReal[date])+'</div>';
+  });
+  html+='<div class="wb-grand-total">'+wbTotalPairTxt(grandTotal,grandReal)+'</div>';
+
+  container.innerHTML=html;
+  wireWeekBoardEvents();
+}
+
+function wireWeekBoardEvents(){
+  var container=document.getElementById('weekBoardGrid');
+  if(container._wired)return;
+  container._wired=true;
+  container.addEventListener('click',function(e){
+    var btn=e.target.closest('.wb-more-btn');
+    if(!btn)return;
+    var target=document.getElementById(btn.dataset.target);
+    if(!target)return;
+    var opening=target.style.display!=='flex';
+    target.style.display=opening?'flex':'none';
+    btn.textContent=opening?'Mostrar menos':('+'+target.children.length+' mais');
+  });
 }
 
 function updateSummary(){
   var totMeta=0,totSlots=0,diasOk=0;
-  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
   for(var i=0;i<7;i++){
     var date=toYMD(addDays(currentWeekStart,i));
     if(!isWorkingDay(parsYMD(date)))continue;
     var dayData=weekData[date]||{};
     var hasSlot=false;
+    var hp=horasEPausasDoDia(parsYMD(date));
+    var activeH=hp.horasAtivas.filter(function(h){return!hp.pausas.includes(h);});
     activeH.forEach(function(h){
       var hd=dayData[h]||{};
       configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l){
@@ -890,7 +1519,7 @@ function updateSummary(){
           totSlots++;hasSlot=true;
           var p=pedidos[sl.pedidoKey];
           var sku=sl.sku || (p && p.sku) || '';
-          var prod=allProdutos[sku] || {};
+          var prod=getProdutoBySku(sku);
           var rate=sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
           totMeta+=rate;
         }
@@ -901,23 +1530,30 @@ function updateSummary(){
   document.getElementById('sumMeta').textContent=fmtNum(totMeta)+' un';
   document.getElementById('sumSlots').textContent=totSlots;
   document.getElementById('sumDias').textContent=diasOk;
-  
+
   updateWeeklySummaryTable();
+  renderWeekBoard();
 }
+
+// Quanto uma meta pode se desviar do padrão do pedido/produto antes de
+// acender o aviso visual (pra cima ou pra baixo) -- não bloqueia nada, só avisa.
+var WK_META_DESVIO_ALERTA = 0.20;
 
 function updateWeeklySummaryTable() {
   var tbody = document.getElementById('weeklySummaryBody');
   if (!tbody) return;
-  
+
   var scheduledKeys = {};
   var scheduledMetas = {};
-  
-  var activeH = config.horasAtivas.filter(function(h){ return !config.pausas.includes(h); });
+  var scheduledHoras = {};
+
   for (var i = 0; i < 7; i++) {
     var date = toYMD(addDays(currentWeekStart, i));
     if (!isWorkingDay(parsYMD(date))) continue;
     var dayData = weekData[date] || {};
-    
+    var hp = horasEPausasDoDia(parsYMD(date));
+    var activeH = hp.horasAtivas.filter(function(h){ return !hp.pausas.includes(h); });
+
     activeH.forEach(function(h) {
       var hd = dayData[h] || {};
       configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l) {
@@ -926,44 +1562,81 @@ function updateWeeklySummaryTable() {
           scheduledKeys[sl.pedidoKey] = 1;
           var p = pedidos[sl.pedidoKey];
           var sku = sl.sku || (p && p.sku) || '';
-          var prod = allProdutos[sku] || {};
+          var prod = getProdutoBySku(sku);
           var rate = sl.mediaPorHora || (p && p.mediaPorHora) || prod.prodHoraRef || 0;
           scheduledMetas[sl.pedidoKey] = (scheduledMetas[sl.pedidoKey] || 0) + rate;
+          scheduledHoras[sl.pedidoKey] = (scheduledHoras[sl.pedidoKey] || 0) + 1;
         }
       });
     });
   }
-  
+
   var keys = Object.keys(scheduledKeys);
   if (keys.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted); text-align:center; padding:16px;">Nenhuma programação para esta semana.</td></tr>';
     return;
   }
-  
+
   tbody.innerHTML = '';
   keys.forEach(function(key) {
     var p = pedidos[key];
     if (!p) return;
-    
-    var isOP = (key.indexOf('OP_') === 0) || (p.parentPedidoId);
+
     var parentIdDisplay = p.parentPedidoId ? '#' + p.parentPedidoId : '?';
-    var opDisplay = isOP ? p.id : '?';
-    
+    // Lote real da OP emitida (Gerador de OPs), não o número do pedido --
+    // um pedido pode ter mais de uma OP até completar (1-N), então mostra
+    // todos os lotes emitidos até agora; se nenhum ainda, avisa que está na
+    // grade mas sem OP emitida.
+    var lotes = lotesDoPedido(key);
+    var opDisplay = lotes.length ? lotes.join(', ') : 'sem OP emitida';
+    var opPillStyle = lotes.length
+      ? 'background:#e0f2fe; color:#0369a1;'
+      : 'background:#fef3c7; color:#92400e;';
+
     var plannedThisWeek = scheduledMetas[key] || 0;
+    var horasProgramadas = scheduledHoras[key] || 0;
     var totalBatch = p.qtdTotal || 0;
     var produced = p.produzido || 0;
-    
+    // Só o que já saiu da(s) OP(s) em aberto -- diferente de "produced"
+    // acima (histórico completo do pedido, usado na barra de Progresso).
+    var producedAberto = producedAbertoDoPedido(key);
+
     var pct = totalBatch ? Math.round((produced / totalBatch) * 100) : 0;
     var pctClamped = Math.min(100, pct);
-    
+
+    // Ritmo padrão de referência (histórico) pra avaliar se a meta editada/
+    // recalculada faz sentido -- não trava nada, só acende um aviso visual.
+    var sku = p.sku || '';
+    var prod = getProdutoBySku(sku);
+    var baseline = p.mediaPorHora || prod.prodHoraRef || 0;
+    var metaEfetiva = horasProgramadas > 0 ? (plannedThisWeek / horasProgramadas) : 0;
+    var desvioPct = baseline > 0 ? Math.abs(metaEfetiva - baseline) / baseline : 0;
+    var forteDesvio = baseline > 0 && metaEfetiva > 0 && desvioPct > WK_META_DESVIO_ALERTA;
+    var desvioTitle = forteDesvio
+      ? ('⚠️ Ritmo efetivo (' + fmtNum(Math.round(metaEfetiva)) + '/h) ' + (metaEfetiva > baseline ? 'bem acima' : 'bem abaixo') + ' do padrão do pedido (' + fmtNum(baseline) + '/h) -- confira se a quantidade editada faz sentido.')
+      : '';
+
     var tr = document.createElement('tr');
-    tr.innerHTML = 
+    tr.innerHTML =
       '<td><strong>' + escapeHtml(p.produto) + '</strong>' + (p.sku ? ' <code style="font-size:10px;">' + escapeHtml(p.sku) + '</code>' : '') + '</td>' +
-      '<td><span class="status-pill" style="background:#e0f2fe; color:#0369a1; border-radius:4px; font-weight:700; padding:2px 6px;">' + escapeHtml(opDisplay) + '</span></td>' +
+      '<td><span class="status-pill" style="'+opPillStyle+' border-radius:4px; font-weight:700; padding:2px 6px;">' + escapeHtml(opDisplay) + '</span></td>' +
       '<td><strong>' + escapeHtml(parentIdDisplay) + '</strong></td>' +
       '<td style="text-align:right; font-weight:600;">' + fmtNum(totalBatch) + ' un</td>' +
-      '<td style="text-align:right; color:#7c3aed; font-weight:700;">' + fmtNum(plannedThisWeek) + ' un</td>' +
-      '<td style="text-align:right; color:#059669; font-weight:700;">' + fmtNum(produced) + ' un</td>' +
+      '<td style="text-align:right; color:var(--muted); font-weight:600;">' + fmtNum(horasProgramadas) + 'h</td>' +
+      '<td style="text-align:right">' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;justify-content:flex-end'+(forteDesvio?';color:var(--warning,#c9910a)':'')+'"' + (desvioTitle?' title="'+escapeAttr(desvioTitle)+'"':'') + '>' +
+          (forteDesvio ? '⚠️ ' : '') + fmtNum(Math.round(metaEfetiva)) + '/h' +
+        '</span>' +
+      '</td>' +
+      '<td style="text-align:right">' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;justify-content:flex-end">' +
+          (forteDesvio ? '<span title="'+escapeAttr(desvioTitle)+'" style="cursor:help">⚠️</span>' : '') +
+          '<input type="number" min="0" step="1" class="wk-qtd-input" data-pedido-key="'+escapeAttr(key)+'" value="'+Math.round(plannedThisWeek)+'" ' +
+            'style="width:82px;text-align:right;border:1px solid '+(forteDesvio?'var(--warning,#c9910a)':'var(--border)')+';border-radius:6px;padding:3px 6px;font-size:13px;font-weight:700;color:#7c3aed;font-family:inherit">' +
+          ' un' +
+        '</span>' +
+      '</td>' +
+      '<td style="text-align:right; color:var(--success); font-weight:700;">' + fmtNum(producedAberto) + ' un</td>' +
       '<td>' +
         '<div style="display:flex; align-items:center; gap:8px;">' +
           '<div style="flex:1; height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden;">' +
@@ -974,6 +1647,103 @@ function updateWeeklySummaryTable() {
       '</td>';
     tbody.appendChild(tr);
   });
+
+  tbody.querySelectorAll('.wk-qtd-input').forEach(function(input) {
+    var commit = function(){ commitWeeklyQtdEdit(input); };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(e){ if (e.key === 'Enter') { input.blur(); } });
+  });
+}
+
+// Acha todos os slots (data/hora/linha) dessa semana visível que pertencem a
+// um pedidoKey -- usado tanto pra reescrever a meta quando a quantidade é
+// editada quanto pra redistribuir depois que um slot é apagado. `exclude`
+// (opcional, {date,hora,linha}) tira um slot específico da lista mesmo que
+// weekData ainda não tenha refletido a remoção (o listener do Firebase
+// atualiza weekData de forma assíncrona, não na hora do .remove()).
+function getWeekSlotsForPedido(pedidoKey, exclude) {
+  var slots = [];
+  for (var i = 0; i < 7; i++) {
+    var date = toYMD(addDays(currentWeekStart, i));
+    if (!isWorkingDay(parsYMD(date))) continue;
+    var dayData = weekData[date] || {};
+    var hp = horasEPausasDoDia(parsYMD(date));
+    var activeH = hp.horasAtivas.filter(function(h){ return !hp.pausas.includes(h); });
+    activeH.forEach(function(h) {
+      var hd = dayData[h] || {};
+      configLinhas.map(function(_, i){ return i + 1; }).forEach(function(l) {
+        if (exclude && exclude.date === date && exclude.hora === h && exclude.linha === l) return;
+        var sl = hd['env' + l];
+        if (sl && sl.pedidoKey === pedidoKey) {
+          slots.push({ date: date, hora: h, linha: l });
+        }
+      });
+    });
+  }
+  return slots;
+}
+
+// Soma a meta de todos os slots dessa semana pra um pedidoKey -- é o mesmo
+// total que aparece em "Programado na Semana", recalculado sob demanda.
+function getWeekTotalForPedido(pedidoKey) {
+  var total = 0;
+  getWeekSlotsForPedido(pedidoKey).forEach(function(s) {
+    var sl = weekData[s.date] && weekData[s.date][s.hora] ? weekData[s.date][s.hora]['env'+s.linha] : null;
+    if (sl) total += (sl.mediaPorHora || 0);
+  });
+  return total;
+}
+
+// Reescreve mediaPorHora em todos os slots informados de forma que a SOMA
+// bata exatamente com totalQtd -- em vez de aplicar a mesma meta arredondada
+// em toda hora (o que quase nunca fecha o total exato: ex. 5400 un em 7h
+// virava 771/h arredondado, e 771×7 = 5397, não 5400 -- a origem dos
+// "números quebrados" no Programado da Semana). Distribui base = totalQtd
+// div horas em cada slot, e a sobra (sempre < nº de horas) vai 1 a mais nas
+// primeiras horas -- mantém as metas próximas umas das outras em vez de
+// empilhar toda a sobra numa hora só.
+function applyExactQtdToWeekSlots(slots, totalQtd) {
+  if (!slots.length) return Promise.resolve();
+  var base = Math.floor(totalQtd / slots.length);
+  var resto = totalQtd - base * slots.length;
+  var updates = {};
+  slots.forEach(function(s, i) {
+    var meta = base + (i < resto ? 1 : 0);
+    updates['programacao/' + s.date + '/' + hKey(s.hora) + '/env' + s.linha + '/mediaPorHora'] = meta;
+  });
+  return db.ref().update(updates);
+}
+
+// Quantidade editada na coluna "Programado na Semana" -- redistribui pelas
+// horas já agendadas dessa semana pra esse pedido, preservando o total
+// exato que foi digitado (ver applyExactQtdToWeekSlots), sem mexer em
+// quantas horas estão agendadas.
+function commitWeeklyQtdEdit(input) {
+  var pedidoKey = input.dataset.pedidoKey;
+  var novaQtd = parseInt(input.value) || 0;
+  var slots = getWeekSlotsForPedido(pedidoKey);
+  if (!slots.length || novaQtd <= 0) { updateWeeklySummaryTable(); return; }
+  input.disabled = true;
+  applyExactQtdToWeekSlots(slots, novaQtd).then(function(){
+    showToast('Meta ajustada: total exato de ' + fmtNum(novaQtd) + ' un. (' + slots.length + 'h programadas).');
+    // weekData atualiza sozinho via os listeners de db.ref('programacao/'+date)
+    // já ativos em loadWeek(), que já chamam updateWeeklySummaryTable() de novo.
+  }).catch(function(e){
+    input.disabled = false;
+    showToast('Erro ao ajustar meta: ' + e.message);
+  });
+}
+
+// Quando um slot é apagado, a quantidade total-alvo da semana (o que já
+// estava exibido em "Programado na Semana" antes de apagar) não recua junto
+// -- em vez disso, as horas restantes se reajustam pra preservar o total
+// exato pretendido. `excludeSlot` é o slot que acabou de ser removido, pra
+// não contar ele de novo antes do listener atualizar weekData.
+function reajustarMetaAposExclusao(pedidoKey, totalAlvo, excludeSlot) {
+  if (!pedidoKey || !totalAlvo) return;
+  var slots = getWeekSlotsForPedido(pedidoKey, excludeSlot);
+  if (!slots.length) return; // nada mais agendado essa semana pra esse pedido
+  applyExactQtdToWeekSlots(slots, totalAlvo);
 }
 
 function populateAgdClientFilter() {
@@ -1044,7 +1814,7 @@ function makePedCard(p){
   if(p.status){var sc=STATUS_CORES[p.status]||{bg:'#f1f5f9',cl:'#64748b'};stBadge='<span style="background:'+sc.bg+';color:'+sc.cl+';border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700">'+p.status+'</span>';}
   var clientText = p.cliente ? '<span style="background:#e0f2fe;color:#0369a1;border-radius:8px;padding:2px 8px;font-size:10px;font-weight:700;margin-left:4px">' + p.cliente + '</span>' : '';
   var sku = p.sku || '';
-  var prod = allProdutos[sku] || {};
+  var prod = getProdutoBySku(sku);
   var speed = p.mediaPorHora || prod.prodHoraRef || 0;
   var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
   var hText = hoursNeeded ? hoursNeeded + 'h restantes' : '--';
@@ -1102,7 +1872,7 @@ function setupProdModal(){
     if(!mSlot||!mSelected)return;
     var p=pedidos[mSelected];if(!p)return;
     var sku = p.sku || '';
-    var prod = allProdutos[sku] || {};
+    var prod = getProdutoBySku(sku);
     var speed = p.mediaPorHora || prod.prodHoraRef || 0;
     var path='programacao/'+mSlot.date+'/'+hKey(mSlot.hora)+'/env'+mSlot.linha;
     db.ref(path).set({pedidoKey:mSelected,produto:p.produto,sku:p.sku||'',mediaPorHora:speed},function(e){
@@ -1116,10 +1886,14 @@ function setupProdModal(){
 function clearSlot(date,hora,linha){
   var slot = weekData[date] && weekData[date][hora] ? weekData[date][hora]['env'+linha] : null;
   var pk = slot ? slot.pedidoKey : null;
+  // Captura o total-alvo da semana ANTES de apagar -- é o que preserva ao
+  // redistribuir a meta pelas horas restantes (ver reajustarMetaAposExclusao).
+  var totalAntes = pk ? getWeekTotalForPedido(pk) : 0;
   db.ref('programacao/'+date+'/'+hKey(hora)+'/env'+linha).remove(function(e){
     if(!e) {
       showToast('Slot limpo!');
       if (pk && window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pk);
+      if (pk) reajustarMetaAposExclusao(pk, totalAntes, {date:date, hora:hora, linha:linha});
     }
   });
 }
@@ -1129,52 +1903,132 @@ function setupAgdModal(){
   document.getElementById('agdCancelBtn').addEventListener('click',function(){document.getElementById('agdModal').classList.remove('open');});
   document.getElementById('agdModal').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
   // Linha buttons listeners are handled dynamically in updateDynamicLinhasUI()
-  document.getElementById('agdHoras').addEventListener('input',function(){updateAgdPreview();});
+  // Quantidade e horas são bidirecionais -- qual campo foi digitado por
+  // último decide o que se recalcula (ver agdRecalc()).
+  document.getElementById('agdQtd').addEventListener('input',function(){agdLastEdited='qtd';updateAgdPreview();});
+  document.getElementById('agdHoras').addEventListener('input',function(){agdLastEdited='horas';updateAgdPreview();});
   document.getElementById('agdDataInicio').addEventListener('change',function(){updateAgdPreview();});
   document.getElementById('agdConfirmBtn').addEventListener('click',doAgendamento);
 }
 
+var agdLastEdited='qtd'; // 'qtd' ou 'horas' -- qual campo dirigiu o último recálculo
+var agdJaAgendado=0;     // un. já agendadas (não produzidas ainda) pra esse pedido, calculado ao abrir o modal
+
 function openAgdModal(key){
   var p=pedidos[key];if(!p)return;
   agdPedidoKey=key;
+  agdLastEdited='qtd';
+  agdJaAgendado=0;
   var lineMatch = String(p.linha || '').match(/\d+/);
   var lineNum = lineMatch ? parseInt(lineMatch[0]) : 1;
   agdLinha = (lineNum >= 1 && lineNum <= configLinhas.length) ? lineNum : 1;
   document.getElementById('agdTitle').textContent=p.produto;
   var sku = p.sku || '';
-  var prod = allProdutos[sku] || {};
+  var prod = getProdutoBySku(sku);
   var speed = p.mediaPorHora || prod.prodHoraRef || 0;
   var hoursNeeded = speed > 0 ? Math.ceil(p._falta / speed) : 0;
   var hoursText = hoursNeeded ? hoursNeeded + 'h' : '--';
   document.getElementById('agdSub').textContent=p.id+(p.sku?' • SKU '+p.sku:'');
   document.getElementById('agdInfoGrid').innerHTML='<div class="agd-info-box"><div class="agd-info-val">'+fmtNum(speed)+'/h</div><div class="agd-info-lbl">Média/hora</div></div><div class="agd-info-box"><div class="agd-info-val">'+fmtNum(p._falta)+'</div><div class="agd-info-lbl">Faltam (un.)</div></div><div class="agd-info-box"><div class="agd-info-val">'+hoursText+'</div><div class="agd-info-lbl">Horas estim.</div></div><div class="agd-info-box"><div class="agd-info-val">'+Math.round(p._pct*100)+'%</div><div class="agd-info-lbl">Produzido</div></div>';
+  // Por padrão vem preenchido com o falta inteiro -- só muda quando a
+  // checagem de "já agendado" (abaixo) resolver, ou se o operador apagar e
+  // digitar outro valor pra fazer uma produção parcial.
+  document.getElementById('agdQtd').value=p._falta||0;
   document.getElementById('agdHoras').value=hoursNeeded||0;
+  document.getElementById('agdQtdHint').textContent='Verificando quanto já está agendado...';
   document.getElementById('agdDataInicio').value=toYMD(nextWorkingDay(new Date()));
   document.querySelectorAll('.linha-btn').forEach(function(b){b.className='linha-btn';});
   var ab=document.querySelector('.linha-btn[data-linha="'+agdLinha+'"]');if(ab)ab.className='linha-btn active-e'+agdLinha;
   document.getElementById('agdPreview').style.display='none';
   document.getElementById('agdModal').classList.add('open');
   updateAgdPreview();
+
+  // Quanto desse pedido já está nos slots futuros (agendado mas ainda não
+  // produzido) -- sem isso, reabrir o modal pra agendar "o resto" sugeria de
+  // novo o falta inteiro, incluindo o que já tinha sido agendado antes
+  // (risco de agendar a mesma quantidade duas vezes).
+  var todayStr=toYMD(new Date());
+  var endStr=toYMD(addDays(new Date(),90));
+  db.ref('programacao').orderByKey().startAt(todayStr).endAt(endStr).once('value').then(function(snap){
+    if(agdPedidoKey!==key) return; // modal já foi trocado de pedido, descarta
+    var jaAgendado=0;
+    snap.forEach(function(dateSnap){
+      var dayData=dateSnap.val()||{};
+      Object.keys(dayData).forEach(function(hourKey){
+        var hourData=dayData[hourKey]||{};
+        for(var i=1;i<=configLinhas.length;i++){
+          var slot=hourData['env'+i];
+          if(slot&&slot.pedidoKey===key){
+            jaAgendado+=(slot.mediaPorHora||speed||0);
+          }
+        }
+      });
+    });
+    agdJaAgendado=jaAgendado;
+    var disponivel=Math.max((p._falta||0)-jaAgendado,0);
+    document.getElementById('agdQtd').value=disponivel;
+    document.getElementById('agdQtdHint').textContent=jaAgendado>0
+      ? (fmtNum(jaAgendado)+' un. já agendadas anteriormente (ainda não produzidas) -- sugerindo o restante.')
+      : '';
+    updateAgdPreview();
+  }).catch(function(){
+    document.getElementById('agdQtdHint').textContent='';
+  });
+}
+
+// Quantidade e horas são as duas faces do mesmo agendamento -- qual delas o
+// operador editou por último decide o que se recalcula:
+// - editou Quantidade -> horas = qtd ÷ ritmo padrão (meta continua padrão;
+//   é o caminho natural pra "quero produzir só X" -- produção parcial).
+// - editou Horas -> quantidade fica como está, meta = qtd ÷ horas (é o
+//   caminho pra "só tenho X horas de linha, qual ritmo preciso pra dar
+//   conta da mesma quantidade nesse tempo").
+function agdRecalc(){
+  var p=pedidos[agdPedidoKey];
+  if(!p) return {qtd:0,horas:0,meta:0,speedPadrao:0,disponivel:0,parcial:false};
+  var sku=p.sku||'';
+  var prod=getProdutoBySku(sku);
+  var speedPadrao=p.mediaPorHora||prod.prodHoraRef||0;
+  var qtd=parseInt(document.getElementById('agdQtd').value)||0;
+  var horas=parseInt(document.getElementById('agdHoras').value)||0;
+
+  if(agdLastEdited==='qtd'){
+    horas=speedPadrao>0?Math.ceil(qtd/speedPadrao):0;
+    document.getElementById('agdHoras').value=horas||0;
+  }
+  var meta=(agdLastEdited==='horas'&&horas>0)?(qtd/horas):speedPadrao;
+  var disponivel=Math.max((p._falta||0)-agdJaAgendado,0);
+  return {qtd:qtd,horas:horas,meta:meta,speedPadrao:speedPadrao,disponivel:disponivel,parcial:qtd<disponivel};
 }
 
 function updateAgdPreview(){
-  var horas=parseInt(document.getElementById('agdHoras').value)||0;
+  var r=agdRecalc();
   var startStr=document.getElementById('agdDataInicio').value;
   var prev=document.getElementById('agdPreview');
-  if(!horas||!startStr){prev.style.display='none';return;}
-  var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
+  if(!r.horas||!startStr){prev.style.display='none';return;}
+  var hpHoje=horasEPausasDoDia(new Date());
+  var activeH=hpHoje.horasAtivas.filter(function(h){return!hpHoje.pausas.includes(h);});
   if(!activeH.length){prev.innerHTML='Nenhuma hora ativa configurada.';prev.style.display='block';return;}
-  var daysNeeded=Math.ceil(horas/activeH.length);
-  prev.innerHTML='~<strong>'+horas+'</strong> slots em <strong>'+daysNeeded+' dia(s)</strong> úteis a partir de <strong>'+fmtBR(parsYMD(startStr))+'</strong>.';
+  var daysNeeded=Math.ceil(r.horas/activeH.length);
+  var extra='';
+  if(r.qtd>r.disponivel){
+    extra=' <strong style="color:var(--danger,#d03b3b)">⚠️ Maior que o disponível</strong> ('+fmtNum(r.disponivel)+' un.) -- confira antes de agendar.';
+  } else if(r.parcial){
+    extra=' <strong style="color:var(--warning,#c9910a)">Produção parcial</strong>: '+fmtNum(r.disponivel-r.qtd)+' un. ficam pra agendar depois.';
+  } else if(agdLastEdited==='horas'&&r.speedPadrao&&Math.round(r.meta)!==Math.round(r.speedPadrao)){
+    extra=' Meta ajustada pra essa janela: <strong>'+fmtNum(Math.round(r.meta))+'/h</strong> (padrão do pedido: '+fmtNum(r.speedPadrao)+'/h).';
+  }
+  prev.innerHTML='~<strong>'+r.horas+'</strong> slots em <strong>'+daysNeeded+' dia(s)</strong> úteis a partir de <strong>'+fmtBR(parsYMD(startStr))+'</strong>.'+extra;
   prev.style.display='block';
 }
 
 function doAgendamento(){
   var p=pedidos[agdPedidoKey];if(!p)return;
-  var horasTotal=parseInt(document.getElementById('agdHoras').value)||0;
+  var r=agdRecalc();
+  var horasTotal=r.horas;
   var startStr=document.getElementById('agdDataInicio').value;
 
-  if(!horasTotal||!startStr){showToast('Preencha horas e data de início.');return;}
+  if(!horasTotal||!startStr){showToast('Preencha quantidade/horas e data de início.');return;}
 
   var btn=document.getElementById('agdConfirmBtn');btn.disabled=true;btn.textContent='Agendando...';
   var start=parsYMD(startStr);
@@ -1182,9 +2036,10 @@ function doAgendamento(){
 
   if(!dates.length){showToast('Nenhum dia útil encontrado.');btn.disabled=false;btn.textContent='⚡ Agendar';return;}
 
-  var sku = p.sku || '';
-  var prod = allProdutos[sku] || {};
-  var speed = p.mediaPorHora || prod.prodHoraRef || 0;
+  // Quantidade dirigindo (padrão): meta = ritmo padrão do pedido -- é uma
+  // produção parcial (ou total) no ritmo normal. Horas dirigindo: meta se
+  // ajusta pra caber a mesma quantidade na janela de tempo escolhida.
+  var speed = r.meta>0 ? Math.round(r.meta) : r.speedPadrao;
 
   Promise.all(dates.map(function(date){return db.ref('programacao/'+date).once('value');})).then(function(snaps){
     var existingData={};
@@ -1193,12 +2048,12 @@ function doAgendamento(){
       snap.forEach(function(hSnap){existingData[dates[i]][hSnap.key.replace('_',':')]=hSnap.val()||{};});
     });
 
-    var activeH=config.horasAtivas.filter(function(h){return!config.pausas.includes(h);});
-
     // Find all empty candidates
     var candidates = [];
     for(var di=0;di<dates.length;di++){
       var dayData=existingData[dates[di]]||{};
+      var hpDia=horasEPausasDoDia(parsYMD(dates[di]));
+      var activeH=hpDia.horasAtivas.filter(function(h){return!hpDia.pausas.includes(h);});
       for(var hi=0;hi<activeH.length;hi++){
         var hora=activeH[hi];var slotKey='env'+agdLinha;
         var hd=dayData[hora]||{};
@@ -1305,29 +2160,7 @@ function setupConfigTab(){
   document.getElementById('clearPeriodBtn').addEventListener('click', clearPeriodProgramacao);
 }
 
-function renderConfigTab(){renderHoursGrid();renderDaysGrid();renderFeriados();fillClearHoraSelects();}
-
-
-function renderHoursGrid(){
-  var grid=document.getElementById('hoursGrid');grid.innerHTML='';
-  ALL_HOURS.forEach(function(h){
-    var isActive=config.horasAtivas.includes(h);
-    var isPausa=config.pausas.includes(h);
-    var chip=document.createElement('div');
-    chip.className='hour-chip'+(isPausa?' pausa':isActive?' active':'');
-    chip.innerHTML=fmtHoraRange(h)+'<div class="hour-chip-hint">'+(isPausa?'intervalo':isActive?'ativo':'inativo')+'</div>';
-    (function(hour){
-      chip.addEventListener('click',function(){
-        var a=config.horasAtivas.includes(hour);var pa=config.pausas.includes(hour);
-        if(!a&&!pa){config.horasAtivas.push(hour);config.horasAtivas.sort();}
-        else if(a&&!pa){config.pausas.push(hour);}
-        else{config.pausas=config.pausas.filter(function(x){return x!==hour;});config.horasAtivas=config.horasAtivas.filter(function(x){return x!==hour;});}
-        renderHoursGrid();
-      });
-    })(h);
-    grid.appendChild(chip);
-  });
-}
+function renderConfigTab(){renderDaysGrid();renderFeriados();fillClearHoraSelects();}
 
 function renderDaysGrid(){
   var grid=document.getElementById('daysGrid');grid.innerHTML='';
@@ -1365,7 +2198,6 @@ function renderFeriados(){
 function saveConfig(){
   var btn=document.getElementById('saveConfigBtn');btn.disabled=true;btn.textContent='Salvando...';
   db.ref('config/planejamento').set({
-    horasAtivas:config.horasAtivas,pausas:config.pausas,
     diasSemana:config.diasSemana,feriados:config.feriados||{}
   },function(e){
     btn.disabled=false;btn.textContent='💾 Salvar Configurações';
@@ -1374,13 +2206,33 @@ function saveConfig(){
   });
 }
 
+// União das horas de todos os turnos configurados (fim normal + fim de
+// sexta) -- candidato mais amplo possível pro seletor de horário da limpeza
+// em lote, já que ali é só uma lista pra escolher um intervalo, não precisa
+// ser o horário exato de um dia específico.
+function todasHorasPossiveis(){
+  var set={};
+  turnosParaCapacidade().forEach(function(t){
+    [configTurnoHorariosFim[t], configTurnoHorariosFimSexta[t]].forEach(function(fim){
+      var inicio=configTurnoHorarios[t];
+      if(!inicio||!fim) return;
+      var hIni=parseInt(inicio.split(':')[0],10);
+      var fimParts=fim.split(':');
+      var hFim=parseInt(fimParts[0],10)+(parseInt(fimParts[1]||'0',10)>0?1:0);
+      expandHourRange(hIni,hFim).forEach(function(h){set[h]=true;});
+    });
+  });
+  var hours=Object.keys(set).sort();
+  return hours.length?hours:ALL_HOURS;
+}
+
 function fillClearHoraSelects() {
   var startSel = document.getElementById('clearHoraInicio');
   var endSel = document.getElementById('clearHoraFim');
   if(!startSel || !endSel) return;
   startSel.innerHTML = '';
   endSel.innerHTML = '';
-  var hours = config.horasAtivas && config.horasAtivas.length ? config.horasAtivas : ALL_HOURS;
+  var hours = todasHorasPossiveis();
   hours.forEach(function(h) {
     var opt1 = document.createElement('option');
     opt1.value = h;
@@ -1415,7 +2267,7 @@ function clearPeriodProgramacao() {
   
   var hoursToClear = [];
   if (horTipo === 'all') {
-    hoursToClear = config.horasAtivas;
+    hoursToClear = todasHorasPossiveis();
   } else {
     var hStart = document.getElementById('clearHoraInicio').value;
     var hEnd = document.getElementById('clearHoraFim').value;
@@ -1429,7 +2281,7 @@ function clearPeriodProgramacao() {
       alert('O horário de término deve ser posterior ao horário de início.');
       return;
     }
-    hoursToClear = config.horasAtivas.filter(function(h) {
+    hoursToClear = todasHorasPossiveis().filter(function(h) {
       var hNum = parseInt(h.replace(':', ''));
       return hNum >= startNum && hNum <= endNum;
     });
@@ -1490,261 +2342,8 @@ function clearPeriodProgramacao() {
 }
 
 
-// ── SISTEMA DE IMPORTAÇÃO DE PLANILHA SEMANAL DO PCP ────────────────
-var parsedData = [];
-var filteredData = [];
-var currentFilter = 'future';
-
-function cleanProduto(v) {
-  if (!v || typeof v !== 'string') return '';
-  var s = v.split('>')[0];
-  s = s.split(' - ')[0];
-  return s.trim();
-}
-
-function extractPedidoId(v) {
-  if (!v || typeof v !== 'string') return '';
-  var parts = v.split('>');
-  if (parts.length < 2) return '';
-  return parts[1].trim();
-}
-
-function excelDateToStr(d) {
-  if (!(d instanceof Date)) return null;
-  var offset = d.getTimezoneOffset() * 60000;
-  var local = new Date(d.getTime() - offset);
-  return local.toISOString().slice(0, 10);
-}
-
-function horaToKey(h) {
-  if (!h) return '';
-  return String(h).split('-')[0].trim();
-}
-
-function getWeekKey(date) {
-  var d = new Date(date + 'T12:00:00');
-  var day = d.getDay();
-  var mon = new Date(d);
-  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  return mon.toISOString().slice(0, 10);
-}
-
-function parseFile(file) {
-  document.getElementById('dropText').textContent = '⏳ Lendo ' + file.name + '...';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
-      var sheetName = 'Previsão Envase';
-      if (wb.SheetNames.indexOf(sheetName) === -1) {
-        sheetName = wb.SheetNames.find(function(s) { return s.toLowerCase().indexOf('previs') !== -1 && s.toLowerCase().indexOf('envase') !== -1; });
-      }
-      if (!sheetName) {
-        alert('Aba "Previsao Envase" nao encontrada. Abas disponíveis: ' + wb.SheetNames.join(', '));
-        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-        return;
-      }
-      var ws = wb.Sheets[sheetName];
-      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      parsedData = [];
-
-      rows.forEach(function(row) {
-        if (!row) return;
-        var dateVal = row[3];
-        var hora = row[4];
-        if (!dateVal || !hora || typeof hora !== 'string') return;
-
-        var d = excelDateToStr(dateVal);
-        if (!d) return;
-
-        var env1 = cleanProduto(row[5]);
-        var env2 = cleanProduto(row[6]);
-        var env3 = cleanProduto(row[7]);
-        var meta1 = Math.round(parseFloat(row[8]) || 0);
-        var meta2 = Math.round(parseFloat(row[9]) || 0);
-        var meta3 = Math.round(parseFloat(row[10]) || 0);
-        var horaKey = horaToKey(hora);
-        if (!horaKey) return;
-
-        var pedidoId1 = extractPedidoId(row[5]);
-        var pedidoId2 = extractPedidoId(row[6]);
-        var pedidoId3 = extractPedidoId(row[7]);
-
-        parsedData.push({
-          date: d,
-          hora: hora.trim(),
-          horaKey: horaKey,
-          env1: env1, env2: env2, env3: env3,
-          meta1: meta1, meta2: meta2, meta3: meta3,
-          pedidoId1: pedidoId1, pedidoId2: pedidoId2, pedidoId3: pedidoId3
-        });
-      });
-
-      if (!parsedData.length) {
-        alert('Nenhum dado encontrado na aba "Previsao Envase". Verifique o formato do arquivo.');
-        document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-        return;
-      }
-
-      document.getElementById('dropText').textContent = '✓ ' + file.name;
-      onParsed();
-    } catch (err) {
-      alert('Erro ao ler arquivo: ' + err.message);
-      document.getElementById('dropText').textContent = 'Clique ou arraste o arquivo aqui';
-      console.error(err);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function onParsed() {
-  var dates = {};
-  var semanas = {};
-  parsedData.forEach(function(r) {
-    dates[r.date] = 1;
-    semanas[getWeekKey(r.date)] = 1;
-  });
-  document.getElementById('statSemanas').textContent = Object.keys(semanas).length;
-  document.getElementById('statDias').textContent = Object.keys(dates).length;
-  document.getElementById('statSlots').textContent = parsedData.length;
-
-  var mc = document.getElementById('mappingContainer');
-  mc.innerHTML = '';
-  ['Envase 1', 'Envase 2', 'Envase 3'].forEach(function(e, i) {
-    var linhaName = configLinhas[i] || null;
-    var row = document.createElement('div');
-    row.className = 'mapping-row';
-    row.innerHTML = '<span class="mapping-badge" style="background:#eff6ff;color:var(--primary);border:1px solid #bfdbfe;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;white-space:nowrap">' + e + '</span>' +
-      '<span class="mapping-arrow" style="color:var(--muted);font-weight:700;margin:0 10px;">→</span>' +
-      (linhaName
-        ? '<span class="mapping-linha" style="font-weight:600;color:var(--text);">' + linhaName + '</span>'
-        : '<span class="mapping-none" style="color:var(--muted);font-style:italic;">Linha ' + (i + 1) + ' (configurada no Admin)</span>');
-    mc.appendChild(row);
-  });
-
-  document.getElementById('infoCard').style.display = 'block';
-  document.getElementById('filterCard').style.display = 'block';
-  document.getElementById('importCard').style.display = 'block';
-
-  applyFilter(currentFilter);
-}
-
-function applyFilter(filter) {
-  currentFilter = filter;
-  document.querySelectorAll('.filter-btn').forEach(function(b) {
-    b.classList.toggle('active', b.getAttribute('data-filter') === filter);
-  });
-
-  var todayDate = toYMD(new Date());
-  if (filter === 'future') {
-    filteredData = parsedData.filter(function(r) { return r.date >= todayDate; });
-  } else {
-    filteredData = parsedData.slice();
-  }
-
-  var uniqueDates = {};
-  filteredData.forEach(function(r) { uniqueDates[r.date] = 1; });
-  var nDias = Object.keys(uniqueDates).length;
-  document.getElementById('filterInfo').innerHTML =
-    '<strong>' + filteredData.length + '</strong> slots em <strong>' + nDias + '</strong> dia(s) selecionados.';
-}
-
-function doImport() {
-  if (!db) { alert('Sem conexao com Firebase.'); return; }
-  if (!filteredData.length) { alert('Nenhum dado para importar no periodo selecionado.'); return; }
-
-  var lines = [
-    configLinhas[0] || 'Linha 1',
-    configLinhas[1] || 'Linha 2',
-    configLinhas[2] || 'Linha 3'
-  ];
-
-  var bySlotUpdates = {};
-  var datesSet = {};
-
-  filteredData.forEach(function(r) {
-    datesSet[r.date] = 1;
-    for (var l = 1; l <= 3; l++) {
-      var envVal = r['env' + l];
-      var pedIdVal = r['pedidoId' + l];
-      var metaVal = r['meta' + l] || 0;
-      
-      if (envVal || pedIdVal) {
-        var pedKey = findPedidoKey(pedIdVal, envVal, pedidos);
-        var slotObj = null;
-        if (pedKey && pedidos[pedKey]) {
-          var p = pedidos[pedKey];
-          var sku = p.sku || '';
-          var prodInfo = allProdutos[sku] || {};
-          var speed = p.mediaPorHora || prodInfo.prodHoraRef || metaVal || 0;
-          slotObj = {
-            pedidoKey: pedKey,
-            produto: p.produto,
-            sku: sku,
-            mediaPorHora: speed
-          };
-        } else if (envVal) {
-          slotObj = {
-            pedidoKey: pedIdVal ? ('OP_' + sanitizeKey(pedIdVal) + '__' + sanitizeKey(envVal)) : '',
-            produto: envVal,
-            sku: '',
-            mediaPorHora: metaVal
-          };
-        }
-        
-        if (slotObj) {
-          var path = 'programacao/' + r.date + '/' + hKey(r.horaKey) + '/env' + l;
-          bySlotUpdates[path] = slotObj;
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/meta' + l] = metaVal;
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/linha' + l] = lines[l - 1];
-          bySlotUpdates['programacao/' + r.date + '/' + hKey(r.horaKey) + '/pedidoId' + l] = pedIdVal || '';
-        }
-      }
-    }
-  });
-
-  var dates = Object.keys(datesSet).sort();
-  var total = dates.length;
-  var done = 0;
-
-  var btn = document.getElementById('btnImport');
-  btn.disabled = true;
-  document.getElementById('progressWrap').style.display = 'block';
-
-  function next() {
-    if (done >= total) {
-      document.getElementById('progressFill').style.width = '100%';
-      document.getElementById('progressText').textContent = '✔ Concluído! ' + total + ' dias importados com sucesso.';
-      btn.disabled = false;
-      showToast('Programacao importada! ' + total + ' dias salvos.');
-      loadWeek();
-      return;
-    }
-    var date = dates[done];
-    var dateUpdates = {};
-    var hasUpdates = false;
-    Object.keys(bySlotUpdates).forEach(function(path) {
-      if (path.indexOf('programacao/' + date + '/') === 0) {
-        dateUpdates[path] = bySlotUpdates[path];
-        hasUpdates = true;
-      }
-    });
-
-    var promise = hasUpdates ? db.ref().update(dateUpdates) : Promise.resolve();
-    promise.then(function() {
-      done++;
-      var pct = Math.round(done / total * 100);
-      document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressText').textContent = 'Salvando ' + done + ' / ' + total + ' dias...';
-      next();
-    })
-    .catch(function(err) {
-      alert('Erro ao salvar ' + date + ': ' + err.message);
-      btn.disabled = false;
-    });
-  }
-  next();
-}
+// (Sistema de importação de planilha semanal removido -- não era mais
+// usado; ver kuryos_target_architecture na memória do projeto.)
 
 function showToast(msg){
   var t=document.getElementById('toast');
@@ -1757,40 +2356,6 @@ function showToast(msg){
   }
 }
 
-// Event Listeners setup
-document.addEventListener('DOMContentLoaded', function() {
-  var dropZone = document.getElementById('dropZone');
-  var fileInput = document.getElementById('fileInput');
-  if (dropZone && fileInput) {
-    dropZone.addEventListener('click', function() { fileInput.click(); });
-    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; dropZone.style.background = '#eff6ff'; });
-    dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor = 'var(--border)'; dropZone.style.background = 'transparent'; });
-    dropZone.addEventListener('drop', function(e) {
-      e.preventDefault();
-      dropZone.style.borderColor = 'var(--border)';
-      dropZone.style.background = 'transparent';
-      var f = e.dataTransfer.files[0];
-      if (f) parseFile(f);
-    });
-    fileInput.addEventListener('change', function() {
-      if (fileInput.files[0]) parseFile(fileInput.files[0]);
-    });
-  }
-
-  var btnFltFuture = document.getElementById('fltFuture');
-  var btnFltAll = document.getElementById('fltAll');
-  if (btnFltFuture) {
-    btnFltFuture.addEventListener('click', function() { applyFilter('future'); });
-  }
-  if (btnFltAll) {
-    btnFltAll.addEventListener('click', function() { applyFilter('all'); });
-  }
-
-  var btnImport = document.getElementById('btnImport');
-  if (btnImport) {
-    btnImport.addEventListener('click', doImport);
-  }
-});
 </script>
 </body>
 </html>

@@ -1,4 +1,12 @@
 """
+DEPRECATED (2026-07-21): substituido pela Cloud Function agendada
+`checkNotificacoes` (functions/index.js), que roda a cada 2 min sozinha no
+Firebase e manda e-mail via Microsoft Graph API (caixa sistema-pcp@kuryos.com.br)
+em vez de automacao COM do Outlook local -- nao precisa mais de um PC ligado
+rodando este script continuamente. Testado ponta a ponta em 2026-07-21,
+confirmado recebendo em pcp@kuryos.com.br e diretoria@kuryos.com.br.
+Mantido so como referencia da logica original (cooldowns, resumo de turno).
+
 Daemon de notificacoes por e-mail do PCP Kuryos.
 
 Fica de olho em tres coisas no Firebase:
@@ -18,32 +26,40 @@ na maquina onde este script roda.
 import os
 import time
 import json
-import urllib.request
+import firebase_admin
+from firebase_admin import credentials, db as fb_db
 from datetime import datetime, timedelta
 
 DB_URL = "https://prod-kuryos-default-rtdb.firebaseio.com"
+SERVICE_ACCOUNT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firebase-service-account.json")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "email_notifications_state.json")
 COOLDOWN_MESMO_ALERTA_MIN = 60  # nao reenvia o mesmo alerta (linha/OP) antes disso
 
 
+def init_firebase():
+    if firebase_admin._apps:
+        return
+    if not os.path.exists(SERVICE_ACCOUNT_PATH):
+        raise SystemExit(
+            f"Chave de service account nao encontrada em: {SERVICE_ACCOUNT_PATH}\n"
+            "Gere em: Firebase Console > Configuracoes do projeto > Contas de servico > "
+            "Gerar nova chave privada, e salve o .json baixado com esse nome nessa pasta."
+        )
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+    firebase_admin.initialize_app(cred, {"databaseURL": DB_URL})
+
+
 def fb_get(path):
-    url = f"{DB_URL}/{path}.json"
     try:
-        with urllib.request.urlopen(url) as resp:
-            data = resp.read()
-            if not data or data == b'null':
-                return None
-            return json.loads(data.decode('utf-8'))
+        return fb_db.reference(path).get()
     except Exception as e:
         print(f"  -> Erro ao ler {path}:", e)
         return None
 
 
 def fb_delete(path):
-    url = f"{DB_URL}/{path}.json"
-    req = urllib.request.Request(url, method='DELETE')
     try:
-        urllib.request.urlopen(req)
+        fb_db.reference(path).delete()
     except Exception as e:
         print(f"  -> Erro ao apagar {path}:", e)
 
@@ -163,6 +179,32 @@ def check_ops_atrasadas(state, destinatarios):
         fb_delete(f"alertas_pendentes/{alert_id}")
 
 
+def check_ops_emitidas(state, destinatarios):
+    """OPs emitidas pelo Gerador de OPs (VBA) via Cloud Function `criarOP` --
+    ela grava o aviso aqui, este daemon é quem manda o e-mail de fato (a
+    function não tem como falar com o Outlook local)."""
+    alertas = fb_get("alertas_pendentes") or {}
+    for alert_id, alert in alertas.items():
+        if not alert or alert.get("tipo") != "op_emitida":
+            continue
+
+        assunto = f"🆕 OP {alert.get('lote', '—')} emitida — {alert.get('produto', '—')}"
+        corpo = (
+            f"Nova OP emitida pelo Gerador de OPs:\n\n"
+            f"Lote/OP: {alert.get('lote', '—')}\n"
+            f"Produto: {alert.get('produto', '—')} (SKU: {alert.get('sku', '—')})\n"
+            f"Cliente: {alert.get('cliente', '—')}\n"
+            f"Quantidade planejada: {alert.get('qtdPlanejada', 0)} un.\n"
+            f"Pedido comercial: #{alert.get('pedidoComercialId') or '—'}\n"
+            f"Emitido por: {alert.get('emitidoPor') or '—'}\n\n"
+            f"Sistema PCP Kuryos — alerta automático."
+        )
+        send_email(destinatarios, assunto, corpo)
+        # Emissão de OP não precisa de cooldown (cada uma é um evento único,
+        # não repetitivo como parada/atraso) -- só consome a fila.
+        fb_delete(f"alertas_pendentes/{alert_id}")
+
+
 def check_fim_de_turno(state, config, destinatarios):
     turno_horarios = config.get("turnoHorarios") or {}
     if not turno_horarios:
@@ -222,6 +264,7 @@ def run_once():
 
     check_linhas_paradas(state, config, destinatarios)
     check_ops_atrasadas(state, destinatarios)
+    check_ops_emitidas(state, destinatarios)
     check_fim_de_turno(state, config, destinatarios)
 
     save_state(state)
@@ -231,6 +274,7 @@ if __name__ == "__main__":
     print("==========================================================")
     print("     KURYOS PCP - DAEMON DE NOTIFICACOES POR E-MAIL       ")
     print("==========================================================")
+    init_firebase()
     print("Monitorando: linha parada, OP atrasada, resumo de turno.")
     print("Destinatarios configurados em admin.html > Notificacoes.")
     print("Pressione Ctrl+C para encerrar.")

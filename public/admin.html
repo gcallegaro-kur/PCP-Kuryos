@@ -4,28 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Configuracoes</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280}
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .header{background:#0a1c69;color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-    .header h1{font-size:18px;font-weight:700}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
-    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
-    .dot.on{background:#34d399;animation:p 2s infinite}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
     @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
-    .main{padding:16px;max-width:96%;margin:0 auto}
-    .card{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;padding:22px;box-shadow:var(--shadow);margin-bottom:16px;border-left:4px solid var(--primary)}
     .card-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
     .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
     .fg{display:flex;flex-direction:column;gap:6px}
     label{font-size:13px;font-weight:600;color:var(--muted)}
-    input[type=text],input[type=number],input[type=date],select{padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;color:var(--text);width:100%;background:white;transition:border-color .2s}
+    input[type=text],input[type=number],input[type=date],select{padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:15px;color:var(--text);width:100%;background:var(--card);transition:border-color .2s}
     input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,86,219,.1)}
     .btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
     .btn-primary{background:var(--primary);color:white}.btn-primary:hover{background:#1141a3}
@@ -48,13 +56,15 @@
     .alert.show{display:block}
     .alert-success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
     .alert-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
-    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:#f9fafb;border-radius:6px;border-left:3px solid var(--border)}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .section-note a{color:var(--primary);font-weight:600;text-decoration:none}
+    .section-note a:hover{text-decoration:underline}
     /* Metas por linha */
-    .matrix-wrapper { overflow-x: auto; margin-top: 14px; border: 1.5px solid var(--border); border-radius: 8px; background: white }
+    .matrix-wrapper { overflow-x: auto; margin-top: 14px; border: 1.5px solid var(--border); border-radius: 8px; background:var(--card) }
     .matrix-table { width: 100%; border-collapse: collapse; font-size: 13px }
     .matrix-table th, .matrix-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right }
-    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; position: sticky; left: 0; background: white; font-weight: bold }
-    .matrix-table th { background: #f9fafb; font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 10px }
+    .matrix-table th:first-child, .matrix-table td:first-child { text-align: left; position: sticky; left: 0; background:var(--card); font-weight: bold }
+    .matrix-table th { background: color-mix(in srgb, var(--text) 4%, var(--card)); font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 10px }
     .matrix-table input[type=number] { padding: 5px 8px; border: 1.5px solid var(--border); border-radius: 6px; width: 85px; text-align: right; font-size: 13px; outline: none }
     .matrix-table input[type=number]:focus { border-color: var(--primary) }
     .matrix-table tr:hover { background: #f9fafb }
@@ -66,48 +76,36 @@
     .meta-total-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
     .empty-metas{padding:20px;text-align:center;font-size:13px;color:var(--muted)}
 
-    /* Toolbar / Navigation */
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
   </style>
 </head>
-<body>
+<body class="kuryos-theme has-sidebar">
 <div class="header">
   <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
-    <h1>Administracao</h1>
-    <div style="font-size:12px;opacity:.8;margin-top:2px">Controle de Producao</div>
+    <h1>Administração</h1>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:2px">Controle de Produção</div>
   </div>
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
-</div>
-
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html" class="active">Admin</a>
-  </div>
 </div>
 
 <div class="main">
   <div id="alertBox" class="alert alert-success"></div>
 
-  <!-- DADOS DE DEMONSTRACAO (SEED) -->
-  <div class="card" id="seedCard" style="display:none; background:#ecfdf5; border:1.5px solid #10b981;">
-    <div class="card-title" style="color:#059669; border-bottom:1px solid #bbf7d0;">Dados de Demonstração</div>
-    <div class="section-note" style="background:#f0fdf4; border-left:3px solid #10b981; margin-bottom:12px;">
-      O banco de dados está vazio. Clique abaixo para carregar uma configuração padrão (Linhas, Turnos, Operadores, Produtos e OPs) para testar o sistema imediatamente.
+  <!-- Achado do Tester: o botão que existia aqui ("Inicializar com Dados
+       Padrão") gravava um objeto fixo de demonstração via db.ref().update({
+       config:..., produtos:..., pedidos:... }) -- e o Firebase RTDB
+       SUBSTITUI o valor inteiro em cada chave de topo passada pro update(),
+       não faz merge profundo. Num banco com dado real (produtos, pedidos,
+       config já cadastrados), um clique apagava tudo isso e trocava por 3
+       produtos e 2 pedidos de exemplo, sem nenhum aviso. Era seguro só
+       enquanto o banco estava genuinamente vazio (fase de testes, antes de
+       ter dado real) -- hoje o app tem ~500 produtos e histórico real, então
+       essa função virou uma mina. Removida por completo: configurar
+       Linhas/Turnos/Postos agora é sempre manual, pelas seções abaixo. -->
+  <div class="card" id="seedCard" style="display:none; background:#fff7ed; border:1.5px solid #f59e0b;">
+    <div class="card-title" style="color:#c2410c; border-bottom:1px solid #fde68a;">Configuração inicial pendente</div>
+    <div class="section-note" style="background:#fffbeb; border-left:3px solid #f59e0b; margin-bottom:0;">
+      Nenhuma Linha de Produção cadastrada ainda. Cadastre manualmente nas seções "Linhas de Produção", "Turnos" e "Postos de Trabalho" logo abaixo.
     </div>
-    <button class="btn btn-success" id="btnSeed">⚡ Inicializar com Dados Padrão</button>
   </div>
 
   <!-- PERIODO -->
@@ -150,6 +148,17 @@
     </div>
   </div>
 
+  <!-- ROTULAGEM -->
+  <div class="card">
+    <div class="card-title">Rotulagem</div>
+    <div class="section-note">Máquinas/estações de rotulagem -- entram como slots fixos no Painel de Turno, igual às linhas.</div>
+    <div class="tag-area" id="tRotulagem"></div>
+    <div class="tag-add">
+      <input type="text" id="iRotulagem" placeholder="Ex: Rotulagem 01, Rotulagem 02...">
+      <button class="btn btn-primary btn-sm" id="btnAddRotulagem">+ Adicionar</button>
+    </div>
+  </div>
+
   <!-- POSTOS -->
   <div class="card">
     <div class="card-title">Postos de Trabalho</div>
@@ -161,6 +170,17 @@
     </div>
   </div>
 
+  <!-- MOTIVOS DE PARADA -->
+  <div class="card">
+    <div class="card-title">Motivos de Parada</div>
+    <div class="section-note">Lista usada no botão "Parar Linha" (Painel de Turno) e no registro de paradas do apontamento.</div>
+    <div class="tag-area" id="tMotivosParada"></div>
+    <div class="tag-add">
+      <input type="text" id="iMotivoParada" placeholder="Ex: Quebra de Máquina, Falta de Material...">
+      <button class="btn btn-primary btn-sm" id="btnAddMotivoParada">+ Adicionar</button>
+    </div>
+  </div>
+
   <!-- PRODUTOS -->
   <div class="card">
     <div class="card-title">Produtos / Itens</div>
@@ -169,6 +189,16 @@
       <input type="text" id="iProduto" placeholder="Ex: Produto A, Ref. 001...">
       <button class="btn btn-primary btn-sm" id="btnAddProduto">+ Adicionar</button>
     </div>
+  </div>
+
+  <!-- CATEGORIAS DE PRODUTO: gerenciado em Cadastros desde a Fase 6.4 --
+       este card foi removido daqui, mas configData.categoriasProduto
+       continua sendo lido junto do resto do config (ver loadConfig), só
+       não é mais editado nesta tela, pra não ter duas UIs escrevendo no
+       mesmo dado. -->
+  <div class="card">
+    <div class="card-title">Categorias de Produto</div>
+    <div class="section-note">Esse cadastro foi movido → <a href="cadastros.html?tab=categorias">Cadastros</a>.</div>
   </div>
 
   <!-- OPERADORES -->
@@ -194,14 +224,104 @@
   <!-- HORARIOS DOS TURNOS + APONTAMENTO -->
   <div class="card">
     <div class="card-title">Horários dos Turnos e Apontamento</div>
-    <div class="section-note">Informe o horário de início de cada turno cadastrado acima (usado para deduzir o turno automaticamente ao fechar uma OP).</div>
-    <div id="turnoHorariosContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px"></div>
+    <div class="section-note">Informe o horário de início e a pausa de cada turno cadastrado acima (o início é usado pra deduzir o turno automaticamente ao fechar uma OP; a pausa é usada pra descontar o intervalo em lançamentos retroativos que atravessam mais de um dia).</div>
+
+    <div class="fg" style="max-width:420px;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:16px">
+      <label style="font-weight:700">Modo de operação</label>
+      <select id="iModoOperacaoTurno">
+        <option value="auto">Detectar automaticamente pelo horário</option>
+        <option value="fixo">Turno único (sempre o mesmo, ignora horário)</option>
+      </select>
+      <div id="turnoFixoWrap" style="display:none;margin-top:8px">
+        <label style="font-size:11px">Qual turno usar sempre</label>
+        <select id="iTurnoFixoNome"></select>
+      </div>
+      <div class="section-note" style="margin-top:6px">Se vocês operam só em turno único (ex: "Padrao"), escolha "Turno único" aqui em vez de deixar os outros turnos cadastrados sem horário — evita o sistema confundir qual turno está ativo.</div>
+    </div>
+
+    <div id="turnoHorariosContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:16px"></div>
     <div class="fg" style="max-width:320px">
       <label>Checkpoints de apontamento por turno</label>
       <input type="number" id="iCheckpointsPorTurno" min="0" placeholder="0 = usar grade horária completa (padrão)">
       <div class="section-note" style="margin-top:6px">Deixe em 0 para manter o apontamento hora a hora. Um número menor (ex: 2 ou 3) reduz a quantidade de checkpoints exigidos por turno — útil pra introduzir o hábito aos poucos.</div>
     </div>
+    <div class="fg" style="max-width:320px">
+      <label>Tolerância pra encerrar o turno no horário (min)</label>
+      <input type="number" id="iToleranciaEncerramento" min="0" placeholder="15">
+      <div class="section-note" style="margin-top:6px">Depois desse tempo além do fim do turno configurado, "Encerrar Turno" passa a exigir um motivo pro atraso (lista "Motivos de Atraso no Encerramento" abaixo).</div>
+    </div>
     <div style="margin-top:14px"><button class="btn btn-success" id="btnSalvarApontamento">Salvar</button></div>
+  </div>
+
+  <!-- TURNOS EXTRAS (REFORÇO TEMPORÁRIO) -->
+  <div class="card">
+    <div class="card-title">Turnos Extras (Reforço Temporário)</div>
+    <div class="section-note">Pra demanda extraordinária e pontual -- 2º turno por algumas semanas, sábado extra por algumas semanas -- sem mexer no padrão semanal permanente acima. Soma horas por cima do turno normal, só dentro do período informado; fora dele, some sozinho, sem precisar lembrar de descadastrar.</div>
+    <div id="turnosExtrasList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+    <div class="form-grid" style="margin-bottom:10px">
+      <div class="fg">
+        <label>Nome</label>
+        <input type="text" id="teNome" placeholder="Ex: 2º Turno Reforço">
+      </div>
+      <div class="fg">
+        <label>De</label>
+        <input type="date" id="teDataInicio">
+      </div>
+      <div class="fg">
+        <label>Até</label>
+        <input type="date" id="teDataFim">
+      </div>
+      <div class="fg">
+        <label>Início</label>
+        <input type="time" id="teHorarioInicio">
+      </div>
+      <div class="fg">
+        <label>Fim</label>
+        <input type="time" id="teHorarioFim">
+      </div>
+      <div class="fg">
+        <label>Pausa (opcional)</label>
+        <div style="display:flex;gap:6px">
+          <input type="time" id="tePausaInicio" style="flex:1">
+          <input type="time" id="tePausaFim" style="flex:1">
+        </div>
+      </div>
+    </div>
+    <div class="fg" style="max-width:420px;margin-bottom:10px">
+      <label>Só nestes dias da semana dentro do período (opcional)</label>
+      <div id="teDiasSemana" style="display:flex;gap:6px;flex-wrap:wrap">
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="1"> Seg</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="2"> Ter</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="3"> Qua</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="4"> Qui</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="5"> Sex</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="6"> Sáb</label>
+        <label style="font-weight:400;display:flex;align-items:center;gap:3px"><input type="checkbox" value="7"> Dom</label>
+      </div>
+      <div class="section-note" style="margin-top:4px">Sem marcar nenhum dia, vale todo dia do período (ex: 2º turno de segunda a sexta). Marcando um dia (ex: Sábado), vale só nesse dia dentro do período (ex: 2 sábados seguidos = período cobrindo exatamente essas 2 datas).</div>
+    </div>
+    <button class="btn btn-primary btn-sm" id="btnAddTurnoExtra">+ Adicionar</button>
+  </div>
+
+  <!-- ZONA FIXA (CONGELAMENTO AUTOMÁTICO ROLANTE) -->
+  <div class="card">
+    <div class="card-title">Zona Fixa do Planejamento</div>
+    <div class="section-note">Quantos dias, a partir de hoje, ficam protegidos contra reajuste automático (o motor de auto-ajuste não move mais o que já está agendado nesses dias -- só o que estiver fora dessa janela continua fluido/"previsão"). Não afeta a edição manual na Grade Semanal, só o robô de reajuste; pra romper a proteção num bloco específico, use "🔓 Liberar" nele.</div>
+    <div class="fg" style="max-width:220px">
+      <label>Dias fixos a partir de hoje</label>
+      <input type="number" id="iCongelamentoDiasFixos" min="0" max="60" style="max-width:120px">
+    </div>
+  </div>
+
+  <!-- MOTIVOS DE ATRASO NO ENCERRAMENTO -->
+  <div class="card">
+    <div class="card-title">Motivos de Atraso no Encerramento</div>
+    <div class="section-note">Exigido em "Encerrar Turno" quando o fechamento passa da tolerância configurada acima (ex: hora extra).</div>
+    <div class="tag-area" id="tMotivosAtrasoEncerramento"></div>
+    <div class="tag-add">
+      <input type="text" id="iMotivoAtrasoEncerramento" placeholder="Ex: Hora extra, Atraso no encerramento...">
+      <button class="btn btn-primary btn-sm" id="btnAddMotivoAtrasoEncerramento">+ Adicionar</button>
+    </div>
   </div>
 
   <!-- NOTIFICACOES -->
@@ -234,7 +354,7 @@
 var firebaseConfig = {
   apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
   authDomain: "prod-kuryos.firebaseapp.com",
-  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
   projectId: "prod-kuryos",
   storageBucket: "prod-kuryos.firebasestorage.app",
   messagingSenderId: "323674581733",
@@ -243,22 +363,38 @@ var firebaseConfig = {
 };
 
 var db;
+// Mesma lista que já estava fixa no HTML do modal ANDON (form.html) --
+// usada como valor inicial de config.motivosParada pra quem ainda não
+// salvou nada aqui, então ninguém perde os motivos já em uso.
+var DEFAULT_MOTIVOS_PARADA = ['Quebra de Máquina', 'Setup / Troca de Lote', 'Falta de Material', 'Ajuste Técnico', 'Limpeza', 'Falta de Operador', 'Outros'];
+var DEFAULT_MOTIVOS_ATRASO = ['Hora extra', 'Atraso no encerramento', 'Problema técnico', 'Outros'];
 var configData = {
   meta: {},
   metasPorLinha: {},
   linhas: [],
+  rotulagem: [],
   postosTrabalho: [],
   produtos: [],
   operadores: [],
   turnos: [],
+  motivosParada: [],
   turnoHorarios: {},
+  turnoHorariosFim: {},
+  turnoHorariosFimSexta: {},
+  modoOperacaoTurno: 'auto',
+  turnoFixoNome: '',
+  turnoPausas: {},
+  turnosExtras: {},
+  congelamento: { diasFixos: 7 },
   checkpointsPorTurno: 0,
+  toleranciaEncerramentoMin: 15,
+  motivosAtrasoEncerramento: [],
   andonParadaMinutos: 15,
   opAtrasoHoras: 1,
   emailNotificacoes: []
 };
 
-function fmtNum(n){ return Number(n||0).toLocaleString('pt-BR'); }
+// fmtNum vem de shared/utils.js
 function setStatus(on,txt){ document.getElementById('sDot').className='dot'+(on?' on':''); document.getElementById('sTxt').textContent=txt; }
 function showAlert(msg,type){
   var box=document.getElementById('alertBox');
@@ -274,10 +410,13 @@ function calcDias(ini,fim){
 
 var tagMapping = {
   linhas: { elementId: 'tLinhas', cssClass: 'linha' },
+  rotulagem: { elementId: 'tRotulagem', cssClass: 'linha' },
   postosTrabalho: { elementId: 'tPostos', cssClass: 'posto' },
   produtos: { elementId: 'tProdutos', cssClass: 'linha' },
   operadores: { elementId: 'tOperadores', cssClass: 'linha' },
-  turnos: { elementId: 'tTurnos', cssClass: 'linha' }
+  turnos: { elementId: 'tTurnos', cssClass: 'linha' },
+  motivosParada: { elementId: 'tMotivosParada', cssClass: 'linha' },
+  motivosAtrasoEncerramento: { elementId: 'tMotivosAtrasoEncerramento', cssClass: 'linha' }
 };
 
 function renderTags(tipo) {
@@ -326,12 +465,21 @@ function renderTags(tipo) {
           renderMetasPorLinha();
         }
         showAlert('Item atualizado.', 'success');
+      }).catch(function(err) {
+        showAlert('Erro ao salvar: ' + err.message, 'danger');
       });
     });
 
     el.appendChild(span);
   });
 }
+
+// Categorias de produto ({nome, codigo}) tinha seu próprio render/add/edit
+// aqui -- removido na Fase 6.4, agora é editado só em cadastros.html (que
+// escreve com db.ref('config/categoriasProduto').set(...), escopado).
+// configData.categoriasProduto continua sendo CARREGADO (ver loadConfig)
+// e preservado em memória, pra saveConfig() -- que faz um SET do node
+// `config` inteiro -- nunca apagar essa chave ao salvar outra seção aqui.
 
 function removeItem(tipo, idx) {
   if (!confirm('Remover este item?')) return;
@@ -342,6 +490,8 @@ function removeItem(tipo, idx) {
       renderMetasPorLinha();
     }
     showAlert('Item removido.', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
   });
 }
 
@@ -362,12 +512,145 @@ function renderTurnoHorarios() {
   } else {
     container.innerHTML = turnos.map(function(t) {
       var val = (configData.turnoHorarios && configData.turnoHorarios[t]) || '';
-      return '<div class="fg"><label>' + t + '</label><input type="time" class="turno-horario-input" data-turno="' + t + '" value="' + val + '"></div>';
+      var valFim = (configData.turnoHorariosFim && configData.turnoHorariosFim[t]) || '';
+      var valFimSexta = (configData.turnoHorariosFimSexta && configData.turnoHorariosFimSexta[t]) || '';
+      var pausa = (configData.turnoPausas && configData.turnoPausas[t]) || {};
+      return '<div class="fg" style="border:1px solid var(--border);border-radius:8px;padding:10px">' +
+        '<label style="font-weight:700">' + t + '</label>' +
+        '<label style="font-size:11px;margin-top:6px">Início do turno</label>' +
+        '<input type="time" class="turno-horario-input" data-turno="' + t + '" value="' + val + '">' +
+        '<label style="font-size:11px;margin-top:6px">Fim do turno</label>' +
+        '<input type="time" class="turno-horario-fim-input" data-turno="' + t + '" value="' + valFim + '">' +
+        '<label style="font-size:11px;margin-top:6px">Fim do turno às sextas (deixe em branco se for igual)</label>' +
+        '<input type="time" class="turno-horario-fim-sexta-input" data-turno="' + t + '" value="' + valFimSexta + '">' +
+        '<label style="font-size:11px;margin-top:6px">Pausa (início)</label>' +
+        '<input type="time" class="turno-pausa-inicio-input" data-turno="' + t + '" value="' + (pausa.inicio || '') + '">' +
+        '<label style="font-size:11px;margin-top:6px">Pausa (fim)</label>' +
+        '<input type="time" class="turno-pausa-fim-input" data-turno="' + t + '" value="' + (pausa.fim || '') + '">' +
+      '</div>';
     }).join('');
   }
   var cpEl = document.getElementById('iCheckpointsPorTurno');
   if (cpEl) cpEl.value = configData.checkpointsPorTurno || '';
+  var tolEl = document.getElementById('iToleranciaEncerramento');
+  if (tolEl) tolEl.value = configData.toleranciaEncerramentoMin != null ? configData.toleranciaEncerramentoMin : '';
+
+  var modoSel = document.getElementById('iModoOperacaoTurno');
+  var fixoWrap = document.getElementById('turnoFixoWrap');
+  var fixoSel = document.getElementById('iTurnoFixoNome');
+  if (modoSel && fixoSel) {
+    modoSel.value = configData.modoOperacaoTurno || 'auto';
+    fixoSel.innerHTML = turnos.map(function(t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+    if (configData.turnoFixoNome && turnos.indexOf(configData.turnoFixoNome) >= 0) {
+      fixoSel.value = configData.turnoFixoNome;
+    }
+    fixoWrap.style.display = modoSel.value === 'fixo' ? 'block' : 'none';
+  }
 }
+
+// ── Turnos extras (reforço temporário/pontual) ──────────────────────
+// Sempre passa por configData + saveConfig() (nunca grava direto num nó
+// separado) -- saveConfig() faz db.ref('config').set(...) do objeto
+// inteiro, então qualquer campo gravado fora desse fluxo seria apagado no
+// próximo clique em qualquer outro "Salvar"/"Adicionar"/"Remover" desta
+// página (mesma classe de bug do antigo botão "Inicializar com Dados
+// Padrão", já removido -- ver comentário perto de #seedCard).
+var DIAS_SEMANA_NOMES = {1:'Seg',2:'Ter',3:'Qua',4:'Qui',5:'Sex',6:'Sáb',7:'Dom'};
+function fmtBRSimple(ymd) {
+  if (!ymd) return '?';
+  var p = String(ymd).split('-');
+  return p.length === 3 ? (p[2] + '/' + p[1] + '/' + p[0]) : ymd;
+}
+function renderTurnosExtras() {
+  var list = document.getElementById('turnosExtrasList');
+  if (!list) return;
+  var extras = configData.turnosExtras || {};
+  var keys = Object.keys(extras);
+  if (!keys.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px">Nenhum turno extra cadastrado.</div>';
+    return;
+  }
+  list.innerHTML = keys.map(function(k) {
+    var t = extras[k] || {};
+    var diasTxt = (t.diasSemana && t.diasSemana.length)
+      ? t.diasSemana.map(function(d) { return DIAS_SEMANA_NOMES[d] || d; }).join(', ')
+      : 'todo dia do período';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:8px;font-size:13px">' +
+      '<div style="flex:1"><strong>' + escapeHtml(t.nome || 'Turno extra') + '</strong> — ' +
+        fmtBRSimple(t.dataInicio) + ' a ' + fmtBRSimple(t.dataFim) + ' · ' + diasTxt + ' · ' +
+        (t.horarioInicio || '?') + '–' + (t.horarioFim || '?') +
+        (t.pausaInicio ? ' · pausa ' + t.pausaInicio + '–' + t.pausaFim : '') +
+      '</div>' +
+      '<span data-rm-te="' + escapeAttr(k) + '" style="color:var(--danger);cursor:pointer;font-weight:700;padding:2px 6px" title="Remover">✕</span>' +
+    '</div>';
+  }).join('');
+  list.querySelectorAll('[data-rm-te]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      if (!confirm('Remover este turno extra?')) return;
+      delete configData.turnosExtras[this.getAttribute('data-rm-te')];
+      saveConfig().then(function() {
+        renderTurnosExtras();
+        showAlert('Turno extra removido.', 'success');
+      }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+    });
+  });
+}
+
+document.getElementById('btnAddTurnoExtra').addEventListener('click', function() {
+  var nome = document.getElementById('teNome').value.trim();
+  var dataInicio = document.getElementById('teDataInicio').value;
+  var dataFim = document.getElementById('teDataFim').value;
+  var horarioInicio = document.getElementById('teHorarioInicio').value;
+  var horarioFim = document.getElementById('teHorarioFim').value;
+  var pausaInicio = document.getElementById('tePausaInicio').value;
+  var pausaFim = document.getElementById('tePausaFim').value;
+  var diasSel = Array.from(document.querySelectorAll('#teDiasSemana input:checked')).map(function(c) { return parseInt(c.value, 10); });
+
+  if (!nome || !dataInicio || !dataFim || !horarioInicio || !horarioFim) {
+    showAlert('Preencha nome, período (de/até) e horário (início/fim).', 'danger');
+    return;
+  }
+  if (dataFim < dataInicio) {
+    showAlert('A data final não pode ser antes da inicial.', 'danger');
+    return;
+  }
+  var novo = { nome: nome, dataInicio: dataInicio, dataFim: dataFim, horarioInicio: horarioInicio, horarioFim: horarioFim };
+  if (diasSel.length) novo.diasSemana = diasSel;
+  if (pausaInicio && pausaFim) { novo.pausaInicio = pausaInicio; novo.pausaFim = pausaFim; }
+
+  var key = db.ref('config/turnosExtras').push().key;
+  configData.turnosExtras = configData.turnosExtras || {};
+  configData.turnosExtras[key] = novo;
+  saveConfig().then(function() {
+    document.getElementById('teNome').value = '';
+    document.getElementById('teDataInicio').value = '';
+    document.getElementById('teDataFim').value = '';
+    document.getElementById('teHorarioInicio').value = '';
+    document.getElementById('teHorarioFim').value = '';
+    document.getElementById('tePausaInicio').value = '';
+    document.getElementById('tePausaFim').value = '';
+    document.querySelectorAll('#teDiasSemana input:checked').forEach(function(c) { c.checked = false; });
+    renderTurnosExtras();
+    showAlert('Turno extra adicionado.', 'success');
+  }).catch(function(err) {
+    delete configData.turnosExtras[key];
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+});
+
+document.getElementById('iCongelamentoDiasFixos').addEventListener('change', function() {
+  var v = parseInt(this.value, 10);
+  if (isNaN(v) || v < 0) v = 7;
+  this.value = v;
+  configData.congelamento = { diasFixos: v };
+  saveConfig().then(function() {
+    showAlert('Zona fixa atualizada: ' + v + ' dia(s).', 'success');
+  }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+});
+
+document.getElementById('iModoOperacaoTurno').addEventListener('change', function() {
+  document.getElementById('turnoFixoWrap').style.display = this.value === 'fixo' ? 'block' : 'none';
+});
 
 document.getElementById('btnSalvarApontamento').addEventListener('click', function() {
   var horarios = {};
@@ -375,7 +658,33 @@ document.getElementById('btnSalvarApontamento').addEventListener('click', functi
     if (inp.value) horarios[inp.getAttribute('data-turno')] = inp.value;
   });
   configData.turnoHorarios = horarios;
+
+  var horariosFim = {};
+  document.querySelectorAll('.turno-horario-fim-input').forEach(function(inp) {
+    if (inp.value) horariosFim[inp.getAttribute('data-turno')] = inp.value;
+  });
+  configData.turnoHorariosFim = horariosFim;
+
+  var horariosFimSexta = {};
+  document.querySelectorAll('.turno-horario-fim-sexta-input').forEach(function(inp) {
+    if (inp.value) horariosFimSexta[inp.getAttribute('data-turno')] = inp.value;
+  });
+  configData.turnoHorariosFimSexta = horariosFimSexta;
+
+  var pausas = {};
+  document.querySelectorAll('.turno-pausa-inicio-input').forEach(function(inp) {
+    var turno = inp.getAttribute('data-turno');
+    var fimInp = document.querySelector('.turno-pausa-fim-input[data-turno="' + turno + '"]');
+    if (inp.value && fimInp && fimInp.value) pausas[turno] = { inicio: inp.value, fim: fimInp.value };
+  });
+  configData.turnoPausas = pausas;
+
+  configData.modoOperacaoTurno = document.getElementById('iModoOperacaoTurno').value;
+  configData.turnoFixoNome = configData.modoOperacaoTurno === 'fixo' ? document.getElementById('iTurnoFixoNome').value : '';
+
   configData.checkpointsPorTurno = parseInt(document.getElementById('iCheckpointsPorTurno').value) || 0;
+  configData.toleranciaEncerramentoMin = parseInt(document.getElementById('iToleranciaEncerramento').value);
+  if (isNaN(configData.toleranciaEncerramentoMin) || configData.toleranciaEncerramentoMin < 0) configData.toleranciaEncerramentoMin = 15;
   saveConfig().then(function() {
     showAlert('Configuração de apontamento salva.', 'success');
   }).catch(function(err) {
@@ -404,7 +713,9 @@ function renderNotificacoesConfig() {
       del.style.marginLeft = '6px';
       del.addEventListener('click', function() {
         configData.emailNotificacoes.splice(i, 1);
-        saveConfig().then(renderNotificacoesConfig);
+        saveConfig().then(renderNotificacoesConfig).catch(function(err) {
+          showAlert('Erro ao salvar: ' + err.message, 'danger');
+        });
       });
       span.appendChild(del);
       el.appendChild(span);
@@ -427,6 +738,8 @@ document.getElementById('btnAddEmail').addEventListener('click', function() {
       renderNotificacoesConfig();
       input.value = '';
       showAlert('Destinatário adicionado.', 'success');
+    }).catch(function(err) {
+      showAlert('Erro ao salvar: ' + err.message, 'danger');
     });
   }
 });
@@ -453,6 +766,8 @@ function addItem(tipo, inputId) {
         renderMetasPorLinha();
       }
       showAlert('"' + val + '" adicionado.', 'success');
+    }).catch(function(err) {
+      showAlert('Erro ao salvar: ' + err.message, 'danger');
     });
   }
   document.getElementById(inputId).value = '';
@@ -720,37 +1035,47 @@ function salvarMetasESeletor() {
 
 function renderAll() {
   renderTags('linhas');
+  renderTags('rotulagem');
   renderTags('postosTrabalho');
   renderTags('produtos');
   renderTags('operadores');
   renderTags('turnos');
+  renderTags('motivosParada');
+  renderTags('motivosAtrasoEncerramento');
 
   if (configData.meta) {
     document.getElementById('mDesc').value = configData.meta.descricao || '';
     document.getElementById('mIni').value = configData.meta.inicio || '';
     document.getElementById('mFim').value = configData.meta.fim || '';
   }
-  
+  document.getElementById('iCongelamentoDiasFixos').value = (configData.congelamento && configData.congelamento.diasFixos != null) ? configData.congelamento.diasFixos : 7;
+
   renderMetasPorLinha();
 }
 
 // Bind tag adding buttons
 document.getElementById('btnAddLinha').addEventListener('click', function() { addItem('linhas', 'iLinha'); });
+document.getElementById('btnAddRotulagem').addEventListener('click', function() { addItem('rotulagem', 'iRotulagem'); });
 document.getElementById('btnAddPosto').addEventListener('click', function() { addItem('postosTrabalho', 'iPosto'); });
 document.getElementById('btnAddProduto').addEventListener('click', function() { addItem('produtos', 'iProduto'); });
 document.getElementById('btnAddOperador').addEventListener('click', function() { addItem('operadores', 'iOperador'); });
 document.getElementById('btnAddTurno').addEventListener('click', function() { addItem('turnos', 'iTurno'); });
+document.getElementById('btnAddMotivoParada').addEventListener('click', function() { addItem('motivosParada', 'iMotivoParada'); });
+document.getElementById('btnAddMotivoAtrasoEncerramento').addEventListener('click', function() { addItem('motivosAtrasoEncerramento', 'iMotivoAtrasoEncerramento'); });
 
 // Keypress enter support
-['iLinha','iPosto','iProduto','iOperador','iTurno'].forEach(function(id) {
+['iLinha','iRotulagem','iPosto','iProduto','iOperador','iTurno','iMotivoParada','iMotivoAtrasoEncerramento'].forEach(function(id) {
   document.getElementById(id).addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       var mapping = {
         iLinha: 'linhas',
+        iRotulagem: 'rotulagem',
         iPosto: 'postosTrabalho',
         iProduto: 'produtos',
         iOperador: 'operadores',
-        iTurno: 'turnos'
+        iTurno: 'turnos',
+        iMotivoParada: 'motivosParada',
+        iMotivoAtrasoEncerramento: 'motivosAtrasoEncerramento'
       };
       var tipo = mapping[id];
       addItem(tipo, id);
@@ -767,30 +1092,44 @@ document.getElementById('btnSalvarMetas').addEventListener('click', salvarMetasE
 // Firebase Init
 try {
   if (firebase.apps.length === 0) { firebase.initializeApp(firebaseConfig); }
+  kuryosConnectEmulatorsIfLocal();
   db = firebase.database();
 
   db.ref('.info/connected').on('value', function(snap) {
     setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
   });
 
-  db.ref('config').on('value', function(snap) {
+  dbOnValue(db.ref('config'), function(snap) {
     var val = snap.val() || {};
     configData.meta = val.meta || {};
     configData.metasPorLinha = val.metasPorLinha || {};
     configData.metasMatriz = val.metasMatriz || {};
     configData.linhas = val.linhas || [];
+    configData.rotulagem = val.rotulagem || [];
     configData.postosTrabalho = val.postosTrabalho || val.postos || [];
     configData.produtos = val.produtos || [];
     configData.operadores = val.operadores || [];
     configData.turnos = val.turnos || [];
+    configData.motivosParada = (val.motivosParada && val.motivosParada.length) ? val.motivosParada : DEFAULT_MOTIVOS_PARADA.slice();
+    configData.toleranciaEncerramentoMin = val.toleranciaEncerramentoMin != null ? val.toleranciaEncerramentoMin : 15;
+    configData.motivosAtrasoEncerramento = (val.motivosAtrasoEncerramento && val.motivosAtrasoEncerramento.length) ? val.motivosAtrasoEncerramento : DEFAULT_MOTIVOS_ATRASO.slice();
     configData.planejamento = val.planejamento || {};
     configData.turnoHorarios = val.turnoHorarios || {};
+    configData.turnoHorariosFim = val.turnoHorariosFim || {};
+    configData.turnoHorariosFimSexta = val.turnoHorariosFimSexta || {};
+    configData.modoOperacaoTurno = val.modoOperacaoTurno || 'auto';
+    configData.turnoFixoNome = val.turnoFixoNome || '';
+    configData.turnoPausas = val.turnoPausas || {};
+    configData.turnosExtras = val.turnosExtras || {};
+    configData.congelamento = val.congelamento || { diasFixos: 7 };
     configData.checkpointsPorTurno = val.checkpointsPorTurno || 0; // 0 = usa a grade horária completa (comportamento atual)
     configData.andonParadaMinutos = val.andonParadaMinutos || 15;
     configData.opAtrasoHoras = val.opAtrasoHoras || 1;
     configData.emailNotificacoes = val.emailNotificacoes || [];
+    configData.categoriasProduto = val.categoriasProduto || [];
     renderAll();
     renderTurnoHorarios();
+    renderTurnosExtras();
     renderNotificacoesConfig();
 
     if (!val.linhas || val.linhas.length === 0) {
@@ -800,86 +1139,13 @@ try {
     }
   });
 
-  // Seed Functionality
-  document.getElementById('btnSeed').addEventListener('click', function() {
-    var t = new Date().toISOString().split('T')[0];
-    var nextMonth = new Date(); nextMonth.setDate(nextMonth.getDate() + 30);
-    var nextMonthStr = nextMonth.toISOString().split('T')[0];
-    
-    var seedData = {
-      "config": {
-        "linhas": ["Linha 1", "Linha 2", "Linha 3"],
-        "postosTrabalho": ["Posto 1", "Posto 2"],
-        "turnos": ["manhã", "tarde", "noite"],
-        "operadores": ["Ana", "Carlos", "João", "Maria"],
-        "meta": {
-          "descricao": "Meta Inicial de Teste",
-          "inicio": t,
-          "fim": nextMonthStr,
-          "quantidade": 150000,
-          "totalDiario": 5000
-        },
-        "metasPorLinha": {
-          "Linha 1": 2000,
-          "Linha 2": 1500,
-          "Linha 3": 1000,
-          "Posto 1": 500,
-          "Posto 2": 500
-        }
-      },
-      "produtos": {
-        "prod_sabonete": { "descricao": "Sabonete Líquido Erva Doce", "sku": "SL001", "cliente": "Kuryos", "volume": "500", "unidadeVolume": "ml", "ativo": "Ativo" },
-        "prod_alcool": { "descricao": "Álcool em Gel 70%", "sku": "AG002", "cliente": "Kuryos", "volume": "1", "unidadeVolume": "L", "ativo": "Ativo" },
-        "prod_locao": { "descricao": "Loção Hidratante Corporal", "sku": "LH003", "cliente": "Kuryos", "volume": "200", "unidadeVolume": "ml", "ativo": "Ativo" }
-      },
-      "pedidos": {
-        "0042__SL001": {
-          "id": "0042",
-          "produto": "Sabonete Líquido Erva Doce",
-          "sku": "SL001",
-          "qtdTotal": 5000,
-          "produzido": 0,
-          "linha": "Linha 1",
-          "priority": 1,
-          "status": "Em andamento",
-          "ordenacao": 1,
-          "insumoStatus": "ok",
-          "insumosChecklist": {
-            "artes": "True", "anvisa": "True", "rotulos": "True", "frascos": "True",
-            "tampas": "True", "cartucho": "-", "valvulas": "-", "celofane": "-",
-            "display": "-", "caixas": "True", "essencia": "True", "mp": "True", "ok": "True"
-          }
-        },
-        "0043__LH003": {
-          "id": "0043",
-          "produto": "Loção Hidratante Corporal",
-          "sku": "LH003",
-          "qtdTotal": 3000,
-          "produzido": 0,
-          "linha": "Linha 2",
-          "priority": 2,
-          "status": "Programado",
-          "ordenacao": 2,
-          "insumoStatus": "parcial",
-          "insumosChecklist": {
-            "artes": "True", "anvisa": "True", "rotulos": "True", "frascos": "True",
-            "tampas": "True", "cartucho": "True", "valvulas": "-", "celofane": "True",
-            "display": "True", "caixas": "True", "essencia": "True", "mp": "True", "ok": "True"
-          }
-        }
-      }
-    };
-
-    var btn = document.getElementById('btnSeed');
-    btn.disabled = true; btn.textContent = 'Carregando...';
-    
-    db.ref().update(seedData).then(function() {
-      showAlert('Dados de demonstração carregados com sucesso!', 'success');
-    }).catch(function(err) {
-      showAlert('Erro ao inicializar dados: ' + err.message, 'danger');
-      btn.disabled = false; btn.textContent = '⚡ Inicializar com Dados Padrão';
-    });
-  });
+  // Achado do Tester: o handler de "Inicializar com Dados Padrão" foi
+  // removido daqui -- gravava um objeto fixo de demonstração via
+  // db.ref().update({config:..., produtos:..., pedidos:...}), e o Firebase
+  // RTDB SUBSTITUI o valor inteiro em cada chave de topo do update(), não
+  // faz merge profundo. Com dado real já cadastrado (~500 produtos,
+  // pedidos, config), um clique apagava tudo isso silenciosamente. Ver o
+  // comentário junto de #seedCard no HTML pra mais detalhe.
 } catch (e) {
   setStatus(false, 'Erro');
   console.error(e);

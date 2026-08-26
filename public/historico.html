@@ -4,56 +4,57 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Histórico de Produção</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--warning:#d97706;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--purple:#7c3aed}
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
 
     /* Header */
-    .header{background:#0a1c69;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100}
-    .header h1{font-size:18px;font-weight:700}
-    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
-    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
-    .dot.on{background:#34d399;animation:p 2s infinite}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
     @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
 
     /* Toolbar */
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
+    .toolbar{background:transparent;border-bottom:none;padding:10px 0 16px;max-width:96%;margin:0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
-    .btn-green{background:#059669;color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
     .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
-    .btn-ghost{background:white;border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
-    .btn-warning{background:#d97706;color:white}.btn-warning:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
+    .btn-warning{background:var(--warning);color:white}.btn-warning:hover{filter:brightness(.9)}
     .btn-sm{padding:5px 10px;font-size:12px}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    input[type=date],input[type=text],select{padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white}
-    input[type=date]:focus,input[type=text]:focus,select:focus{outline:none;border-color:#059669}
+    input[type=date],input[type=text],select{padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--card)}
+    input[type=date]:focus,input[type=text]:focus,select:focus{outline:none;border-color:var(--primary)}
 
-    /* Filters bar */
-    .filters-bar{background:#f9fafb;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    /* Filters bar -- classes .kt-toolbar/.kt-search/.kt-select vêm de
+       shared/theme.css; aqui só posicionamento e o campo "período" que não
+       tem equivalente no componente compartilhado. */
+    .kt-toolbar{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:12px 16px;max-width:96%;margin:0 auto 16px}
     .filter-group{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted)}
-    .search-box{position:relative;flex:1;min-width:150px}
-    .search-box input{width:100%;padding:8px 12px 8px 32px}
-    .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
 
     /* Main */
-    .main{padding:14px;max-width:96%;margin:0 auto}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
 
     /* Stats */
-    .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
-    .stat{background:white;border-radius:10px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-    .stat-val{font-size:22px;font-weight:800;color:#059669}
+    .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:22px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
     .stat-lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
 
     /* Alert */
@@ -65,12 +66,12 @@
     .alert-warning{background:#fffbeb;color:#92400e;border:1px solid #fcd34d}
 
     /* Card / Table */
-    .card{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
     .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .table-wrap{overflow:auto;max-height:calc(100vh - 360px)}
     table{width:100%;border-collapse:collapse;font-size:12px}
-    thead th{background:#f9fafb;padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
-    thead th:hover{background:#f0fdf4;color:#059669}
+    thead th{background:color-mix(in srgb, var(--text) 4%, var(--card));padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+    thead th:hover{background:#f0fdf4;color:var(--success)}
     thead th.sorted-asc::after{content:' ↑'}
     thead th.sorted-desc::after{content:' ↓'}
     td{padding:7px 10px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
@@ -80,8 +81,8 @@
     /* Cell styles */
     .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
     .badge-green{background:#d1fae5;color:#065f46}
-    .badge-blue{background:#eff6ff;color:#1a56db}
-    .badge-gray{background:#f3f4f6;color:var(--muted)}
+    .badge-blue{background:#eff6ff;color:var(--primary)}
+    .badge-gray{background:color-mix(in srgb, var(--text) 8%, var(--card));color:var(--muted)}
     .badge-orange{background:#fff7ed;color:#c2410c}
     .badge-purple{background:#ede9fe;color:var(--purple)}
     .lote-cell{font-family:monospace;font-size:11px;color:var(--muted)}
@@ -92,7 +93,7 @@
     /* Tabs */
     .view-tabs{display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border)}
     .view-tab{padding:7px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;background:none}
-    .view-tab.active{color:#059669;border-bottom-color:#059669}
+    .view-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
     .tab-panel{display:none}
     .tab-panel.active{display:block}
 
@@ -105,7 +106,7 @@
     .pg-produto{font-weight:600;font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .pg-meta{font-size:12px;color:var(--muted);white-space:nowrap}
     .pg-pct{font-weight:800;font-size:13px}
-    .pg-pct.ok{color:#059669}
+    .pg-pct.ok{color:var(--success)}
     .pg-pct.warn{color:var(--warning)}
     .pg-pct.danger{color:var(--danger)}
     .pg-chevron{color:var(--muted);font-size:12px;transition:transform .2s}
@@ -122,35 +123,35 @@
 
     /* Edit button in table */
     .act-btn{background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:4px;font-size:13px;line-height:1;color:var(--muted)}
-    .act-btn:hover{background:#f3f4f6;color:var(--text)}
+    .act-btn:hover{background:color-mix(in srgb, var(--text) 8%, var(--card));color:var(--text)}
     .act-btn.del:hover{color:var(--danger);background:#fee2e2}
 
     /* Import section */
     .import-bar{background:#f0fdf4;border-bottom:2px solid #6ee7b7;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:#065f46}
     .import-bar strong{font-weight:700}
-    .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;background:white}
-    .drop-zone:hover,.drop-zone.drag-over{border-color:#059669;background:#f0fdf4}
+    .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:22px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--card)}
+    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--primary);background:color-mix(in srgb, var(--primary) 5%, white)}
     .drop-icon{font-size:28px;margin-bottom:6px}
     .drop-text{font-size:13px;font-weight:600;color:var(--text)}
     .drop-hint{font-size:11px;color:var(--muted);margin-top:3px}
     input[type=file]{display:none}
     .preview-card{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px}
     .prev-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-    .prev-stat{background:white;border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
-    .prev-stat-val{font-size:18px;font-weight:800;color:#059669}
+    .prev-stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+    .prev-stat-val{font-size:18px;font-weight:800;color:var(--success)}
     .prev-stat-lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
     .preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}
     .preview-table th{background:#e5e7eb;padding:6px 8px;text-align:left;font-weight:700;color:var(--muted);font-size:10px;text-transform:uppercase}
     .preview-table td{padding:6px 8px;border-bottom:1px solid var(--border)}
     .progress-bar{height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden;margin:8px 0}
-    .progress-fill{height:100%;border-radius:3px;background:#059669;transition:width .3s}
+    .progress-fill{height:100%;border-radius:3px;background:var(--success);transition:width .3s}
     .import-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
 
     /* Edit/Add Modal */
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
     .modal-bg.open{display:flex}
-    .modal{background:white;border-radius:14px;width:100%;max-width:600px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
-    .modal-header{background:linear-gradient(135deg,#065f46,#059669);color:white;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:600px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
     .modal-header h2{font-size:15px;font-weight:700}
     .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;opacity:.8}
     .modal-close:hover{opacity:1}
@@ -160,8 +161,8 @@
     .form-group{margin-bottom:0}
     .form-group.full{grid-column:1/-1}
     .form-label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;letter-spacing:.3px}
-    .form-ctrl{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:white}
-    .form-ctrl:focus{outline:none;border-color:#059669;box-shadow:0 0 0 3px rgba(5,150,105,.1)}
+    .form-ctrl{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    .form-ctrl:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     .section-sep{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
     .section-sep:first-child{margin-top:0}
     .edit-warn{font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 10px;margin-top:10px}
@@ -174,11 +175,10 @@
     }
   </style>
 </head>
-<body>
+<body class="kuryos-theme has-sidebar">
 
 <div class="header">
   <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
     <h1>Histórico de Produção</h1>
     <div class="header-sub">Todos os apontamentos · por data e pedido</div>
   </div>
@@ -186,17 +186,6 @@
 </div>
 
 <div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html" class="active">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
   <button class="btn btn-ghost btn-sm" id="btnExportCSV">⬇ Exportar CSV</button>
   <button class="btn btn-warning btn-sm" id="btnReconcile" title="Recalcular produzido de cada pedido a partir dos apontamentos">⚙ Reconciliar Pedidos</button>
 </div>
@@ -204,23 +193,23 @@
 
 
 <!-- Filters -->
-<div class="filters-bar">
+<div class="kt-toolbar">
   <div class="filter-group">
     De <input type="date" id="fDataIni" style="width:130px">
     até <input type="date" id="fDataFim" style="width:130px">
     <button class="btn btn-green btn-sm" id="btnCarregar">Carregar</button>
   </div>
-  <div class="search-box">
-    <span class="search-icon">🔍</span>
+  <div class="kt-search">
+    <span class="icon">🔍</span>
     <input type="text" id="fSearch" placeholder="Produto, lote, pedido, linha...">
   </div>
-  <select id="fLinha" style="width:110px">
+  <select class="kt-select" id="fLinha" style="width:110px">
     <option value="">Todas linhas</option>
     <option value="Linha 1">Linha 1</option>
     <option value="Linha 2">Linha 2</option>
     <option value="Linha 3">Linha 3</option>
   </select>
-  <select id="fComPedido" style="width:150px">
+  <select class="kt-select" id="fComPedido" style="width:150px">
     <option value="">Todos registros</option>
     <option value="com">Com pedido vinculado</option>
     <option value="sem">Sem pedido vinculado</option>
@@ -236,7 +225,7 @@
 
   <div class="stats">
     <div class="stat"><div class="stat-val" id="statRegistros">—</div><div class="stat-lbl">Registros</div></div>
-    <div class="stat"><div class="stat-val" id="statProduzido" style="color:#059669">—</div><div class="stat-lbl">Total produzido</div></div>
+    <div class="stat"><div class="stat-val" id="statProduzido" style="color:var(--success)">—</div><div class="stat-lbl">Total produzido</div></div>
     <div class="stat"><div class="stat-val" id="statComPedido" style="color:var(--purple)">—</div><div class="stat-lbl">Com pedido</div></div>
     <div class="stat"><div class="stat-val" id="statDias" style="color:var(--primary)">—</div><div class="stat-lbl">Dias</div></div>
     <div class="stat"><div class="stat-val" id="statPedidos" style="color:var(--warning)">—</div><div class="stat-lbl">Pedidos únicos</div></div>
@@ -246,6 +235,7 @@
     <div class="view-tabs">
       <button class="view-tab active" id="tabRegistros">📋 Por Registro</button>
       <button class="view-tab" id="tabPedido">📦 Por Pedido</button>
+      <button class="view-tab" id="tabOP">🏭 Por OP</button>
     </div>
 
     <!-- ── Tab: Por Registro ── -->
@@ -283,6 +273,17 @@
       </div>
       <div style="padding:14px" id="pedidoGroups">
         <div class="no-data">Selecione o período e clique em Carregar</div>
+      </div>
+    </div>
+
+    <!-- ── Tab: Por OP ── -->
+    <div class="tab-panel" id="panelOP">
+      <div class="card-title">
+        <span id="opCount">—</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none">OPs concluídas, direto da coleção de OPs — não depende do período acima</span>
+      </div>
+      <div style="padding:14px" id="opGroups">
+        <div class="no-data">Carregando...</div>
       </div>
     </div>
   </div>
@@ -353,6 +354,35 @@
           <input type="text" id="eObs" class="form-ctrl" placeholder="Opcional">
         </div>
       </div>
+      <div class="section-sep">Setup (opcional — só se o lançamento retroativo informou)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Operador</label>
+          <input type="text" id="eOperador" class="form-ctrl" placeholder="Nome do operador">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Setup — Início</label>
+          <input type="datetime-local" id="eSetupIni" class="form-ctrl">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Setup — Fim</label>
+          <input type="datetime-local" id="eSetupFim" class="form-ctrl">
+        </div>
+      </div>
+      <div class="section-sep" id="eOpSecaoTitulo">OP vinculada (Início/Término real — este registro é só uma hora dela)</div>
+      <div class="form-grid" id="eOpSecao">
+        <div class="form-group">
+          <label class="form-label">Início real da OP</label>
+          <input type="datetime-local" id="eOpInicioReal" class="form-ctrl">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Término real da OP</label>
+          <input type="datetime-local" id="eOpFimReal" class="form-ctrl">
+        </div>
+        <div class="form-group full" style="font-size:11px;color:var(--muted)">
+          Esses dois campos ficam gravados na OP (não neste registro específico) e são usados pra calcular o tempo total dela em relatórios/dashboards.
+        </div>
+      </div>
       <div class="edit-warn" id="editWarn" style="display:none">
         ⚠ Se alterar a quantidade de um registro vinculado a um pedido, use <strong>⚙ Reconciliar Pedidos</strong> após salvar para atualizar o contador corretamente.
       </div>
@@ -374,7 +404,7 @@
   var firebaseConfig = {
     apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
     authDomain: "prod-kuryos.firebaseapp.com",
-    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
     projectId: "prod-kuryos",
     storageBucket: "prod-kuryos.firebasestorage.app",
     messagingSenderId: "323674581733",
@@ -382,12 +412,29 @@
     measurementId: "G-PTVWKLRHTG"
   };
   firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
   var db = firebase.database();
 
   // ── State ────────────────────────────────────────────────────────
   var allRegistros = [];   // flat list: {data, hora, produto, linha, quantidade, lote, pedidoId, colaboradores, paradas, turno, _key}
   var pedidosCache = {};   // Firebase pedidos node
   var sortCol = 'data', sortDir = -1; // newest first
+  // Linhas/postos/turnos reais vêm de config (mesma fonte que form.html) --
+  // o modal de edição usava listas fixas ("Linha 1/2/3", "manhã/tarde/noite")
+  // que não batiam com os nomes configurados de verdade (ex: "Turno 01"),
+  // fazendo o <select> silenciosamente ficar em branco (e sobrescrever o
+  // valor real por "—" ao salvar) sempre que o registro tinha um turno/linha
+  // fora dessa lista fixa.
+  var configLinhasH = [];
+  var configPostosH = [];
+  var configTurnosH = [];
+
+  dbOnValue(db.ref('config'), function(snap) {
+    var cfg = snap.val() || {};
+    configLinhasH = cfg.linhas || [];
+    configPostosH = cfg.postosTrabalho || cfg.postos || [];
+    configTurnosH = cfg.turnos || [];
+  });
 
   // ── Connection ───────────────────────────────────────────────────
   db.ref('.info/connected').on('value', function(snap) {
@@ -397,7 +444,7 @@
   });
 
   // Load pedidos once for reconcile / group headers
-  db.ref('pedidos').on('value', function(snap) {
+  dbOnValue(db.ref('pedidos'), function(snap) {
     pedidosCache = snap.val() || {};
   });
 
@@ -427,22 +474,12 @@
     var nextHStr = String(nextH).padStart(2, '0') + ':00';
     return cleanHora + 'h - ' + nextHStr + 'h';
   }
-  function fmtNum(n) {
-    return (n || 0).toLocaleString('pt-BR');
-  }
+  // fmtNum, sanitizeKey e pedidoFirebaseKey vêm de shared/utils.js
   function showAlert(msg, type) {
     var el = document.getElementById('alertBox');
     el.textContent = msg;
     el.className = 'alert alert-' + (type || 'success') + ' show';
     setTimeout(function(){ el.classList.remove('show'); }, 5000);
-  }
-
-  // ── Sanitize key helper (same as pedidos.html) ───────────────────
-  function sanitizeKey(str) {
-    return String(str || '').replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').trim().slice(0, 60);
-  }
-  function pedidoFirebaseKey(id, produto) {
-    return sanitizeKey(id) + '__' + sanitizeKey(produto);
   }
 
   // ── Date range helpers ───────────────────────────────────────────
@@ -458,7 +495,11 @@
 
   // ── Load registros for date range ────────────────────────────────
   document.getElementById('btnCarregar').addEventListener('click', loadRegistros);
-  document.getElementById('fSearch').addEventListener('input', renderAll);
+  var _searchDebounceT = null;
+  document.getElementById('fSearch').addEventListener('input', function() {
+    clearTimeout(_searchDebounceT);
+    _searchDebounceT = setTimeout(renderAll, 200);
+  });
   document.getElementById('fLinha').addEventListener('change', renderAll);
   document.getElementById('fComPedido').addEventListener('change', renderAll);
 
@@ -499,6 +540,9 @@
             paradas: v.paradas || [],
             turno: v.turno || '',
             fonte: v.fonte || '',
+            operador: v.operador || '',
+            setupInicio: v.setupInicio || '',
+            setupFim: v.setupFim || '',
             tipo: v.tipo || 'registro',
             qtdTotalOP: parseFloat(v.qtdTotalOP) || 0,
             qtdEsperadaOP: parseFloat(v.qtdEsperadaOP) || 0,
@@ -634,7 +678,7 @@
         qtyContent = '<strong>' + fmtNum(r.qtdTotalOP) + '</strong><br><span style="font-size:10px;color:var(--muted)">Meta: ' + fmtNum(r.qtdEsperadaOP) + '</span>';
         prodContent = '<span class="badge badge-purple" style="margin-right:6px">✔ Fechamento OP</span>' + escapedProd;
         if (r.justificativaDivergencia) {
-          prodContent += '<br><span style="font-size:11px;color:#dc2626;font-weight:600">Justificativa Desvio: ' + escapedJustificativa + '</span>';
+          prodContent += '<br><span style="font-size:11px;color:var(--danger);font-weight:600">Justificativa Desvio: ' + escapedJustificativa + '</span>';
         }
       } else {
         prodContent = escapedProd;
@@ -642,7 +686,7 @@
 
       return '<tr' + rowStyle + '>' +
         '<td style="white-space:nowrap;font-weight:600">' + fmtDate(r.data) + '</td>' +
-        '<td style="white-space:nowrap;color:var(--muted)">' + fmtHoraRange(r.hora) + '</td>' +
+        '<td style="white-space:nowrap;color:var(--muted)">' + fmtRegistroRange(r) + '</td>' +
         '<td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500" title="' + escapeAttr(r.produto) + '">' + prodContent + '</td>' +
         '<td><span class="badge badge-blue">' + escapedLinha + '</span></td>' +
         '<td class="qty-cell" style="text-align:right">' + qtyContent + '</td>' +
@@ -652,7 +696,7 @@
         '<td>' + paradaStr + '</td>' +
         '<td style="font-size:11px;color:var(--muted)">' + escapeHtml(turnoStr) + '</td>' +
         '<td class="actions-cell">' +
-          '<button class="btn-edit" data-date="' + r.data + '" data-key="' + r._key + '">Editar</button>' +
+          '<button class="btn-edit" data-date="' + r.data + '" data-key="' + r._key + '" data-action="edit">Editar</button>' +
           '<button class="btn-delete" data-date="' + r.data + '" data-key="' + r._key + '" data-action="del">Excluir</button>' +
         '</td>' +
       '</tr>';
@@ -696,7 +740,7 @@
       var qtdTotal = pedObj ? pedObj.qtdTotal : 0;
       var pc = qtdTotal > 0 ? Math.round(totalProduzido / qtdTotal * 100) : null;
       var pcClass = pc === null ? '' : pc >= 95 ? 'ok' : pc >= 70 ? 'warn' : 'danger';
-      var fillColor = pc === null ? '#9ca3af' : pc >= 95 ? '#059669' : pc >= 70 ? '#d97706' : '#e02424';
+      var fillColor = pc === null ? '#9ca3af' : pc >= 95 ? 'var(--success)' : pc >= 70 ? 'var(--warning)' : 'var(--danger)';
 
       var rowId = 'grp-' + sanitizeKey(pedidoId);
 
@@ -713,7 +757,7 @@
           mediaCell = '<span style="color:#7c3aed;font-weight:700">' + fmtNum(r.quantidade) + ' un</span>';
         } else {
           mediaCell = r.quantidade > 0
-            ? '<span style="color:#059669;font-weight:700">' + fmtNum(r.quantidade) + ' /h</span>'
+            ? '<span style="color:var(--success);font-weight:700">' + fmtNum(r.quantidade) + ' /h</span>'
             : '<span style="color:var(--muted)">—</span>';
         }
 
@@ -726,13 +770,13 @@
         if (r.tipo === 'fechamento_op') {
           prodContent = '<span class="badge badge-purple" style="font-size:9px;padding:2px 4px;margin-right:4px">✔ Fechamento OP</span>' + escapedRProd;
           if (r.justificativaDivergencia) {
-            prodContent += '<br><span style="font-size:10px;color:#dc2626;font-weight:500">Justificativa Desvio: ' + escapedRJustificativa + '</span>';
+            prodContent += '<br><span style="font-size:10px;color:var(--danger);font-weight:500">Justificativa Desvio: ' + escapedRJustificativa + '</span>';
           }
         }
 
         return '<tr>' +
           '<td>' + fmtDate(r.data) + '</td>' +
-          '<td style="color:var(--muted)">' + fmtHoraRange(r.hora) + '</td>' +
+          '<td style="color:var(--muted)">' + fmtRegistroRange(r) + '</td>' +
           '<td style="color:var(--muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + escapeAttr(r.produto) + '">' + prodContent + '</td>' +
           '<td><span class="badge badge-blue" style="font-size:10px">' + escapedRLinha + '</span></td>' +
           '<td class="lote-cell">' + escapedRLote + '</td>' +
@@ -762,14 +806,14 @@
         '<div class="ped-group-body" id="' + rowId + '">' +
           '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
             '<thead><tr>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Data</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Hora</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Produto</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Linha</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Lote</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Total Lote</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Hrs Úteis</th>' +
-              '<th style="background:#f9fafb;padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Média/h</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Data</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Hora</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Produto</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Linha</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Lote</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Total Lote</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Hrs Úteis</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted)">Média/h</th>' +
             '</tr></thead>' +
             '<tbody>' + regsHtml + '</tbody>' +
           '</table>' +
@@ -790,18 +834,177 @@
   }
 
   // ── Tab switching ─────────────────────────────────────────────────
-  document.getElementById('tabRegistros').addEventListener('click', function() {
-    document.getElementById('tabRegistros').classList.add('active');
-    document.getElementById('tabPedido').classList.remove('active');
-    document.getElementById('panelRegistros').classList.add('active');
-    document.getElementById('panelPedido').classList.remove('active');
+  var viewTabs = ['tabRegistros', 'tabPedido', 'tabOP'];
+  var viewPanels = { tabRegistros: 'panelRegistros', tabPedido: 'panelPedido', tabOP: 'panelOP' };
+  viewTabs.forEach(function(tabId) {
+    document.getElementById(tabId).addEventListener('click', function() {
+      viewTabs.forEach(function(t) {
+        document.getElementById(t).classList.toggle('active', t === tabId);
+        document.getElementById(viewPanels[t]).classList.toggle('active', t === tabId);
+      });
+    });
   });
-  document.getElementById('tabPedido').addEventListener('click', function() {
-    document.getElementById('tabPedido').classList.add('active');
-    document.getElementById('tabRegistros').classList.remove('active');
-    document.getElementById('panelPedido').classList.add('active');
-    document.getElementById('panelRegistros').classList.remove('active');
+
+  // ── Tab: Por OP — le direto da colecao `ops`, ao vivo, so concluidas ──
+  var opsCache = {};
+  var perdasCache = {};
+  dbOnValue(db.ref('ops'), function(snap) {
+    opsCache = snap.val() || {};
+    renderOpGroups();
   });
+  // Perdas lancadas pelo formulario (fechamento de lote) — formato novo,
+  // prioridade sobre o que veio do Excel em ops.perdas (que fica só de fallback
+  // pro historico anterior a essa tela existir).
+  dbOnValue(db.ref('perdas'), function(snap) {
+    perdasCache = snap.val() || {};
+    renderOpGroups();
+  });
+
+  // Junta todos os lançamentos de perdas de um lote (pode ter mais de um, se
+  // o fechamento foi refeito) num só totalizador por tipo.
+  function perdasDoLote(lote) {
+    var loteSafe = sanitizeKey(lote || '');
+    var entries = perdasCache[loteSafe];
+    if (!entries) return null;
+    var totals = {};
+    Object.values(entries).forEach(function(entry) {
+      (entry.perdas || []).forEach(function(p) {
+        var label = p.tipo === 'Outro' && p.especificacao ? p.especificacao : p.tipo;
+        totals[label] = (totals[label] || 0) + (p.quantidade || 0);
+      });
+    });
+    return totals;
+  }
+
+  function fmtDateTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function paradasSummary(paradas) {
+    if (!paradas || !paradas.length) return null;
+    var totalMin = 0;
+    paradas.forEach(function(p) {
+      if (p.inicio && p.fim) {
+        var ini = new Date(p.inicio), fim = new Date(p.fim);
+        if (!isNaN(ini) && !isNaN(fim)) totalMin += Math.max(0, (fim - ini) / 60000);
+      }
+    });
+    return { count: paradas.length, totalMin: Math.round(totalMin) };
+  }
+
+  var PERDA_LABELS = {
+    frascosRotulagem: 'Frascos (rotulagem)', rotulosRotulagem: 'Rótulos (rotulagem)',
+    frascosEnvase: 'Frascos (envase)', rotulosEnvase: 'Rótulos (envase)',
+    tampasValvulas: 'Tampas/Válvulas', cartuchos: 'Cartuchos',
+    semiAcabadoManip: 'Semi-acabado (manip.)', semiAcabadoEnvase: 'Semi-acabado (envase)'
+  };
+
+  function renderOpGroups() {
+    var container = document.getElementById('opGroups');
+    var ops = Object.keys(opsCache)
+      .map(function(k) { return Object.assign({ key: k }, opsCache[k]); })
+      .filter(function(o) { return o.status === 'Concluído'; })
+      .sort(function(a, b) { return String(b.dataFimReal || '').localeCompare(String(a.dataFimReal || '')); });
+
+    document.getElementById('opCount').textContent = ops.length + ' OP' + (ops.length !== 1 ? 's' : '') + ' concluída' + (ops.length !== 1 ? 's' : '');
+
+    if (!ops.length) {
+      container.innerHTML = '<div class="no-data">Nenhuma OP concluída ainda</div>';
+      return;
+    }
+
+    container.innerHTML = ops.map(function(op) {
+      var planned = op.qtdPlanejada || 0;
+      // Linha/Rotulagem/Posto são somatórias sempre distintas (getProduzido,
+      // shared/utils.js) -- uma OP comum (só Linha, o caso histórico) mostra
+      // a mesma barra única de sempre; só uma OP com mais de um setor tocado
+      // (ex: aberta em Linha E Rotulagem ao mesmo tempo) mostra os dois
+      // valores lado a lado em texto, sem tentar somar numa barra só.
+      var setoresTocados = [
+        { tipo: 'linha', label: 'Linha' },
+        { tipo: 'rotulagem', label: 'Rotulagem' },
+        { tipo: 'posto', label: 'Posto' }
+      ].map(function(s) { return { label: s.label, produced: getProduzido(op, s.tipo) }; })
+        .filter(function(s) { return s.produced > 0; });
+
+      var produced = setoresTocados.length ? setoresTocados[0].produced : 0;
+      var pc = planned > 0 ? Math.round(produced / planned * 100) : null;
+      var pcClass = pc === null ? '' : pc >= 95 ? 'ok' : pc >= 70 ? 'warn' : 'danger';
+      var fillColor = pc === null ? '#9ca3af' : pc >= 95 ? 'var(--success)' : pc >= 70 ? 'var(--warning)' : 'var(--danger)';
+      var rowId = 'op-' + sanitizeKey(op.key);
+
+      var pctLabel = pc !== null
+        ? '<span class="pg-pct ' + pcClass + '">' + pc + '%</span>'
+        : '<span class="pg-pct" style="color:var(--muted)">sem planejado</span>';
+      var barHtml = pc !== null
+        ? '<div class="pg-bar-wrap"><div class="pg-bar"><div class="pg-bar-fill" style="width:' + Math.min(pc,100) + '%;background:' + fillColor + '"></div></div></div>'
+        : '';
+      // 2+ setores tocados na mesma OP: troca a única barra/número pelo
+      // texto de cada setor, lado a lado -- nunca soma os totais.
+      if (setoresTocados.length > 1) {
+        pctLabel = '';
+        barHtml = '';
+        produced = null; // sinaliza pro pg-meta abaixo montar o texto combinado
+      }
+
+      var pStop = paradasSummary(op.paradas);
+      var perdasNovo = perdasDoLote(op.lote);
+      var perdasObj = perdasNovo || op.perdas || {};
+      var perdaEntries = Object.keys(perdasObj).filter(function(k) { return perdasObj[k]; });
+
+      function infoRow(label, value) {
+        return '<tr>' +
+          '<td style="padding:6px 10px;color:var(--muted);font-size:11px;white-space:nowrap">' + label + '</td>' +
+          '<td style="padding:6px 10px">' + value + '</td>' +
+        '</tr>';
+      }
+
+      var bodyRows = '' +
+        infoRow('Cliente', escapeHtml(op.cliente || '—')) +
+        infoRow('SKU', escapeHtml(op.sku || '—')) +
+        infoRow('Linha', escapeHtml(op.linha || '—')) +
+        infoRow('Início real', fmtDateTime(op.dataInicioReal) + (op.dataInicioPlanejada ? ' <span style="color:var(--muted)">(planejado: ' + fmtDateTime(op.dataInicioPlanejada) + ')</span>' : '')) +
+        infoRow('Conclusão real', fmtDateTime(op.dataFimReal) + (op.dataFimPlanejada ? ' <span style="color:var(--muted)">(planejado: ' + fmtDateTime(op.dataFimPlanejada) + ')</span>' : '')) +
+        infoRow('Produção média', op.mediaPorHora ? fmtNum(op.mediaPorHora) + ' un/h' : '—') +
+        infoRow('Paradas', pStop ? pStop.count + ' parada' + (pStop.count !== 1 ? 's' : '') + ' · ' + pStop.totalMin + ' min' : '—') +
+        infoRow('Perdas', perdaEntries.length ? perdaEntries.map(function(k) { return (PERDA_LABELS[k] || k) + ': ' + fmtNum(perdasObj[k]); }).join(', ') : '—');
+
+      if (pStop && op.paradas.length) {
+        bodyRows += infoRow('Motivos', op.paradas.map(function(p) { return escapeHtml(p.motivo || '(sem motivo)'); }).join('; '));
+      }
+
+      return '<div class="ped-group">' +
+        '<div class="ped-group-header" data-target="' + rowId + '">' +
+          '<span class="pg-id">Lote ' + escapeHtml(op.lote || op.key) + '</span>' +
+          '<span class="pg-produto" title="' + escapeAttr(op.produto || '') + '">' + escapeHtml(op.produto || '—') + '</span>' +
+          '<span class="pg-meta">' + (produced === null
+            ? setoresTocados.map(function(s) { return escapeHtml(s.label) + ': <strong>' + fmtNum(s.produced) + '</strong>/' + fmtNum(planned); }).join(' · ')
+            : '<strong>' + fmtNum(produced) + '</strong> / ' + fmtNum(planned) + ' un.') + '</span>' +
+          barHtml +
+          pctLabel +
+          '<span class="pg-chevron" id="chev-' + rowId + '">▶</span>' +
+        '</div>' +
+        '<div class="ped-group-body" id="' + rowId + '">' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+            '<tbody>' + bodyRows + '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    container.querySelectorAll('.ped-group-header').forEach(function(header) {
+      header.addEventListener('click', function() {
+        var target = document.getElementById(this.dataset.target);
+        var chev   = document.getElementById('chev-' + this.dataset.target);
+        var isOpen = target.classList.toggle('open');
+        this.classList.toggle('open', isOpen);
+        chev.classList.toggle('open', isOpen);
+      });
+    });
+  }
 
   // ── Export CSV ───────────────────────────────────────────────────
   document.getElementById('btnExportCSV').addEventListener('click', function() {
@@ -938,6 +1141,56 @@
   // ── Edit modal state ─────────────────────────────────────────────
   var editingDate = null, editingKey = null;
 
+  // Popula os <select> de Linha/Turno com os nomes reais de `config`
+  // (mesma fonte que a aba de apontamento em form.html) em vez da lista
+  // fixa antiga. Se o registro tiver um valor que não está mais na config
+  // (linha/turno renomeado ou removido, ou dado legado tipo "manha"),
+  // adiciona esse valor como opção extra em vez de descartá-lo -- assim o
+  // <select> nunca fica "em branco" escondendo o valor real gravado.
+  function fillEditLinhaSelect(currentVal) {
+    var sel = document.getElementById('eLinha');
+    sel.innerHTML = '<option value="">— Selecione —</option>';
+    var opts = configLinhasH.concat(configPostosH);
+    if (!opts.length) opts = ['Linha 1', 'Linha 2', 'Linha 3']; // config ainda não carregou
+    if (currentVal && opts.indexOf(currentVal) < 0) opts = opts.concat([currentVal]);
+    opts.forEach(function(l) {
+      var o = document.createElement('option');
+      o.value = l; o.textContent = l;
+      sel.appendChild(o);
+    });
+    sel.value = currentVal || '';
+  }
+  function fillEditTurnoSelect(currentVal) {
+    var sel = document.getElementById('eTurno');
+    sel.innerHTML = '<option value="">—</option>';
+    var opts = configTurnosH.length ? configTurnosH.slice() : ['manha', 'tarde', 'noite']; // config ainda não carregou
+    if (currentVal && opts.indexOf(currentVal) < 0) opts = opts.concat([currentVal]);
+    opts.forEach(function(t) {
+      var o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    });
+    sel.value = currentVal || '';
+  }
+
+  // registros guardam setupInicio/setupFim como ISO completo
+  // (new Date().toISOString()); <input type="datetime-local"> precisa de
+  // "YYYY-MM-DDTHH:MM" em horário local, sem o "Z"/milissegundos.
+  function isoToLocalInput(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var pad = function(n){ return String(n).padStart(2,'0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function localInputToIso(val) {
+    if (!val) return '';
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString();
+  }
+
   function openEditModal(date, key) {
     var r = allRegistros.find(function(x){ return x.data === date && x._key === key; });
     if (!r) return;
@@ -950,13 +1203,25 @@
     var horaNormalizada = (r.hora && r.hora !== '—') ? String(r.hora).replace('_', ':') : '';
     document.getElementById('eHora').value = horaNormalizada;
     document.getElementById('eProduto').value = r.produto;
-    document.getElementById('eLinha').value = r.linha !== '—' ? r.linha : '';
-    document.getElementById('eTurno').value = r.turno || '';
+    fillEditLinhaSelect(r.linha !== '—' ? r.linha : '');
+    fillEditTurnoSelect(r.turno || '');
     document.getElementById('eQtd').value = r.quantidade || 0;
     document.getElementById('eLote').value = r.lote || '';
     document.getElementById('ePedidoId').value = r.pedidoId || '';
     document.getElementById('eColaboradores').value = r.colaboradores || '';
     document.getElementById('eObs').value = r.obs || '';
+    document.getElementById('eOperador').value = r.operador || '';
+    document.getElementById('eSetupIni').value = isoToLocalInput(r.setupInicio);
+    document.getElementById('eSetupFim').value = isoToLocalInput(r.setupFim);
+    // Início/Término real vivem na OP (ops/{lote}), não no registro -- um
+    // lote tem vários registros horários, mas só um início/fim real. Só
+    // faz sentido mostrar/editar isso quando o registro está vinculado a
+    // uma OP existente.
+    var opDaLinha = r.lote ? opsCache[sanitizeKey(r.lote)] : null;
+    document.getElementById('eOpSecao').style.display = opDaLinha ? '' : 'none';
+    document.getElementById('eOpSecaoTitulo').style.display = opDaLinha ? '' : 'none';
+    document.getElementById('eOpInicioReal').value = opDaLinha ? isoToLocalInput(opDaLinha.dataInicioReal) : '';
+    document.getElementById('eOpFimReal').value = opDaLinha ? isoToLocalInput(opDaLinha.dataFimReal) : '';
     document.getElementById('editWarn').style.display = r.pedidoId ? 'block' : 'none';
     document.getElementById('btnDeleteRegistro').style.display = 'inline-flex';
     document.getElementById('editAlertBox').classList.remove('show');
@@ -977,24 +1242,35 @@
     document.getElementById('editWarn').style.display = this.value.trim() ? 'block' : 'none';
   });
 
-  function normalizeForMatch(s) {
-    if (!s) return '';
-    return String(s).toLowerCase().replace(/\s+/g, ' ').trim().split(' ').slice(0, 5).join(' ');
-  }
-  function findPedidoKey(pedidoId, produto) {
-    if (!pedidosCache || !pedidoId) return null;
-    var keys = Object.keys(pedidosCache);
-    var exactKey = pedidoFirebaseKey(pedidoId, produto);
-    if (pedidosCache[exactKey]) return exactKey;
-    for (var i = 0; i < keys.length; i++) {
-      var p = pedidosCache[keys[i]];
-      if (p && String(p.id||'') === String(pedidoId)) return keys[i];
+  // findPedidoKey(id, produto, pedidosDict) vem de shared/utils.js -- esse
+  // arquivo tinha uma versão local ainda mais permissiva que as de
+  // form.html/shared (fallback só por id, sem filtrar produto nenhum),
+  // removida por consolidação -- ver o mesmo ajuste em form.html.
+  // Início/Término real vivem em ops/{lote}, não no registro -- grava
+  // separado do save do registro em si. Só mexe se a seção estava visível
+  // (ou seja, a OP já existia) pra não criar campos soltos numa OP que
+  // não existe.
+  function saveOpDatasReais() {
+    var lote = document.getElementById('eLote').value.trim();
+    if (!lote || document.getElementById('eOpSecao').style.display === 'none') return Promise.resolve();
+    var loteKey = sanitizeKey(lote);
+    // Mesma trava usada em qualquer outra escrita em ops/* -- corrigir
+    // início/fim real de uma OP já cancelada não faz sentido.
+    var opAtual = opsCache && opsCache[loteKey];
+    if (opAtual && opAtual.status === 'Cancelado') {
+      alert('Esta OP foi cancelada e não pode ter os dados de início/fim real alterados.');
+      return Promise.resolve();
     }
-    return null;
+    var iniIso = localInputToIso(document.getElementById('eOpInicioReal').value);
+    var fimIso = localInputToIso(document.getElementById('eOpFimReal').value);
+    return db.ref('ops/' + loteKey).update({
+      dataInicioReal: iniIso || null,
+      dataFimReal: fimIso || null
+    });
   }
   function adjustPedidoProduzido(pedidoId, produto, qtyDiff) {
     if (!pedidoId || !produto || qtyDiff === 0) return Promise.resolve({ committed: false });
-    var pedKey = findPedidoKey(pedidoId, produto);
+    var pedKey = findPedidoKey(pedidoId, produto, pedidosCache);
     if (!pedKey) return Promise.resolve({ committed: false });
     return db.ref('pedidos/' + pedKey).transaction(function(p) {
       if (p === null) return; // abort if not exists/loaded yet
@@ -1033,9 +1309,14 @@
       colaboradores: parseInt(document.getElementById('eColaboradores').value) || 0,
       turno: document.getElementById('eTurno').value,
       obs: document.getElementById('eObs').value.trim(),
+      operador: document.getElementById('eOperador').value.trim(),
       paradas: [],
       parada: false
     };
+    var setupIniIso = localInputToIso(document.getElementById('eSetupIni').value);
+    var setupFimIso = localInputToIso(document.getElementById('eSetupFim').value);
+    if (setupIniIso) data.setupInicio = setupIniIso; else data.setupInicio = null;
+    if (setupFimIso) data.setupFim = setupFimIso; else data.setupFim = null;
 
     var btn = document.getElementById('editBtnSave');
     btn.disabled = true; btn.textContent = 'Salvando...';
@@ -1093,6 +1374,7 @@
           });
         }
         tasks.push(syncPromise);
+        tasks.push(saveOpDatasReais());
 
         Promise.all(tasks).then(function() {
           btn.disabled = false; btn.textContent = 'Salvar';

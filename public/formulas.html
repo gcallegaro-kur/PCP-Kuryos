@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fórmulas, BOM e Especificações</title>
+  <script>location.replace('cadastros.html?tab=formulas');</script>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .main{padding:16px 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;padding:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .alert-info{background:var(--tint-blue-bg);color:var(--primary);border:1px solid color-mix(in srgb, var(--primary) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-purple{background:var(--purple);color:white}.btn-purple:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],select{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[disabled],select[disabled]{background:var(--surface-2);color:var(--muted)}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-rascunho{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-aprovada{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-obsoleta{background:var(--tint-gray-bg);color:var(--muted)}
+    .version-pill{padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;background:var(--card)}
+    .version-pill.active{border-color:var(--primary);background:color-mix(in srgb, var(--primary) 8%, var(--card))}
+    .tabs{display:flex;gap:2px;margin:14px 0;border-bottom:2px solid var(--border)}
+    .tab{padding:8px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:var(--surface-2);padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .soma-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:14px;font-weight:700}
+    .soma-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .soma-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+    .empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Fórmulas, BOM e Especificações</h1>
+    <div class="header-sub">Cadastro versionado por produto — a mesma fonte usada na emissão de OP</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <div class="card">
+    <div class="card-title">Produto</div>
+    <div style="max-width:520px;position:relative">
+      <input type="text" id="fProdutoBusca" placeholder="Buscar produto por SKU ou descrição..." autocomplete="off">
+      <div id="produtoResultados" style="display:none;position:absolute;z-index:20;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);max-height:260px;overflow-y:auto;width:100%;margin-top:4px"></div>
+    </div>
+    <div id="produtoSelecionado" style="margin-top:10px;font-size:14px;font-weight:700;display:none"></div>
+  </div>
+
+  <div id="semProduto" class="card">
+    <div class="empty-state">Busque e selecione um produto acima pra ver ou cadastrar fórmula, BOM e especificações.</div>
+  </div>
+
+  <div id="areaVersoes" class="card" style="display:none">
+    <div class="card-title">Versões</div>
+    <div id="listaVersoes" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <button class="btn btn-primary btn-sm" id="btnNovaVersao">+ Nova Versão</button>
+  </div>
+
+  <div id="areaEdicao" class="card" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div class="card-title" style="margin-bottom:0">Versão <span id="versaoAtualLabel"></span> <span id="versaoStatusBadge"></span></div>
+      <div id="versaoAcoes" style="display:flex;gap:8px"></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="formula">Fórmula</button>
+      <button class="tab" data-tab="bom">BOM (Embalagem)</button>
+      <button class="tab" data-tab="espec">Especificações</button>
+    </div>
+
+    <!-- FÓRMULA -->
+    <div class="tab-panel active" id="tab-formula">
+      <table>
+        <thead><tr>
+          <th style="min-width:160px">Matéria-Prima</th>
+          <th style="width:80px">Fase</th>
+          <th style="width:90px">Ordem</th>
+          <th style="width:120px">% m/m</th>
+          <th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="formulaBody"></tbody>
+      </table>
+      <button class="btn btn-ghost btn-sm" id="btnAddFormulaItem" style="margin-top:10px">+ Adicionar item</button>
+      <div class="soma-bar" id="somaBar">Soma: 0,000%</div>
+    </div>
+
+    <!-- BOM -->
+    <div class="tab-panel" id="tab-bom">
+      <table>
+        <thead><tr>
+          <th style="min-width:160px">Material (Embalagem)</th>
+          <th style="width:140px">Qtd. por peça</th>
+          <th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="bomBody"></tbody>
+      </table>
+      <button class="btn btn-ghost btn-sm" id="btnAddBomItem" style="margin-top:10px">+ Adicionar item</button>
+    </div>
+
+    <!-- ESPECIFICAÇÕES -->
+    <div class="tab-panel" id="tab-espec">
+      <table>
+        <thead><tr>
+          <th style="min-width:140px">Ensaio</th>
+          <th style="min-width:140px">Especificação</th>
+          <th style="width:90px">Mínimo</th>
+          <th style="width:90px">Máximo</th>
+          <th style="width:110px">Método</th>
+          <th style="width:70px">Crítico</th>
+          <th style="width:40px"></th>
+        </tr></thead>
+        <tbody id="especBody"></tbody>
+      </table>
+      <button class="btn btn-ghost btn-sm" id="btnAddEspecItem" style="margin-top:10px">+ Adicionar ensaio</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allProdutos = {};
+var allMateriais = {};
+var allFormulas = {};      // key completa -> {codProduto, versao, status, itens, ...}
+var allBom = {};
+var allEspecificacoes = {};
+
+var produtoSelecionadoKey = null; // chave sanitizada do produto (usada como "codProduto")
+var produtoSelecionadoSku = '';
+var versaoAtual = null;    // string "v1", "v2"...
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+function currentUserUid() {
+  return firebase.auth().currentUser ? firebase.auth().currentUser.uid : '';
+}
+
+/* ── Busca de produto (autocomplete simples) ── */
+function renderProdutoResultados(termo) {
+  var el = document.getElementById('produtoResultados');
+  var t = norm(termo);
+  if (!t) { el.style.display = 'none'; return; }
+  var matches = Object.entries(allProdutos).filter(function(entry) {
+    var p = entry[1];
+    return norm(p.sku).indexOf(t) !== -1 || norm(p.descricao).indexOf(t) !== -1;
+  }).slice(0, 30);
+  if (!matches.length) {
+    el.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px">Nenhum produto encontrado.</div>';
+    el.style.display = 'block';
+    return;
+  }
+  el.innerHTML = matches.map(function(entry) {
+    var key = entry[0], p = entry[1];
+    return '<div class="produto-opt" data-key="' + escapeAttr(key) + '" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--tint-gray-bg)">' +
+      '<b>' + escapeHtml(p.sku || key) + '</b> — ' + escapeHtml(p.descricao || '') + '</div>';
+  }).join('');
+  el.style.display = 'block';
+  el.querySelectorAll('.produto-opt').forEach(function(div) {
+    div.addEventListener('mouseenter', function() { div.style.background = 'var(--surface-2)'; });
+    div.addEventListener('mouseleave', function() { div.style.background = ''; });
+    div.addEventListener('click', function() { selecionarProduto(div.getAttribute('data-key')); });
+  });
+}
+
+function selecionarProduto(key) {
+  var p = allProdutos[key];
+  if (!p) return;
+  produtoSelecionadoKey = key;
+  produtoSelecionadoSku = p.sku || key;
+  document.getElementById('fProdutoBusca').value = '';
+  document.getElementById('produtoResultados').style.display = 'none';
+  document.getElementById('produtoSelecionado').style.display = 'block';
+  document.getElementById('produtoSelecionado').textContent = p.sku + ' — ' + p.descricao;
+  document.getElementById('semProduto').style.display = 'none';
+  document.getElementById('areaVersoes').style.display = 'block';
+  versaoAtual = null;
+  document.getElementById('areaEdicao').style.display = 'none';
+  renderVersoes();
+}
+
+/* ── Versões ── */
+function versoesDoProduto() {
+  var codProduto = produtoSelecionadoKey;
+  var out = [];
+  Object.keys(allFormulas).forEach(function(k) {
+    var f = allFormulas[k];
+    if (f && f.codProduto === codProduto) out.push(f);
+  });
+  out.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
+  return out;
+}
+function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
+
+function renderVersoes() {
+  var versoes = versoesDoProduto();
+  var el = document.getElementById('listaVersoes');
+  if (!versoes.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:13px">Nenhuma versão cadastrada ainda.</span>';
+  } else {
+    el.innerHTML = '';
+    versoes.forEach(function(f) {
+      var pill = document.createElement('div');
+      pill.className = 'version-pill' + (f.versao === versaoAtual ? ' active' : '');
+      var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
+      pill.innerHTML = escapeHtml(f.versao) + ' <span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+      pill.addEventListener('click', function() { selecionarVersao(f.versao); });
+      el.appendChild(pill);
+    });
+  }
+  if (!versaoAtual && versoes.length) selecionarVersao(versoes[0].versao);
+}
+
+function selecionarVersao(versao) {
+  versaoAtual = versao;
+  renderVersoes();
+  document.getElementById('areaEdicao').style.display = 'block';
+  var key = chaveVersao(produtoSelecionadoKey, versao);
+  var f = allFormulas[key] || { status: 'RASCUNHO', itens: {} };
+  document.getElementById('versaoAtualLabel').textContent = versao;
+  var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
+  document.getElementById('versaoStatusBadge').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+  renderAcoesVersao(f);
+  renderFormulaTab(key, f);
+  renderBomTab(key);
+  renderEspecTab(key);
+}
+
+// Achado do Auditor: um ensaio marcado "crítico" sem faixa mín/máx só
+// mostrava um alerta cosmético ao salvar -- a versão podia ser aprovada
+// mesmo assim, inconsistente com o rigor já aplicado à soma da fórmula.
+// Replica o mesmo padrão de bloqueio (botão desabilitado + motivo no title).
+function especCriticaSemFaixa(key) {
+  var itens = ((allEspecificacoes[key] || {}).itens) || {};
+  return Object.values(itens).some(function(it) {
+    return it.critico && !it.minimo && !it.maximo;
+  });
+}
+
+function renderAcoesVersao(f) {
+  var el = document.getElementById('versaoAcoes');
+  el.innerHTML = '';
+  if (f.status === 'RASCUNHO') {
+    var key = chaveVersao(f.codProduto, f.versao);
+    var somaOk = Math.abs((f.somaPercentual || 0) - 100) < 0.0005;
+    var especOk = !especCriticaSemFaixa(key);
+    var podeAprovar = somaOk && especOk;
+    if (!f.aprovadoPD) {
+      var b1 = document.createElement('button');
+      b1.className = 'btn btn-primary btn-sm';
+      b1.textContent = 'Aprovar (P&D)';
+      b1.disabled = !podeAprovar;
+      b1.title = !somaOk ? 'Soma da fórmula precisa fechar em 100% antes de aprovar'
+        : (!especOk ? 'Há ensaio crítico sem faixa mínima/máxima definida' : '');
+      b1.addEventListener('click', aprovarPD);
+      el.appendChild(b1);
+    } else if (!f.aprovadoQualidade) {
+      var b2 = document.createElement('button');
+      b2.className = 'btn btn-green btn-sm';
+      b2.textContent = 'Aprovar (Qualidade) — conclui';
+      b2.addEventListener('click', aprovarQualidade);
+      el.appendChild(b2);
+      var info = document.createElement('span');
+      info.style.cssText = 'font-size:12px;color:var(--muted);align-self:center';
+      info.textContent = 'P&D: ' + (f.aprovadoPD.nome || '') + ' em ' + fmtData(f.aprovadoPD.em);
+      el.appendChild(info);
+    }
+  } else if (f.status === 'APROVADA') {
+    var b3 = document.createElement('button');
+    b3.className = 'btn btn-purple btn-sm';
+    b3.textContent = '+ Nova versão a partir desta';
+    b3.addEventListener('click', novaVersaoAPartirDe);
+    el.appendChild(b3);
+  }
+}
+function fmtData(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return iso; }
+}
+
+function btnNovaVersaoClick() {
+  var versoes = versoesDoProduto();
+  var maxN = versoes.reduce(function(m, f) { return Math.max(m, parseVersaoNum(f.versao)); }, 0);
+  var novaVersao = 'v' + (maxN + 1);
+  var key = chaveVersao(produtoSelecionadoKey, novaVersao);
+  var data = {
+    codProduto: produtoSelecionadoKey,
+    versao: novaVersao,
+    status: 'RASCUNHO',
+    itens: {},
+    somaPercentual: 0,
+    aprovadoPD: null,
+    aprovadoQualidade: null,
+    substituiVersao: null,
+    criadoPor: currentUserNome(),
+    criadoEm: new Date().toISOString()
+  };
+  db.ref('formulas/' + key).set(data).then(function() {
+    showAlert('Versão ' + novaVersao + ' criada (rascunho).', 'success');
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+function novaVersaoAPartirDe() {
+  var versoes = versoesDoProduto();
+  var maxN = versoes.reduce(function(m, f) { return Math.max(m, parseVersaoNum(f.versao)); }, 0);
+  var novaVersao = 'v' + (maxN + 1);
+  var origemVersao = versaoAtual;
+  var origemKey = chaveVersao(produtoSelecionadoKey, origemVersao);
+  var novaKey = chaveVersao(produtoSelecionadoKey, novaVersao);
+
+  var origemFormula = allFormulas[origemKey] || {};
+  var origemBom = allBom[origemKey] || {};
+  var origemEspec = allEspecificacoes[origemKey] || {};
+
+  var updates = {};
+  updates['formulas/' + novaKey] = {
+    codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO',
+    itens: origemFormula.itens || {}, somaPercentual: origemFormula.somaPercentual || 0,
+    aprovadoPD: null, aprovadoQualidade: null, substituiVersao: origemVersao,
+    criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
+  };
+  updates['bom/' + novaKey] = { itens: origemBom.itens || {} };
+  updates['especificacoes/' + novaKey] = { itens: origemEspec.itens || {} };
+
+  db.ref().update(updates).then(function() {
+    showAlert('Versão ' + novaVersao + ' criada a partir de ' + origemVersao + '.', 'success');
+    versaoAtual = novaVersao;
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+function aprovarPD() {
+  var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+  db.ref('formulas/' + key + '/aprovadoPD').set({ nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() })
+    .then(function() { showAlert('Aprovação de P&D registrada.', 'success'); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+function aprovarQualidade() {
+  var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+  var updates = {};
+  updates['formulas/' + key + '/aprovadoQualidade'] = { nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() };
+  updates['formulas/' + key + '/status'] = 'APROVADA';
+  updates['formulas/' + key + '/dataAprovacao'] = new Date().toISOString();
+  db.ref().update(updates)
+    .then(function() { showAlert('Fórmula aprovada! Versão ' + versaoAtual + ' agora é a versão oficial.', 'success'); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+/* ── Aba Fórmula ── */
+function renderFormulaTab(key, f) {
+  var itens = f.itens || {};
+  var tbody = document.getElementById('formulaBody');
+  var editavel = f.status === 'RASCUNHO';
+  var entries = Object.entries(itens);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhum item na fórmula ainda.</td></tr>';
+  } else {
+    tbody.innerHTML = entries.map(function(entry) {
+      var itemKey = entry[0], it = entry[1];
+      return linhaFormula(key, itemKey, it, editavel);
+    }).join('');
+  }
+  atualizarSomaBar(f);
+  document.getElementById('btnAddFormulaItem').style.display = editavel ? 'inline-flex' : 'none';
+  wireFormulaRowEvents(key, editavel);
+}
+function materiaisOptions(tipo, selecionado) {
+  var opts = '<option value="">Selecione...</option>';
+  Object.values(allMateriais).filter(function(m) { return !tipo || m.tipo === tipo; })
+    .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
+    .forEach(function(m) {
+      opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
+    });
+  return opts;
+}
+function linhaFormula(formKey, itemKey, it, editavel) {
+  if (!editavel) {
+    return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+      '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + '</td>' +
+      '<td>' + escapeHtml(it.fase || '') + '</td>' +
+      '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
+      '<td>' + fmtNum(it.percentualMM || 0) + '%</td><td></td></tr>';
+  }
+  return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+    '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions('MP', it.mpCodigo) + '</select></td>' +
+    '<td><select class="f-fase" data-item="' + escapeAttr(itemKey) + '">' +
+      ['A', 'B', 'C'].map(function(f) { return '<option value="' + f + '"' + (it.fase === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') +
+    '</select></td>' +
+    '<td><input type="number" class="f-ordem" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" value="' + (it.ordemAdicao != null ? it.ordemAdicao : '') + '"></td>' +
+    '<td><input type="number" class="f-pct" data-item="' + escapeAttr(itemKey) + '" min="0" step="0.001" value="' + (it.percentualMM != null ? it.percentualMM : '') + '"></td>' +
+    '<td><button class="btn btn-danger-ghost btn-sm f-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
+}
+function wireFormulaRowEvents(formKey, editavel) {
+  if (!editavel) return;
+  document.querySelectorAll('#formulaBody .f-mp, #formulaBody .f-fase, #formulaBody .f-ordem, #formulaBody .f-pct').forEach(function(el) {
+    el.addEventListener('change', function() { salvarItemFormula(formKey, el.getAttribute('data-item')); });
+  });
+  document.querySelectorAll('#formulaBody .f-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var itemKey = btn.getAttribute('data-item');
+      db.ref('formulas/' + formKey + '/itens/' + itemKey).remove().then(recalcularSomaFormula.bind(null, formKey));
+    });
+  });
+}
+// Achado do Auditor: salvarItemFormula/salvarItemBom faziam o mesmo lookup
+// de material com pequenas diferenças (um tentava a chave rápida antes do
+// scan O(n), o outro só escaneava) -- consolidado aqui. O caminho rápido
+// (chave = sanitizeKey do código) cobre o caso normal (materiais.html grava
+// com essa mesma chave); o scan é rede de segurança pra dado legado/
+// importado cuja chave não foi gerada por esse sanitizeKey.
+function findMaterialByCodigo(codigo) {
+  return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
+}
+function salvarItemFormula(formKey, itemKey) {
+  var row = document.querySelector('#formulaBody tr[data-item="' + CSS.escape(itemKey) + '"]');
+  if (!row) return;
+  var mpCodigo = row.querySelector('.f-mp').value;
+  var mat = findMaterialByCodigo(mpCodigo);
+  var data = {
+    mpCodigo: mpCodigo,
+    mpNome: mat ? mat.mpNome : '',
+    fase: row.querySelector('.f-fase').value,
+    ordemAdicao: parseInt(row.querySelector('.f-ordem').value) || 0,
+    percentualMM: parseFloat(row.querySelector('.f-pct').value) || 0
+  };
+  db.ref('formulas/' + formKey + '/itens/' + itemKey).set(data).then(function() { recalcularSomaFormula(formKey); });
+}
+function recalcularSomaFormula(formKey) {
+  db.ref('formulas/' + formKey + '/itens').once('value').then(function(snap) {
+    var itens = snap.val() || {};
+    var soma = Object.values(itens).reduce(function(s, it) { return s + (parseFloat(it.percentualMM) || 0); }, 0);
+    return db.ref('formulas/' + formKey + '/somaPercentual').set(Math.round(soma * 1000) / 1000);
+  });
+}
+function atualizarSomaBar(f) {
+  var soma = f.somaPercentual || 0;
+  var ok = Math.abs(soma - 100) < 0.0005;
+  var bar = document.getElementById('somaBar');
+  bar.className = 'soma-bar ' + (ok ? 'soma-ok' : 'soma-erro');
+  bar.textContent = 'Soma: ' + fmtNum(soma) + '%' + (ok ? ' ✓ fecha em 100%' : ' — precisa fechar em 100% exato pra aprovar (diferença: ' + fmtNum(Math.abs(soma - 100)) + 'pp)');
+}
+
+/* ── Aba BOM ── */
+function renderBomTab(key) {
+  var b = allBom[key] || { itens: {} };
+  var f = allFormulas[key] || {};
+  var editavel = f.status === 'RASCUNHO';
+  var itens = b.itens || {};
+  var tbody = document.getElementById('bomBody');
+  var entries = Object.entries(itens);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhum item de embalagem ainda.</td></tr>';
+  } else {
+    tbody.innerHTML = entries.map(function(entry) {
+      var itemKey = entry[0], it = entry[1];
+      if (!editavel) {
+        return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
+      }
+      return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+        '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions('EMBALAGEM', it.materialCodigo) + '</select></td>' +
+        '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
+        '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
+    }).join('');
+  }
+  document.getElementById('btnAddBomItem').style.display = editavel ? 'inline-flex' : 'none';
+  if (!editavel) return;
+  document.querySelectorAll('#bomBody .b-mat, #bomBody .b-qtd').forEach(function(el) {
+    el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
+  });
+  document.querySelectorAll('#bomBody .b-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() { db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+  });
+}
+function salvarItemBom(key, itemKey) {
+  var row = document.querySelector('#bomBody tr[data-item="' + CSS.escape(itemKey) + '"]');
+  if (!row) return;
+  var materialCodigo = row.querySelector('.b-mat').value;
+  var mat = findMaterialByCodigo(materialCodigo);
+  var posicaoIdx = Array.prototype.indexOf.call(row.parentNode.children, row);
+  db.ref('bom/' + key + '/itens/' + itemKey).set({
+    materialCodigo: materialCodigo,
+    materialNome: mat ? mat.mpNome : '',
+    qtdPorPeca: parseFloat(row.querySelector('.b-qtd').value) || 0,
+    posicao: posicaoIdx + 1
+  });
+}
+
+/* ── Aba Especificações ── */
+function renderEspecTab(key) {
+  var e = allEspecificacoes[key] || { itens: {} };
+  var f = allFormulas[key] || {};
+  var editavel = f.status === 'RASCUNHO';
+  var itens = e.itens || {};
+  var tbody = document.getElementById('especBody');
+  var entries = Object.entries(itens);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum ensaio cadastrado ainda.</td></tr>';
+  } else {
+    tbody.innerHTML = entries.map(function(entry) {
+      var itemKey = entry[0], it = entry[1];
+      if (!editavel) {
+        return '<tr><td>' + escapeHtml(it.ensaio || '') + '</td><td>' + escapeHtml(it.especificacaoTexto || '') + '</td><td>' + escapeHtml(it.minimo || '') + '</td><td>' + escapeHtml(it.maximo || '') + '</td><td>' + escapeHtml(it.metodo || '') + '</td><td>' + (it.critico ? 'Sim' : 'Não') + '</td><td></td></tr>';
+      }
+      return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+        '<td><input type="text" class="e-ensaio" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.ensaio || '') + '"></td>' +
+        '<td><input type="text" class="e-texto" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.especificacaoTexto || '') + '"></td>' +
+        '<td><input type="text" class="e-min" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.minimo || '') + '"></td>' +
+        '<td><input type="text" class="e-max" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.maximo || '') + '"></td>' +
+        '<td><input type="text" class="e-metodo" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.metodo || '') + '"></td>' +
+        '<td style="text-align:center"><input type="checkbox" class="e-critico" data-item="' + escapeAttr(itemKey) + '"' + (it.critico ? ' checked' : '') + '></td>' +
+        '<td><button class="btn btn-danger-ghost btn-sm e-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover ensaio" aria-label="Remover ensaio">×</button></td></tr>';
+    }).join('');
+  }
+  document.getElementById('btnAddEspecItem').style.display = editavel ? 'inline-flex' : 'none';
+  if (!editavel) return;
+  document.querySelectorAll('#especBody input').forEach(function(el) {
+    el.addEventListener('change', function() { salvarItemEspec(key, el.getAttribute('data-item')); });
+  });
+  document.querySelectorAll('#especBody .e-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() { db.ref('especificacoes/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+  });
+}
+function salvarItemEspec(key, itemKey) {
+  var row = document.querySelector('#especBody tr[data-item="' + CSS.escape(itemKey) + '"]');
+  if (!row) return;
+  var critico = row.querySelector('.e-critico').checked;
+  var minimo = row.querySelector('.e-min').value.trim();
+  var maximo = row.querySelector('.e-max').value.trim();
+  if (critico && !minimo && !maximo) {
+    showAlert('Ensaio crítico precisa ter faixa mínima ou máxima definida.', 'danger');
+  }
+  db.ref('especificacoes/' + key + '/itens/' + itemKey).set({
+    ensaio: row.querySelector('.e-ensaio').value.trim(),
+    especificacaoTexto: row.querySelector('.e-texto').value.trim(),
+    minimo: minimo,
+    maximo: maximo,
+    metodo: row.querySelector('.e-metodo').value.trim(),
+    critico: critico
+  });
+}
+
+/* ── DOMContentLoaded ── */
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('fProdutoBusca').addEventListener('input', function() {
+    renderProdutoResultados(this.value);
+  });
+  document.getElementById('btnNovaVersao').addEventListener('click', btnNovaVersaoClick);
+
+  document.querySelectorAll('.tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var target = tab.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+      document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+    });
+  });
+
+  document.getElementById('btnAddFormulaItem').addEventListener('click', function() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    db.ref('formulas/' + key + '/itens').push({ mpCodigo: '', mpNome: '', fase: 'A', ordemAdicao: 1, percentualMM: 0 });
+  });
+  document.getElementById('btnAddBomItem').addEventListener('click', function() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    db.ref('bom/' + key + '/itens').push({ materialCodigo: '', materialNome: '', qtdPorPeca: 0, posicao: 1 });
+  });
+  document.getElementById('btnAddEspecItem').addEventListener('click', function() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    db.ref('especificacoes/' + key + '/itens').push({ ensaio: '', especificacaoTexto: '', minimo: '', maximo: '', metodo: '', critico: false });
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#fProdutoBusca') && !e.target.closest('#produtoResultados')) {
+      document.getElementById('produtoResultados').style.display = 'none';
+    }
+  });
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
+    dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('formulas'), function(snap) {
+      allFormulas = snap.val() || {};
+      if (produtoSelecionadoKey) { renderVersoes(); if (versaoAtual) selecionarVersao(versaoAtual); }
+    });
+    dbOnValue(db.ref('bom'), function(snap) {
+      allBom = snap.val() || {};
+      if (produtoSelecionadoKey && versaoAtual) renderBomTab(chaveVersao(produtoSelecionadoKey, versaoAtual));
+    });
+    dbOnValue(db.ref('especificacoes'), function(snap) {
+      allEspecificacoes = snap.val() || {};
+      if (produtoSelecionadoKey && versaoAtual) {
+        var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+        renderEspecTab(key);
+        // Reavalia o botão de aprovação: um ensaio crítico sem faixa também
+        // bloqueia, então precisa recalcular sempre que especificações mudam,
+        // não só quando a fórmula muda.
+        if (allFormulas[key]) renderAcoesVersao(allFormulas[key]);
+      }
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

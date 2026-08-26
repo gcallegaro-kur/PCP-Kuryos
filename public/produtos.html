@@ -4,81 +4,80 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cadastro de Produtos</title>
+  <script>location.replace('cadastros.html?tab=produtos');</script>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--warning:#d97706;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--purple:#7c3aed}
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-    .header{background:#0a1c69;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100}
-    .header h1{font-size:18px;font-weight:700}
-    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
-    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
-    .dot.on{background:#34d399;animation:p 2s infinite}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
     @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
-    .search-box{flex:1;min-width:160px;position:relative}
-    .search-box input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)}
-    .search-box input:focus{outline:none;border-color:#059669}
-    .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
-    select.filter-sel{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white;cursor:pointer}
-    select.filter-sel:focus{outline:none;border-color:#059669}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    /* Toolbar (busca + filtros) -- classes .kt-toolbar/.kt-search/.kt-select
+       vêm de shared/theme.css; aqui só o posicionamento específico da página. */
+    .kt-toolbar{max-width:96%;margin:0 auto 16px;padding-top:10px}
     .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
-    .btn-green{background:#059669;color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
     .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
-    .btn-ghost{background:white;border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
     .btn-sm{padding:5px 10px;font-size:12px}
     .btn:disabled{opacity:.5;cursor:not-allowed}
-    .main{padding:14px;max-width:96%;margin:0 auto}
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-    .stat{background:white;border-radius:10px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-    .stat-val{font-size:24px;font-weight:800;color:#059669}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
     .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
-    .card{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px}
     .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     /* Table */
     .table-wrap{overflow:auto;max-height:calc(100vh - 300px)}
     table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
-    thead th{background:#f9fafb;padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
-    td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
-    tr:hover td{background:#f9fafb}
+    thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    tr:hover td{background:var(--surface-2)}
     .sku-cell{font-family:monospace;font-size:12px;color:var(--muted);white-space:nowrap}
     .desc-cell{font-weight:600;max-width:450px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
-    .badge-green{background:#d1fae5;color:#065f46}
-    .badge-red{background:#fee2e2;color:#991b1b}
-    .badge-blue{background:#eff6ff;color:#1a56db}
-    .badge-gray{background:#f3f4f6;color:var(--muted)}
-    .badge-orange{background:#fff7ed;color:#c2410c}
-    .prodh-cell{font-weight:700;color:#059669;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .prodh-cell{font-weight:700;color:var(--success);white-space:nowrap}
     .prodh-cell.low{color:var(--danger)}
     .prodh-calc{font-size:10px;color:var(--muted);display:block}
     .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
     /* Alert */
     .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
     .alert.show{display:block}
-    .alert-success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
-    .alert-danger{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
-    .alert-info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .alert-info{background:var(--tint-blue-bg);color:var(--primary);border:1px solid color-mix(in srgb, var(--primary) 40%, transparent)}
     /* Modal */
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
     .modal-bg.open{display:flex}
-    .modal{background:white;border-radius:14px;width:100%;max-width:680px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
-    .modal-header{background:linear-gradient(135deg,#065f46,#059669);color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:680px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
     .modal-header h2{font-size:16px;font-weight:700}
     .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
     .modal-close:hover{opacity:1}
     .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
-    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#f9fafb}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
     .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
     .section-label:first-child{margin-top:0}
     .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -86,29 +85,35 @@
     .form-group{margin-bottom:0}
     .form-group.full{grid-column:1/-1}
     label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
-    input[type=text],input[type=number],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:white;transition:border-color .2s}
-    input:focus,select:focus,textarea:focus{outline:none;border-color:#059669;box-shadow:0 0 0 3px rgba(5,150,105,.1)}
-    input[readonly]{background:#f9fafb;color:var(--muted)}
+    input[type=text],input[type=number],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[readonly]{background:var(--surface-2);color:var(--muted)}
     .ean-hint{font-size:11px;color:var(--muted);margin-top:3px}
-    .ean-valid{color:#059669}
+    .ean-valid{color:var(--success)}
     .ean-invalid{color:var(--danger)}
+    .sugestao-ritmo-box{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12.5px;color:var(--text);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .sugestao-ritmo-txt{line-height:1.4}
+    .sugestao-ritmo-txt small{display:block;color:var(--muted);margin-top:2px}
+    .btn-sugestao-usar{background:var(--primary);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .btn-sugestao-usar:hover{filter:brightness(.92)}
     /* Import section */
     .import-card{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s}
-    .import-card:hover,.import-card.drag-over{border-color:#059669;background:#f0fdf4}
+    .import-card:hover,.import-card.drag-over{border-color:var(--primary);background:color-mix(in srgb, var(--primary) 5%, white)}
     .import-icon{font-size:32px;margin-bottom:8px}
     .import-text{font-size:14px;font-weight:600;color:var(--text)}
     .import-hint{font-size:12px;color:var(--muted);margin-top:4px}
     input[type=file]{display:none}
     .progress-bar{height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden;margin:10px 0}
-    .progress-fill{height:100%;border-radius:4px;background:#059669;transition:width .3s}
+    .progress-fill{height:100%;border-radius:4px;background:var(--success);transition:width .3s}
     /* Tabs in modal */
     .tabs{display:flex;gap:2px;margin-bottom:14px;border-bottom:2px solid var(--border);overflow-x:auto}
     .tab{padding:7px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none}
-    .tab.active{color:#059669;border-bottom-color:#059669}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
     .tab-panel{display:none}
     .tab-panel.active{display:block}
     /* Prod/hora recalc */
-    .recalc-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f0fdf4;border-radius:8px;margin-bottom:12px;font-size:13px;color:#065f46}
+    .recalc-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--tint-green-bg);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--tint-green-fg)}
+    .info-box-green{font-size:12px;color:var(--tint-green-fg);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)}
     @media(max-width:600px){
       .stats{grid-template-columns:1fr 1fr}
       .form-grid{grid-template-columns:1fr}
@@ -116,40 +121,28 @@
     }
   </style>
 </head>
-<body>
+<body class="kuryos-theme has-sidebar">
 <div class="header">
   <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
     <h1>Cadastro de Produtos</h1>
     <div class="header-sub">Catálogo completo · sincronizado com Firebase</div>
   </div>
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
 </div>
 
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html">Planejamento</a>
-    <a href="pedidos.html">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html" class="active">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
-  <div class="search-box">
-    <span class="search-icon">🔍</span>
+<div class="kt-toolbar">
+  <div class="kt-search">
+    <span class="icon">🔍</span>
     <input type="text" id="searchInput" placeholder="Buscar por SKU, descrição, cliente...">
   </div>
-  <select class="filter-sel" id="filterAtivo">
+  <select class="kt-select" id="filterAtivo">
     <option value="">Todos</option>
     <option value="Ativo">Ativos</option>
     <option value="Inativo">Inativos</option>
   </select>
-  <select class="filter-sel" id="filterCategoria"><option value="">Todas categorias</option></select>
-  <select class="filter-sel" id="filterCliente"><option value="">Todos clientes</option></select>
-  <button class="btn btn-green" id="btnNovo">+ Novo Produto</button>
+  <select class="kt-select" id="filterCategoria"><option value="">Todas categorias</option></select>
+  <select class="kt-select" id="filterCliente"><option value="">Todos clientes</option></select>
+  <button class="btn btn-primary" id="btnNovo">+ Novo Produto</button>
   <button class="btn btn-ghost" id="btnRecalc" title="Recalcular Prod/hora de todos os produtos">↻ Prod/hora</button>
 </div>
 
@@ -158,7 +151,7 @@
 
   <div class="stats">
     <div class="stat"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Total</div></div>
-    <div class="stat"><div class="stat-val" id="statAtivos" style="color:#059669">—</div><div class="stat-lbl">Ativos</div></div>
+    <div class="stat"><div class="stat-val" id="statAtivos" style="color:var(--success)">—</div><div class="stat-lbl">Ativos</div></div>
     <div class="stat"><div class="stat-val" id="statInativos" style="color:var(--muted)">—</div><div class="stat-lbl">Inativos</div></div>
     <div class="stat"><div class="stat-val" id="statCategorias" style="color:var(--primary)">—</div><div class="stat-lbl">Categorias</div></div>
   </div>
@@ -168,12 +161,13 @@
       <span id="tableCount">Produtos</span>
     </div>
 
-    <!-- Import manual desabilitado: o cadastro agora sincroniza automaticamente
-         (mão única) a partir da aba PRODUTOS do Criador de OPs vF.xlsm, via
-         produtos_watcher.py. Editar produto aqui ou por essa importação
-         antiga divergiria da fonte única — por isso a via manual foi retirada. -->
+    <!-- ERP unificado (ago/2026): o cadastro de produtos deixou de sincronizar
+         do Criador de OPs vF.xlsm (produtos_watcher.py foi descontinuado) --
+         Firebase agora é a fonte real. Produtos novos usam a regra de SKU
+         nova (categoria-cliente-sequencial); os ~500 já cadastrados mantêm o
+         código atual e continuam editáveis normalmente. -->
     <div class="recalc-bar" style="margin:12px 16px">
-      ℹ️ O cadastro de produtos agora sincroniza automaticamente da planilha <strong>Criador de OPs vF.xlsm</strong> (aba PRODUTOS). Para corrigir um produto, edite na planilha — a importação manual por Excel foi desativada aqui pra evitar divergência entre as duas fontes.
+      ℹ️ Cadastro de produtos: o Firebase é a fonte de dados. Produtos novos ganham código automático (categoria-cliente-sequencial) — veja <a href="clientes.html">Clientes</a> e a seção "Categorias de Produto" em <a href="admin.html">Ajustes/Config</a> pra manter essas listas em dia.
     </div>
 
     <div class="table-wrap">
@@ -204,7 +198,7 @@
   <div class="modal">
     <div class="modal-header">
       <h2 id="modalTitle">Novo Produto</h2>
-      <button class="modal-close" id="modalClose">×</button>
+      <button class="modal-close" id="modalClose" title="Fechar" aria-label="Fechar">×</button>
     </div>
     <div class="modal-body">
       <div class="tabs">
@@ -213,22 +207,38 @@
         <button class="tab" data-tab="embal">Embalagem</button>
         <button class="tab" data-tab="reg">Regulatório</button>
         <button class="tab" data-tab="cq">Controle de Qualidade</button>
+        <button class="tab" data-tab="lote">Parâmetros de Lote</button>
       </div>
 
       <!-- Tab: Identificação -->
       <div class="tab-panel active" id="tab-ident">
+        <div id="autoSkuBox" class="info-box-green" style="display:none;border:1px solid color-mix(in srgb, var(--tint-green-fg) 30%, transparent);margin-bottom:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--tint-green-fg);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Gerar código automaticamente (produto novo)</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Categoria</label>
+              <select id="fAutoCategoria"><option value="">Selecione...</option></select>
+            </div>
+            <div class="form-group">
+              <label>Cliente</label>
+              <select id="fAutoCliente"><option value="">Selecione...</option></select>
+            </div>
+          </div>
+          <div class="field-hint" id="skuPreviewHint" style="margin-top:8px;font-size:12px;color:var(--tint-green-fg)">Escolha categoria e cliente pra gerar o código -- ou digite manualmente abaixo.</div>
+        </div>
         <div class="form-grid">
           <div class="form-group">
-            <label>SKU *</label>
-            <input type="text" id="fSku" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Ex: GZLBBS02">
+            <label>SKU * <button type="button" id="btnUnlockSku" class="btn btn-ghost btn-sm" style="display:none;padding:2px 8px;font-size:11px;margin-left:6px">✏ Alterar código</button></label>
+            <input type="text" id="fSku" placeholder="Ex: BSPL-AFEE-0001 (ou digite manualmente)">
+            <div class="field-hint" id="skuRenameHint" style="display:none">Atenção: isso troca a chave do produto no banco (renomeação atômica) -- referências antigas por esse SKU em OPs/fórmulas já emitidas não são atualizadas automaticamente.</div>
           </div>
           <div class="form-group">
             <label>Cód. Cliente</label>
-            <input type="text" id="fCodCliente" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Ex: MRARBS05">
+            <input type="text" id="fCodCliente" placeholder="Ex: MRARBS05 (código próprio do cliente pro item, se houver)">
           </div>
           <div class="form-group full">
             <label>Descrição do Item *</label>
-            <input type="text" id="fDescricao" readonly style="background:#f9fafb;color:var(--muted)" placeholder="Nome completo do produto">
+            <input type="text" id="fDescricao" placeholder="Nome completo do produto">
           </div>
           <div class="form-group">
             <label>Linha do Produto</label>
@@ -237,7 +247,7 @@
           <div class="form-group" style="display:grid;grid-template-columns:2fr 1fr;gap:6px;align-items:end">
             <div>
               <label>Volume</label>
-              <input type="number" id="fVolume" readonly style="background:#f9fafb;color:var(--muted)" min="0" step="any" placeholder="Ex: 200">
+              <input type="number" id="fVolume" min="0" step="any" placeholder="Ex: 200">
             </div>
             <div>
               <label>U.M.</label>
@@ -252,7 +262,7 @@
           </div>
           <div class="form-group">
             <label>Status</label>
-            <select id="fAtivo" disabled style="background:#f9fafb;color:var(--muted)">
+            <select id="fAtivo">
               <option value="Ativo">Ativo</option>
               <option value="Inativo">Inativo</option>
             </select>
@@ -281,8 +291,12 @@
           </div>
           <div class="form-group">
             <label>Prod/hora (calculado dos apontamentos)</label>
-            <input type="text" id="fProdHoraCalc" readonly placeholder="—" style="background:#f9fafb">
+            <input type="text" id="fProdHoraCalc" readonly placeholder="—" style="background:var(--surface-2)">
           </div>
+        </div>
+        <div class="sugestao-ritmo-box" id="sugestaoRitmoBox" style="display:none">
+          <div class="sugestao-ritmo-txt" id="sugestaoRitmoTxt"></div>
+          <button type="button" class="btn-sugestao-usar" id="btnUsarSugestaoRitmo">Usar sugestão</button>
         </div>
       </div>
 
@@ -291,7 +305,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Cliente</label>
-            <input type="text" id="fCliente" readonly style="background:#f9fafb;color:var(--muted)" list="clientesList" placeholder="Ex: MISS ROSE" autocomplete="off">
+            <input type="text" id="fCliente" list="clientesList" placeholder="Ex: MISS ROSE" autocomplete="off">
             <datalist id="clientesList"></datalist>
           </div>
           <div class="form-group">
@@ -324,7 +338,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Un. / Caixa</label>
-            <input type="number" id="fUnCx" readonly style="background:#f9fafb;color:var(--muted)" min="1" step="1" placeholder="Ex: 12">
+            <input type="number" id="fUnCx" readonly style="background:var(--surface-2);color:var(--muted)" min="1" step="1" placeholder="Ex: 12">
           </div>
           <div class="form-group">
             <label>Qtd. Lote Padrão (unidades)</label>
@@ -332,9 +346,9 @@
           </div>
         </div>
         <div class="section-label" style="margin-top:14px">Caixas calculadas automaticamente</div>
-        <div style="font-size:13px;color:var(--muted);padding:10px;background:#f9fafb;border-radius:8px">
+        <div style="font-size:13px;color:var(--muted);padding:10px;background:var(--surface-2);border-radius:8px">
           Com <strong id="calcUnCx">—</strong> un./cx e lote padrão de <strong id="calcLote">—</strong> unidades
-          → <strong id="calcCaixas" style="color:#059669">— caixas</strong> por lote.
+          → <strong id="calcCaixas" style="color:var(--success)">— caixas</strong> por lote.
         </div>
       </div>
 
@@ -358,7 +372,7 @@
 
       <!-- Tab: Controle de Qualidade -->
       <div class="tab-panel" id="tab-cq">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid #059669">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
           Especificações de CQ usadas no Relatório de Produto Acabado da OP.
         </div>
         <div class="form-grid">
@@ -396,6 +410,36 @@
           </div>
         </div>
       </div>
+
+      <!-- Tab: Parâmetros de Lote (ERP unificado -- usados na emissão de OP) -->
+      <div class="tab-panel" id="tab-lote">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
+          Usados pelo cálculo de dimensionamento do lote na emissão de OP. Densidade nunca deve ser 1,0 por padrão -- deixe vazio até ter valor medido de verdade.
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Densidade do Granel (g/ml)</label>
+            <input type="number" id="fDensidadeGranel" min="0" step="any" placeholder="Medida, sem default">
+          </div>
+          <div class="form-group">
+            <label>Prazo de Validade (meses)</label>
+            <input type="number" id="fPrazoValidadeMeses" min="0" step="1" placeholder="Ex: 36">
+          </div>
+          <div class="form-group">
+            <label>Overfill (%)</label>
+            <input type="number" id="fOverfillPct" min="0" step="0.01" placeholder="Ex: 1.5">
+          </div>
+          <div class="form-group">
+            <label>Perda de Processo (%)</label>
+            <input type="number" id="fPerdaProcessoPct" min="0" step="0.01" placeholder="Ex: 2.0">
+          </div>
+          <div class="form-group">
+            <label>Perda de Linha (%)</label>
+            <input type="number" id="fPerdaLinhaPct" min="0" step="0.01" placeholder="Ex: 3.0">
+            <div class="field-hint">Cadastrada por completude/relatório -- não entra na conta do lote na emissão de OP (perda de linha é tratada na produção real, via apontamento).</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalCancelBtn">Cancelar</button>
@@ -408,7 +452,7 @@
 var firebaseConfig = {
   apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
   authDomain: "prod-kuryos.firebaseapp.com",
-  databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
   projectId: "prod-kuryos",
   storageBucket: "prod-kuryos.firebasestorage.app",
   messagingSenderId: "323674581733",
@@ -416,10 +460,13 @@ var firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 var allProdutos = {};   // key → produto object
 var prodHoraCalcMap = {}; // descricao normalizada → avg prod/hora (from registros)
 var editingKey = null;
+var allClientesCad = {};      // clientes/ (cadastro novo, pra geração de SKU)
+var categoriasProdutoCad = []; // config.categoriasProduto
 
 /* ── Utilitários ── */
 // Chave de SKU tem convenção própria (diferente de sanitizeKey de shared/utils.js,
@@ -429,7 +476,7 @@ function sanitizeSkuKey(str) {
   return String(str || '').replace(/[./[\]#$\s]/g, '-').replace(/-+/g, '-').trim().slice(0, 80);
 }
 function norm(s) { return String(s || '').toLowerCase().trim(); }
-function fmtNum(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+// fmtNum vem de shared/utils.js
 function showAlert(msg, type) {
   var box = document.getElementById('alertBox');
   box.className = 'alert alert-' + (type || 'success') + ' show';
@@ -498,6 +545,50 @@ function refreshDatalistsAndFilters() {
   fillSelect('filterCliente', clientes, 'Todos clientes');
 }
 
+/* ── Geração automática de SKU (categoria-cliente-sequencial) ── */
+function refreshAutoSkuSelects() {
+  var selCat = document.getElementById('fAutoCategoria');
+  var selCli = document.getElementById('fAutoCliente');
+  var curCat = selCat.value, curCli = selCli.value;
+  selCat.innerHTML = '<option value="">Selecione...</option>';
+  categoriasProdutoCad.forEach(function(c) {
+    var o = document.createElement('option');
+    o.value = c.codigo; o.textContent = c.nome + ' (' + c.codigo + ')';
+    selCat.appendChild(o);
+  });
+  selCli.innerHTML = '<option value="">Selecione...</option>';
+  Object.values(allClientesCad).filter(function(c) { return c.ativo !== false; })
+    .sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); })
+    .forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c.codigo; o.textContent = c.nome + ' (' + c.codigo + ')';
+      selCli.appendChild(o);
+    });
+  if (curCat) selCat.value = curCat;
+  if (curCli) selCli.value = curCli;
+  updateSkuPreview();
+}
+function updateSkuPreview() {
+  var cat = document.getElementById('fAutoCategoria').value;
+  var cli = document.getElementById('fAutoCliente').value;
+  var hint = document.getElementById('skuPreviewHint');
+  if (cat && cli) {
+    hint.textContent = 'Código será gerado como ' + cat + '-' + cli + '-NNNN ao salvar (sequencial reservado na hora).';
+    // Bug real encontrado pelo Auditor: escolher categoria+cliente aqui nunca
+    // preenchia os campos Cliente/Categoria de fato -- produto novo salvava
+    // com esses campos vazios, sumindo dos filtros/busca por cliente e
+    // categoria. Preenche os dois a partir da seleção (nome legível, pros
+    // filtros/tabela que já leem esses campos de texto continuarem
+    // funcionando) -- o admin ainda pode digitar por cima manualmente.
+    var catObj = categoriasProdutoCad.filter(function(c) { return c.codigo === cat; })[0];
+    var cliObj = allClientesCad[cli];
+    if (catObj) document.getElementById('fCategoria').value = catObj.nome;
+    if (cliObj) document.getElementById('fCliente').value = cliObj.nome;
+  } else {
+    hint.textContent = 'Escolha categoria e cliente pra gerar o código -- ou digite manualmente abaixo.';
+  }
+}
+
 /* ── Tabela ── */
 function renderTable() {
   var search = norm(document.getElementById('searchInput').value);
@@ -530,7 +621,9 @@ function renderTable() {
 
   var tbody = document.getElementById('tableBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="no-data">Nenhum produto encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="no-data">' + (total
+      ? 'Nenhum produto encontrado com esse filtro/busca.'
+      : 'Nenhum produto cadastrado ainda. Clique em "+ Novo Produto" pra começar.') + '</td></tr>';
     return;
   }
 
@@ -547,17 +640,17 @@ function renderTable() {
       ? '<span class="badge badge-green">Ativo</span>'
       : '<span class="badge badge-gray">Inativo</span>';
     return '<tr>' +
-      '<td class="sku-cell" title="' + (p.codCliente || '') + '">' + (p.sku || '—') + '</td>' +
-      '<td class="desc-cell" title="' + (p.descricao || '') + '">' + (p.descricao || '—') + '</td>' +
-      '<td style="white-space:nowrap">' + (p.cliente || '—') + '</td>' +
-      '<td><span class="badge badge-blue">' + (p.categoria || '—') + '</span></td>' +
-      '<td style="font-size:12px;color:var(--muted)">' + (p.subcategoria || '—') + '</td>' +
-      '<td><span class="badge badge-orange">' + (p.viscosidade || '—') + '</span></td>' +
+      '<td class="sku-cell" title="' + escapeAttr(p.codCliente || '') + '">' + escapeHtml(p.sku || '—') + '</td>' +
+      '<td class="desc-cell" title="' + escapeAttr(p.descricao || '') + '">' + escapeHtml(p.descricao || '—') + '</td>' +
+      '<td style="white-space:nowrap">' + escapeHtml(p.cliente || '—') + '</td>' +
+      '<td><span class="badge badge-blue">' + escapeHtml(p.categoria || '—') + '</span></td>' +
+      '<td style="font-size:12px;color:var(--muted)">' + escapeHtml(p.subcategoria || '—') + '</td>' +
+      '<td><span class="badge badge-orange">' + escapeHtml(p.viscosidade || '—') + '</span></td>' +
       '<td style="text-align:right;font-size:12px">' + vol + '</td>' +
       '<td style="text-align:right;font-weight:600">' + (p.unCx || '—') + '</td>' +
       '<td style="text-align:right">' + prodHtml + '</td>' +
       '<td>' + statusBadge + '</td>' +
-      '<td><button class="btn btn-ghost btn-sm btn-edit" data-key="' + key + '">✏</button></td>' +
+      '<td><button class="btn btn-ghost btn-sm btn-edit" data-key="' + key + '" title="Editar produto" aria-label="Editar produto">✏</button></td>' +
     '</tr>';
   }).join('');
 
@@ -571,10 +664,23 @@ function openModal(key) {
   editingKey = key || null;
   var p = key ? (allProdutos[key] || {}) : {};
   document.getElementById('modalTitle').textContent = key ? 'Editar Produto' : 'Novo Produto';
+  document.getElementById('sugestaoRitmoBox').style.display = 'none';
 
-  // Identificação
+  // Geração automática de SKU só faz sentido pra produto novo
+  document.getElementById('autoSkuBox').style.display = key ? 'none' : 'block';
+  document.getElementById('fAutoCategoria').value = '';
+  document.getElementById('fAutoCliente').value = '';
+  updateSkuPreview();
+
+  // Identificação -- achado do Tester: SKU ficava travado pra sempre ao
+  // editar, sem nenhuma forma de acionar a troca de chave atômica que já
+  // existe em finishSaveModal(). Editando, o campo some readonly, mas mostra
+  // um botão "Alterar código" que desbloqueia com aviso -- produto novo
+  // sempre editável direto, sem esse passo extra.
   document.getElementById('fSku').value = p.sku || '';
   document.getElementById('fSku').readOnly = !!key;
+  document.getElementById('btnUnlockSku').style.display = key ? 'inline-flex' : 'none';
+  document.getElementById('skuRenameHint').style.display = 'none';
   document.getElementById('fCodCliente').value = p.codCliente || '';
   document.getElementById('fDescricao').value = p.descricao || '';
   document.getElementById('fLinhaProduto').value = p.linhaProduto || '';
@@ -616,6 +722,13 @@ function openModal(key) {
   document.getElementById('fCqViscosidade').value = cq.viscosidade || '';
   document.getElementById('fCqFaixaPeso').value = cq.faixaPeso || '';
 
+  // Parâmetros de Lote
+  document.getElementById('fDensidadeGranel').value = p.densidadeGranel != null ? p.densidadeGranel : '';
+  document.getElementById('fPrazoValidadeMeses').value = p.prazoValidadeMeses != null ? p.prazoValidadeMeses : '';
+  document.getElementById('fOverfillPct').value = p.overfillPct != null ? p.overfillPct : '';
+  document.getElementById('fPerdaProcessoPct').value = p.perdaProcessoPct != null ? p.perdaProcessoPct : '';
+  document.getElementById('fPerdaLinhaPct').value = p.perdaLinhaPct != null ? p.perdaLinhaPct : '';
+
   // Reset para primeira aba
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === 'ident'); });
   document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-ident'); });
@@ -629,12 +742,68 @@ function closeModal() {
 }
 
 function saveModal() {
-  var sku = document.getElementById('fSku').value.trim();
   var descricao = document.getElementById('fDescricao').value.trim();
-  if (!sku || !descricao) { showAlert('SKU e Descrição são obrigatórios.', 'danger'); return; }
+  if (!descricao) { showAlert('Descrição é obrigatória.', 'danger'); return; }
 
-  var key = editingKey || sanitizeSkuKey(sku);
-  if (!key) { showAlert('SKU inválido.', 'danger'); return; }
+  var autoCategoria = !editingKey ? document.getElementById('fAutoCategoria').value : '';
+  var autoCliente = !editingKey ? document.getElementById('fAutoCliente').value : '';
+
+  document.getElementById('modalSaveBtn').disabled = true;
+
+  var skuPromise;
+  if (autoCategoria && autoCliente) {
+    var counterPath = 'config/contadores/sku/' + autoCategoria + '_' + autoCliente;
+    skuPromise = nextSequential(db, counterPath, autoCategoria + '-' + autoCliente, 4).then(function(r) { return r.formatado; });
+  } else {
+    var skuDigitado = document.getElementById('fSku').value.trim();
+    if (!skuDigitado) {
+      document.getElementById('modalSaveBtn').disabled = false;
+      showAlert('SKU é obrigatório (digite manualmente ou escolha categoria + cliente pra gerar automático).', 'danger');
+      return;
+    }
+    skuPromise = Promise.resolve(skuDigitado);
+  }
+
+  skuPromise.then(function(sku) {
+    document.getElementById('fSku').value = sku;
+    finishSaveModal(sku, descricao);
+  }).catch(function(err) {
+    document.getElementById('modalSaveBtn').disabled = false;
+    showAlert('Erro ao gerar SKU: ' + err.message, 'danger');
+  });
+}
+
+function finishSaveModal(sku, descricao) {
+  // Achado do Tester: "key = editingKey || sanitizeSkuKey(sku)" fazia o "||"
+  // nunca avaliar sanitizeSkuKey(sku) enquanto editingKey existisse -- ou
+  // seja, editar um produto SEMPRE mantinha a chave antiga, não importa o
+  // que foi digitado no campo de SKU destravado. Isso quebrava dois
+  // comportamentos ao mesmo tempo: o rename atômico abaixo (que compara
+  // editingKey !== key) nunca disparava, e a checagem de SKU duplicado
+  // (que também depende de key refletir o SKU realmente digitado) nunca
+  // pegava um SKU já usado por outro produto -- os dois produtos ficavam
+  // com chaves diferentes mas o mesmo campo `sku` exibido, sem aviso.
+  // key precisa SEMPRE refletir o SKU atual do campo; a distinção
+  // "é edição ou é novo" já é feita corretamente logo abaixo comparando
+  // key com editingKey.
+  var key = sanitizeSkuKey(sku);
+  if (!key) { document.getElementById('modalSaveBtn').disabled = false; showAlert('SKU inválido.', 'danger'); return; }
+  // Achado do Auditor (2ª rodada): a checagem original só cobria produto
+  // NOVO. Com o botão "Alterar código" também é possível estar editando um
+  // produto (editingKey setado) e digitar um SKU que já pertence a OUTRO
+  // produto -- sem essa checagem, o rename atômico abaixo sobrescreveria o
+  // outro produto em silêncio e apagaria o que estava sendo editado. Cobre
+  // os dois casos: criar novo com SKU existente, ou renomear pra um SKU que
+  // já é de outro produto (comparando a chave nova contra tudo, exceto a
+  // própria entrada sendo editada).
+  if (allProdutos[key] && key !== editingKey) {
+    document.getElementById('modalSaveBtn').disabled = false;
+    showAlert('Já existe um produto com esse SKU. Edite o produto existente em vez de criar um novo ou renomear para essa chave.', 'danger');
+    return;
+  }
+
+  var autoCategoriaSel = document.getElementById('fAutoCategoria').value;
+  var autoClienteSel = document.getElementById('fAutoCliente').value;
 
   var data = {
     sku: sku,
@@ -665,12 +834,20 @@ function saveModal() {
       teorAlcool: document.getElementById('fCqTeorAlcool').value.trim(),
       viscosidade: document.getElementById('fCqViscosidade').value.trim(),
       faixaPeso: document.getElementById('fCqFaixaPeso').value.trim()
-    }
+    },
+    densidadeGranel: (function() { var v = document.getElementById('fDensidadeGranel').value; return v !== '' ? parseFloat(v) : null; })(),
+    prazoValidadeMeses: parseInt(document.getElementById('fPrazoValidadeMeses').value) || 0,
+    overfillPct: parseFloat(document.getElementById('fOverfillPct').value) || 0,
+    perdaProcessoPct: parseFloat(document.getElementById('fPerdaProcessoPct').value) || 0,
+    perdaLinhaPct: parseFloat(document.getElementById('fPerdaLinhaPct').value) || 0,
+    // FKs pra clientes/config.categoriasProduto, só quando o produto foi
+    // criado pela geração automática de SKU -- produtos antigos/manuais
+    // ficam sem esses campos (esperado, ver decisão nº8 do plano).
+    categoriaCodigo: autoCategoriaSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].categoriaCodigo || '' : ''),
+    clienteKey: autoClienteSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].clienteKey || '' : '')
   };
 
-  document.getElementById('modalSaveBtn').disabled = true;
-  
-    var promise;
+  var promise;
   if (editingKey && editingKey !== key) {
     // SKU key changed: atomic rename
     var updates = {};
@@ -690,12 +867,71 @@ function saveModal() {
     .finally(function() { document.getElementById('modalSaveBtn').disabled = false; });
 }
 
+/* ── Sugestão de ritmo pra produto novo (Fase G) ──────────────────────
+   Item 2/8 da auditoria: produto sem histórico próprio ainda não tinha
+   nenhuma referência além de "chuta um número" -- agora, assim que
+   viscosidade + volume estão preenchidos num produto NOVO sem histórico
+   já detectável (prodHoraCalcMap), busca a mediana do ritmo demonstrado de
+   produtos existentes na mesma viscosidade + faixa de volume
+   (kuryosSugerirRitmoProdutoNovo, shared/utils.js) e oferece preencher
+   fProdHoraRef com 1 clique. Continua editável -- é sugestão, não trava
+   nada. O registros/ só é lido sob demanda (1x, sob cache), igual ao botão
+   "↻ Prod/hora" já faz -- não é um listener permanente na coleção inteira. */
+var registrosCacheSugestao = null;
+function garantirRegistrosSugestao(cb) {
+  if (registrosCacheSugestao) { cb(registrosCacheSugestao); return; }
+  db.ref('registros').once('value').then(function(snap) {
+    registrosCacheSugestao = snap.val() || {};
+    cb(registrosCacheSugestao);
+  }).catch(function() { cb({}); });
+}
+function tentarSugerirRitmo() {
+  var box = document.getElementById('sugestaoRitmoBox');
+  if (editingKey) { box.style.display = 'none'; return; } // só faz sentido pra produto novo
+  var descricao = document.getElementById('fDescricao').value.trim();
+  if (descricao && prodHoraCalcMap[norm(descricao)]) { box.style.display = 'none'; return; } // já tem histórico próprio
+  var viscosidade = document.getElementById('fViscosidade').value;
+  var volume = document.getElementById('fVolume').value;
+  if (!viscosidade || !volume) { box.style.display = 'none'; return; }
+  garantirRegistrosSugestao(function(registros) {
+    // Estado pode ter mudado enquanto o registros/ carregava (trocou de
+    // aba, fechou o modal, editou de novo os campos) -- reconfere antes de
+    // desenhar, senão a sugestão pode aparecer pro produto errado.
+    if (editingKey) { box.style.display = 'none'; return; }
+    var viscAtual = document.getElementById('fViscosidade').value;
+    var volAtual = document.getElementById('fVolume').value;
+    if (viscAtual !== viscosidade || volAtual !== volume) return;
+    var sug = kuryosSugerirRitmoProdutoNovo({ viscosidade: viscosidade, volume: volume }, allProdutos, registros);
+    if (!sug) { box.style.display = 'none'; return; }
+    document.getElementById('sugestaoRitmoTxt').innerHTML =
+      '💡 Sugestão: <strong>' + fmtNum(sug.ritmo) + ' un/h</strong>' +
+      '<small>Mediana de ' + sug.baseadoEm + ' produto(s) já cadastrado(s) com a mesma viscosidade (' + escapeHtml(sug.viscosidade) + ') e faixa de volume semelhante -- ponto de partida, ajuste depois de ver a produção real.</small>';
+    box.style.display = 'flex';
+    box.dataset.ritmoSugerido = sug.ritmo;
+  });
+}
+document.getElementById('btnUsarSugestaoRitmo').addEventListener('click', function() {
+  var box = document.getElementById('sugestaoRitmoBox');
+  var v = box.dataset.ritmoSugerido;
+  if (v) document.getElementById('fProdHoraRef').value = v;
+  box.style.display = 'none';
+});
+document.getElementById('fViscosidade').addEventListener('change', tentarSugerirRitmo);
+document.getElementById('fVolume').addEventListener('input', function() {
+  clearTimeout(window._sugRitmoDebounce);
+  window._sugRitmoDebounce = setTimeout(tentarSugerirRitmo, 400);
+});
+document.getElementById('fDescricao').addEventListener('input', function() {
+  clearTimeout(window._sugRitmoDebounce2);
+  window._sugRitmoDebounce2 = setTimeout(tentarSugerirRitmo, 400);
+});
+
 /* ── Cálculo Prod/hora a partir de registros ── */
 function calcProdHora() {
   var btn = document.getElementById('btnRecalc');
   btn.disabled = true;
   btn.textContent = '↻ Calculando...';
-  db.ref('registros').once('value', function(snap) {
+  db.ref('registros').once('value').then(function(snap) {
     var byProd = {}; // norm(descricao) → {sum, count}
     snap.forEach(function(dateSnap) {
       dateSnap.forEach(function(reg) {
@@ -713,9 +949,12 @@ function calcProdHora() {
       if (d.count >= 3) prodHoraCalcMap[k] = d.sum / d.count;
     });
     renderTable();
+    showAlert('Prod/hora recalculado a partir de ' + Object.keys(prodHoraCalcMap).length + ' produtos com histórico.', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao recalcular Prod/hora: ' + err.message, 'danger');
+  }).finally(function() {
     btn.disabled = false;
     btn.textContent = '↻ Prod/hora';
-    showAlert('Prod/hora recalculado a partir de ' + Object.keys(prodHoraCalcMap).length + ' produtos com histórico.', 'success');
   });
 }
 
@@ -733,6 +972,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Modal buttons */
   document.getElementById('btnNovo').addEventListener('click', function() { openModal(null); });
+  document.getElementById('btnUnlockSku').addEventListener('click', function() {
+    if (!confirm('Isso troca a chave do produto no banco (renomeação atômica). Referências antigas por esse SKU em OPs/fórmulas já emitidas não são atualizadas automaticamente. Continuar?')) return;
+    document.getElementById('fSku').readOnly = false;
+    document.getElementById('fSku').focus();
+    document.getElementById('skuRenameHint').style.display = 'block';
+    this.style.display = 'none';
+  });
   document.getElementById('modalClose').addEventListener('click', closeModal);
   document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
   document.getElementById('modalSaveBtn').addEventListener('click', saveModal);
@@ -747,13 +993,18 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('fLotePadrao').addEventListener('input', updateCalcCaixas);
 
   /* Filters + Search */
-  document.getElementById('searchInput').addEventListener('input', renderTable);
+  var _searchDebounceT = null;
+  document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(_searchDebounceT);
+    _searchDebounceT = setTimeout(renderTable, 200);
+  });
   document.getElementById('filterAtivo').addEventListener('change', renderTable);
   document.getElementById('filterCategoria').addEventListener('change', renderTable);
   document.getElementById('filterCliente').addEventListener('change', renderTable);
 
-  /* Import manual por Excel desativado (Fase E) — cadastro agora sincroniza
-     automaticamente da planilha Criador de OPs vF.xlsm via produtos_watcher.py */
+  /* Geração automática de SKU (categoria + cliente) */
+  document.getElementById('fAutoCategoria').addEventListener('change', updateSkuPreview);
+  document.getElementById('fAutoCliente').addEventListener('change', updateSkuPreview);
 
   /* Recalcular prod/hora */
   document.getElementById('btnRecalc').addEventListener('click', calcProdHora);
@@ -764,10 +1015,19 @@ document.addEventListener('DOMContentLoaded', function() {
       setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
     });
 
-    db.ref('produtos').on('value', function(snap) {
+    dbOnValue(db.ref('produtos'), function(snap) {
       allProdutos = snap.val() || {};
       refreshDatalistsAndFilters();
       renderTable();
+    });
+
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientesCad = snap.val() || {};
+      refreshAutoSkuSelects();
+    });
+    dbOnValue(db.ref('config/categoriasProduto'), function(snap) {
+      categoriasProdutoCad = snap.val() || [];
+      refreshAutoSkuSelects();
     });
 
     // Calcula prod/hora automaticamente no carregamento

@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emissão de OP</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .main{padding:16px 0 60px;max-width:820px;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;padding:20px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .alert-warning{background:var(--tint-orange-bg);color:var(--tint-orange-fg);border:1px solid color-mix(in srgb, var(--tint-orange-fg) 40%, transparent);display:block}
+    .btn{padding:9px 18px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],select{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .form-group{margin-bottom:0}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .radio-row{display:flex;gap:16px;margin-bottom:12px}
+    .radio-opt{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+    .radio-opt input{width:auto}
+    table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border)}
+    td{padding:7px 10px;border-bottom:1px solid var(--tint-gray-bg)}
+    .num{text-align:right;font-variant-numeric:tabular-nums}
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .resumo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+    .resumo-item{background:var(--surface-2);border-radius:8px;padding:10px;text-align:center}
+    .resumo-val{font-size:18px;font-weight:700;color:var(--primary)}
+    .resumo-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+    .produto-opt{padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--tint-gray-bg)}
+    .produto-opt:hover{background:var(--surface-2)}
+    .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+
+    /* Impressão */
+    #printArea{display:none}
+    @media print {
+      body *{visibility:hidden}
+      #printArea, #printArea *{visibility:visible}
+      #printArea{display:block;position:absolute;top:0;left:0;width:100%}
+      .print-page{page-break-after:always;padding:24px;font-size:12px}
+      .print-page:last-child{page-break-after:auto}
+      .print-h{font-size:16px;font-weight:700;margin-bottom:4px}
+      .print-sub{font-size:11px;color:#555;margin-bottom:12px}
+      .print-table{width:100%;border-collapse:collapse;margin-top:8px}
+      .print-table th,.print-table td{border:1px solid #999;padding:4px 8px;font-size:11px;text-align:left}
+      .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:10px 0;font-size:12px}
+    }
+    @media(max-width:600px){.form-grid{grid-template-columns:1fr}.resumo-grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Emissão de OP</h1>
+    <div class="header-sub">Calcula o lote a partir da fórmula aprovada e gera o registro de produção</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <!-- 1. Produto -->
+  <div class="card">
+    <div class="card-title">1. Produto</div>
+    <div style="position:relative">
+      <input type="text" id="fProdutoBusca" placeholder="Buscar por SKU ou descrição..." autocomplete="off">
+      <div id="produtoResultados" style="display:none;position:absolute;z-index:20;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);max-height:260px;overflow-y:auto;width:100%;margin-top:4px"></div>
+    </div>
+    <div id="produtoInfo" style="display:none;margin-top:12px">
+      <div style="font-weight:700;font-size:15px" id="produtoNomeLabel"></div>
+      <div class="field-hint" id="produtoDetalheLabel"></div>
+      <div id="formulaWarning" class="alert alert-warning" style="display:none;margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- 2. Dimensionamento -->
+  <div id="cardDimensionamento" class="card" style="display:none">
+    <div class="card-title">2. Dimensionamento do Lote</div>
+    <div id="dimensionamentoErro" class="alert alert-danger" style="display:none;margin-bottom:10px"></div>
+    <div id="bomWarning" class="alert alert-warning" style="display:none;margin-bottom:10px"></div>
+    <div class="radio-row">
+      <label class="radio-opt"><input type="radio" name="modoQtd" value="massa" checked> Informar massa total (kg)</label>
+      <label class="radio-opt"><input type="radio" name="modoQtd" value="pecas"> Informar peças desejadas</label>
+    </div>
+    <div class="form-grid">
+      <div class="form-group" id="grpMassa">
+        <label>Massa total de fabricação (kg)</label>
+        <input type="number" id="fMassaTotal" min="0" step="any" placeholder="Ex: 800">
+      </div>
+      <div class="form-group" id="grpPecas" style="display:none">
+        <label>Peças desejadas</label>
+        <input type="number" id="fPecasDesejadas" min="0" step="1" placeholder="Ex: 8000">
+      </div>
+      <div class="form-group">
+        <label>Densidade do granel (g/ml)</label>
+        <input type="number" id="fDensidade" min="0" step="any">
+        <div class="field-hint">Vem do cadastro do produto -- ajuste se tiver valor medido mais recente pra esse lote.</div>
+      </div>
+      <div class="form-group">
+        <label>Overfill (%)</label>
+        <input type="number" id="fOverfill" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label>Perda de processo (%)</label>
+        <input type="number" id="fPerdaProcesso" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="resumo-grid" id="resumoCalc">
+      <div class="resumo-item"><div class="resumo-val" id="rPecas">—</div><div class="resumo-lbl">Peças previstas</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rMassa">—</div><div class="resumo-lbl">Massa do lote (kg)</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rVolume">—</div><div class="resumo-lbl">Volume granel (L)</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rValidade">—</div><div class="resumo-lbl">Validade</div></div>
+    </div>
+  </div>
+
+  <!-- 3. Materiais -->
+  <div id="cardMateriais" class="card" style="display:none">
+    <div class="card-title">3. Consumo de Materiais (fórmula + embalagem)</div>
+    <table>
+      <thead><tr><th>Material</th><th>Origem</th><th class="num">Quantidade</th><th></th></tr></thead>
+      <tbody id="materiaisBody"></tbody>
+    </table>
+    <div class="field-hint" style="margin-top:8px">"Substituir" troca só o consumo dessa OP -- não altera a fórmula/BOM cadastrada.</div>
+  </div>
+
+  <!-- 4. Emissão -->
+  <div id="cardEmissao" class="card" style="display:none">
+    <div class="card-title">4. Confirmar Emissão</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Cliente</label>
+        <input type="text" id="fCliente" readonly>
+      </div>
+      <div class="form-group">
+        <label>Emitido por</label>
+        <input type="text" id="fEmitidoPor" readonly>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button class="btn btn-green" id="btnEmitir">Emitir OP</button>
+    </div>
+  </div>
+
+  <!-- 5. Pós-emissão -->
+  <div id="cardSucesso" class="card" style="display:none;text-align:center">
+    <div style="font-size:32px">✅</div>
+    <div style="font-size:18px;font-weight:700;margin:8px 0">OP <span id="loteEmitido"></span> emitida com sucesso</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+      <button class="btn btn-primary" id="btnImprimir">🖨 Abrir documento pra impressão</button>
+      <button class="btn btn-ghost" id="btnNovaOp">Emitir outra OP</button>
+    </div>
+  </div>
+</div>
+
+<!-- Documento de impressão -->
+<div id="printArea"></div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allProdutos = {}, allMateriais = {}, allFormulas = {}, allBom = {}, allEspecificacoes = {}, configData = {};
+var produtoSelecionado = null; // {key, ...campos}
+var formulaEscolhida = null;   // registro de formulas/ escolhido (APROVADA de preferência)
+var bomEscolhido = null;
+var calc = null;               // resultado do dimensionamento
+var materiaisConsumo = {};     // itemKey local -> {mpCodigo, mpNome, quantidade, unidade, origem, substituiMpCodigo}
+var opJaEmitida = null;        // dados da OP recém-emitida, pra imprimir
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 6000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
+function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
+
+/* ── Busca de produto ── */
+function renderProdutoResultados(termo) {
+  var el = document.getElementById('produtoResultados');
+  var t = norm(termo);
+  if (!t) { el.style.display = 'none'; return; }
+  var matches = Object.entries(allProdutos).filter(function(entry) {
+    var p = entry[1];
+    return norm(p.sku).indexOf(t) !== -1 || norm(p.descricao).indexOf(t) !== -1;
+  }).slice(0, 30);
+  el.innerHTML = matches.length
+    ? matches.map(function(entry) {
+        var key = entry[0], p = entry[1];
+        return '<div class="produto-opt" data-key="' + escapeAttr(key) + '"><b>' + escapeHtml(p.sku || key) + '</b> — ' + escapeHtml(p.descricao || '') + '</div>';
+      }).join('')
+    : '<div style="padding:10px;color:var(--muted);font-size:13px">Nenhum produto encontrado.</div>';
+  el.style.display = 'block';
+  el.querySelectorAll('.produto-opt').forEach(function(div) {
+    div.addEventListener('click', function() { selecionarProduto(div.getAttribute('data-key')); });
+  });
+}
+
+function melhorFormulaDoProduto(codProduto) {
+  var versoes = Object.values(allFormulas).filter(function(f) { return f && f.codProduto === codProduto; });
+  if (!versoes.length) return null;
+  var aprovadas = versoes.filter(function(f) { return f.status === 'APROVADA'; });
+  var pool = aprovadas.length ? aprovadas : versoes;
+  pool.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
+  return { registro: pool[0], temAprovada: aprovadas.length > 0 };
+}
+
+function selecionarProduto(key) {
+  var p = allProdutos[key];
+  if (!p) return;
+  produtoSelecionado = Object.assign({ key: key }, p);
+  document.getElementById('fProdutoBusca').value = '';
+  document.getElementById('produtoResultados').style.display = 'none';
+  document.getElementById('produtoInfo').style.display = 'block';
+  document.getElementById('produtoNomeLabel').textContent = p.sku + ' — ' + p.descricao;
+  document.getElementById('produtoDetalheLabel').textContent =
+    'Cliente: ' + (p.cliente || '—') + ' · Volume nominal: ' + (p.volume || '—') + ' ' + (p.unidadeVolume || '') +
+    ' · Validade cadastrada: ' + (p.prazoValidadeMeses || '—') + ' meses';
+
+  var achado = melhorFormulaDoProduto(key);
+  var warnBox = document.getElementById('formulaWarning');
+  if (!achado) {
+    warnBox.style.display = 'block';
+    warnBox.textContent = '⚠️ Este produto não tem nenhuma fórmula cadastrada em Fórmulas/BOM/Especificações. Cadastre a fórmula antes de emitir a OP.';
+    formulaEscolhida = null;
+    document.getElementById('cardDimensionamento').style.display = 'none';
+    document.getElementById('cardMateriais').style.display = 'none';
+    document.getElementById('cardEmissao').style.display = 'none';
+    return;
+  }
+  formulaEscolhida = achado.registro;
+  bomEscolhido = allBom[chaveVersao(key, formulaEscolhida.versao)] || { itens: {} };
+  if (!achado.temAprovada) {
+    warnBox.style.display = 'block';
+    warnBox.textContent = '⚠️ Não existe versão APROVADA da fórmula pra este produto -- usando a versão mais recente (' + formulaEscolhida.versao + ', status ' + formulaEscolhida.status + '). Emitir mesmo assim é permitido, mas confira com P&D/Qualidade antes de liberar o lote.';
+  } else {
+    warnBox.style.display = 'none';
+  }
+
+  document.getElementById('fDensidade').value = p.densidadeGranel != null ? p.densidadeGranel : '';
+  document.getElementById('fOverfill').value = p.overfillPct != null ? p.overfillPct : 0;
+  document.getElementById('fPerdaProcesso').value = p.perdaProcessoPct != null ? p.perdaProcessoPct : 0;
+  document.getElementById('fCliente').value = p.cliente || '';
+  document.getElementById('fEmitidoPor').value = currentUserNome();
+  document.getElementById('fMassaTotal').value = '';
+  document.getElementById('fPecasDesejadas').value = '';
+
+  document.getElementById('cardDimensionamento').style.display = 'block';
+  document.getElementById('cardMateriais').style.display = 'none';
+  document.getElementById('cardEmissao').style.display = 'none';
+  calc = null;
+  materiaisConsumo = {};
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+
+/* ── Cálculo de dimensionamento (ver GERADOR_OP_SPEC.md + fórmulas reais extraídas do Gerador de OPs.xlsm) ── */
+// Achado do Auditor: a fórmula abaixo só faz sentido fisicamente pra volume
+// (ml/L) -- mas produtos.html permite cadastrar unidadeVolume como g/kg/un
+// também. Calcular como se fosse ml pra esses casos gera números sem
+// nenhum aviso (ex: produto cadastrado em L saía 1000x menor). Convertemos
+// explicitamente ml/L pra litro; qualquer outra unidade bloqueia o cálculo
+// com uma mensagem clara em vez de produzir um resultado fisicamente errado.
+function volumeNominalEmLitros(produto) {
+  var vol = parseFloat(produto.volume) || 0;
+  var un = (produto.unidadeVolume || 'ml').toLowerCase();
+  if (un === 'ml') return {litros: vol / 1000, ok: true};
+  if (un === 'l') return {litros: vol, ok: true};
+  return {litros: 0, ok: false, unidade: produto.unidadeVolume};
+}
+function recalcular() {
+  if (!produtoSelecionado) return;
+  var modo = document.querySelector('input[name=modoQtd]:checked').value;
+  var volInfo = volumeNominalEmLitros(produtoSelecionado);
+  var densidade = parseFloat(document.getElementById('fDensidade').value) || 0;
+  var overfillPct = parseFloat(document.getElementById('fOverfill').value) || 0;
+  var perdaProcessoPct = parseFloat(document.getElementById('fPerdaProcesso').value) || 0;
+  var erroBox = document.getElementById('dimensionamentoErro');
+
+  if (!volInfo.ok) {
+    erroBox.style.display = 'block';
+    erroBox.textContent = '⚠️ Este produto está cadastrado com unidade de volume "' + escapeHtml(volInfo.unidade || '—') + '", mas o dimensionamento do lote só sabe calcular a partir de ml ou L. Corrija a unidade em Cadastro de Produtos antes de emitir, ou ajuste o cálculo pra esse tipo de produto.';
+    document.getElementById('rPecas').textContent = '—';
+    document.getElementById('rMassa').textContent = '—';
+    document.getElementById('rVolume').textContent = '—';
+    document.getElementById('rValidade').textContent = '—';
+    calc = null;
+    return;
+  }
+  erroBox.style.display = 'none';
+  var volumeNominalL = volInfo.litros;
+
+  if (!volumeNominalL || !densidade) {
+    document.getElementById('rPecas').textContent = '—';
+    document.getElementById('rMassa').textContent = '—';
+    document.getElementById('rVolume').textContent = '—';
+    document.getElementById('rValidade').textContent = '—';
+    calc = null;
+    return;
+  }
+
+  var pecas;
+  if (modo === 'massa') {
+    // Math.max(0, ...) nos dois ramos: o campo tem min="0" no HTML, mas
+    // isso não impede ler um valor negativo via .value em JS (achado do
+    // Auditor) -- sem essa guarda, a OP era emitida com consumo de
+    // material e qtdPlanejada negativos, sem nenhum erro visível.
+    var massaInformada = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
+    pecas = massaInformada > 0 ? massaInformada / (volumeNominalL * densidade) : 0;
+  } else {
+    pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
+  }
+  pecas = Math.round(pecas);
+
+  var volumeTeoricoFinalMlPorUn = (volumeNominalL * (1 + overfillPct / 100)) * 1000;
+  var volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
+  var massaLoteKg = volumeGranelL * densidade;
+
+  var prazoMeses = parseInt(produtoSelecionado.prazoValidadeMeses) || 0;
+  var dataValidade = null;
+  if (prazoMeses > 0) {
+    var d = new Date();
+    d.setMonth(d.getMonth() + prazoMeses);
+    dataValidade = d;
+  }
+
+  calc = {
+    pecasPrevistas: pecas,
+    massaLoteKg: Math.round(massaLoteKg * 1000) / 1000,
+    volumeGranelL: Math.round(volumeGranelL * 1000) / 1000,
+    densidadeGranelUsada: densidade,
+    overfillPctUsado: overfillPct,
+    perdaProcessoPctUsado: perdaProcessoPct,
+    validade: dataValidade ? dataValidade.toISOString() : null
+  };
+
+  document.getElementById('rPecas').textContent = pecas ? fmtNum(pecas) : '—';
+  document.getElementById('rMassa').textContent = calc.massaLoteKg ? fmtNum(calc.massaLoteKg) : '—';
+  document.getElementById('rVolume').textContent = calc.volumeGranelL ? fmtNum(calc.volumeGranelL) : '—';
+  document.getElementById('rValidade').textContent = dataValidade ? dataValidade.toLocaleDateString('pt-BR') : '—';
+
+  montarMateriaisConsumo();
+}
+
+function montarMateriaisConsumo() {
+  // Achado do Auditor: qualquer mudança nos campos do card 2 (densidade,
+  // overfill, perda, massa/peças) chama recalcular() -> montarMateriaisConsumo(),
+  // que reconstruía materiaisConsumo do ZERO sempre com o material ORIGINAL
+  // da fórmula/BOM -- apagando silenciosamente qualquer substituição já
+  // feita na tabela (card 3). Guardamos o estado anterior e, pra cada item,
+  // preservamos mpCodigo/mpNome/substituiMpCodigo se ele já tinha sido
+  // trocado -- só a quantidade é recalculada (a proporção continua sendo a
+  // do item ORIGINAL da fórmula/BOM, só o material físico muda).
+  var anterior = materiaisConsumo;
+  materiaisConsumo = {};
+  if (!calc || calc.pecasPrevistas <= 0) {
+    document.getElementById('cardMateriais').style.display = 'none';
+    document.getElementById('cardEmissao').style.display = 'none';
+    return;
+  }
+  var itensFormula = (formulaEscolhida && formulaEscolhida.itens) || {};
+  Object.keys(itensFormula).forEach(function(itemKey) {
+    var it = itensFormula[itemKey];
+    var key = 'f_' + itemKey;
+    var prev = anterior[key];
+    materiaisConsumo[key] = {
+      mpCodigo: prev ? prev.mpCodigo : it.mpCodigo,
+      mpNome: prev ? prev.mpNome : it.mpNome,
+      quantidade: Math.round((calc.massaLoteKg * (it.percentualMM || 0) / 100) * 1000) / 1000,
+      unidade: 'kg', origem: 'formula',
+      substituiMpCodigo: prev ? prev.substituiMpCodigo : null
+    };
+  });
+  var itensBom = (bomEscolhido && bomEscolhido.itens) || {};
+  Object.keys(itensBom).forEach(function(itemKey) {
+    var it = itensBom[itemKey];
+    var key = 'b_' + itemKey;
+    var prev = anterior[key];
+    // Achado do Auditor: unidade 'un' fixa ignorava que um material de
+    // embalagem também pode estar cadastrado em 'kg' (ex: filme vendido a
+    // peso) -- usa a unidade real do cadastro, com 'un' só como fallback.
+    var matCadastrado = findMaterialByCodigo(it.materialCodigo);
+    materiaisConsumo[key] = {
+      mpCodigo: prev ? prev.mpCodigo : it.materialCodigo,
+      mpNome: prev ? prev.mpNome : it.materialNome,
+      quantidade: Math.round((calc.pecasPrevistas * (it.qtdPorPeca || 0)) * 1000) / 1000,
+      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom',
+      substituiMpCodigo: prev ? prev.substituiMpCodigo : null
+    };
+  });
+
+  // Achado do Auditor: uma fórmula pode chegar a APROVADA sem nunca ter
+  // itens de BOM cadastrados (versão criada do zero, não clonada de uma
+  // anterior) -- isso passava batido, emitindo a OP sem nenhum material de
+  // embalagem rastreado e sem aviso nenhum.
+  var bomBox = document.getElementById('bomWarning');
+  if (Object.keys(itensFormula).length && !Object.keys(itensBom).length) {
+    bomBox.style.display = 'block';
+    bomBox.textContent = '⚠️ Esta versão da fórmula não tem nenhum item de embalagem (BOM) cadastrado. A OP será emitida sem material de embalagem no consumo -- confira se isso está correto antes de emitir.';
+  } else {
+    bomBox.style.display = 'none';
+  }
+
+  renderMateriaisTable();
+  document.getElementById('cardMateriais').style.display = 'block';
+  document.getElementById('cardEmissao').style.display = 'block';
+}
+function findMaterialByCodigo(codigo) {
+  return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
+}
+
+function renderMateriaisTable() {
+  var tbody = document.getElementById('materiaisBody');
+  var entries = Object.entries(materiaisConsumo);
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Nenhum item -- confira a fórmula/BOM cadastrada.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(function(entry) {
+    var key = entry[0], it = entry[1];
+    var origemBadge = it.origem === 'formula' ? '<span class="badge badge-green">Fórmula</span>' : '<span class="badge badge-orange">Embalagem</span>';
+    var subLabel = it.substituiMpCodigo ? ' <span class="field-hint">(substitui ' + escapeHtml(it.substituiMpCodigo) + ')</span>' : '';
+    return '<tr>' +
+      '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + '</td>' +
+      '<td>' + origemBadge + '</td>' +
+      '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm subst-btn" data-key="' + escapeAttr(key) + '">Substituir</button></td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('.subst-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirSubstituicao(btn.getAttribute('data-key')); });
+  });
+}
+
+function abrirSubstituicao(key) {
+  var it = materiaisConsumo[key];
+  if (!it) return;
+  var tipo = it.origem === 'formula' ? 'MP' : 'EMBALAGEM';
+  var opcoes = Object.values(allMateriais).filter(function(m) { return m.tipo === tipo; });
+  var lista = opcoes.map(function(m, i) { return (i + 1) + '. ' + m.mpCodigo + ' — ' + m.mpNome; }).join('\n');
+  var escolha = prompt('Substituir "' + it.mpCodigo + '" por (digite o código do material):\n\n' + lista);
+  if (escolha === null) return;
+  var novoMat = opcoes.find(function(m) { return norm(m.mpCodigo) === norm(escolha.trim()); });
+  if (!novoMat) { showAlert('Material não encontrado (digite o código exatamente como aparece na lista).', 'danger'); return; }
+  // mpCodigoOriginal é o material que estava na fórmula/BOM antes de qualquer substituição nesta OP
+  // (se já houve uma troca, it.substituiMpCodigo guarda o original; senão, o próprio it.mpCodigo já é o original).
+  var mpCodigoOriginal = it.substituiMpCodigo || it.mpCodigo;
+  materiaisConsumo[key] = Object.assign({}, it, {
+    mpCodigo: novoMat.mpCodigo, mpNome: novoMat.mpNome,
+    // Escolher de volta o material original desfaz a substituição (limpa o rótulo em vez de
+    // mostrar "MPGR001 (substitui MPGR001)").
+    substituiMpCodigo: novoMat.mpCodigo === mpCodigoOriginal ? null : mpCodigoOriginal
+  });
+  renderMateriaisTable();
+}
+
+/* ── Numeração de lote (AADDD/NN) -- mesmo formato já em produção nos milhares de OPs existentes ── */
+function proximoLote() {
+  var hoje = new Date();
+  var ano2 = String(hoje.getFullYear() % 100).padStart(2, '0');
+  var inicioAno = new Date(hoje.getFullYear(), 0, 1);
+  var diaDoAno = Math.floor((hoje - inicioAno) / 86400000) + 1;
+  var prefixo = ano2 + String(diaDoAno).padStart(3, '0');
+  var counterPath = 'config/contadores/lotesPorDia/' + prefixo;
+  // Reusa o mesmo helper de contador seguro contra corrida de shared/utils.js
+  // (já usado pra numeração de SKU) em vez de reimplementar a .transaction()
+  // aqui -- só o formato final (prefixo/NN, com barra) é específico deste caso.
+  return nextSequential(db, counterPath, null, 2).then(function(seq) {
+    return prefixo + '/' + seq.formatado;
+  });
+}
+
+function montarDadosOP(lote) {
+  return {
+    lote: lote, sku: produtoSelecionado.sku, produto: produtoSelecionado.descricao, cliente: produtoSelecionado.cliente || '',
+    qtdPlanejada: calc.pecasPrevistas,
+    skuPedidoKey: '', // não vinculado a pedido comercial nesta emissão direta (diferente do fluxo do Gerador de OPs/VBA)
+    linha: '', produzidoLinha: 0, produzidoRotulagem: 0, produzidoPosto: 0, produzido: 0,
+    status: 'Não Iniciado',
+    dataInicioReal: null, dataFimReal: null, dataInicioPlanejada: null, dataFimPlanejada: null,
+    mediaPorHora: 0, paradas: [], perdas: {},
+    abertaDesde: null, abertaLinha: null, abertaDesdeRot: null, abertaRotulagem: null,
+    setupInicio: null, setupFim: null, setupInicioRot: null, setupFimRot: null,
+    canceladoEm: null, canceladoPor: null, motivoCancelamento: null,
+    dataEmissao: new Date().toISOString(), emitidoPor: currentUserNome(),
+    arquivoPdf: '', arquivoXlsx: '',
+    // Campos novos do ERP unificado (Fase 3)
+    formulaVersao: formulaEscolhida ? formulaEscolhida.versao : null,
+    bomVersao: formulaEscolhida ? formulaEscolhida.versao : null,
+    massaLoteKg: calc.massaLoteKg, volumeGranelL: calc.volumeGranelL,
+    densidadeGranelUsada: calc.densidadeGranelUsada, overfillPctUsado: calc.overfillPctUsado,
+    perdaProcessoPctUsado: calc.perdaProcessoPctUsado, validade: calc.validade,
+    materiaisConsumo: materiaisConsumo
+  };
+}
+// Achado do Auditor: enquanto o Gerador de OPs (VBA/planilha) continuar
+// rodando em paralelo (fase de transição), ele numera lotes pelo próprio
+// contador interno, sem nenhuma ligação com config/contadores/lotesPorDia/*
+// usado aqui. Os dois podem perfeitamente gerar o mesmo "26230/01" no mesmo
+// dia. O antigo `db.ref('ops/'+loteKey).set(data)` sobrescrevia esse nó sem
+// checar se já existia -- se o lote já tivesse produção real apontada
+// (produzidoLinha, paradas, etc.), isso apagava tudo em silêncio. Agora a
+// gravação usa `.transaction()`: só commita se o nó ainda estiver vazio: se
+// já existir (colisão com o VBA ou com outra emissão concorrente), a
+// transaction aborta sem tocar no dado existente e tentamos o PRÓXIMO
+// número automaticamente, até um limite de tentativas.
+function reservarLoteEEmitir(tentativasRestantes) {
+  return proximoLote().then(function(lote) {
+    var loteKey = sanitizeKey(lote);
+    var data = montarDadosOP(lote);
+    return db.ref('ops/' + loteKey).transaction(function(atual) {
+      if (atual !== null) return; // já existe (provavelmente emitido por outra via) -- aborta sem sobrescrever
+      return data;
+    }).then(function(result) {
+      if (!result.committed) {
+        if (tentativasRestantes <= 0) {
+          throw new Error('Não foi possível reservar um número de lote livre (colisão repetida com OPs já existentes). Tente novamente em instantes.');
+        }
+        return reservarLoteEEmitir(tentativasRestantes - 1);
+      }
+      return {lote: lote, data: data};
+    });
+  });
+}
+
+/* ── Emissão ── */
+function emitirOP() {
+  if (!produtoSelecionado || !calc || calc.pecasPrevistas <= 0) {
+    showAlert('Preencha o dimensionamento do lote antes de emitir.', 'danger');
+    return;
+  }
+  document.getElementById('btnEmitir').disabled = true;
+  reservarLoteEEmitir(5).then(function(res) {
+    opJaEmitida = res.data;
+    document.getElementById('loteEmitido').textContent = res.lote;
+    document.getElementById('cardDimensionamento').style.display = 'none';
+    document.getElementById('cardMateriais').style.display = 'none';
+    document.getElementById('cardEmissao').style.display = 'none';
+    document.getElementById('cardSucesso').style.display = 'block';
+    showAlert('OP ' + res.lote + ' emitida com sucesso.', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao emitir OP: ' + err.message, 'danger');
+  }).finally(function() {
+    document.getElementById('btnEmitir').disabled = false;
+  });
+}
+
+/* ── Documento de impressão ── */
+function montarDocumentoImpressao() {
+  if (!opJaEmitida) return '';
+  var op = opJaEmitida;
+  var itensFormula = Object.values(op.materiaisConsumo).filter(function(i) { return i.origem === 'formula'; });
+  var itensBom = Object.values(op.materiaisConsumo).filter(function(i) { return i.origem === 'bom'; });
+  var especs = (allEspecificacoes[chaveVersao(produtoSelecionado.key, op.formulaVersao)] || {}).itens || {};
+
+  var html = '<div class="print-page">' +
+    '<div class="print-h">Ordem de Produção ' + escapeHtml(op.lote) + '</div>' +
+    '<div class="print-sub">Emitida em ' + new Date(op.dataEmissao).toLocaleString('pt-BR') + ' por ' + escapeHtml(op.emitidoPor) + '</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Produto:</b> ' + escapeHtml(op.produto) + '</div>' +
+      '<div><b>SKU:</b> ' + escapeHtml(op.sku) + '</div>' +
+      '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
+      '<div><b>Fórmula versão:</b> ' + escapeHtml(op.formulaVersao || '—') + '</div>' +
+      '<div><b>Peças previstas:</b> ' + fmtNum(op.qtdPlanejada) + '</div>' +
+      '<div><b>Massa do lote:</b> ' + fmtNum(op.massaLoteKg) + ' kg</div>' +
+      '<div><b>Volume granel:</b> ' + fmtNum(op.volumeGranelL) + ' L</div>' +
+      '<div><b>Densidade usada:</b> ' + fmtNum(op.densidadeGranelUsada) + ' g/ml</div>' +
+      '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR') : '—') + '</div>' +
+    '</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:16px">Fórmula (matéria-prima)</div>' +
+    '<table class="print-table"><thead><tr><th>Código</th><th>Material</th><th>Quantidade (kg)</th></tr></thead><tbody>' +
+    itensFormula.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + '</td></tr>'; }).join('') +
+    '</tbody></table>' +
+    '<div class="print-h" style="font-size:13px;margin-top:16px">Embalagem (BOM)</div>' +
+    '<table class="print-table"><thead><tr><th>Código</th><th>Material</th><th>Quantidade (un)</th></tr></thead><tbody>' +
+    itensBom.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + '</td></tr>'; }).join('') +
+    '</tbody></table>' +
+    (Object.keys(especs).length ? (
+      '<div class="print-h" style="font-size:13px;margin-top:16px">Especificações de Qualidade</div>' +
+      '<table class="print-table"><thead><tr><th>Ensaio</th><th>Especificação</th><th>Mín.</th><th>Máx.</th><th>Método</th></tr></thead><tbody>' +
+      Object.values(especs).map(function(e) { return '<tr><td>' + escapeHtml(e.ensaio) + '</td><td>' + escapeHtml(e.especificacaoTexto || '') + '</td><td>' + escapeHtml(e.minimo || '') + '</td><td>' + escapeHtml(e.maximo || '') + '</td><td>' + escapeHtml(e.metodo || '') + '</td></tr>'; }).join('') +
+      '</tbody></table>'
+    ) : '') +
+  '</div>';
+  return html;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('fProdutoBusca').addEventListener('input', function() { renderProdutoResultados(this.value); });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#fProdutoBusca') && !e.target.closest('#produtoResultados')) {
+      document.getElementById('produtoResultados').style.display = 'none';
+    }
+  });
+
+  document.querySelectorAll('input[name=modoQtd]').forEach(function(r) {
+    r.addEventListener('change', function() {
+      document.getElementById('grpMassa').style.display = this.value === 'massa' ? 'block' : 'none';
+      document.getElementById('grpPecas').style.display = this.value === 'pecas' ? 'block' : 'none';
+      recalcular();
+    });
+  });
+  ['fMassaTotal', 'fPecasDesejadas', 'fDensidade', 'fOverfill', 'fPerdaProcesso'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', recalcular);
+  });
+
+  document.getElementById('btnEmitir').addEventListener('click', emitirOP);
+  document.getElementById('btnImprimir').addEventListener('click', function() {
+    document.getElementById('printArea').innerHTML = montarDocumentoImpressao();
+    window.print();
+  });
+  document.getElementById('btnNovaOp').addEventListener('click', function() { location.reload(); });
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
+    dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('formulas'), function(snap) { allFormulas = snap.val() || {}; });
+    dbOnValue(db.ref('bom'), function(snap) { allBom = snap.val() || {}; });
+    dbOnValue(db.ref('especificacoes'), function(snap) { allEspecificacoes = snap.val() || {}; });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

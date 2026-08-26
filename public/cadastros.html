@@ -1,0 +1,2826 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastros</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    /* Fase 6 (unificação de cadastros): tokens/base idênticos aos que já
+       existiam, um em cada um de produtos.html/materiais.html/formulas.html/
+       clientes.html (confirmado byte-a-byte por 3 agentes Explore antes de
+       montar esta página) -- união de todos os tokens extras que qualquer
+       um dos quatro usava (--purple, tints azul/laranja/verde/vermelho/
+       cinza), nenhum valor divergia entre eles. */
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 16px;padding-top:10px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-purple{background:var(--purple);color:white}.btn-purple:hover{filter:brightness(.9)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .table-wrap{overflow:auto;max-height:calc(100vh - 340px)}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+    thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    th.th-sortable{cursor:pointer;user-select:none}
+    th.th-sortable:hover{color:var(--primary)}
+    th.th-sort-active{color:var(--primary)}
+    td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    tr:hover td{background:var(--surface-2)}
+    .sku-cell{font-family:monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+    .desc-cell{font-weight:600;max-width:450px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .alert-info{background:var(--tint-blue-bg);color:var(--primary);border:1px solid color-mix(in srgb, var(--primary) 40%, transparent)}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:680px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-close:hover{opacity:1}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],input[type=tel],input[type=email],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[readonly]{background:var(--surface-2);color:var(--muted)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
+    label.chk input{width:auto}
+    @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}}
+    /* Abas de NÍVEL PÁGINA -- nomes deliberadamente diferentes de .tab/.tab-panel
+       (usado dentro de Produtos e de Fórmulas/BOM/Especificações pros próprios
+       sub-níveis) pra nunca colidir com os querySelectorAll('.tab') de cada um. */
+    .main-tabs{display:flex;gap:4px;overflow-x:auto;max-width:96%;margin:0 auto 16px;border-bottom:2px solid var(--border)}
+    .main-tab{padding:10px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
+    .main-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .main-tab-panel{display:none}
+    .main-tab-panel.active{display:block}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .tag-area{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;min-height:32px}
+    .tag{border-radius:20px;padding:4px 8px 4px 12px;font-size:13px;display:inline-flex;align-items:center;gap:4px;line-height:1.4;background:var(--tint-blue-bg);color:var(--primary);border:1px solid color-mix(in srgb, var(--primary) 25%, transparent);cursor:pointer}
+    .tag-btn{background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;font-size:13px;opacity:.6;color:inherit}
+    .tag-btn:hover{opacity:1}
+    .tag-add{display:flex;gap:8px;flex-wrap:wrap}
+    .tag-add input{flex:1;min-width:140px}
+    /* Abas DENTRO do modal de Produtos e da aba Fórmulas/BOM/Especificações
+       (dois níveis internos separados, cada um com seu próprio container --
+       os querySelectorAll de cada um são escopados a esse container, nunca
+       a document, então nomear os dois como .tab/.tab-panel de propósito
+       não colide nem entre si nem com .main-tab/.main-tab-panel acima). */
+    .tabs{display:flex;gap:2px;margin-bottom:14px;border-bottom:2px solid var(--border);overflow-x:auto}
+    .tab{padding:7px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .recalc-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--tint-green-bg);border-radius:8px;margin-bottom:12px;font-size:13px;color:var(--tint-green-fg)}
+    .info-box-green{font-size:12px;color:var(--tint-green-fg);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)}
+    .import-icon{font-size:32px;margin-bottom:8px}
+    .progress-bar{height:8px;border-radius:4px;background:#e5e7eb;overflow:hidden;margin:10px 0}
+    .progress-fill{height:100%;border-radius:4px;background:var(--success);transition:width .3s}
+    .empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
+    .version-pill{padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;background:var(--card)}
+    .version-pill.active{border-color:var(--primary);background:color-mix(in srgb, var(--primary) 8%, var(--card))}
+    .badge-rascunho{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-aprovada{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-obsoleta{background:var(--tint-gray-bg);color:var(--muted)}
+    .tipo-fields{display:none}
+    .tipo-fields.show{display:block}
+    .soma-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:14px;font-weight:700}
+    .soma-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .soma-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+
+<div class="header">
+  <div>
+    <h1>Cadastros</h1>
+    <div class="header-sub">Materiais, Produtos, Fórmulas/BOM/Especificações, Categorias, Clientes e Fornecedores -- num lugar só.</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+</div>
+
+<div class="main-tabs" id="mainTabs">
+  <button class="main-tab active" data-maintab="materiais">Materiais</button>
+  <button class="main-tab" data-maintab="produtos">Produtos</button>
+  <button class="main-tab" data-maintab="formulas">Fórmulas / BOM / Especificações</button>
+  <button class="main-tab" data-maintab="categorias">Categorias</button>
+  <button class="main-tab" data-maintab="clientes">Clientes</button>
+  <button class="main-tab" data-maintab="fornecedores">Fornecedores</button>
+</div>
+
+<div class="main">
+  <div class="main-tab-panel active" id="maintab-materiais">
+    <div class="kt-toolbar">
+      <div class="kt-search">
+        <span class="icon">🔍</span>
+        <input type="text" id="searchInput-mat" placeholder="Buscar por código, nome ou INCI...">
+      </div>
+      <select class="kt-select" id="filterTipo">
+        <option value="">Todos os tipos</option>
+        <option value="MPGR">MP Geral</option>
+        <option value="MPES">Fragrância / Essência</option>
+        <option value="EP">Embalagem Primária</option>
+        <option value="ES">Embalagem Secundária</option>
+        <option value="ET">Embalagem Terciária</option>
+      </select>
+      <select class="kt-select" id="filterAtivo-mat">
+        <option value="">Todos</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovo-mat">+ Novo Material</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="statTotal-mat">—</div><div class="stat-lbl">Total</div></div>
+      <div class="stat"><div class="stat-val" id="statMP" style="color:var(--primary)">—</div><div class="stat-lbl">Matéria-Prima</div></div>
+      <div class="stat"><div class="stat-val" id="statEmbalagem" style="color:var(--purple)">—</div><div class="stat-lbl">Embalagem</div></div>
+      <div class="stat"><div class="stat-val" id="statControlado" style="color:var(--danger)">—</div><div class="stat-lbl">Controlados</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span id="tableCount-mat">Materiais</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead id="matThead-mat">
+            <tr>
+              <th style="min-width:100px" data-sort="mpCodigo">Código</th>
+              <th style="min-width:200px" data-sort="mpNome">Nome</th>
+              <th style="min-width:110px" data-sort="tipo">Tipo</th>
+              <th style="min-width:60px" data-sort="unidade">Un.</th>
+              <th style="min-width:90px" data-sort="fornecedoresCount">Fornec. Homolog.</th>
+              <th style="min-width:80px" data-sort="ativo">Status</th>
+              <th style="min-width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody-mat"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalBg-mat">
+      <div class="modal" style="max-width:760px">
+        <div class="modal-header">
+          <h2 id="modalTitle-mat">Novo Material</h2>
+          <button class="modal-close" id="modalClose-mat" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="section-label">Identificação</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Código</label>
+              <input type="text" id="fCodigo-mat" readonly placeholder="Gerado automaticamente ao salvar">
+              <div class="field-hint" id="codigoHint-mat">Escolha o tipo abaixo -- o código é gerado automaticamente ao salvar (não-significativo, não muda mais depois).</div>
+            </div>
+            <div class="form-group">
+              <label>Tipo *</label>
+              <select id="fTipo">
+                <option value="MPGR">MP Geral</option>
+                <option value="MPES">Fragrância / Essência</option>
+                <option value="EP">Embalagem Primária</option>
+                <option value="ES">Embalagem Secundária</option>
+                <option value="ET">Embalagem Terciária</option>
+              </select>
+              <div class="field-hint" id="tipoDescricaoHint-mat"></div>
+            </div>
+            <div class="form-group full">
+              <div class="section-note" style="margin:0">
+                <b>Embalagem Primária</b> -- toca o produto direto (frasco, tampa, válvula, batoque, lacre...).
+                <b>Secundária</b> -- agrupa/comunica, não toca o produto (rótulo, cartucho, bula, selo, celofane...) -- geralmente o que o cliente vê na prateleira.
+                <b>Terciária</b> -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).
+              </div>
+            </div>
+            <div class="form-group full">
+              <label>Nome / Descrição *</label>
+              <input type="text" id="fNome-mat" placeholder="Ex: FRASCO AIRLESS 120ML 24/410 ALTO TRANSPARENTE">
+            </div>
+            <div class="form-group">
+              <label>Marca / Modelo</label>
+              <input type="text" id="fMarcaModelo-mat" placeholder="Quando aplicável">
+            </div>
+            <div class="form-group">
+              <label>Código de barras</label>
+              <input type="text" id="fCodigoBarras-mat" placeholder="EAN do fabricante, quando houver">
+            </div>
+            <div class="form-group">
+              <label>Unidade *</label>
+              <select id="fUnidade">
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="L">L</option>
+                <option value="ml">ml</option>
+                <option value="un">un</option>
+                <option value="rolo">rolo</option>
+                <option value="m">metro</option>
+                <option value="cx">caixa</option>
+                <option value="pct">pacote</option>
+                <option value="par">par</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- MP GERAL -->
+          <div class="tipo-fields" data-tipo-for="MPGR">
+            <div class="section-label">Matéria-Prima -- Geral</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInci-mat" placeholder="Ex: Glycerin"></div>
+              <div class="form-group"><label>Função na fórmula</label><input type="text" id="fFuncaoFormula-mat" placeholder="Ex: umectante, emulsificante..."></div>
+              <div class="form-group"><label>Aparência</label><input type="text" id="fAparencia-mat" placeholder="Ex: líquido viscoso incolor"></div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCor-mat" placeholder="Ex: incolor, amarelo claro..."></div>
+              <div class="form-group"><label>Densidade de referência (g/ml)</label>
+                <input type="number" id="fDensidade" min="0" step="any" placeholder="Deixe vazio até ter valor medido de verdade">
+                <div class="field-hint">Nunca usar 1,0 como padrão. É o valor de referência do padrão homologado -- tolerância de aceite é definida pela Qualidade, não aqui.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MP ESSÊNCIA / FRAGRÂNCIA -->
+          <div class="tipo-fields" data-tipo-for="MPES">
+            <div class="section-label">Fragrância / Essência</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Nome INCI</label><input type="text" id="fInciFrag-mat" placeholder="Quando aplicável"></div>
+              <div class="form-group"><label>Casa de fragrância</label><input type="text" id="fCasaFragrancia-mat" placeholder="Ex: Givaudan, Firmenich..."></div>
+              <div class="form-group full"><label>Inspiração</label><input type="text" id="fInspiracao-mat" placeholder="Ex: inspirado em [referência de mercado]"></div>
+              <div class="form-group"><label>Custo target (USD/kg)</label><input type="number" id="fCustoTargetUsd-mat" min="0" step="any"></div>
+            </div>
+          </div>
+
+          <!-- EMBALAGEM PRIMÁRIA -->
+          <div class="tipo-fields" data-tipo-for="EP">
+            <div class="section-label">Embalagem Primária</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Formato</label><input type="text" id="fFormato-mat" placeholder="Ex: cilíndrico alto, oval achatado..."></div>
+              <div class="form-group"><label>Gargalo / rosca (GPI/SPI)</label><input type="text" id="fGargalo-mat" placeholder="Ex: 24/410"></div>
+              <div class="form-group"><label>Material</label>
+                <select id="fMaterialResina-mat">
+                  <option value="">Selecione...</option>
+                  <option value="PET">PET</option>
+                  <option value="PEAD">PEAD (polietileno alta densidade)</option>
+                  <option value="PEBD">PEBD (polietileno baixa densidade)</option>
+                  <option value="PP">PP (polipropileno)</option>
+                  <option value="PVC">PVC</option>
+                  <option value="PS">PS (poliestireno)</option>
+                  <option value="VIDRO">Vidro</option>
+                  <option value="METAL">Alumínio / Metal</option>
+                  <option value="PAPEL">Papel / Cartão</option>
+                  <option value="PAPELAO">Papelão</option>
+                  <option value="OUTRO">Outro</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCorEp-mat"></div>
+              <div class="form-group"><label>Volume nominal (ml)</label><input type="number" id="fVolumeNominal-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Volume interno total (ml)</label><input type="number" id="fVolumeInterno-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Head space</label><input type="text" id="fHeadSpace-mat" readonly placeholder="Calculado automaticamente"></div>
+              <div class="form-group"><label>Peso unitário (g)</label><input type="number" id="fPesoUnitario-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Altura (mm)</label><input type="number" id="fAltura-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Diâmetro (mm)</label><input type="number" id="fDiametro-mat" min="0" step="any"></div>
+            </div>
+          </div>
+
+          <!-- EMBALAGEM SECUNDÁRIA / TERCIÁRIA -->
+          <div class="tipo-fields" data-tipo-for="ES,ET">
+            <div class="section-label">Embalagem Secundária / Terciária</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Material</label>
+                <select id="fMaterialResinaSt-mat">
+                  <option value="">Selecione...</option>
+                  <option value="PET">PET</option>
+                  <option value="PEAD">PEAD</option>
+                  <option value="PEBD">PEBD</option>
+                  <option value="PP">PP</option>
+                  <option value="PVC">PVC</option>
+                  <option value="PS">PS</option>
+                  <option value="VIDRO">Vidro</option>
+                  <option value="METAL">Alumínio / Metal</option>
+                  <option value="PAPEL">Papel / Cartão</option>
+                  <option value="PAPELAO">Papelão</option>
+                  <option value="OUTRO">Outro</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Cor</label><input type="text" id="fCorSt-mat"></div>
+              <div class="form-group"><label>Comprimento (mm)</label><input type="number" id="fComprimentoSt-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Largura (mm)</label><input type="number" id="fLarguraSt-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Altura (mm)</label><input type="number" id="fAlturaSt-mat" min="0" step="any"></div>
+              <div class="form-group"><label>Peso unitário (g)</label><input type="number" id="fPesoUnitarioSt-mat" min="0" step="any"></div>
+            </div>
+          </div>
+
+          <div class="section-label">Observações</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Observações / especificações técnicas livres</label>
+              <textarea id="fEspecificacoes" rows="2" placeholder="Qualquer coisa relevante que não caiba nos campos acima"></textarea>
+            </div>
+          </div>
+
+          <div class="section-label">Logística</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Unidade de compra</label>
+              <select id="fUnidadeCompra-mat">
+                <option value="">Igual à unidade de uso</option>
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+                <option value="L">L</option>
+                <option value="ml">ml</option>
+                <option value="un">un</option>
+                <option value="rolo">rolo</option>
+                <option value="m">metro</option>
+                <option value="cx">caixa</option>
+                <option value="pct">pacote</option>
+                <option value="par">par</option>
+              </select>
+              <div class="field-hint">Só preencha se comprar numa unidade diferente da unidade de uso (ex: compra em kg, usa em g).</div>
+            </div>
+            <div class="form-group"><label>Fator de conversão</label><input type="number" id="fFatorConversao-mat" min="0" step="any" placeholder="1 unidade de compra = X unidades de uso"></div>
+            <div class="form-group"><label>Peso bruto da unidade de compra (kg)</label><input type="number" id="fPesoBrutoCompra-mat" min="0" step="any"></div>
+            <div class="form-group"><label>Peso líquido da unidade de compra (kg)</label><input type="number" id="fPesoLiquidoCompra-mat" min="0" step="any"></div>
+          </div>
+
+          <div class="section-label">Fornecedores homologados</div>
+          <div class="section-note">Cada material pode ter vários fornecedores homologados -- o Pedido de Compra escolhe entre eles. Cadastro de fornecedor em si fica na aba Fornecedores, aqui mesmo em Cadastros.</div>
+          <div class="table-wrap" style="margin-bottom:10px">
+            <table>
+              <thead><tr><th>Fornecedor</th><th>Nome comercial do item</th><th>Código deles</th><th>Status</th><th>Custo ref.</th><th style="width:40px"></th></tr></thead>
+              <tbody id="fornecedoresHomologadosBody-mat"><tr><td colspan="6" class="no-data">Nenhum fornecedor homologado ainda.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="form-grid" style="align-items:end">
+            <div class="form-group"><label>Fornecedor</label><select id="fhFornecedor-mat"><option value="">Selecione...</option></select></div>
+            <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fhNomeComercial-mat"></div>
+            <div class="form-group"><label>Código deles</label><input type="text" id="fhCodigoFornecedor-mat"></div>
+            <div class="form-group"><label>Status</label>
+              <select id="fhStatus-mat">
+                <option value="aguardando_homologacao">Aguardando homologação</option>
+                <option value="homologado">Homologado</option>
+                <option value="nao_homologado">Não homologado</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Custo ref.</label><input type="number" id="fhCustoRef-mat" min="0" step="any"></div>
+            <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddFornHomolog-mat" style="width:100%">+ Adicionar</button></div>
+          </div>
+
+          <div class="section-label">Status</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="chk"><input type="checkbox" id="fControlado"> Controlado (ex: álcool -- controle PF)</label>
+            </div>
+            <div class="form-group">
+              <label class="chk"><input type="checkbox" id="fAtivo-mat" checked> Ativo</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalCancelBtn-mat">Cancelar</button>
+          <button class="btn btn-primary" id="modalSaveBtn-mat">Salvar Material</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="main-tab-panel" id="maintab-produtos">
+    <div class="kt-toolbar">
+      <div class="kt-search">
+        <span class="icon">🔍</span>
+        <input type="text" id="searchInput-prod" placeholder="Buscar por SKU, descrição, cliente...">
+      </div>
+      <select class="kt-select" id="filterAtivo-prod">
+        <option value="">Todos</option>
+        <option value="Ativo">Ativos</option>
+        <option value="Inativo">Inativos</option>
+      </select>
+      <select class="kt-select" id="filterCategoria-prod"><option value="">Todas categorias</option></select>
+      <select class="kt-select" id="filterCliente-prod"><option value="">Todos clientes</option></select>
+      <button class="btn btn-primary" id="btnNovo-prod">+ Novo Produto</button>
+      <button class="btn btn-ghost" id="btnRecalc-prod" title="Recalcular Prod/hora de todos os produtos">↻ Prod/hora</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="statTotal-prod">—</div><div class="stat-lbl">Total</div></div>
+      <div class="stat"><div class="stat-val" id="statAtivos-prod" style="color:var(--success)">—</div><div class="stat-lbl">Ativos</div></div>
+      <div class="stat"><div class="stat-val" id="statInativos-prod" style="color:var(--muted)">—</div><div class="stat-lbl">Inativos</div></div>
+      <div class="stat"><div class="stat-val" id="statCategorias-prod" style="color:var(--primary)">—</div><div class="stat-lbl">Categorias</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span id="tableCount-prod">Produtos</span>
+      </div>
+      <div class="recalc-bar" style="margin:12px 16px">
+        ℹ️ Produtos novos ganham código automático (categoria-cliente-sequencial) — veja as abas Clientes e Categorias, aqui mesmo, pra manter essas listas em dia.
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="prodThead-prod">
+            <tr>
+              <th style="min-width:110px" data-sort="sku">SKU</th>
+              <th style="min-width:220px" data-sort="descricao">Descrição</th>
+              <th style="min-width:90px" data-sort="cliente">Cliente</th>
+              <th style="min-width:80px" data-sort="categoria">Categoria</th>
+              <th style="min-width:80px" data-sort="subcategoria">Subcategoria</th>
+              <th style="min-width:80px" data-sort="viscosidade">Viscosidade</th>
+              <th style="min-width:60px;text-align:right" data-sort="volume">Volume</th>
+              <th style="min-width:50px;text-align:right" data-sort="unCx">Un./Cx</th>
+              <th style="min-width:70px;text-align:right" data-sort="prodHora">Prod/h</th>
+              <th style="min-width:60px" data-sort="ativo">Status</th>
+              <th style="min-width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody-prod"><tr><td colspan="11" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalBg-prod">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modalTitle-prod">Novo Produto</h2>
+          <button class="modal-close" id="modalClose-prod" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="tabs" id="prodInnerTabs">
+            <button class="tab active" data-tab="prod-ident">Identificação</button>
+            <button class="tab" data-tab="prod-classif">Classificação</button>
+            <button class="tab" data-tab="prod-embal">Embalagem</button>
+            <button class="tab" data-tab="prod-reg">Regulatório</button>
+            <button class="tab" data-tab="prod-cq">Controle de Qualidade</button>
+            <button class="tab" data-tab="prod-lote">Parâmetros de Lote</button>
+          </div>
+
+          <div class="tab-panel active" id="tab-prod-ident">
+            <div id="autoSkuBox-prod" class="info-box-green" style="display:none;border:1px solid color-mix(in srgb, var(--tint-green-fg) 30%, transparent);margin-bottom:14px">
+              <div style="font-size:12px;font-weight:700;color:var(--tint-green-fg);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Gerar código automaticamente (produto novo)</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Categoria</label>
+                  <select id="fAutoCategoria-prod"><option value="">Selecione...</option></select>
+                </div>
+                <div class="form-group">
+                  <label>Cliente</label>
+                  <select id="fAutoCliente-prod"><option value="">Selecione...</option></select>
+                </div>
+              </div>
+              <div class="field-hint" id="skuPreviewHint-prod" style="margin-top:8px;font-size:12px;color:var(--tint-green-fg)">Escolha categoria e cliente pra gerar o código -- ou digite manualmente abaixo.</div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>SKU * <button type="button" id="btnUnlockSku-prod" class="btn btn-ghost btn-sm" style="display:none;padding:2px 8px;font-size:11px;margin-left:6px">✏ Alterar código</button></label>
+                <input type="text" id="fSku-prod" placeholder="Ex: BSPL-AFEE-0001 (ou digite manualmente)">
+                <div class="field-hint" id="skuRenameHint-prod" style="display:none">Atenção: isso troca a chave do produto no banco (renomeação atômica) -- referências antigas por esse SKU em OPs/fórmulas já emitidas não são atualizadas automaticamente.</div>
+              </div>
+              <div class="form-group">
+                <label>Cód. Cliente</label>
+                <input type="text" id="fCodCliente-prod" placeholder="Ex: MRARBS05 (código próprio do cliente pro item, se houver)">
+              </div>
+              <div class="form-group full">
+                <label>Descrição do Item *</label>
+                <input type="text" id="fDescricao-prod" placeholder="Nome completo do produto">
+              </div>
+              <div class="form-group">
+                <label>Linha do Produto</label>
+                <input type="text" id="fLinhaProduto-prod" placeholder="Ex: ARABY'S">
+              </div>
+              <div class="form-group" style="display:grid;grid-template-columns:2fr 1fr;gap:6px;align-items:end">
+                <div>
+                  <label>Volume</label>
+                  <input type="number" id="fVolume-prod" min="0" step="any" placeholder="Ex: 200">
+                </div>
+                <div>
+                  <label>U.M.</label>
+                  <select id="fUnidadeVolume-prod">
+                    <option value="ml">ml</option>
+                    <option value="L">L</option>
+                    <option value="g">g</option>
+                    <option value="kg">kg</option>
+                    <option value="un">un</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="fAtivo-prod">
+                  <option value="Ativo">Ativo</option>
+                  <option value="Inativo">Inativo</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="section-label">Códigos de Barras</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>EAN-13</label>
+                <input type="text" id="fEan13-prod" placeholder="13 dígitos" maxlength="13">
+                <div class="ean-hint" id="ean13Hint-prod"></div>
+              </div>
+              <div class="form-group">
+                <label>DUM-14</label>
+                <input type="text" id="fDum14-prod" placeholder="14 dígitos" maxlength="14">
+                <div class="ean-hint" id="dum14Hint-prod"></div>
+              </div>
+            </div>
+
+            <div class="section-label">Histórico de Produção</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Prod/hora (referência manual)</label>
+                <input type="number" id="fProdHoraRef-prod" min="0" step="1" placeholder="Ex: 1200">
+              </div>
+              <div class="form-group">
+                <label>Prod/hora (calculado dos apontamentos)</label>
+                <input type="text" id="fProdHoraCalc-prod" readonly placeholder="—" style="background:var(--surface-2)">
+              </div>
+            </div>
+            <div class="sugestao-ritmo-box" id="sugestaoRitmoBox-prod" style="display:none">
+              <div class="sugestao-ritmo-txt" id="sugestaoRitmoTxt-prod"></div>
+              <button type="button" class="btn-sugestao-usar" id="btnUsarSugestaoRitmo-prod">Usar sugestão</button>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-prod-classif">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Cliente</label>
+                <input type="text" id="fCliente-prod" list="clientesList-prod" placeholder="Ex: MISS ROSE" autocomplete="off">
+                <datalist id="clientesList-prod"></datalist>
+              </div>
+              <div class="form-group">
+                <label>Viscosidade</label>
+                <select id="fViscosidade-prod">
+                  <option value="">Selecione...</option>
+                  <option>LÍQUIDO</option>
+                  <option>LÍQUIDO ESPESSO</option>
+                  <option>VISCOSO</option>
+                  <option>CREMOSO</option>
+                  <option>DENSO</option>
+                  <option>GEL</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Categoria do Produto</label>
+                <input type="text" id="fCategoria-prod" list="categoriasList-prod" placeholder="Ex: CORPORAL" autocomplete="off">
+                <datalist id="categoriasList-prod"></datalist>
+              </div>
+              <div class="form-group">
+                <label>Subcategoria do Produto</label>
+                <input type="text" id="fSubcategoria-prod" list="subcategoriasList-prod" placeholder="Ex: BODY SPLASH" autocomplete="off">
+                <datalist id="subcategoriasList-prod"></datalist>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-prod-embal">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Un. / Caixa</label>
+                <input type="number" id="fUnCx-prod" readonly style="background:var(--surface-2);color:var(--muted)" min="1" step="1" placeholder="Ex: 12">
+              </div>
+              <div class="form-group">
+                <label>Qtd. Lote Padrão (unidades)</label>
+                <input type="number" id="fLotePadrao-prod" min="0" step="1" placeholder="Ex: 3000">
+              </div>
+            </div>
+            <div class="section-label" style="margin-top:14px">Caixas calculadas automaticamente</div>
+            <div style="font-size:13px;color:var(--muted);padding:10px;background:var(--surface-2);border-radius:8px">
+              Com <strong id="calcUnCx-prod">—</strong> un./cx e lote padrão de <strong id="calcLote-prod">—</strong> unidades
+              → <strong id="calcCaixas-prod" style="color:var(--success)">— caixas</strong> por lote.
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-prod-reg">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>MS Anvisa</label>
+                <input type="text" id="fMsAnvisa-prod" placeholder="Número do registro">
+              </div>
+              <div class="form-group">
+                <label>LP</label>
+                <input type="number" id="fLp-prod" min="0" step="0.01" placeholder="Ex: 0.45">
+              </div>
+              <div class="form-group full">
+                <label>Observações</label>
+                <textarea id="fObs-prod" rows="3" placeholder="Informações adicionais..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-prod-cq">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
+              Especificações de CQ usadas no Relatório de Produto Acabado da OP.
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Aspecto</label>
+                <input type="text" id="fCqAspecto-prod" placeholder="Ex: Líquido">
+              </div>
+              <div class="form-group">
+                <label>Cor</label>
+                <input type="text" id="fCqCor-prod" placeholder="Ex: Translúcido">
+              </div>
+              <div class="form-group">
+                <label>Odor</label>
+                <input type="text" id="fCqOdor-prod" placeholder="Ex: Característico">
+              </div>
+              <div class="form-group">
+                <label>Densidade (faixa)</label>
+                <input type="text" id="fCqDensidade-prod" placeholder="Ex: 0,85 - 0,95">
+              </div>
+              <div class="form-group">
+                <label>pH</label>
+                <input type="text" id="fCqPh-prod" placeholder="Ex: 4,5 - 6,5">
+              </div>
+              <div class="form-group">
+                <label>Teor de Álcool</label>
+                <input type="text" id="fCqTeorAlcool-prod" placeholder="Ex: 50°g/L - 60°g/L">
+              </div>
+              <div class="form-group">
+                <label>Viscosidade (especificação)</label>
+                <input type="text" id="fCqViscosidade-prod" placeholder="Ex: 5.000 - 10.000 cP">
+              </div>
+              <div class="form-group">
+                <label>Faixa de Peso</label>
+                <input type="text" id="fCqFaixaPeso-prod" placeholder="Ex: 185g - 195g">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" id="tab-prod-lote">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
+              Usados pelo cálculo de dimensionamento do lote na emissão de OP. Densidade nunca deve ser 1,0 por padrão -- deixe vazio até ter valor medido de verdade.
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Densidade do Granel (g/ml)</label>
+                <input type="number" id="fDensidadeGranel-prod" min="0" step="any" placeholder="Medida, sem default">
+              </div>
+              <div class="form-group">
+                <label>Prazo de Validade (meses)</label>
+                <input type="number" id="fPrazoValidadeMeses-prod" min="0" step="1" placeholder="Ex: 36">
+              </div>
+              <div class="form-group">
+                <label>Overfill (%)</label>
+                <input type="number" id="fOverfillPct-prod" min="0" step="0.01" placeholder="Ex: 1.5">
+              </div>
+              <div class="form-group">
+                <label>Perda de Processo (%)</label>
+                <input type="number" id="fPerdaProcessoPct-prod" min="0" step="0.01" placeholder="Ex: 2.0">
+              </div>
+              <div class="form-group">
+                <label>Perda de Linha (%)</label>
+                <input type="number" id="fPerdaLinhaPct-prod" min="0" step="0.01" placeholder="Ex: 3.0">
+                <div class="field-hint">Cadastrada por completude/relatório -- não entra na conta do lote na emissão de OP (perda de linha é tratada na produção real, via apontamento).</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalCancelBtn-prod">Cancelar</button>
+          <button class="btn btn-primary" id="modalSaveBtn-prod">Salvar Produto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="main-tab-panel" id="maintab-formulas">
+    <div class="card">
+      <div class="card-title">Produto</div>
+      <div style="max-width:520px;position:relative">
+        <input type="text" id="fProdutoBusca-form" placeholder="Buscar produto por SKU ou descrição..." autocomplete="off">
+        <div id="produtoResultados-form" style="display:none;position:absolute;z-index:20;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);max-height:260px;overflow-y:auto;width:100%;margin-top:4px"></div>
+      </div>
+      <div id="produtoSelecionado-form" style="margin-top:10px;font-size:14px;font-weight:700;display:none"></div>
+    </div>
+
+    <div id="semProduto-form" class="card">
+      <div class="empty-state">Busque e selecione um produto acima pra ver ou cadastrar fórmula, BOM e especificações.</div>
+    </div>
+
+    <div id="areaVersoes-form" class="card" style="display:none">
+      <div class="card-title">Versões</div>
+      <div id="listaVersoes-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-sm" id="btnNovaVersao-form">+ Nova Versão</button>
+    </div>
+
+    <div id="areaEdicao-form" class="card" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div class="card-title" style="margin-bottom:0">Versão <span id="versaoAtualLabel-form"></span> <span id="versaoStatusBadge-form"></span></div>
+        <div id="versaoAcoes-form" style="display:flex;gap:8px"></div>
+      </div>
+
+      <div class="tabs" id="formulasInnerTabs">
+        <button class="tab active" data-tab="form-formula">Fórmula</button>
+        <button class="tab" data-tab="form-bom">BOM (Embalagem)</button>
+        <button class="tab" data-tab="form-espec">Especificações</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-form-formula">
+        <table>
+          <thead><tr>
+            <th style="min-width:160px">Matéria-Prima</th>
+            <th style="width:80px">Fase</th>
+            <th style="width:90px">Ordem</th>
+            <th style="width:120px">% m/m</th>
+            <th style="width:40px"></th>
+          </tr></thead>
+          <tbody id="formulaBody-form"></tbody>
+        </table>
+        <button class="btn btn-ghost btn-sm" id="btnAddFormulaItem-form" style="margin-top:10px">+ Adicionar item</button>
+        <div class="soma-bar" id="somaBar-form">Soma: 0,000%</div>
+      </div>
+
+      <div class="tab-panel" id="tab-form-bom">
+        <table>
+          <thead><tr>
+            <th style="min-width:160px">Material (Embalagem)</th>
+            <th style="width:140px">Qtd. por peça</th>
+            <th style="width:40px"></th>
+          </tr></thead>
+          <tbody id="bomBody-form"></tbody>
+        </table>
+        <button class="btn btn-ghost btn-sm" id="btnAddBomItem-form" style="margin-top:10px">+ Adicionar item</button>
+      </div>
+
+      <div class="tab-panel" id="tab-form-espec">
+        <table>
+          <thead><tr>
+            <th style="min-width:140px">Ensaio</th>
+            <th style="min-width:140px">Especificação</th>
+            <th style="width:90px">Mínimo</th>
+            <th style="width:90px">Máximo</th>
+            <th style="width:110px">Método</th>
+            <th style="width:70px">Crítico</th>
+            <th style="width:40px"></th>
+          </tr></thead>
+          <tbody id="especBody-form"></tbody>
+        </table>
+        <button class="btn btn-ghost btn-sm" id="btnAddEspecItem-form" style="margin-top:10px">+ Adicionar ensaio</button>
+      </div>
+    </div>
+  </div>
+  <div class="main-tab-panel" id="maintab-categorias">
+    <div class="card" style="padding:16px">
+      <div class="section-note">Lista fechada, ancorada na taxonomia oficial da ANVISA pra produtos cosméticos -- a mesma classificação já usada no registro/notificação de cada produto. Alimenta a geração automática de código (formato CATEGORIA-CLIENTE-SEQUENCIAL, ex: PRF-AFEE-00001) na aba Produtos. Clique numa categoria pra ativar/desativar -- categorias que a Kuryos não usa hoje ficam inativas, mas continuam cadastradas, prontas pro dia que precisar.</div>
+      <div class="tag-area" id="tCategoriasProduto-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar categoria fora da lista</div>
+      <div class="field-hint" style="margin-bottom:8px">A lista acima já cobre as categorias oficiais da ANVISA -- normalmente não deveria ser preciso adicionar. Use isto só se surgir um tipo de produto genuinamente novo (ex: uma categoria nova criada pela própria ANVISA).</div>
+      <div class="tag-add">
+        <input type="text" id="iCategoriaNome-cat" placeholder="Nome (ex: BODY SPLASH)" style="flex:2">
+        <input type="text" id="iCategoriaCodigo-cat" placeholder="Código, 3 letras (ex: BSP)" style="flex:1" maxlength="3">
+        <button class="btn btn-ghost btn-sm" id="btnAddCategoriaProduto-cat">+ Adicionar</button>
+      </div>
+    </div>
+  </div>
+  <div class="main-tab-panel" id="maintab-clientes">
+    <div class="kt-toolbar">
+      <div class="kt-search">
+        <span class="icon">🔍</span>
+        <input type="text" id="searchInput-cli" placeholder="Buscar por nome ou código...">
+      </div>
+      <select class="kt-select" id="filterAtivo-cli">
+        <option value="">Todos</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovo-cli">+ Novo Cliente</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span id="tableCount-cli">Clientes</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead id="cliThead-cli">
+            <tr>
+              <th style="min-width:100px" data-sort="codigo">Código</th>
+              <th style="min-width:220px" data-sort="nome">Nome</th>
+              <th style="min-width:80px" data-sort="ativo">Status</th>
+              <th style="min-width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody-cli"><tr><td colspan="4" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalBg-cli">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modalTitle-cli">Novo Cliente</h2>
+          <button class="modal-close" id="modalClose-cli" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Nome *</label>
+            <input type="text" id="fNome-cli" placeholder="Ex: AFEER OF ARABIAN">
+          </div>
+          <div class="form-group">
+            <label>Código *</label>
+            <input type="text" id="fCodigo-cli" placeholder="Ex: AFEE" maxlength="8">
+            <div class="field-hint">Curto, sem espaço, maiúsculo -- vira parte do SKU dos produtos desse cliente. Evite mudar depois de já ter produto cadastrado.</div>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="fAtivo-cli">
+              <option value="ativo">Ativo</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalCancelBtn-cli">Cancelar</button>
+          <button class="btn btn-primary" id="modalSaveBtn-cli">Salvar Cliente</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="main-tab-panel" id="maintab-fornecedores">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="fnSearch-forn" placeholder="Buscar por razão social, nome fantasia ou CNPJ..."></div>
+      <select class="kt-select" id="fnFilterTipo-forn">
+        <option value="">Todos os tipos</option>
+        <option value="mp">Matéria-Prima</option>
+        <option value="embalagem">Embalagem</option>
+        <option value="transportadora">Transportadora</option>
+        <option value="consumo">Material de Uso e Consumo</option>
+        <option value="servicos">Serviços</option>
+        <option value="tecnologia">Tecnologia</option>
+        <option value="equipamentos">Equipamentos e Manutenção</option>
+        <option value="publico">Órgão Público / Regulatório</option>
+        <option value="outro">Outro</option>
+      </select>
+      <select class="kt-select" id="fnFilterRevisado-forn">
+        <option value="">Todos</option>
+        <option value="pendente">Ainda não revisados</option>
+        <option value="revisado">Já revisados</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovoFornecedor-forn">+ Novo Fornecedor</button>
+    </div>
+    <div class="card">
+      <div class="card-title" id="fnCount-forn">Fornecedores</div>
+      <div class="table-wrap">
+        <table>
+          <thead id="fnThead-forn"><tr>
+            <th data-sort="razaoSocial">Razão Social</th>
+            <th data-sort="nomeFantasia">Nome Fantasia</th>
+            <th data-sort="cnpj">CNPJ</th>
+            <th style="min-width:90px" data-sort="tipo">Tipo</th>
+            <th style="min-width:100px" data-sort="cidade">Local</th>
+            <th data-sort="contatoNome">Contato</th>
+            <th data-sort="condicaoPagamento">Condição Pgto</th>
+            <th data-sort="prazoEntregaDias">Prazo Entrega</th>
+            <th style="min-width:100px" data-sort="revisado">Revisado</th>
+            <th data-sort="ativo">Status</th>
+            <th style="width:50px"></th>
+          </tr></thead>
+          <tbody id="fnBody-forn"><tr><td colspan="11" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalFornecedor-forn">
+      <div class="modal">
+        <div class="modal-header"><h2 id="modalFornecedorTitle-forn">Novo Fornecedor</h2><button class="modal-close" id="modalFornecedorClose-forn" title="Fechar" aria-label="Fechar">×</button></div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group full">
+              <label>Razão Social *</label>
+              <input type="text" id="fnRazaoSocial-forn" placeholder="Ex: Distribuidora ABC Ltda">
+            </div>
+            <div class="form-group full">
+              <label>Nome Fantasia</label>
+              <input type="text" id="fnNomeFantasia-forn">
+            </div>
+            <div class="form-group">
+              <label>CNPJ</label>
+              <input type="text" id="fnCnpj-forn" placeholder="00.000.000/0000-00">
+            </div>
+            <div class="form-group">
+              <label>Tipo de fornecedor</label>
+              <select id="fnTipo-forn">
+                <option value="">Selecione...</option>
+                <option value="mp">Matéria-Prima</option>
+                <option value="embalagem">Embalagem</option>
+                <option value="transportadora">Transportadora</option>
+                <option value="consumo">Material de Uso e Consumo</option>
+                <option value="servicos">Serviços</option>
+                <option value="tecnologia">Tecnologia</option>
+                <option value="equipamentos">Equipamentos e Manutenção</option>
+                <option value="publico">Órgão Público / Regulatório</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Prazo de entrega (dias)</label>
+              <input type="number" id="fnPrazoEntrega-forn" min="0" step="1">
+            </div>
+            <div class="form-group full">
+              <label>Condição de pagamento</label>
+              <input type="text" id="fnCondicaoPagamento-forn" placeholder="Ex: 30/60/90 dias">
+            </div>
+          </div>
+          <div class="section-label">Contato</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Nome do contato</label>
+              <input type="text" id="fnContatoNome-forn">
+            </div>
+            <div class="form-group">
+              <label>Telefone</label>
+              <input type="text" id="fnContatoTelefone-forn">
+            </div>
+            <div class="form-group full">
+              <label>E-mail (usado pra cotação)</label>
+              <input type="text" id="fnContatoEmail-forn" placeholder="compras@fornecedor.com.br">
+            </div>
+            <div class="form-group full">
+              <label>Site</label>
+              <input type="text" id="fnSite-forn" placeholder="www.fornecedor.com.br">
+            </div>
+          </div>
+          <div class="section-label">Localização e Certificações</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cidade</label>
+              <input type="text" id="fnCidade-forn">
+            </div>
+            <div class="form-group">
+              <label>UF</label>
+              <input type="text" id="fnUf-forn" maxlength="2" style="text-transform:uppercase">
+            </div>
+            <div class="form-group full">
+              <label>Certificações</label>
+              <input type="text" id="fnCertificacoes-forn" placeholder="Ex: BPF/GMP, ISO 9001...">
+            </div>
+          </div>
+          <div class="section-label">Status</div>
+          <label class="chk"><input type="checkbox" id="fnAtivo-forn" checked> Ativo</label>
+          <label class="chk" style="margin-top:6px"><input type="checkbox" id="fnRevisado-forn" checked> Já revisado</label>
+          <div class="field-hint">Marca que os dados deste fornecedor (contato, condição, prazo) já foram conferidos. Fornecedores recém-importados vêm desmarcados.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalFornecedorCancel-forn">Cancelar</button>
+          <button class="btn btn-primary" id="modalFornecedorSave-forn">Salvar Fornecedor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+// ── Utilitários compartilhados por TODAS as sub-abas (Fase 6) ──────────
+// Únicos de propósito -- produtos.html/materiais.html/formulas.html/
+// clientes.html tinham cada um sua própria cópia idêntica destas 3
+// funções (confirmado pelos agentes Explore); aqui viram uma só, e cada
+// seção portada teve sua própria cópia removida ao entrar (fica só o
+// `editingKey`/`renderTable`/`openModal`/etc. de cada seção, presos no
+// IIFE dela -- ver comentário na seção de cada aba).
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+try {
+  db.ref('.info/connected').on('value', function(snap) {
+    setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+  });
+} catch (err) {
+  setStatus(false, 'Erro');
+  console.error(err);
+}
+
+// ── Abas de nível página + roteamento por ?tab= ────────────────────────
+var MAINTAB_ALIASES = { produtos: 'produtos', materiais: 'materiais', formulas: 'formulas', categorias: 'categorias', clientes: 'clientes', fornecedores: 'fornecedores' };
+function activateMainTab(name, pushUrl) {
+  if (!MAINTAB_ALIASES[name]) return;
+  document.querySelectorAll('.main-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-maintab') === name); });
+  document.querySelectorAll('.main-tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'maintab-' + name); });
+  if (pushUrl) {
+    var url = new URL(location.href);
+    url.searchParams.set('tab', name);
+    history.replaceState(null, '', url);
+  }
+}
+document.getElementById('mainTabs').addEventListener('click', function(e) {
+  var btn = e.target.closest('.main-tab');
+  if (!btn) return;
+  activateMainTab(btn.getAttribute('data-maintab'), true);
+});
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(location.search);
+  var tab = params.get('tab');
+  if (tab && MAINTAB_ALIASES[tab]) activateMainTab(tab, false);
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: MATERIAIS (portado de materiais.html -- Fase 6.1)
+// IIFE de propósito: renderTable/openModal/closeModal/saveModal/
+// editingKey continuam com o MESMO nome que tinham no arquivo original
+// (nenhuma função foi renomeada), só que agora presos a este escopo --
+// não vazam pro global, então não colidem com a versão de mesmo nome de
+// nenhuma outra aba. firebaseConfig/db/norm/showAlert/setStatus/
+// db.ref('.info/connected') do arquivo original foram removidos daqui --
+// já existem uma vez só, no nível da página (acima).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allMateriais = {};
+  var allFornecedores = {};
+  var editingKey = null;
+  var fornecedoresHomologadosStaged = {}; // fornecedorKey -> {nomeComercial, codigoFornecedor, statusHomologacao, custoReferencia} -- staged em memória até salvar
+  var matSortable = makeSortableTable(document.getElementById('matThead-mat'), 'mpCodigo', 'asc');
+
+  var TIPO_LABELS = { MPGR: 'MP Geral', MPES: 'Fragrância/Essência', EP: 'Embalagem Primária', ES: 'Embalagem Secundária', ET: 'Embalagem Terciária' };
+  var TIPO_BADGE_CLASS = { MPGR: 'badge-blue', MPES: 'badge-orange', EP: 'badge-purple', ES: 'badge-purple', ET: 'badge-purple' };
+  var STATUS_HOMOLOG_LABELS = { homologado: 'Homologado', nao_homologado: 'Não homologado', aguardando_homologacao: 'Aguardando' };
+  var STATUS_HOMOLOG_BADGE = { homologado: 'badge-green', nao_homologado: 'badge-red', aguardando_homologacao: 'badge-orange' };
+  var TIPO_DESCRICOES = {
+    MPGR: 'Matéria-prima geral -- insumo da fórmula que não é fragrância/essência.',
+    MPES: 'Fragrância ou essência -- insumo aromático, com fornecimento e regras próprias (casa de fragrância, IFRA).',
+    EP: 'Embalagem Primária -- toca o produto diretamente (frasco, tampa, válvula, batoque, lacre...).',
+    ES: 'Embalagem Secundária -- agrupa/comunica, não toca o produto (rótulo, cartucho, bula, selo, celofane...). Geralmente é o que o cliente final vê na prateleira.',
+    ET: 'Embalagem Terciária -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).'
+  };
+
+  function refreshFhFornecedorOptions() {
+    var sel = document.getElementById('fhFornecedor-mat');
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">Selecione...</option>';
+    Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
+      .forEach(function(entry) {
+        var o = document.createElement('option');
+        o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
+        sel.appendChild(o);
+      });
+    if (cur) sel.value = cur;
+  }
+
+  // Só entram debaixo do mesmo tipo campos que fazem sentido pra aquele
+  // material -- ver data-tipo-for (aceita lista separada por vírgula, ex:
+  // "ES,ET" pro bloco compartilhado de secundária/terciária).
+  function updateTipoFieldsVisibility() {
+    var tipo = document.getElementById('fTipo').value;
+    document.querySelectorAll('.tipo-fields').forEach(function(el) {
+      var fors = el.getAttribute('data-tipo-for').split(',');
+      el.classList.toggle('show', fors.indexOf(tipo) !== -1);
+    });
+    document.getElementById('tipoDescricaoHint-mat').textContent = TIPO_DESCRICOES[tipo] || '';
+  }
+
+  function updateHeadSpace() {
+    var nominal = parseFloat(document.getElementById('fVolumeNominal-mat').value);
+    var interno = parseFloat(document.getElementById('fVolumeInterno-mat').value);
+    var out = document.getElementById('fHeadSpace-mat');
+    if (!nominal || !interno || interno <= 0) { out.value = ''; return; }
+    var pct = ((interno - nominal) / interno) * 100;
+    out.value = fmtNum(Math.round(pct * 10) / 10) + '%';
+  }
+
+  /* ── Fornecedores homologados (sub-lista dentro do modal) ── */
+  function renderFornecedoresHomologados() {
+    var tbody = document.getElementById('fornecedoresHomologadosBody-mat');
+    var entries = Object.entries(fornecedoresHomologadosStaged);
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum fornecedor homologado ainda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(function(entry) {
+      var fKey = entry[0], fh = entry[1];
+      var fornNome = (allFornecedores[fKey] || {}).nomeFantasia || (allFornecedores[fKey] || {}).razaoSocial || fKey;
+      var statusBadge = '<span class="badge ' + (STATUS_HOMOLOG_BADGE[fh.statusHomologacao] || 'badge-gray') + '">' + escapeHtml(STATUS_HOMOLOG_LABELS[fh.statusHomologacao] || fh.statusHomologacao) + '</span>';
+      return '<tr>' +
+        '<td>' + escapeHtml(fornNome) + '</td>' +
+        '<td>' + escapeHtml(fh.nomeComercial || '—') + '</td>' +
+        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(fh.codigoFornecedor || '—') + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + (fh.custoReferencia != null ? fmtNum(fh.custoReferencia) : '—') + '</td>' +
+        '<td><button class="btn btn-danger-ghost btn-sm fh-remove" data-key="' + escapeAttr(fKey) + '" title="Remover" aria-label="Remover">×</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.fh-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        delete fornecedoresHomologadosStaged[btn.getAttribute('data-key')];
+        renderFornecedoresHomologados();
+      });
+    });
+  }
+  function addFornecedorHomologado() {
+    var fKey = document.getElementById('fhFornecedor-mat').value;
+    if (!fKey) { showAlert('Selecione um fornecedor.', 'danger'); return; }
+    var custoVal = document.getElementById('fhCustoRef-mat').value;
+    fornecedoresHomologadosStaged[fKey] = {
+      nomeComercial: document.getElementById('fhNomeComercial-mat').value.trim(),
+      codigoFornecedor: document.getElementById('fhCodigoFornecedor-mat').value.trim(),
+      statusHomologacao: document.getElementById('fhStatus-mat').value,
+      custoReferencia: custoVal !== '' ? parseFloat(custoVal) : null
+    };
+    document.getElementById('fhNomeComercial-mat').value = '';
+    document.getElementById('fhCodigoFornecedor-mat').value = '';
+    document.getElementById('fhCustoRef-mat').value = '';
+    document.getElementById('fhStatus-mat').value = 'aguardando_homologacao';
+    renderFornecedoresHomologados();
+  }
+
+  function renderTable() {
+    var search = norm(document.getElementById('searchInput-mat').value);
+    var filtTipo = document.getElementById('filterTipo').value;
+    var filtAtivo = document.getElementById('filterAtivo-mat').value;
+
+    var rows = Object.entries(allMateriais).filter(function(entry) {
+      var m = entry[1];
+      var ativo = m.ativo === false ? 'inativo' : 'ativo';
+      if (filtTipo && m.tipo !== filtTipo) return false;
+      if (filtAtivo && ativo !== filtAtivo) return false;
+      if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome) + ' ' + norm(m.inci)).indexOf(search) === -1) return false;
+      return true;
+    });
+    rows = matSortable.applySort(rows, function(entry, field) {
+      if (field === 'fornecedoresCount') return Object.keys(entry[1].fornecedores || {}).length;
+      return entry[1][field];
+    });
+
+    var total = Object.keys(allMateriais).length;
+    var mp = Object.values(allMateriais).filter(function(m) { return m.tipo === 'MPGR' || m.tipo === 'MPES'; }).length;
+    var emb = Object.values(allMateriais).filter(function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; }).length;
+    var ctrl = Object.values(allMateriais).filter(function(m) { return m.controlado; }).length;
+    document.getElementById('statTotal-mat').textContent = fmtNum(total);
+    document.getElementById('statMP').textContent = fmtNum(mp);
+    document.getElementById('statEmbalagem').textContent = fmtNum(emb);
+    document.getElementById('statControlado').textContent = fmtNum(ctrl);
+    document.getElementById('tableCount-mat').textContent = 'Materiais (' + rows.length + ' exibidos)';
+
+    var tbody = document.getElementById('tableBody-mat');
+    if (!rows.length) {
+      var semNenhumCadastrado = !total;
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + (semNenhumCadastrado
+        ? 'Nenhum material cadastrado ainda. Clique em "+ Novo Material" pra começar.'
+        : 'Nenhum material encontrado com esse filtro/busca.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], m = entry[1];
+      var ativo = m.ativo !== false;
+      var tipoLabel = TIPO_LABELS[m.tipo] || m.tipo || '—';
+      var tipoBadge = '<span class="badge ' + (TIPO_BADGE_CLASS[m.tipo] || 'badge-gray') + '">' + escapeHtml(tipoLabel) + '</span>';
+      var qtdHomolog = Object.keys(m.fornecedores || {}).length;
+      return '<tr>' +
+        '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
+        '<td>' + escapeHtml(m.mpNome || '—') + '</td>' +
+        '<td>' + tipoBadge + '</td>' +
+        '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
+        '<td style="text-align:center">' + (qtdHomolog || '—') + '</td>' +
+        '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm btn-edit-mat" data-key="' + key + '" title="Editar material" aria-label="Editar material">✏</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.btn-edit-mat').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+    });
+  }
+
+  function openModal(key) {
+    editingKey = key || null;
+    var m = key ? (allMateriais[key] || {}) : {};
+    fornecedoresHomologadosStaged = key ? JSON.parse(JSON.stringify(m.fornecedores || {})) : {};
+
+    document.getElementById('modalTitle-mat').textContent = key ? 'Editar Material' : 'Novo Material';
+    document.getElementById('fCodigo-mat').value = m.mpCodigo || '';
+    document.getElementById('codigoHint-mat').style.display = key ? 'none' : 'block';
+    document.getElementById('fTipo').value = m.tipo || 'MPGR';
+    document.getElementById('fTipo').disabled = !!key; // tipo decide o prefixo do código -- não muda depois de gerado
+    document.getElementById('fNome-mat').value = m.mpNome || '';
+    document.getElementById('fMarcaModelo-mat').value = m.marcaModelo || '';
+    document.getElementById('fCodigoBarras-mat').value = m.codigoBarras || '';
+    document.getElementById('fUnidade').value = m.unidade || 'kg';
+
+    document.getElementById('fInci-mat').value = m.inci || '';
+    document.getElementById('fFuncaoFormula-mat').value = m.funcaoFormula || '';
+    document.getElementById('fAparencia-mat').value = m.aparencia || '';
+    document.getElementById('fCor-mat').value = m.cor || '';
+    document.getElementById('fDensidade').value = m.densidade != null ? m.densidade : '';
+
+    document.getElementById('fInciFrag-mat').value = m.inci || '';
+    document.getElementById('fCasaFragrancia-mat').value = m.casaFragrancia || '';
+    document.getElementById('fInspiracao-mat').value = m.inspiracao || '';
+    document.getElementById('fCustoTargetUsd-mat').value = m.custoTargetUsd != null ? m.custoTargetUsd : '';
+
+    document.getElementById('fFormato-mat').value = m.formato || '';
+    document.getElementById('fGargalo-mat').value = m.gargaloRosca || '';
+    document.getElementById('fMaterialResina-mat').value = m.materialResina || '';
+    document.getElementById('fCorEp-mat').value = m.cor || '';
+    document.getElementById('fVolumeNominal-mat').value = m.volumeNominal != null ? m.volumeNominal : '';
+    document.getElementById('fVolumeInterno-mat').value = m.volumeInternoTotal != null ? m.volumeInternoTotal : '';
+    document.getElementById('fPesoUnitario-mat').value = m.pesoUnitario != null ? m.pesoUnitario : '';
+    document.getElementById('fAltura-mat').value = m.alturaMm != null ? m.alturaMm : '';
+    document.getElementById('fDiametro-mat').value = m.diametroMm != null ? m.diametroMm : '';
+    updateHeadSpace();
+
+    document.getElementById('fMaterialResinaSt-mat').value = m.materialResina || '';
+    document.getElementById('fCorSt-mat').value = m.cor || '';
+    document.getElementById('fComprimentoSt-mat').value = m.comprimentoMm != null ? m.comprimentoMm : '';
+    document.getElementById('fLarguraSt-mat').value = m.larguraMm != null ? m.larguraMm : '';
+    document.getElementById('fAlturaSt-mat').value = m.alturaMm != null ? m.alturaMm : '';
+    document.getElementById('fPesoUnitarioSt-mat').value = m.pesoUnitario != null ? m.pesoUnitario : '';
+
+    document.getElementById('fEspecificacoes').value = m.especificacoesTecnicas || '';
+
+    document.getElementById('fUnidadeCompra-mat').value = m.unidadeCompra || '';
+    document.getElementById('fFatorConversao-mat').value = m.fatorConversao != null ? m.fatorConversao : '';
+    document.getElementById('fPesoBrutoCompra-mat').value = m.pesoBrutoCompra != null ? m.pesoBrutoCompra : '';
+    document.getElementById('fPesoLiquidoCompra-mat').value = m.pesoLiquidoCompra != null ? m.pesoLiquidoCompra : '';
+
+    refreshFhFornecedorOptions();
+    document.getElementById('fhNomeComercial-mat').value = '';
+    document.getElementById('fhCodigoFornecedor-mat').value = '';
+    document.getElementById('fhStatus-mat').value = 'aguardando_homologacao';
+    document.getElementById('fhCustoRef-mat').value = '';
+    renderFornecedoresHomologados();
+
+    document.getElementById('fControlado').checked = !!m.controlado;
+    document.getElementById('fAtivo-mat').checked = m.ativo !== false;
+
+    updateTipoFieldsVisibility();
+    document.getElementById('modalBg-mat').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('modalBg-mat').classList.remove('open');
+    document.getElementById('fTipo').disabled = false;
+    editingKey = null;
+  }
+
+  function coletarDadosPorTipo(tipo) {
+    var data = {};
+    if (tipo === 'MPGR') {
+      data.inci = document.getElementById('fInci-mat').value.trim();
+      data.funcaoFormula = document.getElementById('fFuncaoFormula-mat').value.trim();
+      data.aparencia = document.getElementById('fAparencia-mat').value.trim();
+      data.cor = document.getElementById('fCor-mat').value.trim();
+      var densVal = document.getElementById('fDensidade').value;
+      data.densidade = densVal !== '' ? parseFloat(densVal) : null;
+    } else if (tipo === 'MPES') {
+      data.inci = document.getElementById('fInciFrag-mat').value.trim();
+      data.casaFragrancia = document.getElementById('fCasaFragrancia-mat').value.trim();
+      data.inspiracao = document.getElementById('fInspiracao-mat').value.trim();
+      var custoVal = document.getElementById('fCustoTargetUsd-mat').value;
+      data.custoTargetUsd = custoVal !== '' ? parseFloat(custoVal) : null;
+    } else if (tipo === 'EP') {
+      data.formato = document.getElementById('fFormato-mat').value.trim();
+      data.gargaloRosca = document.getElementById('fGargalo-mat').value.trim();
+      data.materialResina = document.getElementById('fMaterialResina-mat').value;
+      data.cor = document.getElementById('fCorEp-mat').value.trim();
+      var vn = document.getElementById('fVolumeNominal-mat').value;
+      var vi = document.getElementById('fVolumeInterno-mat').value;
+      data.volumeNominal = vn !== '' ? parseFloat(vn) : null;
+      data.volumeInternoTotal = vi !== '' ? parseFloat(vi) : null;
+      var pu = document.getElementById('fPesoUnitario-mat').value;
+      data.pesoUnitario = pu !== '' ? parseFloat(pu) : null;
+      var alt = document.getElementById('fAltura-mat').value;
+      var diam = document.getElementById('fDiametro-mat').value;
+      data.alturaMm = alt !== '' ? parseFloat(alt) : null;
+      data.diametroMm = diam !== '' ? parseFloat(diam) : null;
+    } else if (tipo === 'ES' || tipo === 'ET') {
+      data.materialResina = document.getElementById('fMaterialResinaSt-mat').value;
+      data.cor = document.getElementById('fCorSt-mat').value.trim();
+      var comp = document.getElementById('fComprimentoSt-mat').value;
+      var larg = document.getElementById('fLarguraSt-mat').value;
+      var altSt = document.getElementById('fAlturaSt-mat').value;
+      var pesoSt = document.getElementById('fPesoUnitarioSt-mat').value;
+      data.comprimentoMm = comp !== '' ? parseFloat(comp) : null;
+      data.larguraMm = larg !== '' ? parseFloat(larg) : null;
+      data.alturaMm = altSt !== '' ? parseFloat(altSt) : null;
+      data.pesoUnitario = pesoSt !== '' ? parseFloat(pesoSt) : null;
+    }
+    return data;
+  }
+
+  function saveModal() {
+    var nome = document.getElementById('fNome-mat').value.trim();
+    if (!nome) { showAlert('Nome / descrição é obrigatório.', 'danger'); return; }
+    var tipo = document.getElementById('fTipo').value;
+
+    var unidadeCompraVal = document.getElementById('fUnidadeCompra-mat').value;
+    var fatorConvVal = document.getElementById('fFatorConversao-mat').value;
+    var pesoBrutoVal = document.getElementById('fPesoBrutoCompra-mat').value;
+    var pesoLiquidoVal = document.getElementById('fPesoLiquidoCompra-mat').value;
+
+    var data = Object.assign({
+      mpNome: nome,
+      tipo: tipo,
+      unidade: document.getElementById('fUnidade').value,
+      marcaModelo: document.getElementById('fMarcaModelo-mat').value.trim(),
+      codigoBarras: document.getElementById('fCodigoBarras-mat').value.trim(),
+      especificacoesTecnicas: document.getElementById('fEspecificacoes').value.trim(),
+      unidadeCompra: unidadeCompraVal || null,
+      fatorConversao: fatorConvVal !== '' ? parseFloat(fatorConvVal) : null,
+      pesoBrutoCompra: pesoBrutoVal !== '' ? parseFloat(pesoBrutoVal) : null,
+      pesoLiquidoCompra: pesoLiquidoVal !== '' ? parseFloat(pesoLiquidoVal) : null,
+      fornecedores: fornecedoresHomologadosStaged,
+      controlado: document.getElementById('fControlado').checked,
+      ativo: document.getElementById('fAtivo-mat').checked
+    }, coletarDadosPorTipo(tipo));
+
+    document.getElementById('modalSaveBtn-mat').disabled = true;
+
+    if (editingKey) {
+      data.mpCodigo = allMateriais[editingKey] ? allMateriais[editingKey].mpCodigo : document.getElementById('fCodigo-mat').value;
+      db.ref('materiais/' + editingKey).set(data)
+        .then(function() { showAlert('Material salvo com sucesso!', 'success'); closeModal(); })
+        .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+        .finally(function() { document.getElementById('modalSaveBtn-mat').disabled = false; });
+      return;
+    }
+
+    // Código não-significativo: {TIPO}-00001, reservado atomicamente por tipo
+    // (mesmo mecanismo de config/contadores já usado pro SKU de produto).
+    // Nunca reaproveita chave legada -- materiais importados do Gerador de
+    // OPs continuam com o código deles, intocados.
+    nextSequential(db, 'config/contadores/materiais/' + tipo, tipo, 5).then(function(r) {
+      var key = sanitizeKey(r.formatado);
+      data.mpCodigo = r.formatado;
+      return db.ref('materiais/' + key).set(data);
+    }).then(function() {
+      showAlert('Material salvo com sucesso!', 'success');
+      closeModal();
+    }).catch(function(err) {
+      showAlert('Erro: ' + err.message, 'danger');
+    }).finally(function() {
+      document.getElementById('modalSaveBtn-mat').disabled = false;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnNovo-mat').addEventListener('click', function() { openModal(null); });
+    document.getElementById('modalClose-mat').addEventListener('click', closeModal);
+    document.getElementById('modalCancelBtn-mat').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn-mat').addEventListener('click', saveModal);
+    document.getElementById('modalBg-mat').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    document.getElementById('fTipo').addEventListener('change', updateTipoFieldsVisibility);
+    document.getElementById('fVolumeNominal-mat').addEventListener('input', updateHeadSpace);
+    document.getElementById('fVolumeInterno-mat').addEventListener('input', updateHeadSpace);
+    document.getElementById('btnAddFornHomolog-mat').addEventListener('click', addFornecedorHomologado);
+
+    var _t = null;
+    document.getElementById('searchInput-mat').addEventListener('input', function() {
+      clearTimeout(_t); _t = setTimeout(renderTable, 200);
+    });
+    document.getElementById('filterTipo').addEventListener('change', renderTable);
+    document.getElementById('filterAtivo-mat').addEventListener('change', renderTable);
+    matSortable.wireHeaders(renderTable);
+
+    dbOnValue(db.ref('materiais'), function(snap) {
+      allMateriais = snap.val() || {};
+      renderTable();
+    });
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedores = snap.val() || {};
+      refreshFhFornecedorOptions();
+      renderTable();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CLIENTES (portado de clientes.html -- Fase 6.2)
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allClientes = {};
+  var editingKey = null;
+  var cliSortable = makeSortableTable(document.getElementById('cliThead-cli'), 'nome', 'asc');
+
+  function renderTable() {
+    var search = norm(document.getElementById('searchInput-cli').value);
+    var filtAtivo = document.getElementById('filterAtivo-cli').value;
+
+    var rows = Object.entries(allClientes).filter(function(entry) {
+      var c = entry[1];
+      var ativo = c.ativo === false ? 'inativo' : 'ativo';
+      if (filtAtivo && ativo !== filtAtivo) return false;
+      if (search && (norm(c.nome) + ' ' + norm(c.codigo)).indexOf(search) === -1) return false;
+      return true;
+    });
+    rows = cliSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+
+    document.getElementById('tableCount-cli').textContent = 'Clientes (' + rows.length + ' exibidos)';
+    var tbody = document.getElementById('tableBody-cli');
+    if (!rows.length) {
+      var semNenhumCadastrado = !Object.keys(allClientes).length;
+      tbody.innerHTML = '<tr><td colspan="4" class="no-data">' + (semNenhumCadastrado
+        ? 'Nenhum cliente cadastrado ainda. Clique em "+ Novo Cliente" pra começar.'
+        : 'Nenhum cliente encontrado com esse filtro/busca.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], c = entry[1];
+      var ativo = c.ativo !== false;
+      return '<tr>' +
+        '<td class="code-cell">' + escapeHtml(c.codigo || '—') + '</td>' +
+        '<td>' + escapeHtml(c.nome || '—') + '</td>' +
+        '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm btn-edit-cli" data-key="' + key + '" title="Editar cliente" aria-label="Editar cliente">✏</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.btn-edit-cli').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+    });
+  }
+
+  function openModal(key) {
+    editingKey = key || null;
+    var c = key ? (allClientes[key] || {}) : {};
+    document.getElementById('modalTitle-cli').textContent = key ? 'Editar Cliente' : 'Novo Cliente';
+    document.getElementById('fNome-cli').value = c.nome || '';
+    document.getElementById('fCodigo-cli').value = c.codigo || '';
+    document.getElementById('fAtivo-cli').value = c.ativo === false ? 'inativo' : 'ativo';
+    document.getElementById('modalBg-cli').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('modalBg-cli').classList.remove('open');
+    editingKey = null;
+  }
+  function saveModal() {
+    var nome = document.getElementById('fNome-cli').value.trim();
+    var codigo = document.getElementById('fCodigo-cli').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!nome || !codigo) { showAlert('Nome e código são obrigatórios (código só letras/números/hífen/underline).', 'danger'); return; }
+
+    var key = editingKey || sanitizeKey(codigo);
+    var duplicado = Object.entries(allClientes).some(function(entry) {
+      return entry[0] !== editingKey && entry[1].codigo === codigo;
+    });
+    if (duplicado) { showAlert('Já existe um cliente com esse código.', 'danger'); return; }
+
+    var data = { nome: nome, codigo: codigo, ativo: document.getElementById('fAtivo-cli').value === 'ativo' };
+    document.getElementById('modalSaveBtn-cli').disabled = true;
+
+    var promise;
+    if (editingKey && editingKey !== key) {
+      var updates = {};
+      updates['clientes/' + key] = data;
+      updates['clientes/' + editingKey] = null;
+      promise = db.ref().update(updates);
+    } else {
+      promise = db.ref('clientes/' + key).update(data);
+    }
+    promise
+      .then(function() { showAlert('Cliente salvo com sucesso!', 'success'); closeModal(); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalSaveBtn-cli').disabled = false; });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnNovo-cli').addEventListener('click', function() { openModal(null); });
+    document.getElementById('modalClose-cli').addEventListener('click', closeModal);
+    document.getElementById('modalCancelBtn-cli').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn-cli').addEventListener('click', saveModal);
+    document.getElementById('modalBg-cli').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    var _t = null;
+    document.getElementById('searchInput-cli').addEventListener('input', function() {
+      clearTimeout(_t); _t = setTimeout(renderTable, 200);
+    });
+    document.getElementById('filterAtivo-cli').addEventListener('change', renderTable);
+    cliSortable.wireHeaders(renderTable);
+
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientes = snap.val() || {};
+      renderTable();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: FORNECEDORES (extraído de compras.html -- Fase 6.3). compras.html
+// mantém seu próprio listener em db.ref('fornecedores') (só leitura, pros
+// selects e pra denormalizar nome/e-mail) -- aqui é o único lugar que
+// ainda faz CRUD desse cadastro.
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allFornecedores = {};
+  var editingKey = null;
+  var fnSortable = makeSortableTable(document.getElementById('fnThead-forn'), 'razaoSocial', 'asc');
+
+  var TIPO_FORNECEDOR_LABELS = { mp: 'Matéria-Prima', embalagem: 'Embalagem', transportadora: 'Transportadora', consumo: 'Material de Uso e Consumo', servicos: 'Serviços', tecnologia: 'Tecnologia', equipamentos: 'Equipamentos e Manutenção', publico: 'Órgão Público / Regulatório', outro: 'Outro' };
+
+  function renderFornecedores() {
+    var search = norm(document.getElementById('fnSearch-forn').value);
+    var filtRevisado = document.getElementById('fnFilterRevisado-forn').value;
+    var filtTipo = document.getElementById('fnFilterTipo-forn').value;
+    var rows = Object.entries(allFornecedores).filter(function(entry) {
+      var f = entry[1];
+      var revisado = f.revisado !== false;
+      if (filtRevisado === 'revisado' && !revisado) return false;
+      if (filtRevisado === 'pendente' && revisado) return false;
+      if (filtTipo && f.tipo !== filtTipo) return false;
+      if (search && (norm(f.razaoSocial) + ' ' + norm(f.nomeFantasia) + ' ' + norm(f.cnpj)).indexOf(search) === -1) return false;
+      return true;
+    });
+    rows = fnSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+
+    var totalRevisados = Object.values(allFornecedores).filter(function(f) { return f.revisado !== false; }).length;
+    document.getElementById('fnCount-forn').textContent = 'Fornecedores (' + rows.length + ' exibidos) — ' + totalRevisados + ' de ' + Object.keys(allFornecedores).length + ' revisados';
+
+    var tbody = document.getElementById('fnBody-forn');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="no-data">' + (Object.keys(allFornecedores).length
+        ? 'Nenhum fornecedor encontrado com esse filtro/busca.'
+        : 'Nenhum fornecedor cadastrado ainda. Clique em "+ Novo Fornecedor" pra começar.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], f = entry[1];
+      var ativo = f.ativo !== false;
+      var revisado = f.revisado !== false;
+      var contato = [f.contatoNome, f.contatoEmail].filter(Boolean).join(' · ');
+      var tipoLabel = f.tipo ? (TIPO_FORNECEDOR_LABELS[f.tipo] || f.tipo) : '—';
+      var local = [f.cidade, f.uf].filter(Boolean).join('/');
+      var revisadoBadge = revisado
+        ? '<span class="badge badge-green fn-toggle-revisado" data-key="' + escapeAttr(key) + '" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
+        : '<span class="badge badge-orange fn-toggle-revisado" data-key="' + escapeAttr(key) + '" style="cursor:pointer" title="Clique pra marcar como revisado">Pendente</span>';
+      return '<tr>' +
+        '<td>' + escapeHtml(f.razaoSocial || '—') + '</td>' +
+        '<td>' + escapeHtml(f.nomeFantasia || '—') + '</td>' +
+        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(f.cnpj || '—') + '</td>' +
+        '<td style="font-size:12px">' + escapeHtml(tipoLabel) + '</td>' +
+        '<td style="font-size:12px">' + escapeHtml(local || '—') + '</td>' +
+        '<td style="font-size:12px">' + escapeHtml(contato || '—') + '</td>' +
+        '<td style="font-size:12px">' + escapeHtml(f.condicaoPagamento || '—') + '</td>' +
+        '<td>' + (f.prazoEntregaDias != null ? fmtNum(f.prazoEntregaDias) + ' dias' : '—') + '</td>' +
+        '<td>' + revisadoBadge + '</td>' +
+        '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm fn-edit-forn" data-key="' + escapeAttr(key) + '" title="Editar fornecedor" aria-label="Editar fornecedor">✏</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.fn-edit-forn').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModalFornecedor(btn.getAttribute('data-key')); });
+    });
+    document.querySelectorAll('.fn-toggle-revisado').forEach(function(badge) {
+      badge.addEventListener('click', function() {
+        var key = badge.getAttribute('data-key');
+        var atual = (allFornecedores[key] || {}).revisado !== false;
+        db.ref('fornecedores/' + key + '/revisado').set(!atual)
+          .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+      });
+    });
+  }
+  function openModalFornecedor(key) {
+    editingKey = key || null;
+    var f = key ? (allFornecedores[key] || {}) : {};
+    document.getElementById('modalFornecedorTitle-forn').textContent = key ? 'Editar Fornecedor' : 'Novo Fornecedor';
+    document.getElementById('fnRazaoSocial-forn').value = f.razaoSocial || '';
+    document.getElementById('fnNomeFantasia-forn').value = f.nomeFantasia || '';
+    document.getElementById('fnCnpj-forn').value = f.cnpj || '';
+    document.getElementById('fnTipo-forn').value = f.tipo || '';
+    document.getElementById('fnPrazoEntrega-forn').value = f.prazoEntregaDias != null ? f.prazoEntregaDias : '';
+    document.getElementById('fnCondicaoPagamento-forn').value = f.condicaoPagamento || '';
+    document.getElementById('fnContatoNome-forn').value = f.contatoNome || '';
+    document.getElementById('fnContatoTelefone-forn').value = f.contatoTelefone || '';
+    document.getElementById('fnContatoEmail-forn').value = f.contatoEmail || '';
+    document.getElementById('fnSite-forn').value = f.site || '';
+    document.getElementById('fnCidade-forn').value = f.cidade || '';
+    document.getElementById('fnUf-forn').value = f.uf || '';
+    document.getElementById('fnCertificacoes-forn').value = f.certificacoes || '';
+    document.getElementById('fnAtivo-forn').checked = f.ativo !== false;
+    // Fornecedor novo (criado do zero, alguém digitando tudo agora) já
+    // nasce revisado -- só quem vem de importação em lote precisa da
+    // flag desmarcada por padrão (feita no próprio script de import).
+    document.getElementById('fnRevisado-forn').checked = key ? f.revisado !== false : true;
+    document.getElementById('modalFornecedor-forn').classList.add('open');
+  }
+  function closeModalFornecedor() { document.getElementById('modalFornecedor-forn').classList.remove('open'); editingKey = null; }
+  function saveFornecedor() {
+    var razaoSocial = document.getElementById('fnRazaoSocial-forn').value.trim();
+    if (!razaoSocial) { showAlert('Razão social é obrigatória.', 'danger'); return; }
+    var prazoVal = document.getElementById('fnPrazoEntrega-forn').value;
+    var data = {
+      razaoSocial: razaoSocial,
+      nomeFantasia: document.getElementById('fnNomeFantasia-forn').value.trim(),
+      cnpj: document.getElementById('fnCnpj-forn').value.trim(),
+      tipo: document.getElementById('fnTipo-forn').value,
+      prazoEntregaDias: prazoVal !== '' ? parseInt(prazoVal) : null,
+      condicaoPagamento: document.getElementById('fnCondicaoPagamento-forn').value.trim(),
+      contatoNome: document.getElementById('fnContatoNome-forn').value.trim(),
+      contatoTelefone: document.getElementById('fnContatoTelefone-forn').value.trim(),
+      contatoEmail: document.getElementById('fnContatoEmail-forn').value.trim(),
+      site: document.getElementById('fnSite-forn').value.trim(),
+      cidade: document.getElementById('fnCidade-forn').value.trim(),
+      uf: document.getElementById('fnUf-forn').value.trim().toUpperCase(),
+      certificacoes: document.getElementById('fnCertificacoes-forn').value.trim(),
+      ativo: document.getElementById('fnAtivo-forn').checked,
+      revisado: document.getElementById('fnRevisado-forn').checked
+    };
+    var key = editingKey || db.ref('fornecedores').push().key;
+    document.getElementById('modalFornecedorSave-forn').disabled = true;
+    db.ref('fornecedores/' + key).update(data)
+      .then(function() { showAlert('Fornecedor salvo com sucesso!', 'success'); closeModalFornecedor(); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalFornecedorSave-forn').disabled = false; });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnNovoFornecedor-forn').addEventListener('click', function() { openModalFornecedor(null); });
+    document.getElementById('modalFornecedorClose-forn').addEventListener('click', closeModalFornecedor);
+    document.getElementById('modalFornecedorCancel-forn').addEventListener('click', closeModalFornecedor);
+    document.getElementById('modalFornecedorSave-forn').addEventListener('click', saveFornecedor);
+    document.getElementById('modalFornecedor-forn').addEventListener('click', function(e) { if (e.target === this) closeModalFornecedor(); });
+
+    var _t = null;
+    document.getElementById('fnSearch-forn').addEventListener('input', function() {
+      clearTimeout(_t); _t = setTimeout(renderFornecedores, 200);
+    });
+    document.getElementById('fnFilterRevisado-forn').addEventListener('change', renderFornecedores);
+    document.getElementById('fnFilterTipo-forn').addEventListener('change', renderFornecedores);
+    fnSortable.wireHeaders(renderFornecedores);
+
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedores = snap.val() || {};
+      renderFornecedores();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CATEGORIAS DE PRODUTO (extraído de admin.html -- Fase 6.4)
+// Achado crítico do levantamento: admin.html's saveConfig() faz
+// db.ref('config').set(configData_inteiro) -- um SET do node `config`
+// TODO (~25 chaves: linhas, turnos, metas, congelamento...). Replicar
+// esse padrão aqui, sem conhecer as outras 24 chaves, apagaria a config
+// inteira ao salvar uma categoria (mesma classe do bug do antigo botão
+// "Inicializar com Dados Padrão", já corrigido antes nesta sessão). Por
+// isso aqui a escrita é ESCOPADA: db.ref('config/categoriasProduto')
+// direto, nunca db.ref('config') inteiro. Mesmo padrão que produtos.html
+// já usa pra LER isso hoje -- nenhuma mudança necessária lá.
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var categorias = [];
+
+  // Lista fechada, ancorada na taxonomia oficial da ANVISA pra produto
+  // cosmético -- a mesma classificação usada no registro/notificação de
+  // cada produto. Só usada pra semear config/categoriasProduto na
+  // primeira vez que a aba carrega vazia -- depois disso o cadastro real
+  // mora no banco, isto aqui não roda de novo.
+  var CATEGORIAS_SEED = [
+    { codigo: 'HIG', nome: 'Higiene Corporal', exemplos: 'sabonete líquido, gel de banho', ativo: true },
+    { codigo: 'CAB', nome: 'Cabelo', exemplos: 'shampoo, condicionador, tônico, tintura', ativo: true },
+    { codigo: 'PEL', nome: 'Pele', exemplos: 'hidratante, creme facial, óleo corporal', ativo: true },
+    { codigo: 'PRF', nome: 'Perfumaria', exemplos: 'perfume, colônia, body splash, extrato', ativo: true },
+    { codigo: 'DES', nome: 'Desodorantes / Antiperspirantes', exemplos: 'desodorante aerossol, roll-on', ativo: false },
+    { codigo: 'SOL', nome: 'Protetores Solares', exemplos: 'protetor solar facial, corporal', ativo: false },
+    { codigo: 'BRZ', nome: 'Bronzeadores / Autobronzeadores', exemplos: 'bronzeador, autobronzeador', ativo: false },
+    { codigo: 'MAQ', nome: 'Maquiagem', exemplos: 'batom, base, sombra, blush', ativo: false },
+    { codigo: 'UNH', nome: 'Unhas', exemplos: 'esmalte, removedor', ativo: false },
+    { codigo: 'DEP', nome: 'Depilação', exemplos: 'creme depilatório, cera', ativo: false },
+    { codigo: 'BAR', nome: 'Barba e Após-Barba', exemplos: 'gel de barbear, pós-barba', ativo: false },
+    { codigo: 'BUC', nome: 'Higiene Bucal e Dentária', exemplos: 'dentifrício, enxaguante bucal', ativo: false },
+    { codigo: 'INF', nome: 'Produtos Infantis', exemplos: 'linha bebê', ativo: false },
+    { codigo: 'TAL', nome: 'Talco', exemplos: 'talco corporal', ativo: false }
+  ];
+
+  function renderCategorias() {
+    var el = document.getElementById('tCategoriasProduto-cat');
+    if (!categorias.length) {
+      el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>';
+      return;
+    }
+    el.innerHTML = '';
+    categorias.forEach(function(cat, i) {
+      var ativa = cat.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativa ? '' : 'opacity:.5');
+      span.title = (ativa ? 'Ativa' : 'Inativa') + ' -- clique pra ' + (ativa ? 'desativar' : 'ativar') + (cat.exemplos ? ' | ex: ' + cat.exemplos : '');
+
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = cat.nome + ' (' + cat.codigo + ')';
+      span.appendChild(nm);
+
+      span.addEventListener('click', function() {
+        categorias[i] = Object.assign({}, cat, { ativo: !ativa });
+        db.ref('config/categoriasProduto').set(categorias).then(function() {
+          showAlert('Categoria ' + (!ativa ? 'ativada' : 'desativada') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+
+      // Categorias fora da lista fechada (adicionadas manualmente, ver
+      // "Adicionar categoria fora da lista") podem ser removidas -- as
+      // 14 da ANVISA não têm esse botão, só ativa/desativa.
+      if (!cat.anvisa) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover esta categoria?')) return;
+          categorias.splice(i, 1);
+          db.ref('config/categoriasProduto').set(categorias).then(function() {
+            showAlert('Categoria removida.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+
+      el.appendChild(span);
+    });
+  }
+
+  function addCategoria() {
+    var nomeInput = document.getElementById('iCategoriaNome-cat');
+    var codigoInput = document.getElementById('iCategoriaCodigo-cat');
+    var nome = nomeInput.value.trim();
+    var codigo = codigoInput.value.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    if (!nome || codigo.length !== 3) { showAlert('Preencha nome e código de exatamente 3 letras.', 'danger'); return; }
+    if (categorias.some(function(c) { return c.codigo === codigo; })) {
+      showAlert('Já existe uma categoria com esse código.', 'danger');
+      return;
+    }
+    categorias.push({ nome: nome, codigo: codigo, ativo: true, anvisa: false });
+    db.ref('config/categoriasProduto').set(categorias).then(function() {
+      nomeInput.value = '';
+      codigoInput.value = '';
+      showAlert('Categoria adicionada.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddCategoriaProduto-cat').addEventListener('click', addCategoria);
+    document.getElementById('iCategoriaCodigo-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addCategoria(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/categoriasProduto'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        // Primeira vez -- semeia a lista fechada da ANVISA. Escrita
+        // escopada (config/categoriasProduto), nunca db.ref('config') inteiro.
+        var seed = CATEGORIAS_SEED.map(function(c) { return Object.assign({ anvisa: true }, c); });
+        db.ref('config/categoriasProduto').set(seed);
+        return; // o próprio set acima vai disparar este listener de novo, já com dado
+      }
+      categorias = val;
+      renderCategorias();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: PRODUTOS (portado de produtos.html -- Fase 6.5). Maior seção,
+// modal com 6 sub-abas próprias (Identificação/Classificação/Embalagem/
+// Regulatório/CQ/Parâmetros de Lote) -- o querySelectorAll('.tab') delas
+// é escopado a #modalBg-prod (não document), pra não reagir a cliques nas
+// abas de nível página nem, mais adiante, às de Fórmulas/BOM/Especificações.
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allProdutos = {};
+  var prodHoraCalcMap = {};
+  var editingKey = null;
+  var allClientesCad = {};
+  var categoriasProdutoCad = [];
+  var prodSortable = makeSortableTable(document.getElementById('prodThead-prod'), 'sku', 'asc');
+
+  function sanitizeSkuKey(str) {
+    return String(str || '').replace(/[./[\]#$\s]/g, '-').replace(/-+/g, '-').trim().slice(0, 80);
+  }
+
+  function validateEan(val, digits) {
+    var s = String(val || '').replace(/\D/g, '');
+    if (!s) return { ok: null, msg: '' };
+    if (s.length !== digits) return { ok: false, msg: 'Deve ter ' + digits + ' dígitos (atual: ' + s.length + ')' };
+    return { ok: true, msg: '✓ Formato válido' };
+  }
+  function updateEanHint(inputId, hintId, digits) {
+    var v = document.getElementById(inputId).value;
+    var r = validateEan(v, digits);
+    var el = document.getElementById(hintId);
+    el.textContent = r.msg;
+    el.className = 'ean-hint ' + (r.ok === true ? 'ean-valid' : r.ok === false ? 'ean-invalid' : '');
+  }
+
+  function updateCalcCaixas() {
+    var uc = parseInt(document.getElementById('fUnCx-prod').value) || 0;
+    var lp = parseInt(document.getElementById('fLotePadrao-prod').value) || 0;
+    document.getElementById('calcUnCx-prod').textContent = uc || '—';
+    document.getElementById('calcLote-prod').textContent = lp ? fmtNum(lp) : '—';
+    document.getElementById('calcCaixas-prod').textContent = (uc && lp) ? fmtNum(Math.ceil(lp / uc)) : '—';
+  }
+
+  function refreshDatalistsAndFilters() {
+    var clientes = {}, cats = {}, subs = {};
+    Object.values(allProdutos).forEach(function(p) {
+      if (p.cliente) clientes[p.cliente] = 1;
+      if (p.categoria) cats[p.categoria] = 1;
+      if (p.subcategoria) subs[p.subcategoria] = 1;
+    });
+
+    function fillDatalist(id, obj) {
+      var el = document.getElementById(id);
+      el.innerHTML = '';
+      Object.keys(obj).sort().forEach(function(v) {
+        var o = document.createElement('option'); o.value = v; el.appendChild(o);
+      });
+    }
+    function fillSelect(id, obj, label) {
+      var el = document.getElementById(id);
+      var cur = el.value;
+      el.innerHTML = '<option value="">' + label + '</option>';
+      Object.keys(obj).sort().forEach(function(v) {
+        var o = document.createElement('option'); o.value = v; o.textContent = v; el.appendChild(o);
+      });
+      if (cur) el.value = cur;
+    }
+
+    fillDatalist('clientesList-prod', clientes);
+    fillDatalist('categoriasList-prod', cats);
+    fillDatalist('subcategoriasList-prod', subs);
+    fillSelect('filterCategoria-prod', cats, 'Todas categorias');
+    fillSelect('filterCliente-prod', clientes, 'Todos clientes');
+  }
+
+  function refreshAutoSkuSelects() {
+    var selCat = document.getElementById('fAutoCategoria-prod');
+    var selCli = document.getElementById('fAutoCliente-prod');
+    var curCat = selCat.value, curCli = selCli.value;
+    selCat.innerHTML = '<option value="">Selecione...</option>';
+    categoriasProdutoCad.filter(function(c) { return c.ativo !== false; })
+      .sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); })
+      .forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.codigo;
+        o.textContent = c.nome + ' (' + c.codigo + ')' + (c.exemplos ? ' -- ' + c.exemplos : '');
+        selCat.appendChild(o);
+      });
+    selCli.innerHTML = '<option value="">Selecione...</option>';
+    Object.values(allClientesCad).filter(function(c) { return c.ativo !== false; })
+      .sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); })
+      .forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c.codigo; o.textContent = c.nome + ' (' + c.codigo + ')';
+        selCli.appendChild(o);
+      });
+    if (curCat) selCat.value = curCat;
+    if (curCli) selCli.value = curCli;
+    updateSkuPreview();
+  }
+  function updateSkuPreview() {
+    var cat = document.getElementById('fAutoCategoria-prod').value;
+    var cli = document.getElementById('fAutoCliente-prod').value;
+    var hint = document.getElementById('skuPreviewHint-prod');
+    if (cat && cli) {
+      hint.textContent = 'Código será gerado como ' + cat + '-' + cli + '-NNNN ao salvar (sequencial reservado na hora).';
+      var catObj = categoriasProdutoCad.filter(function(c) { return c.codigo === cat; })[0];
+      var cliObj = allClientesCad[cli];
+      if (catObj) document.getElementById('fCategoria-prod').value = catObj.nome;
+      if (cliObj) document.getElementById('fCliente-prod').value = cliObj.nome;
+    } else {
+      hint.textContent = 'Escolha categoria e cliente pra gerar o código -- ou digite manualmente abaixo.';
+    }
+  }
+
+  function renderTable() {
+    var search = norm(document.getElementById('searchInput-prod').value);
+    var filtAtivo = document.getElementById('filterAtivo-prod').value;
+    var filtCat = document.getElementById('filterCategoria-prod').value;
+    var filtCli = document.getElementById('filterCliente-prod').value;
+
+    var rows = Object.entries(allProdutos).filter(function(entry) {
+      var p = entry[1];
+      if (filtAtivo && p.ativo !== filtAtivo) return false;
+      if (filtCat && p.categoria !== filtCat) return false;
+      if (filtCli && p.cliente !== filtCli) return false;
+      if (search) {
+        var haystack = norm(p.sku) + ' ' + norm(p.descricao) + ' ' + norm(p.cliente) + ' ' + norm(p.codCliente);
+        if (haystack.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+    rows = prodSortable.applySort(rows, function(entry, field) {
+      if (field === 'prodHora') return prodHoraCalcMap[norm(entry[1].descricao)] || entry[1].prodHoraRef || 0;
+      return entry[1][field];
+    });
+
+    var total = Object.keys(allProdutos).length;
+    var ativos = Object.values(allProdutos).filter(function(p) { return p.ativo === 'Ativo'; }).length;
+    var inativos = total - ativos;
+    var cats = {};
+    Object.values(allProdutos).forEach(function(p) { if (p.categoria) cats[p.categoria] = 1; });
+    document.getElementById('statTotal-prod').textContent = fmtNum(total);
+    document.getElementById('statAtivos-prod').textContent = fmtNum(ativos);
+    document.getElementById('statInativos-prod').textContent = fmtNum(inativos);
+    document.getElementById('statCategorias-prod').textContent = Object.keys(cats).length;
+    document.getElementById('tableCount-prod').textContent = 'Produtos (' + rows.length + ' exibidos)';
+
+    var tbody = document.getElementById('tableBody-prod');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="no-data">' + (total
+        ? 'Nenhum produto encontrado com esse filtro/busca.'
+        : 'Nenhum produto cadastrado ainda. Clique em "+ Novo Produto" pra começar.') + '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], p = entry[1];
+      var prodH = prodHoraCalcMap[norm(p.descricao)];
+      var prodHtml = prodH
+        ? '<span class="prodh-cell">' + fmtNum(Math.round(prodH)) + '</span><span class="prodh-calc">média calculada</span>'
+        : (p.prodHoraRef
+            ? '<span class="prodh-cell" style="color:var(--muted)">' + fmtNum(p.prodHoraRef) + '</span><span class="prodh-calc">referência manual</span>'
+            : '<span style="color:var(--muted)">—</span>');
+      var vol = p.volume ? (p.volume + ' ' + (p.unidadeVolume || '')) : '—';
+      var statusBadge = p.ativo === 'Ativo'
+        ? '<span class="badge badge-green">Ativo</span>'
+        : '<span class="badge badge-gray">Inativo</span>';
+      return '<tr>' +
+        '<td class="sku-cell" title="' + escapeAttr(p.codCliente || '') + '">' + escapeHtml(p.sku || '—') + '</td>' +
+        '<td class="desc-cell" title="' + escapeAttr(p.descricao || '') + '">' + escapeHtml(p.descricao || '—') + '</td>' +
+        '<td style="white-space:nowrap">' + escapeHtml(p.cliente || '—') + '</td>' +
+        '<td><span class="badge badge-blue">' + escapeHtml(p.categoria || '—') + '</span></td>' +
+        '<td style="font-size:12px;color:var(--muted)">' + escapeHtml(p.subcategoria || '—') + '</td>' +
+        '<td><span class="badge badge-orange">' + escapeHtml(p.viscosidade || '—') + '</span></td>' +
+        '<td style="text-align:right;font-size:12px">' + vol + '</td>' +
+        '<td style="text-align:right;font-weight:600">' + (p.unCx || '—') + '</td>' +
+        '<td style="text-align:right">' + prodHtml + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm btn-edit-prod" data-key="' + key + '" title="Editar produto" aria-label="Editar produto">✏</button></td>' +
+      '</tr>';
+    }).join('');
+
+    document.querySelectorAll('.btn-edit-prod').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+    });
+  }
+
+  function openModal(key) {
+    editingKey = key || null;
+    var p = key ? (allProdutos[key] || {}) : {};
+    document.getElementById('modalTitle-prod').textContent = key ? 'Editar Produto' : 'Novo Produto';
+    document.getElementById('sugestaoRitmoBox-prod').style.display = 'none';
+
+    document.getElementById('autoSkuBox-prod').style.display = key ? 'none' : 'block';
+    document.getElementById('fAutoCategoria-prod').value = '';
+    document.getElementById('fAutoCliente-prod').value = '';
+    updateSkuPreview();
+
+    document.getElementById('fSku-prod').value = p.sku || '';
+    document.getElementById('fSku-prod').readOnly = !!key;
+    document.getElementById('btnUnlockSku-prod').style.display = key ? 'inline-flex' : 'none';
+    document.getElementById('skuRenameHint-prod').style.display = 'none';
+    document.getElementById('fCodCliente-prod').value = p.codCliente || '';
+    document.getElementById('fDescricao-prod').value = p.descricao || '';
+    document.getElementById('fLinhaProduto-prod').value = p.linhaProduto || '';
+    document.getElementById('fVolume-prod').value = p.volume || '';
+    document.getElementById('fUnidadeVolume-prod').value = p.unidadeVolume || 'ml';
+    document.getElementById('fAtivo-prod').value = p.ativo || 'Ativo';
+    document.getElementById('fEan13-prod').value = p.ean13 || '';
+    document.getElementById('fDum14-prod').value = p.dum14 || '';
+    document.getElementById('fProdHoraRef-prod').value = p.prodHoraRef || '';
+    var calc = prodHoraCalcMap[norm(p.descricao)];
+    document.getElementById('fProdHoraCalc-prod').value = calc ? fmtNum(Math.round(calc)) + ' un/h' : '—';
+    updateEanHint('fEan13-prod', 'ean13Hint-prod', 13);
+    updateEanHint('fDum14-prod', 'dum14Hint-prod', 14);
+
+    document.getElementById('fCliente-prod').value = p.cliente || '';
+    document.getElementById('fViscosidade-prod').value = p.viscosidade || '';
+    document.getElementById('fCategoria-prod').value = p.categoria || '';
+    document.getElementById('fSubcategoria-prod').value = p.subcategoria || '';
+
+    document.getElementById('fUnCx-prod').value = p.unCx || '';
+    document.getElementById('fLotePadrao-prod').value = p.lotePadrao || '';
+    updateCalcCaixas();
+
+    document.getElementById('fMsAnvisa-prod').value = p.msAnvisa || '';
+    document.getElementById('fLp-prod').value = p.lp || 0;
+    document.getElementById('fObs-prod').value = p.obs || '';
+
+    var cq = p.cq || {};
+    document.getElementById('fCqAspecto-prod').value = cq.aspecto || '';
+    document.getElementById('fCqCor-prod').value = cq.cor || '';
+    document.getElementById('fCqOdor-prod').value = cq.odor || '';
+    document.getElementById('fCqDensidade-prod').value = cq.densidade || '';
+    document.getElementById('fCqPh-prod').value = cq.ph || '';
+    document.getElementById('fCqTeorAlcool-prod').value = cq.teorAlcool || '';
+    document.getElementById('fCqViscosidade-prod').value = cq.viscosidade || '';
+    document.getElementById('fCqFaixaPeso-prod').value = cq.faixaPeso || '';
+
+    document.getElementById('fDensidadeGranel-prod').value = p.densidadeGranel != null ? p.densidadeGranel : '';
+    document.getElementById('fPrazoValidadeMeses-prod').value = p.prazoValidadeMeses != null ? p.prazoValidadeMeses : '';
+    document.getElementById('fOverfillPct-prod').value = p.overfillPct != null ? p.overfillPct : '';
+    document.getElementById('fPerdaProcessoPct-prod').value = p.perdaProcessoPct != null ? p.perdaProcessoPct : '';
+    document.getElementById('fPerdaLinhaPct-prod').value = p.perdaLinhaPct != null ? p.perdaLinhaPct : '';
+
+    var modal = document.getElementById('modalBg-prod');
+    modal.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === 'prod-ident'); });
+    modal.querySelectorAll('.tab-panel').forEach(function(tp) { tp.classList.toggle('active', tp.id === 'tab-prod-ident'); });
+
+    modal.classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalBg-prod').classList.remove('open');
+    editingKey = null;
+  }
+
+  function saveModal() {
+    var descricao = document.getElementById('fDescricao-prod').value.trim();
+    if (!descricao) { showAlert('Descrição é obrigatória.', 'danger'); return; }
+
+    var autoCategoria = !editingKey ? document.getElementById('fAutoCategoria-prod').value : '';
+    var autoCliente = !editingKey ? document.getElementById('fAutoCliente-prod').value : '';
+
+    document.getElementById('modalSaveBtn-prod').disabled = true;
+
+    var skuPromise;
+    if (autoCategoria && autoCliente) {
+      var counterPath = 'config/contadores/sku/' + autoCategoria + '_' + autoCliente;
+      skuPromise = nextSequential(db, counterPath, autoCategoria + '-' + autoCliente, 4).then(function(r) { return r.formatado; });
+    } else {
+      var skuDigitado = document.getElementById('fSku-prod').value.trim();
+      if (!skuDigitado) {
+        document.getElementById('modalSaveBtn-prod').disabled = false;
+        showAlert('SKU é obrigatório (digite manualmente ou escolha categoria + cliente pra gerar automático).', 'danger');
+        return;
+      }
+      skuPromise = Promise.resolve(skuDigitado);
+    }
+
+    skuPromise.then(function(sku) {
+      document.getElementById('fSku-prod').value = sku;
+      finishSaveModal(sku, descricao);
+    }).catch(function(err) {
+      document.getElementById('modalSaveBtn-prod').disabled = false;
+      showAlert('Erro ao gerar SKU: ' + err.message, 'danger');
+    });
+  }
+
+  function finishSaveModal(sku, descricao) {
+    var key = sanitizeSkuKey(sku);
+    if (!key) { document.getElementById('modalSaveBtn-prod').disabled = false; showAlert('SKU inválido.', 'danger'); return; }
+    if (allProdutos[key] && key !== editingKey) {
+      document.getElementById('modalSaveBtn-prod').disabled = false;
+      showAlert('Já existe um produto com esse SKU. Edite o produto existente em vez de criar um novo ou renomear para essa chave.', 'danger');
+      return;
+    }
+
+    var autoCategoriaSel = document.getElementById('fAutoCategoria-prod').value;
+    var autoClienteSel = document.getElementById('fAutoCliente-prod').value;
+
+    var data = {
+      sku: sku,
+      descricao: descricao,
+      linhaProduto: document.getElementById('fLinhaProduto-prod').value.trim(),
+      volume: parseFloat(document.getElementById('fVolume-prod').value) || 0,
+      unidadeVolume: document.getElementById('fUnidadeVolume-prod').value,
+      ativo: document.getElementById('fAtivo-prod').value,
+      codCliente: document.getElementById('fCodCliente-prod').value.trim(),
+      ean13: document.getElementById('fEan13-prod').value.trim(),
+      dum14: document.getElementById('fDum14-prod').value.trim(),
+      prodHoraRef: parseInt(document.getElementById('fProdHoraRef-prod').value) || 0,
+      cliente: document.getElementById('fCliente-prod').value.trim(),
+      viscosidade: document.getElementById('fViscosidade-prod').value,
+      categoria: document.getElementById('fCategoria-prod').value.trim(),
+      subcategoria: document.getElementById('fSubcategoria-prod').value.trim(),
+      unCx: parseInt(document.getElementById('fUnCx-prod').value) || 0,
+      lotePadrao: parseInt(document.getElementById('fLotePadrao-prod').value) || 0,
+      msAnvisa: document.getElementById('fMsAnvisa-prod').value.trim(),
+      lp: parseFloat(document.getElementById('fLp-prod').value) || 0,
+      obs: document.getElementById('fObs-prod').value.trim(),
+      cq: {
+        aspecto: document.getElementById('fCqAspecto-prod').value.trim(),
+        cor: document.getElementById('fCqCor-prod').value.trim(),
+        odor: document.getElementById('fCqOdor-prod').value.trim(),
+        densidade: document.getElementById('fCqDensidade-prod').value.trim(),
+        ph: document.getElementById('fCqPh-prod').value.trim(),
+        teorAlcool: document.getElementById('fCqTeorAlcool-prod').value.trim(),
+        viscosidade: document.getElementById('fCqViscosidade-prod').value.trim(),
+        faixaPeso: document.getElementById('fCqFaixaPeso-prod').value.trim()
+      },
+      densidadeGranel: (function() { var v = document.getElementById('fDensidadeGranel-prod').value; return v !== '' ? parseFloat(v) : null; })(),
+      prazoValidadeMeses: parseInt(document.getElementById('fPrazoValidadeMeses-prod').value) || 0,
+      overfillPct: parseFloat(document.getElementById('fOverfillPct-prod').value) || 0,
+      perdaProcessoPct: parseFloat(document.getElementById('fPerdaProcessoPct-prod').value) || 0,
+      perdaLinhaPct: parseFloat(document.getElementById('fPerdaLinhaPct-prod').value) || 0,
+      categoriaCodigo: autoCategoriaSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].categoriaCodigo || '' : ''),
+      clienteKey: autoClienteSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].clienteKey || '' : '')
+    };
+
+    var promise;
+    if (editingKey && editingKey !== key) {
+      // Renomeação: histórico (OPs/pedidos/registros) NUNCA é reescrito --
+      // fica com o SKU antigo pra sempre, como fotografia do que era
+      // verdade na época. Em vez disso, mantemos um mapa de apelidos:
+      // skusAnteriores no produto (todo SKU que ele já teve) + um índice
+      // reverso sku_historico/{skuAntigo} -> skuAtual, sempre achatado num
+      // salto só (se o produto já foi renomeado antes, os apelidos antigos
+      // também são repontados pro SKU novo, não ficam encadeados).
+      var registroAntigo = allProdutos[editingKey] || {};
+      var aliasesAntigos = Object.keys(registroAntigo.skusAnteriores || {});
+      var todosAliases = aliasesAntigos.concat([editingKey]);
+      var skusAnterioresNovo = {};
+      todosAliases.forEach(function(alias) { skusAnterioresNovo[alias] = true; });
+      data.skusAnteriores = skusAnterioresNovo;
+
+      var updates = {};
+      updates['produtos/' + key] = data;
+      updates['produtos/' + editingKey] = null;
+      todosAliases.forEach(function(alias) { updates['sku_historico/' + alias] = key; });
+      promise = db.ref().update(updates);
+    } else {
+      promise = db.ref('produtos/' + key).update(data);
+    }
+
+    promise
+      .then(function() {
+        showAlert('Produto salvo com sucesso!', 'success');
+        closeModal();
+      })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalSaveBtn-prod').disabled = false; });
+  }
+
+  var registrosCacheSugestao = null;
+  function garantirRegistrosSugestao(cb) {
+    if (registrosCacheSugestao) { cb(registrosCacheSugestao); return; }
+    db.ref('registros').once('value').then(function(snap) {
+      registrosCacheSugestao = snap.val() || {};
+      cb(registrosCacheSugestao);
+    }).catch(function() { cb({}); });
+  }
+  function tentarSugerirRitmo() {
+    var box = document.getElementById('sugestaoRitmoBox-prod');
+    if (editingKey) { box.style.display = 'none'; return; }
+    var descricao = document.getElementById('fDescricao-prod').value.trim();
+    if (descricao && prodHoraCalcMap[norm(descricao)]) { box.style.display = 'none'; return; }
+    var viscosidade = document.getElementById('fViscosidade-prod').value;
+    var volume = document.getElementById('fVolume-prod').value;
+    if (!viscosidade || !volume) { box.style.display = 'none'; return; }
+    garantirRegistrosSugestao(function(registros) {
+      if (editingKey) { box.style.display = 'none'; return; }
+      var viscAtual = document.getElementById('fViscosidade-prod').value;
+      var volAtual = document.getElementById('fVolume-prod').value;
+      if (viscAtual !== viscosidade || volAtual !== volume) return;
+      var sug = kuryosSugerirRitmoProdutoNovo({ viscosidade: viscosidade, volume: volume }, allProdutos, registros);
+      if (!sug) { box.style.display = 'none'; return; }
+      document.getElementById('sugestaoRitmoTxt-prod').innerHTML =
+        '💡 Sugestão: <strong>' + fmtNum(sug.ritmo) + ' un/h</strong>' +
+        '<small>Mediana de ' + sug.baseadoEm + ' produto(s) já cadastrado(s) com a mesma viscosidade (' + escapeHtml(sug.viscosidade) + ') e faixa de volume semelhante -- ponto de partida, ajuste depois de ver a produção real.</small>';
+      box.style.display = 'flex';
+      box.dataset.ritmoSugerido = sug.ritmo;
+    });
+  }
+
+  function calcProdHora() {
+    var btn = document.getElementById('btnRecalc-prod');
+    btn.disabled = true;
+    btn.textContent = '↻ Calculando...';
+    db.ref('registros').once('value').then(function(snap) {
+      var byProd = {};
+      snap.forEach(function(dateSnap) {
+        dateSnap.forEach(function(reg) {
+          var r = reg.val();
+          if (!r.produto || !r.quantidade || r.quantidade <= 0) return;
+          var k = norm(r.produto);
+          if (!byProd[k]) byProd[k] = { sum: 0, count: 0 };
+          byProd[k].sum += r.quantidade;
+          byProd[k].count++;
+        });
+      });
+      prodHoraCalcMap = {};
+      Object.keys(byProd).forEach(function(k) {
+        var d = byProd[k];
+        if (d.count >= 3) prodHoraCalcMap[k] = d.sum / d.count;
+      });
+      renderTable();
+      showAlert('Prod/hora recalculado a partir de ' + Object.keys(prodHoraCalcMap).length + ' produtos com histórico.', 'success');
+    }).catch(function(err) {
+      showAlert('Erro ao recalcular Prod/hora: ' + err.message, 'danger');
+    }).finally(function() {
+      btn.disabled = false;
+      btn.textContent = '↻ Prod/hora';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#modalBg-prod .tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = tab.getAttribute('data-tab');
+        var modal = document.getElementById('modalBg-prod');
+        modal.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+        modal.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+      });
+    });
+
+    document.getElementById('btnNovo-prod').addEventListener('click', function() { openModal(null); });
+    document.getElementById('btnUnlockSku-prod').addEventListener('click', function() {
+      if (!confirm('Isso troca a chave do produto no banco (renomeação atômica). Referências antigas por esse SKU em OPs/fórmulas já emitidas não são atualizadas automaticamente. Continuar?')) return;
+      document.getElementById('fSku-prod').readOnly = false;
+      document.getElementById('fSku-prod').focus();
+      document.getElementById('skuRenameHint-prod').style.display = 'block';
+      this.style.display = 'none';
+    });
+    document.getElementById('modalClose-prod').addEventListener('click', closeModal);
+    document.getElementById('modalCancelBtn-prod').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn-prod').addEventListener('click', saveModal);
+    document.getElementById('modalBg-prod').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    document.getElementById('fEan13-prod').addEventListener('input', function() { updateEanHint('fEan13-prod', 'ean13Hint-prod', 13); });
+    document.getElementById('fDum14-prod').addEventListener('input', function() { updateEanHint('fDum14-prod', 'dum14Hint-prod', 14); });
+
+    document.getElementById('fUnCx-prod').addEventListener('input', updateCalcCaixas);
+    document.getElementById('fLotePadrao-prod').addEventListener('input', updateCalcCaixas);
+
+    var _searchDebounceT = null;
+    document.getElementById('searchInput-prod').addEventListener('input', function() {
+      clearTimeout(_searchDebounceT);
+      _searchDebounceT = setTimeout(renderTable, 200);
+    });
+    document.getElementById('filterAtivo-prod').addEventListener('change', renderTable);
+    document.getElementById('filterCategoria-prod').addEventListener('change', renderTable);
+    document.getElementById('filterCliente-prod').addEventListener('change', renderTable);
+    prodSortable.wireHeaders(renderTable);
+
+    document.getElementById('fAutoCategoria-prod').addEventListener('change', updateSkuPreview);
+    document.getElementById('fAutoCliente-prod').addEventListener('change', updateSkuPreview);
+
+    document.getElementById('btnRecalc-prod').addEventListener('click', calcProdHora);
+
+    document.getElementById('btnUsarSugestaoRitmo-prod').addEventListener('click', function() {
+      var box = document.getElementById('sugestaoRitmoBox-prod');
+      var v = box.dataset.ritmoSugerido;
+      if (v) document.getElementById('fProdHoraRef-prod').value = v;
+      box.style.display = 'none';
+    });
+    document.getElementById('fViscosidade-prod').addEventListener('change', tentarSugerirRitmo);
+    document.getElementById('fVolume-prod').addEventListener('input', function() {
+      clearTimeout(window._sugRitmoDebounceProd);
+      window._sugRitmoDebounceProd = setTimeout(tentarSugerirRitmo, 400);
+    });
+    document.getElementById('fDescricao-prod').addEventListener('input', function() {
+      clearTimeout(window._sugRitmoDebounceProd2);
+      window._sugRitmoDebounceProd2 = setTimeout(tentarSugerirRitmo, 400);
+    });
+
+    dbOnValue(db.ref('produtos'), function(snap) {
+      allProdutos = snap.val() || {};
+      refreshDatalistsAndFilters();
+      renderTable();
+    });
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientesCad = snap.val() || {};
+      refreshAutoSkuSelects();
+    });
+    dbOnValue(db.ref('config/categoriasProduto'), function(snap) {
+      categoriasProdutoCad = snap.val() || [];
+      refreshAutoSkuSelects();
+    });
+
+    calcProdHora();
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: FÓRMULAS / BOM / ESPECIFICAÇÕES (portado de formulas.html --
+// Fase 6.6). Sem modal -- edição inline nas 3 sub-abas próprias, cujo
+// querySelectorAll('.tab') é escopado a #maintab-formulas (não document),
+// mesmo motivo do Produtos: nunca reagir a cliques nas abas de nível
+// página nem nas abas internas do Produtos.
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allProdutos = {};
+  var allMateriais = {};
+  var allFormulas = {};
+  var allBom = {};
+  var allEspecificacoes = {};
+
+  var produtoSelecionadoKey = null;
+  var produtoSelecionadoSku = '';
+  var versaoAtual = null;
+
+  function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
+  function currentUserNome() {
+    return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+  }
+  function currentUserUid() {
+    return firebase.auth().currentUser ? firebase.auth().currentUser.uid : '';
+  }
+
+  function renderProdutoResultados(termo) {
+    var el = document.getElementById('produtoResultados-form');
+    var t = norm(termo);
+    if (!t) { el.style.display = 'none'; return; }
+    var matches = Object.entries(allProdutos).filter(function(entry) {
+      var p = entry[1];
+      return norm(p.sku).indexOf(t) !== -1 || norm(p.descricao).indexOf(t) !== -1;
+    }).slice(0, 30);
+    if (!matches.length) {
+      el.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px">Nenhum produto encontrado.</div>';
+      el.style.display = 'block';
+      return;
+    }
+    el.innerHTML = matches.map(function(entry) {
+      var key = entry[0], p = entry[1];
+      return '<div class="produto-opt" data-key="' + escapeAttr(key) + '" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--tint-gray-bg)">' +
+        '<b>' + escapeHtml(p.sku || key) + '</b> — ' + escapeHtml(p.descricao || '') + '</div>';
+    }).join('');
+    el.style.display = 'block';
+    el.querySelectorAll('.produto-opt').forEach(function(div) {
+      div.addEventListener('mouseenter', function() { div.style.background = 'var(--surface-2)'; });
+      div.addEventListener('mouseleave', function() { div.style.background = ''; });
+      div.addEventListener('click', function() { selecionarProduto(div.getAttribute('data-key')); });
+    });
+  }
+
+  function selecionarProduto(key) {
+    var p = allProdutos[key];
+    if (!p) return;
+    produtoSelecionadoKey = key;
+    produtoSelecionadoSku = p.sku || key;
+    document.getElementById('fProdutoBusca-form').value = '';
+    document.getElementById('produtoResultados-form').style.display = 'none';
+    document.getElementById('produtoSelecionado-form').style.display = 'block';
+    document.getElementById('produtoSelecionado-form').textContent = p.sku + ' — ' + p.descricao;
+    document.getElementById('semProduto-form').style.display = 'none';
+    document.getElementById('areaVersoes-form').style.display = 'block';
+    versaoAtual = null;
+    document.getElementById('areaEdicao-form').style.display = 'none';
+    renderVersoes();
+  }
+
+  function versoesDoProduto() {
+    var codProduto = produtoSelecionadoKey;
+    var out = [];
+    Object.keys(allFormulas).forEach(function(k) {
+      var f = allFormulas[k];
+      if (f && f.codProduto === codProduto) out.push(f);
+    });
+    out.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
+    return out;
+  }
+  function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
+
+  function renderVersoes() {
+    var versoes = versoesDoProduto();
+    var el = document.getElementById('listaVersoes-form');
+    if (!versoes.length) {
+      el.innerHTML = '<span style="color:var(--muted);font-size:13px">Nenhuma versão cadastrada ainda.</span>';
+    } else {
+      el.innerHTML = '';
+      versoes.forEach(function(f) {
+        var pill = document.createElement('div');
+        pill.className = 'version-pill' + (f.versao === versaoAtual ? ' active' : '');
+        var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
+        pill.innerHTML = escapeHtml(f.versao) + ' <span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+        pill.addEventListener('click', function() { selecionarVersao(f.versao); });
+        el.appendChild(pill);
+      });
+    }
+    if (!versaoAtual && versoes.length) selecionarVersao(versoes[0].versao);
+  }
+
+  function selecionarVersao(versao) {
+    versaoAtual = versao;
+    renderVersoes();
+    document.getElementById('areaEdicao-form').style.display = 'block';
+    var key = chaveVersao(produtoSelecionadoKey, versao);
+    var f = allFormulas[key] || { status: 'RASCUNHO', itens: {} };
+    document.getElementById('versaoAtualLabel-form').textContent = versao;
+    var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
+    document.getElementById('versaoStatusBadge-form').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+    renderAcoesVersao(f);
+    renderFormulaTab(key, f);
+    renderBomTab(key);
+    renderEspecTab(key);
+  }
+
+  // Achado do Auditor: um ensaio marcado "crítico" sem faixa mín/máx só
+  // mostrava um alerta cosmético ao salvar -- a versão podia ser aprovada
+  // mesmo assim, inconsistente com o rigor já aplicado à soma da fórmula.
+  // Replica o mesmo padrão de bloqueio (botão desabilitado + motivo no title).
+  function especCriticaSemFaixa(key) {
+    var itens = ((allEspecificacoes[key] || {}).itens) || {};
+    return Object.values(itens).some(function(it) {
+      return it.critico && !it.minimo && !it.maximo;
+    });
+  }
+
+  function renderAcoesVersao(f) {
+    var el = document.getElementById('versaoAcoes-form');
+    el.innerHTML = '';
+    if (f.status === 'RASCUNHO') {
+      var key = chaveVersao(f.codProduto, f.versao);
+      var somaOk = Math.abs((f.somaPercentual || 0) - 100) < 0.0005;
+      var especOk = !especCriticaSemFaixa(key);
+      var podeAprovar = somaOk && especOk;
+      if (!f.aprovadoPD) {
+        var b1 = document.createElement('button');
+        b1.className = 'btn btn-primary btn-sm';
+        b1.textContent = 'Aprovar (P&D)';
+        b1.disabled = !podeAprovar;
+        b1.title = !somaOk ? 'Soma da fórmula precisa fechar em 100% antes de aprovar'
+          : (!especOk ? 'Há ensaio crítico sem faixa mínima/máxima definida' : '');
+        b1.addEventListener('click', aprovarPD);
+        el.appendChild(b1);
+      } else if (!f.aprovadoQualidade) {
+        var b2 = document.createElement('button');
+        b2.className = 'btn btn-green btn-sm';
+        b2.textContent = 'Aprovar (Qualidade) — conclui';
+        b2.addEventListener('click', aprovarQualidade);
+        el.appendChild(b2);
+        var info = document.createElement('span');
+        info.style.cssText = 'font-size:12px;color:var(--muted);align-self:center';
+        info.textContent = 'P&D: ' + (f.aprovadoPD.nome || '') + ' em ' + fmtData(f.aprovadoPD.em);
+        el.appendChild(info);
+      }
+    } else if (f.status === 'APROVADA') {
+      var b3 = document.createElement('button');
+      b3.className = 'btn btn-purple btn-sm';
+      b3.textContent = '+ Nova versão a partir desta';
+      b3.addEventListener('click', novaVersaoAPartirDe);
+      el.appendChild(b3);
+    }
+  }
+  function fmtData(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return iso; }
+  }
+
+  function btnNovaVersaoClick() {
+    var versoes = versoesDoProduto();
+    var maxN = versoes.reduce(function(m, f) { return Math.max(m, parseVersaoNum(f.versao)); }, 0);
+    var novaVersao = 'v' + (maxN + 1);
+    var key = chaveVersao(produtoSelecionadoKey, novaVersao);
+    var data = {
+      codProduto: produtoSelecionadoKey,
+      versao: novaVersao,
+      status: 'RASCUNHO',
+      itens: {},
+      somaPercentual: 0,
+      aprovadoPD: null,
+      aprovadoQualidade: null,
+      substituiVersao: null,
+      criadoPor: currentUserNome(),
+      criadoEm: new Date().toISOString()
+    };
+    db.ref('formulas/' + key).set(data).then(function() {
+      showAlert('Versão ' + novaVersao + ' criada (rascunho).', 'success');
+    }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+  }
+
+  function novaVersaoAPartirDe() {
+    var versoes = versoesDoProduto();
+    var maxN = versoes.reduce(function(m, f) { return Math.max(m, parseVersaoNum(f.versao)); }, 0);
+    var novaVersao = 'v' + (maxN + 1);
+    var origemVersao = versaoAtual;
+    var origemKey = chaveVersao(produtoSelecionadoKey, origemVersao);
+    var novaKey = chaveVersao(produtoSelecionadoKey, novaVersao);
+
+    var origemFormula = allFormulas[origemKey] || {};
+    var origemBom = allBom[origemKey] || {};
+    var origemEspec = allEspecificacoes[origemKey] || {};
+
+    var updates = {};
+    updates['formulas/' + novaKey] = {
+      codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO',
+      itens: origemFormula.itens || {}, somaPercentual: origemFormula.somaPercentual || 0,
+      aprovadoPD: null, aprovadoQualidade: null, substituiVersao: origemVersao,
+      criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
+    };
+    updates['bom/' + novaKey] = { itens: origemBom.itens || {} };
+    updates['especificacoes/' + novaKey] = { itens: origemEspec.itens || {} };
+
+    db.ref().update(updates).then(function() {
+      showAlert('Versão ' + novaVersao + ' criada a partir de ' + origemVersao + '.', 'success');
+      versaoAtual = novaVersao;
+    }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+  }
+
+  function aprovarPD() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    db.ref('formulas/' + key + '/aprovadoPD').set({ nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() })
+      .then(function() { showAlert('Aprovação de P&D registrada.', 'success'); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+  }
+  function aprovarQualidade() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    var updates = {};
+    updates['formulas/' + key + '/aprovadoQualidade'] = { nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() };
+    updates['formulas/' + key + '/status'] = 'APROVADA';
+    updates['formulas/' + key + '/dataAprovacao'] = new Date().toISOString();
+    db.ref().update(updates)
+      .then(function() { showAlert('Fórmula aprovada! Versão ' + versaoAtual + ' agora é a versão oficial.', 'success'); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+  }
+
+  function renderFormulaTab(key, f) {
+    var itens = f.itens || {};
+    var tbody = document.getElementById('formulaBody-form');
+    var editavel = f.status === 'RASCUNHO';
+    var entries = Object.entries(itens);
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhum item na fórmula ainda.</td></tr>';
+    } else {
+      tbody.innerHTML = entries.map(function(entry) {
+        var itemKey = entry[0], it = entry[1];
+        return linhaFormula(key, itemKey, it, editavel);
+      }).join('');
+    }
+    atualizarSomaBar(f);
+    document.getElementById('btnAddFormulaItem-form').style.display = editavel ? 'inline-flex' : 'none';
+    wireFormulaRowEvents(key, editavel);
+  }
+  // tipos: array de tipos aceitos (ver enum atual em Materiais -- MPGR/MPES
+  // pra matéria-prima, EP/ES/ET pra embalagem), ou null/vazio pra não filtrar.
+  function materiaisOptions(tipos, selecionado) {
+    var opts = '<option value="">Selecione...</option>';
+    Object.values(allMateriais).filter(function(m) { return !tipos || !tipos.length || tipos.indexOf(m.tipo) !== -1; })
+      .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
+      .forEach(function(m) {
+        opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
+      });
+    return opts;
+  }
+  function linhaFormula(formKey, itemKey, it, editavel) {
+    if (!editavel) {
+      return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+        '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + '</td>' +
+        '<td>' + escapeHtml(it.fase || '') + '</td>' +
+        '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
+        '<td>' + fmtNum(it.percentualMM || 0) + '%</td><td></td></tr>';
+    }
+    return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+      '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['MPGR', 'MPES'], it.mpCodigo) + '</select></td>' +
+      '<td><select class="f-fase" data-item="' + escapeAttr(itemKey) + '">' +
+        ['A', 'B', 'C'].map(function(f) { return '<option value="' + f + '"' + (it.fase === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') +
+      '</select></td>' +
+      '<td><input type="number" class="f-ordem" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" value="' + (it.ordemAdicao != null ? it.ordemAdicao : '') + '"></td>' +
+      '<td><input type="number" class="f-pct" data-item="' + escapeAttr(itemKey) + '" min="0" step="0.001" value="' + (it.percentualMM != null ? it.percentualMM : '') + '"></td>' +
+      '<td><button class="btn btn-danger-ghost btn-sm f-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
+  }
+  function wireFormulaRowEvents(formKey, editavel) {
+    if (!editavel) return;
+    document.querySelectorAll('#formulaBody-form .f-mp, #formulaBody-form .f-fase, #formulaBody-form .f-ordem, #formulaBody-form .f-pct').forEach(function(el) {
+      el.addEventListener('change', function() { salvarItemFormula(formKey, el.getAttribute('data-item')); });
+    });
+    document.querySelectorAll('#formulaBody-form .f-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var itemKey = btn.getAttribute('data-item');
+        db.ref('formulas/' + formKey + '/itens/' + itemKey).remove().then(recalcularSomaFormula.bind(null, formKey));
+      });
+    });
+  }
+  // Achado do Auditor: salvarItemFormula/salvarItemBom faziam o mesmo lookup
+  // de material com pequenas diferenças (um tentava a chave rápida antes do
+  // scan O(n), o outro só escaneava) -- consolidado aqui. O caminho rápido
+  // (chave = sanitizeKey do código) cobre o caso normal (materiais.html grava
+  // com essa mesma chave); o scan é rede de segurança pra dado legado/
+  // importado cuja chave não foi gerada por esse sanitizeKey.
+  function findMaterialByCodigo(codigo) {
+    return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
+  }
+  function salvarItemFormula(formKey, itemKey) {
+    var row = document.querySelector('#formulaBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
+    if (!row) return;
+    var mpCodigo = row.querySelector('.f-mp').value;
+    var mat = findMaterialByCodigo(mpCodigo);
+    var data = {
+      mpCodigo: mpCodigo,
+      mpNome: mat ? mat.mpNome : '',
+      fase: row.querySelector('.f-fase').value,
+      ordemAdicao: parseInt(row.querySelector('.f-ordem').value) || 0,
+      percentualMM: parseFloat(row.querySelector('.f-pct').value) || 0
+    };
+    db.ref('formulas/' + formKey + '/itens/' + itemKey).set(data).then(function() { recalcularSomaFormula(formKey); });
+  }
+  function recalcularSomaFormula(formKey) {
+    db.ref('formulas/' + formKey + '/itens').once('value').then(function(snap) {
+      var itens = snap.val() || {};
+      var soma = Object.values(itens).reduce(function(s, it) { return s + (parseFloat(it.percentualMM) || 0); }, 0);
+      return db.ref('formulas/' + formKey + '/somaPercentual').set(Math.round(soma * 1000) / 1000);
+    });
+  }
+  function atualizarSomaBar(f) {
+    var soma = f.somaPercentual || 0;
+    var ok = Math.abs(soma - 100) < 0.0005;
+    var bar = document.getElementById('somaBar-form');
+    bar.className = 'soma-bar ' + (ok ? 'soma-ok' : 'soma-erro');
+    bar.textContent = 'Soma: ' + fmtNum(soma) + '%' + (ok ? ' ✓ fecha em 100%' : ' — precisa fechar em 100% exato pra aprovar (diferença: ' + fmtNum(Math.abs(soma - 100)) + 'pp)');
+  }
+
+  function renderBomTab(key) {
+    var b = allBom[key] || { itens: {} };
+    var f = allFormulas[key] || {};
+    var editavel = f.status === 'RASCUNHO';
+    var itens = b.itens || {};
+    var tbody = document.getElementById('bomBody-form');
+    var entries = Object.entries(itens);
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhum item de embalagem ainda.</td></tr>';
+    } else {
+      tbody.innerHTML = entries.map(function(entry) {
+        var itemKey = entry[0], it = entry[1];
+        if (!editavel) {
+          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
+        }
+        return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET'], it.materialCodigo) + '</select></td>' +
+          '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
+          '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
+      }).join('');
+    }
+    document.getElementById('btnAddBomItem-form').style.display = editavel ? 'inline-flex' : 'none';
+    if (!editavel) return;
+    document.querySelectorAll('#bomBody-form .b-mat, #bomBody-form .b-qtd').forEach(function(el) {
+      el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
+    });
+    document.querySelectorAll('#bomBody-form .b-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() { db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+    });
+  }
+  function salvarItemBom(key, itemKey) {
+    var row = document.querySelector('#bomBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
+    if (!row) return;
+    var materialCodigo = row.querySelector('.b-mat').value;
+    var mat = findMaterialByCodigo(materialCodigo);
+    var posicaoIdx = Array.prototype.indexOf.call(row.parentNode.children, row);
+    db.ref('bom/' + key + '/itens/' + itemKey).set({
+      materialCodigo: materialCodigo,
+      materialNome: mat ? mat.mpNome : '',
+      qtdPorPeca: parseFloat(row.querySelector('.b-qtd').value) || 0,
+      posicao: posicaoIdx + 1
+    });
+  }
+
+  function renderEspecTab(key) {
+    var e = allEspecificacoes[key] || { itens: {} };
+    var f = allFormulas[key] || {};
+    var editavel = f.status === 'RASCUNHO';
+    var itens = e.itens || {};
+    var tbody = document.getElementById('especBody-form');
+    var entries = Object.entries(itens);
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum ensaio cadastrado ainda.</td></tr>';
+    } else {
+      tbody.innerHTML = entries.map(function(entry) {
+        var itemKey = entry[0], it = entry[1];
+        if (!editavel) {
+          return '<tr><td>' + escapeHtml(it.ensaio || '') + '</td><td>' + escapeHtml(it.especificacaoTexto || '') + '</td><td>' + escapeHtml(it.minimo || '') + '</td><td>' + escapeHtml(it.maximo || '') + '</td><td>' + escapeHtml(it.metodo || '') + '</td><td>' + (it.critico ? 'Sim' : 'Não') + '</td><td></td></tr>';
+        }
+        return '<tr data-item="' + escapeAttr(itemKey) + '">' +
+          '<td><input type="text" class="e-ensaio" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.ensaio || '') + '"></td>' +
+          '<td><input type="text" class="e-texto" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.especificacaoTexto || '') + '"></td>' +
+          '<td><input type="text" class="e-min" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.minimo || '') + '"></td>' +
+          '<td><input type="text" class="e-max" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.maximo || '') + '"></td>' +
+          '<td><input type="text" class="e-metodo" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.metodo || '') + '"></td>' +
+          '<td style="text-align:center"><input type="checkbox" class="e-critico" data-item="' + escapeAttr(itemKey) + '"' + (it.critico ? ' checked' : '') + '></td>' +
+          '<td><button class="btn btn-danger-ghost btn-sm e-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover ensaio" aria-label="Remover ensaio">×</button></td></tr>';
+      }).join('');
+    }
+    document.getElementById('btnAddEspecItem-form').style.display = editavel ? 'inline-flex' : 'none';
+    if (!editavel) return;
+    document.querySelectorAll('#especBody-form input').forEach(function(el) {
+      el.addEventListener('change', function() { salvarItemEspec(key, el.getAttribute('data-item')); });
+    });
+    document.querySelectorAll('#especBody-form .e-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() { db.ref('especificacoes/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+    });
+  }
+  function salvarItemEspec(key, itemKey) {
+    var row = document.querySelector('#especBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
+    if (!row) return;
+    var critico = row.querySelector('.e-critico').checked;
+    var minimo = row.querySelector('.e-min').value.trim();
+    var maximo = row.querySelector('.e-max').value.trim();
+    if (critico && !minimo && !maximo) {
+      showAlert('Ensaio crítico precisa ter faixa mínima ou máxima definida.', 'danger');
+    }
+    db.ref('especificacoes/' + key + '/itens/' + itemKey).set({
+      ensaio: row.querySelector('.e-ensaio').value.trim(),
+      especificacaoTexto: row.querySelector('.e-texto').value.trim(),
+      minimo: minimo,
+      maximo: maximo,
+      metodo: row.querySelector('.e-metodo').value.trim(),
+      critico: critico
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('fProdutoBusca-form').addEventListener('input', function() {
+      renderProdutoResultados(this.value);
+    });
+    document.getElementById('btnNovaVersao-form').addEventListener('click', btnNovaVersaoClick);
+
+    document.querySelectorAll('#maintab-formulas .tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = tab.getAttribute('data-tab');
+        document.querySelectorAll('#maintab-formulas .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+        document.querySelectorAll('#maintab-formulas .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+      });
+    });
+
+    document.getElementById('btnAddFormulaItem-form').addEventListener('click', function() {
+      var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+      db.ref('formulas/' + key + '/itens').push({ mpCodigo: '', mpNome: '', fase: 'A', ordemAdicao: 1, percentualMM: 0 });
+    });
+    document.getElementById('btnAddBomItem-form').addEventListener('click', function() {
+      var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+      db.ref('bom/' + key + '/itens').push({ materialCodigo: '', materialNome: '', qtdPorPeca: 0, posicao: 1 });
+    });
+    document.getElementById('btnAddEspecItem-form').addEventListener('click', function() {
+      var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+      db.ref('especificacoes/' + key + '/itens').push({ ensaio: '', especificacaoTexto: '', minimo: '', maximo: '', metodo: '', critico: false });
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('#fProdutoBusca-form') && !e.target.closest('#produtoResultados-form')) {
+        document.getElementById('produtoResultados-form').style.display = 'none';
+      }
+    });
+
+    dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
+    dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('formulas'), function(snap) {
+      allFormulas = snap.val() || {};
+      if (produtoSelecionadoKey) { renderVersoes(); if (versaoAtual) selecionarVersao(versaoAtual); }
+    });
+    dbOnValue(db.ref('bom'), function(snap) {
+      allBom = snap.val() || {};
+      if (produtoSelecionadoKey && versaoAtual) renderBomTab(chaveVersao(produtoSelecionadoKey, versaoAtual));
+    });
+    dbOnValue(db.ref('especificacoes'), function(snap) {
+      allEspecificacoes = snap.val() || {};
+      if (produtoSelecionadoKey && versaoAtual) {
+        var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+        renderEspecTab(key);
+        if (allFormulas[key]) renderAcoesVersao(allFormulas[key]);
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

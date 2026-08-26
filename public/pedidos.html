@@ -3,62 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pedidos & OPs</title>
+  <title>Pedidos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--success:#0e9f6e;--danger:#e02424;--warning:#d97706;--bg:#f3f4f6;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--purple:#7c3aed}
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
 
     /* Header */
-    .header{background:#0a1c69;color:white;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100}
-    .header h1{font-size:18px;font-weight:700}
-    .header-sub{font-size:11px;opacity:.8;margin-top:1px}
-    .status-pill{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.15);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600}
-    .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
-    .dot.on{background:#34d399;animation:p 2s infinite}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
     @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
 
-    /* Toolbar */
-    .toolbar{background:white;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .nav-links{display:flex;gap:8px;font-size:13px;margin-right:8px;align-items:center;flex-wrap:wrap}
-    .nav-links a{color:var(--primary);text-decoration:none;font-weight:600;padding:6px 12px;border-radius:20px;background:#f3f4f6;border:1px solid var(--border);transition:all .15s}
-    .nav-links a:hover{background:#e5e7eb;text-decoration:none}
-    .nav-links a.active{color:white!important;background:#10b981!important;border-color:#10b981!important;box-shadow:0 2px 6px rgba(16,185,129,.3)}
-    .search-box{flex:1;min-width:160px;position:relative}
-    .search-box input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text)}
-    .search-box input:focus{outline:none;border-color:#059669}
-    .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
-    select.filter-sel{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:white;cursor:pointer}
-    select.filter-sel:focus{outline:none;border-color:#059669}
+    /* Toolbar (busca + filtros) -- classes .kt-toolbar/.kt-search/.kt-select
+       vêm de shared/theme.css; aqui só o posicionamento específico da página. */
+    .kt-toolbar{max-width:96%;margin:0 auto 16px;padding-top:10px}
     .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
-    .btn-green{background:#059669;color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
     .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
-    .btn-ghost{background:white;border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:#f9fafb}
     .btn-danger{background:var(--danger);color:white}.btn-danger:hover{filter:brightness(.9)}
     .btn-sm{padding:5px 10px;font-size:12px}
     .btn:disabled{opacity:.5;cursor:not-allowed}
 
     /* Layout */
-    .main{padding:14px;max-width:96%;margin:0 auto}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
 
     /* Stats */
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-    .stat{background:white;border-radius:10px;padding:14px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-    .stat-val{font-size:24px;font-weight:800;color:#059669}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
     .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
 
     /* Card / Table */
-    .card{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
     .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .table-wrap{overflow:auto;max-height:calc(100vh - 280px)}
     table{width:100%;border-collapse:collapse;font-size:13px;min-width:860px}
-    thead th{background:#f9fafb;padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    thead th{background:color-mix(in srgb, var(--text) 4%, var(--card));padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    thead th[data-col]{cursor:pointer;user-select:none}
+    thead th[data-col]:hover{background:#f0fdf4;color:var(--success)}
+    thead th.sorted-asc::after{content:' ↑'}
+    thead th.sorted-desc::after{content:' ↓'}
+    .group-header td{background:color-mix(in srgb, var(--text) 4%, var(--card));font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border)}
     td{padding:8px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
     tr:hover td{background:#f9fafb}
 
@@ -67,21 +69,22 @@
     .prod-cell{font-weight:600;max-width:450px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
     .badge-green{background:#d1fae5;color:#065f46}
-    .badge-blue{background:#eff6ff;color:#1a56db}
-    .badge-gray{background:#f3f4f6;color:var(--muted)}
+    .badge-blue{background:#eff6ff;color:var(--primary)}
+    .badge-gray{background:color-mix(in srgb, var(--text) 8%, var(--card));color:var(--muted)}
     .badge-orange{background:#fff7ed;color:#c2410c}
     .badge-red{background:#fee2e2;color:#991b1b}
     .badge-purple{background:#ede9fe;color:var(--purple)}
 
     /* Progress bar inline */
     .prog-wrap{min-width:110px}
+    .op-breakdown-tip{position:fixed;z-index:10000;display:none;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;line-height:1.5;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.18);white-space:pre-line;max-width:280px;pointer-events:none}
     .prog-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
     .prog-label .pct{font-weight:700}
     .prog-bar{height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden}
     .prog-fill{height:100%;border-radius:3px;transition:width .3s}
-    .fill-green{background:#059669}
-    .fill-orange{background:#d97706}
-    .fill-red{background:#e02424}
+    .fill-green{background:var(--success)}
+    .fill-orange{background:var(--warning)}
+    .fill-red{background:var(--danger)}
     .fill-purple{background:var(--purple)}
 
     /* Alert */
@@ -100,14 +103,32 @@
     /* Modal */
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
     .modal-bg.open{display:flex}
-    .modal{background:white;border-radius:14px;width:100%;max-width:580px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
-    .modal-header{background:linear-gradient(135deg,#065f46,#059669);color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:580px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
     .modal-header h2{font-size:16px;font-weight:700}
     .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
     .modal-close:hover{opacity:1}
     .modal-body{padding:20px;max-height:75vh;overflow-y:auto}
     .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;background:#f9fafb}
     .modal-footer-right{display:flex;gap:8px}
+
+    /* Modal: Ordenar Prioridades */
+    .modal-prio{max-width:640px}
+    .prio-hint{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+    .prio-list{display:flex;flex-direction:column;gap:6px}
+    .prio-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;transition:background .12s,box-shadow .12s}
+    .prio-row.dragging{opacity:.4}
+    .prio-row.drag-over{box-shadow:inset 0 2px 0 var(--primary)}
+    .prio-handle{cursor:grab;color:var(--muted);font-size:16px;padding:2px 4px;user-select:none;touch-action:none}
+    .prio-handle:active{cursor:grabbing}
+    .prio-rank{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;border-radius:50%;background:var(--primary);color:white;font-size:12px;font-weight:800;flex-shrink:0}
+    .prio-info{flex:1;min-width:0}
+    .prio-produto{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .prio-sub{font-size:11px;color:var(--muted);margin-top:1px}
+    .prio-pos-field{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0}
+    .prio-pos-field label{margin:0;font-size:9.5px;white-space:nowrap}
+    .prio-pos-input{width:54px;padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;text-align:center;color:var(--primary);background:var(--card)}
+    .prio-pos-input:focus{outline:none;border-color:var(--primary)}
 
     /* Form */
     .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
@@ -116,9 +137,9 @@
     .form-group{margin-bottom:0}
     .form-group.full{grid-column:1/-1}
     label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
-    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:white;transition:border-color .2s}
-    input:focus,select:focus,textarea:focus{outline:none;border-color:#059669;box-shadow:0 0 0 3px rgba(5,150,105,.1)}
-    input[readonly]{background:#f9fafb;color:var(--muted)}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[readonly]{background:color-mix(in srgb, var(--text) 4%, var(--card));color:var(--muted)}
     .form-hint{font-size:11px;color:var(--muted);margin-top:3px}
     .form-hint.warn{color:var(--warning)}
 
@@ -128,52 +149,6 @@
     .del-body p{margin-bottom:8px}
     .del-body strong{color:var(--danger)}
 
-    /* Import section */
-    .import-section{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;overflow:hidden}
-    .import-section-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
-    .import-section-header:hover{background:#f9fafb}
-    .import-section-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-    .import-section-body{padding:16px;display:none}
-    .import-section-body.open{display:block}
-    .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px}
-    .drop-zone:hover,.drop-zone.drag-over{border-color:#059669;background:#f0fdf4}
-    .drop-icon{font-size:32px;margin-bottom:8px}
-    .drop-text{font-size:14px;font-weight:600;color:var(--text)}
-    .drop-hint{font-size:12px;color:var(--muted);margin-top:4px}
-    input[type=file]{display:none}
-    /* Preview */
-    .preview-card{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
-    .preview-header{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
-    .preview-field{font-size:13px}
-    .preview-field .lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:2px}
-    .preview-field .val{font-weight:600;color:var(--text)}
-    .preview-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;padding:12px;background:white;border:1.5px solid #059669;border-radius:8px}
-    .preview-inputs .pi-label{font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;display:block;margin-bottom:4px}
-    .preview-inputs input,.preview-inputs select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;color:var(--text)}
-    .preview-inputs input:focus,.preview-inputs select:focus{outline:none;border-color:#059669}
-    .preview-note{font-size:12px;color:#065f46;margin-bottom:12px}
-    .preview-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
-    .preview-table th{background:#e5e7eb;padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase}
-    .preview-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
-    .preview-table tr:last-child td{border-bottom:none}
-    .match-badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600}
-    .match-ok{background:#d1fae5;color:#065f46}
-    .match-warn{background:#fff7ed;color:#c2410c}
-    .match-err{background:#fee2e2;color:#991b1b}
-    .preview-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .preview-summary{font-size:13px;color:var(--muted)}
-    /* Import tabs */
-    .import-tabs{display:flex;gap:2px;margin-bottom:14px;border-bottom:2px solid var(--border)}
-    .import-tab{padding:7px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;white-space:nowrap}
-    .import-tab.active{color:#059669;border-bottom-color:#059669}
-    .import-tab-panel{display:none}
-    .import-tab-panel.active{display:block}
-    /* Planilha preview */
-    .plan-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
-    .plan-stat{background:#f0fdf4;border:1px solid #6ee7b7;border-radius:8px;padding:10px;text-align:center}
-    .plan-stat-val{font-size:20px;font-weight:800;color:#059669}
-    .plan-stat-lbl{font-size:10px;color:#065f46;font-weight:600;text-transform:uppercase;margin-top:2px}
-
     @media(max-width:600px){
       .stats{grid-template-columns:1fr 1fr}
       .form-grid{grid-template-columns:1fr}
@@ -182,46 +157,40 @@
     }
   </style>
 </head>
-<body>
+<body class="kuryos-theme has-sidebar">
 
 <div class="header">
   <div>
-    <img src="kuryos-logo.svg" alt="Kuryos" style="height:75px; margin-bottom:12px; filter:brightness(0) invert(1); opacity:.95; display:block">
-    <h1>Pedidos &amp; OPs</h1>
+    <h1>Pedidos</h1>
     <div class="header-sub">OPs de produção e backlog de Pedidos Comerciais · sincronizado com Firebase</div>
   </div>
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
 </div>
 
-<div class="toolbar">
-  <div class="nav-links">
-    <a href="dashboard.html">Dashboard</a><a href="dashboard_analise.html">Análise Histórica</a>
-    <a href="form.html">Formulário</a>
-    <a href="planejamento.html">Planejamento</a>
-    <a href="pedidos.html" class="active">Pedidos</a>
-    <a href="historico.html">Histórico</a>
-    <a href="produtos.html">Produtos</a>
-    <a href="insumos.html">Insumos</a>
-    <a href="ops.html">OPs</a>
-    <a href="admin.html">Admin</a>
-  </div>
-  <div class="search-box">
-    <span class="search-icon">🔍</span>
+<div class="kt-toolbar">
+  <div class="kt-search">
+    <span class="icon">🔍</span>
     <input type="text" id="searchInput" placeholder="Buscar por ID, produto...">
   </div>
-  <select class="filter-sel" id="filterStatus">
+  <select class="kt-select" id="filterStatus">
+    <option value="andamento" selected>Em andamento</option>
     <option value="">Todos os status</option>
-    <option value="andamento">Em andamento</option>
     <option value="concluido">Concluído (≥95%)</option>
     <option value="encerrado">Encerrado</option>
   </select>
-  <select class="filter-sel" id="filterLinha">
+  <select class="kt-select" id="filterLinha">
     <option value="">Todas as linhas</option>
     <option value="Linha 1">Linha 1</option>
     <option value="Linha 2">Linha 2</option>
     <option value="Linha 3">Linha 3</option>
   </select>
-  <button class="btn btn-green" id="btnNovo">+ Novo Pedido</button>
+  <select class="kt-select" id="groupBySel">
+    <option value="">Não agrupar</option>
+    <option value="linha">Agrupar por Linha</option>
+    <option value="cliente">Agrupar por Cliente</option>
+  </select>
+  <button class="btn btn-ghost" id="btnOrdenarPrioridade">🔀 Ordenar Prioridades</button>
+  <button class="btn btn-primary" id="btnNovo">+ Novo Pedido</button>
 </div>
 
 <div class="main">
@@ -230,7 +199,7 @@
   <!-- Pedido comercial (backlog do Comercial) x OP de produção são conceitos
        diferentes (ver auth_check.js/manual) — duas abas, um pra cada. -->
   <div style="display:flex;gap:6px;background:#f3f4f6;padding:4px;border-radius:8px;border:1px solid var(--bd);margin-bottom:14px;max-width:480px">
-    <button type="button" class="btn-sm" id="tabBtnOps" onclick="switchPedidosTab('ops')" style="flex:1;border:none;background:white;box-shadow:0 1px 3px rgba(0,0,0,.1);border-radius:6px;padding:8px;font-weight:700;cursor:pointer">⚙️ OPs de Produção</button>
+    <button type="button" class="btn-sm" id="tabBtnOps" onclick="switchPedidosTab('ops')" style="flex:1;border:none;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.1);border-radius:6px;padding:8px;font-weight:700;cursor:pointer">⚙️ Pedidos - SKUs para Produção</button>
     <button type="button" class="btn-sm" id="tabBtnComerciais" onclick="switchPedidosTab('comerciais')" style="flex:1;border:none;background:none;border-radius:6px;padding:8px;font-weight:700;cursor:pointer;color:var(--l)">📦 Pedidos Comerciais</button>
   </div>
 
@@ -241,11 +210,11 @@
       <div class="stat-lbl">Total</div>
     </div>
     <div class="stat">
-      <div class="stat-val" id="statAndamento" style="color:#1a56db">—</div>
+      <div class="stat-val" id="statAndamento" style="color:var(--primary)">—</div>
       <div class="stat-lbl">Em Andamento</div>
     </div>
     <div class="stat">
-      <div class="stat-val" id="statConcluido" style="color:#059669">—</div>
+      <div class="stat-val" id="statConcluido" style="color:var(--success)">—</div>
       <div class="stat-lbl">Concluídos</div>
     </div>
     <div class="stat">
@@ -263,20 +232,22 @@
         <thead>
           <tr>
             <th style="width:36px;text-align:center" title="Prioridade da planilha">Prio.</th>
-            <th style="min-width:110px">ID do Pedido</th>
-            <th style="min-width:200px">Produto</th>
-            <th style="min-width:70px">Linha</th>
-            <th style="min-width:90px">Data Prod.</th>
-            <th style="min-width:70px;text-align:right">Qtd Total</th>
-            <th style="min-width:70px;text-align:right">Produzido</th>
-            <th style="min-width:130px">Progresso</th>
-            <th style="min-width:110px">Status</th>
+            <th style="min-width:110px" data-col="id">ID do Pedido</th>
+            <th style="min-width:200px" data-col="produto">Produto</th>
+            <th style="min-width:70px" data-col="linha">Linha</th>
+            <th style="min-width:90px" data-col="dataProd">Data Prod.</th>
+            <th style="min-width:88px" data-col="dataPedido">Data Pedido</th>
+            <th style="min-width:100px" data-col="diasAberto" title="Dias corridos desde a data do pedido comercial vinculado">Em aberto há</th>
+            <th style="min-width:70px;text-align:right" data-col="qtdTotal">Qtd Total</th>
+            <th style="min-width:70px;text-align:right" data-col="produzido">Produzido</th>
+            <th style="min-width:130px" data-col="pct">Progresso</th>
+            <th style="min-width:110px" data-col="status">Status</th>
             <th style="min-width:80px">Insumos</th>
             <th style="min-width:80px"></th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="10" class="no-data">Carregando...</td></tr>
+          <tr><td colspan="12" class="no-data">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -290,35 +261,43 @@
         <div class="stat-lbl">Total</div>
       </div>
       <div class="stat">
-        <div class="stat-val" id="pcStatAberto" style="color:#1a56db">—</div>
+        <div class="stat-val" id="pcStatAberto" style="color:var(--primary)">—</div>
         <div class="stat-lbl">Aguardando OP</div>
       </div>
       <div class="stat">
-        <div class="stat-val" id="pcStatParcial" style="color:#d97706">—</div>
+        <div class="stat-val" id="pcStatParcial" style="color:var(--warning)">—</div>
         <div class="stat-lbl">Produção Parcial</div>
       </div>
       <div class="stat">
-        <div class="stat-val" id="pcStatCompleto" style="color:#059669">—</div>
+        <div class="stat-val" id="pcStatCompleto" style="color:var(--success)">—</div>
         <div class="stat-lbl">Atendido (100%)</div>
       </div>
     </div>
     <div class="card">
-      <div class="card-title"><span id="pcTableCount">Pedidos Comerciais</span></div>
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span id="pcTableCount">Pedidos Comerciais</span>
+        <select class="kt-select" id="filterStatusComercial" style="font-weight:600">
+          <option value="aberto" selected>Em aberto / parcial</option>
+          <option value="">Todos os status</option>
+          <option value="completo">Atendido (100%)</option>
+        </select>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th style="min-width:70px">Pedido</th>
-              <th>Cliente</th>
-              <th>Itens</th>
-              <th style="text-align:right">Qtd. Pedida</th>
-              <th style="text-align:right">Produzido (OPs vinculadas)</th>
-              <th style="min-width:150px">Progresso</th>
-              <th>Data</th>
+              <th style="min-width:70px" data-col="id">Pedido</th>
+              <th data-col="cliente">Cliente</th>
+              <th data-col="itensCount">Itens</th>
+              <th style="text-align:right" data-col="qtdPedida">Qtd. Pedida</th>
+              <th style="text-align:right" data-col="produzido">Produzido (OPs vinculadas)</th>
+              <th style="min-width:150px" data-col="pct">Progresso</th>
+              <th style="min-width:88px" data-col="data">Data do pedido</th>
+              <th style="min-width:100px" data-col="diasAberto" title="Dias corridos desde a data do pedido">Em aberto há</th>
             </tr>
           </thead>
           <tbody id="pcTableBody">
-            <tr><td colspan="7" class="no-data">Carregando...</td></tr>
+            <tr><td colspan="8" class="no-data">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -417,7 +396,7 @@
 <!-- Modal: Confirmar exclusão -->
 <div class="modal-bg" id="delModalBg">
   <div class="modal del-modal">
-    <div class="modal-header" style="background:linear-gradient(135deg,#9b1c1c,#e02424)">
+    <div class="modal-header" style="background:linear-gradient(135deg,#9b1c1c,var(--danger))">
       <h2>Excluir Pedido</h2>
       <button class="modal-close" id="delModalClose">×</button>
     </div>
@@ -438,12 +417,39 @@
   </div>
 </div>
 
+<!-- Modal: Ordenar Prioridades -->
+<div class="modal-bg" id="prioModalBg">
+  <div class="modal modal-prio">
+    <div class="modal-header">
+      <h2>🔀 Ordenar Prioridades</h2>
+      <button class="modal-close" id="prioModalClose">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="prio-hint">
+        Arraste (⠿) pra ajustar a posição de um pedido em relação aos vizinhos, ou digite a posição desejada no campo <strong>Classificar Prioridade do Pedido</strong> pra pular direto pro lugar certo — os outros pedidos se reorganizam sozinhos. Só pedidos em andamento aparecem aqui.
+      </div>
+      <div id="prioListEmpty" class="no-data" style="display:none;padding:20px">Nenhum pedido em andamento pra priorizar.</div>
+      <div class="prio-list" id="prioList"></div>
+    </div>
+    <div class="modal-footer">
+      <div style="font-size:11px;color:var(--muted)" id="prioSaveStatus"></div>
+      <div class="modal-footer-right">
+        <button class="btn btn-ghost" id="prioModalFechar">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhamento por OP/lote no hover do Produzido (aba SKUs para Produção) --
+     ver comentário em opBreakdownCache/fetchOpBreakdown mais abaixo. -->
+<div id="opBreakdownTip" class="op-breakdown-tip"></div>
+
 <script>
   // ── Firebase config ──────────────────────────────────────────────
   var firebaseConfig = {
     apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
     authDomain: "prod-kuryos.firebaseapp.com",
-    databaseURL: "https://prod-kuryos-default-rtdb.firebaseio.com",
+    databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
     projectId: "prod-kuryos",
     storageBucket: "prod-kuryos.firebasestorage.app",
     messagingSenderId: "323674581733",
@@ -451,6 +457,7 @@
     measurementId: "G-PTVWKLRHTG"
   };
   firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
   var db = firebase.database();
 
   // ── State ────────────────────────────────────────────────────────
@@ -488,6 +495,33 @@
     var parts = s.split('-');
     if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
     return s;
+  }
+  // Dias corridos entre uma data "YYYY-MM-DD" e hoje. Monta os dois lados a
+  // partir de ano/mês/dia locais (não de string ISO direto no construtor de
+  // Date) pra não sofrer o mesmo bug de fuso horário já corrigido em outras
+  // telas desta sessão -- meio-dia UTC vs. meia-noite local pode empurrar a
+  // data pro dia errado dependendo da hora em que a página é aberta.
+  function diasDesde(dataStr) {
+    if (!dataStr) return -1;
+    var parts = String(dataStr).split('-');
+    if (parts.length !== 3) return -1;
+    var d0 = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    if (isNaN(d0.getTime())) return -1;
+    var hoje = new Date();
+    var d1 = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    return Math.round((d1 - d0) / 86400000);
+  }
+  // Badge "Em aberto há" — cor evolui com a idade do pedido (só pra quem
+  // ainda está aberto/parcial; pedido já atendido mostra o ciclo total,
+  // sem alarme, porque não é mais uma pendência).
+  function fmtDiasAberto(r) {
+    if (r.diasAberto < 0) return '<span style="color:var(--muted);font-size:11px">—</span>';
+    var rotulo = r.diasAberto + (r.diasAberto === 1 ? ' dia' : ' dias');
+    if (r.categoria === 'completo') {
+      return '<span class="badge badge-gray" title="Tempo total entre o pedido e o atendimento de 100%">Atendido em ' + rotulo + '</span>';
+    }
+    var cls = r.diasAberto <= 7 ? 'badge-blue' : r.diasAberto <= 15 ? 'badge-orange' : 'badge-red';
+    return '<span class="badge ' + cls + '" title="Dias corridos desde a data do pedido">' + rotulo + '</span>';
   }
   function showAlert(msg, type, box) {
     var el = box || document.getElementById('alertBox');
@@ -531,18 +565,20 @@
   //    OPs vinculadas por parentPedidoId ──────────────────────────────────
   var pedidosComerciaisCache = {};
 
-  db.ref('pedidos_comerciais').on('value', function(snap) {
+  dbOnValue(db.ref('pedidos_comerciais'), function(snap) {
     pedidosComerciaisCache = snap.val() || {};
     renderPedidosComerciais();
   });
+
+  var pcSortCol = null, pcSortDir = 1;
 
   function renderPedidosComerciais() {
     var tbody = document.getElementById('pcTableBody');
     if (!tbody || document.getElementById('tabPanelComerciais').style.display === 'none') return;
 
-    var ids = Object.keys(pedidosComerciaisCache).sort(function(a, b) { return Number(b) - Number(a); });
+    var ids = Object.keys(pedidosComerciaisCache);
     if (!ids.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
       document.getElementById('pcStatTotal').textContent = '0';
       document.getElementById('pcStatAberto').textContent = '0';
       document.getElementById('pcStatParcial').textContent = '0';
@@ -550,11 +586,24 @@
       return;
     }
 
+    var statusFilter = document.getElementById('filterStatusComercial').value;
+    var search = document.getElementById('searchInput').value.toLowerCase().trim();
     var nAberto = 0, nParcial = 0, nCompleto = 0;
-    var rows = ids.map(function(id) {
+
+    // 1) Monta as linhas com os valores já calculados (separado do HTML,
+    //    pra poder ordenar por qualquer coluna antes de renderizar).
+    var rows = [];
+    ids.forEach(function(id) {
       var pc = pedidosComerciaisCache[id] || {};
       var itens = pc.itens || [];
       var qtdPedida = pc.total_qtd || itens.reduce(function(s, it) { return s + (it.qtd || 0); }, 0);
+
+      // Busca casa com ID ou cliente — assim um pedido completo escondido
+      // pelo filtro padrão ainda aparece se alguém procurar por ele direto.
+      if (search) {
+        var haystack = (id + ' ' + (pc.cliente || '')).toLowerCase();
+        if (haystack.indexOf(search) === -1) return;
+      }
 
       // Soma produzido de todas as OPs (pedidos/) vinculadas a este pedido comercial
       var produzido = 0;
@@ -565,37 +614,119 @@
         }
       });
 
+      // Um SKU encerrado/concluído (pedidoStatus) conta como atendido mesmo
+      // que produzido < qtdTotal (ex: quantidade final aceita menor que a
+      // pedida) -- sem isso, esse pedido comercial nunca batia 100% e ficava
+      // pra sempre em "Aberto" mesmo já tendo sumido da lista de produção
+      // ativa (relatado como "pedido que não existe mais em SKUs para
+      // Produção mas continua aqui").
+      var skuSet = {};
+      itens.forEach(function(it) { if (it.sku) skuSet[it.sku] = true; });
+      var skuList = Object.keys(skuSet);
+      var skusConcluidos = skuList.filter(function(sku) {
+        var p = allPedidos[id + '__' + sanitizeKey(sku)];
+        if (!p) return false;
+        var st = pedidoStatus(p);
+        return st === 'concluido' || st === 'encerrado';
+      }).length;
+      var todosSkusConcluidos = skuList.length > 0 && skusConcluidos === skuList.length;
+
       var pct = qtdPedida > 0 ? Math.min(100, Math.round((produzido / qtdPedida) * 100)) : 0;
-      if (pct >= 100 && qtdPedida > 0) nCompleto++;
+      var categoria = todosSkusConcluidos || (pct >= 100 && qtdPedida > 0) ? 'completo' : 'aberto'; // aberto cobre tanto parcial quanto sem produção ainda
+      if (categoria === 'completo') nCompleto++;
       else if (produzido > 0) nParcial++;
       else nAberto++;
 
-      var itensResumo = itens.map(function(it) { return escapeHtml(it.descricao || ''); }).join(', ') || '—';
-      var barColor = pct >= 100 ? '#059669' : pct > 0 ? '#d97706' : '#cbd5e1';
+      // Pedidos 100% atendidos ficam escondidos por padrão — só poluíam a
+      // lista sem precisar de ação; ainda dá pra ver escolhendo o filtro.
+      if (statusFilter && categoria !== statusFilter) return;
 
-      return '<tr>' +
-        '<td><strong>#' + escapeHtml(id) + '</strong></td>' +
-        '<td>' + escapeHtml(pc.cliente || '-') + '</td>' +
-        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + escapeAttr(itensResumo) + '">' + itensResumo + '</td>' +
-        '<td style="text-align:right">' + fmtNum(qtdPedida) + '</td>' +
-        '<td style="text-align:right">' + fmtNum(produzido) + '</td>' +
-        '<td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-size:11px;font-weight:700">' + pct + '%</span></div></td>' +
-        '<td>' + escapeHtml(pc.data || '-') + '</td>' +
-      '</tr>';
+      var itensResumo = itens.map(function(it) { return escapeHtml(it.descricao || ''); }).join(', ') || '—';
+
+      // Quebra por item -- cada item do pedido comercial tem sua própria OP
+      // vinculada (chave parentPedidoId__SKU, mesmo padrão já usado acima
+      // pra achar skusConcluidos), da qual vem o produzido individual. Serve
+      // de base pros hovers de Qtd Pedida/Produzido/Progresso -- em vez de só
+      // o agregado, mostra quanto é de cada item que compõe o pedido.
+      var itemBreakdown = itens.map(function(it) {
+        var linked = allPedidos[id + '__' + sanitizeKey(it.sku || '')] || null;
+        var itQtd = it.qtd || 0;
+        var itProduzido = linked ? (linked.produzido || 0) : 0;
+        var itPct = itQtd > 0 ? Math.min(100, Math.round(itProduzido / itQtd * 100)) : 0;
+        return { descricao: it.descricao || it.sku || '?', qtd: itQtd, produzido: itProduzido, pct: itPct };
+      });
+      var qtdPedidaTitle = itemBreakdown.map(function(b) { return b.descricao + ': ' + fmtNum(b.qtd) + ' un.'; }).join('\n') || '—';
+      var produzidoTitle = itemBreakdown.map(function(b) { return b.descricao + ': ' + fmtNum(b.produzido) + ' / ' + fmtNum(b.qtd) + ' un.'; }).join('\n') || '—';
+      var pctTitle = itemBreakdown.map(function(b) { return b.descricao + ': ' + b.pct + '%'; }).join('\n') || '—';
+
+      rows.push({
+        id: id,
+        cliente: pc.cliente || '-',
+        itensCount: itens.length,
+        itensResumo: itensResumo,
+        qtdPedida: qtdPedida,
+        qtdPedidaTitle: qtdPedidaTitle,
+        produzido: produzido,
+        produzidoTitle: produzidoTitle,
+        pct: pct,
+        pctTitle: pctTitle,
+        data: pc.dataPedido || '',
+        diasAberto: diasDesde(pc.dataPedido),
+        categoria: categoria
+      });
     });
 
-    tbody.innerHTML = rows.join('');
-    document.getElementById('pcTableCount').textContent = ids.length + ' Pedido(s) Comercial(is)';
+    // 2) Ordena (clique no cabeçalho) ou usa o padrão (mais recente primeiro)
+    if (pcSortCol) {
+      var col = pcSortCol;
+      rows.sort(function(a, b) {
+        if (col === 'itensCount' || col === 'qtdPedida' || col === 'produzido' || col === 'pct' || col === 'diasAberto') {
+          return (a[col] - b[col]) * pcSortDir;
+        }
+        return String(a[col] || '').localeCompare(String(b[col] || ''), undefined, {numeric:true}) * pcSortDir;
+      });
+    } else {
+      rows.sort(function(a, b) { return String(b.id).localeCompare(a.id, undefined, {numeric:true}); });
+    }
+
+    // 3) Renderiza
+    var html = rows.map(function(r) {
+      var barColor = r.pct >= 100 ? 'var(--success)' : r.pct > 0 ? 'var(--warning)' : '#cbd5e1';
+      return '<tr>' +
+        '<td><strong>#' + escapeHtml(r.id) + '</strong></td>' +
+        '<td>' + escapeHtml(r.cliente) + '</td>' +
+        '<td style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + escapeAttr(r.itensResumo) + '">' + r.itensResumo + '</td>' +
+        '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.qtdPedidaTitle) + '">' + fmtNum(r.qtdPedida) + '</td>' +
+        '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.produzidoTitle) + '">' + fmtNum(r.produzido) + '</td>' +
+        '<td style="cursor:help" title="' + escapeAttr(r.pctTitle) + '"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:' + barColor + '"></div></div><span style="font-size:11px;font-weight:700">' + r.pct + '%</span></div></td>' +
+        '<td>' + escapeHtml(fmtDate(r.data) || '-') + '</td>' +
+        '<td>' + fmtDiasAberto(r) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    tbody.innerHTML = html || '<tr><td colspan="8" class="no-data">Nenhum pedido comercial nesse filtro.</td></tr>';
+    document.getElementById('pcTableCount').textContent = rows.length + ' de ' + ids.length + ' Pedido(s) Comercial(is)';
     document.getElementById('pcStatTotal').textContent = fmtNum(ids.length);
     document.getElementById('pcStatAberto').textContent = fmtNum(nAberto);
     document.getElementById('pcStatParcial').textContent = fmtNum(nParcial);
     document.getElementById('pcStatCompleto').textContent = fmtNum(nCompleto);
   }
 
-  function fmtNum(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+  document.querySelector('#tabPanelComerciais thead').addEventListener('click', function(e) {
+    var th = e.target.closest('th[data-col]');
+    if (!th) return;
+    var col = th.dataset.col;
+    if (col === pcSortCol) { pcSortDir *= -1; }
+    else { pcSortCol = col; pcSortDir = 1; }
+    document.querySelectorAll('#tabPanelComerciais thead th').forEach(function(t){ t.classList.remove('sorted-asc','sorted-desc'); });
+    th.classList.add(pcSortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+    renderPedidosComerciais();
+  });
+
+  // fmtNum vem de shared/utils.js
 
   // ── Load produtos for select ─────────────────────────────────────
-  db.ref('produtos').on('value', function(snap) {
+  dbOnValue(db.ref('produtos'), function(snap) {
     produtosCache = snap.val() || {};
     fillProdutoSelect();
   });
@@ -627,7 +758,7 @@
   }
 
   // ── Load pedidos (realtime) ──────────────────────────────────────
-  db.ref('pedidos').on('value', function(snap) {
+  dbOnValue(db.ref('pedidos'), function(snap) {
     allPedidos = {};
     if (snap.val()) {
       Object.entries(snap.val()).forEach(function(entry) {
@@ -641,10 +772,79 @@
   });
 
   // ── Render ───────────────────────────────────────────────────────
+  var opsSortCol = null, opsSortDir = 1;
+
+  // Data do pedido comercial de origem desta OP (não confundir com dataProd,
+  // que é a data de produção planejada) -- só existe pra OPs que nasceram do
+  // Gerador de Pedidos (parentPedidoId); OP cadastrada direto aqui não tem.
+  function opDataPedido(p) {
+    if (!p || !p.parentPedidoId) return '';
+    var pc = pedidosComerciaisCache[p.parentPedidoId];
+    return (pc && pc.dataPedido) || '';
+  }
+  function fmtDiasAbertoOp(p) {
+    var dataPedidoVal = opDataPedido(p);
+    if (!dataPedidoVal) return '<span style="color:var(--muted);font-size:11px">—</span>';
+    var d = diasDesde(dataPedidoVal);
+    if (d < 0) return '<span style="color:var(--muted);font-size:11px">—</span>';
+    var rotulo = d + (d === 1 ? ' dia' : ' dias');
+    var st = pedidoStatus(p);
+    if (st === 'concluido' || st === 'encerrado') {
+      return '<span class="badge badge-gray" title="Tempo total entre o pedido comercial e a conclusão desta OP">Concluído em ' + rotulo + '</span>';
+    }
+    var cls = d <= 7 ? 'badge-blue' : d <= 15 ? 'badge-orange' : 'badge-red';
+    return '<span class="badge ' + cls + '" title="Dias corridos desde a data do pedido comercial">' + rotulo + '</span>';
+  }
+
+  function renderOpRow(p) {
+    var pc = pct(p);
+    var st = pedidoStatus(p);
+    var fillClass = pc >= 95 ? 'fill-green' : pc >= 70 ? 'fill-orange' : 'fill-red';
+    if (st === 'encerrado') fillClass = 'fill-purple';
+    var statusBadge =
+      st === 'concluido'  ? '<span class="badge badge-green">✓ Concluído</span>' :
+      st === 'encerrado'  ? '<span class="badge badge-purple">⬛ Encerrado</span>' :
+                            '<span class="badge badge-blue">⚙ Em andamento</span>';
+    var ins = p.insumoStatus;
+    var insBadge = ins === 'ok'      ? '<a href="insumos.html#' + p._key + '" class="badge badge-green" style="text-decoration:none">✓ OK</a>' :
+                   ins === 'parcial' ? '<a href="insumos.html#' + p._key + '" class="badge badge-orange" style="text-decoration:none">⚠ Parcial</a>' :
+                   ins === 'pendente'? '<a href="insumos.html#' + p._key + '" class="badge badge-red" style="text-decoration:none">✗ Pendente</a>' :
+                                       '<a href="insumos.html#' + p._key + '" class="badge" style="text-decoration:none;background:color-mix(in srgb, var(--text) 8%, var(--card));color:var(--muted)">— —</a>';
+    var prioCell = p.priority
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:800">' + p.priority + '</span>'
+      : '<span style="color:var(--muted)">—</span>';
+    var clientBadge = p.cliente ? ' <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:700;padding:1px 5px;margin-left:4px">' + p.cliente + '</span>' : '';
+    var dataPedidoVal = opDataPedido(p);
+    return '<tr>' +
+      '<td style="text-align:center">' + prioCell + '</td>' +
+      '<td><span class="id-badge">#' + (p.id||'—') + '</span></td>' +
+      '<td><div class="prod-cell" title="' + (p.produto||'') + '">' + (p.produto||'—') + clientBadge + '</div></td>' +
+      '<td>' + (p.linha||'—') + '</td>' +
+      '<td>' + fmtDate(p.dataProd) + '</td>' +
+      '<td>' + (dataPedidoVal ? fmtDate(dataPedidoVal) : '<span style="color:var(--muted)">—</span>') + '</td>' +
+      '<td>' + fmtDiasAbertoOp(p) + '</td>' +
+      '<td style="text-align:right;font-weight:600">' + (p.qtdTotal ? p.qtdTotal.toLocaleString('pt-BR') : '—') + '</td>' +
+      '<td class="produzido-cell" data-op-key="' + escapeAttr(p._key) + '" style="text-align:right;color:var(--muted);cursor:help">' + ((p.produzido||0).toLocaleString('pt-BR')) + '</td>' +
+      '<td>' +
+        '<div class="prog-wrap">' +
+          '<div class="prog-label"><span>' + (p.produzido||0).toLocaleString('pt-BR') + ' / ' + (p.qtdTotal||0).toLocaleString('pt-BR') + '</span><span class="pct">' + pc + '%</span></div>' +
+          '<div class="prog-bar"><div class="prog-fill ' + fillClass + '" style="width:' + Math.min(pc,100) + '%"></div></div>' +
+        '</div>' +
+      '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td>' + insBadge + '</td>' +
+      '<td><div class="actions-cell">' +
+        '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '">✏️</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
   function renderTable() {
     var search = document.getElementById('searchInput').value.toLowerCase().trim();
     var filterStatus = document.getElementById('filterStatus').value;
     var filterLinha = document.getElementById('filterLinha').value;
+    var groupBy = document.getElementById('groupBySel').value;
 
     var list = Object.values(allPedidos).filter(function(p) {
       var st = pedidoStatus(p);
@@ -657,18 +857,32 @@
       return true;
     });
 
-    // Sort: usar prioridade (asc), depois ordenacao da planilha, depois status
-    list.sort(function(a, b) {
-      var sa = pedidoStatus(a), sb = pedidoStatus(b);
-      var stOrd = {andamento:0, concluido:1, encerrado:2};
-      if (stOrd[sa] !== stOrd[sb]) return stOrd[sa] - stOrd[sb];
-      // Dentro do mesmo status: usar prioridade
-      var pa = a.priority || 999, pb = b.priority || 999;
-      if (pa !== pb) return pa - pb;
-      var oa = a.ordenacao || 999999999, ob = b.ordenacao || 999999999;
-      if (oa !== ob) return oa - ob;
-      return pct(b) - pct(a);
-    });
+    if (opsSortCol) {
+      // Ordenação escolhida pelo usuário via clique no cabeçalho — numérica pras
+      // colunas de quantidade, alfabética/status pro resto.
+      list.sort(function(a, b) {
+        var col = opsSortCol;
+        if (col === 'pct') return (pct(a) - pct(b)) * opsSortDir;
+        if (col === 'status') return String(pedidoStatus(a)).localeCompare(pedidoStatus(b)) * opsSortDir;
+        if (col === 'qtdTotal' || col === 'produzido') return ((a[col]||0) - (b[col]||0)) * opsSortDir;
+        if (col === 'dataProd') return String(a.dataProd||'').localeCompare(String(b.dataProd||'')) * opsSortDir;
+        if (col === 'dataPedido') return String(opDataPedido(a)).localeCompare(String(opDataPedido(b))) * opsSortDir;
+        if (col === 'diasAberto') return (diasDesde(opDataPedido(a)) - diasDesde(opDataPedido(b))) * opsSortDir;
+        return String(a[col]||'').localeCompare(String(b[col]||''), undefined, {numeric:true}) * opsSortDir;
+      });
+    } else {
+      // Sort padrão: usar prioridade (asc), depois ordenacao da planilha, depois status
+      list.sort(function(a, b) {
+        var sa = pedidoStatus(a), sb = pedidoStatus(b);
+        var stOrd = {andamento:0, concluido:1, encerrado:2};
+        if (stOrd[sa] !== stOrd[sb]) return stOrd[sa] - stOrd[sb];
+        var pa = a.priority || 999, pb = b.priority || 999;
+        if (pa !== pb) return pa - pb;
+        var oa = a.ordenacao || 999999999, ob = b.ordenacao || 999999999;
+        if (oa !== ob) return oa - ob;
+        return pct(b) - pct(a);
+      });
+    }
 
     // Stats from ALL pedidos (unfiltered)
     var all = Object.values(allPedidos);
@@ -681,56 +895,55 @@
 
     var tbody = document.getElementById('tableBody');
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="no-data">Nenhum pedido encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12" class="no-data">Nenhum pedido encontrado</td></tr>';
       return;
     }
 
-    tbody.innerHTML = list.map(function(p) {
-      var pc = pct(p);
-      var st = pedidoStatus(p);
-      var fillClass = pc >= 95 ? 'fill-green' : pc >= 70 ? 'fill-orange' : 'fill-red';
-      if (st === 'encerrado') fillClass = 'fill-purple';
-      var statusBadge =
-        st === 'concluido'  ? '<span class="badge badge-green">✓ Concluído</span>' :
-        st === 'encerrado'  ? '<span class="badge badge-purple">⬛ Encerrado</span>' :
-                              '<span class="badge badge-blue">⚙ Em andamento</span>';
-      var ins = p.insumoStatus;
-      var insBadge = ins === 'ok'      ? '<a href="insumos.html#' + p._key + '" class="badge badge-green" style="text-decoration:none">✓ OK</a>' :
-                     ins === 'parcial' ? '<a href="insumos.html#' + p._key + '" class="badge badge-orange" style="text-decoration:none">⚠ Parcial</a>' :
-                     ins === 'pendente'? '<a href="insumos.html#' + p._key + '" class="badge badge-red" style="text-decoration:none">✗ Pendente</a>' :
-                                         '<a href="insumos.html#' + p._key + '" class="badge" style="text-decoration:none;background:#f3f4f6;color:#6b7280">— —</a>';
-      var prioCell = p.priority
-        ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:800">' + p.priority + '</span>'
-        : '<span style="color:var(--muted)">—</span>';
-      var clientBadge = p.cliente ? ' <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:700;padding:1px 5px;margin-left:4px">' + p.cliente + '</span>' : '';
-      return '<tr>' +
-        '<td style="text-align:center">' + prioCell + '</td>' +
-        '<td><span class="id-badge">#' + (p.id||'—') + '</span></td>' +
-        '<td><div class="prod-cell" title="' + (p.produto||'') + '">' + (p.produto||'—') + clientBadge + '</div></td>' +
-        '<td>' + (p.linha||'—') + '</td>' +
-        '<td>' + fmtDate(p.dataProd) + '</td>' +
-        '<td style="text-align:right;font-weight:600">' + (p.qtdTotal ? p.qtdTotal.toLocaleString('pt-BR') : '—') + '</td>' +
-        '<td style="text-align:right;color:var(--muted)">' + ((p.produzido||0).toLocaleString('pt-BR')) + '</td>' +
-        '<td>' +
-          '<div class="prog-wrap">' +
-            '<div class="prog-label"><span>' + (p.produzido||0).toLocaleString('pt-BR') + ' / ' + (p.qtdTotal||0).toLocaleString('pt-BR') + '</span><span class="pct">' + pc + '%</span></div>' +
-            '<div class="prog-bar"><div class="prog-fill ' + fillClass + '" style="width:' + Math.min(pc,100) + '%"></div></div>' +
-          '</div>' +
-        '</td>' +
-        '<td>' + statusBadge + '</td>' +
-        '<td>' + insBadge + '</td>' +
-        '<td><div class="actions-cell">' +
-          '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '">✏️</button>' +
-          '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>' +
-        '</div></td>' +
-      '</tr>';
-    }).join('');
+    if (!groupBy) {
+      tbody.innerHTML = list.map(renderOpRow).join('');
+      return;
+    }
+
+    // Agrupado: mantém a ordem já calculada acima dentro de cada grupo,
+    // só particiona em seções por Linha ou Cliente.
+    var groups = {};
+    var groupOrder = [];
+    list.forEach(function(p) {
+      var g = (groupBy === 'linha' ? p.linha : p.cliente) || '—';
+      if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+      groups[g].push(p);
+    });
+    groupOrder.sort(function(a, b) { return a.localeCompare(b, undefined, {numeric:true}); });
+    var html = '';
+    groupOrder.forEach(function(g) {
+      html += '<tr class="group-header"><td colspan="13">' + escapeHtml(g) + ' (' + groups[g].length + ')</td></tr>';
+      html += groups[g].map(renderOpRow).join('');
+    });
+    tbody.innerHTML = html;
   }
 
+  document.querySelector('#tabPanelOps thead').addEventListener('click', function(e) {
+    var th = e.target.closest('th[data-col]');
+    if (!th) return;
+    var col = th.dataset.col;
+    if (col === opsSortCol) { opsSortDir *= -1; }
+    else { opsSortCol = col; opsSortDir = 1; }
+    document.querySelectorAll('#tabPanelOps thead th').forEach(function(t){ t.classList.remove('sorted-asc','sorted-desc'); });
+    th.classList.add(opsSortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+    renderTable();
+  });
+
+  document.getElementById('groupBySel').addEventListener('change', renderTable);
+
   // ── Filters ──────────────────────────────────────────────────────
-  document.getElementById('searchInput').addEventListener('input', renderTable);
+  var _searchDebounceT = null;
+  document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(_searchDebounceT);
+    _searchDebounceT = setTimeout(function() { renderTable(); renderPedidosComerciais(); }, 200);
+  });
   document.getElementById('filterStatus').addEventListener('change', renderTable);
   document.getElementById('filterLinha').addEventListener('change', renderTable);
+  document.getElementById('filterStatusComercial').addEventListener('change', renderPedidosComerciais);
 
   // ── Table actions (edit / delete) via delegation ─────────────────
   document.getElementById('tableBody').addEventListener('click', function(e) {
@@ -739,6 +952,133 @@
     var key = btn.dataset.key;
     if (btn.dataset.action === 'edit') openEdit(key);
     if (btn.dataset.action === 'delete') openDelete(key);
+  });
+
+  // ── Hover em "Produzido" (aba SKUs para Produção): detalha por OP/lote ──
+  // Sob demanda, por pedido -- ao primeiro hover busca só os apontamentos
+  // daquele pedido (registros/{data}, filtrado por pedidoId == p.id), nunca
+  // a coleção inteira. Resultado fica em cache (opBreakdownCache) pro resto
+  // da sessão, então só paga essa leitura uma vez por pedido, mesmo que a
+  // pessoa passe o mouse várias vezes.
+  var opBreakdownCache = {}; // pedidoKey -> texto do tooltip, já pronto
+  // Achado real ao investigar um caso relatado (Body Splash Flor D'Aura,
+  // pedido 0011): não era o prazo -- parte dos apontamentos do
+  // Apontamento em Tempo Real (form.html, tipo 'apontamento_total') é
+  // salva SEM o campo pedidoId (só produto/lote/quantidade). O filtro
+  // estrito por pedidoId==p.id descartava esses silenciosamente, mesmo
+  // dentro da janela de dias. Confirmado batendo a soma: os apontamentos
+  // "órfãos" (sem pedidoId) de 26222/02 e parte de 26222/03 fechavam
+  // exatamente os 7.786 un. gravados em pedidos/{key}.produzido, que o
+  // filtro por pedidoId sozinho nunca alcançava. Corrigido casando também
+  // por produto (texto exato) quando pedidoId está ausente -- só nesse caso,
+  // pra não misturar produção de OUTRO pedido que por acaso tenha o mesmo
+  // produto num período sobreposto.
+  var OP_BREAKDOWN_MAX_DIAS = 730; // ~2 anos -- cobre esta base (mais antiga só a partir de 2025-01) com folga, sem ficar literalmente sem teto
+  var opBreakdownTip = document.getElementById('opBreakdownTip');
+  var opBreakdownActiveKey = null; // evita que uma resposta atrasada de OUTRO pedido escreva no tooltip errado
+
+  function opBreakdownDateRange(p) {
+    var hoje = new Date();
+    var maxIni = new Date(hoje.getTime() - OP_BREAKDOWN_MAX_DIAS * 86400000);
+    var dataPedidoVal = opDataPedido(p);
+    var ini = maxIni;
+    var truncado = false;
+    if (dataPedidoVal) {
+      var parts = String(dataPedidoVal).split('-');
+      var d0 = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      if (!isNaN(d0.getTime())) {
+        if (d0 < maxIni) { truncado = true; } else { ini = d0; }
+      }
+    } else {
+      truncado = true; // sem data de origem conhecida -- sempre limitado à janela máxima
+    }
+    var dates = [];
+    var d = new Date(ini);
+    while (d <= hoje) {
+      dates.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+      d.setDate(d.getDate() + 1);
+    }
+    return { dates: dates, truncado: truncado };
+  }
+
+  function fetchOpBreakdown(p) {
+    var key = p._key;
+    if (opBreakdownCache[key]) return Promise.resolve(opBreakdownCache[key]);
+    var range = opBreakdownDateRange(p);
+    var porLote = {};
+    return Promise.all(range.dates.map(function(date) {
+      return db.ref('registros/' + date).once('value').then(function(snap) {
+        snap.forEach(function(regSnap) {
+          var r = regSnap.val();
+          if (!r) return;
+          // O produto precisa bater SEMPRE -- um pedido comercial (pedidoId)
+          // reúne vários SKUs (ex: "0011" tinha Flor D'Aura, Céu Infinito,
+          // Rosa Rainha...); casar só por pedidoId sem conferir o produto
+          // misturava apontamentos de OUTRO item do mesmo pedido comercial
+          // aqui (achado real: registros de "Despertar das Flores" com
+          // pedidoId=0011 entrando na conta de "Flor D'Aura").
+          var produtoMatch = String(r.produto || '').trim().toUpperCase() === String(p.produto || '').trim().toUpperCase();
+          if (!produtoMatch) return;
+          var mesmoPedido = String(r.pedidoId || '') === String(p.id || '');
+          // Fallback só quando o registro não tem pedidoId NENHUM -- nunca
+          // p/ um registro que tem pedidoId de OUTRO pedido, mesmo que o
+          // produto bata (evita misturar produção de dois pedidos abertos
+          // ao mesmo tempo pro mesmo item). Necessário porque parte dos
+          // apontamentos do Apontamento em Tempo Real (form.html, tipo
+          // 'apontamento_total') é salva sem o campo pedidoId.
+          var orfaoMesmoProduto = !r.pedidoId;
+          if (!mesmoPedido && !orfaoMesmoProduto) return;
+          var lote = r.lote || '(sem lote)';
+          porLote[lote] = (porLote[lote] || 0) + (parseFloat(r.quantidade) || 0);
+        });
+      });
+    })).then(function() {
+      var lotes = Object.keys(porLote).sort();
+      var texto;
+      if (!lotes.length) {
+        texto = 'Nenhum apontamento encontrado' + (range.truncado ? ' nos últimos ' + OP_BREAKDOWN_MAX_DIAS + ' dias.' : '.');
+      } else {
+        texto = lotes.map(function(lote) { return 'OP ' + lote + ': ' + fmtNum(porLote[lote]) + ' un.'; }).join('\n');
+        if (range.truncado) texto += '\n(apontamentos além de ' + OP_BREAKDOWN_MAX_DIAS + ' dias atrás não entram aqui)';
+      }
+      opBreakdownCache[key] = texto;
+      return texto;
+    });
+  }
+
+  function positionOpBreakdownTip(e) {
+    var pad = 14;
+    var x = e.clientX + pad, y = e.clientY + pad;
+    // Não deixa o tooltip nascer fora da tela (canto inferior direito é o caso comum)
+    if (x + 280 > window.innerWidth) x = e.clientX - 280 - pad;
+    if (y + 90 > window.innerHeight) y = e.clientY - 90 - pad;
+    opBreakdownTip.style.left = x + 'px';
+    opBreakdownTip.style.top = y + 'px';
+  }
+
+  document.getElementById('tableBody').addEventListener('mouseover', function(e) {
+    var cell = e.target.closest('.produzido-cell');
+    if (!cell) return;
+    var key = cell.dataset.opKey;
+    var p = allPedidos[key];
+    if (!p) return;
+    opBreakdownActiveKey = key;
+    opBreakdownTip.style.display = 'block';
+    opBreakdownTip.textContent = opBreakdownCache[key] || 'Carregando…';
+    positionOpBreakdownTip(e);
+    fetchOpBreakdown(p).then(function(texto) {
+      if (opBreakdownActiveKey === key) opBreakdownTip.textContent = texto;
+    });
+  });
+  document.getElementById('tableBody').addEventListener('mousemove', function(e) {
+    if (opBreakdownTip.style.display === 'block' && e.target.closest('.produzido-cell')) positionOpBreakdownTip(e);
+  });
+  document.getElementById('tableBody').addEventListener('mouseout', function(e) {
+    var cell = e.target.closest('.produzido-cell');
+    if (cell && !cell.contains(e.relatedTarget)) {
+      opBreakdownTip.style.display = 'none';
+      opBreakdownActiveKey = null;
+    }
   });
 
   // ── Modal: open new ──────────────────────────────────────────────
@@ -819,16 +1159,30 @@
     if (!produto) { showModalAlert('Selecione o produto.'); return; }
     if (!qtdTotal || qtdTotal < 1) { showModalAlert('Informe a quantidade total (mínimo 1).'); return; }
 
-    var newKey = pedidoFirebaseKey(id, produto);
+    // Pedidos vinculados a um pedido comercial (criados pelo Gerador de
+    // Pedidos) usam a chave parentPedidoId__SKU, da qual dependem as OPs
+    // (skuPedidoKey), o checklist de insumos e o resumo em Pedidos
+    // Comerciais. Essa chave NUNCA pode mudar aqui -- antes, editar ID ou
+    // Produto (ou até só abrir e salvar sem mudar nada, já que a chave
+    // recalculada por pedidoFirebaseKey(id,produto) quase nunca batia com a
+    // original) recriava o pedido numa chave nova, derrubando o vínculo,
+    // apagando o checklist de insumos, e órfando o item em Pedidos
+    // Comerciais -- exatamente o padrão relatado.
+    var existing = editingKey ? allPedidos[editingKey] : null;
+    var isComercial = !!(existing && existing.parentPedidoId);
 
-    var skuVal = '';
-    var clientVal = '';
-    var matchedProd = Object.values(produtosCache).find(function(p) {
-      return p.descricao === produto;
-    });
-    if (matchedProd) {
-      skuVal = matchedProd.sku || '';
-      clientVal = matchedProd.cliente || '';
+    var newKey = isComercial ? editingKey : pedidoFirebaseKey(id, produto);
+
+    var skuVal = isComercial ? (existing.sku || '') : '';
+    var clientVal = isComercial ? (existing.cliente || '') : '';
+    if (!isComercial) {
+      var matchedProd = Object.values(produtosCache).find(function(p) {
+        return p.descricao === produto;
+      });
+      if (matchedProd) {
+        skuVal = matchedProd.sku || '';
+        clientVal = matchedProd.cliente || '';
+      }
     }
 
     var data = {
@@ -843,6 +1197,10 @@
       priority: priorityVal > 0 ? priorityVal : 999
     };
     if (statusManual) data.statusManual = statusManual;
+    if (isComercial) {
+      data.parentPedidoId = existing.parentPedidoId;
+      if (existing.insumosChecklist) data.insumosChecklist = existing.insumosChecklist;
+    }
 
     // If editing and the key changed (ID or produto changed), delete old key
     var oldKey = editingKey;
@@ -990,14 +1348,178 @@
     deleteKey = null;
   }
 
+  // ── Ordenar Prioridades (drag-and-drop + posição direta) ───────────
+  // Duas formas de mexer na mesma lista ordenada: arrastar (bom pra ajuste
+  // fino, mover um vizinho pra cima/baixo) ou digitar a posição alvo no
+  // campo "Classificar Prioridade do Pedido" (bom pra saltos grandes, tipo
+  // tirar um pedido da posição 90 e trazer pra posição 2, sem precisar
+  // arrastar por uma lista de 90+ itens). As duas ações convergem pro mesmo
+  // fluxo: reordenar o array em memória e regravar 1..N em pedidos/{key}/priority.
+  var prioOrder = []; // firebaseKeys, na ordem de prioridade atual
+
+  function abertosPrioOrdenados() {
+    return Object.keys(allPedidos)
+      .filter(function(k) { return pedidoStatus(allPedidos[k]) === 'andamento'; })
+      .sort(function(a, b) {
+        var pa = allPedidos[a].priority > 0 ? allPedidos[a].priority : 9999;
+        var pb = allPedidos[b].priority > 0 ? allPedidos[b].priority : 9999;
+        if (pa !== pb) return pa - pb;
+        return String(allPedidos[a].produto || '').localeCompare(String(allPedidos[b].produto || ''));
+      });
+  }
+
+  function openPrioModal() {
+    prioOrder = abertosPrioOrdenados();
+    document.getElementById('prioSaveStatus').textContent = '';
+    renderPrioList();
+    document.getElementById('prioModalBg').classList.add('open');
+  }
+
+  function closePrioModal() {
+    document.getElementById('prioModalBg').classList.remove('open');
+  }
+
+  function renderPrioList() {
+    var list = document.getElementById('prioList');
+    var empty = document.getElementById('prioListEmpty');
+    if (!prioOrder.length) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    list.innerHTML = prioOrder.map(function(key, idx) {
+      var p = allPedidos[key];
+      if (!p) return '';
+      var rank = idx + 1;
+      var sub = (p.id ? '#' + p.id : '') + (p.cliente ? ' · ' + p.cliente : '');
+      return '<div class="prio-row" draggable="true" data-key="' + escapeAttr(key) + '">' +
+        '<span class="prio-handle" title="Arraste pra reordenar">⠿</span>' +
+        '<span class="prio-rank">' + rank + '</span>' +
+        '<div class="prio-info">' +
+          '<div class="prio-produto" title="' + escapeAttr(p.produto || '') + '">' + escapeHtml(p.produto || '—') + '</div>' +
+          '<div class="prio-sub">' + escapeHtml(sub) + '</div>' +
+        '</div>' +
+        '<div class="prio-pos-field">' +
+          '<label>Classificar Prioridade do Pedido</label>' +
+          '<input type="number" class="prio-pos-input" min="1" max="' + prioOrder.length + '" value="' + rank + '" data-key="' + escapeAttr(key) + '">' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    list.querySelectorAll('.prio-pos-input').forEach(function(input) {
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') input.blur(); });
+      input.addEventListener('blur', function() { commitPrioPosition(input.dataset.key, parseInt(input.value, 10)); });
+    });
+
+    setupPrioDrag(list);
+  }
+
+  function setupPrioDrag(list) {
+    var draggingEl = null;
+    list.querySelectorAll('.prio-row').forEach(function(row) {
+      row.addEventListener('dragstart', function() {
+        draggingEl = row;
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', function() {
+        row.classList.remove('dragging');
+        draggingEl = null;
+        commitPrioOrderFromDOM();
+      });
+      row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!draggingEl || draggingEl === row) return;
+        var rect = row.getBoundingClientRect();
+        var before = (e.clientY - rect.top) < rect.height / 2;
+        list.insertBefore(draggingEl, before ? row : row.nextSibling);
+      });
+    });
+  }
+
+  function commitPrioOrderFromDOM() {
+    var list = document.getElementById('prioList');
+    var newOrder = Array.prototype.map.call(list.querySelectorAll('.prio-row'), function(row) { return row.dataset.key; });
+    if (newOrder.join(',') === prioOrder.join(',')) return; // nada mudou, evita escrita à toa
+    prioOrder = newOrder;
+    savePrioOrder();
+    renderPrioList();
+  }
+
+  function commitPrioPosition(key, novaPos) {
+    var idx = prioOrder.indexOf(key);
+    if (idx === -1) return;
+    var n = prioOrder.length;
+    if (!novaPos || isNaN(novaPos)) { renderPrioList(); return; }
+    novaPos = Math.max(1, Math.min(n, novaPos));
+    var novoIdx = novaPos - 1;
+    if (novoIdx === idx) { renderPrioList(); return; }
+    prioOrder.splice(idx, 1);
+    prioOrder.splice(novoIdx, 0, key);
+    savePrioOrder();
+    renderPrioList();
+  }
+
+  function savePrioOrder() {
+    var updates = {};
+    var changed = 0;
+    prioOrder.forEach(function(key, idx) {
+      var novaPrio = idx + 1;
+      if (allPedidos[key] && allPedidos[key].priority !== novaPrio) {
+        updates['pedidos/' + key + '/priority'] = novaPrio;
+        changed++;
+      }
+    });
+    var statusEl = document.getElementById('prioSaveStatus');
+    if (!changed) { statusEl.textContent = ''; return; }
+    statusEl.textContent = 'Salvando...';
+    db.ref().update(updates).then(function() {
+      statusEl.textContent = 'Salvo ✓';
+      setTimeout(function() { statusEl.textContent = ''; }, 2000);
+    }).catch(function(e) {
+      statusEl.textContent = 'Erro ao salvar: ' + e.message;
+    });
+  }
+
+  document.getElementById('btnOrdenarPrioridade').addEventListener('click', openPrioModal);
+  document.getElementById('prioModalClose').addEventListener('click', closePrioModal);
+  document.getElementById('prioModalFechar').addEventListener('click', closePrioModal);
+  document.getElementById('prioModalBg').addEventListener('click', function(e) {
+    if (e.target === this) closePrioModal();
+  });
+
+  // Remove o item correspondente de pedidos_comerciais/{parentId}.itens --
+  // sem isso, apagar um SKU em pedidos/ deixava o item "fantasma" no
+  // consolidado de Pedidos Comerciais pra sempre (ele nunca foi derivado
+  // dinamicamente de pedidos/, é um snapshot próprio).
+  function removeItemFromPedidoComercial(parentId, sku) {
+    if (!parentId) return Promise.resolve();
+    return db.ref('pedidos_comerciais/' + parentId).once('value').then(function(snap) {
+      var pc = snap.val();
+      if (!pc || !pc.itens) return;
+      var newItens = pc.itens.filter(function(it) { return it.sku !== sku; });
+      if (newItens.length === pc.itens.length) return; // nada com esse sku, nada a fazer
+      if (newItens.length === 0) {
+        return db.ref('pedidos_comerciais/' + parentId).remove();
+      }
+      var newTotal = newItens.reduce(function(s, it) { return s + (it.qtd || 0); }, 0);
+      return db.ref('pedidos_comerciais/' + parentId).update({ itens: newItens, total_qtd: newTotal });
+    });
+  }
+
   document.getElementById('delBtnConfirmar').addEventListener('click', function() {
     if (!deleteKey) return;
     var btn = this;
     btn.disabled = true;
     btn.textContent = 'Excluindo...';
     var k = deleteKey;
+    var p = allPedidos[k] || {};
+    var parentId = p.parentPedidoId;
+    var sku = p.sku;
     db.ref('pedidos/' + k).remove().then(function() {
       return cleanFutureSlots(k, db);
+    }).then(function() {
+      return removeItemFromPedidoComercial(parentId, sku);
     }).then(function() {
       btn.disabled = false;
       btn.textContent = 'Excluir';

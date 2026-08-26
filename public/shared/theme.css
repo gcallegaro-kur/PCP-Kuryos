@@ -1,0 +1,124 @@
+/* ─────────────────────────────────────────────────────────────────
+   Kuryos PCP — design tokens (linguagem Apple, aprovada 2026-07-19)
+   Fonte única de cores/tipografia/raio/sombra para todas as páginas.
+   Ver dashboard.html para o primeiro uso completo destes tokens.
+   ───────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+  --bg: #f5f5f7;
+  --sidebar-bg: rgba(255,255,255,.72);
+  --panel: #ffffff;
+  --ink: #1d1d1f;
+  --ink-soft: #6e6e73;
+  --ink-mute: #86868b;
+  --line: #d2d2d7;
+  --accent: #0a1c69;
+  --accent-deep: #050f38;
+  --good: #0ca30c;
+  --warn: #fab219;
+  --critical: #d03b3b;
+  --s1: #2e4fc0;
+  --s2: #c9910a;
+  --s3: #12967d;
+  --seq-100: #d6ddf5;
+  --seq-300: #8fa3e8;
+  --seq-500: #4a63c9;
+  --seq-700: #223a94;
+  --seq-900: #0a1c69;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 28px -14px rgba(0,0,0,.16);
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --bg: #000000;
+    --sidebar-bg: rgba(28,28,30,.72);
+    --panel: #1c1c1e;
+    --ink: #f5f5f7;
+    --ink-soft: #98989d;
+    --ink-mute: #6e6e73;
+    --line: #38383a;
+    --accent: #5e83ea;
+    --accent-deep: #a9b8ec;
+    --s1: #5b7ae0; --s2: #bb8a2e; --s3: #28a186;
+    --seq-100: #1c2340; --seq-300: #2c3970; --seq-500: #4257a8; --seq-700: #6f86d9; --seq-900: #a9b8ec;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 28px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --sidebar-bg: rgba(28,28,30,.72); --panel: #1c1c1e;
+  --ink: #f5f5f7; --ink-soft: #98989d; --ink-mute: #6e6e73; --line: #38383a;
+  --accent: #5e83ea; --accent-deep: #a9b8ec;
+  --good: #0ca30c; --warn: #fab219; --critical: #d03b3b;
+  --s1: #5b7ae0; --s2: #bb8a2e; --s3: #28a186;
+  --seq-100: #1c2340; --seq-300: #2c3970; --seq-500: #4257a8; --seq-700: #6f86d9; --seq-900: #a9b8ec;
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 12px 28px -14px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f5f7; --sidebar-bg: rgba(255,255,255,.72); --panel: #ffffff;
+  --ink: #1d1d1f; --ink-soft: #6e6e73; --ink-mute: #86868b; --line: #d2d2d7;
+  --accent: #2456d6; --accent-deep: #0a1c69;
+  --good: #0ca30c; --warn: #fab219; --critical: #d03b3b;
+  --s1: #2e4fc0; --s2: #c9910a; --s3: #12967d;
+  --seq-100: #d6ddf5; --seq-300: #8fa3e8; --seq-500: #4a63c9; --seq-700: #223a94; --seq-900: #0a1c69;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 28px -14px rgba(0,0,0,.16);
+}
+
+body.kuryos-theme {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Shell: sidebar + main content, usado em toda página autenticada ──
+   .has-sidebar fica no <body> estático de cada página (não é injetado por
+   JS) — o recuo de 232px já existe no primeiro paint, antes do
+   auth_check.js sequer rodar. Isso evita o "pulo" de layout que dava
+   quando o recuo só era aplicado depois que a sidebar era inserida
+   (relatado como "a barra lateral carrega só depois"). */
+.kt-shell { display: flex; min-height: 100vh; }
+.kt-main { flex: 1; min-width: 0; padding: 30px 34px 60px; max-width: 1180px; }
+body.has-sidebar { padding-left: 232px; }
+@media (max-width: 980px) {
+  .kt-main { padding: 20px 16px 40px; }
+  body.has-sidebar { padding-left: 0; }
+}
+
+/* ── Componentes comuns ── */
+.kt-card { background: var(--panel); border-radius: var(--radius-lg); padding: 22px; box-shadow: var(--shadow); }
+.kt-eyebrow { font-size: 12px; font-weight: 600; color: var(--ink-mute); margin-bottom: 4px; }
+.kt-h1 { font-size: 32px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.kt-section-lbl { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 12px; }
+.kt-section-lbl h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+.kt-section-lbl .hint { font-size: 12.5px; color: var(--ink-mute); }
+
+.kt-segmented { display: inline-flex; background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 10px; padding: 3px; gap: 2px; }
+.kt-segmented button { border: none; background: none; padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer; font-family: var(--font-ui); }
+.kt-segmented button.active { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+
+/* ── Barra de busca/filtro (padrão único pra toda página que lista/filtra
+   dados -- pedidos, produtos, histórico, insumos, planejamento) ── */
+.kt-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.kt-search { position: relative; flex: 1; min-width: 180px; }
+/* padding-left forçado com !important -- quase toda página tem uma regra
+   genérica própria tipo `input[type=text],select{padding:...}` (pros campos
+   de modal de cadastro) que empata em especificidade com `.kt-search input`
+   e, por vir depois no CSS da própria página, vencia e cobria o ícone de
+   busca. Em vez de caçar isso página por página, resolvido uma vez aqui. */
+.kt-search input { width: 100%; padding: 9px 14px !important; padding-left: 34px !important; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; color: var(--ink); background: var(--panel); font-family: var(--font-ui); transition: border-color .15s; }
+.kt-search input:focus { outline: none; border-color: var(--accent); }
+.kt-search .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ink-mute); font-size: 13px; pointer-events: none; }
+.kt-select { padding: 9px 12px !important; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 13px; color: var(--ink); background: var(--panel); font-family: var(--font-ui); cursor: pointer; }
+.kt-select:focus { outline: none; border-color: var(--accent); }
+
+.kt-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--good); }
+.kt-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: kt-pulse 1.6s infinite; }
+@keyframes kt-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+@media (prefers-reduced-motion: reduce) { .kt-live i { animation: none; } }

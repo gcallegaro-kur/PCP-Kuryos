@@ -7,10 +7,17 @@
     "usuarios": {
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+        ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+        "role": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || (auth.uid == $uid && !root.child('usuarios').child($uid).child('role').exists()))"
+        }
       }
     },
     "produtos": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "sku_historico": {
       ".read": "auth != null",
       ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
     },
@@ -18,25 +25,97 @@
       ".read": "auth != null",
       ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
     },
+    "clientes": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "materiais": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "formulas": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "bom": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "especificacoes": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "fornecedores": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "solicitacoes_compra": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "pedidos_compra": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "cotacoes": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
     "pedidos": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
     },
     "programacao": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
     },
     "registros": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
     },
     "estado_linhas": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
     },
     "perdas": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "ops": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "pedidos_comerciais": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "ajustes_planejamento": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "alertas_pendentes": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "alocacoes_planejamento": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "atividadesPosto": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "turnosEncerrados": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "intervalosApontados": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
+    },
+    "paradas_historico": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')"
     },
     ".read": "auth != null",
     ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
