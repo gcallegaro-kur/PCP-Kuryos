@@ -768,3 +768,71 @@ function makeSortableTable(theadEl, defaultField, defaultDir) {
   }
   return { state: state, applySort: applySort, wireHeaders: wireHeaders };
 }
+
+// ── Explosão de materiais (Fórmula + BOM) por quantidade planejada ──────
+// Usado por emitir_op.html (cópia local, não tocada -- já testada em
+// produção) e por compras.html (Necessidade de Compra, gerar solicitação a
+// partir de um pedido) -- os dois precisam do MESMO cálculo, senão a
+// quantidade sugerida na compra diverge da que a OP de fato vai consumir.
+function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
+function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
+
+// Prefere a versão APROVADA mais recente; sem nenhuma aprovada, cai pra
+// mais recente de qualquer status (com temAprovada:false pro chamador
+// decidir se avisa/bloqueia).
+function melhorFormulaDoProduto(codProduto, allFormulas) {
+  var versoes = Object.values(allFormulas || {}).filter(function(f) { return f && f.codProduto === codProduto; });
+  if (!versoes.length) return null;
+  var aprovadas = versoes.filter(function(f) { return f.status === 'APROVADA'; });
+  var pool = aprovadas.length ? aprovadas : versoes;
+  pool.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
+  return { registro: pool[0], temAprovada: aprovadas.length > 0 };
+}
+
+// Só sabe calcular fisicamente a partir de ml/L -- outras unidades (g/kg/un)
+// bloqueiam com erro explícito em vez de um número silenciosamente errado.
+function volumeNominalEmLitros(produto) {
+  var vol = parseFloat(produto.volume) || 0;
+  var un = (produto.unidadeVolume || 'ml').toLowerCase();
+  if (un === 'ml') return { litros: vol / 1000, ok: true };
+  if (un === 'l') return { litros: vol, ok: true };
+  return { litros: 0, ok: false, unidade: produto.unidadeVolume };
+}
+
+// Mesma matemática de montarMateriaisConsumo() em emitir_op.html, só que
+// sem o estado de "substituição de item" (não existe nesse contexto --
+// aqui é só sugestão de compra, ainda não é uma OP de verdade).
+// `pecas` = quantidade de unidades a produzir (ex: saldo em aberto do
+// pedido, não necessariamente o pedido inteiro).
+// Retorna { ok, erro?, itens: [{mpCodigo, mpNome, quantidade, unidade, origem}], massaLoteKg, volumeGranelL }
+function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCache) {
+  var volInfo = volumeNominalEmLitros(produto);
+  if (!volInfo.ok) return { ok: false, erro: 'Produto cadastrado com unidade de volume "' + (volInfo.unidade || '—') + '" -- só sei calcular a partir de ml ou L.' };
+  var densidade = parseFloat(produto.densidadeGranel) || 0;
+  if (!volInfo.litros || !densidade || !pecas) return { ok: false, erro: 'Faltam dados pra calcular (volume nominal, densidade de granel ou quantidade).' };
+
+  var overfillPct = parseFloat(produto.overfillPct) || 0;
+  var perdaProcessoPct = parseFloat(produto.perdaProcessoPct) || 0;
+  var volumeTeoricoFinalMlPorUn = (volInfo.litros * (1 + overfillPct / 100)) * 1000;
+  var volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
+  var massaLoteKg = volumeGranelL * densidade;
+
+  var itens = [];
+  Object.values((formula && formula.itens) || {}).forEach(function(it) {
+    itens.push({
+      mpCodigo: it.mpCodigo, mpNome: it.mpNome,
+      quantidade: Math.round((massaLoteKg * (it.percentualMM || 0) / 100) * 1000) / 1000,
+      unidade: 'kg', origem: 'formula'
+    });
+  });
+  Object.values((bom && bom.itens) || {}).forEach(function(it) {
+    var matCadastrado = materiaisCache ? (materiaisCache[sanitizeKey(it.materialCodigo)] || Object.values(materiaisCache).find(function(m) { return m.mpCodigo === it.materialCodigo; })) : null;
+    itens.push({
+      mpCodigo: it.materialCodigo, mpNome: it.materialNome,
+      quantidade: Math.round((pecas * (it.qtdPorPeca || 0)) * 1000) / 1000,
+      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom'
+    });
+  });
+
+  return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: Math.round(volumeGranelL * 1000) / 1000 };
+}
