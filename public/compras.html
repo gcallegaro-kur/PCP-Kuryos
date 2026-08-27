@@ -421,6 +421,55 @@ function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
 }
 
+// ── Fase 2: fornecedor homologado + último preço, direto no fluxo ──────
+// Mesmo dado que já existe (materiais/{k}/fornecedores do cadastro, ver
+// cadastros.html) e o próprio pedidos_compra (Histórico de Preços acima) --
+// só reaproveitado aqui no ponto de decisão, em vez de só ficar disponível
+// em telas separadas.
+function homologadosDoMaterial(materialCodigo) {
+  var mat = findMaterialByCodigo(materialCodigo);
+  if (!mat || !mat.fornecedores) return [];
+  return Object.entries(mat.fornecedores).map(function(e) {
+    var fKey = e[0], fh = e[1];
+    var forn = allFornecedores[fKey];
+    return { key: fKey, nome: forn ? (forn.nomeFantasia || forn.razaoSocial) : fKey, status: fh.statusHomologacao };
+  });
+}
+function ultimoPrecoDoMaterial(materialCodigo) {
+  var achado = null;
+  Object.values(allPedidosCompra).forEach(function(pc) {
+    Object.values(pc.itens || {}).forEach(function(it) {
+      if (it.materialCodigo !== materialCodigo || it.precoUnit == null || it.precoUnit === '') return;
+      var data = pc.dataEmissao || pc.dataCriacao || '';
+      if (!achado || data > achado.data) achado = { precoUnit: parseFloat(it.precoUnit), fornecedorNome: pc.fornecedorNome, data: data };
+    });
+  });
+  return achado;
+}
+// Texto de referência curto, reutilizado nos 3 pontos de decisão (builder
+// de solicitação, preview de consolidação, cotação).
+function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
+  var homologados = homologadosDoMaterial(materialCodigo);
+  var ultimoPreco = ultimoPrecoDoMaterial(materialCodigo);
+  var partes = [];
+  if (homologados.length) {
+    var nomes = homologados.map(function(h) { return h.nome; }).join(', ');
+    partes.push('🔧 Homologados: ' + escapeHtml(nomes));
+  } else {
+    partes.push('<span style="color:var(--warning)">⚠ nenhum fornecedor homologado pra este material</span>');
+  }
+  if (ultimoPreco) {
+    partes.push('💰 Último preço: ' + fmtNum(ultimoPreco.precoUnit) + ' (' + escapeHtml(ultimoPreco.fornecedorNome) + ', ' + fmtData(ultimoPreco.data) + ')');
+  }
+  if (fornecedorKeyEmFoco) {
+    var ehHomologado = homologados.some(function(h) { return h.key === fornecedorKeyEmFoco; });
+    partes.push(ehHomologado
+      ? '<span style="color:var(--success)">✓ fornecedor escolhido é homologado</span>'
+      : '<span style="color:var(--warning)">⚠ fornecedor escolhido NÃO está homologado pra este material</span>');
+  }
+  return '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + partes.join(' · ') + '</div>';
+}
+
 /* ══════════════ Tabs ══════════════ */
 document.querySelectorAll('.tab').forEach(function(tab) {
   tab.addEventListener('click', function() {
@@ -547,12 +596,16 @@ function renderScItensBuilder() {
   box.innerHTML = scItensBuilder.map(function(it, idx) {
     var mat = findMaterialByCodigo(it.materialCodigo);
     var unidade = mat ? mat.unidade : '';
-    return '<div class="item-row" data-idx="' + idx + '">' +
-      '<select class="sci-mat" data-idx="' + idx + '">' + materiaisOptionsSimple(it.materialCodigo) + '</select>' +
-      '<input type="number" class="sci-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
-      '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
-      '<input type="text" class="sci-obs" data-idx="' + idx + '" value="' + escapeAttr(it.obs || '') + '" placeholder="Opcional">' +
-      '<button class="btn btn-danger-ghost btn-sm sci-remove" data-idx="' + idx + '" title="Remover item" aria-label="Remover item">×</button>' +
+    var referencia = it.materialCodigo ? referenciaMaterialHtml(it.materialCodigo) : '';
+    return '<div>' +
+      '<div class="item-row" data-idx="' + idx + '">' +
+        '<select class="sci-mat" data-idx="' + idx + '">' + materiaisOptionsSimple(it.materialCodigo) + '</select>' +
+        '<input type="number" class="sci-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
+        '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
+        '<input type="text" class="sci-obs" data-idx="' + idx + '" value="' + escapeAttr(it.obs || '') + '" placeholder="Opcional">' +
+        '<button class="btn btn-danger-ghost btn-sm sci-remove" data-idx="' + idx + '" title="Remover item" aria-label="Remover item">×</button>' +
+      '</div>' +
+      referencia +
     '</div>';
   }).join('');
   document.querySelectorAll('.sci-mat').forEach(function(el) {
@@ -973,16 +1026,20 @@ function renderPcItensPreview() {
     });
   });
   if (!rows.length) { box.innerHTML = '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>'; return; }
+  var fornecedorEmFoco = document.getElementById('pcFornecedor').value || null;
   box.innerHTML = '<div class="item-row-head"><div>Material</div><div>Quantidade</div><div>Un.</div><div>Preço unit. (opcional)</div><div></div></div>' +
     rows.map(function(r) {
       var precoKey = r.scKey + '|' + r.itemKey;
       var valorAtual = precosDigitados[precoKey] != null ? escapeAttr(precosDigitados[precoKey]) : '';
-      return '<div class="item-row">' +
-        '<div style="font-size:12.5px">' + escapeHtml(r.it.materialCodigo) + ' — ' + escapeHtml(r.it.materialNome || '') + '</div>' +
-        '<div style="font-size:12.5px">' + fmtNum(r.it.qtd) + '</div>' +
-        '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(r.it.unidade || '') + '</div>' +
-        '<input type="number" class="pc-preco" data-preco-key="' + escapeAttr(precoKey) + '" min="0" step="any" placeholder="0,00" value="' + valorAtual + '">' +
-        '<div></div>' +
+      return '<div>' +
+        '<div class="item-row">' +
+          '<div style="font-size:12.5px">' + escapeHtml(r.it.materialCodigo) + ' — ' + escapeHtml(r.it.materialNome || '') + '</div>' +
+          '<div style="font-size:12.5px">' + fmtNum(r.it.qtd) + '</div>' +
+          '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(r.it.unidade || '') + '</div>' +
+          '<input type="number" class="pc-preco" data-preco-key="' + escapeAttr(precoKey) + '" min="0" step="any" placeholder="0,00" value="' + valorAtual + '">' +
+          '<div></div>' +
+        '</div>' +
+        referenciaMaterialHtml(r.it.materialCodigo, fornecedorEmFoco) +
       '</div>';
     }).join('');
   document.querySelectorAll('.pc-preco').forEach(function(el) {
@@ -1210,6 +1267,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalConsolidarCancel').addEventListener('click', closeModalConsolidar);
   document.getElementById('modalConsolidarSave').addEventListener('click', saveConsolidar);
   document.getElementById('modalConsolidar').addEventListener('click', function(e) { if (e.target === this) closeModalConsolidar(); });
+  // Refaz o preview quando o fornecedor muda -- é o que decide o aviso de
+  // "homologado" por item (ver referenciaMaterialHtml).
+  document.getElementById('pcFornecedor').addEventListener('change', renderPcItensPreview);
 
   document.getElementById('btnCotacao').addEventListener('click', openModalCotacao);
   document.getElementById('modalCotacaoClose').addEventListener('click', closeModalCotacao);
@@ -1217,8 +1277,32 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalCotacaoSave').addEventListener('click', enviarCotacao);
   document.getElementById('modalCotacao').addEventListener('click', function(e) { if (e.target === this) closeModalCotacao(); });
   document.getElementById('cotFornecedor').addEventListener('change', function() {
-    var f = allFornecedores[this.value];
-    document.getElementById('cotFornecedorEmailHint').textContent = f ? (f.contatoEmail ? 'E-mail: ' + f.contatoEmail : '⚠️ Esse fornecedor não tem e-mail cadastrado.') : '';
+    var fKey = this.value;
+    var f = allFornecedores[fKey];
+    var emailTxt = f ? (f.contatoEmail ? 'E-mail: ' + escapeHtml(f.contatoEmail) : '⚠️ Esse fornecedor não tem e-mail cadastrado.') : '';
+
+    // Homologação: junta os materiais das solicitações selecionadas pra
+    // essa cotação e confere quais NÃO são homologados pro fornecedor
+    // escolhido -- mesmo aviso do preview de consolidação, aqui antes de
+    // mandar o e-mail.
+    var homologHtml = '';
+    if (fKey) {
+      var materiaisUnicos = {};
+      Object.keys(cotacaoSelecionadas).forEach(function(scKey) {
+        var s = allSolicitacoes[scKey];
+        if (!s) return;
+        Object.values(s.itens || {}).forEach(function(it) { materiaisUnicos[it.materialCodigo] = it.materialNome; });
+      });
+      var naoHomologados = Object.keys(materiaisUnicos).filter(function(cod) {
+        return !homologadosDoMaterial(cod).some(function(h) { return h.key === fKey; });
+      });
+      if (naoHomologados.length) {
+        homologHtml = '<div style="color:var(--warning);margin-top:4px">⚠ Não homologado pra: ' + naoHomologados.map(escapeHtml).join(', ') + '</div>';
+      } else if (Object.keys(materiaisUnicos).length) {
+        homologHtml = '<div style="color:var(--success);margin-top:4px">✓ Homologado pra todos os materiais desta cotação</div>';
+      }
+    }
+    document.getElementById('cotFornecedorEmailHint').innerHTML = emailTxt + homologHtml;
   });
 
   var _t = null;
