@@ -174,6 +174,10 @@
     .wb-chip-top{display:flex;align-items:center;gap:4px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .wb-chip-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .wb-chip-qty{font-size:10px;color:var(--muted);opacity:.8;margin-top:1px;white-space:nowrap}
+    /* Pedido do usuário: SKU + descrição do produto, por extenso, sem
+       truncar (diferente de -top/-sub que cortam com reticências) --
+       quebra linha à vontade, o card cresce em altura se precisar. */
+    .wb-chip-produto{font-size:9.5px;color:var(--muted);white-space:normal;overflow-wrap:break-word;line-height:1.25;margin-top:1px}
     .wb-cell-real{font-size:10px;color:var(--muted);margin-top:3px;padding-top:3px;border-top:1px dashed var(--border);white-space:nowrap}
     .wb-cell-total{font-size:11px;font-weight:800;color:var(--primary);margin-top:4px;padding-top:4px;border-top:1px solid var(--border);white-space:nowrap}
     .wb-more-btn{font-size:10.5px;font-weight:700;color:var(--primary);background:none;border:none;cursor:pointer;text-align:left;padding:2px 0}
@@ -1335,7 +1339,7 @@ function mergeChipsForDay(blocks,linhaNum,date){
   blocks.forEach(function(b){
     var lote=b.lote||exactLoteForSlot(date,b.hours[0],b.pedidoKey,linhaNum);
     var k=b.pedidoKey+'|'+(lote||'');
-    if(!byKey[k]){byKey[k]={pedidoKey:b.pedidoKey,lote:lote,produto:b.produto,firstIdx:b.startIdx,qtd:0,horas:0};order.push(k);}
+    if(!byKey[k]){byKey[k]={pedidoKey:b.pedidoKey,lote:lote,produto:b.produto,sku:b.sku,firstIdx:b.startIdx,qtd:0,horas:0};order.push(k);}
     // Mesma conta da Grade diária (buildBlockHTML: metaVal*block.span) --
     // soma se o mesmo pedido+lote aparecer em mais de um bloco no dia
     // (ex: interrompido e retomado depois na mesma linha).
@@ -1368,7 +1372,15 @@ function wbChipHtml(c,linhaNum){
   var label=c.lote||c.produto||(ped?('#'+ped.id):'')||'?';
   var cliente=(ped&&ped.cliente)||c.produto||'';
   var qtyHtml=c.qtd>0?'<div class="wb-chip-qty">'+fmtNum(c.qtd)+' un · '+c.horas+'h</div>':'';
-  return '<div class="'+cls+'"><div class="wb-chip-top">'+insumoDot+escapeHtml(label)+'</div><div class="wb-chip-sub">'+escapeHtml(cliente)+'</div>'+qtyHtml+'</div>';
+  // Pedido do usuário: além da OP (o "label" acima), mostrar SKU + descrição
+  // do produto por extenso -- só quando o topo já virou o lote (senão
+  // c.produto já É o label, mostrar de novo seria repetir a mesma info).
+  var produtoHtml='';
+  if(c.lote&&c.produto){
+    var sku=c.sku||(ped&&ped.sku)||'';
+    produtoHtml='<div class="wb-chip-produto">'+(sku?escapeHtml(sku)+' — ':'')+escapeHtml(c.produto)+'</div>';
+  }
+  return '<div class="'+cls+'"><div class="wb-chip-top">'+insumoDot+escapeHtml(label)+'</div><div class="wb-chip-sub">'+escapeHtml(cliente)+'</div>'+produtoHtml+qtyHtml+'</div>';
 }
 
 function wbCellHtml(chips,date,linhaNum){
