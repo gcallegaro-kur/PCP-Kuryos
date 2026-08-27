@@ -514,6 +514,7 @@ function saveReceber() {
   var observacoes = document.getElementById('rcObservacoes').value.trim();
   var recebidoPor = currentUserNome();
   var erroExcedente = null; // preenchido dentro da transaction se algum item passar do total pedido
+  var itensRecebidosParaEstoque = null; // idem -- só o resultado da tentativa que de fato commitou importa
 
   db.ref('pedidos_compra/' + recebendoKey).transaction(function(atual) {
     if (!atual) return atual; // PC sumiu do banco entretanto -- aborta sem tocar em nada
@@ -557,6 +558,7 @@ function saveReceber() {
       if (qtdRecFinal < qtd - 0.0001) todosCompletos = false;
     });
     atual.status = todosCompletos ? 'RECEBIDO_TOTAL' : (algumRecebido ? 'RECEBIDO_PARCIAL' : atual.status);
+    itensRecebidosParaEstoque = itensRecebidos;
 
     return atual;
   }).then(function(result) {
@@ -564,8 +566,39 @@ function saveReceber() {
     if (!result.committed) { showAlert('Não foi possível registrar o recebimento (o pedido pode ter sido removido). Atualize a lista e tente de novo.', 'danger'); return; }
     showAlert('Recebimento registrado com sucesso!', 'success');
     closeModalReceber();
+    // Entrada de estoque -- secundário e best-effort: o recebimento contra o
+    // Pedido de Compra (fonte de verdade) já está gravado e confirmado nesse
+    // ponto; se isso falhar, avisa mas não desfaz nem trava o recebimento.
+    incrementarEstoque(itensRecebidosParaEstoque, 'recebimento_pc', recebendoKey).catch(function(err) {
+      console.error('Falha ao atualizar saldo de estoque:', err);
+      showAlert('Recebimento registrado, mas o saldo de estoque não pôde ser atualizado agora: ' + err.message, 'danger');
+    });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalReceberSave').disabled = false; });
+}
+
+/* ══════════════ Estoque (Fase 4a -- entrada) ══════════════ */
+// estoque/{materialKey} espelha a chave de materiais/{materialKey}
+// (sanitizeKey(mpCodigo), mesmo padrão usado pra gravar o material em
+// cadastros.html) -- não precisa carregar o cadastro inteiro aqui pra
+// resolver a chave. Cada item recebido soma no saldo via .transaction()
+// (dois recebimentos do mesmo material ao mesmo tempo, PCs diferentes,
+// não podem se perder um no outro).
+function incrementarEstoque(itensRecebidos, origemTipo, origemRef) {
+  var itens = Object.values(itensRecebidos || {}).filter(function(it) { return it.qtdRecebidaAgora > 0; });
+  return Promise.all(itens.map(function(it) {
+    var key = sanitizeKey(it.materialCodigo);
+    return db.ref('estoque/' + key).transaction(function(atual) {
+      atual = atual || { saldoAtual: 0 };
+      atual.saldoAtual = (atual.saldoAtual || 0) + it.qtdRecebidaAgora;
+      atual.materialCodigo = it.materialCodigo;
+      atual.materialNome = it.materialNome || (atual.materialNome || '');
+      atual.unidade = it.unidade || atual.unidade || '';
+      atual.ultimaAtualizacao = new Date().toISOString();
+      atual.ultimaMovimentacao = { tipo: origemTipo, qtd: it.qtdRecebidaAgora, ref: origemRef, em: new Date().toISOString() };
+      return atual;
+    });
+  }));
 }
 
 /* ══════════════ Modal Checklist de Etiqueta ══════════════ */
