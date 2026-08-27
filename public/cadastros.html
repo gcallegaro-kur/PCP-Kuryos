@@ -334,6 +334,16 @@
                 </select>
               </div>
               <div class="form-group"><label>Cor</label><input type="text" id="fCorEp-mat" class="uc"></div>
+              <div class="form-group"><label>Textura</label>
+                <select id="fTextura-mat">
+                  <option value="">Selecione...</option>
+                  <option value="LISA">Lisa</option>
+                  <option value="ESTRIADA">Estriada</option>
+                  <option value="FOSCA">Fosca</option>
+                  <option value="BRILHANTE">Brilhante</option>
+                  <option value="OUTRA">Outra</option>
+                </select>
+              </div>
               <div class="form-group"><label>Volume nominal (ml)</label><input type="number" id="fVolumeNominal-mat" min="0" step="any"></div>
               <div class="form-group"><label>Volume interno total (ml)</label><input type="number" id="fVolumeInterno-mat" min="0" step="any"></div>
               <div class="form-group"><label>Head space</label><input type="text" id="fHeadSpace-mat" readonly placeholder="Calculado automaticamente"></div>
@@ -1336,6 +1346,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { path: 'pesoUnitario', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'alturaMm', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'diametroMm', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'textura', aplicavel: function(m) { return m.tipo === 'EP'; } },
     { path: 'comprimentoMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'larguraMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'materialResina', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
@@ -1452,6 +1463,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return {
         resina: document.getElementById('fMaterialResina-mat').value,
         gargalo: document.getElementById('fGargalo-mat').value.trim(),
+        textura: document.getElementById('fTextura-mat').value,
         volumeInterno: parseFloat(document.getElementById('fVolumeInterno-mat').value),
         altura: parseFloat(document.getElementById('fAltura-mat').value),
         diametro: parseFloat(document.getElementById('fDiametro-mat').value),
@@ -1483,6 +1495,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (variantesEquivalentesStaged[k]) return false; // já vinculado
       if ((m.materialResina || '') !== atual.resina) return false;
       if (tipo === 'EP' && atual.gargalo && (m.gargaloRosca || '').trim() !== atual.gargalo) return false;
+      // Textura diferente (lisa/estriada/...) não é "equivalente" -- é uma
+      // escolha de design/tato que muda o produto, mesmo com o resto igual.
+      if (tipo === 'EP' && atual.textura && (m.textura || '') !== atual.textura) return false;
       return true;
     });
 
@@ -1705,6 +1720,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fGargalo-mat').value = m.gargaloRosca || '';
     document.getElementById('fMaterialResina-mat').value = m.materialResina || '';
     document.getElementById('fCorEp-mat').value = m.cor || '';
+    document.getElementById('fTextura-mat').value = m.textura || '';
     document.getElementById('fVolumeNominal-mat').value = m.volumeNominal != null ? m.volumeNominal : '';
     document.getElementById('fVolumeInterno-mat').value = m.volumeInternoTotal != null ? m.volumeInternoTotal : '';
     document.getElementById('fPesoUnitario-mat').value = m.pesoUnitario != null ? m.pesoUnitario : '';
@@ -1833,6 +1849,7 @@ document.addEventListener('DOMContentLoaded', function() {
       data.gargaloRosca = document.getElementById('fGargalo-mat').value.trim();
       data.materialResina = document.getElementById('fMaterialResina-mat').value;
       data.cor = document.getElementById('fCorEp-mat').value.trim();
+      data.textura = document.getElementById('fTextura-mat').value;
       var vn = document.getElementById('fVolumeNominal-mat').value;
       var vi = document.getElementById('fVolumeInterno-mat').value;
       data.volumeNominal = vn !== '' ? parseFloat(vn) : null;
