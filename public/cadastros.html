@@ -413,31 +413,55 @@
             <div class="form-group"><label>Peso líquido da unidade de compra (kg)</label><input type="number" id="fPesoLiquidoCompra-mat" min="0" step="any"></div>
           </div>
 
-          <div class="section-label">Fornecedores homologados</div>
-          <div class="section-note">Cada material pode ter vários fornecedores homologados -- o Pedido de Compra escolhe entre eles. Cadastro de fornecedor em si fica na aba Fornecedores, aqui mesmo em Cadastros.</div>
-          <div class="table-wrap" style="margin-bottom:10px">
-            <table>
-              <thead><tr><th>Fornecedor</th><th>Nome comercial do item</th><th>Código deles</th><th>Status</th><th>Custo ref.</th><th style="width:40px"></th></tr></thead>
-              <tbody id="fornecedoresHomologadosBody-mat"><tr><td colspan="6" class="no-data">Nenhum fornecedor homologado ainda.</td></tr></tbody>
-            </table>
+          <div class="tipo-fields" data-tipo-for="MPGR,MPES,MU">
+            <div class="section-label">Fornecedores homologados</div>
+            <div class="section-note">Cada material pode ter vários fornecedores homologados -- o Pedido de Compra escolhe entre eles. Cadastro de fornecedor em si fica na aba Fornecedores, aqui mesmo em Cadastros.</div>
+            <div class="table-wrap" style="margin-bottom:10px">
+              <table>
+                <thead><tr><th>Fornecedor</th><th>Nome comercial do item</th><th>Código deles</th><th>Status</th><th>Custo ref.</th><th style="width:40px"></th></tr></thead>
+                <tbody id="fornecedoresHomologadosBody-mat"><tr><td colspan="6" class="no-data">Nenhum fornecedor homologado ainda.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="form-grid" style="align-items:end">
+              <div class="form-group">
+                <label>Fornecedor</label>
+                <input type="text" id="fhFornecedor-mat" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+                <input type="hidden" id="fhFornecedorKey-mat">
+              </div>
+              <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fhNomeComercial-mat" class="uc"></div>
+              <div class="form-group"><label>Código deles</label><input type="text" id="fhCodigoFornecedor-mat" class="uc"></div>
+              <div class="form-group"><label>Status</label>
+                <select id="fhStatus-mat">
+                  <option value="aguardando_homologacao">Aguardando homologação</option>
+                  <option value="homologado">Homologado</option>
+                  <option value="nao_homologado">Não homologado</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Custo ref.</label><input type="number" id="fhCustoRef-mat" min="0" step="any"></div>
+              <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddFornHomolog-mat" style="width:100%">+ Adicionar</button></div>
+            </div>
           </div>
-          <div class="form-grid" style="align-items:end">
-            <div class="form-group">
-              <label>Fornecedor</label>
-              <input type="text" id="fhFornecedor-mat" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
-              <input type="hidden" id="fhFornecedorKey-mat">
+
+          <div class="tipo-fields" data-tipo-for="EP,ES,ET">
+            <div class="section-label">Fornecedor</div>
+            <div class="section-note">Embalagem é um fornecedor por cadastro -- se 3 fornecedores tiverem "a mesma" peça, cada um ganha seu próprio cadastro de material (código diferente), ligados como Variantes equivalentes logo abaixo. Isso é diferente de Matéria-Prima/Fragrância, que ainda aceita vários fornecedores homologados no mesmo cadastro.</div>
+            <div class="form-grid" style="align-items:end">
+              <div class="form-group">
+                <label>Fornecedor</label>
+                <input type="text" id="fuFornecedor-mat" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+                <input type="hidden" id="fuFornecedorKey-mat">
+              </div>
+              <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fuNomeComercial-mat" class="uc"></div>
+              <div class="form-group"><label>Código deles</label><input type="text" id="fuCodigoFornecedor-mat" class="uc"></div>
+              <div class="form-group"><label>Status</label>
+                <select id="fuStatus-mat">
+                  <option value="aguardando_homologacao">Aguardando homologação</option>
+                  <option value="homologado">Homologado</option>
+                  <option value="nao_homologado">Não homologado</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Custo ref.</label><input type="number" id="fuCustoRef-mat" min="0" step="any"></div>
             </div>
-            <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fhNomeComercial-mat" class="uc"></div>
-            <div class="form-group"><label>Código deles</label><input type="text" id="fhCodigoFornecedor-mat" class="uc"></div>
-            <div class="form-group"><label>Status</label>
-              <select id="fhStatus-mat">
-                <option value="aguardando_homologacao">Aguardando homologação</option>
-                <option value="homologado">Homologado</option>
-                <option value="nao_homologado">Não homologado</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Custo ref.</label><input type="number" id="fhCustoRef-mat" min="0" step="any"></div>
-            <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddFornHomolog-mat" style="width:100%">+ Adicionar</button></div>
           </div>
 
           <div class="section-label">Variantes equivalentes</div>
@@ -1397,6 +1421,11 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('fhFornecedor-mat').value = '';
       document.getElementById('fhFornecedorKey-mat').value = '';
     }
+    var fuKeyAtual = document.getElementById('fuFornecedorKey-mat').value;
+    if (fuKeyAtual && !fhFornecedorItems.some(function(it) { return it.key === fuKeyAtual; })) {
+      document.getElementById('fuFornecedor-mat').value = '';
+      document.getElementById('fuFornecedorKey-mat').value = '';
+    }
   }
 
   /* ── Variantes equivalentes ── */
@@ -1751,6 +1780,21 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fhCustoRef-mat').value = '';
     renderFornecedoresHomologados();
 
+    // Embalagem (EP/ES/ET): um fornecedor só por cadastro, ver
+    // fornecedoresHomologadosStaged como fonte (já veio de m.fornecedores
+    // acima) -- pega a única entrada, se houver, e preenche os campos
+    // simples em vez da tabela de homologados.
+    var fuChaves = Object.keys(fornecedoresHomologadosStaged);
+    var fuKey = fuChaves[0] || '';
+    var fu = fuKey ? fornecedoresHomologadosStaged[fuKey] : null;
+    var fuFornNome = fuKey ? ((allFornecedores[fuKey] || {}).nomeFantasia || (allFornecedores[fuKey] || {}).razaoSocial || fuKey) : '';
+    document.getElementById('fuFornecedor-mat').value = fuFornNome;
+    document.getElementById('fuFornecedorKey-mat').value = fuKey;
+    document.getElementById('fuNomeComercial-mat').value = fu ? (fu.nomeComercial || '') : '';
+    document.getElementById('fuCodigoFornecedor-mat').value = fu ? (fu.codigoFornecedor || '') : '';
+    document.getElementById('fuStatus-mat').value = fu ? (fu.statusHomologacao || 'aguardando_homologacao') : 'aguardando_homologacao';
+    document.getElementById('fuCustoRef-mat').value = fu && fu.custoReferencia != null ? fu.custoReferencia : '';
+
     variantesEquivalentesStaged = key ? JSON.parse(JSON.stringify(m.variantesEquivalentes || {})) : {};
     document.getElementById('veMaterial-mat').value = '';
     document.getElementById('veMaterialKey-mat').value = '';
@@ -1875,6 +1919,25 @@ document.addEventListener('DOMContentLoaded', function() {
     return data;
   }
 
+  // Embalagem (EP/ES/ET) grava no MESMO formato de sempre (fornecedores{}
+  // map, pra não mexer em nada que compras.html já lê dali -- ver
+  // homologadosDoMaterial lá), só que sempre com 0 ou 1 chave: cada
+  // fornecedor da "mesma" peça vira um cadastro de material próprio (ver
+  // Variantes equivalentes), não uma segunda linha homologada aqui.
+  function montarFornecedoresParaSalvar(tipo) {
+    if (tipo !== 'EP' && tipo !== 'ES' && tipo !== 'ET') return fornecedoresHomologadosStaged;
+    var fKey = document.getElementById('fuFornecedorKey-mat').value;
+    if (!fKey) return {};
+    var custoVal = document.getElementById('fuCustoRef-mat').value;
+    var out = {};
+    out[fKey] = {
+      nomeComercial: document.getElementById('fuNomeComercial-mat').value.trim(),
+      codigoFornecedor: document.getElementById('fuCodigoFornecedor-mat').value.trim(),
+      statusHomologacao: document.getElementById('fuStatus-mat').value,
+      custoReferencia: custoVal !== '' ? parseFloat(custoVal) : null
+    };
+    return out;
+  }
   function saveModal() {
     var nome = document.getElementById('fNome-mat').value.trim();
     if (!nome) { showAlert('Nome / descrição é obrigatório.', 'danger'); return; }
@@ -1896,7 +1959,7 @@ document.addEventListener('DOMContentLoaded', function() {
       fatorConversao: fatorConvVal !== '' ? parseFloat(fatorConvVal) : null,
       pesoBrutoCompra: pesoBrutoVal !== '' ? parseFloat(pesoBrutoVal) : null,
       pesoLiquidoCompra: pesoLiquidoVal !== '' ? parseFloat(pesoLiquidoVal) : null,
-      fornecedores: fornecedoresHomologadosStaged,
+      fornecedores: montarFornecedoresParaSalvar(tipo),
       variantesEquivalentes: variantesEquivalentesStaged,
       controlado: document.getElementById('fControlado').checked,
       ativo: document.getElementById('fAtivo-mat').checked
@@ -1992,6 +2055,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('fhFornecedor-mat').addEventListener('input', function() {
       document.getElementById('fhFornecedorKey-mat').value = '';
+    });
+
+    // Embalagem (EP/ES/ET): mesmo autocomplete, mesma lista filtrada por
+    // tipo (fhFornecedorItems, atualizada em refreshFhFornecedorOptions) --
+    // só o destino é um fornecedor único, não uma linha de tabela.
+    attachAutocomplete(document.getElementById('fuFornecedor-mat'), function() { return fhFornecedorItems; }, {
+      onSelect: function(it) { document.getElementById('fuFornecedorKey-mat').value = it.key; }
+    });
+    document.getElementById('fuFornecedor-mat').addEventListener('input', function() {
+      document.getElementById('fuFornecedorKey-mat').value = '';
     });
 
     document.getElementById('btnAddVariante-mat').addEventListener('click', addVariante);
