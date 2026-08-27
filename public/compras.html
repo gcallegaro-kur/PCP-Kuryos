@@ -116,7 +116,7 @@
   <button class="tab" data-tab="pedidos">Pedidos de Compra</button>
   <button class="tab" data-tab="precos">📊 Histórico de Preços</button>
   <button class="tab" data-tab="fornecedores-analise">📈 Análise de Fornecedores</button>
-  <button class="tab" data-tab="busca-fornecedor">🔎 Fornecedores por Material</button>
+  <button class="tab" data-tab="busca-fornecedor">🔎 Busca Avançada: Fornecedores × Material</button>
   <button class="tab" data-tab="estoque">📦 Estoque</button>
 </div>
 
@@ -231,22 +231,25 @@
     </div>
   </div>
 
-  <!-- ═══════════ BUSCA: FORNECEDORES POR MATERIAL ═══════════ -->
+  <!-- ═══════════ BUSCA AVANÇADA: FORNECEDORES × MATERIAL ═══════════ -->
   <div class="tab-panel" id="tab-busca-fornecedor">
     <div class="kt-toolbar">
       <select class="kt-select" id="bfTipo">
-        <option value="">Todos os tipos</option>
+        <option value="">Escolha um tipo pra ver os filtros dele...</option>
         <option value="MPGR">MP Geral</option>
         <option value="MPES">Fragrância/Essência</option>
         <option value="EP">Embalagem Primária</option>
         <option value="ES">Embalagem Secundária</option>
         <option value="ET">Embalagem Terciária</option>
       </select>
-      <select class="kt-select" id="bfResina"><option value="">Todos os materiais/resinas</option></select>
-      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="bfSearch" placeholder="Ou busque um material específico por código/nome..."></div>
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="bfSearch" placeholder="Buscar por código/nome do material..."></div>
     </div>
-    <div class="section-note">Quem fornece o que você está filtrando -- combina fornecedores homologados no cadastro com o histórico real de compra (inclui quem já compramos e não é mais homologado hoje). Ex: "quero cotar com quem fornece papelão" -- filtra Tipo=Embalagem Secundária e Material=Papelão.</div>
-    <div id="bfResultados"><div class="card"><div class="no-data">Escolha um tipo, material/resina, ou busque por um material específico.</div></div></div>
+    <div class="section-note">Filtra material igual um e-commerce filtra produto -- escolhe o tipo e os campos daquele tipo aparecem (resina, textura, fixação, dimensão, cor...), igual em Cadastros. Combina com o preço da última compra real e mostra o fornecedor de cada material que bater no filtro (homologado no cadastro e/ou já comprado no histórico, mesmo que hoje não seja mais homologado).</div>
+    <div class="card" id="bfFacetasCard" style="margin-bottom:14px">
+      <div class="card-title">Filtros</div>
+      <div class="form-grid" id="bfFacetas"></div>
+    </div>
+    <div id="bfResultados"><div class="card"><div class="no-data">Escolha um tipo, ou busque um material específico.</div></div></div>
   </div>
 
   <!-- ═══════════ ESTOQUE ═══════════ -->
@@ -997,114 +1000,171 @@ function renderAnaliseFornecedores() {
   }).join('');
 }
 
-/* ══════════════ Busca: Fornecedores por Material ══════════════ */
+/* ══════════════ Busca Avançada: Fornecedores × Material ══════════════ */
 // Pedido original: "quero cotar com fornecedores de papelão -- inclusive
-// quem já compramos no passado e não compramos mais". Combina duas fontes
-// que já existem em telas separadas: fornecedores homologados (cadastro de
-// Materiais) e histórico real de compra (pedidos_compra), mesmo pra
-// fornecedor hoje inativo/não homologado -- ninguém some da lista.
-function refreshBfResinaOptions() {
-  var sel = document.getElementById('bfResina');
-  var cur = sel.value;
-  var tipo = document.getElementById('bfTipo').value;
-  var resinas = {};
+// quem já compramos no passado e não compramos mais". Evoluiu pra busca
+// facetada estilo e-commerce: escolhe o tipo (a "categoria") e os campos
+// DAQUELE TIPO viram filtro -- os mesmos campos que já existem em
+// Cadastros > Materiais por tipo (resina/textura/fixação/dimensão pra
+// Embalagem; aparência/densidade pra MP Geral; casa de fragrância/custo
+// pra Fragrância). Resultado é por MATERIAL, não mais por fornecedor --
+// cada material já sai com o fornecedor dele (EP/ES/ET/MPES hoje é sempre
+// 0 ou 1, ver cadastros.html; MP Geral pode ter vários homologados).
+var BF_FACET_CONFIG = {
+  EP: [
+    { field: 'materialResina', label: 'Material', type: 'select' },
+    { field: 'textura', label: 'Textura', type: 'select', opts: [['LISA', 'Lisa'], ['ESTRIADA', 'Estriada'], ['FOSCA', 'Fosca'], ['BRILHANTE', 'Brilhante'], ['OUTRA', 'Outra']] },
+    { field: 'fixacao', label: 'Fixação', type: 'select', opts: [['ROSCA', 'Rosca'], ['RECRAVE', 'Recrave'], ['EASY_LOCK', 'Easy Lock'], ['OUTRA', 'Outra']] },
+    { field: 'cor', label: 'Cor', type: 'select' },
+    { field: 'volumeNominal', label: 'Volume nominal (ml)', type: 'range' },
+    { field: 'volumeInternoTotal', label: 'Volume interno (ml)', type: 'range' },
+    { field: 'alturaMm', label: 'Altura (mm)', type: 'range' },
+    { field: 'diametroMm', label: 'Diâmetro (mm)', type: 'range' },
+    { field: 'pesoUnitario', label: 'Peso unitário (g)', type: 'range' }
+  ],
+  ES: [
+    { field: 'materialResina', label: 'Material', type: 'select' },
+    { field: 'cor', label: 'Cor', type: 'select' },
+    { field: 'comprimentoMm', label: 'Comprimento (mm)', type: 'range' },
+    { field: 'larguraMm', label: 'Largura (mm)', type: 'range' },
+    { field: 'alturaMm', label: 'Altura (mm)', type: 'range' },
+    { field: 'pesoUnitario', label: 'Peso unitário (g)', type: 'range' }
+  ],
+  MPGR: [
+    { field: 'cor', label: 'Cor', type: 'select' },
+    { field: 'aparencia', label: 'Aparência', type: 'select' },
+    { field: 'funcaoFormula', label: 'Função na fórmula', type: 'select' },
+    { field: 'densidade', label: 'Densidade (g/ml)', type: 'range' }
+  ],
+  MPES: [
+    { field: 'casaFragrancia', label: 'Casa de fragrância', type: 'select' },
+    { field: 'custoTargetUsd', label: 'Custo target (USD/kg)', type: 'range' }
+  ]
+};
+BF_FACET_CONFIG.ET = BF_FACET_CONFIG.ES;
+
+function bfDistinctValues(tipo, field) {
+  var vals = {};
   Object.values(allMateriais).forEach(function(m) {
-    if (tipo && m.tipo !== tipo) return;
-    if (m.materialResina) resinas[m.materialResina] = true;
+    if (m.tipo !== tipo) return;
+    if (m[field]) vals[m[field]] = true;
   });
-  var lista = Object.keys(resinas).sort();
-  sel.innerHTML = '<option value="">Todos os materiais/resinas</option>' +
-    lista.map(function(r) { return '<option value="' + escapeAttr(r) + '">' + escapeHtml(r) + '</option>'; }).join('');
-  if (lista.indexOf(cur) !== -1) sel.value = cur;
+  return Object.keys(vals).sort();
+}
+
+var _tbfFacet = null;
+function renderBfFacetas() {
+  var tipo = document.getElementById('bfTipo').value;
+  var card = document.getElementById('bfFacetasCard');
+  var box = document.getElementById('bfFacetas');
+  var config = BF_FACET_CONFIG[tipo];
+  if (!tipo || !config) { card.style.display = 'none'; box.innerHTML = ''; return; }
+  card.style.display = '';
+  box.innerHTML = config.map(function(f) {
+    if (f.type === 'select') {
+      var opts = f.opts || bfDistinctValues(tipo, f.field).map(function(v) { return [v, v]; });
+      return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
+        '<select class="kt-select bf-facet" data-field="' + f.field + '" data-type="select" style="width:100%">' +
+        '<option value="">Todos</option>' +
+        opts.map(function(o) { return '<option value="' + escapeAttr(o[0]) + '">' + escapeHtml(o[1]) + '</option>'; }).join('') +
+        '</select></div>';
+    }
+    return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+      '<input type="number" class="bf-facet" data-field="' + f.field + '" data-type="range" data-bound="min" placeholder="mín" style="width:50%">' +
+      '<span style="color:var(--muted)">–</span>' +
+      '<input type="number" class="bf-facet" data-field="' + f.field + '" data-type="range" data-bound="max" placeholder="máx" style="width:50%">' +
+      '</div></div>';
+  }).join('') +
+    '<div class="form-group"><label>Última compra: preço (R$)</label>' +
+    '<div style="display:flex;gap:6px;align-items:center">' +
+    '<input type="number" class="bf-facet" data-field="_preco" data-type="range" data-bound="min" placeholder="mín" style="width:50%">' +
+    '<span style="color:var(--muted)">–</span>' +
+    '<input type="number" class="bf-facet" data-field="_preco" data-type="range" data-bound="max" placeholder="máx" style="width:50%">' +
+    '</div></div>';
+  document.querySelectorAll('.bf-facet').forEach(function(el) {
+    if (el.tagName === 'SELECT') { el.addEventListener('change', renderBuscaFornecedor); return; }
+    el.addEventListener('input', function() { clearTimeout(_tbfFacet); _tbfFacet = setTimeout(renderBuscaFornecedor, 250); });
+  });
 }
 
 function buscaFornecedorPorMaterial() {
   var tipo = document.getElementById('bfTipo').value;
-  var resina = document.getElementById('bfResina').value;
   var search = norm(document.getElementById('bfSearch').value);
+  if (!tipo && !search) return [];
+
+  var filtrosSelect = {}, filtrosRange = {};
+  document.querySelectorAll('.bf-facet').forEach(function(el) {
+    var field = el.getAttribute('data-field');
+    if (el.getAttribute('data-type') === 'select') {
+      if (el.value) filtrosSelect[field] = el.value;
+    } else if (el.value !== '') {
+      filtrosRange[field] = filtrosRange[field] || {};
+      filtrosRange[field][el.getAttribute('data-bound')] = parseFloat(el.value);
+    }
+  });
 
   var materiaisFiltrados = Object.entries(allMateriais).filter(function(e) {
     var m = e[1];
     if (tipo && m.tipo !== tipo) return false;
-    if (resina && (m.materialResina || '') !== resina) return false;
     if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome)).indexOf(search) === -1) return false;
+    for (var campo in filtrosSelect) { if ((m[campo] || '') !== filtrosSelect[campo]) return false; }
+    for (var campo2 in filtrosRange) {
+      if (campo2 === '_preco') continue; // preço vem do histórico, filtrado depois
+      var v = m[campo2], r = filtrosRange[campo2];
+      if (v == null) return false;
+      if (r.min != null && v < r.min) return false;
+      if (r.max != null && v > r.max) return false;
+    }
     return true;
   });
-  if (!materiaisFiltrados.length) return { materiais: [], porFornecedor: [] };
 
-  var porFornecedor = {}; // chave -> { key, nome, ativo, materiais: {matKey: {...}} }
-  function garanteFornecedor(fKey, nomeFallback) {
-    if (!porFornecedor[fKey]) {
-      var forn = allFornecedores[fKey];
-      porFornecedor[fKey] = { key: fKey, nome: forn ? (forn.nomeFantasia || forn.razaoSocial) : nomeFallback, ativo: forn ? forn.ativo !== false : null, materiais: {} };
-    }
-    return porFornecedor[fKey];
-  }
-  function garanteMaterial(agg, matKey, m) {
-    if (!agg.materiais[matKey]) agg.materiais[matKey] = { codigo: m.mpCodigo, nome: m.mpNome, homologado: false, comprado: false, ultimaCompraData: null, ultimaCompraPreco: null };
-    return agg.materiais[matKey];
-  }
-
-  materiaisFiltrados.forEach(function(entry) {
+  var resultado = materiaisFiltrados.map(function(entry) {
     var matKey = entry[0], m = entry[1];
-    Object.keys(m.fornecedores || {}).forEach(function(fKey) {
-      garanteMaterial(garanteFornecedor(fKey, fKey), matKey, m).homologado = true;
-    });
+    return { key: matKey, material: m, preco: ultimoPrecoDoMaterial(m.mpCodigo), homologados: homologadosDoMaterial(m.mpCodigo) };
   });
-
-  Object.values(allPedidosCompra).forEach(function(pc) {
-    Object.values(pc.itens || {}).forEach(function(it) {
-      var matEntry = materiaisFiltrados.find(function(e) { return e[1].mpCodigo === it.materialCodigo; });
-      if (!matEntry || it.precoUnit == null) return;
-      var fKey = pc.fornecedorKey || ('semcad:' + norm(pc.fornecedorNome));
-      var agg = garanteFornecedor(fKey, pc.fornecedorNome || fKey);
-      var item = garanteMaterial(agg, matEntry[0], matEntry[1]);
-      item.comprado = true;
-      var data = pc.dataEmissao || pc.dataCriacao || '';
-      if (!item.ultimaCompraData || data > item.ultimaCompraData) {
-        item.ultimaCompraData = data;
-        item.ultimaCompraPreco = parseFloat(it.precoUnit);
-      }
+  var precoFiltro = filtrosRange._preco;
+  if (precoFiltro) {
+    resultado = resultado.filter(function(r) {
+      if (!r.preco) return false;
+      if (precoFiltro.min != null && r.preco.precoUnit < precoFiltro.min) return false;
+      if (precoFiltro.max != null && r.preco.precoUnit > precoFiltro.max) return false;
+      return true;
     });
-  });
-
-  var lista = Object.values(porFornecedor).sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
-  return { materiais: materiaisFiltrados, porFornecedor: lista };
+  }
+  resultado.sort(function(a, b) { return norm(a.material.mpCodigo).localeCompare(norm(b.material.mpCodigo)); });
+  return resultado;
 }
 
 function renderBuscaFornecedor() {
   var box = document.getElementById('bfResultados');
-  var r = buscaFornecedorPorMaterial();
-  if (!r.materiais.length) {
-    box.innerHTML = '<div class="card"><div class="no-data">Escolha um tipo, material/resina, ou busque por um material específico.</div></div>';
+  var tipo = document.getElementById('bfTipo').value;
+  if (!tipo && !norm(document.getElementById('bfSearch').value)) {
+    box.innerHTML = '<div class="card"><div class="no-data">Escolha um tipo, ou busque um material específico.</div></div>';
     return;
   }
-  if (!r.porFornecedor.length) {
-    box.innerHTML = '<div class="card"><div class="no-data">' + r.materiais.length + ' material(is) encontrado(s), mas nenhum fornecedor homologado ou com histórico de compra ainda.</div></div>';
+  var resultado = buscaFornecedorPorMaterial();
+  if (!resultado.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Nenhum material bate com esse filtro.</div></div>';
     return;
   }
-  box.innerHTML = '<div class="card"><div class="card-title">' + r.porFornecedor.length + ' fornecedor(es) — ' + r.materiais.length + ' material(is) no filtro</div>' +
-    '<div class="table-wrap"><table><thead><tr><th>Fornecedor</th><th>Status</th><th style="min-width:280px">Materiais</th><th>Última compra</th></tr></thead><tbody>' +
-    r.porFornecedor.map(function(f) {
-      var statusBadge = f.ativo === null
-        ? '<span class="badge badge-gray" title="Não achamos o cadastro deste fornecedor -- só existe o nome no histórico">🕐 sem cadastro</span>'
-        : (f.ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>');
-      var materiaisHtml = Object.values(f.materiais).map(function(it) {
-        var tag = it.homologado
-          ? '<span class="badge badge-blue" style="margin-left:4px">homologado</span>'
-          : (it.comprado ? '<span class="badge badge-orange" style="margin-left:4px">já compramos</span>' : '');
-        return '<div style="font-size:12px">' + escapeHtml(it.codigo) + ' — ' + escapeHtml(it.nome) + tag + '</div>';
-      }).join('');
-      var ultimaCompra = Object.values(f.materiais).reduce(function(max, it) {
-        if (!it.ultimaCompraData) return max;
-        return (!max || it.ultimaCompraData > max.data) ? { data: it.ultimaCompraData, preco: it.ultimaCompraPreco } : max;
-      }, null);
-      var ultimaCompraTxt = ultimaCompra ? fmtData(ultimaCompra.data) + (ultimaCompra.preco != null ? ' · ' + fmtNum(ultimaCompra.preco) : '') : '<span style="color:var(--muted)">nunca compramos</span>';
+  box.innerHTML = '<div class="card"><div class="card-title">' + resultado.length + ' material(is) encontrado(s)</div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Código</th><th>Nome</th><th>Fornecedor</th><th>Última compra</th></tr></thead><tbody>' +
+    resultado.map(function(r) {
+      var fornHtml;
+      if (r.homologados.length) {
+        fornHtml = r.homologados.map(function(h) { return escapeHtml(h.nome); }).join(', ');
+      } else if (r.preco) {
+        fornHtml = escapeHtml(r.preco.fornecedorNome || '—') + ' <span class="badge badge-orange" style="margin-left:4px" title="Já compramos, mas não é (ou não é mais) o fornecedor homologado no cadastro">só histórico</span>';
+      } else {
+        fornHtml = '<span style="color:var(--warning)">⚠ nenhum fornecedor cadastrado ainda</span>';
+      }
+      var precoHtml = r.preco ? fmtNum(r.preco.precoUnit) + ' · ' + fmtData(r.preco.data) : '<span style="color:var(--muted)">nunca compramos</span>';
       return '<tr>' +
-        '<td>' + escapeHtml(f.nome) + '</td>' +
-        '<td>' + statusBadge + '</td>' +
-        '<td>' + materiaisHtml + '</td>' +
-        '<td style="font-size:12px;white-space:nowrap">' + ultimaCompraTxt + '</td>' +
+        '<td class="code-cell">' + escapeHtml(r.material.mpCodigo) + '</td>' +
+        '<td>' + escapeHtml(r.material.mpNome) + '</td>' +
+        '<td>' + fornHtml + '</td>' +
+        '<td style="font-size:12px;white-space:nowrap">' + precoHtml + '</td>' +
       '</tr>';
     }).join('') + '</tbody></table></div></div>';
 }
@@ -1709,10 +1769,10 @@ document.addEventListener('DOMContentLoaded', function() {
   phSortable.wireHeaders(renderHistoricoPrecos);
   faSortable.wireHeaders(renderAnaliseFornecedores);
 
-  document.getElementById('bfTipo').addEventListener('change', function() { refreshBfResinaOptions(); renderBuscaFornecedor(); });
-  document.getElementById('bfResina').addEventListener('change', renderBuscaFornecedor);
+  document.getElementById('bfTipo').addEventListener('change', function() { renderBfFacetas(); renderBuscaFornecedor(); });
   var _tbf = null;
   document.getElementById('bfSearch').addEventListener('input', function() { clearTimeout(_tbf); _tbf = setTimeout(renderBuscaFornecedor, 200); });
+  renderBfFacetas();
 
   esSortable.wireHeaders(renderEstoque);
   var _tes = null;
@@ -1741,7 +1801,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('materiais'), function(snap) {
       allMateriais = snap.val() || {};
-      refreshBfResinaOptions();
+      // Não chama renderBfFacetas() aqui -- reconstruiria o painel inteiro
+      // (select/range) toda vez que QUALQUER material mudar em qualquer
+      // lugar do sistema, apagando o filtro que a pessoa já tinha montado.
+      // As opções de select ficam levemente desatualizadas até trocar de
+      // tipo (dispara renderBfFacetas de novo); troca aceitável por não
+      // perder o filtro ativo.
       renderBuscaFornecedor();
       refreshAeItems();
     });
