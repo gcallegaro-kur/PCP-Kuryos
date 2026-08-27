@@ -453,13 +453,6 @@
               </div>
               <div class="form-group"><label>Nome comercial do item</label><input type="text" id="fuNomeComercial-mat" class="uc"></div>
               <div class="form-group"><label>Código deles</label><input type="text" id="fuCodigoFornecedor-mat" class="uc"></div>
-              <div class="form-group"><label>Status</label>
-                <select id="fuStatus-mat">
-                  <option value="aguardando_homologacao">Aguardando homologação</option>
-                  <option value="homologado">Homologado</option>
-                  <option value="nao_homologado">Não homologado</option>
-                </select>
-              </div>
               <div class="form-group"><label>Custo ref.</label><input type="number" id="fuCustoRef-mat" min="0" step="any"></div>
             </div>
           </div>
@@ -1792,7 +1785,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fuFornecedorKey-mat').value = fuKey;
     document.getElementById('fuNomeComercial-mat').value = fu ? (fu.nomeComercial || '') : '';
     document.getElementById('fuCodigoFornecedor-mat').value = fu ? (fu.codigoFornecedor || '') : '';
-    document.getElementById('fuStatus-mat').value = fu ? (fu.statusHomologacao || 'aguardando_homologacao') : 'aguardando_homologacao';
     document.getElementById('fuCustoRef-mat').value = fu && fu.custoReferencia != null ? fu.custoReferencia : '';
 
     variantesEquivalentesStaged = key ? JSON.parse(JSON.stringify(m.variantesEquivalentes || {})) : {};
@@ -1935,7 +1927,6 @@ document.addEventListener('DOMContentLoaded', function() {
     out[fKey] = {
       nomeComercial: document.getElementById('fuNomeComercial-mat').value.trim(),
       codigoFornecedor: document.getElementById('fuCodigoFornecedor-mat').value.trim(),
-      statusHomologacao: document.getElementById('fuStatus-mat').value,
       custoReferencia: custoVal !== '' ? parseFloat(custoVal) : null
     };
     return out;
