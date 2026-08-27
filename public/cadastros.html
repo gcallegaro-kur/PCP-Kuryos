@@ -184,6 +184,7 @@
         <option value="EP">Embalagem Primária</option>
         <option value="ES">Embalagem Secundária</option>
         <option value="ET">Embalagem Terciária</option>
+        <option value="MU">Uso e Consumo</option>
       </select>
       <select class="kt-select" id="filterAtivo-mat">
         <option value="">Todos</option>
@@ -243,6 +244,7 @@
                 <option value="EP">Embalagem Primária</option>
                 <option value="ES">Embalagem Secundária</option>
                 <option value="ET">Embalagem Terciária</option>
+                <option value="MU">Uso e Consumo</option>
               </select>
               <div class="field-hint" id="tipoDescricaoHint-mat"></div>
             </div>
@@ -251,6 +253,7 @@
                 <b>Embalagem Primária</b> -- toca o produto direto (frasco, tampa, válvula, batoque, lacre...).
                 <b>Secundária</b> -- agrupa/comunica, não toca o produto (rótulo, cartucho, bula, selo, celofane...) -- geralmente o que o cliente vê na prateleira.
                 <b>Terciária</b> -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).
+                <b>Uso e Consumo</b> -- insumo indireto, não faz parte do produto (limpeza, EPI, laboratório, escritório...) -- mas pode entrar num BOM quando for usado na operação (ex: etiqueta de identificação de caixa de embarque).
               </div>
             </div>
             <div class="form-group full">
@@ -1301,8 +1304,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var variantesEquivalentesStaged = {}; // materialKey -> true -- staged em memória até salvar; vínculo é gravado nos dois materiais ao salvar
   var matSortable = makeSortableTable(document.getElementById('matThead-mat'), 'mpCodigo', 'asc');
 
-  var TIPO_LABELS = { MPGR: 'MP Geral', MPES: 'Fragrância/Essência', EP: 'Embalagem Primária', ES: 'Embalagem Secundária', ET: 'Embalagem Terciária' };
-  var TIPO_BADGE_CLASS = { MPGR: 'badge-blue', MPES: 'badge-orange', EP: 'badge-purple', ES: 'badge-purple', ET: 'badge-purple' };
+  var TIPO_LABELS = { MPGR: 'MP Geral', MPES: 'Fragrância/Essência', EP: 'Embalagem Primária', ES: 'Embalagem Secundária', ET: 'Embalagem Terciária', MU: 'Uso e Consumo' };
+  var TIPO_BADGE_CLASS = { MPGR: 'badge-blue', MPES: 'badge-orange', EP: 'badge-purple', ES: 'badge-purple', ET: 'badge-purple', MU: 'badge-gray' };
 
   // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
   // Campos comuns valem pra qualquer tipo; os por-tipo só entram na conta
@@ -1336,7 +1339,8 @@ document.addEventListener('DOMContentLoaded', function() {
     MPES: 'Fragrância ou essência -- insumo aromático, com fornecimento e regras próprias (casa de fragrância, IFRA).',
     EP: 'Embalagem Primária -- toca o produto diretamente (frasco, tampa, válvula, batoque, lacre...).',
     ES: 'Embalagem Secundária -- agrupa/comunica, não toca o produto (rótulo, cartucho, bula, selo, celofane...). Geralmente é o que o cliente final vê na prateleira.',
-    ET: 'Embalagem Terciária -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).'
+    ET: 'Embalagem Terciária -- transporte/logística, não vista pelo consumidor final (display de PDV, caixa de embarque, divisória, cantoneira...).',
+    MU: 'Uso e Consumo -- insumo indireto, não faz parte do produto (limpeza, EPI, laboratório, escritório...). Pode ser referenciado num BOM quando usado na operação (ex: etiqueta de identificação de caixa de embarque), mas não é uma embalagem do produto em si.'
   };
 
   // Só faz sentido homologar fornecedor do TIPO certo pro material -- MP/
@@ -3364,7 +3368,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET'], it.materialCodigo) + '</select></td>' +
+          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET', 'MU'], it.materialCodigo) + '</select></td>' +
           '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
           '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
       }).join('');
