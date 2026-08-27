@@ -587,17 +587,7 @@ function saveReceber() {
 function incrementarEstoque(itensRecebidos, origemTipo, origemRef) {
   var itens = Object.values(itensRecebidos || {}).filter(function(it) { return it.qtdRecebidaAgora > 0; });
   return Promise.all(itens.map(function(it) {
-    var key = sanitizeKey(it.materialCodigo);
-    return db.ref('estoque/' + key).transaction(function(atual) {
-      atual = atual || { saldoAtual: 0 };
-      atual.saldoAtual = (atual.saldoAtual || 0) + it.qtdRecebidaAgora;
-      atual.materialCodigo = it.materialCodigo;
-      atual.materialNome = it.materialNome || (atual.materialNome || '');
-      atual.unidade = it.unidade || atual.unidade || '';
-      atual.ultimaAtualizacao = new Date().toISOString();
-      atual.ultimaMovimentacao = { tipo: origemTipo, qtd: it.qtdRecebidaAgora, ref: origemRef, em: new Date().toISOString() };
-      return atual;
-    });
+    return ajustarEstoque(db, it.materialCodigo, it.qtdRecebidaAgora, origemTipo, origemRef, { materialNome: it.materialNome, unidade: it.unidade });
   }));
 }
 

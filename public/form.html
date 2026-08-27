@@ -1770,6 +1770,27 @@ dbOnValue(db.ref('ops'), function(snap) {
   renderPainelTurno();
 });
 
+// ── Fórmula/BOM/Materiais -- só leitura, pra calcular consumo real de
+// estoque a cada apontamento de Linha (baixarEstoqueConsumo). Nenhum CRUD
+// aqui, cadastro fica em cadastros.html.
+var allProdutosForm = {};
+var allFormulasForm = {};
+var allBomForm = {};
+var allMateriaisForm = {};
+dbOnValue(db.ref('produtos'), function(snap) { allProdutosForm = snap.val() || {}; });
+dbOnValue(db.ref('formulas'), function(snap) { allFormulasForm = snap.val() || {}; });
+dbOnValue(db.ref('bom'), function(snap) { allBomForm = snap.val() || {}; });
+var materiaisFormItems = []; // pro autocomplete de material específico na perda
+dbOnValue(db.ref('materiais'), function(snap) {
+  allMateriaisForm = snap.val() || {};
+  materiaisFormItems = Object.entries(allMateriaisForm).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return String(a[1].mpNome||'').localeCompare(String(b[1].mpNome||'')); })
+    .map(function(e) {
+      var label = e[1].mpCodigo + ' — ' + e[1].mpNome;
+      return { key: e[0], value: label, label: label };
+    });
+});
+
 // ── Pedido ID hint ────────────────────────────────────────────────
 
 function parseOpId(str) {
@@ -2642,7 +2663,39 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // campo continua intocado nos outros fluxos.
     if (novaMedia > 0) op.mediaPorHora = novaMedia;
     return op;
+  }).then(function(result) {
+    // Baixa de estoque por consumo real -- só envase (mesma decisão de
+    // isSetorEnvase pro produzido do pedido: rotulagem ainda não é
+    // confiável). Fica FORA da transaction acima (não dá pra fazer leitura
+    // de fórmula/BOM dentro de uma transaction, que roda várias vezes em
+    // caso de conflito) -- best-effort, não desfaz o apontamento se falhar.
+    if (isSetorEnvase(tipo) && result.committed && result.snapshot.exists()) {
+      baixarEstoqueConsumo(result.snapshot.val(), qtd, 'consumo_producao', lote).catch(function(err) {
+        console.error('Falha ao dar baixa de estoque por consumo de produção:', err);
+      });
+    }
+    return result;
   });
+}
+
+// Calcula o consumo teórico de Fórmula+BOM pra a quantidade REALMENTE
+// produzida nesse apontamento (não a planejada da OP inteira) e desconta
+// do estoque, material por material. Sem fórmula/BOM cadastrada pro
+// produto, não quebra nada -- só não desconta (mesma tolerância que o
+// resto do app já tem pra produto sem fórmula ainda migrada).
+function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
+  if (!op || !op.sku || !qtdReal) return Promise.resolve();
+  var achado = melhorFormulaDoProduto(op.sku, allFormulasForm);
+  if (!achado) return Promise.resolve();
+  var formula = achado.registro;
+  var bom = allBomForm[chaveVersao(op.sku, formula.versao)] || { itens: {} };
+  var produto = allProdutosForm[op.sku];
+  if (!produto) return Promise.resolve();
+  var calc = explodirMateriaisNecessarios(produto, qtdReal, formula, bom, allMateriaisForm);
+  if (!calc.ok || !calc.itens.length) return Promise.resolve();
+  return Promise.all(calc.itens.map(function(it) {
+    return ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade });
+  }));
 }
 
 // pedidos/{key}.produzido representa venda/entrega ao cliente -- só o
@@ -2684,6 +2737,7 @@ function syncNextItem() {
           linha: item.registro.linha, pedidoId: item.pedidoId || '',
           perdas: item.perdas, timestamp: new Date().toISOString()
         }));
+        saves.push(baixarEstoquePerdas(item.perdas, item.registro.lote));
       }
       if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
         var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
@@ -2811,6 +2865,7 @@ function syncNextItem() {
           data: item.data, lote: item.lote, produto: item.produto, linha: item.registro.linha,
           pedidoId: item.pedidoId, perdas: item.perdas, timestamp: new Date().toISOString()
         }));
+        saves.push(baixarEstoquePerdas(item.perdas, item.lote));
       }
       return Promise.all(saves);
     });
@@ -3480,6 +3535,11 @@ function addPerda(containerId, noMsgId) {
     '<div class="form-group" id="pOutroWrap-'+id+'" style="display:none">' +
       '<label>Especificar</label>' +
       '<input type="text" id="pOutroSpec-'+id+'" placeholder="Descreva a perda...">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label>Material específico (opcional -- desconta do estoque)</label>' +
+      '<input type="text" id="pMaterial-'+id+'" placeholder="Digite pra buscar..." autocomplete="off">' +
+      '<input type="hidden" id="pMaterialKey-'+id+'">' +
     '</div>';
   document.getElementById(containerId).appendChild(div);
   div.querySelector('.btn-rem-parada').addEventListener('click', function() {
@@ -3489,6 +3549,16 @@ function addPerda(containerId, noMsgId) {
       var noPerdasMsg = document.getElementById(noMsgId);
       if (noPerdasMsg) noPerdasMsg.style.display = '';
     }
+  });
+  // Material específico: mesmo componente de busca já usado em Cadastros/
+  // Compras (attachAutocomplete, shared/utils.js) -- opcional, sem escolher
+  // da lista a perda continua sendo lançada normal, só não desconta estoque
+  // (sem saber qual material, não tem o que descontar).
+  attachAutocomplete(document.getElementById('pMaterial-'+id), function() { return materiaisFormItems; }, {
+    onSelect: function(it) { document.getElementById('pMaterialKey-'+id).value = it.key; }
+  });
+  document.getElementById('pMaterial-'+id).addEventListener('input', function() {
+    document.getElementById('pMaterialKey-'+id).value = '';
   });
   document.getElementById('pTipo-'+id).addEventListener('change', function() {
     document.getElementById('pOutroWrap-'+id).style.display = this.value === 'Outro' ? 'block' : 'none';
@@ -3505,11 +3575,27 @@ function collectPerdas(containerId) {
     var tipo = (document.getElementById('pTipo-'+id)||{value:''}).value || '';
     var qtd  = parseInt((document.getElementById('pQtdPerda-'+id)||{value:0}).value||0) || 0;
     var spec = (document.getElementById('pOutroSpec-'+id)||{value:''}).value.trim() || '';
+    var materialKey = (document.getElementById('pMaterialKey-'+id)||{value:''}).value || '';
     var entry = { tipo: tipo, quantidade: qtd };
     if (tipo === 'Outro' && spec) entry.especificacao = spec;
+    if (materialKey && allMateriaisForm[materialKey]) {
+      entry.materialCodigo = allMateriaisForm[materialKey].mpCodigo;
+      entry.materialNome = allMateriaisForm[materialKey].mpNome;
+    }
     if (tipo) perdas.push(entry);
   });
   return perdas;
+}
+
+// Desconta do estoque toda perda lançada COM material específico -- perda
+// só com categoria genérica (sem materialCodigo) continua sendo registrada
+// como sempre foi, só não desconta nada (não tem como saber qual material).
+function baixarEstoquePerdas(perdas, ref) {
+  var comMaterial = (perdas || []).filter(function(p) { return p.materialCodigo && p.quantidade > 0; });
+  if (!comMaterial.length) return Promise.resolve();
+  return Promise.all(comMaterial.map(function(p) {
+    return ajustarEstoque(db, p.materialCodigo, -p.quantidade, 'perda', ref, { materialNome: p.materialNome });
+  })).catch(function(err) { console.error('Falha ao dar baixa de estoque por perda:', err); });
 }
 
 // ── Finalizar OP submit ───────────────────────────────────────────

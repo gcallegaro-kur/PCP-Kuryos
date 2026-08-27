@@ -837,6 +837,29 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
   return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: Math.round(volumeGranelL * 1000) / 1000 };
 }
 
+// ── Ajuste de saldo de estoque (Fase 4) ─────────────────────────────────
+// Único ponto que escreve em estoque/{materialKey} -- usado por
+// logistica.html (entrada por recebimento), form.html (baixa por consumo
+// real de produção e por perda com material específico). `delta` pode ser
+// positivo (entrada) ou negativo (saída); `dbRef` é a instância `db` de
+// quem chama (mesmo padrão de nextSequential). Sempre .transaction() --
+// dois ajustes concorrentes no mesmo material nunca se perdem um no outro.
+function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, extras) {
+  if (!materialCodigo || !delta) return Promise.resolve();
+  extras = extras || {};
+  var key = sanitizeKey(materialCodigo);
+  return dbRef.ref('estoque/' + key).transaction(function(atual) {
+    atual = atual || { saldoAtual: 0 };
+    atual.saldoAtual = (atual.saldoAtual || 0) + delta;
+    atual.materialCodigo = materialCodigo;
+    if (extras.materialNome) atual.materialNome = extras.materialNome;
+    if (extras.unidade) atual.unidade = extras.unidade;
+    atual.ultimaAtualizacao = new Date().toISOString();
+    atual.ultimaMovimentacao = { tipo: tipoMovimentacao, qtd: delta, ref: ref || null, em: new Date().toISOString() };
+    return atual;
+  });
+}
+
 // ── Padrão de etiqueta de identificação do fornecedor ───────────────────
 // Campos obrigatórios na etiqueta que o fornecedor cola nas caixas/fardos
 // entregues -- usado por compras.html (mostra o padrão + manda no e-mail de
