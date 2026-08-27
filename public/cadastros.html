@@ -428,6 +428,10 @@
 
           <div class="section-label">Variantes equivalentes</div>
           <div class="section-note">Use quando dois materiais são fisicamente diferentes (fornecedores diferentes, medida levemente diferente) mas substituíveis nesta compra -- ex: dois frascos de fornecedores distintos que a Qualidade aceita como intercambiáveis. Não funde estoque nem cadastro; só faz o Compras mostrar a alternativa (fornecedor/preço) na hora de decidir. O vínculo é sempre nos dois sentidos -- adicionar aqui também aparece no material vinculado.</div>
+          <div class="tipo-fields" data-tipo-for="EP,ES,ET" style="margin-bottom:12px">
+            <div class="field-hint" style="margin-bottom:6px">Sugestões automáticas -- mesmo gargalo/rosca (EP) e material, comparando as medidas com o que já foi preenchido acima. Você decide se a diferença compensa a troca.</div>
+            <div id="veSugestoesBox-mat"></div>
+          </div>
           <div class="table-wrap" style="margin-bottom:10px">
             <table>
               <thead><tr><th>Código</th><th>Nome</th><th style="width:40px"></th></tr></thead>
@@ -1377,17 +1381,122 @@ document.addEventListener('DOMContentLoaded', function() {
         delete variantesEquivalentesStaged[btn.getAttribute('data-key')];
         renderVariantesEquivalentes();
         refreshVeMaterialItems();
+        renderSugestoesVariantes();
       });
     });
   }
   function addVariante() {
     var vKey = document.getElementById('veMaterialKey-mat').value;
     if (!vKey) { showAlert('Digite e selecione um material da lista.', 'danger'); return; }
+    vincularVarianteStaged(vKey);
+  }
+  function vincularVarianteStaged(vKey) {
     variantesEquivalentesStaged[vKey] = true;
     document.getElementById('veMaterial-mat').value = '';
     document.getElementById('veMaterialKey-mat').value = '';
     renderVariantesEquivalentes();
     refreshVeMaterialItems();
+    renderSugestoesVariantes();
+  }
+
+  // Sugestão automática de variante -- compara o material sendo editado com
+  // os já cadastrados do MESMO tipo, mesmo gargalo/rosca (EP) e mesma
+  // resina (EP/ES/ET), mostrando a diferença de volume interno/altura/
+  // diâmetro/peso. Nunca vincula sozinho -- só reduz a busca manual a uma
+  // lista curta com o dado técnico já calculado, pra decisão humana.
+  function camposComparaveis(tipo) {
+    if (tipo === 'EP') {
+      return {
+        resina: document.getElementById('fMaterialResina-mat').value,
+        gargalo: document.getElementById('fGargalo-mat').value.trim(),
+        volumeInterno: parseFloat(document.getElementById('fVolumeInterno-mat').value),
+        altura: parseFloat(document.getElementById('fAltura-mat').value),
+        diametro: parseFloat(document.getElementById('fDiametro-mat').value),
+        peso: parseFloat(document.getElementById('fPesoUnitario-mat').value)
+      };
+    }
+    if (tipo === 'ES' || tipo === 'ET') {
+      return {
+        resina: document.getElementById('fMaterialResinaSt-mat').value,
+        gargalo: null,
+        volumeInterno: null,
+        altura: parseFloat(document.getElementById('fAlturaSt-mat').value),
+        diametro: null,
+        peso: parseFloat(document.getElementById('fPesoUnitarioSt-mat').value)
+      };
+    }
+    return null;
+  }
+  function sugerirVariantesEquivalentes() {
+    var tipo = document.getElementById('fTipo').value;
+    var atual = camposComparaveis(tipo);
+    if (!atual || !atual.resina) return []; // MP não tem campo comparável ainda; sem resina, não dá pra filtrar com segurança
+
+    var candidatos = Object.entries(allMateriais).filter(function(e) {
+      var k = e[0], m = e[1];
+      if (k === editingKey) return false;
+      if (m.ativo === false) return false;
+      if (m.tipo !== tipo) return false;
+      if (variantesEquivalentesStaged[k]) return false; // já vinculado
+      if ((m.materialResina || '') !== atual.resina) return false;
+      if (tipo === 'EP' && atual.gargalo && (m.gargaloRosca || '').trim() !== atual.gargalo) return false;
+      return true;
+    });
+
+    var sugestoes = candidatos.map(function(e) {
+      var k = e[0], m = e[1];
+      var deltas = {};
+      if (!isNaN(atual.volumeInterno) && m.volumeInternoTotal != null) deltas.volumeInterno = m.volumeInternoTotal - atual.volumeInterno;
+      if (!isNaN(atual.altura) && m.alturaMm != null) deltas.altura = m.alturaMm - atual.altura;
+      if (!isNaN(atual.diametro) && m.diametroMm != null) deltas.diametro = m.diametroMm - atual.diametro;
+      if (!isNaN(atual.peso) && m.pesoUnitario != null) deltas.peso = m.pesoUnitario - atual.peso;
+      return { key: k, material: m, deltas: deltas };
+    });
+
+    // Mais parecido primeiro -- volume interno pra EP (é o que decide
+    // headspace), peso pra ES/ET (não têm volume interno).
+    var chaveOrdenacao = tipo === 'EP' ? 'volumeInterno' : 'peso';
+    sugestoes.sort(function(a, b) {
+      var da = a.deltas[chaveOrdenacao], db2 = b.deltas[chaveOrdenacao];
+      if (da == null && db2 == null) return 0;
+      if (da == null) return 1;
+      if (db2 == null) return -1;
+      return Math.abs(da) - Math.abs(db2);
+    });
+    return sugestoes;
+  }
+  function renderSugestoesVariantes() {
+    var box = document.getElementById('veSugestoesBox-mat');
+    if (!box) return;
+    var sugestoes = sugerirVariantesEquivalentes();
+    if (!sugestoes.length) {
+      box.innerHTML = '<div class="field-hint">Preencha gargalo/rosca (EP) ou material (ES/ET), e as medidas, pra ver sugestões automáticas de variante equivalente.</div>';
+      return;
+    }
+    function fmtDelta(v, unidade) {
+      if (v == null) return null;
+      var sinal = v > 0 ? '+' : '';
+      var cor = Math.abs(v) < 0.01 ? 'var(--success)' : 'var(--text)';
+      return '<span style="color:' + cor + '">Δ ' + sinal + fmtNum(v) + unidade + '</span>';
+    }
+    box.innerHTML = sugestoes.slice(0, 8).map(function(s) {
+      var partesDelta = [
+        fmtDelta(s.deltas.volumeInterno, ' ml volume interno'),
+        fmtDelta(s.deltas.altura, ' mm altura'),
+        fmtDelta(s.deltas.diametro, ' mm diâmetro'),
+        fmtDelta(s.deltas.peso, ' g peso')
+      ].filter(Boolean).join(' · ');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">' +
+        '<div style="font-size:12px">' +
+          '<b>' + escapeHtml(s.material.mpCodigo) + '</b> — ' + escapeHtml(s.material.mpNome) +
+          (partesDelta ? '<br><span style="color:var(--muted)">' + partesDelta + '</span>' : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-ghost btn-sm ve-sugestao-add" data-key="' + escapeAttr(s.key) + '" style="white-space:nowrap">+ Vincular</button>' +
+      '</div>';
+    }).join('');
+    document.querySelectorAll('.ve-sugestao-add').forEach(function(btn) {
+      btn.addEventListener('click', function() { vincularVarianteStaged(btn.getAttribute('data-key')); });
+    });
   }
 
   // Só entram debaixo do mesmo tipo campos que fazem sentido pra aquele
@@ -1585,6 +1694,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('veMaterialKey-mat').value = '';
     refreshVeMaterialItems();
     renderVariantesEquivalentes();
+    renderSugestoesVariantes();
 
     document.getElementById('fControlado').checked = !!m.controlado;
     document.getElementById('fAtivo-mat').checked = m.ativo !== false;
@@ -1729,6 +1839,19 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fVolumeNominal-mat').addEventListener('input', updateHeadSpace);
     document.getElementById('fVolumeInterno-mat').addEventListener('input', updateHeadSpace);
     document.getElementById('btnAddFornHomolog-mat').addEventListener('click', addFornecedorHomologado);
+
+    // Sugestão de variante reage a qualquer campo comparável (EP e ES/ET) --
+    // delegado num só listener em vez de religar campo por campo.
+    var CAMPOS_SUGESTAO_VARIANTE = ['fGargalo-mat', 'fMaterialResina-mat', 'fVolumeNominal-mat', 'fVolumeInterno-mat', 'fAltura-mat', 'fDiametro-mat', 'fPesoUnitario-mat', 'fMaterialResinaSt-mat', 'fComprimentoSt-mat', 'fLarguraSt-mat', 'fAlturaSt-mat', 'fPesoUnitarioSt-mat'];
+    var _tSugestao = null;
+    document.getElementById('modalBg-mat').addEventListener('input', function(e) {
+      if (CAMPOS_SUGESTAO_VARIANTE.indexOf(e.target.id) === -1) return;
+      clearTimeout(_tSugestao); _tSugestao = setTimeout(renderSugestoesVariantes, 250);
+    });
+    document.getElementById('modalBg-mat').addEventListener('change', function(e) {
+      if (CAMPOS_SUGESTAO_VARIANTE.indexOf(e.target.id) === -1) return;
+      renderSugestoesVariantes();
+    });
 
     // Fornecedor homologado: digita pra filtrar, igual ao campo de OP no
     // apontamento (attachAutocomplete, shared/utils.js). A chave real do
