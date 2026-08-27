@@ -1191,8 +1191,8 @@
 
   // Cascata completa -- uma OP cancelada some de TODO lugar que ainda a
   // trata como capacidade/compromisso real (alocacoes_planejamento,
-  // programacao), ficando só o registro histórico em ops/{lote} de que foi
-  // cancelada.
+  // programacao, empenho de estoque), ficando só o registro histórico em
+  // ops/{lote} de que foi cancelada.
   function executarCancelamentoOp(opKey, op, motivo) {
     const lote = op.lote;
     database.ref('ops/' + opKey).update({
@@ -1226,6 +1226,13 @@
           // mais coberta por essa OP cancelada.
           if (typeof clearLoteFromFutureSlots === 'function') {
             cascatas.push(clearLoteFromFutureSlots(lote, database));
+          }
+          // 3. Libera de volta pro disponível qualquer empenho remanescente
+          // dessa OP (reservado na emissão, nunca chegou a ser consumido por
+          // não ter sido apontado antes do cancelamento).
+          if (op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
+            var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+            cascatas.push(liberarEmpenhoLote(database, lote, codigosEmpenho));
           }
         }
         return Promise.all(cascatas);

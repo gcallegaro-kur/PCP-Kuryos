@@ -590,6 +590,12 @@ function emitirOP() {
     document.getElementById('cardEmissao').style.display = 'none';
     document.getElementById('cardSucesso').style.display = 'block';
     showAlert('OP ' + res.lote + ' emitida com sucesso.', 'success');
+    // Reserva (empenha) no estoque cada material do consumo calculado --
+    // best-effort, fora da transaction de emissão: a OP já existe e é o que
+    // importa; o empenho é um reflexo dela, não pré-requisito pra emitir.
+    empenharMateriais(db, res.lote, res.data.sku, Object.values(res.data.materiaisConsumo || {})).catch(function(err) {
+      console.error('Falha ao empenhar materiais da OP ' + res.lote + ':', err);
+    });
   }).catch(function(err) {
     showAlert('Erro ao emitir OP: ' + err.message, 'danger');
   }).finally(function() {

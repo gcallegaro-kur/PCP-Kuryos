@@ -860,6 +860,91 @@ function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, ext
   });
 }
 
+// ── Estoque empenhado/reservado (Fase 4c) ───────────────────────────────
+// Saldo físico (saldoAtual, acima) e saldo empenhado são dois números
+// DIFERENTES no mesmo nó estoque/{materialKey}: saldoAtual é o que tem
+// fisicamente em fábrica; saldoEmpenhado é quanto disso já está comprometido
+// por OPs emitidas mas ainda não totalmente apontadas. saldoDisponivel
+// (= saldoAtual - saldoEmpenhado) é o que sobra pra novos compromissos --
+// sempre CALCULADO na leitura (compras.html), nunca gravado, pra nunca
+// divergir dos dois números-fonte.
+//
+// empenhos/{loteKey} dentro de cada material é o índice que permite reduzir
+// ou liberar o empenho de um lote específico sem precisar varrer todo mundo
+// -- criado na emissão (empenharMateriais), reduzido a cada apontamento real
+// (baixarEmpenho, mesmo delta que já sai do saldo físico) e zerado quando a
+// OP termina ou é cancelada (liberarEmpenhoLote), soltando de volta pro
+// disponível qualquer sobra entre o teórico empenhado e o real consumido.
+
+// Chamado na emissão da OP (emitir_op.html) -- reserva cada material do
+// materiaisConsumo recém-calculado. Best-effort: se falhar, não desfaz a
+// emissão (a OP já existe; o empenho é um reflexo dela, não pré-requisito).
+function empenharMateriais(dbRef, lote, sku, itens) {
+  if (!lote || !itens || !itens.length) return Promise.resolve();
+  var loteKey = sanitizeKey(lote);
+  var agora = new Date().toISOString();
+  return Promise.all(itens.map(function(it) {
+    if (!it.mpCodigo || !it.quantidade) return Promise.resolve();
+    var key = sanitizeKey(it.mpCodigo);
+    return dbRef.ref('estoque/' + key).transaction(function(atual) {
+      atual = atual || { saldoAtual: 0 };
+      atual.saldoEmpenhado = (atual.saldoEmpenhado || 0) + it.quantidade;
+      atual.materialCodigo = it.mpCodigo;
+      if (it.mpNome) atual.materialNome = it.mpNome;
+      atual.empenhos = atual.empenhos || {};
+      atual.empenhos[loteKey] = { lote: lote, sku: sku || '', qtdEmpenhada: it.quantidade, criadoEm: agora, atualizadoEm: agora };
+      return atual;
+    });
+  }));
+}
+
+// Chamado a cada apontamento real de produção (form.html, junto com
+// ajustarEstoque do consumo físico) -- reduz o empenho daquele lote na MESMA
+// quantidade que acabou de sair do físico, pra o empenhado ir refletindo a
+// realidade conforme a OP avança. Nunca vai negativo; se não havia empenho
+// pra esse lote/material (ex: OP emitida antes desta função existir), não
+// desconta nada em vez de criar um saldo negativo sem sentido.
+function baixarEmpenho(dbRef, lote, materialCodigo, qtd) {
+  if (!lote || !materialCodigo || !qtd) return Promise.resolve();
+  var loteKey = sanitizeKey(lote);
+  var key = sanitizeKey(materialCodigo);
+  return dbRef.ref('estoque/' + key).transaction(function(atual) {
+    if (!atual || !atual.empenhos || !atual.empenhos[loteKey]) return atual;
+    var emp = atual.empenhos[loteKey];
+    var abatido = Math.min(qtd, emp.qtdEmpenhada || 0);
+    var novoQtd = Math.round(((emp.qtdEmpenhada || 0) - abatido) * 1000) / 1000;
+    atual.saldoEmpenhado = Math.max(0, Math.round(((atual.saldoEmpenhado || 0) - abatido) * 1000) / 1000);
+    if (novoQtd <= 0) {
+      delete atual.empenhos[loteKey];
+    } else {
+      atual.empenhos[loteKey] = { lote: emp.lote, sku: emp.sku, qtdEmpenhada: novoQtd, criadoEm: emp.criadoEm, atualizadoEm: new Date().toISOString() };
+    }
+    return atual;
+  });
+}
+
+// Chamado quando a OP conclui (~95% do planejado, mesmo critério de
+// computeOpStatus) ou é cancelada -- libera de volta pro disponível
+// qualquer sobra entre o que foi empenhado na emissão e o que realmente
+// foi consumido via baixarEmpenho ao longo da produção. `materiaisCodigos`
+// vem de Object.values(op.materiaisConsumo) -- a OP já carrega essa lista,
+// não precisa varrer o estoque inteiro procurando quem reservou esse lote.
+function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
+  if (!lote || !materiaisCodigos || !materiaisCodigos.length) return Promise.resolve();
+  var loteKey = sanitizeKey(lote);
+  return Promise.all(materiaisCodigos.map(function(mpCodigo) {
+    if (!mpCodigo) return Promise.resolve();
+    var key = sanitizeKey(mpCodigo);
+    return dbRef.ref('estoque/' + key).transaction(function(atual) {
+      if (!atual || !atual.empenhos || !atual.empenhos[loteKey]) return atual;
+      var restante = atual.empenhos[loteKey].qtdEmpenhada || 0;
+      atual.saldoEmpenhado = Math.max(0, Math.round(((atual.saldoEmpenhado || 0) - restante) * 1000) / 1000);
+      delete atual.empenhos[loteKey];
+      return atual;
+    });
+  }));
+}
+
 // ── Padrão de etiqueta de identificação do fornecedor ───────────────────
 // Campos obrigatórios na etiqueta que o fornecedor cola nas caixas/fardos
 // entregues -- usado por compras.html (mostra o padrão + manda no e-mail de

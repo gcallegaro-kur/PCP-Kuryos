@@ -255,7 +255,7 @@
       <div class="kt-search"><span class="icon">🔍</span><input type="text" id="esSearch" placeholder="Buscar por código ou nome do material..."></div>
       <button class="btn btn-ghost" id="btnAjustarEstoque">⚖️ Ajustar Saldo</button>
     </div>
-    <div class="section-note">Saldo atualizado automaticamente a cada recebimento em Logística (entrada). Ainda não desconta consumo de produção -- por enquanto só sobe; use Ajustar Saldo pra corrigir depois de uma contagem física.</div>
+    <div class="section-note">Saldo Atual sobe a cada recebimento em Logística e desce a cada apontamento real de produção (consumo) ou perda com material específico. Empenhado é quanto desse saldo já está reservado por OPs emitidas ainda não totalmente apontadas; Disponível (= Atual − Empenhado) é o que sobra pra novos compromissos. Use Ajustar Saldo pra corrigir o Atual depois de uma contagem física.</div>
     <div class="card">
       <div class="card-title" id="esCount">Estoque</div>
       <div class="table-wrap">
@@ -263,10 +263,12 @@
           <thead id="esThead"><tr>
             <th data-sort="materialCodigo">Material</th>
             <th data-sort="saldoAtual" style="text-align:right">Saldo Atual</th>
+            <th data-sort="saldoEmpenhado" style="text-align:right">Empenhado</th>
+            <th data-sort="saldoDisponivel" style="text-align:right">Disponível</th>
             <th data-sort="ultimaAtualizacao">Última Atualização</th>
             <th style="min-width:90px">Ações</th>
           </tr></thead>
-          <tbody id="esBody"><tr><td colspan="4" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="esBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1116,19 +1118,26 @@ function renderEstoque() {
     if (!search) return true;
     return (norm(e[1].materialCodigo) + ' ' + norm(e[1].materialNome)).indexOf(search) !== -1;
   });
-  rows = esSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+  rows = esSortable.applySort(rows, function(entry, field) {
+    if (field === 'saldoDisponivel') return (entry[1].saldoAtual || 0) - (entry[1].saldoEmpenhado || 0);
+    return entry[1][field];
+  });
 
   document.getElementById('esCount').textContent = 'Estoque (' + rows.length + ' material(is) com movimento)';
   var tbody = document.getElementById('esBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(function(entry) {
     var key = entry[0], e = entry[1];
+    var empenhado = e.saldoEmpenhado || 0;
+    var disponivel = (e.saldoAtual || 0) - empenhado;
     return '<tr>' +
       '<td>' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') + '</td>' +
       '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
+      '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
+      '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
       '<td style="font-size:12px">' + fmtData(e.ultimaAtualizacao) + '</td>' +
       '<td><button class="btn btn-ghost btn-sm es-ajustar" data-key="' + escapeAttr(key) + '">⚖️ Ajustar</button></td>' +
     '</tr>';

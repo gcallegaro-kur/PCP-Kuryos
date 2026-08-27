@@ -2670,9 +2670,22 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // de fórmula/BOM dentro de uma transaction, que roda várias vezes em
     // caso de conflito) -- best-effort, não desfaz o apontamento se falhar.
     if (isSetorEnvase(tipo) && result.committed && result.snapshot.exists()) {
-      baixarEstoqueConsumo(result.snapshot.val(), qtd, 'consumo_producao', lote).catch(function(err) {
+      var opAtual = result.snapshot.val();
+      baixarEstoqueConsumo(opAtual, qtd, 'consumo_producao', lote).catch(function(err) {
         console.error('Falha ao dar baixa de estoque por consumo de produção:', err);
       });
+      // OP bateu o critério de "Concluído" nesse apontamento (mesmos ~95% de
+      // computeOpStatus) -- libera de volta pro disponível qualquer sobra
+      // entre o que foi empenhado na emissão e o que realmente saiu via
+      // baixarEmpenho ao longo da produção. Idempotente: sem sobra (ou sem
+      // empenho pra esse lote, ex. OP emitida antes desta função existir),
+      // não faz nada.
+      if (opAtual.status === 'Concluído' && opAtual.materiaisConsumo) {
+        var codigosEmpenho = Object.values(opAtual.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+        liberarEmpenhoLote(db, lote, codigosEmpenho).catch(function(err) {
+          console.error('Falha ao liberar empenho remanescente da OP ' + lote + ':', err);
+        });
+      }
     }
     return result;
   });
@@ -2682,7 +2695,9 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
 // produzida nesse apontamento (não a planejada da OP inteira) e desconta
 // do estoque, material por material. Sem fórmula/BOM cadastrada pro
 // produto, não quebra nada -- só não desconta (mesma tolerância que o
-// resto do app já tem pra produto sem fórmula ainda migrada).
+// resto do app já tem pra produto sem fórmula ainda migrada). Junto com
+// cada baixa física, reduz o empenhado do mesmo lote na mesma quantidade
+// (baixarEmpenho, Fase 4c) -- é o consumo real "confirmando" a reserva.
 function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   if (!op || !op.sku || !qtdReal) return Promise.resolve();
   var achado = melhorFormulaDoProduto(op.sku, allFormulasForm);
@@ -2694,7 +2709,10 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   var calc = explodirMateriaisNecessarios(produto, qtdReal, formula, bom, allMateriaisForm);
   if (!calc.ok || !calc.itens.length) return Promise.resolve();
   return Promise.all(calc.itens.map(function(it) {
-    return ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade });
+    return Promise.all([
+      ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade }),
+      baixarEmpenho(db, ref, it.mpCodigo, it.quantidade)
+    ]);
   }));
 }
 
