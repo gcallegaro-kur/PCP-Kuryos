@@ -3257,8 +3257,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!p) return;
     produtoSelecionadoKey = key;
     produtoSelecionadoSku = p.sku || key;
-    document.getElementById('fProdutoBusca-form').value = '';
+    var buscaInput = document.getElementById('fProdutoBusca-form');
+    buscaInput.value = '';
     document.getElementById('produtoResultados-form').style.display = 'none';
+    // Achado do usuário: clicar num resultado tira o foco do campo de busca
+    // (a div clicada não é focável) e ninguém devolvia -- a caixa ficava
+    // visualmente vazia e "pronta", mas digitar a próxima busca não ia pra
+    // lugar nenhum até clicar nela de novo. Refoca aqui pra já poder
+    // pesquisar o próximo produto sem precisar clicar de novo.
+    buscaInput.focus();
     document.getElementById('produtoSelecionado-form').style.display = 'block';
     document.getElementById('produtoSelecionado-form').textContent = p.sku + ' — ' + p.descricao;
     document.getElementById('semProduto-form').style.display = 'none';
