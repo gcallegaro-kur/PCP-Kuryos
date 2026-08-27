@@ -3207,7 +3207,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var f = allFormulas[key] || { status: 'RASCUNHO', itens: {} };
     document.getElementById('versaoAtualLabel-form').textContent = versao;
     var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
-    document.getElementById('versaoStatusBadge-form').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+    // Mesmo padrão de badge clicável de Fornecedores/Materiais -- "nasce
+    // revisado" (revisado !== false) pra quem já existia antes desse campo
+    // existir; só quem veio do import em lote (revisado:false explícito)
+    // precisa de alguém confirmar antes de poder aprovar.
+    var revisado = f.revisado !== false;
+    var revisadoBadge = revisado
+      ? '<span class="badge badge-green fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
+      : '<span class="badge badge-orange fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como revisado">Pendente</span>';
+    document.getElementById('versaoStatusBadge-form').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span> ' + revisadoBadge;
+    document.querySelectorAll('.fv-toggle-revisado').forEach(function(badge) {
+      badge.addEventListener('click', function() {
+        db.ref('formulas/' + key + '/revisado').set(!revisado);
+      });
+    });
     renderAcoesVersao(f);
     renderFormulaTab(key, f);
     renderBomTab(key);
@@ -3225,6 +3238,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // Item pendente do import (Fórmula ou BOM) bloqueia aprovação -- ninguém
+  // aprova receita com material não identificado, mesmo que a soma feche.
+  function temItemPendente(key) {
+    var itensForm = ((allFormulas[key] || {}).itens) || {};
+    var itensBom = ((allBom[key] || {}).itens) || {};
+    return Object.values(itensForm).some(function(it) { return it.pendente; }) ||
+      Object.values(itensBom).some(function(it) { return it.pendente; });
+  }
   function renderAcoesVersao(f) {
     var el = document.getElementById('versaoAcoes-form');
     el.innerHTML = '';
@@ -3232,14 +3253,18 @@ document.addEventListener('DOMContentLoaded', function() {
       var key = chaveVersao(f.codProduto, f.versao);
       var somaOk = Math.abs((f.somaPercentual || 0) - 100) < 0.0005;
       var especOk = !especCriticaSemFaixa(key);
-      var podeAprovar = somaOk && especOk;
+      var pendenciaOk = !temItemPendente(key);
+      var revisadoOk = f.revisado !== false;
+      var podeAprovar = somaOk && especOk && pendenciaOk && revisadoOk;
       if (!f.aprovadoPD) {
         var b1 = document.createElement('button');
         b1.className = 'btn btn-primary btn-sm';
         b1.textContent = 'Aprovar (P&D)';
         b1.disabled = !podeAprovar;
         b1.title = !somaOk ? 'Soma da fórmula precisa fechar em 100% antes de aprovar'
-          : (!especOk ? 'Há ensaio crítico sem faixa mínima/máxima definida' : '');
+          : (!especOk ? 'Há ensaio crítico sem faixa mínima/máxima definida'
+          : (!pendenciaOk ? 'Há item de Fórmula ou BOM ainda pendente de revisão (vindo da importação)'
+          : (!revisadoOk ? 'Marque esta versão como "Revisado" antes de aprovar' : '')));
         b1.addEventListener('click', aprovarPD);
         el.appendChild(b1);
       } else if (!f.aprovadoQualidade) {
@@ -3361,16 +3386,30 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     return opts;
   }
+  // Item importado do Gerador de OPs sem material identificado (pendente:true)
+  // mostra o texto original da planilha + uma sugestão por similaridade de
+  // nome (nunca vinculada sozinha -- só um atalho: clicar preenche o select,
+  // ainda precisa confirmar salvando). Escolher qualquer material no select
+  // (sugerido ou outro) já limpa o pendente sozinho, ver salvarItemFormula.
+  function linhaPendenciaHtml(it, classeBtn, dataAttr) {
+    if (!it.pendente) return '';
+    var sug = it.sugestaoMatch;
+    return '<div class="field-hint" style="color:var(--danger)">⚠ Pendente do import -- texto original: "' + escapeHtml(it.textoOriginalGeradorOPs || '') + '"' +
+      (sug ? ' · sugestão: <b>' + escapeHtml(sug.mpCodigo) + '</b> — ' + escapeHtml(sug.mpNome) + ' (' + Math.round(sug.score * 100) + '%) ' +
+        '<button type="button" class="btn btn-ghost btn-sm ' + classeBtn + '" ' + dataAttr + ' data-sugestao="' + escapeAttr(sug.mpCodigo) + '">Usar sugestão</button>' : ' · sem sugestão, buscar manualmente') +
+      '</div>';
+  }
   function linhaFormula(formKey, itemKey, it, editavel) {
     if (!editavel) {
       return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-        '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + '</td>' +
+        '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.fase || '') + '</td>' +
         '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
         '<td>' + fmtNum(it.percentualMM || 0) + '%</td><td></td></tr>';
     }
     return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-      '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['MPGR', 'MPES'], it.mpCodigo) + '</select></td>' +
+      '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['MPGR', 'MPES'], it.mpCodigo) + '</select>' +
+        linhaPendenciaHtml(it, 'f-usar-sugestao', 'data-item="' + escapeAttr(itemKey) + '"') + '</td>' +
       '<td><select class="f-fase" data-item="' + escapeAttr(itemKey) + '">' +
         ['A', 'B', 'C'].map(function(f) { return '<option value="' + f + '"' + (it.fase === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') +
       '</select></td>' +
@@ -3387,6 +3426,14 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function() {
         var itemKey = btn.getAttribute('data-item');
         db.ref('formulas/' + formKey + '/itens/' + itemKey).remove().then(recalcularSomaFormula.bind(null, formKey));
+      });
+    });
+    document.querySelectorAll('#formulaBody-form .f-usar-sugestao').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var itemKey = btn.getAttribute('data-item');
+        var row = document.querySelector('#formulaBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
+        row.querySelector('.f-mp').value = btn.getAttribute('data-sugestao');
+        salvarItemFormula(formKey, itemKey);
       });
     });
   }
@@ -3411,6 +3458,19 @@ document.addEventListener('DOMContentLoaded', function() {
       ordemAdicao: parseInt(row.querySelector('.f-ordem').value) || 0,
       percentualMM: parseFloat(row.querySelector('.f-pct').value) || 0
     };
+    // Escolher um material de verdade resolve a pendência do import sozinho;
+    // deixar em branco preserva o texto original/sugestão pra não perder
+    // contexto de revisão só por causa de um clique sem querer.
+    var itemAtual = ((allFormulas[formKey] || {}).itens || {})[itemKey] || {};
+    if (mpCodigo) {
+      data.pendente = null;
+      data.textoOriginalGeradorOPs = null;
+      data.sugestaoMatch = null;
+    } else if (itemAtual.pendente) {
+      data.pendente = true;
+      data.textoOriginalGeradorOPs = itemAtual.textoOriginalGeradorOPs || null;
+      data.sugestaoMatch = itemAtual.sugestaoMatch || null;
+    }
     db.ref('formulas/' + formKey + '/itens/' + itemKey).set(data).then(function() { recalcularSomaFormula(formKey); });
   }
   function recalcularSomaFormula(formKey) {
@@ -3441,10 +3501,11 @@ document.addEventListener('DOMContentLoaded', function() {
       tbody.innerHTML = entries.map(function(entry) {
         var itemKey = entry[0], it = entry[1];
         if (!editavel) {
-          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
+          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET'], it.materialCodigo) + '</select></td>' +
+          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET'], it.materialCodigo) + '</select>' +
+            linhaPendenciaHtml(it, 'b-usar-sugestao', 'data-item="' + escapeAttr(itemKey) + '"') + '</td>' +
           '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
           '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
       }).join('');
@@ -3457,6 +3518,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('#bomBody-form .b-remove').forEach(function(btn) {
       btn.addEventListener('click', function() { db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
     });
+    document.querySelectorAll('#bomBody-form .b-usar-sugestao').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var itemKey = btn.getAttribute('data-item');
+        var row = document.querySelector('#bomBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
+        row.querySelector('.b-mat').value = btn.getAttribute('data-sugestao');
+        salvarItemBom(key, itemKey);
+      });
+    });
   }
   function salvarItemBom(key, itemKey) {
     var row = document.querySelector('#bomBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
@@ -3464,12 +3533,25 @@ document.addEventListener('DOMContentLoaded', function() {
     var materialCodigo = row.querySelector('.b-mat').value;
     var mat = findMaterialByCodigo(materialCodigo);
     var posicaoIdx = Array.prototype.indexOf.call(row.parentNode.children, row);
-    db.ref('bom/' + key + '/itens/' + itemKey).set({
+    var data = {
       materialCodigo: materialCodigo,
       materialNome: mat ? mat.mpNome : '',
       qtdPorPeca: parseFloat(row.querySelector('.b-qtd').value) || 0,
       posicao: posicaoIdx + 1
-    });
+    };
+    // Mesmo raciocínio de salvarItemFormula: material escolhido resolve a
+    // pendência sozinho; em branco preserva o texto original/sugestão.
+    var itemAtual = ((allBom[key] || {}).itens || {})[itemKey] || {};
+    if (materialCodigo) {
+      data.pendente = null;
+      data.textoOriginalGeradorOPs = null;
+      data.sugestaoMatch = null;
+    } else if (itemAtual.pendente) {
+      data.pendente = true;
+      data.textoOriginalGeradorOPs = itemAtual.textoOriginalGeradorOPs || null;
+      data.sugestaoMatch = itemAtual.sugestaoMatch || null;
+    }
+    db.ref('bom/' + key + '/itens/' + itemKey).set(data);
   }
 
   function renderEspecTab(key) {
@@ -3566,7 +3648,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('bom'), function(snap) {
       allBom = snap.val() || {};
-      if (produtoSelecionadoKey && versaoAtual) renderBomTab(chaveVersao(produtoSelecionadoKey, versaoAtual));
+      if (produtoSelecionadoKey && versaoAtual) {
+        var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+        renderBomTab(key);
+        // pendência de BOM também entra no gate de aprovação (temItemPendente) --
+        // sem isso, resolver a última pendência do BOM não reativava o botão.
+        if (allFormulas[key]) renderAcoesVersao(allFormulas[key]);
+      }
     });
     dbOnValue(db.ref('especificacoes'), function(snap) {
       allEspecificacoes = snap.val() || {};
