@@ -875,13 +875,22 @@ function normalizePedidoKey(key){
   return idPart + '__' + parts.slice(1).join('__');
 }
 
+// Retorna { ativos, concluidos } -- lotes de OP emitidas pra esse pedido,
+// separados por status. Achado do usuário: a versão antiga só olhava OP
+// ativa (opEstaAtiva) e caía direto em "sem OP emitida" quando a(s) OP(s)
+// do pedido já tinham sido concluídas -- errado, porque "sem OP emitida"
+// diz que NUNCA saiu OP, quando na verdade saiu (e produziu de verdade),
+// só não tem nenhuma em aberto NESTE momento (comum quando o pedido segue
+// programado pro resto do saldo mas a próxima OP ainda não foi emitida).
 function lotesDoPedido(pedidoKey){
   if(lotesMemo.hasOwnProperty(pedidoKey)) return lotesMemo[pedidoKey];
   var alvo = normalizePedidoKey(pedidoKey);
-  var result = Object.values(opsCache)
-    .filter(function(o){ return o && normalizePedidoKey(o.skuPedidoKey)===alvo && opEstaAtiva(o); })
-    .sort(function(a,b){ return String(b.dataEmissao||'').localeCompare(String(a.dataEmissao||'')); })
-    .map(function(o){ return o.lote; });
+  var todos = Object.values(opsCache).filter(function(o){ return o && normalizePedidoKey(o.skuPedidoKey)===alvo; });
+  var porData = function(a,b){ return String(b.dataEmissao||'').localeCompare(String(a.dataEmissao||'')); };
+  var result = {
+    ativos: todos.filter(opEstaAtiva).sort(porData).map(function(o){ return o.lote; }),
+    concluidos: todos.filter(function(o){ return !opEstaAtiva(o); }).sort(porData).map(function(o){ return o.lote; })
+  };
   lotesMemo[pedidoKey] = result;
   return result;
 }
@@ -1596,14 +1605,26 @@ function updateWeeklySummaryTable() {
 
     var parentIdDisplay = p.parentPedidoId ? '#' + p.parentPedidoId : '?';
     // Lote real da OP emitida (Gerador de OPs), não o número do pedido --
-    // um pedido pode ter mais de uma OP até completar (1-N), então mostra
-    // todos os lotes emitidos até agora; se nenhum ainda, avisa que está na
-    // grade mas sem OP emitida.
+    // um pedido pode ter mais de uma OP até completar (1-N). 3 estados
+    // possíveis, não 2: (1) tem OP ATIVA rodando agora -- mostra em azul;
+    // (2) já teve OP(s), todas concluídas, mas nenhuma aberta neste momento
+    // (comum: pedido segue programado pro saldo restante, próxima OP ainda
+    // não emitida) -- mostra o(s) lote(s) concluído(s) em verde, NUNCA
+    // "sem OP emitida" (seria dizer que nunca saiu OP, quando saiu e
+    // produziu de verdade); (3) nunca teve nenhuma OP -- aí sim "sem OP
+    // emitida", em amarelo de aviso.
     var lotes = lotesDoPedido(key);
-    var opDisplay = lotes.length ? lotes.join(', ') : 'sem OP emitida';
-    var opPillStyle = lotes.length
-      ? 'background:#e0f2fe; color:#0369a1;'
-      : 'background:#fef3c7; color:#92400e;';
+    var opDisplay, opPillStyle;
+    if (lotes.ativos.length) {
+      opDisplay = lotes.ativos.join(', ');
+      opPillStyle = 'background:#e0f2fe; color:#0369a1;';
+    } else if (lotes.concluidos.length) {
+      opDisplay = lotes.concluidos[0] + (lotes.concluidos.length > 1 ? ' (+' + (lotes.concluidos.length - 1) + ' concluída' + (lotes.concluidos.length > 2 ? 's' : '') + ')' : ' (concluída)');
+      opPillStyle = 'background:#dcfce7; color:#166534;';
+    } else {
+      opDisplay = 'sem OP emitida';
+      opPillStyle = 'background:#fef3c7; color:#92400e;';
+    }
 
     var plannedThisWeek = scheduledMetas[key] || 0;
     var horasProgramadas = scheduledHoras[key] || 0;
