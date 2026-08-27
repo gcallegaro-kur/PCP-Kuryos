@@ -460,6 +460,15 @@
               <label class="chk"><input type="checkbox" id="fAtivo-mat" checked> Ativo</label>
             </div>
           </div>
+
+          <div class="section-label" id="historicoMatLabel-mat" style="display:none">Histórico de alterações</div>
+          <div class="section-note" id="historicoMatNote-mat" style="display:none">Registrado automaticamente a cada edição salva -- não cobre a criação do registro nem edições feitas antes deste recurso existir.</div>
+          <div class="table-wrap" style="margin-bottom:10px; max-height:220px; overflow-y:auto" id="historicoMatWrap-mat">
+            <table>
+              <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th><th>Por</th><th>Quando</th></tr></thead>
+              <tbody id="historicoMatBody-mat"><tr><td colspan="5" class="no-data">Nenhuma alteração registrada ainda.</td></tr></tbody>
+            </table>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" id="modalCancelBtn-mat">Cancelar</button>
@@ -1737,12 +1746,71 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fAtivo-mat').checked = m.ativo !== false;
 
     updateTipoFieldsVisibility();
+    renderHistoricoMaterial(key);
     document.getElementById('modalBg-mat').classList.add('open');
   }
   function closeModal() {
     document.getElementById('modalBg-mat').classList.remove('open');
     document.getElementById('fTipo').disabled = false;
     editingKey = null;
+  }
+
+  // Só existe log a partir da edição -- material novo não tem o que
+  // mostrar ainda (ver diffParaHistorico, shared/utils.js).
+  var CAMPOS_LABEL_HISTORICO = {
+    mpNome: 'Nome', tipo: 'Tipo', unidade: 'Unidade', marcaModelo: 'Marca/Modelo',
+    codigoBarras: 'Código de barras', especificacoesTecnicas: 'Especificações técnicas',
+    unidadeCompra: 'Unidade de compra', fatorConversao: 'Fator de conversão',
+    pesoBrutoCompra: 'Peso bruto compra', pesoLiquidoCompra: 'Peso líquido compra',
+    fornecedores: 'Fornecedores homologados', variantesEquivalentes: 'Variantes equivalentes',
+    controlado: 'Controlado', ativo: 'Ativo',
+    inci: 'INCI', funcaoFormula: 'Função na fórmula', aparencia: 'Aparência', cor: 'Cor',
+    densidade: 'Densidade', casaFragrancia: 'Casa de fragrância', inspiracao: 'Inspiração',
+    custoTargetUsd: 'Custo target USD', formato: 'Formato', gargaloRosca: 'Gargalo/rosca',
+    materialResina: 'Material', volumeNominal: 'Volume nominal', volumeInternoTotal: 'Volume interno',
+    pesoUnitario: 'Peso unitário', alturaMm: 'Altura', diametroMm: 'Diâmetro',
+    comprimentoMm: 'Comprimento', larguraMm: 'Largura', revisado: 'Revisado'
+  };
+  // Cada seção desta página é seu próprio IIFE (ver Fase 6 no histórico do
+  // projeto) -- fmtData/currentUserNome da aba Fórmulas não são visíveis
+  // aqui, cópia local de ambos.
+  function currentUserNome() {
+    return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+  }
+  function fmtDataHistoricoMat(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return iso; }
+  }
+  function fmtValorHistorico(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+    if (typeof v === 'object') return Object.keys(v).length ? (Object.keys(v).length + ' item(ns)') : '—';
+    return String(v);
+  }
+  function renderHistoricoMaterial(key) {
+    var label = document.getElementById('historicoMatLabel-mat');
+    var note = document.getElementById('historicoMatNote-mat');
+    var wrap = document.getElementById('historicoMatWrap-mat');
+    var tbody = document.getElementById('historicoMatBody-mat');
+    if (!key) { label.style.display = 'none'; note.style.display = 'none'; wrap.style.display = 'none'; return; }
+    label.style.display = ''; note.style.display = ''; wrap.style.display = '';
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Carregando...</td></tr>';
+    db.ref('historico_materiais/' + key).once('value').then(function(snap) {
+      var itens = snap.val() || {};
+      var entradas = Object.values(itens).sort(function(a, b) { return (b.alteradoEm || '').localeCompare(a.alteradoEm || ''); });
+      if (!entradas.length) { tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma alteração registrada ainda.</td></tr>'; return; }
+      tbody.innerHTML = entradas.map(function(e) {
+        return '<tr>' +
+          '<td>' + escapeHtml(CAMPOS_LABEL_HISTORICO[e.campo] || e.campo) + '</td>' +
+          '<td>' + escapeHtml(fmtValorHistorico(e.valorAnterior)) + '</td>' +
+          '<td>' + escapeHtml(fmtValorHistorico(e.valorNovo)) + '</td>' +
+          '<td>' + escapeHtml(e.alteradoPor || '—') + '</td>' +
+          '<td style="font-size:12px">' + fmtDataHistoricoMat(e.alteradoEm) + '</td>' +
+        '</tr>';
+      }).join('');
+    }).catch(function() {
+      tbody.innerHTML = '<tr><td colspan="5" class="no-data">Erro ao carregar histórico.</td></tr>';
+    });
   }
 
   function coletarDadosPorTipo(tipo) {
@@ -1836,6 +1904,14 @@ document.addEventListener('DOMContentLoaded', function() {
       updates['materiais/' + editingKey] = data;
       variantesAdicionadas.forEach(function(vKey) { updates['materiais/' + vKey + '/variantesEquivalentes/' + editingKey] = true; });
       variantesRemovidas.forEach(function(vKey) { updates['materiais/' + vKey + '/variantesEquivalentes/' + editingKey] = null; });
+
+      // Log de alteração (ver diffParaHistorico, shared/utils.js) -- mesmo
+      // update() atômico da gravação real, nunca loga sem salvar de fato.
+      var mudancasHistorico = diffParaHistorico(allMateriais[editingKey], data, currentUserNome());
+      mudancasHistorico.forEach(function(mud) {
+        var pushKey = db.ref('historico_materiais/' + editingKey).push().key;
+        updates['historico_materiais/' + editingKey + '/' + pushKey] = mud;
+      });
 
       db.ref().update(updates)
         .then(function() { showAlert('Material salvo com sucesso!', 'success'); closeModal(); })

@@ -945,6 +945,40 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
   }));
 }
 
+// ── Log de alterações de cadastro ───────────────────────────────────────
+// Cadastros (Materiais por ora, mesmo padrão dá pra reusar em Produtos/
+// Clientes/Fornecedores depois) não guardavam histórico nenhum -- salvar
+// sempre sobrescrevia o registro inteiro, sem rastro de quem mudou o quê.
+// Compara `antes` (registro como estava) com `depois` (o que vai ser
+// gravado) campo a campo (JSON.stringify pra cobrir objeto aninhado tipo
+// fornecedores/variantesEquivalentes também) e devolve só as mudanças reais
+// -- quem chama inclui isso no MESMO multi-path update() da gravação, pra
+// nunca logar uma mudança que não foi salva (ou vice-versa).
+function diffParaHistorico(antes, depois, alteradoPor, ignorarCampos) {
+  ignorarCampos = ignorarCampos || [];
+  var campos = {};
+  Object.keys(depois || {}).forEach(function(k) { campos[k] = true; });
+  Object.keys(antes || {}).forEach(function(k) { campos[k] = true; });
+  var agora = new Date().toISOString();
+  var mudancas = [];
+  Object.keys(campos).forEach(function(k) {
+    if (ignorarCampos.indexOf(k) !== -1) return;
+    var v1 = antes ? antes[k] : undefined;
+    var v2 = (depois || {})[k];
+    var s1 = JSON.stringify(v1 === undefined ? null : v1);
+    var s2 = JSON.stringify(v2 === undefined ? null : v2);
+    if (s1 === s2) return;
+    mudancas.push({
+      campo: k,
+      valorAnterior: v1 === undefined ? null : v1,
+      valorNovo: v2 === undefined ? null : v2,
+      alteradoPor: alteradoPor,
+      alteradoEm: agora
+    });
+  });
+  return mudancas;
+}
+
 // ── % de preenchimento de cadastro ──────────────────────────────────────
 // Usado por cadastros.html (Materiais/Produtos/Clientes/Fornecedores) pra
 // mostrar, em cada linha da tabela, quanto do cadastro já foi preenchido --
