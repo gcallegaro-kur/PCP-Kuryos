@@ -945,6 +945,58 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
   }));
 }
 
+// ── % de preenchimento de cadastro ──────────────────────────────────────
+// Usado por cadastros.html (Materiais/Produtos/Clientes/Fornecedores) pra
+// mostrar, em cada linha da tabela, quanto do cadastro já foi preenchido --
+// incentiva completar o registro em vez de só bater os campos obrigatórios
+// mínimos. `campos` é um array onde cada item é uma string (dot-path lido
+// direto de dentro do objeto, ex: 'cq.ph') ou {path, aplicavel(obj)} pra
+// campo que só existe pra um subtipo do registro (ex: campo de Embalagem
+// Primária não deveria contar contra um material de Matéria-Prima). Campo
+// booleano/checkbox e select com valor padrão pré-selecionado ficam DE
+// FORA de propósito -- não têm um estado "vazio" distinto de uma resposta
+// válida, então contá-los só inflaria o % sem significar nada.
+function valorPreenchido(v) {
+  if (v === null || v === undefined) return false;
+  if (typeof v === 'string') return v.trim() !== '';
+  if (typeof v === 'number') return v !== 0 && !isNaN(v);
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.keys(v).length > 0;
+  return !!v;
+}
+function lerCampoPreenchimento(obj, path) {
+  return path.split('.').reduce(function(o, k) { return (o && o[k] !== undefined) ? o[k] : undefined; }, obj);
+}
+function calcularPreenchimento(obj, campos) {
+  var total = 0, preenchidos = 0;
+  (campos || []).forEach(function(c) {
+    var path = typeof c === 'string' ? c : c.path;
+    var aplicavel = typeof c === 'string' || typeof c.aplicavel !== 'function' || c.aplicavel(obj);
+    if (!aplicavel) return;
+    total++;
+    if (valorPreenchido(lerCampoPreenchimento(obj, path))) preenchidos++;
+  });
+  return { pct: total > 0 ? Math.round((preenchidos / total) * 100) : 100, preenchidos: preenchidos, total: total };
+}
+// Escala contínua vermelho→amarelo→verde (interpola o matiz HSL de 0 a
+// 120), em vez de 3 faixas fixas com corte abrupto -- fica claro que 40%
+// é "melhor que 20%" e não só "ainda vermelho".
+function corPreenchimento(pct) {
+  return 'hsl(' + (Math.max(0, Math.min(100, pct)) * 1.2) + ', 70%, 42%)';
+}
+// Barrinha + % pra célula de tabela. Trilho usa var(--surface-2) (já
+// tokenizado claro/escuro em todo o app) em vez de cor fixa, pra não ficar
+// lavado no dark mode; só o preenchimento em si usa a escala de cor.
+function preenchimentoBadgeHtml(pct) {
+  var cor = corPreenchimento(pct);
+  return '<div style="display:flex;align-items:center;gap:6px" title="' + pct + '% do cadastro preenchido">' +
+    '<div style="flex:1;min-width:44px;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden">' +
+      '<div style="width:' + pct + '%;height:100%;background:' + cor + ';border-radius:3px"></div>' +
+    '</div>' +
+    '<span style="font-size:11px;font-weight:700;color:' + cor + ';font-variant-numeric:tabular-nums;min-width:30px;text-align:right">' + pct + '%</span>' +
+  '</div>';
+}
+
 // ── Padrão de etiqueta de identificação do fornecedor ───────────────────
 // Campos obrigatórios na etiqueta que o fornecedor cola nas caixas/fardos
 // entregues -- usado por compras.html (mostra o padrão + manda no e-mail de

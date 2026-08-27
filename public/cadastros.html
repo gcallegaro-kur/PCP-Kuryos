@@ -211,11 +211,12 @@
               <th style="min-width:110px" data-sort="tipo">Tipo</th>
               <th style="min-width:60px" data-sort="unidade">Un.</th>
               <th style="min-width:90px" data-sort="fornecedoresCount">Fornec. Homolog.</th>
+              <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
               <th style="min-width:80px" data-sort="ativo">Status</th>
               <th style="min-width:50px"></th>
             </tr>
           </thead>
-          <tbody id="tableBody-mat"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="tableBody-mat"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -508,11 +509,12 @@
               <th style="min-width:60px;text-align:right" data-sort="volume">Volume</th>
               <th style="min-width:50px;text-align:right" data-sort="unCx">Un./Cx</th>
               <th style="min-width:70px;text-align:right" data-sort="prodHora">Prod/h</th>
+              <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
               <th style="min-width:60px" data-sort="ativo">Status</th>
               <th style="min-width:50px"></th>
             </tr>
           </thead>
-          <tbody id="tableBody-prod"><tr><td colspan="11" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="tableBody-prod"><tr><td colspan="12" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -879,11 +881,12 @@
               <th style="min-width:140px" data-sort="cnpj">CNPJ</th>
               <th style="min-width:100px" data-sort="cidade">Local</th>
               <th style="min-width:160px" data-sort="contatoComNome">Contato Comercial</th>
+              <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
               <th style="min-width:80px" data-sort="ativo">Status</th>
               <th style="min-width:50px"></th>
             </tr>
           </thead>
-          <tbody id="tableBody-cli"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="tableBody-cli"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1043,10 +1046,11 @@
             <th data-sort="condicaoPagamento">Condição Pgto</th>
             <th data-sort="prazoEntregaDias">Prazo Entrega</th>
             <th style="min-width:100px" data-sort="revisado">Revisado</th>
+            <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
             <th data-sort="ativo">Status</th>
             <th style="width:50px"></th>
           </tr></thead>
-          <tbody id="fnBody-forn"><tr><td colspan="11" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="fnBody-forn"><tr><td colspan="12" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1299,6 +1303,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var TIPO_LABELS = { MPGR: 'MP Geral', MPES: 'Fragrância/Essência', EP: 'Embalagem Primária', ES: 'Embalagem Secundária', ET: 'Embalagem Terciária' };
   var TIPO_BADGE_CLASS = { MPGR: 'badge-blue', MPES: 'badge-orange', EP: 'badge-purple', ES: 'badge-purple', ET: 'badge-purple' };
+
+  // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
+  // Campos comuns valem pra qualquer tipo; os por-tipo só entram na conta
+  // do material daquele tipo (não é justo cobrar um frasco por não ter
+  // Nome INCI, por exemplo).
+  var CAMPOS_PREENCHIMENTO_MAT = [
+    'mpNome', 'unidade', 'marcaModelo', 'codigoBarras', 'especificacoesTecnicas', 'fornecedores',
+    { path: 'inci', aplicavel: function(m) { return m.tipo === 'MPGR' || m.tipo === 'MPES'; } },
+    { path: 'funcaoFormula', aplicavel: function(m) { return m.tipo === 'MPGR'; } },
+    { path: 'aparencia', aplicavel: function(m) { return m.tipo === 'MPGR'; } },
+    { path: 'densidade', aplicavel: function(m) { return m.tipo === 'MPGR'; } },
+    { path: 'casaFragrancia', aplicavel: function(m) { return m.tipo === 'MPES'; } },
+    { path: 'inspiracao', aplicavel: function(m) { return m.tipo === 'MPES'; } },
+    { path: 'custoTargetUsd', aplicavel: function(m) { return m.tipo === 'MPES'; } },
+    { path: 'formato', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'gargaloRosca', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'volumeNominal', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'volumeInternoTotal', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'pesoUnitario', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
+    { path: 'alturaMm', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
+    { path: 'diametroMm', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'comprimentoMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
+    { path: 'larguraMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
+    { path: 'materialResina', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
+    { path: 'cor', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } }
+  ];
   var STATUS_HOMOLOG_LABELS = { homologado: 'Homologado', nao_homologado: 'Não homologado', aguardando_homologacao: 'Aguardando' };
   var STATUS_HOMOLOG_BADGE = { homologado: 'badge-green', nao_homologado: 'badge-red', aguardando_homologacao: 'badge-orange' };
   var TIPO_DESCRICOES = {
@@ -1583,6 +1613,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     rows = matSortable.applySort(rows, function(entry, field) {
       if (field === 'fornecedoresCount') return Object.keys(entry[1].fornecedores || {}).length;
+      if (field === 'preenchimentoPct') return calcularPreenchimento(entry[1], CAMPOS_PREENCHIMENTO_MAT).pct;
       return entry[1][field];
     });
 
@@ -1599,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var tbody = document.getElementById('tableBody-mat');
     if (!rows.length) {
       var semNenhumCadastrado = !total;
-      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + (semNenhumCadastrado
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhumCadastrado
         ? 'Nenhum material cadastrado ainda. Clique em "+ Novo Material" pra começar.'
         : 'Nenhum material encontrado com esse filtro/busca.') + '</td></tr>';
       return;
@@ -1614,12 +1645,14 @@ document.addEventListener('DOMContentLoaded', function() {
       var variantesBadge = qtdVariantes
         ? ' <span class="badge badge-purple" title="Tem variante(s) equivalente(s) vinculada(s)">🔀 ' + qtdVariantes + '</span>'
         : '';
+      var pct = calcularPreenchimento(m, CAMPOS_PREENCHIMENTO_MAT).pct;
       return '<tr>' +
         '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
         '<td>' + escapeHtml(m.mpNome || '—') + variantesBadge + '</td>' +
         '<td>' + tipoBadge + '</td>' +
         '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
         '<td style="text-align:center">' + (qtdHomolog || '—') + '</td>' +
+        '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-mat" data-key="' + key + '" title="Editar material" aria-label="Editar material">✏</button></td>' +
       '</tr>';
@@ -1901,6 +1934,14 @@ document.addEventListener('DOMContentLoaded', function() {
   var editingKey = null;
   var cliSortable = makeSortableTable(document.getElementById('cliThead-cli'), 'nome', 'asc');
 
+  // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
+  // detentorAnvisa fica de fora -- select sempre vem com 'cliente'
+  // pré-selecionado, nunca fica "vazio" de verdade.
+  var CAMPOS_PREENCHIMENTO_CLI = [
+    'nome', 'codigo', 'cnpj', 'contatoComNome', 'contatoComTelefone', 'contatoComEmail',
+    'contatoTecNome', 'contatoTecTelefone', 'contatoTecEmail', 'cidade', 'uf', 'condicaoPagamento', 'site'
+  ];
+
   /* ── Vínculos: matriz/filial e cliente×fornecedor ── */
   var cliMatrizItems = [], cliFornecedorItems = [];
   function refreshCliVinculoItems() {
@@ -1940,13 +1981,16 @@ document.addEventListener('DOMContentLoaded', function() {
       if (search && (norm(c.nome) + ' ' + norm(c.codigo) + ' ' + norm(c.cnpj)).indexOf(search) === -1) return false;
       return true;
     });
-    rows = cliSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+    rows = cliSortable.applySort(rows, function(entry, field) {
+      if (field === 'preenchimentoPct') return calcularPreenchimento(entry[1], CAMPOS_PREENCHIMENTO_CLI).pct;
+      return entry[1][field];
+    });
 
     document.getElementById('tableCount-cli').textContent = 'Clientes (' + rows.length + ' exibidos)';
     var tbody = document.getElementById('tableBody-cli');
     if (!rows.length) {
       var semNenhumCadastrado = !Object.keys(allClientes).length;
-      tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + (semNenhumCadastrado
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhumCadastrado
         ? 'Nenhum cliente cadastrado ainda. Clique em "+ Novo Cliente" pra começar.'
         : 'Nenhum cliente encontrado com esse filtro/busca.') + '</td></tr>';
       return;
@@ -1962,12 +2006,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (c.fornecedorVinculadoKey) {
         vinculoBadges += ' <span class="badge badge-blue" title="Também cadastrado como fornecedor">🔗 Também fornecedor</span>';
       }
+      var pct = calcularPreenchimento(c, CAMPOS_PREENCHIMENTO_CLI).pct;
       return '<tr>' +
         '<td class="code-cell">' + escapeHtml(c.codigo || '—') + '</td>' +
         '<td>' + escapeHtml(c.nome || '—') + vinculoBadges + '</td>' +
         '<td>' + escapeHtml(c.cnpj || '—') + '</td>' +
         '<td>' + escapeHtml(local || '—') + '</td>' +
         '<td>' + escapeHtml(c.contatoComNome || '—') + '</td>' +
+        '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-cli" data-key="' + key + '" title="Editar cliente" aria-label="Editar cliente">✏</button></td>' +
       '</tr>';
@@ -2110,6 +2156,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var editingKey = null;
   var fnSortable = makeSortableTable(document.getElementById('fnThead-forn'), 'razaoSocial', 'asc');
 
+  // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
+  var CAMPOS_PREENCHIMENTO_FORN = [
+    'razaoSocial', 'nomeFantasia', 'cnpj', 'tipo', 'prazoEntregaDias', 'condicaoPagamento',
+    'contatoNome', 'contatoTelefone', 'contatoEmail', 'site', 'cidade', 'uf', 'certificacoes'
+  ];
+
   var TIPO_FORNECEDOR_LABELS = { mp: 'Matéria-Prima', embalagem: 'Embalagem', transportadora: 'Transportadora', consumo: 'Material de Uso e Consumo', servicos: 'Serviços', tecnologia: 'Tecnologia', equipamentos: 'Equipamentos e Manutenção', publico: 'Órgão Público / Regulatório', outro: 'Outro' };
 
   /* ── Vínculos: matriz/filial e fornecedor×cliente ── */
@@ -2153,14 +2205,17 @@ document.addEventListener('DOMContentLoaded', function() {
       if (search && (norm(f.razaoSocial) + ' ' + norm(f.nomeFantasia) + ' ' + norm(f.cnpj)).indexOf(search) === -1) return false;
       return true;
     });
-    rows = fnSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+    rows = fnSortable.applySort(rows, function(entry, field) {
+      if (field === 'preenchimentoPct') return calcularPreenchimento(entry[1], CAMPOS_PREENCHIMENTO_FORN).pct;
+      return entry[1][field];
+    });
 
     var totalRevisados = Object.values(allFornecedores).filter(function(f) { return f.revisado !== false; }).length;
     document.getElementById('fnCount-forn').textContent = 'Fornecedores (' + rows.length + ' exibidos) — ' + totalRevisados + ' de ' + Object.keys(allFornecedores).length + ' revisados';
 
     var tbody = document.getElementById('fnBody-forn');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="no-data">' + (Object.keys(allFornecedores).length
+      tbody.innerHTML = '<tr><td colspan="12" class="no-data">' + (Object.keys(allFornecedores).length
         ? 'Nenhum fornecedor encontrado com esse filtro/busca.'
         : 'Nenhum fornecedor cadastrado ainda. Clique em "+ Novo Fornecedor" pra começar.') + '</td></tr>';
       return;
@@ -2183,6 +2238,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (f.clienteVinculadoKey) {
         vinculoBadges += ' <span class="badge badge-blue" title="Também cadastrado como cliente">🔗 Também cliente</span>';
       }
+      var pct = calcularPreenchimento(f, CAMPOS_PREENCHIMENTO_FORN).pct;
       return '<tr>' +
         '<td>' + escapeHtml(f.razaoSocial || '—') + vinculoBadges + '</td>' +
         '<td>' + escapeHtml(f.nomeFantasia || '—') + '</td>' +
@@ -2193,6 +2249,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td style="font-size:12px">' + escapeHtml(f.condicaoPagamento || '—') + '</td>' +
         '<td>' + (f.prazoEntregaDias != null ? fmtNum(f.prazoEntregaDias) + ' dias' : '—') + '</td>' +
         '<td>' + revisadoBadge + '</td>' +
+        '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm fn-edit-forn" data-key="' + escapeAttr(key) + '" title="Editar fornecedor" aria-label="Editar fornecedor">✏</button></td>' +
       '</tr>';
@@ -2454,6 +2511,14 @@ document.addEventListener('DOMContentLoaded', function() {
   var categoriasProdutoCad = [];
   var prodSortable = makeSortableTable(document.getElementById('prodThead-prod'), 'sku', 'asc');
 
+  // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
+  var CAMPOS_PREENCHIMENTO_PROD = [
+    'sku', 'descricao', 'linhaProduto', 'volume', 'cliente', 'viscosidade', 'categoria', 'subcategoria',
+    'unCx', 'lotePadrao', 'msAnvisa', 'lp', 'obs', 'ean13', 'dum14',
+    'densidadeGranel', 'prazoValidadeMeses', 'overfillPct', 'perdaProcessoPct', 'perdaLinhaPct',
+    'cq.aspecto', 'cq.cor', 'cq.odor', 'cq.densidade', 'cq.ph', 'cq.teorAlcool', 'cq.viscosidade', 'cq.faixaPeso'
+  ];
+
   function sanitizeSkuKey(str) {
     return String(str || '').replace(/[./[\]#$\s]/g, '-').replace(/-+/g, '-').trim().slice(0, 80);
   }
@@ -2571,6 +2636,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     rows = prodSortable.applySort(rows, function(entry, field) {
       if (field === 'prodHora') return prodHoraCalcMap[norm(entry[1].descricao)] || entry[1].prodHoraRef || 0;
+      if (field === 'preenchimentoPct') return calcularPreenchimento(entry[1], CAMPOS_PREENCHIMENTO_PROD).pct;
       return entry[1][field];
     });
 
@@ -2587,7 +2653,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var tbody = document.getElementById('tableBody-prod');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="no-data">' + (total
+      tbody.innerHTML = '<tr><td colspan="12" class="no-data">' + (total
         ? 'Nenhum produto encontrado com esse filtro/busca.'
         : 'Nenhum produto cadastrado ainda. Clique em "+ Novo Produto" pra começar.') + '</td></tr>';
       return;
@@ -2605,6 +2671,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var statusBadge = p.ativo === 'Ativo'
         ? '<span class="badge badge-green">Ativo</span>'
         : '<span class="badge badge-gray">Inativo</span>';
+      var pct = calcularPreenchimento(p, CAMPOS_PREENCHIMENTO_PROD).pct;
       return '<tr>' +
         '<td class="sku-cell" title="' + escapeAttr(p.codCliente || '') + '">' + escapeHtml(p.sku || '—') + '</td>' +
         '<td class="desc-cell" title="' + escapeAttr(p.descricao || '') + '">' + escapeHtml(p.descricao || '—') + '</td>' +
@@ -2615,6 +2682,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td style="text-align:right;font-size:12px">' + vol + '</td>' +
         '<td style="text-align:right;font-weight:600">' + (p.unCx || '—') + '</td>' +
         '<td style="text-align:right">' + prodHtml + '</td>' +
+        '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + statusBadge + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-prod" data-key="' + key + '" title="Editar produto" aria-label="Editar produto">✏</button></td>' +
       '</tr>';
