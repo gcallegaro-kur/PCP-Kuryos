@@ -116,6 +116,7 @@
   <button class="tab" data-tab="pedidos">Pedidos de Compra</button>
   <button class="tab" data-tab="precos">📊 Histórico de Preços</button>
   <button class="tab" data-tab="fornecedores-analise">📈 Análise de Fornecedores</button>
+  <button class="tab" data-tab="busca-fornecedor">🔎 Fornecedores por Material</button>
 </div>
 
 <div class="main">
@@ -227,6 +228,24 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- ═══════════ BUSCA: FORNECEDORES POR MATERIAL ═══════════ -->
+  <div class="tab-panel" id="tab-busca-fornecedor">
+    <div class="kt-toolbar">
+      <select class="kt-select" id="bfTipo">
+        <option value="">Todos os tipos</option>
+        <option value="MPGR">MP Geral</option>
+        <option value="MPES">Fragrância/Essência</option>
+        <option value="EP">Embalagem Primária</option>
+        <option value="ES">Embalagem Secundária</option>
+        <option value="ET">Embalagem Terciária</option>
+      </select>
+      <select class="kt-select" id="bfResina"><option value="">Todos os materiais/resinas</option></select>
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="bfSearch" placeholder="Ou busque um material específico por código/nome..."></div>
+    </div>
+    <div class="section-note">Quem fornece o que você está filtrando -- combina fornecedores homologados no cadastro com o histórico real de compra (inclui quem já compramos e não é mais homologado hoje). Ex: "quero cotar com quem fornece papelão" -- filtra Tipo=Embalagem Secundária e Material=Papelão.</div>
+    <div id="bfResultados"><div class="card"><div class="no-data">Escolha um tipo, material/resina, ou busque por um material específico.</div></div></div>
   </div>
 
 </div>
@@ -925,6 +944,118 @@ function renderAnaliseFornecedores() {
   }).join('');
 }
 
+/* ══════════════ Busca: Fornecedores por Material ══════════════ */
+// Pedido original: "quero cotar com fornecedores de papelão -- inclusive
+// quem já compramos no passado e não compramos mais". Combina duas fontes
+// que já existem em telas separadas: fornecedores homologados (cadastro de
+// Materiais) e histórico real de compra (pedidos_compra), mesmo pra
+// fornecedor hoje inativo/não homologado -- ninguém some da lista.
+function refreshBfResinaOptions() {
+  var sel = document.getElementById('bfResina');
+  var cur = sel.value;
+  var tipo = document.getElementById('bfTipo').value;
+  var resinas = {};
+  Object.values(allMateriais).forEach(function(m) {
+    if (tipo && m.tipo !== tipo) return;
+    if (m.materialResina) resinas[m.materialResina] = true;
+  });
+  var lista = Object.keys(resinas).sort();
+  sel.innerHTML = '<option value="">Todos os materiais/resinas</option>' +
+    lista.map(function(r) { return '<option value="' + escapeAttr(r) + '">' + escapeHtml(r) + '</option>'; }).join('');
+  if (lista.indexOf(cur) !== -1) sel.value = cur;
+}
+
+function buscaFornecedorPorMaterial() {
+  var tipo = document.getElementById('bfTipo').value;
+  var resina = document.getElementById('bfResina').value;
+  var search = norm(document.getElementById('bfSearch').value);
+
+  var materiaisFiltrados = Object.entries(allMateriais).filter(function(e) {
+    var m = e[1];
+    if (tipo && m.tipo !== tipo) return false;
+    if (resina && (m.materialResina || '') !== resina) return false;
+    if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome)).indexOf(search) === -1) return false;
+    return true;
+  });
+  if (!materiaisFiltrados.length) return { materiais: [], porFornecedor: [] };
+
+  var porFornecedor = {}; // chave -> { key, nome, ativo, materiais: {matKey: {...}} }
+  function garanteFornecedor(fKey, nomeFallback) {
+    if (!porFornecedor[fKey]) {
+      var forn = allFornecedores[fKey];
+      porFornecedor[fKey] = { key: fKey, nome: forn ? (forn.nomeFantasia || forn.razaoSocial) : nomeFallback, ativo: forn ? forn.ativo !== false : null, materiais: {} };
+    }
+    return porFornecedor[fKey];
+  }
+  function garanteMaterial(agg, matKey, m) {
+    if (!agg.materiais[matKey]) agg.materiais[matKey] = { codigo: m.mpCodigo, nome: m.mpNome, homologado: false, comprado: false, ultimaCompraData: null, ultimaCompraPreco: null };
+    return agg.materiais[matKey];
+  }
+
+  materiaisFiltrados.forEach(function(entry) {
+    var matKey = entry[0], m = entry[1];
+    Object.keys(m.fornecedores || {}).forEach(function(fKey) {
+      garanteMaterial(garanteFornecedor(fKey, fKey), matKey, m).homologado = true;
+    });
+  });
+
+  Object.values(allPedidosCompra).forEach(function(pc) {
+    Object.values(pc.itens || {}).forEach(function(it) {
+      var matEntry = materiaisFiltrados.find(function(e) { return e[1].mpCodigo === it.materialCodigo; });
+      if (!matEntry || it.precoUnit == null) return;
+      var fKey = pc.fornecedorKey || ('semcad:' + norm(pc.fornecedorNome));
+      var agg = garanteFornecedor(fKey, pc.fornecedorNome || fKey);
+      var item = garanteMaterial(agg, matEntry[0], matEntry[1]);
+      item.comprado = true;
+      var data = pc.dataEmissao || pc.dataCriacao || '';
+      if (!item.ultimaCompraData || data > item.ultimaCompraData) {
+        item.ultimaCompraData = data;
+        item.ultimaCompraPreco = parseFloat(it.precoUnit);
+      }
+    });
+  });
+
+  var lista = Object.values(porFornecedor).sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
+  return { materiais: materiaisFiltrados, porFornecedor: lista };
+}
+
+function renderBuscaFornecedor() {
+  var box = document.getElementById('bfResultados');
+  var r = buscaFornecedorPorMaterial();
+  if (!r.materiais.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Escolha um tipo, material/resina, ou busque por um material específico.</div></div>';
+    return;
+  }
+  if (!r.porFornecedor.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">' + r.materiais.length + ' material(is) encontrado(s), mas nenhum fornecedor homologado ou com histórico de compra ainda.</div></div>';
+    return;
+  }
+  box.innerHTML = '<div class="card"><div class="card-title">' + r.porFornecedor.length + ' fornecedor(es) — ' + r.materiais.length + ' material(is) no filtro</div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Fornecedor</th><th>Status</th><th style="min-width:280px">Materiais</th><th>Última compra</th></tr></thead><tbody>' +
+    r.porFornecedor.map(function(f) {
+      var statusBadge = f.ativo === null
+        ? '<span class="badge badge-gray" title="Não achamos o cadastro deste fornecedor -- só existe o nome no histórico">🕐 sem cadastro</span>'
+        : (f.ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>');
+      var materiaisHtml = Object.values(f.materiais).map(function(it) {
+        var tag = it.homologado
+          ? '<span class="badge badge-blue" style="margin-left:4px">homologado</span>'
+          : (it.comprado ? '<span class="badge badge-orange" style="margin-left:4px">já compramos</span>' : '');
+        return '<div style="font-size:12px">' + escapeHtml(it.codigo) + ' — ' + escapeHtml(it.nome) + tag + '</div>';
+      }).join('');
+      var ultimaCompra = Object.values(f.materiais).reduce(function(max, it) {
+        if (!it.ultimaCompraData) return max;
+        return (!max || it.ultimaCompraData > max.data) ? { data: it.ultimaCompraData, preco: it.ultimaCompraPreco } : max;
+      }, null);
+      var ultimaCompraTxt = ultimaCompra ? fmtData(ultimaCompra.data) + (ultimaCompra.preco != null ? ' · ' + fmtNum(ultimaCompra.preco) : '') : '<span style="color:var(--muted)">nunca compramos</span>';
+      return '<tr>' +
+        '<td>' + escapeHtml(f.nome) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td>' + materiaisHtml + '</td>' +
+        '<td style="font-size:12px;white-space:nowrap">' + ultimaCompraTxt + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table></div></div>';
+}
+
 function refreshPcFornecedorFilter() {
   ['pcFilterFornecedor', 'pcFornecedor', 'cotFornecedor'].forEach(function(id) {
     var sel = document.getElementById(id);
@@ -1338,17 +1469,27 @@ document.addEventListener('DOMContentLoaded', function() {
   phSortable.wireHeaders(renderHistoricoPrecos);
   faSortable.wireHeaders(renderAnaliseFornecedores);
 
+  document.getElementById('bfTipo').addEventListener('change', function() { refreshBfResinaOptions(); renderBuscaFornecedor(); });
+  document.getElementById('bfResina').addEventListener('change', renderBuscaFornecedor);
+  var _tbf = null;
+  document.getElementById('bfSearch').addEventListener('input', function() { clearTimeout(_tbf); _tbf = setTimeout(renderBuscaFornecedor, 200); });
+
   try {
     db.ref('.info/connected').on('value', function(snap) {
       setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
     });
-    dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('materiais'), function(snap) {
+      allMateriais = snap.val() || {};
+      refreshBfResinaOptions();
+      renderBuscaFornecedor();
+    });
     // Fornecedores agora é gerenciado só em cadastros.html -- compras.html
     // mantém este listener de LEITURA (popula os selects de pedido/cotação
     // e denormaliza nome/e-mail), sem CRUD próprio.
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allFornecedores = snap.val() || {};
       refreshPcFornecedorFilter();
+      renderBuscaFornecedor();
     });
     dbOnValue(db.ref('solicitacoes_compra'), function(snap) {
       allSolicitacoes = snap.val() || {};
@@ -1360,6 +1501,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderPedidos();
       renderHistoricoPrecos();
       renderAnaliseFornecedores();
+      renderBuscaFornecedor();
     });
     // Só leitura -- pra "Gerar de Pedido" (explosão de Fórmula/BOM contra o
     // saldo em aberto do pedido). Nenhuma dessas 5 tem CRUD aqui.
