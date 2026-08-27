@@ -344,6 +344,16 @@
                   <option value="OUTRA">Outra</option>
                 </select>
               </div>
+              <div class="form-group"><label>Fixação</label>
+                <select id="fFixacao-mat">
+                  <option value="">Selecione...</option>
+                  <option value="ROSCA">Rosca</option>
+                  <option value="RECRAVE">Recrave</option>
+                  <option value="EASY_LOCK">Easy Lock</option>
+                  <option value="OUTRA">Outra</option>
+                </select>
+                <div class="field-hint">Mecanismo de fixação no gargalo -- diferente da medida de rosca (GPI/SPI) acima.</div>
+              </div>
               <div class="form-group"><label>Volume nominal (ml)</label><input type="number" id="fVolumeNominal-mat" min="0" step="any"></div>
               <div class="form-group"><label>Volume interno total (ml)</label><input type="number" id="fVolumeInterno-mat" min="0" step="any"></div>
               <div class="form-group"><label>Head space</label><input type="text" id="fHeadSpace-mat" readonly placeholder="Calculado automaticamente"></div>
@@ -1364,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { path: 'alturaMm', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'diametroMm', aplicavel: function(m) { return m.tipo === 'EP'; } },
     { path: 'textura', aplicavel: function(m) { return m.tipo === 'EP'; } },
+    { path: 'fixacao', aplicavel: function(m) { return m.tipo === 'EP'; } },
     { path: 'comprimentoMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'larguraMm', aplicavel: function(m) { return m.tipo === 'ES' || m.tipo === 'ET'; } },
     { path: 'materialResina', aplicavel: function(m) { return m.tipo === 'EP' || m.tipo === 'ES' || m.tipo === 'ET'; } },
@@ -1486,6 +1497,7 @@ document.addEventListener('DOMContentLoaded', function() {
         resina: document.getElementById('fMaterialResina-mat').value,
         gargalo: document.getElementById('fGargalo-mat').value.trim(),
         textura: document.getElementById('fTextura-mat').value,
+        fixacao: document.getElementById('fFixacao-mat').value,
         volumeInterno: parseFloat(document.getElementById('fVolumeInterno-mat').value),
         altura: parseFloat(document.getElementById('fAltura-mat').value),
         diametro: parseFloat(document.getElementById('fDiametro-mat').value),
@@ -1520,6 +1532,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Textura diferente (lisa/estriada/...) não é "equivalente" -- é uma
       // escolha de design/tato que muda o produto, mesmo com o resto igual.
       if (tipo === 'EP' && atual.textura && (m.textura || '') !== atual.textura) return false;
+      // Fixação diferente (rosca/recrave/easy lock) normalmente nem encaixa
+      // no mesmo gargalo -- ainda mais restritivo que textura.
+      if (tipo === 'EP' && atual.fixacao && (m.fixacao || '') !== atual.fixacao) return false;
       return true;
     });
 
@@ -1743,6 +1758,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fMaterialResina-mat').value = m.materialResina || '';
     document.getElementById('fCorEp-mat').value = m.cor || '';
     document.getElementById('fTextura-mat').value = m.textura || '';
+    document.getElementById('fFixacao-mat').value = m.fixacao || '';
     document.getElementById('fVolumeNominal-mat').value = m.volumeNominal != null ? m.volumeNominal : '';
     document.getElementById('fVolumeInterno-mat').value = m.volumeInternoTotal != null ? m.volumeInternoTotal : '';
     document.getElementById('fPesoUnitario-mat').value = m.pesoUnitario != null ? m.pesoUnitario : '';
@@ -1886,6 +1902,7 @@ document.addEventListener('DOMContentLoaded', function() {
       data.materialResina = document.getElementById('fMaterialResina-mat').value;
       data.cor = document.getElementById('fCorEp-mat').value.trim();
       data.textura = document.getElementById('fTextura-mat').value;
+      data.fixacao = document.getElementById('fFixacao-mat').value;
       var vn = document.getElementById('fVolumeNominal-mat').value;
       var vi = document.getElementById('fVolumeInterno-mat').value;
       data.volumeNominal = vn !== '' ? parseFloat(vn) : null;
@@ -2028,7 +2045,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Sugestão de variante reage a qualquer campo comparável (EP e ES/ET) --
     // delegado num só listener em vez de religar campo por campo.
-    var CAMPOS_SUGESTAO_VARIANTE = ['fGargalo-mat', 'fMaterialResina-mat', 'fVolumeNominal-mat', 'fVolumeInterno-mat', 'fAltura-mat', 'fDiametro-mat', 'fPesoUnitario-mat', 'fMaterialResinaSt-mat', 'fComprimentoSt-mat', 'fLarguraSt-mat', 'fAlturaSt-mat', 'fPesoUnitarioSt-mat'];
+    var CAMPOS_SUGESTAO_VARIANTE = ['fGargalo-mat', 'fMaterialResina-mat', 'fTextura-mat', 'fFixacao-mat', 'fVolumeNominal-mat', 'fVolumeInterno-mat', 'fAltura-mat', 'fDiametro-mat', 'fPesoUnitario-mat', 'fMaterialResinaSt-mat', 'fComprimentoSt-mat', 'fLarguraSt-mat', 'fAlturaSt-mat', 'fPesoUnitarioSt-mat'];
     var _tSugestao = null;
     document.getElementById('modalBg-mat').addEventListener('input', function(e) {
       if (CAMPOS_SUGESTAO_VARIANTE.indexOf(e.target.id) === -1) return;
