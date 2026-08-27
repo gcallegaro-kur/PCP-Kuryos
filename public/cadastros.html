@@ -413,7 +413,7 @@
             <div class="form-group"><label>Peso líquido da unidade de compra (kg)</label><input type="number" id="fPesoLiquidoCompra-mat" min="0" step="any"></div>
           </div>
 
-          <div class="tipo-fields" data-tipo-for="MPGR,MPES,MU">
+          <div class="tipo-fields" data-tipo-for="MPGR,MU">
             <div class="section-label">Fornecedores homologados</div>
             <div class="section-note">Cada material pode ter vários fornecedores homologados -- o Pedido de Compra escolhe entre eles. Cadastro de fornecedor em si fica na aba Fornecedores, aqui mesmo em Cadastros.</div>
             <div class="table-wrap" style="margin-bottom:10px">
@@ -442,9 +442,9 @@
             </div>
           </div>
 
-          <div class="tipo-fields" data-tipo-for="EP,ES,ET">
+          <div class="tipo-fields" data-tipo-for="MPES,EP,ES,ET">
             <div class="section-label">Fornecedor</div>
-            <div class="section-note">Embalagem é um fornecedor por cadastro -- se 3 fornecedores tiverem "a mesma" peça, cada um ganha seu próprio cadastro de material (código diferente), ligados como Variantes equivalentes logo abaixo. Isso é diferente de Matéria-Prima/Fragrância, que ainda aceita vários fornecedores homologados no mesmo cadastro.</div>
+            <div class="section-note">Fragrância/Essência e Embalagem são um fornecedor por cadastro -- se mais de um fornecedor tiver "a mesma" essência ou peça, cada um ganha seu próprio cadastro de material (código diferente), ligados como Variantes equivalentes logo abaixo. Isso é diferente de MP Geral, que ainda aceita vários fornecedores homologados no mesmo cadastro.</div>
             <div class="form-grid" style="align-items:end">
               <div class="form-group">
                 <label>Fornecedor</label>
@@ -1780,10 +1780,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fhCustoRef-mat').value = '';
     renderFornecedoresHomologados();
 
-    // Embalagem (EP/ES/ET): um fornecedor só por cadastro, ver
-    // fornecedoresHomologadosStaged como fonte (já veio de m.fornecedores
-    // acima) -- pega a única entrada, se houver, e preenche os campos
-    // simples em vez da tabela de homologados.
+    // Fragrância/Essência e Embalagem (MPES/EP/ES/ET): um fornecedor só por
+    // cadastro, ver fornecedoresHomologadosStaged como fonte (já veio de
+    // m.fornecedores acima) -- pega a única entrada, se houver, e preenche
+    // os campos simples em vez da tabela de homologados.
     var fuChaves = Object.keys(fornecedoresHomologadosStaged);
     var fuKey = fuChaves[0] || '';
     var fu = fuKey ? fornecedoresHomologadosStaged[fuKey] : null;
@@ -1919,13 +1919,15 @@ document.addEventListener('DOMContentLoaded', function() {
     return data;
   }
 
-  // Embalagem (EP/ES/ET) grava no MESMO formato de sempre (fornecedores{}
-  // map, pra não mexer em nada que compras.html já lê dali -- ver
-  // homologadosDoMaterial lá), só que sempre com 0 ou 1 chave: cada
-  // fornecedor da "mesma" peça vira um cadastro de material próprio (ver
-  // Variantes equivalentes), não uma segunda linha homologada aqui.
+  // Fragrância/Essência e Embalagem (MPES/EP/ES/ET) gravam no MESMO formato
+  // de sempre (fornecedores{} map, pra não mexer em nada que compras.html já
+  // lê dali -- ver homologadosDoMaterial lá), só que sempre com 0 ou 1
+  // chave: cada fornecedor da "mesma" essência/peça vira um cadastro de
+  // material próprio (ver Variantes equivalentes), não uma segunda linha
+  // homologada aqui. Só MP Geral (MPGR) e Uso e Consumo continuam com
+  // vários fornecedores homologados no mesmo cadastro.
   function montarFornecedoresParaSalvar(tipo) {
-    if (tipo !== 'EP' && tipo !== 'ES' && tipo !== 'ET') return fornecedoresHomologadosStaged;
+    if (tipo !== 'MPES' && tipo !== 'EP' && tipo !== 'ES' && tipo !== 'ET') return fornecedoresHomologadosStaged;
     var fKey = document.getElementById('fuFornecedorKey-mat').value;
     if (!fKey) return {};
     var custoVal = document.getElementById('fuCustoRef-mat').value;
