@@ -1132,22 +1132,105 @@ function solicitacoesAprovadasDisponiveis() {
   return Object.entries(allSolicitacoes).filter(function(e) { return e[1].status === 'APROVADA'; })
     .sort(function(a, b) { return (a[1].criadoEm || '').localeCompare(b[1].criadoEm || ''); });
 }
+
+/* ── Fase 3: sugestão de agrupamento por fornecedor ── */
+// Preço por fornecedor (não só o mais recente global, ver ultimoPrecoDoMaterial)
+// -- aqui precisa comparar entre fornecedores homologados pra achar o mais barato.
+function precoPorFornecedorDoMaterial(materialCodigo) {
+  var porFornecedor = {}; // fKey -> {precoUnit, data}
+  Object.values(allPedidosCompra).forEach(function(pc) {
+    if (!pc.fornecedorKey) return;
+    Object.values(pc.itens || {}).forEach(function(it) {
+      if (it.materialCodigo !== materialCodigo || it.precoUnit == null || it.precoUnit === '') return;
+      var data = pc.dataEmissao || pc.dataCriacao || '';
+      var atual = porFornecedor[pc.fornecedorKey];
+      if (!atual || data > atual.data) porFornecedor[pc.fornecedorKey] = { precoUnit: parseFloat(it.precoUnit), data: data };
+    });
+  });
+  return porFornecedor;
+}
+// Entre os homologados pro material, prioriza o mais barato (pelo último
+// preço pago); sem nenhum preço conhecido, cai pro primeiro homologado.
+// Sem homologado nenhum, não dá sugestão (null) -- decisão fica 100% manual.
+function melhorFornecedorParaMaterial(materialCodigo) {
+  var homologados = homologadosDoMaterial(materialCodigo);
+  if (!homologados.length) return null;
+  var precos = precoPorFornecedorDoMaterial(materialCodigo);
+  var comPreco = homologados.filter(function(h) { return precos[h.key] != null; });
+  if (comPreco.length) {
+    comPreco.sort(function(a, b) { return precos[a.key].precoUnit - precos[b.key].precoUnit; });
+    return comPreco[0].key;
+  }
+  return homologados[0].key;
+}
+// Uma solicitação pode ter itens de materiais diferentes, cada um com seu
+// próprio "melhor fornecedor" -- a sugestão da solicitação inteira é por
+// maioria de votos entre os itens (empate: o primeiro encontrado).
+function fornecedorSugeridoParaSolicitacao(s) {
+  var votos = {};
+  Object.values(s.itens || {}).forEach(function(it) {
+    var fKey = melhorFornecedorParaMaterial(it.materialCodigo);
+    if (fKey) votos[fKey] = (votos[fKey] || 0) + 1;
+  });
+  var chaves = Object.keys(votos);
+  if (!chaves.length) return null;
+  chaves.sort(function(a, b) { return votos[b] - votos[a]; });
+  return chaves[0];
+}
+
 function renderPcSolicitacoesList() {
   var disponiveis = solicitacoesAprovadasDisponiveis();
   var box = document.getElementById('pcSolicitacoesList');
   if (!disponiveis.length) {
     box.innerHTML = '<div class="empty-hint">Nenhuma solicitação aprovada disponível pra consolidar no momento.</div>';
-  } else {
-    box.innerHTML = disponiveis.map(function(entry) {
-      var key = entry[0], s = entry[1];
-      var itens = Object.values(s.itens || {});
-      var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
-      return '<label class="chk-row" style="cursor:pointer">' +
-        '<input type="checkbox" class="pc-sc-check" data-key="' + escapeAttr(key) + '"' + (consolidarSelecionadas[key] ? ' checked' : '') + '>' +
-        '<div class="chk-row-body"><b>' + escapeHtml(s.numeroFormatado) + '</b> — ' + escapeHtml(s.solicitante || '') + '<br>' + itensResumo + '</div>' +
-      '</label>';
-    }).join('');
+    return;
   }
+
+  // Agrupa por fornecedor sugerido -- quem não tem sugestão clara (nenhum
+  // material homologado) cai num grupo "sem sugestão", sempre por último.
+  var grupos = {}; // fKey|'__sem_sugestao__' -> [entries]
+  disponiveis.forEach(function(entry) {
+    var fKey = fornecedorSugeridoParaSolicitacao(entry[1]) || '__sem_sugestao__';
+    if (!grupos[fKey]) grupos[fKey] = [];
+    grupos[fKey].push(entry);
+  });
+  var chavesGrupo = Object.keys(grupos).filter(function(k) { return k !== '__sem_sugestao__'; })
+    .sort(function(a, b) { return grupos[b].length - grupos[a].length; });
+  if (grupos['__sem_sugestao__']) chavesGrupo.push('__sem_sugestao__');
+
+  function linhaSolicitacao(entry) {
+    var key = entry[0], s = entry[1];
+    var itens = Object.values(s.itens || {});
+    var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+    return '<label class="chk-row" style="cursor:pointer">' +
+      '<input type="checkbox" class="pc-sc-check" data-key="' + escapeAttr(key) + '"' + (consolidarSelecionadas[key] ? ' checked' : '') + '>' +
+      '<div class="chk-row-body"><b>' + escapeHtml(s.numeroFormatado) + '</b> — ' + escapeHtml(s.solicitante || '') + '<br>' + itensResumo + '</div>' +
+    '</label>';
+  }
+
+  box.innerHTML = chavesGrupo.map(function(fKey) {
+    var entries = grupos[fKey];
+    var semSugestao = fKey === '__sem_sugestao__';
+    var forn = semSugestao ? null : allFornecedores[fKey];
+    var titulo = semSugestao ? 'Sem sugestão de fornecedor (nenhum material homologado)' : (forn ? (forn.nomeFantasia || forn.razaoSocial) : fKey);
+    return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-2)">' +
+        '<div style="font-size:12.5px"><b>' + (semSugestao ? '' : '💡 Sugestão: ') + escapeHtml(titulo) + '</b> — ' + entries.length + ' solicitação' + (entries.length !== 1 ? 'ões' : '') + '</div>' +
+        (semSugestao ? '' : '<button type="button" class="btn btn-ghost btn-sm pc-grupo-selecionar" data-fkey="' + escapeAttr(fKey) + '">Selecionar grupo</button>') +
+      '</div>' +
+      '<div style="padding:6px 10px">' + entries.map(linhaSolicitacao).join('') + '</div>' +
+    '</div>';
+  }).join('');
+
+  document.querySelectorAll('.pc-grupo-selecionar').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var fKey = btn.getAttribute('data-fkey');
+      grupos[fKey].forEach(function(entry) { consolidarSelecionadas[entry[0]] = true; });
+      document.getElementById('pcFornecedor').value = fKey;
+      renderPcSolicitacoesList();
+      renderPcItensPreview();
+    });
+  });
   document.querySelectorAll('.pc-sc-check').forEach(function(el) {
     el.addEventListener('change', function() {
       var key = el.getAttribute('data-key');
