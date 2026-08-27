@@ -426,6 +426,23 @@
             <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddFornHomolog-mat" style="width:100%">+ Adicionar</button></div>
           </div>
 
+          <div class="section-label">Variantes equivalentes</div>
+          <div class="section-note">Use quando dois materiais são fisicamente diferentes (fornecedores diferentes, medida levemente diferente) mas substituíveis nesta compra -- ex: dois frascos de fornecedores distintos que a Qualidade aceita como intercambiáveis. Não funde estoque nem cadastro; só faz o Compras mostrar a alternativa (fornecedor/preço) na hora de decidir. O vínculo é sempre nos dois sentidos -- adicionar aqui também aparece no material vinculado.</div>
+          <div class="table-wrap" style="margin-bottom:10px">
+            <table>
+              <thead><tr><th>Código</th><th>Nome</th><th style="width:40px"></th></tr></thead>
+              <tbody id="variantesEquivalentesBody-mat"><tr><td colspan="3" class="no-data">Nenhuma variante vinculada.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="form-grid" style="align-items:end">
+            <div class="form-group full">
+              <label>Adicionar variante</label>
+              <input type="text" id="veMaterial-mat" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="veMaterialKey-mat">
+            </div>
+            <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddVariante-mat" style="width:100%">+ Adicionar</button></div>
+          </div>
+
           <div class="section-label">Status</div>
           <div class="form-grid">
             <div class="form-group">
@@ -1273,6 +1290,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var allFornecedores = {};
   var editingKey = null;
   var fornecedoresHomologadosStaged = {}; // fornecedorKey -> {nomeComercial, codigoFornecedor, statusHomologacao, custoReferencia} -- staged em memória até salvar
+  var variantesEquivalentesStaged = {}; // materialKey -> true -- staged em memória até salvar; vínculo é gravado nos dois materiais ao salvar
   var matSortable = makeSortableTable(document.getElementById('matThead-mat'), 'mpCodigo', 'asc');
 
   var TIPO_LABELS = { MPGR: 'MP Geral', MPES: 'Fragrância/Essência', EP: 'Embalagem Primária', ES: 'Embalagem Secundária', ET: 'Embalagem Terciária' };
@@ -1321,6 +1339,55 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('fhFornecedor-mat').value = '';
       document.getElementById('fhFornecedorKey-mat').value = '';
     }
+  }
+
+  /* ── Variantes equivalentes ── */
+  var veMaterialItems = [];
+  function refreshVeMaterialItems() {
+    veMaterialItems = Object.entries(allMateriais)
+      .filter(function(e) {
+        if (e[0] === editingKey) return false; // não pode ser variante de si mesmo
+        if (e[1].ativo === false) return false;
+        if (variantesEquivalentesStaged[e[0]]) return false; // já adicionado
+        return true;
+      })
+      .sort(function(a, b) { return norm(a[1].mpNome).localeCompare(norm(b[1].mpNome)); })
+      .map(function(e) {
+        var label = (e[1].mpCodigo || e[0]) + ' — ' + (e[1].mpNome || '');
+        return { key: e[0], value: label, label: label };
+      });
+  }
+  function renderVariantesEquivalentes() {
+    var tbody = document.getElementById('variantesEquivalentesBody-mat');
+    var keys = Object.keys(variantesEquivalentesStaged);
+    if (!keys.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhuma variante vinculada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = keys.map(function(k) {
+      var m = allMateriais[k];
+      return '<tr>' +
+        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(m ? m.mpCodigo : k) + '</td>' +
+        '<td>' + escapeHtml(m ? m.mpNome : '(material não encontrado)') + '</td>' +
+        '<td><button class="btn btn-danger-ghost btn-sm ve-remove" data-key="' + escapeAttr(k) + '" title="Remover" aria-label="Remover">×</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.ve-remove').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        delete variantesEquivalentesStaged[btn.getAttribute('data-key')];
+        renderVariantesEquivalentes();
+        refreshVeMaterialItems();
+      });
+    });
+  }
+  function addVariante() {
+    var vKey = document.getElementById('veMaterialKey-mat').value;
+    if (!vKey) { showAlert('Digite e selecione um material da lista.', 'danger'); return; }
+    variantesEquivalentesStaged[vKey] = true;
+    document.getElementById('veMaterial-mat').value = '';
+    document.getElementById('veMaterialKey-mat').value = '';
+    renderVariantesEquivalentes();
+    refreshVeMaterialItems();
   }
 
   // Só entram debaixo do mesmo tipo campos que fazem sentido pra aquele
@@ -1434,9 +1501,13 @@ document.addEventListener('DOMContentLoaded', function() {
       var tipoLabel = TIPO_LABELS[m.tipo] || m.tipo || '—';
       var tipoBadge = '<span class="badge ' + (TIPO_BADGE_CLASS[m.tipo] || 'badge-gray') + '">' + escapeHtml(tipoLabel) + '</span>';
       var qtdHomolog = Object.keys(m.fornecedores || {}).length;
+      var qtdVariantes = Object.keys(m.variantesEquivalentes || {}).length;
+      var variantesBadge = qtdVariantes
+        ? ' <span class="badge badge-purple" title="Tem variante(s) equivalente(s) vinculada(s)">🔀 ' + qtdVariantes + '</span>'
+        : '';
       return '<tr>' +
         '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
-        '<td>' + escapeHtml(m.mpNome || '—') + '</td>' +
+        '<td>' + escapeHtml(m.mpNome || '—') + variantesBadge + '</td>' +
         '<td>' + tipoBadge + '</td>' +
         '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
         '<td style="text-align:center">' + (qtdHomolog || '—') + '</td>' +
@@ -1508,6 +1579,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fhStatus-mat').value = 'aguardando_homologacao';
     document.getElementById('fhCustoRef-mat').value = '';
     renderFornecedoresHomologados();
+
+    variantesEquivalentesStaged = key ? JSON.parse(JSON.stringify(m.variantesEquivalentes || {})) : {};
+    document.getElementById('veMaterial-mat').value = '';
+    document.getElementById('veMaterialKey-mat').value = '';
+    refreshVeMaterialItems();
+    renderVariantesEquivalentes();
 
     document.getElementById('fControlado').checked = !!m.controlado;
     document.getElementById('fAtivo-mat').checked = m.ativo !== false;
@@ -1588,6 +1665,7 @@ document.addEventListener('DOMContentLoaded', function() {
       pesoBrutoCompra: pesoBrutoVal !== '' ? parseFloat(pesoBrutoVal) : null,
       pesoLiquidoCompra: pesoLiquidoVal !== '' ? parseFloat(pesoLiquidoVal) : null,
       fornecedores: fornecedoresHomologadosStaged,
+      variantesEquivalentes: variantesEquivalentesStaged,
       controlado: document.getElementById('fControlado').checked,
       ativo: document.getElementById('fAtivo-mat').checked
     }, coletarDadosPorTipo(tipo));
@@ -1596,7 +1674,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (editingKey) {
       data.mpCodigo = allMateriais[editingKey] ? allMateriais[editingKey].mpCodigo : document.getElementById('fCodigo-mat').value;
-      db.ref('materiais/' + editingKey).set(data)
+
+      // Vínculo de variante é sempre nos dois sentidos -- grava o registro
+      // deste material inteiro (.set() de sempre, via update() no path dele)
+      // e, no mesmo multi-path update, adiciona/remove só a chave deste
+      // material no lado do material vinculado (nunca mexe no resto do
+      // registro dele).
+      var origVariantes = Object.keys((allMateriais[editingKey] && allMateriais[editingKey].variantesEquivalentes) || {});
+      var novasVariantes = Object.keys(variantesEquivalentesStaged);
+      var variantesAdicionadas = novasVariantes.filter(function(k) { return origVariantes.indexOf(k) === -1; });
+      var variantesRemovidas = origVariantes.filter(function(k) { return novasVariantes.indexOf(k) === -1; });
+
+      var updates = {};
+      updates['materiais/' + editingKey] = data;
+      variantesAdicionadas.forEach(function(vKey) { updates['materiais/' + vKey + '/variantesEquivalentes/' + editingKey] = true; });
+      variantesRemovidas.forEach(function(vKey) { updates['materiais/' + vKey + '/variantesEquivalentes/' + editingKey] = null; });
+
+      db.ref().update(updates)
         .then(function() { showAlert('Material salvo com sucesso!', 'success'); closeModal(); })
         .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
         .finally(function() { document.getElementById('modalSaveBtn-mat').disabled = false; });
@@ -1610,7 +1704,10 @@ document.addEventListener('DOMContentLoaded', function() {
     nextSequential(db, 'config/contadores/materiais/' + tipo, tipo, 5).then(function(r) {
       var key = sanitizeKey(r.formatado);
       data.mpCodigo = r.formatado;
-      return db.ref('materiais/' + key).set(data);
+      var updates = {};
+      updates['materiais/' + key] = data;
+      Object.keys(variantesEquivalentesStaged).forEach(function(vKey) { updates['materiais/' + vKey + '/variantesEquivalentes/' + key] = true; });
+      return db.ref().update(updates);
     }).then(function() {
       showAlert('Material salvo com sucesso!', 'success');
       closeModal();
@@ -1642,6 +1739,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('fhFornecedor-mat').addEventListener('input', function() {
       document.getElementById('fhFornecedorKey-mat').value = '';
+    });
+
+    document.getElementById('btnAddVariante-mat').addEventListener('click', addVariante);
+    attachAutocomplete(document.getElementById('veMaterial-mat'), function() { return veMaterialItems; }, {
+      onSelect: function(it) { document.getElementById('veMaterialKey-mat').value = it.key; }
+    });
+    document.getElementById('veMaterial-mat').addEventListener('input', function() {
+      document.getElementById('veMaterialKey-mat').value = '';
     });
 
     var _t = null;

@@ -448,6 +448,14 @@ function ultimoPrecoDoMaterial(materialCodigo) {
 }
 // Texto de referência curto, reutilizado nos 3 pontos de decisão (builder
 // de solicitação, preview de consolidação, cotação).
+// Materiais fisicamente diferentes mas que a Qualidade aceita como
+// substituíveis nesta compra (ex: dois frascos de fornecedores distintos) --
+// vínculo gravado nos dois sentidos no cadastro de Materiais (cadastros.html).
+function variantesEquivalentesDoMaterial(materialCodigo) {
+  var mat = findMaterialByCodigo(materialCodigo);
+  if (!mat || !mat.variantesEquivalentes) return [];
+  return Object.keys(mat.variantesEquivalentes).map(function(vKey) { return allMateriais[vKey]; }).filter(Boolean);
+}
 function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
   var homologados = homologadosDoMaterial(materialCodigo);
   var ultimoPreco = ultimoPrecoDoMaterial(materialCodigo);
@@ -467,7 +475,21 @@ function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
       ? '<span style="color:var(--success)">✓ fornecedor escolhido é homologado</span>'
       : '<span style="color:var(--warning)">⚠ fornecedor escolhido NÃO está homologado pra este material</span>');
   }
-  return '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + partes.join(' · ') + '</div>';
+  var html = '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + partes.join(' · ') + '</div>';
+
+  var variantes = variantesEquivalentesDoMaterial(materialCodigo);
+  if (variantes.length) {
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">🔀 Alternativa(s) equivalente(s): ' +
+      variantes.map(function(v) {
+        var h = homologadosDoMaterial(v.mpCodigo);
+        var p = ultimoPrecoDoMaterial(v.mpCodigo);
+        var detalhe = [];
+        if (h.length) detalhe.push(h.map(function(x) { return x.nome; }).join(', '));
+        if (p) detalhe.push(fmtNum(p.precoUnit));
+        return escapeHtml(v.mpCodigo) + ' — ' + escapeHtml(v.mpNome) + (detalhe.length ? ' (' + detalhe.join(' · ') + ')' : ' (sem histórico de compra ainda)');
+      }).join('; ') + '</div>';
+  }
+  return html;
 }
 
 /* ══════════════ Tabs ══════════════ */
