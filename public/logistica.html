@@ -238,7 +238,7 @@ var recebendoKey = null;
 function refreshTransportadoraSelect(desiredValue) {
   var el = document.getElementById('agTransportadora');
   var atual = desiredValue != null ? desiredValue : el.value;
-  var nomes = Object.values(allTransportadoras).filter(function(t) { return t.tipo === 'transportadora' && t.ativo !== false; })
+  var nomes = Object.values(allTransportadoras).filter(function(t) { return tiposFornecedor(t).indexOf('transportadora') !== -1 && t.ativo !== false; })
     .map(function(t) { return t.nomeFantasia || t.razaoSocial; }).filter(Boolean).sort(function(a, b) { return norm(a).localeCompare(norm(b)); });
   var opts = '<option value="">Selecione...</option>';
   nomes.forEach(function(nome) { opts += '<option value="' + escapeAttr(nome) + '">' + escapeHtml(nome) + '</option>'; });

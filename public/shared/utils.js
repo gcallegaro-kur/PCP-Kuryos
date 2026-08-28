@@ -945,6 +945,29 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
   }));
 }
 
+// ── Tipos de fornecedor (multi) ─────────────────────────────────────────
+// Achado do usuário: um fornecedor real (ex: uma matriz com 3 CNPJs)
+// costuma vender em mais de uma categoria ao mesmo tempo -- embalagem,
+// válvula E matéria-prima, por exemplo. `tipo` (singular, o schema
+// antigo) não dava conta disso: cadastrado como só "mp", o fornecedor
+// sumia da lista de "fornecedor homologado" na hora de vincular a um
+// material de embalagem (cadastros.html#refreshFhFornecedorOptions
+// comparava tipo===tipoAlvo) e do <select> de transportadora em
+// logistica.html (mesmo bug, mesma causa). `fornecedores/{key}.tipos`
+// agora é um ARRAY -- tiposFornecedor(f) lê os dois formatos (novo
+// `tipos`, ou o `tipo` singular antigo de cadastro nunca editado desde
+// essa mudança) sem precisar de migração em massa: qualquer fornecedor
+// antigo migra sozinho pra `tipos` na próxima vez que alguém salvar o
+// cadastro dele em cadastros.html (ver saveFornecedor). Compartilhada
+// (não só cadastros.html) porque logistica.html também lê fornecedores/
+// filtrando por tipo (transportadora).
+function tiposFornecedor(f) {
+  if (!f) return [];
+  if (Array.isArray(f.tipos)) return f.tipos;
+  if (f.tipos && typeof f.tipos === 'object') return Object.keys(f.tipos).filter(function(k) { return f.tipos[k]; });
+  return f.tipo ? [f.tipo] : [];
+}
+
 // ── Log de alterações de cadastro ───────────────────────────────────────
 // Cadastros (Materiais por ora, mesmo padrão dá pra reusar em Produtos/
 // Clientes/Fornecedores depois) não guardavam histórico nenhum -- salvar

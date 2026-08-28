@@ -212,12 +212,13 @@
               <th style="min-width:110px" data-sort="tipo">Tipo</th>
               <th style="min-width:60px" data-sort="unidade">Un.</th>
               <th style="min-width:90px" data-sort="fornecedoresCount">Fornec. Homolog.</th>
+              <th style="min-width:90px" data-sort="usoCount">Usado em</th>
               <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
               <th style="min-width:80px" data-sort="ativo">Status</th>
               <th style="min-width:50px"></th>
             </tr>
           </thead>
-          <tbody id="tableBody-mat"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="tableBody-mat"><tr><td colspan="9" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1130,20 +1131,20 @@
               <label>CNPJ</label>
               <input type="text" id="fnCnpj-forn" placeholder="00.000.000/0000-00">
             </div>
-            <div class="form-group">
-              <label>Tipo de fornecedor</label>
-              <select id="fnTipo-forn">
-                <option value="">Selecione...</option>
-                <option value="mp">Matéria-Prima</option>
-                <option value="embalagem">Embalagem</option>
-                <option value="transportadora">Transportadora</option>
-                <option value="consumo">Material de Uso e Consumo</option>
-                <option value="servicos">Serviços</option>
-                <option value="tecnologia">Tecnologia</option>
-                <option value="equipamentos">Equipamentos e Manutenção</option>
-                <option value="publico">Órgão Público / Regulatório</option>
-                <option value="outro">Outro</option>
-              </select>
+            <div class="form-group full">
+              <label>Tipo(s) de fornecedor</label>
+              <div class="field-hint" style="margin-bottom:6px">Um fornecedor pode vender em mais de uma categoria (ex: embalagem + matéria-prima) -- marque todas que se aplicam. Isso decide quem aparece como opção pra vincular "fornecedor homologado" num material, em Materiais.</div>
+              <div id="fnTiposBox-forn" style="display:flex;flex-wrap:wrap;gap:4px 16px">
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="mp"> Matéria-Prima</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="embalagem"> Embalagem</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="transportadora"> Transportadora</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="consumo"> Material de Uso e Consumo</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="servicos"> Serviços</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="tecnologia"> Tecnologia</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="equipamentos"> Equipamentos e Manutenção</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="publico"> Órgão Público / Regulatório</label>
+                <label class="chk"><input type="checkbox" class="fn-tipo-chk" value="outro"> Outro</label>
+              </div>
             </div>
             <div class="form-group">
               <label>Prazo de entrega (dias)</label>
@@ -1419,9 +1420,15 @@ document.addEventListener('DOMContentLoaded', function() {
     fhFornecedorItems = Object.entries(allFornecedores)
       .filter(function(e) {
         if (e[1].ativo === false) return false;
-        // Só filtra quem JÁ tem tipo cadastrado -- um fornecedor ainda não
-        // classificado não pode sumir da lista, só não teria prioridade.
-        if (tipoAlvo && e[1].tipo && e[1].tipo !== tipoAlvo) return false;
+        // Só filtra quem JÁ tem tipo(s) cadastrado(s) -- um fornecedor
+        // ainda não classificado não pode sumir da lista, só não teria
+        // prioridade. Um fornecedor pode ter VÁRIOS tipos ao mesmo tempo
+        // (ex: vende embalagem E matéria-prima) -- basta UM deles bater
+        // com o tipo do material (achado do usuário: fornecedor com
+        // "mp" sumia da lista na hora de homologar pra um material de
+        // embalagem, mesmo vendendo embalagem também).
+        var tipos = tiposFornecedor(e[1]);
+        if (tipoAlvo && tipos.length && tipos.indexOf(tipoAlvo) === -1) return false;
         return true;
       })
       .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
@@ -1691,6 +1698,7 @@ document.addEventListener('DOMContentLoaded', function() {
     rows = matSortable.applySort(rows, function(entry, field) {
       if (field === 'fornecedoresCount') return Object.keys(entry[1].fornecedores || {}).length;
       if (field === 'preenchimentoPct') return calcularPreenchimento(entry[1], CAMPOS_PREENCHIMENTO_MAT).pct;
+      if (field === 'usoCount') return calcularUsoMaterial(entry[1].mpCodigo).length;
       return entry[1][field];
     });
 
@@ -1707,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var tbody = document.getElementById('tableBody-mat');
     if (!rows.length) {
       var semNenhumCadastrado = !total;
-      tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhumCadastrado
+      tbody.innerHTML = '<tr><td colspan="9" class="no-data">' + (semNenhumCadastrado
         ? 'Nenhum material cadastrado ainda. Clique em "+ Novo Material" pra começar.'
         : 'Nenhum material encontrado com esse filtro/busca.') + '</td></tr>';
       return;
@@ -1723,18 +1731,39 @@ document.addEventListener('DOMContentLoaded', function() {
         ? ' <span class="badge badge-purple" title="Tem variante(s) equivalente(s) vinculada(s)">🔀 ' + qtdVariantes + '</span>'
         : '';
       var pct = calcularPreenchimento(m, CAMPOS_PREENCHIMENTO_MAT).pct;
+      // "Usado em" -- pedido do usuário: precisa ficar exposto na tabela,
+      // sem precisar abrir o cadastro pra saber se um material está em uso
+      // (importante antes de descontinuar/trocar um material). Contagem de
+      // PRODUTOS distintos (não de vínculos -- um material pode estar na
+      // Fórmula E no BOM do mesmo produto, ainda conta como 1 produto só);
+      // tooltip com a lista já dá o "onde", clique abre o cadastro pro
+      // detalhe cheio (% da fórmula, versão etc. -- ver seção "Usado em"
+      // no modal, calcularUsoMaterial/renderUsoMaterial).
+      var usos = calcularUsoMaterial(m.mpCodigo);
+      var produtosDistintos = {};
+      usos.forEach(function(u) { produtosDistintos[u.codProduto] = 1; });
+      var qtdProdutos = Object.keys(produtosDistintos).length;
+      var usoCell = qtdProdutos
+        ? '<span class="badge badge-blue btn-uso-mat" data-key="' + key + '" style="cursor:pointer" title="' +
+            escapeAttr(usos.map(function(u) {
+              var prod = allProdutosMat[u.codProduto];
+              return (prod ? prod.sku : u.codProduto) + ' (' + u.onde + ')';
+            }).join('\n')) +
+          '">' + qtdProdutos + ' produto' + (qtdProdutos > 1 ? 's' : '') + '</span>'
+        : '<span style="color:var(--muted)">—</span>';
       return '<tr>' +
         '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
         '<td>' + escapeHtml(m.mpNome || '—') + variantesBadge + '</td>' +
         '<td>' + tipoBadge + '</td>' +
         '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
         '<td style="text-align:center">' + (qtdHomolog || '—') + '</td>' +
+        '<td>' + usoCell + '</td>' +
         '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-mat" data-key="' + key + '" title="Editar material" aria-label="Editar material">✏</button></td>' +
       '</tr>';
     }).join('');
-    document.querySelectorAll('.btn-edit-mat').forEach(function(btn) {
+    document.querySelectorAll('.btn-edit-mat, .btn-uso-mat').forEach(function(btn) {
       btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
     });
   }
@@ -1901,17 +1930,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // hora a partir de Fórmulas/BOM (a fonte da verdade continua lá, isto
   // aqui é só uma visão). Pedido do usuário: saber, olhando um material,
   // quais produtos dependem dele -- útil antes de descontinuar/trocar algo.
-  function renderUsoMaterial(key) {
-    var label = document.getElementById('usoMatLabel-mat');
-    var note = document.getElementById('usoMatNote-mat');
-    var wrap = document.getElementById('usoMatWrap-mat');
-    var tbody = document.getElementById('usoMatBody-mat');
-    if (!key) { label.style.display = 'none'; note.style.display = 'none'; wrap.style.display = 'none'; return; }
-    label.style.display = ''; note.style.display = ''; wrap.style.display = '';
-
-    var mpCodigo = (allMateriais[key] || {}).mpCodigo;
-    if (!mpCodigo) { tbody.innerHTML = '<tr><td colspan="4" class="no-data">—</td></tr>'; return; }
-
+  // Cálculo puro (sem DOM) -- reusado pela tabela (coluna "Usado em", badge
+  // com contagem + tooltip) e pelo modal (renderUsoMaterial, detalhe cheio).
+  function calcularUsoMaterial(mpCodigo) {
+    if (!mpCodigo) return [];
     var usos = [];
     Object.values(allFormulasMat).forEach(function(f) {
       if (!f || !f.itens) return;
@@ -1929,13 +1951,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     });
+    usos.sort(function(a, b) { return norm(a.codProduto).localeCompare(norm(b.codProduto)) || a.onde.localeCompare(b.onde); });
+    return usos;
+  }
 
+  function renderUsoMaterial(key) {
+    var label = document.getElementById('usoMatLabel-mat');
+    var note = document.getElementById('usoMatNote-mat');
+    var wrap = document.getElementById('usoMatWrap-mat');
+    var tbody = document.getElementById('usoMatBody-mat');
+    if (!key) { label.style.display = 'none'; note.style.display = 'none'; wrap.style.display = 'none'; return; }
+    label.style.display = ''; note.style.display = ''; wrap.style.display = '';
+
+    var mpCodigo = (allMateriais[key] || {}).mpCodigo;
+    var usos = calcularUsoMaterial(mpCodigo);
     if (!usos.length) {
       tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum produto usa este material em Fórmula ou BOM ainda.</td></tr>';
       return;
     }
-    usos.sort(function(a, b) { return norm(a.codProduto).localeCompare(norm(b.codProduto)) || a.onde.localeCompare(b.onde); });
-
     tbody.innerHTML = usos.map(function(u) {
       var prod = allProdutosMat[u.codProduto];
       var prodLabel = prod ? (prod.sku + ' — ' + (prod.descricao || '')) : u.codProduto;
@@ -2173,14 +2206,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('formulas'), function(snap) {
       allFormulasMat = snap.val() || {};
+      renderTable();
       if (editingKey) renderUsoMaterial(editingKey);
     });
     dbOnValue(db.ref('bom'), function(snap) {
       allBomMat = snap.val() || {};
+      renderTable();
       if (editingKey) renderUsoMaterial(editingKey);
     });
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutosMat = snap.val() || {};
+      renderTable();
       if (editingKey) renderUsoMaterial(editingKey);
     });
   });
@@ -2419,7 +2455,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
   var CAMPOS_PREENCHIMENTO_FORN = [
-    'razaoSocial', 'nomeFantasia', 'cnpj', 'tipo', 'prazoEntregaDias', 'condicaoPagamento',
+    'razaoSocial', 'nomeFantasia', 'cnpj', 'tipos', 'prazoEntregaDias', 'condicaoPagamento',
     'contatoNome', 'contatoTelefone', 'contatoEmail', 'site', 'cidade', 'uf', 'certificacoes'
   ];
 
@@ -2462,7 +2498,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var revisado = f.revisado !== false;
       if (filtRevisado === 'revisado' && !revisado) return false;
       if (filtRevisado === 'pendente' && revisado) return false;
-      if (filtTipo && f.tipo !== filtTipo) return false;
+      if (filtTipo && tiposFornecedor(f).indexOf(filtTipo) === -1) return false;
       if (search && (norm(f.razaoSocial) + ' ' + norm(f.nomeFantasia) + ' ' + norm(f.cnpj)).indexOf(search) === -1) return false;
       return true;
     });
@@ -2486,7 +2522,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var ativo = f.ativo !== false;
       var revisado = f.revisado !== false;
       var contato = [f.contatoNome, f.contatoEmail].filter(Boolean).join(' · ');
-      var tipoLabel = f.tipo ? (TIPO_FORNECEDOR_LABELS[f.tipo] || f.tipo) : '—';
+      var tipoLabel = tiposFornecedor(f).map(function(t) { return TIPO_FORNECEDOR_LABELS[t] || t; }).join(', ') || '—';
       var local = [f.cidade, f.uf].filter(Boolean).join('/');
       var revisadoBadge = revisado
         ? '<span class="badge badge-green fn-toggle-revisado" data-key="' + escapeAttr(key) + '" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
@@ -2534,7 +2570,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fnRazaoSocial-forn').value = f.razaoSocial || '';
     document.getElementById('fnNomeFantasia-forn').value = f.nomeFantasia || '';
     document.getElementById('fnCnpj-forn').value = f.cnpj || '';
-    document.getElementById('fnTipo-forn').value = f.tipo || '';
+    var tiposAtuais = tiposFornecedor(f);
+    document.querySelectorAll('.fn-tipo-chk').forEach(function(chk) { chk.checked = tiposAtuais.indexOf(chk.value) !== -1; });
     document.getElementById('fnPrazoEntrega-forn').value = f.prazoEntregaDias != null ? f.prazoEntregaDias : '';
     document.getElementById('fnCondicaoPagamento-forn').value = f.condicaoPagamento || '';
     document.getElementById('fnContatoNome-forn').value = f.contatoNome || '';
@@ -2570,7 +2607,12 @@ document.addEventListener('DOMContentLoaded', function() {
       razaoSocial: razaoSocial,
       nomeFantasia: document.getElementById('fnNomeFantasia-forn').value.trim(),
       cnpj: document.getElementById('fnCnpj-forn').value.trim(),
-      tipo: document.getElementById('fnTipo-forn').value,
+      // Array, não mais 1 valor só -- um fornecedor pode vender em mais de
+      // uma categoria (ex: embalagem + MP), ver tiposFornecedor() acima.
+      // `tipo` (singular) fica de fora do gravado daqui pra frente -- quem
+      // ainda tiver só o campo antigo continua lido via tiposFornecedor(),
+      // migra sozinho assim que essa tela salvar de novo.
+      tipos: Array.from(document.querySelectorAll('.fn-tipo-chk:checked')).map(function(c) { return c.value; }),
       prazoEntregaDias: prazoVal !== '' ? parseInt(prazoVal) : null,
       condicaoPagamento: document.getElementById('fnCondicaoPagamento-forn').value.trim(),
       contatoNome: document.getElementById('fnContatoNome-forn').value.trim(),
