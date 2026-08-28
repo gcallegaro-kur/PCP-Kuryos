@@ -488,6 +488,15 @@
             <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddVariante-mat" style="width:100%">+ Adicionar</button></div>
           </div>
 
+          <div class="section-label" id="usoMatLabel-mat" style="display:none">Usado em (Fórmula / BOM)</div>
+          <div class="section-note" id="usoMatNote-mat" style="display:none">Somente leitura -- levantado agora, a partir das Fórmulas e BOMs cadastradas (não é um vínculo gravado no material). Se você trocar este material aqui, os produtos abaixo NÃO mudam sozinhos -- edite a Fórmula/BOM de cada um, na aba ao lado.</div>
+          <div class="table-wrap" style="margin-bottom:10px" id="usoMatWrap-mat">
+            <table>
+              <thead><tr><th>Produto</th><th>Onde</th><th style="text-align:right">Proporção</th><th>Versão</th></tr></thead>
+              <tbody id="usoMatBody-mat"><tr><td colspan="4" class="no-data">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+
           <div class="section-label">Status</div>
           <div class="form-grid">
             <div class="form-group">
@@ -1345,6 +1354,9 @@ document.addEventListener('DOMContentLoaded', function() {
 (function() {
   var allMateriais = {};
   var allFornecedores = {};
+  var allFormulasMat = {}; // só leitura -- ver "Usado em (Fórmula / BOM)" no modal
+  var allBomMat = {};
+  var allProdutosMat = {};
   var editingKey = null;
   var fornecedoresHomologadosStaged = {}; // fornecedorKey -> {nomeComercial, codigoFornecedor, statusHomologacao, custoReferencia} -- staged em memória até salvar
   var variantesEquivalentesStaged = {}; // materialKey -> true -- staged em memória até salvar; vínculo é gravado nos dois materiais ao salvar
@@ -1815,6 +1827,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateTipoFieldsVisibility();
     renderHistoricoMaterial(key);
+    renderUsoMaterial(key);
     document.getElementById('modalBg-mat').classList.add('open');
   }
   function closeModal() {
@@ -1879,6 +1892,62 @@ document.addEventListener('DOMContentLoaded', function() {
     }).catch(function() {
       tbody.innerHTML = '<tr><td colspan="5" class="no-data">Erro ao carregar histórico.</td></tr>';
     });
+  }
+
+  // ── Usado em (Fórmula / BOM) -- reverse lookup, só leitura ──────────────
+  // Varre formulas/ e bom/ (carregadas só pra isso, allFormulasMat/allBomMat
+  // acima) procurando itens que referenciam este material, agrupado por
+  // produto. Não é vínculo gravado no material -- sempre recalculado na
+  // hora a partir de Fórmulas/BOM (a fonte da verdade continua lá, isto
+  // aqui é só uma visão). Pedido do usuário: saber, olhando um material,
+  // quais produtos dependem dele -- útil antes de descontinuar/trocar algo.
+  function renderUsoMaterial(key) {
+    var label = document.getElementById('usoMatLabel-mat');
+    var note = document.getElementById('usoMatNote-mat');
+    var wrap = document.getElementById('usoMatWrap-mat');
+    var tbody = document.getElementById('usoMatBody-mat');
+    if (!key) { label.style.display = 'none'; note.style.display = 'none'; wrap.style.display = 'none'; return; }
+    label.style.display = ''; note.style.display = ''; wrap.style.display = '';
+
+    var mpCodigo = (allMateriais[key] || {}).mpCodigo;
+    if (!mpCodigo) { tbody.innerHTML = '<tr><td colspan="4" class="no-data">—</td></tr>'; return; }
+
+    var usos = [];
+    Object.values(allFormulasMat).forEach(function(f) {
+      if (!f || !f.itens) return;
+      Object.values(f.itens).forEach(function(it) {
+        if (it && it.mpCodigo === mpCodigo) {
+          usos.push({ codProduto: f.codProduto, versao: f.versao, status: f.status || null, onde: 'Fórmula', proporcao: it.percentualMM != null ? (fmtNum(it.percentualMM) + '%') : '—' });
+        }
+      });
+    });
+    Object.values(allBomMat).forEach(function(b) {
+      if (!b || !b.itens) return;
+      Object.values(b.itens).forEach(function(it) {
+        if (it && it.materialCodigo === mpCodigo) {
+          usos.push({ codProduto: b.codProduto, versao: b.versao, status: null, onde: 'BOM', proporcao: it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
+        }
+      });
+    });
+
+    if (!usos.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum produto usa este material em Fórmula ou BOM ainda.</td></tr>';
+      return;
+    }
+    usos.sort(function(a, b) { return norm(a.codProduto).localeCompare(norm(b.codProduto)) || a.onde.localeCompare(b.onde); });
+
+    tbody.innerHTML = usos.map(function(u) {
+      var prod = allProdutosMat[u.codProduto];
+      var prodLabel = prod ? (prod.sku + ' — ' + (prod.descricao || '')) : u.codProduto;
+      var ondeBadge = u.onde === 'Fórmula' ? '<span class="badge badge-blue">Fórmula</span>' : '<span class="badge badge-purple">BOM</span>';
+      var statusBadge = u.status ? (' <span class="badge ' + (u.status === 'APROVADA' ? 'badge-green' : 'badge-orange') + '" style="font-size:10px">' + escapeHtml(u.status) + '</span>') : '';
+      return '<tr>' +
+        '<td>' + escapeHtml(prodLabel) + '</td>' +
+        '<td>' + ondeBadge + '</td>' +
+        '<td style="text-align:right">' + escapeHtml(u.proporcao) + '</td>' +
+        '<td>' + escapeHtml(u.versao || '—') + statusBadge + '</td>' +
+      '</tr>';
+    }).join('');
   }
 
   function coletarDadosPorTipo(tipo) {
@@ -2101,6 +2170,18 @@ document.addEventListener('DOMContentLoaded', function() {
       allFornecedores = snap.val() || {};
       refreshFhFornecedorOptions();
       renderTable();
+    });
+    dbOnValue(db.ref('formulas'), function(snap) {
+      allFormulasMat = snap.val() || {};
+      if (editingKey) renderUsoMaterial(editingKey);
+    });
+    dbOnValue(db.ref('bom'), function(snap) {
+      allBomMat = snap.val() || {};
+      if (editingKey) renderUsoMaterial(editingKey);
+    });
+    dbOnValue(db.ref('produtos'), function(snap) {
+      allProdutosMat = snap.val() || {};
+      if (editingKey) renderUsoMaterial(editingKey);
     });
   });
 })();
