@@ -90,12 +90,70 @@ relevante para retomar o trabalho depois.
 - Sem indicação visual de que dá pra trocar o produto selecionado sem
   recarregar a página (funciona, só não é óbvio).
 
+## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
+
+Conceito grande, discutido em profundidade com o usuário em 2026-08-28,
+adiado explicitamente pra focar primeiro em azeitar Planejamento/PCP/
+Apontamento (ver `PLANO_PLANEJAMENTO_PCP.md`). Retomar com calma quando
+chegar a vez -- não é só trabalho técnico, é digitalizar um processo que
+hoje roda inteiramente em papel, sem sistema nenhum por trás (confirmado
+pelo usuário: "hoje não existe esse processo, nosso sistema é bem
+defasado, não está sendo utilizado"). Contexto completo, pra não perder
+nenhuma decisão já tomada na conversa:
+
+- **Ordens de Serviço "principais"** -- as 5 que já existem hoje via o
+  Gerador de OPs em Excel (Separação, Manipulação, Envase, Rotulagem,
+  Análise de Qualidade de Bulk/Produto Acabado), hoje "dissolvidas" dentro
+  dos postos de trabalho sem formalização própria. Objetivo declarado do
+  usuário: internalizar o Gerador de OPs no sistema assim que os cadastros
+  estiverem bem povoados (trabalho em andamento nesta sessão).
+- **Ordens de Serviço "acessórias"/de transformação** -- NÃO são etapas
+  fixas do processo padrão, são trabalho que a empresa quer **minimizar**:
+  ocorrem quando um fornecedor não é avisado corretamente da especificação
+  e a produção precisa "absorver o custo" transformando um material errado
+  no material certo (exemplo real dado pelo usuário: cortar uma válvula de
+  120mm pra virar uma válvula de 100mm, porque X assim vira Y, e Y é o que
+  o BOM do produto pede). Vínculo com a OP é **indireto**, via material, não
+  direto via pedido/OP -- modelo sugerido: tratar como uma "Fórmula/BOM em
+  miniatura" (Y = X + trabalho), reaproveitando a estrutura de cadastro que
+  Materiais/BOM já têm. Hoje a produção tem autonomia total pra fazer esse
+  tipo de trabalho sem registro nenhum -- é dinheiro/tempo perdido invisível,
+  provavelmente contaminando qualquer métrica de eficiência sem ninguém
+  saber a causa real.
+- **Roteiro de produção condicional por SKU + gate de disponibilidade via
+  "mínimo entre etapas obrigatórias"** -- alguns SKUs têm etapas que
+  legitimamente rodam fora de ordem por restrição de capacidade (exemplo
+  real: "fixador de maquiagem" não cabe celofanar em linha, gargalo de
+  produção -- envasa tudo primeiro, celofana depois, por fora). Modelo
+  proposto: quantidade "pronta pra estoque/faturamento" = a MENOR
+  quantidade entre todas as etapas obrigatórias do roteiro daquele produto,
+  não importa a ordem em que rodaram. Resolve o problema real relatado: a
+  ficha de Envase hoje fica "não finalizada" enquanto não celofana tudo
+  (causa confusão e demora no fechamento do lote) porque celofanagem não é
+  uma etapa própria, está pendurada dentro do fechamento do Envase.
+- **Ficha de Separação hoje mistura dois momentos distintos** -- separação
+  de materiais (início da cadeia, ligado à emissão da OP) e conferência de
+  produto acabado pra estoque/faturamento (fim da cadeia) -- numa única
+  ficha ambígua, preenchida só parcialmente. No modelo novo viram duas
+  etapas independentes; a segunda (conferência de produto acabado) deixa de
+  ser manual e passa a ser calculada pelo "mínimo entre etapas" acima.
+- **Estoque de produto acabado incremental**, alimentado pelo gate acima --
+  fecha a lacuna já identificada de "sem estoque de produto acabado" (Fase
+  4 só cobre matéria-prima/embalagem consumida; Logística ainda controla
+  produto acabado numa planilha separada).
+- **Faturamento parcial por acúmulo até gatilho de coleta** -- confirmado
+  pelo usuário que faturamento já é parcial na prática (ex: a cada 3.000kg
+  acumulados dispara uma coleta e o faturamento correspondente) -- o saldo
+  de estoque de produto acabado acima seria o que acumula até bater esse
+  gatilho, integrando com o agendamento de coleta que Logística já
+  acompanha.
+
 ## Estoque / Produção
 
-- **Sem estoque de produto acabado** (finished-goods) — o estoque que
-  existe hoje (Fase 4) só cobre matéria-prima/embalagem consumida em
-  produção. Logística ainda controla produto acabado numa planilha
-  separada.
+- **Sem estoque de produto acabado** (finished-goods) — ver seção "Ordens
+  de Serviço / Roteiro de Produção / Estoque de Produto Acabado" acima,
+  que cobre esse ponto em detalhe (o gate de disponibilidade proposto ali
+  é o que alimentaria esse estoque).
 - **Devolução ao fornecedor como movimento de estoque** — identificado
   durante o design do estoque físico (Fase 4), nunca implementado. Hoje só
   existe entrada (recebimento), consumo (apontamento), perda e ajuste
