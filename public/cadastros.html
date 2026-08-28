@@ -2483,7 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var allFornecedores = {};
   var allClientesForn = {}; // cópia local só de leitura, pro vínculo fornecedor×cliente
   var editingKey = null;
-  var cnpjsAdicionaisStaged = {}; // pushKey -> {cnpj, obs} -- staged em memória até salvar, mesmo padrão de fornecedoresHomologadosStaged (Materiais)
+  var cnpjsAdicionaisStaged = []; // [{cnpj, obs}] -- staged em memória até salvar (array, não referencia outro cadastro como fornecedoresHomologadosStaged referencia)
   var fnSortable = makeSortableTable(document.getElementById('fnThead-forn'), 'razaoSocial', 'asc');
 
   // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
@@ -2532,7 +2532,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (filtRevisado === 'revisado' && !revisado) return false;
       if (filtRevisado === 'pendente' && revisado) return false;
       if (filtTipo && tiposFornecedor(f).indexOf(filtTipo) === -1) return false;
-      if (search && (norm(f.razaoSocial) + ' ' + norm(f.nomeFantasia) + ' ' + norm(f.cnpj)).indexOf(search) === -1) return false;
+      var cnpjsExtra = (f.cnpjsAdicionais || []).map(function(c) { return c.cnpj; }).join(' ');
+      if (search && (norm(f.razaoSocial) + ' ' + norm(f.nomeFantasia) + ' ' + norm(f.cnpj) + ' ' + norm(cnpjsExtra)).indexOf(search) === -1) return false;
       return true;
     });
     rows = fnSortable.applySort(rows, function(entry, field) {
@@ -2569,10 +2570,14 @@ document.addEventListener('DOMContentLoaded', function() {
         vinculoBadges += ' <span class="badge badge-blue" title="Também cadastrado como cliente">🔗 Também cliente</span>';
       }
       var pct = calcularPreenchimento(f, CAMPOS_PREENCHIMENTO_FORN).pct;
+      var cnpjsAdic = f.cnpjsAdicionais || [];
+      var cnpjExtraBadge = cnpjsAdic.length
+        ? ' <span class="badge badge-blue" title="' + escapeAttr(cnpjsAdic.map(function(c) { return c.cnpj + (c.obs ? ' (' + c.obs + ')' : ''); }).join('\n')) + '">+' + cnpjsAdic.length + '</span>'
+        : '';
       return '<tr>' +
         '<td>' + escapeHtml(f.razaoSocial || '—') + vinculoBadges + '</td>' +
         '<td>' + escapeHtml(f.nomeFantasia || '—') + '</td>' +
-        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(f.cnpj || '—') + '</td>' +
+        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(f.cnpj || '—') + cnpjExtraBadge + '</td>' +
         '<td style="font-size:12px">' + escapeHtml(tipoLabel) + '</td>' +
         '<td style="font-size:12px">' + escapeHtml(local || '—') + '</td>' +
         '<td style="font-size:12px">' + escapeHtml(contato || '—') + '</td>' +
@@ -2614,6 +2619,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fnCidade-forn').value = f.cidade || '';
     document.getElementById('fnUf-forn').value = f.uf || '';
     document.getElementById('fnCertificacoes-forn').value = f.certificacoes || '';
+    cnpjsAdicionaisStaged = key ? JSON.parse(JSON.stringify(f.cnpjsAdicionais || [])) : [];
+    document.getElementById('fnCnpjAdd-forn').value = '';
+    document.getElementById('fnCnpjAddObs-forn').value = '';
+    renderCnpjsAdicionais();
     document.getElementById('fnAtivo-forn').checked = f.ativo !== false;
     // Fornecedor novo (criado do zero, alguém digitando tudo agora) já
     // nasce revisado -- só quem vem de importação em lote precisa da
@@ -2632,6 +2641,45 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalFornecedor-forn').classList.add('open');
   }
   function closeModalFornecedor() { document.getElementById('modalFornecedor-forn').classList.remove('open'); editingKey = null; }
+
+  // ── CNPJs adicionais ─────────────────────────────────────────────────
+  // Achado do usuário: uma relação comercial só (mesmo contato, mesma
+  // condição de pagamento, mesmas homologações de material) às vezes
+  // emite nota por mais de um CNPJ -- ex: matriz + filiais vendendo
+  // categorias diferentes. Em vez de 3 cadastros de fornecedor ligados por
+  // matriz/filial (que duplicaria contato/condição/homologado 3x), fica 1
+  // cadastro só com uma lista de CNPJs extra. matriz/filial continua
+  // existindo pra quando for de verdade OUTRA empresa (contato próprio).
+  function renderCnpjsAdicionais() {
+    var tbody = document.getElementById('fnCnpjsBody-forn');
+    if (!cnpjsAdicionaisStaged.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhum CNPJ adicional.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = cnpjsAdicionaisStaged.map(function(c, i) {
+      return '<tr>' +
+        '<td style="font-family:monospace;font-size:12px">' + escapeHtml(c.cnpj) + '</td>' +
+        '<td>' + escapeHtml(c.obs || '—') + '</td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-cnpj-forn" data-idx="' + i + '" title="Remover">✕</button></td>' +
+      '</tr>';
+    }).join('');
+    tbody.querySelectorAll('.btn-rm-cnpj-forn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        cnpjsAdicionaisStaged.splice(parseInt(btn.getAttribute('data-idx'), 10), 1);
+        renderCnpjsAdicionais();
+      });
+    });
+  }
+  function addCnpjAdicional() {
+    var cnpj = document.getElementById('fnCnpjAdd-forn').value.trim();
+    if (!cnpj) { showAlert('Informe o CNPJ antes de adicionar.', 'danger'); return; }
+    var obs = document.getElementById('fnCnpjAddObs-forn').value.trim();
+    cnpjsAdicionaisStaged.push({ cnpj: cnpj, obs: obs });
+    document.getElementById('fnCnpjAdd-forn').value = '';
+    document.getElementById('fnCnpjAddObs-forn').value = '';
+    renderCnpjsAdicionais();
+  }
+
   function saveFornecedor() {
     var razaoSocial = document.getElementById('fnRazaoSocial-forn').value.trim();
     if (!razaoSocial) { showAlert('Razão social é obrigatória.', 'danger'); return; }
@@ -2640,6 +2688,7 @@ document.addEventListener('DOMContentLoaded', function() {
       razaoSocial: razaoSocial,
       nomeFantasia: document.getElementById('fnNomeFantasia-forn').value.trim(),
       cnpj: document.getElementById('fnCnpj-forn').value.trim(),
+      cnpjsAdicionais: cnpjsAdicionaisStaged,
       // Array, não mais 1 valor só -- um fornecedor pode vender em mais de
       // uma categoria (ex: embalagem + MP), ver tiposFornecedor() acima.
       // `tipo` (singular) fica de fora do gravado daqui pra frente -- quem
@@ -2674,6 +2723,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalFornecedorCancel-forn').addEventListener('click', closeModalFornecedor);
     document.getElementById('modalFornecedorSave-forn').addEventListener('click', saveFornecedor);
     document.getElementById('modalFornecedor-forn').addEventListener('click', function(e) { if (e.target === this) closeModalFornecedor(); });
+    document.getElementById('btnAddCnpj-forn').addEventListener('click', addCnpjAdicional);
 
     var _t = null;
     document.getElementById('fnSearch-forn').addEventListener('input', function() {
