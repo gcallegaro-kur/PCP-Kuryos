@@ -1155,6 +1155,21 @@
               <input type="text" id="fnCondicaoPagamento-forn" class="uc" placeholder="Ex: 30/60/90 dias">
             </div>
           </div>
+
+          <div class="section-label">CNPJs adicionais</div>
+          <div class="section-note">Use quando esta MESMA relação comercial (contato, condição de pagamento, homologações) emite nota fiscal por mais de um CNPJ -- ex: uma matriz com filiais que vendem categorias diferentes. Continua sendo 1 cadastro só, não 3: os fornecedores homologados vinculados aos materiais valem pra todos os CNPJs daqui. Se for uma empresa DIFERENTE (contato próprio, preço próprio, precisa ser avaliada separado), use "Vínculos" → matriz/filial logo abaixo em vez disto -- aí sim como 2 cadastros ligados.</div>
+          <div class="table-wrap" style="margin-bottom:10px">
+            <table>
+              <thead><tr><th>CNPJ</th><th>Razão social / observação</th><th style="width:40px"></th></tr></thead>
+              <tbody id="fnCnpjsBody-forn"><tr><td colspan="3" class="no-data">Nenhum CNPJ adicional.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="form-grid" style="align-items:end">
+            <div class="form-group"><label>CNPJ</label><input type="text" id="fnCnpjAdd-forn" placeholder="00.000.000/0000-00"></div>
+            <div class="form-group"><label>Razão social / observação (opcional)</label><input type="text" id="fnCnpjAddObs-forn" class="uc" placeholder="Ex: Filial SP -- embalagens"></div>
+            <div class="form-group"><button type="button" class="btn btn-ghost btn-sm" id="btnAddCnpj-forn" style="width:100%">+ Adicionar</button></div>
+          </div>
+
           <div class="section-label">Contato</div>
           <div class="form-grid">
             <div class="form-group">
@@ -1932,22 +1947,39 @@ document.addEventListener('DOMContentLoaded', function() {
   // quais produtos dependem dele -- útil antes de descontinuar/trocar algo.
   // Cálculo puro (sem DOM) -- reusado pela tabela (coluna "Usado em", badge
   // com contagem + tooltip) e pelo modal (renderUsoMaterial, detalhe cheio).
+  // codProduto/versao vêm do próprio campo do registro quando presentes;
+  // alguns bom/{key} e especificacoes/{key} antigos nasceram sem isso
+  // (criados de forma implícita, só pelo primeiro item adicionado, antes
+  // de novaVersaoAPartirDe/btnNovaVersaoClick passarem a gravar os dois
+  // campos -- achado nesta sessão) -- pra esses, deriva da própria CHAVE
+  // do registro (sempre "{codProduto}__{versao}", mesmo formato de
+  // chaveVersao em shared/utils.js), então funciona mesmo pros registros
+  // antigos ainda não corrigidos por um backfill.
+  function codProdutoEVersao(key, registro) {
+    if (registro && registro.codProduto) return { codProduto: registro.codProduto, versao: registro.versao };
+    var partes = String(key).split('__');
+    return { codProduto: partes[0], versao: partes.slice(1).join('__') || null };
+  }
   function calcularUsoMaterial(mpCodigo) {
     if (!mpCodigo) return [];
     var usos = [];
-    Object.values(allFormulasMat).forEach(function(f) {
+    Object.entries(allFormulasMat).forEach(function(entry) {
+      var key = entry[0], f = entry[1];
       if (!f || !f.itens) return;
+      var cv = codProdutoEVersao(key, f);
       Object.values(f.itens).forEach(function(it) {
         if (it && it.mpCodigo === mpCodigo) {
-          usos.push({ codProduto: f.codProduto, versao: f.versao, status: f.status || null, onde: 'Fórmula', proporcao: it.percentualMM != null ? (fmtNum(it.percentualMM) + '%') : '—' });
+          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: f.status || null, onde: 'Fórmula', proporcao: it.percentualMM != null ? (fmtNum(it.percentualMM) + '%') : '—' });
         }
       });
     });
-    Object.values(allBomMat).forEach(function(b) {
+    Object.entries(allBomMat).forEach(function(entry) {
+      var key = entry[0], b = entry[1];
       if (!b || !b.itens) return;
+      var cv = codProdutoEVersao(key, b);
       Object.values(b.itens).forEach(function(it) {
         if (it && it.materialCodigo === mpCodigo) {
-          usos.push({ codProduto: b.codProduto, versao: b.versao, status: null, onde: 'BOM', proporcao: it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
+          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: null, onde: 'BOM', proporcao: it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
         }
       });
     });
@@ -2451,6 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var allFornecedores = {};
   var allClientesForn = {}; // cópia local só de leitura, pro vínculo fornecedor×cliente
   var editingKey = null;
+  var cnpjsAdicionaisStaged = {}; // pushKey -> {cnpj, obs} -- staged em memória até salvar, mesmo padrão de fornecedoresHomologadosStaged (Materiais)
   var fnSortable = makeSortableTable(document.getElementById('fnThead-forn'), 'razaoSocial', 'asc');
 
   // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
@@ -3538,7 +3571,18 @@ document.addEventListener('DOMContentLoaded', function() {
       criadoPor: currentUserNome(),
       criadoEm: new Date().toISOString()
     };
-    db.ref('formulas/' + key).set(data).then(function() {
+    // Achado do usuário: bom/{key} e especificacoes/{key} nunca tinham
+    // codProduto/versao gravados -- só nasciam de forma implícita, na
+    // primeira vez que alguém adicionava um item (db.ref('bom/'+key+
+    // '/itens').push(...)), então o Firebase criava o nó pai só com
+    // `itens`, sem mais nada. Isso quebrava silenciosamente qualquer
+    // leitura que precisasse do campo (não da CHAVE) -- ex: "Usado em"
+    // em Materiais. Cria os 3 juntos agora, mesmo formato.
+    var updates = {};
+    updates['formulas/' + key] = data;
+    updates['bom/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: {} };
+    updates['especificacoes/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: {} };
+    db.ref().update(updates).then(function() {
       showAlert('Versão ' + novaVersao + ' criada (rascunho).', 'success');
     }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
   }
@@ -3562,8 +3606,8 @@ document.addEventListener('DOMContentLoaded', function() {
       aprovadoPD: null, aprovadoQualidade: null, substituiVersao: origemVersao,
       criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
     };
-    updates['bom/' + novaKey] = { itens: origemBom.itens || {} };
-    updates['especificacoes/' + novaKey] = { itens: origemEspec.itens || {} };
+    updates['bom/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: origemBom.itens || {} };
+    updates['especificacoes/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: origemEspec.itens || {} };
 
     db.ref().update(updates).then(function() {
       showAlert('Versão ' + novaVersao + ' criada a partir de ' + origemVersao + '.', 'success');
