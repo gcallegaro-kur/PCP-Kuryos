@@ -80,13 +80,22 @@ apontamento de produção.
 
 ## 3. Decisões já tomadas com o usuário
 
-- **Granularidade do planejamento: 15 minutos, não 5.** A equipe já tem
-  dificuldade de manter a rotina de apontamento hoje (que é por hora) —
-  cair pra 5 minutos sem captura automática (sensor/contador) pioraria
-  esse problema em vez de resolver. 15 minutos é o meio-termo: detecta
-  desvio cedo sem multiplicar o esforço manual. Se no futuro houver
-  contagem automática, 5 minutos ou tempo real passam a fazer sentido sem
-  custo de operador.
+- **Granularidade de 15 minutos é do PLANEJAMENTO (grade/slots e ciclo de
+  acompanhamento do sistema), não do apontamento.** Correção importante do
+  usuário: são duas coisas separadas. Os 15 minutos valem pra como a grade
+  de programação é fatiada e pra de quanto em quanto tempo o sistema
+  reavalia/atualiza o andamento contra o planejado (monitoramento do lado
+  do PCP/sistema). **O apontamento em si — o que a produção efetivamente
+  registra — fica só em dois eventos por OP, por enquanto: abertura e
+  encerramento.** Sem check-in intermediário obrigatório pro operador. É
+  essa simplificação (não a granularidade da grade) que ataca a
+  dificuldade real relatada de manter a rotina de apontamento — o esforço
+  manual do operador não cresce com a granularidade do planejamento, os
+  dois são independentes. Paradas de linha continuam via Andon
+  (`estado_linhas`/`paradas_historico`), que já é um mecanismo à parte do
+  apontamento de quantidade. Se no futuro houver contagem automática
+  (sensor/contador), apontamento intermediário mais granular passa a fazer
+  sentido sem custo de operador — não antes disso.
 - **Conclusão de OP: 100% manual pelo PCP no início, sem exceção — não
   gated por desvio.** Volume é baixo (poucas OPs/dia, 3 linhas), e o
   objetivo é construir a rotina/fluxo bem amarrado primeiro. Automação por
@@ -144,8 +153,11 @@ retrabalho.
    confiança.
 2. **Popular `dataInicioPlanejada`/`dataFimPlanejada` de verdade na
    emissão da OP** — pré-requisito de todo o resto desta lista.
-3. **Travar apontamento na OP programada** — baixo risco, resolve a dor
-   que a equipe já sente hoje na rotina de apontamento.
+3. **Travar apontamento na OP programada, com o modelo simplificado de
+   dois eventos (abertura/encerramento)** — baixo risco, resolve a dor que
+   a equipe já sente hoje na rotina de apontamento (hoje é por hora; passa
+   a ser só abrir a OP programada e encerrar quando terminar, sem check-in
+   intermediário obrigatório).
 4. **Somar paradas reais ao tempo estimado + alerta de atraso (15min)** —
    fecha gap de dado já existente, reaproveita o cron já existente.
 5. **Redesenho das duas telas de planejamento** (Quantidades / OPs) sobre
