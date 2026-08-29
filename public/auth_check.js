@@ -70,7 +70,8 @@ const pageAccessRules = {
   // hierarquia é desenhada na Fase 2 (Avaliação de Desempenho).
   'rh_cadastros.html': ['rh', 'gestor'],
   'rh_avaliacao.html': ['rh', 'gestor'],
-  'rh_ferias.html': ['rh', 'gestor']
+  'rh_ferias.html': ['rh', 'gestor'],
+  'rh_dashboard.html': ['rh']
 };
 
 // Extrai o nome da página atual
@@ -265,8 +266,10 @@ window.currentUser = null;
               // Cada "família" de papel tem sua própria home -- mandar um
               // papel de RH pra dashboard.html (que ele também não acessa)
               // só trocaria um Acesso Negado por outro, em loop.
-              if (role === 'rh' || role === 'gestor') {
-                window.location.href = 'rh_cadastros.html';
+              if (role === 'rh') {
+                window.location.href = 'rh_dashboard.html';
+              } else if (role === 'gestor') {
+                window.location.href = 'rh_avaliacao.html';
               } else if (role === 'production' || role === 'rotulagem') {
                 window.location.href = 'form.html';
               } else {
@@ -433,13 +436,18 @@ function renderUnifiedNavbar(user) {
   // Documentos, Férias etc. entram em fases futuras (ver plano do módulo).
   const rhGroup = !isRH ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Recursos Humanos</div>' +
+    (user.role === 'rh' ? ktLink('rh_dashboard.html', 'dashboard', 'Dashboard', activePage) : '') +
     ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
     ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage) +
     ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
     '</div>';
 
+  // RH Central pousa no Dashboard (é a "tela inicial" dele, por decisão da
+  // especificação); Gestor não acessa o Dashboard nesta fase -- pousa na
+  // Avaliação, sua ferramenta principal.
+  var rhHome = user.role === 'rh' ? 'rh_dashboard.html' : 'rh_avaliacao.html';
   sidebar.innerHTML =
-    '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? 'rh_cadastros.html' : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
+    '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? rhHome : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
     analisesGroup + pcpGroup + producaoGroup + usersGroup + rhGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +

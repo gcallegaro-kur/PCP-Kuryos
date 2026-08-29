@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RH — Dashboard</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .section-label{font-size:12px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px}
+    .section-label:first-child{margin-top:0}
+    .grid-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:6px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--shadow);border-left:4px solid var(--primary)}
+    .stat-val{font-size:26px;font-weight:800;letter-spacing:-.01em}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:4px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary);padding:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .row-list{display:flex;flex-direction:column;gap:6px}
+    .row-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface-2);border-radius:8px;font-size:13px}
+    .row-item b{font-weight:700}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .section-note.pendente{border-left-color:var(--warning);background:color-mix(in srgb, var(--warning) 8%, var(--card))}
+    .cols-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:800px){.cols-2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+
+<div class="header">
+  <div>
+    <h1>Dashboard do RH</h1>
+    <div class="header-sub">Consolidado de Cadastro, Avaliação e Férias -- só RH Central.</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+
+  <div class="section-label">Alertas</div>
+  <div class="card">
+    <div class="row-list" id="alertasList-dash"><div class="no-data">Carregando...</div></div>
+  </div>
+
+  <div class="section-label">Quadro de pessoas</div>
+  <div class="grid-stats">
+    <div class="stat"><div class="stat-val" id="statHeadcount-dash">—</div><div class="stat-lbl">Headcount ativo</div></div>
+    <div class="stat"><div class="stat-val" id="statAdmissoes-dash">—</div><div class="stat-lbl">Admissões (30d)</div></div>
+    <div class="stat"><div class="stat-val" id="statDesligamentos-dash">—</div><div class="stat-lbl">Desligamentos (30d)</div></div>
+    <div class="stat"><div class="stat-val" id="statTurnover-dash">—</div><div class="stat-lbl">Turnover (30d)</div></div>
+  </div>
+  <div class="cols-2">
+    <div class="card">
+      <div class="card-title">Por sexo</div>
+      <div class="row-list" id="porSexo-dash"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Por tipo de contrato</div>
+      <div class="row-list" id="porContrato-dash"></div>
+    </div>
+  </div>
+
+  <div class="section-label">Custos de pessoal</div>
+  <div class="section-note pendente">⚑ Cálculo completo e confirmado só para CLT (fórmula da especificação, seção 3.12). PJ soma salário+VT sem o "bônus adicional" (percentual pendente -- D-10). Temporário/Aprendiz/Terceirizado/Outro ainda não têm regra de custo definida (D-10) -- esses colaboradores contam no headcount mas ficam de fora da soma de custo abaixo.</div>
+  <div class="grid-stats">
+    <div class="stat"><div class="stat-val" id="statSalarioMedio-dash">—</div><div class="stat-lbl">Salário médio</div></div>
+    <div class="stat"><div class="stat-val" id="statCustoMedio-dash">—</div><div class="stat-lbl">Custo médio/colaborador</div></div>
+    <div class="stat"><div class="stat-val" id="statCustoTotal-dash">—</div><div class="stat-lbl">Custo total estimado</div></div>
+    <div class="stat"><div class="stat-val" id="statForaRegra-dash">—</div><div class="stat-lbl">Sem regra de custo (D-10)</div></div>
+  </div>
+
+  <div class="section-label">Desempenho</div>
+  <div class="cols-2">
+    <div class="card">
+      <div class="card-title">Nota geral média da empresa</div>
+      <div class="stat-val" id="notaMediaEmpresa-dash" style="font-size:32px">—</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Distribuição por faixa</div>
+      <div class="row-list" id="porFaixa-dash"><div class="no-data">Sem avaliações registradas ainda.</div></div>
+    </div>
+  </div>
+
+  <div class="section-label">Clima organizacional &amp; Canal de denúncia</div>
+  <div class="card">
+    <div class="no-data">Ainda não implementados (Fase 5 do módulo de RH) -- ver plano.</div>
+  </div>
+
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+try { db.ref('.info/connected').on('value', function(snap) { setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...'); }); }
+catch (err) { setStatus(false, 'Erro'); console.error(err); }
+
+function fmtMoeda(v) { return 'R$ ' + fmtNum(Math.round((v || 0) * 100) / 100); }
+
+// ── Custo mensal por colaborador (seção 3.12 da especificação) ──────────
+// Só CLT tem fórmula 100% confirmada -- os demais tipos ficam marcados
+// como "sem regra" (D-10) em vez de arriscar um número errado.
+function custoMensalColaborador(c) {
+  var salario = c.salarioBase || 0;
+  var va = c.valeAlimentacao || 0;
+  var vt = c.valeTransporte || 0;
+  if (c.tipoContrato === 'CLT') {
+    var fgts = salario * 0.08;
+    var decimoTerceiro = salario * 0.0833;
+    var fgtsSobre13 = salario * 0.0067;
+    var feriasMaisUmTerco = salario * 0.0278;
+    var fgtsSobreFerias = feriasMaisUmTerco * 0.08;
+    var multaFgts = salario * 0.032;
+    var descontoVt = vt > 0 ? -(salario * 0.06) : 0;
+    return salario + va + vt + fgts + decimoTerceiro + fgtsSobre13 + feriasMaisUmTerco + fgtsSobreFerias + multaFgts + descontoVt;
+  }
+  if (c.tipoContrato === 'Estágio') return salario + vt;
+  if (c.tipoContrato === 'PJ') return salario + vt; // ⚑ bônus adicional D-10 não aplicado (percentual não confirmado)
+  return null; // Temporário/Aprendiz/Terceirizado/Outro -- ⚑ D-10, sem regra ainda
+}
+
+function diasDesde(iso) {
+  if (!iso) return Infinity;
+  return Math.floor((Date.now() - new Date(iso + 'T00:00:00').getTime()) / 86400000);
+}
+function aniversarioNoMes(dataIso) {
+  if (!dataIso) return false;
+  var d = new Date(dataIso + 'T00:00:00');
+  return d.getMonth() === new Date().getMonth();
+}
+
+function renderQuadroPessoas(colaboradores) {
+  var ativos = colaboradores.filter(function(c) { return (c.status || 'Ativo') === 'Ativo'; });
+  var admissoes30 = colaboradores.filter(function(c) { return c.dataAdmissao && diasDesde(c.dataAdmissao) <= 30; }).length;
+  var desligamentos30 = colaboradores.filter(function(c) { return c.status === 'Desligado' && c.dataDesligamento && diasDesde(c.dataDesligamento) <= 30; }).length;
+  var baseTurnover = ativos.length + desligamentos30;
+  var turnover = baseTurnover > 0 ? Math.round((desligamentos30 / baseTurnover) * 1000) / 10 : 0;
+
+  document.getElementById('statHeadcount-dash').textContent = fmtNum(ativos.length);
+  document.getElementById('statAdmissoes-dash').textContent = fmtNum(admissoes30);
+  document.getElementById('statDesligamentos-dash').textContent = fmtNum(desligamentos30);
+  document.getElementById('statTurnover-dash').textContent = turnover + '%';
+
+  var porSexo = {};
+  ativos.forEach(function(c) { var s = c.sexo || 'Não informado'; porSexo[s] = (porSexo[s] || 0) + 1; });
+  document.getElementById('porSexo-dash').innerHTML = Object.entries(porSexo).map(function(e) {
+    return '<div class="row-item"><span>' + escapeHtml(e[0]) + '</span><b>' + fmtNum(e[1]) + '</b></div>';
+  }).join('') || '<div class="no-data">Sem dados.</div>';
+
+  var porContrato = {};
+  ativos.forEach(function(c) { var t = c.tipoContrato || 'Não informado'; porContrato[t] = (porContrato[t] || 0) + 1; });
+  document.getElementById('porContrato-dash').innerHTML = Object.entries(porContrato).map(function(e) {
+    return '<div class="row-item"><span>' + escapeHtml(e[0]) + '</span><b>' + fmtNum(e[1]) + '</b></div>';
+  }).join('') || '<div class="no-data">Sem dados.</div>';
+
+  // Custos
+  var calculaveis = ativos.map(custoMensalColaborador).filter(function(v) { return v != null; });
+  var foraDaRegra = ativos.length - calculaveis.length;
+  var salarios = ativos.map(function(c) { return c.salarioBase || 0; }).filter(function(v) { return v > 0; });
+  var salarioMedio = salarios.length ? salarios.reduce(function(s, v) { return s + v; }, 0) / salarios.length : 0;
+  var custoMedio = calculaveis.length ? calculaveis.reduce(function(s, v) { return s + v; }, 0) / calculaveis.length : 0;
+  var custoTotal = calculaveis.reduce(function(s, v) { return s + v; }, 0);
+  document.getElementById('statSalarioMedio-dash').textContent = fmtMoeda(salarioMedio);
+  document.getElementById('statCustoMedio-dash').textContent = fmtMoeda(custoMedio);
+  document.getElementById('statCustoTotal-dash').textContent = fmtMoeda(custoTotal);
+  document.getElementById('statForaRegra-dash').textContent = fmtNum(foraDaRegra) + ' colab.';
+
+  // Alertas: aniversários do mês (natalício + empresa)
+  var alertas = [];
+  ativos.forEach(function(c) {
+    if (aniversarioNoMes(c.dataNascimento)) alertas.push({ tipo: 'Aniversário', texto: c.nome + ' faz aniversário este mês' });
+    if (aniversarioNoMes(c.dataAdmissao)) alertas.push({ tipo: 'Tempo de casa', texto: c.nome + ' completa aniversário de empresa este mês' });
+  });
+  return alertas;
+}
+
+function renderDesempenho(avaliacoes) {
+  if (!avaliacoes.length) {
+    document.getElementById('notaMediaEmpresa-dash').textContent = '—';
+    return;
+  }
+  var media = avaliacoes.reduce(function(s, a) { return s + (a.notaGeral || 0); }, 0) / avaliacoes.length;
+  document.getElementById('notaMediaEmpresa-dash').textContent = (Math.round(media * 100) / 100).toString().replace('.', ',');
+  var porFaixa = {};
+  avaliacoes.forEach(function(a) { var f = a.faixaNome || 'Sem faixa'; porFaixa[f] = (porFaixa[f] || 0) + 1; });
+  document.getElementById('porFaixa-dash').innerHTML = Object.entries(porFaixa).map(function(e) {
+    return '<div class="row-item"><span>' + escapeHtml(e[0]) + '</span><b>' + fmtNum(e[1]) + '</b></div>';
+  }).join('');
+}
+
+function renderAlertas(alertasQuadro, feriasPendentes) {
+  var lista = [];
+  if (feriasPendentes > 0) lista.push('<div class="row-item"><span>' + fmtNum(feriasPendentes) + ' solicitação(ões) de férias aguardando aprovação</span><span class="badge badge-orange">Pendente</span></div>');
+  alertasQuadro.forEach(function(a) { lista.push('<div class="row-item"><span>' + escapeHtml(a.texto) + '</span><span class="badge badge-gray">' + escapeHtml(a.tipo) + '</span></div>'); });
+  document.getElementById('alertasList-dash').innerHTML = lista.join('') || '<div class="no-data">Nenhum alerta no momento.</div>';
+}
+
+var _dados = { colaboradores: [], avaliacoes: [], feriasPendentes: 0, loaded: { col: false, av: false, fer: false } };
+function tentarRenderizar() {
+  if (!_dados.loaded.col) return;
+  var alertasQuadro = renderQuadroPessoas(_dados.colaboradores);
+  if (_dados.loaded.av) renderDesempenho(_dados.avaliacoes);
+  if (_dados.loaded.fer) renderAlertas(alertasQuadro, _dados.feriasPendentes);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  dbOnValue(db.ref('rh_colaboradores'), function(snap) {
+    _dados.colaboradores = Object.values(snap.val() || {});
+    _dados.loaded.col = true;
+    tentarRenderizar();
+  }, { onError: function() {
+    document.getElementById('alertasList-dash').innerHTML = '<div class="no-data">Este painel é visível só para RH Central.</div>';
+  } });
+  dbOnValue(db.ref('rh_avaliacoes'), function(snap) {
+    _dados.avaliacoes = Object.values(snap.val() || {});
+    _dados.loaded.av = true;
+    tentarRenderizar();
+  });
+  dbOnValue(db.ref('rh_ferias'), function(snap) {
+    var todas = Object.values(snap.val() || {});
+    _dados.feriasPendentes = todas.filter(function(f) { return f.status === 'Solicitada' || f.status === 'Aprovada pelo gestor'; }).length;
+    _dados.loaded.fer = true;
+    tentarRenderizar();
+  });
+});
+</script>
+
+</body>
+</html>
