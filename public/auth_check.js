@@ -43,35 +43,40 @@ window.cycleKuryosTheme = function() {
 };
 
 // --- Perfis de Acesso Permitidos por Página ---
+// 'pcp' (novo, pedido do usuário): vê tudo do PCP -- mesmo acesso de
+// página que 'admin' sempre teve nas páginas de produção/planejamento/
+// cadastros/compras/logística -- só NÃO entra em nenhuma página de RH.
+// 'admin' virou o papel "vê literalmente tudo, sem exceção" -- ganhou
+// acesso às páginas de RH também (ver grupo rh_* abaixo), que antes eram
+// só de 'rh'/'gestor'.
 const pageAccessRules = {
   'form.html': ['production', 'admin', 'rotulagem'],
-  'planejamento.html': ['production', 'admin'],
-  'horizonte.html': ['production', 'admin'],
-  'dashboard.html': ['production', 'admin'],
-  'dashboard_analise.html': ['production', 'admin'],
-  'ops.html': ['production', 'admin'],
-  'historico.html': ['production', 'admin'],
-  'pedidos.html': ['admin'],
-  'produtos.html': ['admin'],
-  'insumos.html': ['admin'],
-  'usuarios.html': ['admin'],
-  'admin.html': ['admin'],
-  'clientes.html': ['admin'],
-  'materiais.html': ['admin'],
-  'formulas.html': ['admin'],
-  'cadastros.html': ['admin'],
-  'emitir_op.html': ['admin'],
-  'compras.html': ['admin'],
-  'logistica.html': ['admin'],
-  // Módulo de RH -- login completamente separado do PCP (decisão do
-  // usuário: sem múltiplos papéis por pessoa). 'gestor' já entra aqui
-  // porque tem login desde a Fase 1, mesmo sem ainda ler
-  // rh_colaboradores (ver database.rules.json) -- a leitura por
-  // hierarquia é desenhada na Fase 2 (Avaliação de Desempenho).
-  'rh_cadastros.html': ['rh', 'gestor'],
-  'rh_avaliacao.html': ['rh', 'gestor'],
-  'rh_ferias.html': ['rh', 'gestor'],
-  'rh_dashboard.html': ['rh']
+  'planejamento.html': ['production', 'admin', 'pcp'],
+  'horizonte.html': ['production', 'admin', 'pcp'],
+  'dashboard.html': ['production', 'admin', 'pcp'],
+  'dashboard_analise.html': ['production', 'admin', 'pcp'],
+  'ops.html': ['production', 'admin', 'pcp'],
+  'historico.html': ['production', 'admin', 'pcp'],
+  'pedidos.html': ['admin', 'pcp'],
+  'produtos.html': ['admin', 'pcp'],
+  'insumos.html': ['admin', 'pcp'],
+  'usuarios.html': ['admin', 'pcp'],
+  'admin.html': ['admin', 'pcp'],
+  'clientes.html': ['admin', 'pcp'],
+  'materiais.html': ['admin', 'pcp'],
+  'formulas.html': ['admin', 'pcp'],
+  'cadastros.html': ['admin', 'pcp'],
+  'emitir_op.html': ['admin', 'pcp'],
+  'compras.html': ['admin', 'pcp'],
+  'logistica.html': ['admin', 'pcp'],
+  // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
+  // (decisão do usuário: sem múltiplos papéis por pessoa). 'admin' entra
+  // aqui também (pedido do usuário: ADM vê tudo, sem exceção) -- 'pcp'
+  // deliberadamente NÃO entra em nenhuma linha abaixo.
+  'rh_cadastros.html': ['rh', 'gestor', 'admin'],
+  'rh_avaliacao.html': ['rh', 'gestor', 'admin'],
+  'rh_ferias.html': ['rh', 'gestor', 'admin'],
+  'rh_dashboard.html': ['rh', 'admin']
 };
 
 // Extrai o nome da página atual
@@ -259,6 +264,7 @@ window.currentUser = null;
             if (allowedRoles && !allowedRoles.includes(role)) {
               clearAuthWatchdog();
               const deniedRoleLabel = role === 'admin' ? 'Administrador'
+                : role === 'pcp' ? 'PCP'
                 : role === 'rh' ? 'RH Central'
                 : role === 'gestor' ? 'Gestor de Linha'
                 : role === 'rotulagem' ? 'Rotulagem' : 'Produção';
@@ -387,17 +393,23 @@ function renderUnifiedNavbar(user) {
   sidebar.id = 'unified-navbar';
   sidebar.className = 'kt-sidebar';
 
-  // Módulo de RH -- login completamente separado do PCP (decisão do
-  // usuário). Papel rh/gestor nunca vê nenhum link de PCP/Produção, e
-  // vice-versa -- os dois grupos de link são mutuamente exclusivos, não
-  // uma questão de esconder alguns itens dentro do mesmo menu.
+  // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
+  // (decisão do usuário). Esse papel nunca vê nenhum link de PCP/Produção,
+  // e vice-versa -- os dois grupos de link são mutuamente exclusivos pra
+  // ele. 'admin' é a ÚNICA exceção (pedido do usuário: ADM vê tudo, sem
+  // exceção) -- vê o menu de PCP inteiro E o de RH ao mesmo tempo, por
+  // isso showRhGroup é uma condição separada de isRH.
   const isRH = user.role === 'rh' || user.role === 'gestor';
+  const showRhGroup = isRH || user.role === 'admin';
   const isRotulagem = user.role === 'rotulagem';
   const roleLabel = user.role === 'admin' ? 'Administrador'
+    : user.role === 'pcp' ? 'PCP'
     : user.role === 'rh' ? 'RH Central'
     : user.role === 'gestor' ? 'Gestor de Linha'
     : (isRotulagem ? 'Rotulagem' : 'Produção');
-  const isPcpAdmin = user.role === 'admin';
+  // 'pcp' (novo papel, pedido do usuário: "vê tudo, menos o RH") tem
+  // exatamente o mesmo alcance de página que 'admin' sempre teve no PCP.
+  const isPcpAdmin = user.role === 'admin' || user.role === 'pcp';
   const initials = (user.nome || '?').trim().split(/\s+/).slice(0, 2).map(function(s) { return s[0]; }).join('').toUpperCase();
 
   // Perfil Rotulagem só tem acesso a form.html -- sidebar minimalista, sem
@@ -432,11 +444,13 @@ function renderUnifiedNavbar(user) {
     ? '<div class="kt-nav-group">' + ktLink('usuarios.html', 'people', 'Usuários', activePage) + '</div>'
     : '';
 
-  // RH (Fase 1): só Colaboradores/Cargos (rh_cadastros.html) -- Avaliação,
-  // Documentos, Férias etc. entram em fases futuras (ver plano do módulo).
-  const rhGroup = !isRH ? '' :
+  // RH (Fase 1-3b): Colaboradores/Cargos, Avaliação, Férias -- Documentos
+  // etc. entram em fases futuras (ver plano do módulo). 'admin' vê este
+  // grupo TAMBÉM (showRhGroup), além do grupo PCP inteiro acima -- os
+  // dois não são mais mutuamente exclusivos só pra esse papel.
+  const rhGroup = !showRhGroup ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Recursos Humanos</div>' +
-    (user.role === 'rh' ? ktLink('rh_dashboard.html', 'dashboard', 'Dashboard', activePage) : '') +
+    ((user.role === 'rh' || user.role === 'admin') ? ktLink('rh_dashboard.html', 'dashboard', 'Dashboard', activePage) : '') +
     ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
     ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage) +
     ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
