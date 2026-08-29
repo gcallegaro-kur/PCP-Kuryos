@@ -770,8 +770,17 @@
 
     container.innerHTML = pedidoIds.map(function(pedidoId) {
       var regs = groups[pedidoId];
+      // Achado do agente de auditoria: somava TODOS os registros do pedido,
+      // sem filtrar por setor -- um lote com apontamento em Linha E
+      // Rotulagem/Posto contava a mesma produção duas vezes aqui (%
+      // completo podia passar de 100%), mesmo isLinhaEnvase já existindo
+      // nesta página e sendo usado corretamente noutra aba (Motivos
+      // Recorrentes). regs continua com a lista completa (pros detalhes
+      // expandidos mostrarem tudo que foi apontado, sem esconder nada) --
+      // só o total/percentual usado pra "% completo" agora filtra.
       // Para registros importados: usar qtdTotalLote (total do lote); para manuais: usar quantidade
       var totalProduzido = regs.reduce(function(s, r) {
+        if (!isLinhaEnvase(r.linha)) return s;
         return s + (r.qtdTotalLote > 0 ? r.qtdTotalLote : r.quantidade);
       }, 0);
       var produto = regs[0].produto;
