@@ -277,7 +277,11 @@ retrabalho.
    substituindo a TELA de Horizonte (não o pipeline `alocacoes_planejamento`,
    que é recablado, não descartado), com timeline de início/fim exatos.
    A tela de apontamento da produção passa a espelhar essa tela.
-7. **Conclusão de OP gated por PCP** (100% manual no início).
+7. ✅ **Conclusão de OP gated por PCP** (100% manual no início).
+   **Concluída e deployada** (ver seção 16) — a auto-conclusão silenciosa
+   aos 95% (a causa raiz do problema original da sessão) foi eliminada
+   de vez; só uma confirmação explícita do PCP em `ops.html` grava
+   `status:'Concluído'` agora.
 8. **Changeover configurável** com setup padrão inicial por linha, apurado
    a cada OP/dia.
 9. **Fechamento do Dia** — painel de conferência agregado (seção 5).
@@ -907,3 +911,63 @@ reescrever a capacidade do zero.
 **Enquanto aguarda validação do mockup**, trabalho seguiu nas fases
 seguintes do roteiro (7 em diante), que não dependem de nenhuma decisão
 de UI ainda em aberto.
+
+## 16. Fase 7 concluída — conclusão de OP 100% manual pelo PCP (2026-08-29)
+
+Decisão já registrada na seção 3, mas o MECANISMO exato tinha duas
+leituras possíveis do texto ("100% manual pelo PCP, sem exceção") —
+confirmado de novo com o usuário antes de tocar o código, dado o
+tamanho do impacto (muda a rotina diária de fechamento de OP nas 3
+linhas). Duas opções apresentadas: (a) só remover a auto-conclusão
+silenciosa aos 95%, operador continua fechando normalmente; (b) só o
+PCP pode marcar 'Concluído' de verdade, operador fecha mas fica
+"aguardando confirmação". **Escolhida a opção (b)**, mais fiel ao texto
+literal do plano.
+
+- **`shared/utils.js` (`computeOpStatus`)**: nunca mais deriva
+  'Concluído' sozinho. Bater 95% agora deriva `'Aguardando Confirmação'`
+  (novo status), que é "pegajoso" igual 'Concluído' já era (a função
+  nunca reverte de volta).
+- **`shared/utils.js` (`opEstaAtiva`)**: `'Aguardando Confirmação'`
+  conta como "não ativa" — a linha já foi liberada, não deve mais
+  aparecer em Alocar OP/Andon/etc.
+- **`auth_check.js` (`_syncOpsLoteStatusELinha`)**: mesma correção
+  replicada na varredura que roda a cada carga de página (tinha sua
+  própria cópia paralela da lógica de 95%).
+- **`form.html`**: os 2 fluxos que forçavam `status:'Concluído'`
+  diretamente (Painel de Turno "Encerrar OP" e "Fechar Lote") agora
+  gravam `'Aguardando Confirmação'` — quem fecha na linha registra o
+  resultado final e libera a linha, mas não conclui mais sozinho.
+  Mensagens de sucesso avisam isso ao operador. "Apontamento por Total"
+  já não forçava conclusão antes (por design), sem mudança.
+- **`ops.html`**: nova seção "⏳ Aguardando Confirmação do PCP" na
+  tabela — sem ela, essas OPs ficariam invisíveis (opEstaAtiva as tira
+  de "OPs Emitidas em Aberto"). Botão "✅ Confirmar conclusão" — a única
+  ação em todo o sistema que grava `status:'Concluído'` de verdade
+  agora — disponível pra `admin` e `pcp` (`canConfirmOp`, papel novo,
+  distinto do `isAdmin` já usado no resto do arquivo). Registra
+  `confirmadoPor`/`confirmadoEm`.
+- **`functions/index.js` (`checkOpsAtrasadas`, Fase 4)**: corrigido pra
+  também ignorar OPs `'Aguardando Confirmação'` — sem isso, uma OP
+  recém-fechada podia gerar alerta falso de atraso mesmo já tendo
+  liberado a linha.
+- **`dashboard.html`**: tag "OP concluída" no feed de atividade não
+  presume mais que todo fechamento é uma conclusão de verdade — reflete
+  o status real.
+
+Testado: harness Node com os blocos reais extraídos de cada arquivo
+(computeOpStatus/opEstaAtiva, fecharAlocacaoOP, o branch fechamento_op,
+canConfirmOp/confirmarConclusaoOp/renderOpAguardandoConfirmacaoRow,
+checkOpsAtrasadas) — cobrindo o caso crítico (99% produzido nunca mais
+vira Concluído sozinho), o "pegajoso" (não regride depois de
+confirmado), e o controle de acesso (production não confirma nem
+chamando a função direto). **Deployado** (hosting + functions).
+
+**Gap conhecido, não corrigido** (fora de escopo, mesmo padrão de todo
+o resto do app): o controle de quem pode confirmar é só client-side —
+`database.rules.json` não distingue por-campo dentro de `ops/`
+(`production` também tem escrita geral nesse nó). Mesmo nível de
+proteção que toda outra trava admin-only já existente (cancelar OP,
+editar linha/pedido).
+
+**Próxima fase**: Fase 8 (changeover configurável).
