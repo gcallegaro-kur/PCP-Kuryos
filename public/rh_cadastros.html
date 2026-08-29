@@ -408,6 +408,18 @@ document.addEventListener('DOMContentLoaded', function() {
   if (tab && MAINTAB_ALIASES[tab]) activateMainTab(tab, false);
 });
 
+// rh_cargos.write é só-RH -- esconde "+ Novo Cargo" pro papel Gestor (que
+// só tem leitura nesta aba), mesmo espírito do botão-edit já escondido em
+// renderTable() de Cargos.
+function aplicarRestricoesDePapelCargos() {
+  if (!window.currentUser) { setTimeout(aplicarRestricoesDePapelCargos, 200); return; }
+  if (window.currentUser.role === 'gestor') {
+    var btn = document.getElementById('btnNovo-cgo');
+    if (btn) btn.style.display = 'none';
+  }
+}
+aplicarRestricoesDePapelCargos();
+
 // ════════════════════════════════════════════════════════════════════
 // ABA: CARGOS (Organizacional, Fase 1 -- estrutura simples, ver nota na
 // aba sobre a decisão pendente D-03). Carregada ANTES de Colaboradores
@@ -442,6 +454,12 @@ var allCargos = {};
         : 'Nenhum cargo encontrado com esse filtro/busca.') + '</td></tr>';
       return;
     }
+    // rh_cargos.write é só-RH (database.rules.json) -- Gestor lê esta aba
+    // (precisa pra Férias/Avaliação saberem o cargo de alguém), mas
+    // qualquer botão de escrita aqui sempre terminaria em permission_denied
+    // pra ele. Achado da revisão de melhores práticas: esconder, não só
+    // deixar clicável e falhar.
+    var souRH = window.currentUser && window.currentUser.role === 'rh';
     tbody.innerHTML = rows.map(function(entry) {
       var key = entry[0], c = entry[1];
       var ativo = c.ativo !== false;
@@ -450,7 +468,7 @@ var allCargos = {};
         '<td>' + escapeHtml(c.nivelTrilha || '—') + '</td>' +
         '<td>' + escapeHtml(c.setor || '—') + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
-        '<td><button class="btn btn-ghost btn-sm btn-edit-cgo" data-key="' + escapeAttr(key) + '" title="Editar cargo" aria-label="Editar cargo">✏</button></td>' +
+        '<td>' + (souRH ? '<button class="btn btn-ghost btn-sm btn-edit-cgo" data-key="' + escapeAttr(key) + '" title="Editar cargo" aria-label="Editar cargo">✏</button>' : '') + '</td>' +
       '</tr>';
     }).join('');
     document.querySelectorAll('.btn-edit-cgo').forEach(function(btn) {
@@ -702,7 +720,11 @@ var allCargos = {};
     // hierarquia, sem precisar dar a ele acesso a rh_colaboradores inteiro.
     var updates = {};
     updates['rh_colaboradores/' + key] = data;
-    updates['rh_colaboradores_publico/' + key] = { nome: data.nome, cargoKey: data.cargoKey, gestorKey: data.gestorKey, uidLogin: data.uidLogin, status: data.status };
+    // dataAdmissao entra aqui (não é dado sensível como salário/bancário) --
+    // Férias (Fase 3b) precisa dela pra calcular período aquisitivo, e
+    // rh_ferias.html só tem acesso de leitura a rh_colaboradores_publico,
+    // nunca a rh_colaboradores inteiro.
+    updates['rh_colaboradores_publico/' + key] = { nome: data.nome, cargoKey: data.cargoKey, gestorKey: data.gestorKey, uidLogin: data.uidLogin, status: data.status, dataAdmissao: data.dataAdmissao };
     db.ref().update(updates)
       .then(function() { showAlert('Colaborador salvo com sucesso!', 'success'); closeModal(); })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })

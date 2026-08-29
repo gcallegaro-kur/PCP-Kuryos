@@ -77,6 +77,9 @@
     .pilar-head input[type=number]{flex:0 0 90px}
     .nota-input{width:64px;text-align:center;font-weight:700}
     .rating-cell{text-align:center}
+    .table-wrap{overflow-x:auto}
+    #cardCriterios-av #notaResumo-av{position:sticky;bottom:0}
+    @media(max-width:600px){.form-grid,.form-grid.cols-3,.form-grid.cols-4{grid-template-columns:1fr}.pilar-head{flex-wrap:wrap}}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -111,10 +114,12 @@
 
     <div class="card">
       <div class="card-title"><span>Faixas de classificação</span><button class="btn btn-ghost btn-sm" id="btnAddFaixa-av">+ Adicionar faixa</button></div>
-      <table>
-        <thead><tr><th style="width:90px">De</th><th style="width:90px">Até</th><th>Nome</th><th>Recomendação</th><th style="width:40px"></th></tr></thead>
-        <tbody id="faixasBody-av"><tr><td colspan="5" class="no-data">Nenhuma faixa cadastrada.</td></tr></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:90px">De</th><th style="width:90px">Até</th><th>Nome</th><th>Recomendação</th><th style="width:40px"></th></tr></thead>
+          <tbody id="faixasBody-av"><tr><td colspan="5" class="no-data">Nenhuma faixa cadastrada.</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <button class="btn btn-primary" id="btnSalvarModelo-av">Salvar modelo</button>
@@ -152,10 +157,12 @@
 
     <div class="card">
       <div class="card-title"><span>Plano de ação</span><button class="btn btn-ghost btn-sm" id="btnAddPlanoAcao-av">+ Adicionar ação</button></div>
-      <table>
-        <thead><tr><th>Ação combinada</th><th style="width:160px">Responsável</th><th style="width:130px">Prazo</th><th style="width:120px">Status</th><th style="width:40px"></th></tr></thead>
-        <tbody id="planoAcaoBody-av"><tr><td colspan="5" class="no-data">Nenhuma ação registrada ainda.</td></tr></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ação combinada</th><th style="width:160px">Responsável</th><th style="width:130px">Prazo</th><th style="width:120px">Status</th><th style="width:40px"></th></tr></thead>
+          <tbody id="planoAcaoBody-av"><tr><td colspan="5" class="no-data">Nenhuma ação registrada ainda.</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <button class="btn btn-primary" id="btnSalvarAvaliacao-av">Fechar e registrar avaliação</button>
@@ -165,10 +172,12 @@
   <div class="main-tab-panel" id="maintab-historico">
     <div class="card">
       <div class="card-title"><span id="histCount-av">Avaliações registradas</span></div>
-      <table>
-        <thead><tr><th>Colaborador</th><th>Período</th><th>Data</th><th style="text-align:right">Nota geral</th><th>Faixa</th><th>Avaliador</th></tr></thead>
-        <tbody id="histBody-av"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Colaborador</th><th>Período</th><th>Data</th><th style="text-align:right">Nota geral</th><th>Faixa</th><th>Avaliador</th></tr></thead>
+          <tbody id="histBody-av"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -268,7 +277,7 @@ function renderPilares() {
         '<td><input type="text" class="crit-a1" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora1) + '" placeholder="Nota 1"></td>' +
         '<td><input type="text" class="crit-a3" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora3) + '" placeholder="Nota 3"></td>' +
         '<td><input type="text" class="crit-a5" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora5) + '" placeholder="Nota 5"></td>' +
-        '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-crit" data-pi="' + pi + '" data-ci="' + ci + '">✕</button></td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-crit" data-pi="' + pi + '" data-ci="' + ci + '" title="Remover critério" aria-label="Remover critério">✕</button></td>' +
       '</tr>';
     }).join('');
     return '<div class="pilar-card">' +
@@ -277,8 +286,8 @@ function renderPilares() {
         '<div style="flex:0 0 90px"><label>Peso (%)</label><input type="number" class="pilar-peso" data-pi="' + pi + '" value="' + escapeAttr(String(p.peso)) + '" min="0" max="100" step="0.1"></div>' +
         '<button type="button" class="btn btn-danger-ghost btn-sm btn-rm-pilar" data-pi="' + pi + '">Remover pilar</button>' +
       '</div>' +
-      '<table><thead><tr><th>Critério</th><th>Definição</th><th>Âncora nota 1</th><th>Âncora nota 3</th><th>Âncora nota 5</th><th></th></tr></thead>' +
-      '<tbody>' + (critHtml || '<tr><td colspan="6" class="no-data">Nenhum critério ainda.</td></tr>') + '</tbody></table>' +
+      '<div class="table-wrap"><table><thead><tr><th>Critério</th><th>Definição</th><th>Âncora nota 1</th><th>Âncora nota 3</th><th>Âncora nota 5</th><th></th></tr></thead>' +
+      '<tbody>' + (critHtml || '<tr><td colspan="6" class="no-data">Nenhum critério ainda.</td></tr>') + '</tbody></table></div>' +
       '<button type="button" class="btn btn-ghost btn-sm btn-add-crit" data-pi="' + pi + '" style="margin-top:8px">+ Adicionar critério</button>' +
     '</div>';
   }).join('') || '<div class="no-data">Nenhum pilar ainda -- clique em "+ Adicionar pilar".</div>';
@@ -321,7 +330,7 @@ function renderFaixas() {
       '<td><input type="number" class="faixa-max" data-i="' + i + '" value="' + escapeAttr(String(f.max)) + '" step="0.1"></td>' +
       '<td><input type="text" class="uc faixa-nome" data-i="' + i + '" value="' + escapeAttr(f.nome) + '"></td>' +
       '<td><input type="text" class="faixa-rec" data-i="' + i + '" value="' + escapeAttr(f.recomendacao) + '"></td>' +
-      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-faixa" data-i="' + i + '">✕</button></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-faixa" data-i="' + i + '" title="Remover faixa" aria-label="Remover faixa">✕</button></td>' +
     '</tr>';
   }).join('');
   var map = { min: 'min', max: 'max', nome: 'nome', rec: 'recomendacao' };
@@ -402,13 +411,21 @@ function renderCriteriosForm() {
 }
 
 function recalcularNotas() {
-  if (!modeloAtual) return { notaGeral: 0, notaPorPilar: {}, faixa: null, notasCriterios: {} };
+  if (!modeloAtual) return { notaGeral: 0, notaPorPilar: {}, faixa: null, notasCriterios: {}, completo: false, notasInvalidas: false };
   var notasCriterios = {};
+  var notasInvalidas = false;
   document.querySelectorAll('.nota-criterio').forEach(function(el) {
     var v = parseFloat(el.value);
-    if (!isNaN(v)) notasCriterios[el.getAttribute('data-pilar') + '|' + el.getAttribute('data-criterio')] = v;
+    var valida = !isNaN(v) && v >= 1 && v <= 5;
+    // Achado da revisão de segurança/UI: o min/max do <input type=number>
+    // não bloqueia nada (não está dentro de um <form> com submit nativo) --
+    // um valor fora de 1-5 (ex: "50" digitado por engano) precisa ser
+    // rejeitado explicitamente aqui, não só confiar no atributo HTML.
+    el.style.borderColor = (el.value !== '' && !valida) ? 'var(--danger)' : '';
+    if (el.value !== '' && !valida) notasInvalidas = true;
+    if (valida) notasCriterios[el.getAttribute('data-pilar') + '|' + el.getAttribute('data-criterio')] = v;
   });
-  var notaPorPilar = {}, notaGeral = 0, pesoTotalPreenchido = 0;
+  var notaPorPilar = {}, notaGeralPonderada = 0, pesoTotalPreenchido = 0;
   Object.entries(modeloAtual.pilares || {}).forEach(function(pe) {
     var pk = pe[0], p = pe[1];
     var criterioKeys = Object.keys(p.criterios || {});
@@ -416,20 +433,31 @@ function recalcularNotas() {
     if (notas.length) {
       var media = notas.reduce(function(s, n) { return s + n; }, 0) / notas.length;
       notaPorPilar[pk] = Math.round(media * 100) / 100;
-      notaGeral += media * (parseFloat(p.peso) || 0) / 100;
+      notaGeralPonderada += media * (parseFloat(p.peso) || 0);
       pesoTotalPreenchido += parseFloat(p.peso) || 0;
     }
   });
-  notaGeral = Math.round(notaGeral * 100) / 100;
+  // Achado da revisão de melhores práticas: somar só os pilares
+  // respondidos SEM dividir pelo peso efetivamente preenchido fazia uma
+  // avaliação incompleta gravar nota geral artificialmente baixa (ex: só
+  // 1 de 3 pilares, tirando 5/5 num pilar de peso 30%, gravava notaGeral
+  // 1.5 em vez de refletir só o que foi respondido). Reescala pelo peso
+  // preenchido -- ainda assim BLOQUEADO em salvarAvaliacao() enquanto
+  // não chegar a 100% (completo=false), isto aqui é só pro número exibido
+  // em tempo real fazer sentido matematicamente.
+  var notaGeral = pesoTotalPreenchido > 0 ? Math.round((notaGeralPonderada / pesoTotalPreenchido) * 100) / 100 : 0;
   var faixa = null;
   Object.values(modeloAtual.faixas || {}).forEach(function(f) {
     if (notaGeral >= (f.min || 0) && notaGeral <= (f.max != null ? f.max : 999)) faixa = f;
   });
   var resumo = document.getElementById('notaResumo-av');
   var completo = pesoTotalPreenchido >= 99.9;
-  resumo.textContent = 'Nota geral: ' + notaGeral + (faixa ? ' -- ' + faixa.nome : '') + (completo ? '' : ' (ainda faltam critérios de algum pilar)');
-  resumo.className = 'soma-bar ' + (completo ? 'soma-ok' : 'soma-erro');
-  return { notaGeral: notaGeral, notaPorPilar: notaPorPilar, faixa: faixa, notasCriterios: notasCriterios };
+  var msg = 'Nota geral: ' + notaGeral + (faixa ? ' -- ' + faixa.nome : '');
+  if (notasInvalidas) msg += ' -- ⚠ Alguma nota fora do intervalo 1-5 (destacada em vermelho), corrija antes de fechar.';
+  else if (!completo) msg += ' (ainda faltam critérios de algum pilar)';
+  resumo.textContent = msg;
+  resumo.className = 'soma-bar ' + (completo && !notasInvalidas ? 'soma-ok' : 'soma-erro');
+  return { notaGeral: notaGeral, notaPorPilar: notaPorPilar, faixa: faixa, notasCriterios: notasCriterios, completo: completo, notasInvalidas: notasInvalidas };
 }
 
 var planoAcaoStaged = [];
@@ -442,7 +470,7 @@ function renderPlanoAcao() {
       '<td><input type="text" class="uc pa-resp" data-i="' + i + '" value="' + escapeAttr(a.responsavel) + '"></td>' +
       '<td><input type="date" class="pa-prazo" data-i="' + i + '" value="' + escapeAttr(a.prazo) + '"></td>' +
       '<td><select class="pa-status" data-i="' + i + '"><option ' + (a.status === 'Pendente' ? 'selected' : '') + '>Pendente</option><option ' + (a.status === 'Em andamento' ? 'selected' : '') + '>Em andamento</option><option ' + (a.status === 'Concluído' ? 'selected' : '') + '>Concluído</option></select></td>' +
-      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-pa" data-i="' + i + '">✕</button></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-pa" data-i="' + i + '" title="Remover ação" aria-label="Remover ação">✕</button></td>' +
     '</tr>';
   }).join('');
   document.querySelectorAll('.pa-acao').forEach(function(el) { el.addEventListener('input', function() { planoAcaoStaged[+el.getAttribute('data-i')].acao = el.value; }); });
@@ -460,6 +488,12 @@ function salvarAvaliacao() {
   if (!modeloAtual) { showAlert('Nenhum modelo de avaliação vigente cadastrado ainda.', 'danger'); return; }
   var calc = recalcularNotas();
   if (!Object.keys(calc.notasCriterios).length) { showAlert('Preencha pelo menos uma nota.', 'danger'); return; }
+  if (calc.notasInvalidas) { showAlert('Alguma nota está fora do intervalo 1-5 (destacada em vermelho) -- corrija antes de fechar.', 'danger'); return; }
+  // Achado da revisão de melhores práticas: antes disso, uma avaliação com
+  // só parte dos pilares pontuados podia ser fechada e registrada com uma
+  // nota geral artificialmente baixa (a nota, por ser gravada permanente
+  // e não editável depois, precisa refletir a avaliação completa).
+  if (!calc.completo) { showAlert('Faltam critérios de algum pilar -- preencha todos antes de fechar a avaliação.', 'danger'); return; }
 
   var uid = firebase.auth().currentUser.uid;
   var planoAcaoObj = {};

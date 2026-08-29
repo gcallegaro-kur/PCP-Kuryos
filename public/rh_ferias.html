@@ -56,13 +56,15 @@
     .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .form-group.full{grid-column:1/-1}
     label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
-    input[type=text],input[type=date],textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
-    input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[type=text],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
     .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto}
     .kt-ac-list.open{display:block}
     .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
     .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
+    .table-wrap{overflow-x:auto}
+    @media(max-width:600px){.form-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -90,7 +92,11 @@
         <input type="hidden" id="fColaboradorId-fer">
         <div class="field-hint" id="saldoHint-fer"></div>
       </div>
-      <div class="form-group"><label>Período aquisitivo *</label><input type="text" id="fPeriodoAquisitivo-fer" placeholder="Ex: 2024-2025"></div>
+      <div class="form-group">
+        <label>Período aquisitivo *</label>
+        <select id="fPeriodoAquisitivo-fer"><option value="">Selecione o colaborador primeiro...</option></select>
+        <div class="field-hint">Calculado automaticamente a partir da data de admissão (ciclos de 12 meses, art. 130 CLT) -- achado do especialista em RH desta revisão: período em texto livre deixava a checagem de saldo frágil (qualquer diferença de digitação quebrava a soma).</div>
+      </div>
       <div class="form-group"></div>
       <div class="form-group"><label>Data de início *</label><input type="date" id="fDataInicio-fer"></div>
       <div class="form-group"><label>Data de fim *</label><input type="date" id="fDataFim-fer"></div>
@@ -112,10 +118,12 @@
 
   <div class="card">
     <div class="card-title"><span id="listCount-fer">Solicitações</span></div>
-    <table>
-      <thead><tr><th>Colaborador</th><th>Período</th><th>Datas</th><th style="text-align:right">Dias</th><th>Status</th><th style="min-width:220px">Ações</th></tr></thead>
-      <tbody id="listBody-fer"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
-    </table>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Colaborador</th><th>Período</th><th>Datas</th><th style="text-align:right">Dias</th><th>Status</th><th style="min-width:220px">Ações</th></tr></thead>
+        <tbody id="listBody-fer"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -166,6 +174,35 @@ function refreshColaboradorItems() {
     .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome }; });
 }
 
+function toYMD(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+// ── Períodos aquisitivos (CLT art. 130) -- ciclos de 12 meses a partir da
+// admissão. Achado do especialista em RH desta revisão: período em texto
+// livre era frágil (qualquer diferença de digitação quebrava o cálculo de
+// saldo); o valor do <option> agora é sempre a data de início do ciclo
+// (YYYY-MM-DD), estável e comparável, o texto exibido é só cosmético.
+// `concessivoFim` = fim do período CONCESSIVO (12 meses após o fim do
+// aquisitivo, art. 134/137 CLT) -- passar dessa data sem usar o saldo
+// obriga a empresa a pagar em dobro.
+function periodosAquisitivos(dataAdmissao) {
+  if (!dataAdmissao) return [];
+  var hoje = new Date();
+  var inicio = new Date(dataAdmissao + 'T00:00:00');
+  var periodos = [];
+  var guarda = 0;
+  while (inicio <= hoje && guarda < 40) {
+    var fim = new Date(inicio); fim.setFullYear(fim.getFullYear() + 1); fim.setDate(fim.getDate() - 1);
+    var concessivoFim = new Date(fim); concessivoFim.setFullYear(concessivoFim.getFullYear() + 1);
+    periodos.push({
+      valor: toYMD(inicio), inicio: toYMD(inicio), fim: toYMD(fim), concessivoFim: toYMD(concessivoFim),
+      label: inicio.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR')
+    });
+    inicio = new Date(fim); inicio.setDate(inicio.getDate() + 1);
+    guarda++;
+  }
+  return periodos.reverse(); // mais recente primeiro
+}
+
 function diasEntre(ini, fim) {
   if (!ini || !fim) return 0;
   var d1 = new Date(ini + 'T00:00:00'), d2 = new Date(fim + 'T00:00:00');
@@ -173,40 +210,80 @@ function diasEntre(ini, fim) {
   return dias > 0 ? dias : 0;
 }
 
-function diasJaUsadosNoPeriodo(colaboradorId, periodoAquisitivo, excluirKey) {
-  return Object.entries(allFerias).reduce(function(soma, entry) {
+function splitsNoPeriodo(colaboradorId, periodoAquisitivo, excluirKey) {
+  return Object.entries(allFerias).filter(function(entry) {
     var key = entry[0], f = entry[1];
-    if (key === excluirKey) return soma;
-    if (f.colaboradorId !== colaboradorId || f.periodoAquisitivo !== periodoAquisitivo) return soma;
-    if (f.status === 'Recusada') return soma;
-    return soma + (f.qtdDias || 0);
-  }, 0);
+    if (key === excluirKey) return false;
+    if (f.colaboradorId !== colaboradorId || f.periodoAquisitivo !== periodoAquisitivo) return false;
+    return f.status !== 'Recusada';
+  }).map(function(entry) { return entry[1]; });
+}
+function diasJaUsadosNoPeriodo(colaboradorId, periodoAquisitivo, excluirKey) {
+  return splitsNoPeriodo(colaboradorId, periodoAquisitivo, excluirKey).reduce(function(soma, f) { return soma + (f.qtdDias || 0); }, 0);
+}
+
+function refreshPeriodoOptions() {
+  var colaboradorId = document.getElementById('fColaboradorId-fer').value;
+  var sel = document.getElementById('fPeriodoAquisitivo-fer');
+  var col = allColaboradoresPublico[colaboradorId];
+  if (!col || !col.dataAdmissao) {
+    sel.innerHTML = '<option value="">' + (colaboradorId ? 'Colaborador sem data de admissão cadastrada' : 'Selecione o colaborador primeiro...') + '</option>';
+    return;
+  }
+  var periodos = periodosAquisitivos(col.dataAdmissao);
+  sel.innerHTML = periodos.map(function(p) { return '<option value="' + escapeAttr(p.valor) + '">' + escapeHtml(p.label) + '</option>'; }).join('');
 }
 
 function atualizarSaldoHint() {
   var colaboradorId = document.getElementById('fColaboradorId-fer').value;
-  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value.trim();
+  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value;
   var hint = document.getElementById('saldoHint-fer');
   if (!colaboradorId || !periodo) { hint.textContent = ''; return; }
   var usados = diasJaUsadosNoPeriodo(colaboradorId, periodo, null);
   var restante = SALDO_DIAS_PADRAO - usados;
-  hint.textContent = 'Saldo do período ' + periodo + ': ' + restante + ' de ' + SALDO_DIAS_PADRAO + ' dias (regra provisória, ver aviso acima).';
+  var splits = splitsNoPeriodo(colaboradorId, periodo, null);
+  var temQuebraDe14 = splits.some(function(f) { return (f.qtdDias || 0) >= 14; });
+  hint.textContent = 'Saldo do período: ' + restante + ' de ' + SALDO_DIAS_PADRAO + ' dias (regra provisória, ver aviso acima). ' +
+    splits.length + ' de 3 fracionamentos usados.' + (splits.length && !temQuebraDe14 ? ' ⚑ Nenhum split ainda com 14+ dias (art. 134 §1º CLT exige pelo menos um).' : '');
   hint.style.color = restante <= 0 ? 'var(--danger)' : '';
 }
 
 function registrarSolicitacao() {
   var colaboradorId = document.getElementById('fColaboradorId-fer').value;
-  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value.trim();
+  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value;
   var ini = document.getElementById('fDataInicio-fer').value;
   var fim = document.getElementById('fDataFim-fer').value;
   if (!colaboradorId) { showAlert('Selecione o colaborador (precisa escolher da lista).', 'danger'); return; }
-  if (!periodo) { showAlert('Informe o período aquisitivo.', 'danger'); return; }
+  if (!periodo) { showAlert('Selecione o período aquisitivo.', 'danger'); return; }
   if (!ini || !fim) { showAlert('Informe as datas de início e fim.', 'danger'); return; }
   var qtdDias = diasEntre(ini, fim);
   if (qtdDias <= 0) { showAlert('Data de fim precisa ser depois da data de início.', 'danger'); return; }
+
+  // Fracionamento (CLT art. 134 §1º, redação Lei 13.467/2017) -- achado do
+  // especialista em RH: diferente da regra de saldo (D-01, ainda pendente
+  // de confirmação da Kuryos), isso é lei fixa, não uma política a
+  // confirmar -- vale bloquear já. Máx. 3 fracionamentos por período,
+  // cada um com pelo menos 5 dias. O requisito de "pelo menos um com 14+
+  // dias" fica como aviso (não bloqueio) porque a ordem de cadastro das
+  // solicitações é livre -- bloquear a 1ª/2ª por ainda não ter uma de 14
+  // dias impediria um uso legítimo e incremental.
+  var splitsExistentes = splitsNoPeriodo(colaboradorId, periodo, null);
+  if (splitsExistentes.length >= 3) {
+    showAlert('Este período aquisitivo já tem 3 fracionamentos (o máximo permitido pelo art. 134 §1º da CLT). Recuse ou conclua algum antes de adicionar outro.', 'danger');
+    return;
+  }
+  if (qtdDias < 5) {
+    showAlert('Cada fracionamento de férias precisa ter no mínimo 5 dias (art. 134 §1º da CLT).', 'danger');
+    return;
+  }
+
   var usados = diasJaUsadosNoPeriodo(colaboradorId, periodo, null);
   if (usados + qtdDias > SALDO_DIAS_PADRAO) {
-    showAlert('Saldo insuficiente: restam ' + (SALDO_DIAS_PADRAO - usados) + ' dia(s) no período ' + periodo + ' (regra provisória de ' + SALDO_DIAS_PADRAO + ' dias/período -- D-01 pendente).', 'danger');
+    // Achado da revisão de UI/UX: código de decisão interno (D-01) não
+    // deveria aparecer no alerta transacional que o usuário vê tentando
+    // resolver um problema -- a rastreabilidade fica só na nota fixa do
+    // topo da página, aqui a mensagem é só o que importa pra ele agora.
+    showAlert('Saldo insuficiente: restam ' + (SALDO_DIAS_PADRAO - usados) + ' dia(s) neste período.', 'danger');
     return;
   }
 
@@ -223,12 +300,24 @@ function registrarSolicitacao() {
     criadoEm: new Date().toISOString()
   };
   document.getElementById('btnSolicitar-fer').disabled = true;
-  db.ref('rh_ferias').push(registro)
+  var key = db.ref('rh_ferias').push().key;
+  var updates = {};
+  updates['rh_ferias/' + key] = registro;
+  // Índice pro Gestor da equipe conseguir ler esta solicitação depois --
+  // ver database.rules.json (rh_ferias.$key.read exige achar a chave via
+  // este índice; sem gravá-lo aqui, o Gestor nunca listaria a solicitação
+  // mesmo tendo permissão de leitura no registro específico).
+  var col = allColaboradoresPublico[colaboradorId] || {};
+  var gestorDoColaborador = allColaboradoresPublico[col.gestorKey] || {};
+  if (gestorDoColaborador.uidLogin) {
+    updates['rh_ferias_por_gestor/' + gestorDoColaborador.uidLogin + '/' + key] = true;
+  }
+  db.ref().update(updates)
     .then(function() {
       showAlert('Solicitação registrada!', 'success');
       document.getElementById('fColaborador-fer').value = '';
       document.getElementById('fColaboradorId-fer').value = '';
-      document.getElementById('fPeriodoAquisitivo-fer').value = '';
+      refreshPeriodoOptions();
       document.getElementById('fDataInicio-fer').value = '';
       document.getElementById('fDataFim-fer').value = '';
       document.getElementById('fObs-fer').value = '';
@@ -238,9 +327,18 @@ function registrarSolicitacao() {
     .finally(function() { document.getElementById('btnSolicitar-fer').disabled = false; });
 }
 
+var APROVAR_CONFIRMS = {
+  gestor: 'Aprovar esta solicitação de férias (1ª etapa)?',
+  rh: 'Aprovar esta solicitação de férias (etapa final)?',
+  concluir: 'Marcar esta solicitação como concluída?'
+};
 function aprovar(key, etapa) {
   var f = allFerias[key];
   if (!f) return;
+  // Mesmo padrão de confirm() já usado em compras.html pra aprovação de
+  // Solicitação de Compra -- achado da revisão de UI/UX: aqui não tinha
+  // nenhuma confirmação antes de uma ação que avança (ou fecha) o fluxo.
+  if (!confirm(APROVAR_CONFIRMS[etapa] || 'Confirmar esta ação?')) return;
   var updates = {};
   if (etapa === 'gestor') {
     updates['rh_ferias/' + key + '/status'] = 'Aprovada pelo gestor';
@@ -313,29 +411,67 @@ function renderLista() {
 
 document.addEventListener('DOMContentLoaded', function() {
   attachAutocomplete(document.getElementById('fColaborador-fer'), function() { return colaboradorItems; }, {
-    onSelect: function(it) { document.getElementById('fColaboradorId-fer').value = it.key; atualizarSaldoHint(); }
+    onSelect: function(it) { document.getElementById('fColaboradorId-fer').value = it.key; refreshPeriodoOptions(); atualizarSaldoHint(); }
   });
-  document.getElementById('fColaborador-fer').addEventListener('input', function() { document.getElementById('fColaboradorId-fer').value = ''; atualizarSaldoHint(); });
+  document.getElementById('fColaborador-fer').addEventListener('input', function() { document.getElementById('fColaboradorId-fer').value = ''; refreshPeriodoOptions(); atualizarSaldoHint(); });
   document.getElementById('fColaborador-fer').addEventListener('focus', refreshColaboradorItems);
-  document.getElementById('fPeriodoAquisitivo-fer').addEventListener('input', atualizarSaldoHint);
+  document.getElementById('fPeriodoAquisitivo-fer').addEventListener('change', atualizarSaldoHint);
   document.getElementById('btnSolicitar-fer').addEventListener('click', registrarSolicitacao);
   document.getElementById('filterStatus-fer').addEventListener('change', renderLista);
 
   dbOnValue(db.ref('rh_colaboradores_publico'), function(snap) {
     allColaboradoresPublico = snap.val() || {};
-    if (window.currentUser && window.currentUser.role === 'gestor' && firebase.auth().currentUser) {
-      var meu = Object.entries(allColaboradoresPublico).filter(function(e) { return e[1].uidLogin === firebase.auth().currentUser.uid; })[0];
-      minhaColaboradorKey = meu ? meu[0] : null;
-    }
-    refreshColaboradorItems();
-    renderLista();
+    resolverMinhaColaboradorKey();
   });
-  dbOnValue(db.ref('rh_ferias'), function(snap) {
-    allFerias = snap.val() || {};
-    renderLista();
-    atualizarSaldoHint();
-  });
+  carregarFerias();
 });
+
+// window.currentUser é resolvido de forma assíncrona por auth_check.js --
+// se este listener de rh_colaboradores_publico disparar primeiro, minha
+// ColaboradorKey ficaria null pra sempre (achado da revisão de melhores
+// práticas). Mesmo padrão de retry curto já usado em aplicarRestricoesDePapel/
+// carregarHistorico de rh_avaliacao.html.
+function resolverMinhaColaboradorKey() {
+  if (!window.currentUser) { setTimeout(resolverMinhaColaboradorKey, 200); return; }
+  if (window.currentUser.role === 'gestor' && firebase.auth().currentUser) {
+    var meu = Object.entries(allColaboradoresPublico).filter(function(e) { return e[1].uidLogin === firebase.auth().currentUser.uid; })[0];
+    minhaColaboradorKey = meu ? meu[0] : null;
+  }
+  refreshColaboradorItems();
+  renderLista();
+}
+
+// ── Carga de rh_ferias -- role-aware, ver database.rules.json ──────────
+// RH lê o nó inteiro (.read amplo). Gestor NÃO tem mais leitura ampla
+// (achado crítico da auditoria: um Gestor conseguia ver férias de
+// colaboradores de QUALQUER equipe, só filtrado na renderização) -- agora
+// lê via índice rh_ferias_por_gestor/{meuUid} (que grava/mantém as chaves
+// das solicitações da própria equipe) e busca cada registro individualmente,
+// mesmo padrão já usado pro Histórico de Avaliação do Gestor.
+function carregarFerias() {
+  if (!window.currentUser) { setTimeout(carregarFerias, 200); return; }
+  if (window.currentUser.role === 'rh') {
+    dbOnValue(db.ref('rh_ferias'), function(snap) {
+      allFerias = snap.val() || {};
+      renderLista();
+      atualizarSaldoHint();
+    });
+    return;
+  }
+  var uid = firebase.auth().currentUser && firebase.auth().currentUser.uid;
+  if (!uid) { setTimeout(carregarFerias, 200); return; }
+  dbOnValue(db.ref('rh_ferias_por_gestor/' + uid), function(snap) {
+    var chaves = Object.keys(snap.val() || {});
+    Promise.all(chaves.map(function(k) { return db.ref('rh_ferias/' + k).once('value').then(function(s) { return [k, s.val()]; }); }))
+      .then(function(pares) {
+        allFerias = {};
+        pares.forEach(function(p) { if (p[1]) allFerias[p[0]] = p[1]; });
+        renderLista();
+        atualizarSaldoHint();
+      })
+      .catch(function(err) { console.error('Falha ao carregar férias da equipe:', err); });
+  });
+}
 </script>
 
 </body>
