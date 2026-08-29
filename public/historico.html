@@ -666,7 +666,14 @@
   function updateStats(list) {
     var totalQtd = 0, diasSet = {}, pedSet = {}, comPed = 0;
     list.forEach(function(r) {
-      totalQtd += r.quantidade;
+      // Achado do agente de auditoria (3ª rodada): "Produzido" somava os 3
+      // setores (Linha+Rotulagem+Posto) -- mesma classe de bug já corrigida
+      // em renderPedidoGroups (mesmo arquivo, isLinhaEnvase já existente)
+      // mas nunca aplicada aqui. Superestimava produção real sempre que
+      // havia apontamento de rotulagem/posto no período carregado. As
+      // outras 4 stats continuam sem filtro de propósito -- contam
+      // "quantos registros/dias/pedidos", não produção.
+      if (isLinhaEnvase(r.linha)) totalQtd += r.quantidade;
       diasSet[r.data] = 1;
       if (r.pedidoId) { pedSet[r.pedidoId] = 1; comPed++; }
     });

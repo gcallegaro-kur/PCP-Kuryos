@@ -2816,51 +2816,63 @@ function syncNextItem() {
 
   if (item.type === 'registro') {
     promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
-      var saves = [];
-      if (item.registro && item.registro.lote) {
-        updateOpRecordOnApontamento(item.registro.lote, item.qtd, undefined, regTimestampIso(item.registro, 'periodoInicio'), item.tipo, regTimestampIso(item.registro, 'periodoFim'));
-      }
-      // Perdas do Turno Retroativo (item.perdas) vão pro mesmo lugar que
-      // "Finalizar OP" já usa (perdas/{lote}) -- mesmo schema, pra
-      // historico.html/e-mail de resumo lerem os dois sem precisar saber
-      // de onde vieram.
-      if (item.perdas && item.perdas.length && item.registro && item.registro.lote) {
-        var loteSafePerda = sanitizeKey(item.registro.lote);
-        saves.push(db.ref('perdas/' + loteSafePerda).push({
-          data: item.data, lote: item.registro.lote, produto: item.produto,
-          linha: item.registro.linha, pedidoId: item.pedidoId || '',
-          perdas: item.perdas, timestamp: new Date().toISOString()
-        }));
-        saves.push(baixarEstoquePerdas(item.perdas, item.registro.lote));
-      }
-      if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
-        var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
-        if (pedKey) {
-          saves.push(opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
-            if (!ativa) return;
-            return db.ref('pedidos/' + pedKey).transaction(function(p) {
-              if (!p) return p;
-              p.produzido = (p.produzido || 0) + item.qtd;
-              p.ultimoApontamento = new Date().toISOString();
-              return p;
-            }).then(function(res) {
-              if (res.committed && res.snapshot.exists()) {
-                var val = res.snapshot.val();
-                if (typeof window.updateOpStatusAutomatically === 'function') {
-                  window.updateOpStatusAutomatically(pedKey);
-                if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
-                }
-                var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
-                var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
-                if (isDone) {
-                  return cleanFutureSlots(pedKey, db);
-                }
-              }
-            });
+      // Achado CRÍTICO do agente de auditoria (3ª rodada): esta chamada
+      // rodava fire-and-forget (sem `return`, sem entrar em `saves`) --
+      // mesma classe de bug já corrigida em apontamento_total/fechamento_op,
+      // só que aqui no fluxo mais usado do app (apontamento horário normal).
+      // `Promise.all(saves)` resolvia sem esperar a transaction de ops/
+      // committar; se a aba fechasse/recarregasse nesse meio-tempo, o item
+      // já tinha sido removido da fila local (localStorage) mesmo com o
+      // incremento de produzidoLinha ainda não gravado -- perda silenciosa,
+      // sem retry possível (o item nunca mais existiria pra reprocessar).
+      // Agora encadeia de verdade: só sai da fila depois que ops/ committar.
+      var opUpdatePromise = (item.registro && item.registro.lote)
+        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, undefined, regTimestampIso(item.registro, 'periodoInicio'), item.tipo, regTimestampIso(item.registro, 'periodoFim'))
+        : Promise.resolve(null);
+      return opUpdatePromise.then(function() {
+        var saves = [];
+        // Perdas do Turno Retroativo (item.perdas) vão pro mesmo lugar que
+        // "Finalizar OP" já usa (perdas/{lote}) -- mesmo schema, pra
+        // historico.html/e-mail de resumo lerem os dois sem precisar saber
+        // de onde vieram.
+        if (item.perdas && item.perdas.length && item.registro && item.registro.lote) {
+          var loteSafePerda = sanitizeKey(item.registro.lote);
+          saves.push(db.ref('perdas/' + loteSafePerda).push({
+            data: item.data, lote: item.registro.lote, produto: item.produto,
+            linha: item.registro.linha, pedidoId: item.pedidoId || '',
+            perdas: item.perdas, timestamp: new Date().toISOString()
           }));
+          saves.push(baixarEstoquePerdas(item.perdas, item.registro.lote));
         }
-      }
-      return Promise.all(saves);
+        if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
+          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          if (pedKey) {
+            saves.push(opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
+              if (!ativa) return;
+              return db.ref('pedidos/' + pedKey).transaction(function(p) {
+                if (!p) return p;
+                p.produzido = (p.produzido || 0) + item.qtd;
+                p.ultimoApontamento = new Date().toISOString();
+                return p;
+              }).then(function(res) {
+                if (res.committed && res.snapshot.exists()) {
+                  var val = res.snapshot.val();
+                  if (typeof window.updateOpStatusAutomatically === 'function') {
+                    window.updateOpStatusAutomatically(pedKey);
+                  if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
+                  }
+                  var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
+                  var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
+                  if (isDone) {
+                    return cleanFutureSlots(pedKey, db);
+                  }
+                }
+              });
+            }));
+          }
+        }
+        return Promise.all(saves);
+      });
     });
   } else if (item.type === 'apontamento_total') {
     // Mesmo efeito colateral do apontamento horário (ops/pedidos.produzido,

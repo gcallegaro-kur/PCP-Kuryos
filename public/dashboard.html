@@ -415,7 +415,11 @@ function updateStackedMetas() {
   } else {
     metaHoje = todayIsWorking ? somaLinhas : 0;
   }
-  var prodHoje = regsData.reduce(function(s, r) { return s + (r.quantidade || 0); }, 0);
+  // Achado do agente de auditoria (3ª rodada): mesma classe de bug do
+  // #mTotal (renderAll) -- somava os 3 setores juntos contra uma meta que só
+  // existe pro envase, inflando o % das 3 barras (Hoje/Semana/Período).
+  // isLinhaDeProducao já existe no arquivo (extraída pra este propósito).
+  var prodHoje = regsData.reduce(function(s, r) { return isLinhaDeProducao(r.linha) ? s + (r.quantidade || 0) : s; }, 0);
   
   // ── 2. META DA SEMANA ─────────────────────────────────
   // Find Monday and Sunday of selected week
@@ -475,16 +479,16 @@ function updateStackedMetas() {
     var snapWeek = snaps[0];
     if (snapWeek && snapWeek.exists()) {
       snapWeek.forEach(function(dateSnap) {
-        dateSnap.forEach(function(r) { prodSemanal += (r.val().quantidade || 0); });
+        dateSnap.forEach(function(r) { var v = r.val(); if (isLinhaDeProducao(v.linha)) prodSemanal += (v.quantidade || 0); });
       });
     }
-    
+
     var prodPcp = 0;
     if (snaps.length > 1) {
       var snapPcp = snaps[1];
       if (snapPcp && snapPcp.exists()) {
         snapPcp.forEach(function(dateSnap) {
-          dateSnap.forEach(function(r) { prodPcp += (r.val().quantidade || 0); });
+          dateSnap.forEach(function(r) { var v = r.val(); if (isLinhaDeProducao(v.linha)) prodPcp += (v.quantidade || 0); });
         });
       }
     }
@@ -846,6 +850,12 @@ function renderDoughnutChart(wrapperId, canvasId, groupedData, colorMap, title) 
 
 function renderProdutos(regs, total) {
   var c = document.getElementById('prodProd');
+  // Achado do agente de auditoria (3ª rodada): numerador somava os 3 setores
+  // (regs cru) contra um denominador (total) já filtrado pra só envase --
+  // % podia passar de 100% ou a soma de todos os produtos ultrapassar o
+  // total do card sempre que um lote passasse por Linha e Rotulagem no
+  // mesmo dia. Filtra aqui igual o total já é filtrado em renderAll.
+  regs = regs.filter(function(r) { return isLinhaDeProducao(r.linha); });
   if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
   var byP = {};
   regs.forEach(function(r){ byP[r.produto] = (byP[r.produto]||0) + (r.quantidade||0); });
@@ -901,6 +911,9 @@ function renderParadas(regs) {
 
 function renderColaboradores(regs, total) {
   var c = document.getElementById('prodColab');
+  // Mesmo achado/mesma correção de renderProdutos -- numerador precisa vir
+  // do mesmo conjunto filtrado (só envase) que gerou o "total" recebido.
+  regs = regs.filter(function(r) { return isLinhaDeProducao(r.linha); });
   if (!regs.length) { c.innerHTML = '<div class="no-data">Sem dados.</div>'; return; }
   var byC = {};
   regs.forEach(function(r) {
@@ -921,8 +934,12 @@ function renderColaboradores(regs, total) {
 
 function renderLotes(regs) {
   var c = document.getElementById('prodLote');
+  // Mesma classe de bug dos outros cards deste dashboard: sem filtro, um
+  // lote que passa por Linha e Rotulagem no mesmo dia aparece com
+  // quantidade inflada (soma os 2 setores) -- consistente com o resto da
+  // tela (Total do Dia/Por Produto/Por Colaborador), que já filtra.
   var byL = {};
-  regs.forEach(function(r) {
+  regs.filter(function(r) { return isLinhaDeProducao(r.linha); }).forEach(function(r) {
     if (!r.lote) return;
     if (!byL[r.lote]) {
       byL[r.lote] = { total: 0, produtos: {} };
