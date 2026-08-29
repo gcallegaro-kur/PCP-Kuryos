@@ -90,6 +90,23 @@ relevante para retomar o trabalho depois.
 - Sem indicação visual de que dá pra trocar o produto selecionado sem
   recarregar a página (funciona, só não é óbvio).
 
+## Planejamento / PCP
+
+Trabalho ativo, roteiro completo em `PLANO_PLANEJAMENTO_PCP.md` (não
+duplicado aqui) — só os 2 itens que esse plano marcou como fora de
+escopo por enquanto:
+
+- **Apontamento de manipulação (rendimento real do batch)** — bloqueado
+  por um pré-requisito de PROCESSO, não de sistema: hoje há falha de
+  disciplina de pesagem no chão de fábrica, alguns itens nem estão sendo
+  pesados. Apontar volume real contra um dado de pesagem que não existe
+  de forma confiável geraria número pior que não ter o dado. Retomar só
+  depois de resolver a disciplina de pesagem.
+- **Alertas sonoros na fábrica / notificação no celular do funcionário**
+  quando uma OP atrasa — evolução natural do sistema de alertas por
+  e-mail (Fase 4 do plano), cogitada pelo usuário como próximo passo
+  "conforme for" amadurecendo, não parte do MVP.
+
 ## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
 
 Conceito grande, discutido em profundidade com o usuário em 2026-08-28,
@@ -163,11 +180,11 @@ nenhuma decisão já tomada na conversa:
   qualidade, o que ocasionam mais perdas, queria tentar capturar e
   mensurar essas variações". É analytics pra depois do cutover das
   planilhas legadas, não construir preventivamente.
-- **Agendamento em `planejamento.html` parcialmente desconectado do fluxo
-  de congelamento de `horizonte.html`/`alocacoes_planejamento`** ⚠
-  verificar se ainda procede — achado de 30+ dias atrás; pode já ter sido
-  resolvido por trabalho posterior nesta sessão (Resumo Semanal por Linha,
-  etc.) — conferir antes de priorizar.
+- ~~Agendamento em `planejamento.html` parcialmente desconectado do fluxo
+  de congelamento de `horizonte.html`/`alocacoes_planejamento`~~ — deixou
+  de ser um item de backlog: confirmado e aprofundado (o motor de
+  replanejamento automático não produz efeito visível hoje), virou Fase 1
+  de trabalho ativo em `PLANO_PLANEJAMENTO_PCP.md`.
 
 ## Qualidade (módulo futuro, fora de escopo até agora)
 
