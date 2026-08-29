@@ -3945,7 +3945,11 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
           '<div class="turno-stat-line">Envase há ' + horasTxt + '</div>';
       }
       html += '<button type="button" class="andon-btn btn-resume" data-encerrar-op="' + escTurno(op.lote) + '" data-encerrar-nome="' + escTurno(nome) + '" data-encerrar-tipo="' + tipo + '">✅ Encerrar OP</button>' +
-        '<button type="button" class="andon-btn btn-neutral" data-intervalo-nome="' + escTurno(nome) + '" data-intervalo-tipo="' + tipo + '">☕ Intervalo</button>';
+        // Achado do agente de UX: parecido demais com "🛑 Parar linha" (mesmo
+        // card, botão full-width logo acima) -- gente confundia achando que
+        // registra uma parada de linha de verdade. Isto aqui só salva
+        // "quanto foi produzido até agora", a linha continua rodando/aberta.
+        '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar a linha -- diferente de &quot;Parar linha&quot;" data-intervalo-nome="' + escTurno(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
     }
 
     card.innerHTML = html;
