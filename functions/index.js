@@ -92,6 +92,20 @@ async function syncProdutoFromOP(sku, produto, cliente, produtoInfo) {
 // com nada, não adivinha por quantidade em cima disso -- fica sem vincular e
 // loga o erro, pra não mascarar um vínculo errado atrás de um código que
 // parecia preciso e não era.
+// Fase 6 do plano (PLANO_PLANEJAMENTO_PCP.md): achado do usuário ao
+// revisar o mockup -- um pedido comercial planejado por quantidade
+// (ex: 10.000 un.) na prática vira N OPs emitidas (ex: 10 de 1.000),
+// não 1. A versão anterior desta função tratava cada alocação como
+// vínculo BINÁRIO (1 alocação = no máximo 1 OP, "opLote" + status
+// vira 'vinculado' e nunca mais aceita outra) -- a 2a OP emitida contra
+// o mesmo bloco de 10.000 não achava mais nenhuma alocação 'congelado'
+// disponível (a única já virou 'vinculado' pela 1a) e ficava sem vínculo.
+// Agora cada alocação é consumida aos poucos: "congelado" enquanto
+// sobrar capacidade (qtd - qtdConsumida > 0), só vira "vinculado" quando
+// a soma das OPs emitidas contra ela fecha o total. `opsVinculadas` (mapa
+// loteKey -> {lote,qtd,vinculadoEm}) substitui o antigo campo único
+// `opLote` -- ver cancelOp (ops.html) e _syncOpsLoteStatusELinha/
+// autoAjustarPlanejamento (auth_check.js), que precisaram do mesmo ajuste.
 async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCodigo) {
   if (!skuPedidoKey) return;
   const snap = await db.ref("alocacoes_planejamento")
@@ -100,10 +114,14 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
   let bestId = null;
   let vinculoPreciso = false;
 
+  function capacidadeRestante(aloc) {
+    return (aloc.qtd || 0) - (aloc.qtdConsumida || 0);
+  }
+
   if (necessidadeCodigo) {
     const codigoNorm = String(necessidadeCodigo).trim().toUpperCase();
     for (const [id, aloc] of Object.entries(alocacoes)) {
-      if (!aloc || aloc.status !== "congelado" || aloc.opLote) continue;
+      if (!aloc || aloc.status !== "congelado" || capacidadeRestante(aloc) <= 0) continue;
       const derivedCodigo = "NEC-" + id.slice(-6).toUpperCase();
       if (derivedCodigo === codigoNorm) {
         bestId = id;
@@ -113,15 +131,15 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
     }
     if (!bestId) {
       console.error("necessidadeCodigo '" + necessidadeCodigo + "' informado pra OP " + lote +
-        " não bateu com nenhuma alocação congelada de " + skuPedidoKey +
+        " não bateu com nenhuma alocação congelada com capacidade restante de " + skuPedidoKey +
         " -- não vinculado, pra não adivinhar errado.");
       return;
     }
   } else {
     let bestDiff = Infinity;
     for (const [id, aloc] of Object.entries(alocacoes)) {
-      if (!aloc || aloc.status !== "congelado" || aloc.opLote) continue;
-      const diff = Math.abs((aloc.qtd || 0) - qtdPlanejada);
+      if (!aloc || aloc.status !== "congelado" || capacidadeRestante(aloc) <= 0) continue;
+      const diff = Math.abs(capacidadeRestante(aloc) - qtdPlanejada);
       if (diff < bestDiff) {
         bestDiff = diff;
         bestId = id;
@@ -131,26 +149,39 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
   }
 
   const aloc = alocacoes[bestId];
-  await db.ref("alocacoes_planejamento/" + bestId).update({
-    opLote: lote,
-    status: "vinculado",
-    vinculadoEm: new Date().toISOString(),
-    vinculoPreciso: vinculoPreciso,
-  });
+  const loteKeySafe = sanitizeKey(lote);
+  const novaQtdConsumida = (aloc.qtdConsumida || 0) + qtdPlanejada;
+  const novoStatus = novaQtdConsumida >= (aloc.qtd || 0) ? "vinculado" : "congelado";
+  const updates = {};
+  updates["opsVinculadas/" + loteKeySafe] = {lote: lote, qtd: qtdPlanejada, vinculadoEm: new Date().toISOString()};
+  updates.qtdConsumida = novaQtdConsumida;
+  updates.status = novoStatus;
+  if (vinculoPreciso) updates.vinculoPreciso = true;
+  await db.ref("alocacoes_planejamento/" + bestId).update(updates);
 
-  // Grava o lote direto nos slots horários que essa alocação cobre -- sem
+  // Grava o lote direto nos slots horários que essa OP cobre (só até a
+  // quantidade DESSA OP, não a alocação inteira -- sem isso, a 1a OP de
+  // um bloco de 10 "roubaria" visualmente os slots das outras 9) -- sem
   // isso, a Grade Semanal (planejamento.html) tinha que adivinhar por FIFO
   // qual OP corresponde a cada hora (buildWeekLoteAssignment/exactLoteForSlot).
   // Best-effort: se der errado, a alocação já está vinculada, o pior caso é
   // a Grade continuar caindo no fallback de adivinhação pra essa semana.
   try {
-    await writeLoteIntoWeekSlots(skuPedidoKey, aloc.semanaISO, aloc.linha, lote);
+    await writeLoteIntoWeekSlots(skuPedidoKey, aloc.semanaISO, aloc.linha, lote, qtdPlanejada);
   } catch (e) {
     console.error("Falha ao gravar lote nos slots de programacao pro lote " + lote + ":", e);
   }
 }
 
-async function writeLoteIntoWeekSlots(pedidoKey, semanaISO, linhaNome, lote) {
+// qtdAlvo (Fase 6, achado do usuário: "1 pedido vira N OPs"): quando
+// passado, para de preencher slots assim que a soma de mediaPorHora dos
+// slots já marcados (o mesmo ritmo com que cada slot foi originalmente
+// programado) cobrir a quantidade dessa OP específica -- sem isso, a 1a
+// OP emitida contra um bloco de 10.000un/10 OPs "roubaria" visualmente
+// TODOS os slots restantes do bloco inteiro, sobrando nada pras próximas
+// 9. Omitir qtdAlvo preenche tudo que sobrar (comportamento antigo,
+// ainda correto pro caso de 1 alocação = 1 OP só).
+async function writeLoteIntoWeekSlots(pedidoKey, semanaISO, linhaNome, lote, qtdAlvo) {
   if (!semanaISO || !linhaNome) return;
   const linhasSnap = await db.ref("config/linhas").once("value");
   const linhas = linhasSnap.val() || [];
@@ -160,16 +191,22 @@ async function writeLoteIntoWeekSlots(pedidoKey, semanaISO, linhaNome, lote) {
 
   const weekStart = new Date(semanaISO + "T12:00:00");
   const updates = {};
-  for (let d = 0; d < 7; d++) {
+  let qtdCoberta = 0;
+  for (let d = 0; d < 7 && (qtdAlvo == null || qtdCoberta < qtdAlvo); d++) {
     const day = new Date(weekStart);
     day.setDate(day.getDate() + d);
     const ymd = day.toISOString().split("T")[0];
     const daySnap = await db.ref("programacao/" + ymd).once("value");
     const dayData = daySnap.val() || {};
-    for (const hourKey of Object.keys(dayData)) {
+    // Ordem cronológica dentro do dia (chaves tipo "07_00") -- cobre as
+    // horas mais cedo primeiro, mesma ordem em que a produção acontece.
+    const hourKeys = Object.keys(dayData).sort();
+    for (const hourKey of hourKeys) {
+      if (qtdAlvo != null && qtdCoberta >= qtdAlvo) break;
       const slot = (dayData[hourKey] || {})[slotKey];
       if (slot && slot.pedidoKey === pedidoKey && !slot.lote) {
         updates["programacao/" + ymd + "/" + hourKey + "/" + slotKey + "/lote"] = lote;
+        qtdCoberta += (slot.mediaPorHora || 0);
       }
     }
   }

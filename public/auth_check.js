@@ -722,8 +722,15 @@ window._syncOpsLoteStatusELinha = function(programacao) {
       var updates = {};
 
       if (!op.linha) {
+        // Fase 6 do plano: opLote (vínculo único) virou opsVinculadas (mapa
+        // -- uma alocação pode ter várias OPs, um pedido de 10.000 vira N
+        // OPs). Não exige mais status==='vinculado' (só bate quando a
+        // alocação inteira já foi 100% consumida) -- uma OP específica já
+        // está genuinamente vinculada a essa linha mesmo que a alocação
+        // ainda esteja 'congelado' aguardando as outras OPs do mesmo bloco.
+        var opLoteKeySafe = sanitizeKey(op.lote);
         var alocLinha = alocacoes.find(function(a) {
-          return a && a.opLote === op.lote && a.status === 'vinculado' && a.linha;
+          return a && a.opsVinculadas && a.opsVinculadas[opLoteKeySafe] && a.linha;
         });
         if (alocLinha) updates.linha = alocLinha.linha;
       }
@@ -887,7 +894,13 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
       // pedidoKey|segunda-da-semana|linha.
       var vinculadoSet = {};
       Object.values(alocacoes).forEach(function(a) {
-        if (a && a.status === 'vinculado') {
+        // Fase 6 do plano: status só vira 'vinculado' quando a alocação
+        // inteira já foi 100% consumida (todas as N OPs do bloco emitidas)
+        // -- mas mesmo uma OP só (consumo parcial, opsVinculadas não
+        // vazio) já é um compromisso real que o reajuste automático não
+        // deve mexer, senão reshufflaria a capacidade restante em cima de
+        // OPs que já existem de verdade pra esse mesmo bloco.
+        if (a && ((a.opsVinculadas && Object.keys(a.opsVinculadas).length) || a.status === 'vinculado')) {
           vinculadoSet[a.pedidoKey + '|' + a.semanaISO + '|' + a.linha] = true;
         }
       });

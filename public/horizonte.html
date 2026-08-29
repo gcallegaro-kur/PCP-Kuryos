@@ -634,7 +634,11 @@ function renderNecessidades(){
   var card=document.getElementById('hzNecessidadesCard');
   var items=Object.keys(alocacoesCache).filter(function(id){
     var a=alocacoesCache[id];
-    return a&&a.status==='congelado'&&!a.opLote;
+    // Fase 6 do plano: status só some de 'congelado' quando a alocação
+    // inteira já foi 100% consumida por OPs emitidas (opsVinculadas, um
+    // pedido pode virar N OPs) -- 'congelado' sozinho já basta agora pra
+    // "ainda precisa de pelo menos mais 1 OP" (opLote não existe mais).
+    return a&&a.status==='congelado';
   }).map(function(id){
     return {id:id,a:alocacoesCache[id]};
   }).sort(function(x,y){

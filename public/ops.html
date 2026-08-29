@@ -1439,13 +1439,24 @@
         if (lote) {
           // 1. Desvincula qualquer alocacoes_planejamento presa a essa OP --
           // sem isso, horizonte.html continuaria contando a capacidade como
-          // "já comprometida" pra sempre.
+          // "já comprometida" pra sempre. Fase 6 do plano: uma alocação
+          // agora pode ter várias OPs vinculadas (opsVinculadas, um pedido
+          // de 10.000 vira N OPs de menor quantidade) -- cancelar UMA OP só
+          // remove a parte dela (não cancela a alocação inteira, que pode
+          // ter outras OPs legitimamente vinculadas) e devolve a
+          // quantidade dela pra capacidade disponível (volta pra
+          // 'congelado', mesmo que já tivesse batido 'vinculado' antes).
           cascatas.push(database.ref('alocacoes_planejamento').once('value').then((snap) => {
             const upd = {};
+            const loteKeySafe = sanitizeKey(lote);
             snap.forEach((child) => {
               const v = child.val();
-              if (v && v.opLote === lote && v.status === 'vinculado') {
-                upd[child.key + '/status'] = 'cancelado';
+              const vinc = v && v.opsVinculadas && v.opsVinculadas[loteKeySafe];
+              if (vinc) {
+                const qtdRemovida = vinc.qtd || 0;
+                upd[child.key + '/opsVinculadas/' + loteKeySafe] = null;
+                upd[child.key + '/qtdConsumida'] = Math.max((v.qtdConsumida || 0) - qtdRemovida, 0);
+                upd[child.key + '/status'] = 'congelado';
               }
             });
             if (Object.keys(upd).length) return database.ref('alocacoes_planejamento').update(upd);
