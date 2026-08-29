@@ -970,4 +970,65 @@ o resto do app): o controle de quem pode confirmar é só client-side —
 proteção que toda outra trava admin-only já existente (cancelar OP,
 editar linha/pedido).
 
-**Próxima fase**: Fase 8 (changeover configurável).
+**Próxima fase, à época**: Fase 8. Retomado o trabalho na Fase 6 logo
+em seguida (ver seção 17) depois de fechar o desenho com o usuário.
+
+## 17. Fase 6 — desenho final aprovado + fundação de backend concluída (2026-08-29/30)
+
+4 rodadas de mockup (seção 15/16) até o desenho fechar com o usuário.
+**Desenho final**:
+
+- **As duas telas usam a MESMA interface** — a Grade Semanal que já
+  existe hoje (`planejamento.html`: `.gantt-grid`/`.gantt-block` com
+  `grid-column: X / span Y` proporcional à duração em horas, dia-tabs,
+  navegação por semana E por dia — `btnPrevDay`/`btnNextDay`, que já
+  existiam e ficaram de fora do 1o mockup por engano — e o "🗓️ Resumo
+  Semanal por Linha", mantido). A "📋 Programação Semanal Consolidada"
+  (tabela plana separada) fica de fora — confirmado que não é usada.
+- **Planejamento de Quantidades** = a Grade de hoje, sem mudança
+  estrutural — é onde o PCP aloca (clica numa célula vazia, escolhe
+  pedido, define linha/horário/quantidade), blocos representam
+  quantidade planejada por pedido.
+- **Planejamento de OPs** = a MESMA grade, mas é só um resultado visual
+  (somente leitura) — blocos são OPs de verdade (uma vez emitidas, não
+  pedidos), com o tempo de setup/limpeza entre uma OP e a próxima na
+  mesma linha aparecendo como um bloco hachurado entre elas (mesmo
+  padrão visual já usado hoje pra pausa de turno, `.gantt-cell-pausa`).
+  Alimenta a Fase 8 (changeover) com um lugar pra mostrar esse tempo.
+- **Achado crítico do usuário, corrigido antes de ir mais longe**: um
+  pedido planejado por quantidade (ex: 10.000 un.) na prática vira N OPs
+  emitidas (ex: 10 de 1.000) — o vínculo `alocacoes_planejamento`↔OP
+  (`linkAlocacaoToOP`) era BINÁRIO (1 alocação aceita só 1 OP), a 2a OP
+  emitida contra o mesmo bloco não achava mais nada disponível. **Já
+  corrigido e deployado**, ver detalhe técnico completo no commit
+  `909d89e` — resumo: `alocacoes_planejamento/{id}` ganha `qtdConsumida`
+  + `opsVinculadas` (mapa, substitui o campo único `opLote`), `status`
+  só vira `'vinculado'` quando o total é 100% consumido por todas as OPs
+  do bloco; `writeLoteIntoWeekSlots` preenche só os slots de hora
+  suficientes pra cobrir CADA OP (não mais todos de uma vez), pra não
+  "roubar" visualmente os slots das próximas OPs do mesmo bloco. Testado
+  com harness Node (24 asserções) simulando exatamente o cenário de
+  10.000un→10 OPs de 1.000, incluindo a distribuição correta dos slots
+  de hora entre elas. Consumidores ajustados: `cancelOp` (ops.html,
+  desvincula só a OP cancelada, não a alocação inteira),
+  `_syncOpsLoteStatusELinha`/`autoAjustarPlanejamento` (auth_check.js),
+  "Necessidades de Emissão" (horizonte.html).
+
+### Falta implementar (próximos passos)
+
+- **Tela "Planejamento de Quantidades"**: hoje é a aba "Grade Semanal"
+  de `planejamento.html` — decidir se vira uma tela própria
+  (renomear/mover) ou se `planejamento.html` É essa tela (renomeando o
+  menu). Reaproveita quase 100% do código existente.
+- **Tela "Planejamento de OPs"**: nova, mesma estrutura de Grade, mas
+  lendo `ops/` (com `dataInicioPlanejada`/`dataFimPlanejada`, Fase 2) em
+  vez de `programacao/` — cada bloco = 1 OP, cor por status real
+  (Em Produção/Concluído/Aguardando Confirmação/Atrasada, usando o que
+  já existe da Fase 7). Bloco de setup entre OPs consecutivas na mesma
+  linha: usar `setupInicio`/`setupFim` já gravado por OP quando
+  existir (dado capturado hoje, nunca mostrado em lugar nenhum — mesmo
+  padrão de "gap de dado existente" da Fase 5), com um valor padrão
+  configurável por linha como fallback (a parte "configurável" da
+  Fase 8, que passa a viver aqui visualmente).
+- **Painel de Turno espelhando a grade de OPs** — item já confirmado no
+  desenho original (seção 3), ainda não iniciado.
