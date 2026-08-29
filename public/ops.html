@@ -366,6 +366,7 @@
               <th>Cliente</th>
               <th>Produto / Descrição</th>
               <th style="width: 120px;">Linha</th>
+              <th style="width: 170px;">Programação</th>
               <th style="width: 150px;">Pedido Comercial</th>
               <th style="width: 180px;">Progresso Realizado</th>
               <th style="width: 160px;">Status da OP</th>
@@ -374,7 +375,7 @@
           </thead>
           <tbody id="ops-tbody">
             <tr>
-              <td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
+              <td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
             </tr>
           </tbody>
         </table>
@@ -939,6 +940,56 @@
     }).join('');
   }
 
+  // Fase 2 do plano de Planejamento/PCP (PLANO_PLANEJAMENTO_PCP.md): os
+  // campos dataInicioPlanejada/dataFimPlanejada existiam no schema da OP
+  // desde sempre mas nunca eram preenchidos em lugar nenhum -- sem eles,
+  // nenhum alerta de atraso é possível. Enquanto as duas telas novas de
+  // Planejamento (Fase 6) não existem, este é o ponto de entrada manual:
+  // o PCP programa aqui, a produção marca o início real ao abrir a OP
+  // (já existente, form.html).
+  function isoToDatetimeLocal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function fmtProgramacaoCurta(iso) {
+    if (!iso) return null;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function programacaoCellHtml(op, escapedKeyAttr, isAdmin) {
+    var ini = fmtProgramacaoCurta(op.dataInicioPlanejada);
+    var fim = fmtProgramacaoCurta(op.dataFimPlanejada);
+    var resumo = ini ? (fim ? (escapeHtml(ini) + ' → ' + escapeHtml(fim)) : ('a partir de ' + escapeHtml(ini))) : null;
+    return `<div class="pedido-cell">
+      ${resumo ? `<span style="font-size:12px">${resumo}</span>` : `<span class="badge-pedido is-vazio">Não programada</span>`}
+      ${isAdmin ? `<button type="button" class="btn-edit-inline" title="Programar início/fim planejados" onclick="showProgramacaoEdit('${escapedKeyAttr}')">✏️</button>` : ``}
+    </div>`;
+  }
+  // Mesmo padrão de "clique no lápis pra editar" de showPedidoSelect logo
+  // abaixo -- grava direto via updateOpField (já valida admin e trata
+  // erro), o listener de listenToActiveOps re-renderiza a linha sozinho
+  // depois da escrita confirmar, sem precisar de um botão de "fechar".
+  function showProgramacaoEdit(opKey) {
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    const cell = document.getElementById('programacaoCell-' + escapeAttr(opKey));
+    if (!cell) return;
+    const keyAttr = escapeAttr(opKey);
+    cell.innerHTML = `<div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:10px;color:var(--muted)">Início planejado</label>
+      <input type="datetime-local" style="font-size:12px;padding:2px 4px" value="${isoToDatetimeLocal(op.dataInicioPlanejada)}" onchange="updateOpField('${keyAttr}', 'dataInicioPlanejada', this.value ? new Date(this.value).toISOString() : null)">
+      <label style="font-size:10px;color:var(--muted)">Fim planejado</label>
+      <input type="datetime-local" style="font-size:12px;padding:2px 4px" value="${isoToDatetimeLocal(op.dataFimPlanejada)}" onchange="updateOpField('${keyAttr}', 'dataFimPlanejada', this.value ? new Date(this.value).toISOString() : null)">
+    </div>`;
+    const firstInput = cell.querySelector('input');
+    if (firstInput) firstInput.focus();
+  }
+
   function renderOpRow(op) {
     const isAdmin = currentRole === 'admin';
     let optionsHtml = `<option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>`;
@@ -983,6 +1034,7 @@
             ? `<select onchange="updateOpField('${escapedKeyAttr}', 'linha', this.value)">${optionsHtml}</select>`
             : `<span>${escapedLinha}</span>`}
         </td>
+        <td id="programacaoCell-${escapedKeyAttr}">${programacaoCellHtml(op, escapedKeyAttr, isAdmin)}</td>
         <td id="pedidoCell-${escapedKeyAttr}">
           <div class="pedido-cell">
             ${derivedParentId
@@ -1047,6 +1099,7 @@
           <div style="font-weight: 600;">${escapedProduto}</div>
           <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku} · ${escapedCliente}</div>
         </td>
+        <td>—</td>
         <td>—</td>
         <td>${p.parentPedidoId ? '#' + escapeHtml(String(p.parentPedidoId)) : '—'}</td>
         <td>${planned.toLocaleString('pt-BR')} un planejadas</td>
