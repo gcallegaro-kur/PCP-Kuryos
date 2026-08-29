@@ -232,13 +232,17 @@ acima.
 Cada fase depende do dado/decisão da fase anterior — seguir a ordem evita
 retrabalho.
 
-1. **Investigar por que o motor de replanejamento automático
+1. ✅ **Investigar por que o motor de replanejamento automático
    (`autoAjustarPlanejamento`) não produz efeito visível hoje** —
-   diagnóstico primeiro (read-only, barato), decide se as fases 5-6 vão
-   adaptar esse motor ou reconstruir. Fazer isso antes de qualquer coisa
-   que dependa dele evita retrabalho.
+   **concluída**: achados os 4 bloqueios reais, todos corrigidos e
+   deployados (ver seção 9). Falta só confirmar com o time, ao vivo, que
+   o motor está de fato empurrando/adiantando slots agora que os
+   bloqueios sumiram.
 2. **Popular `dataInicioPlanejada`/`dataFimPlanejada` de verdade na
-   emissão da OP** — pré-requisito de quase tudo abaixo.
+   emissão da OP** — pré-requisito de quase tudo abaixo. **Parcial**:
+   edição manual já existe em `ops.html` (seção 9); falta decidir se vale
+   também auto-derivar de slots vinculados na emissão, ou se manual basta
+   até a Fase 6.
 3. **Apontamento nos pontos de controle** (início de turno — novo botão
    dedicado —, abertura de OP, paradas via Andon, encerramento de OP, fim
    de turno) + travar na OP programada — baixo risco, ataca a dor real
@@ -326,24 +330,25 @@ corrigido e implantado, e o que fica mapeado pra retomar em cada fase.
   `#scheduleBanner`, `#fPedidoIdLocked`/`#btnTrocarOP`) que ficavam quase
   brancos no dark mode — trocados por `color-mix()` sobre os tokens já
   usados no resto da página. **Deployado.**
+- **`pedidos.html` — campo de linha fixo corrigido**: `<select id="fLinha">`
+  só oferecia "Linha 1"/"Linha 2"/"Linha 3" no HTML; agora é preenchido
+  dinamicamente via `config.linhas` (mesmo padrão de `fillProdutoSelect`
+  no mesmo arquivo) — se uma linha for renomeada, o pedido continua
+  batendo com o nome real na grade. **Deployado.**
+- **Override manual de status de OP fica visível e reversível**:
+  `updateOpField` (`ops.html`) grava `statusManualOverride:true` +
+  quem/quando ao mudar status manualmente; `_syncOpsLoteStatusELinha`
+  (`auth_check.js`) passa a respeitar essa flag em vez de sobrescrever
+  silenciosamente. Badge "🔒 manual" + botão "🔓 liberar" devolve pro
+  automático quando quiser. **Deployado.**
 
 ### Mapeado pra retomar, por fase
 
-**Fase 1 (motor de replanejamento) — ainda incompleta mesmo com a causa
-raiz corrigida:**
-- `pedidos.html` só oferece "Linha 1"/"Linha 2"/"Linha 3" fixos no campo
-  `linha` de um pedido, mas o nome real das linhas vem de `config.linhas`
-  (texto livre, editável em `admin.html`) — se uma linha foi renomeada,
-  `pedidos/{key}.linha` nunca vai bater com o nome real na grade, e o
-  filtro do motor de replanejamento continua vazio mesmo com os dois
-  achados acima corrigidos. Precisa trocar o campo fixo por um `<select>`
-  vindo de `config.linhas`.
-- Correção manual de `ops/{lote}.status` (via `ops.html`) é revertida
-  silenciosamente pela sincronização automática (`_syncOpsLoteStatusELinha`,
-  que só protege `'Concluído'`/`'Cancelado'`) na próxima carga de página
-  de qualquer admin. Precisa de um flag tipo `statusManualOverride` que a
-  sincronização automática respeite, mesmo padrão que `statusManual`
-  já tem em `pedidos/`.
+**Fase 1 (motor de replanejamento) — os 4 bloqueios conhecidos já foram
+corrigidos** (campo `pedidos.linha` nunca populado de forma durável,
+comparação de `pedidoKey` sem normalizar, campo de linha fixo em
+`pedidos.html`, override de status revertido silenciosamente). Resta só
+um comportamento intencional a ter em mente, não um bug:
 - Zona fixa de 7 dias (`config/congelamento.diasFixos`) protege da
   automação qualquer slot dentro da próxima semana — combinado com os
   achados acima, reforça a percepção de "nada muda" porque a semana
