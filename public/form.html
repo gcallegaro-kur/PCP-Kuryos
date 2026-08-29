@@ -382,16 +382,30 @@
           <label>Quantidade TOTAL produzida até agora nesta OP</label>
           <input type="number" id="encerrarOpTurnoQtd" min="0" placeholder="Ex: 3400">
         </div>
+        <!-- Achados dos agentes de UX/boas práticas: este era o fluxo mais
+             usado no dia a dia (Painel de Turno) e o mais pobre -- sem hint
+             de ritmo (só existia em "Apontamento por Total") e com perda em
+             texto livre único (só "Fechar Lote" tinha o dropdown tipado
+             PERDAS_TIPOS, multi-perda, com desconto de estoque por material
+             específico). Portado pra cá -- reaproveita addPerda/collectPerdas
+             já parametrizadas por containerId, sem duplicar lógica. -->
+        <div class="form-hint prog" id="encerrarOpTurnoRitmoHint"></div>
         <div class="form-group">
           <label>Operador</label>
           <input type="text" id="encerrarOpTurnoOperador" placeholder="Nome do operador..." autocomplete="off">
         </div>
-        <div class="form-group">
-          <label>Perdas (opcional)</label>
-          <input type="text" id="encerrarOpTurnoPerdaInsumo" placeholder="Insumo (ex: Frasco 120ml)">
+        <div class="parada-section" style="margin-bottom:14px">
+          <div class="parada-section-header">
+            <span class="parada-section-title">Perdas (opcional)</span>
+            <button type="button" class="btn-add-parada" id="btnAddPerdaEncerrarTurno">+ Adicionar perda</button>
+          </div>
+          <div id="encerrarOpTurnoPerdasList">
+            <div id="encerrarOpTurnoNoPerdasMsg" class="no-paradas">Nenhuma perda informada.</div>
+          </div>
         </div>
-        <div class="form-group">
-          <input type="number" id="encerrarOpTurnoPerdaQtd" min="0" placeholder="Quantidade perdida">
+        <div class="form-group" id="encerrarOpTurnoJustificaWrap" style="display:none">
+          <label style="color:var(--danger);font-weight:700">Justificativa do Desvio (Obrigatório)</label>
+          <textarea id="encerrarOpTurnoJustificativa" rows="3" placeholder="Explique o motivo do desvio (ex: quebras de embalagens, rendimento do lote de bulk, refugo, etc.)"></textarea>
         </div>
       </div>
       <div class="modal-footer">
@@ -4257,6 +4271,7 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
     };
     if (lote) registro.lote = lote;
     if (pedidoId) registro.pedidoId = pedidoId;
+    if (opts.justificativa) registro.justificativaDivergencia = opts.justificativa;
     var clientKey = db.ref('registros/' + today()).push().key;
     queueOfflineWrite({
       id: clientKey, type: 'apontamento_total', data: today(), registro: registro,
@@ -4288,21 +4303,73 @@ function abrirEncerrarOpModal(nome, tipo, lote) {
   document.getElementById('encerrarOpTurnoSubtitle').textContent = nome + ' · OP ' + lote;
   document.getElementById('encerrarOpTurnoQtd').value = '';
   document.getElementById('encerrarOpTurnoOperador').value = '';
-  document.getElementById('encerrarOpTurnoPerdaInsumo').value = '';
-  document.getElementById('encerrarOpTurnoPerdaQtd').value = '';
+  document.getElementById('encerrarOpTurnoRitmoHint').textContent = '';
+  document.getElementById('encerrarOpTurnoRitmoHint').className = 'form-hint prog';
+  var perdasList = document.getElementById('encerrarOpTurnoPerdasList');
+  perdasList.querySelectorAll('.perda-entry').forEach(function(el) { el.remove(); });
+  document.getElementById('encerrarOpTurnoNoPerdasMsg').style.display = '';
+  document.getElementById('encerrarOpTurnoJustificaWrap').style.display = 'none';
+  document.getElementById('encerrarOpTurnoJustificativa').value = '';
   document.getElementById('encerrarOpTurnoModal').classList.add('open');
 }
 
-// Perda digitada como texto livre por ora (não como tipo pré-definido do
-// fluxo antigo de Fechar Lote) -- reaproveita o mesmo formato de perdas
-// já usado ali (tipo:'Outro' + especificacao), então historico.html
-// mostra do mesmo jeito sem precisar de nenhuma mudança.
-function salvarPerdaOP(lote, produto, linha, insumo, qtd) {
-  if (!insumo || !qtd) return Promise.resolve();
+// Mesmo cálculo/estilo de updateRitmoHint() (Apontamento por Total, Modo
+// Avançado) -- só que generalizado por tipo (linha/rotulagem/posto) via
+// campoAberturaInicio(tipo), já que aqui o modal serve os 3 setores.
+// Também decide se exige justificativa: mesmo gatilho de opForm/opJustificativa
+// (comparar contra a quantidade planejada da OP), consistente com o que o
+// card do Painel de Turno já mostra como "% concluído".
+function updateEncerrarOpTurnoRitmoHint() {
+  var hintEl = document.getElementById('encerrarOpTurnoRitmoHint');
+  var justWrap = document.getElementById('encerrarOpTurnoJustificaWrap');
+  var justTa = document.getElementById('encerrarOpTurnoJustificativa');
+  if (!encerrarOpAlvoAtual) { hintEl.textContent = ''; justWrap.style.display = 'none'; return; }
+  var op = findOpByLote(encerrarOpAlvoAtual.lote) || {};
+  var qtdTotal = parseInt(document.getElementById('encerrarOpTurnoQtd').value) || 0;
+  var apontado = getProduzido(op, encerrarOpAlvoAtual.tipo);
+  var delta = qtdTotal - apontado;
+  if (!qtdTotal) {
+    hintEl.className = 'form-hint prog';
+    hintEl.textContent = 'Já registrado: ' + fmtNum(apontado) + ' un.' + (op.qtdPlanejada ? ' de ' + fmtNum(op.qtdPlanejada) + ' un. planejadas' : '');
+  } else if (delta < 0) {
+    hintEl.className = 'form-hint manual';
+    hintEl.textContent = '⚠️ Quantidade digitada é menor que o já registrado (' + fmtNum(apontado) + ' un.) — confira antes de salvar.';
+  } else {
+    var campoInicio = campoAberturaInicio(encerrarOpAlvoAtual.tipo);
+    var horas = op[campoInicio] ? horasDesde(op[campoInicio]) : 0;
+    if (horas) {
+      var ritmo = Math.round(delta / horas);
+      hintEl.className = 'form-hint prog';
+      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un. em ' + (Math.round(horas*10)/10) + 'h · Ritmo real: ' + fmtNum(ritmo) + ' un./h';
+    } else {
+      hintEl.className = 'form-hint prog';
+      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un.';
+    }
+  }
+  // Desvio contra o planejado da OP -- só exige justificativa quando há uma
+  // quantidade planejada real pra comparar (OPs sem planejamento não travam).
+  var hasDeviation = qtdTotal > 0 && op.qtdPlanejada > 0 && qtdTotal !== op.qtdPlanejada;
+  justWrap.style.display = hasDeviation ? 'block' : 'none';
+  if (!hasDeviation) justTa.value = '';
+}
+document.getElementById('encerrarOpTurnoQtd').addEventListener('input', updateEncerrarOpTurnoRitmoHint);
+document.getElementById('btnAddPerdaEncerrarTurno').addEventListener('click', function() {
+  addPerda('encerrarOpTurnoPerdasList', 'encerrarOpTurnoNoPerdasMsg');
+});
+
+// Grava as perdas estruturadas (mesmo formato tipado + material específico
+// de collectPerdas/Fechar Lote) direto em perdas/{lote} -- fora da fila
+// offline por ora, mesmo padrão já usado pelo salvarPerdaOP antigo que este
+// substitui (gap de fila offline pra esta escrita já é conhecido/registrado
+// em MELHORIAS_FUTURAS.md, não é regressão introduzida aqui).
+function salvarPerdasEncerrarOP(lote, produto, linha, pedidoId, perdas) {
+  if (!perdas || !perdas.length) return Promise.resolve();
   return db.ref('perdas/' + sanitizeKey(lote)).push({
     data: today(), lote: lote, produto: produto, linha: linha,
-    perdas: [{ tipo: 'Outro', quantidade: qtd, especificacao: insumo }],
+    pedidoId: pedidoId || '', perdas: perdas,
     timestamp: new Date().toISOString()
+  }).then(function() {
+    return baixarEstoquePerdas(perdas, lote);
   });
 }
 
@@ -4310,10 +4377,16 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
   if (!encerrarOpAlvoAtual) return;
   var qtd = parseInt(document.getElementById('encerrarOpTurnoQtd').value) || 0;
   var operador = document.getElementById('encerrarOpTurnoOperador').value.trim();
-  var perdaInsumo = document.getElementById('encerrarOpTurnoPerdaInsumo').value.trim();
-  var perdaQtd = parseInt(document.getElementById('encerrarOpTurnoPerdaQtd').value) || 0;
+  var perdas = collectPerdas('encerrarOpTurnoPerdasList');
   if (!operador) { alert('Informe o operador.'); return; }
   var opAlvo = findOpByLote(encerrarOpAlvoAtual.lote) || {};
+  var hasDeviation = qtd > 0 && opAlvo.qtdPlanejada > 0 && qtd !== opAlvo.qtdPlanejada;
+  var justificativa = document.getElementById('encerrarOpTurnoJustificativa').value.trim();
+  if (hasDeviation && !justificativa) {
+    alert('Por favor, insira a justificativa para o desvio de quantidade.');
+    document.getElementById('encerrarOpTurnoJustificativa').focus();
+    return;
+  }
   // "Qtd. total" é o acumulado desde o início da OP, não o produzido desde o
   // último apontamento -- confundir os dois faz a diferença calculada dar
   // zero e nada é gravado, sem nenhum aviso (só o modal fecha "com sucesso").
@@ -4327,8 +4400,13 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
   }
   var btn = this;
   btn.disabled = true;
-  fecharAlocacaoOP(encerrarOpAlvoAtual.lote, qtd, operador, { manterAberta: false, forcarConcluido: true, tipo: encerrarOpAlvoAtual.tipo }).then(function(res) {
-    return salvarPerdaOP(encerrarOpAlvoAtual.lote, opAlvo.produto || '', encerrarOpAlvoAtual.nome, perdaInsumo, perdaQtd).then(function() { return res; });
+  var pedKeyResolvido = opAlvo.skuPedidoKey ? resolvePedidoKeyBySkuKey(opAlvo.skuPedidoKey, pedidosCache) : null;
+  var pedidoIdAlvo = (pedKeyResolvido && pedidosCache[pedKeyResolvido]) ? (pedidosCache[pedKeyResolvido].id || '') : '';
+  fecharAlocacaoOP(encerrarOpAlvoAtual.lote, qtd, operador, {
+    manterAberta: false, forcarConcluido: true, tipo: encerrarOpAlvoAtual.tipo,
+    justificativa: hasDeviation ? justificativa : ''
+  }).then(function(res) {
+    return salvarPerdasEncerrarOP(encerrarOpAlvoAtual.lote, opAlvo.produto || '', encerrarOpAlvoAtual.nome, pedidoIdAlvo, perdas).then(function() { return res; });
   }).then(function(res) {
     btn.disabled = false;
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');
