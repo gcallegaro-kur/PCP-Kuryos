@@ -118,12 +118,14 @@ telas assumirem o papel de UI que `horizonte.html` tinha.
 
 ### Granularidade — do sistema, não do operador; e é exata, não slot fixo
 
-**O apontamento do operador NÃO é por hora nem por OP inteira — são 4
-pontos de controle naturais**, corrigido nesta revisão: **abertura da OP,
-intervalo, fim de turno, encerramento da OP**. Isso já é próximo do que o
-Painel de Turno faz hoje (o "Fim de turno"/"Intervalo" já existem como
-motivo de parada automática, `form.html:4554-4557`) — a diferença é
-formalizar esses 4 pontos como o modelo oficial de apontamento, sem exigir
+**O apontamento do operador NÃO é por hora nem por OP inteira — são
+pontos de controle naturais**, ajustado nesta 2ª revisão: **início de
+turno, abertura de OP, paradas (Andon), encerramento de OP, fim de
+turno.** "Intervalo" saiu da lista — decisão do usuário. "Início de
+turno" precisa virar um botão explícito próprio (hoje o Painel de Turno
+não tem uma ação dedicada pra isso, só "Fim de turno" já existe como
+motivo de parada automática, `form.html:4554-4557`). A diferença é
+formalizar esses pontos como o modelo oficial de apontamento, sem exigir
 check-in por hora.
 
 A granularidade do PLANEJAMENTO (grade/timeline do sistema) é uma decisão
@@ -212,9 +214,9 @@ dias — precisaríamos de um apontamento de produção diária no fim de cada
 dia? Como o sistema ajuda a tornar isso rápido?
 
 **Proposta: não deveria ser um formulário novo de digitação — deveria ser
-um painel de conferência que já vem pré-preenchido** pelos 4 pontos de
-controle da seção 3 (abertura, intervalo, fim de turno, encerramento de
-cada OP) mais paradas registradas via Andon. Se cada um desses eventos já
+um painel de conferência que já vem pré-preenchido** pelos pontos de
+controle da seção 3 (início de turno, abertura/encerramento de cada OP,
+fim de turno) mais paradas registradas via Andon. Se cada um desses eventos já
 captura o dado corretamente ao longo do dia, "fechar o dia" vira uma
 **leitura agregada**, não uma tarefa de digitar tudo de novo no fim: o
 painel mostra, por linha, o que rodou, quanto produziu, quais paradas
@@ -237,9 +239,10 @@ retrabalho.
    que dependa dele evita retrabalho.
 2. **Popular `dataInicioPlanejada`/`dataFimPlanejada` de verdade na
    emissão da OP** — pré-requisito de quase tudo abaixo.
-3. **Apontamento nos 4 pontos de controle** (abertura, intervalo, fim de
-   turno, encerramento) + travar na OP programada — baixo risco, ataca a
-   dor real que a equipe já relatou na rotina de apontamento.
+3. **Apontamento nos pontos de controle** (início de turno — novo botão
+   dedicado —, abertura de OP, paradas via Andon, encerramento de OP, fim
+   de turno) + travar na OP programada — baixo risco, ataca a dor real
+   que a equipe já relatou na rotina de apontamento.
 4. **Alertas ao PCP**: OP não iniciada no horário programado + OP atrasada
    em andamento, 5min de tolerância inicial + repique a cada 10min
    (cooldown próprio, não o padrão de 60min do sistema atual) —

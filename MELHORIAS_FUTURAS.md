@@ -106,6 +106,12 @@ escopo por enquanto:
   quando uma OP atrasa — evolução natural do sistema de alertas por
   e-mail (Fase 4 do plano), cogitada pelo usuário como próximo passo
   "conforme for" amadurecendo, não parte do MVP.
+- **E-mail de fim de turno tem % inconsistentes** (`onTurnoEncerrado`,
+  `functions/index.js:895`, campos `disponibilidadePct`/performance) —
+  reportado pelo usuário como "bem inconsistente". Adiado
+  deliberadamente: revisar com calma, caso a caso (provavelmente é mais
+  de uma causa raiz, não um bug único óbvio), não durante a implementação
+  do plano de Planejamento/PCP.
 
 ## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
 
