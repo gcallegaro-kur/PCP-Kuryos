@@ -112,6 +112,19 @@ escopo por enquanto:
   deliberadamente: revisar com calma, caso a caso (provavelmente é mais
   de uma causa raiz, não um bug único óbvio), não durante a implementação
   do plano de Planejamento/PCP.
+- **Trava dura na lista de "Alocar OP" (`form.html`)** — hoje a lista só
+  guia (ordenada por prioridade + selo "Próxima recomendada"), mas
+  produção ainda pode escolher qualquer OP livre, não só a programada
+  pra aquela linha. Adiado conscientemente pelo usuário ("bate, fica
+  legal por hora"): travar de verdade exigiria confiar em `ops.linha`
+  pra saber "essa OP é dessa linha", mas esse campo é sobrescrito toda
+  vez que alguém aloca (reflete última alocação física, não programação)
+  — travar contra ele esconderia OPs válidas ainda sem linha definida,
+  pior que o problema atual. Retomar quando o modelo de blocos por OP da
+  Fase 6 (`PLANO_PLANEJAMENTO_PCP.md`) existir, com vínculo OP↔linha
+  confiável desde a programação — nesse ponto também vale pensar num
+  "escape hatch" pro PCP resolver exceção na hora, sem travar produção
+  de verdade se o dado estiver incompleto.
 
 ## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
 
