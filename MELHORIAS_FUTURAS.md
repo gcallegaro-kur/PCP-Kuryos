@@ -204,6 +204,11 @@ dedicado por tela em vez de fixes pontuais:
   multi-seleção customizados (`setupMultiSelect`) não fecham com Esc, só
   clicando fora com o mouse — ruim pra quem usa teclado (equipe de
   PCP/escritório, uso plausível nesta tela específica).
+- **`cadastros.html`/`logistica.html`/`emitir_op.html`** (achado da 5a
+  rodada): mesmo padrão confirmado — `cadastros.html` tem 130 labels, 0
+  usam `for=`; `logistica.html`/`emitir_op.html` têm 0 ocorrências de
+  `label for=`. Nenhum dos três trata Escape pra fechar modal (só botão
+  × ou clique fora).
 
 ## Limpeza de código (stubs legados)
 
@@ -219,6 +224,59 @@ dedicado por tela em vez de fixes pontuais:
   mínimo sem SDK/lógica de negócio, ou marcar visivelmente como legado.
 - **`admin.html:405-409`**: `calcDias(ini, fim)` definida mas nunca
   chamada (`calcDiasUteis()` é usada no lugar) — código morto, remover.
+
+## Segurança / Regras de Acesso
+
+Achado da 5a rodada de auditoria (2026-08-29). Não é um bug — é uma
+decisão consciente pendente de confirmar com o usuário:
+
+- **`auth_check.js` bloqueia por página, `database.rules.json` não
+  bloqueia por papel nos mesmos dados** — `pageAccessRules` impede
+  `production`/`rotulagem`/`rh`/`gestor` de abrir `cadastros.html`/
+  `compras.html`/`insumos.html`, mas as regras do banco dão
+  `.read: "auth != null"` sem checar papel pra `materiais`, `clientes`,
+  `fornecedores`, `cotacoes`, `pedidos_compra`, `estoque`, `insumos`
+  etc. — qualquer papel autenticado consegue ler esse dado inteiro via
+  chamada direta ao SDK no console do navegador, mesmo sem conseguir
+  abrir a página. Diferente do achado de RH (que vazava dado sensível de
+  pessoas e permitia escalação de privilégio, já corrigido), isso é dado
+  de negócio interno (materiais, clientes, compras) — decidir se a
+  equipe pequena/confiável da Kuryos torna isso aceitável ou se vale
+  fechar por papel nas regras também.
+- **`ops.html`/`historico.html` não incluem `rotulagem` em
+  `pageAccessRules`, mas as regras do banco permitem escrita de
+  `rotulagem` em `ops`/`registros`** — direção seguraconservadora (client
+  bloqueia mais do que o servidor permitiria), mas pode ser um bug
+  funcional: papel Rotulagem sem UI pra uma ação que a regra já autoriza.
+- **`functions/index.js:27` (`checkApiKey`)** — comparação de API key
+  usa `!==` (não constant-time). Risco teórico de timing attack, difícil
+  de explorar sobre rede real; ajuste cosmético (`crypto.timingSafeEqual`)
+  se quiser fechar de vez.
+- **`functions/index.js:296` (`criarPedido`)** — sem cap no tamanho de
+  `body.itens`; só explorável por quem já tem a API key (o macro VBA
+  confiável), risco real baixo.
+- **`cadastros.html` — race conditions de baixo risco em toggles/arrays
+  sem `.transaction()`**: toggle "Revisado" de Fornecedores (linha 2609)
+  e Fórmulas (linha 3544) fazem `.set(!valorAtual)` a partir do cache
+  local; add/toggle/remove de Categorias (linhas 2817-2863) regrava o
+  array `config/categoriasProduto` inteiro a partir do snapshot em
+  memória. Dois cliques quase simultâneos podem fazer um "pular"/perder o
+  do outro. Campos de baixo risco (não são dado financeiro/quantidade).
+- **`cadastros.html` — performance da aba Fórmulas/BOM/Materiais**:
+  `formulas`/`bom`/`produtos`/`especificacoes` são carregados por
+  inteiro e o listener nunca é desmontado ao trocar de aba — editar a
+  fórmula de QUALQUER produto, de qualquer sessão, dispara
+  `renderTable()` completo em Materiais (mesmo em background) e
+  `selecionarVersao()` completo em Fórmulas (reconstrói o `tbody`
+  inteiro), podendo derrubar o foco/estado de quem está digitando outra
+  fórmula ao mesmo tempo em outra sessão. Não corrigido — precisaria de
+  listeners escopados por produto/versão, mudança estrutural maior.
+- **`emitir_op.html:487` — substituição de material usa `prompt()`
+  nativo** (digitar o código exato de cor, sem autocomplete) em vez do
+  padrão de busca com autocomplete usado no resto do app pra qualquer
+  seleção de material — único ponto da emissão de OP (fluxo crítico,
+  decide o que é consumido no lote) com esse padrão mais sujeito a erro
+  de digitação.
 
 ## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
 

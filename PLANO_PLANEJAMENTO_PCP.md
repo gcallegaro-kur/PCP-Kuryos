@@ -690,3 +690,80 @@ enriquecido (seção 11).
   poderiam rodar em paralelo, `renderAll()` com ~610 linhas fazendo 5
   domínios de negócio numa função só. Aviso de "dados congelados" já
   está visível na UI (confirmado, sem ação necessária).
+
+## 13. Quinta rodada de auditoria (2026-08-29)
+
+2 agentes em paralelo, com atenção redobrada a segurança por causa do
+achado crítico da 4a rodada: `auth_check.js`, `functions/index.js`,
+`cadastros.html` (o arquivo grande que hospeda a lógica real de
+Materiais/Clientes/Fornecedores/Produtos/Categorias — os separados
+`produtos.html`/`clientes.html`/`materiais.html`/`formulas.html` são só
+stubs de redirect pra cá), `logistica.html`, `emitir_op.html`.
+
+### Já corrigido e em produção
+
+- **🔴 SEGURANÇA CRÍTICA — o fix da 4a rodada em `usuarios/{uid}/role`
+  não fechou a autopromoção de verdade**: o commit anterior removeu
+  `pcp` da regra ANINHADA de `role`, mas a regra do NÓ PAI
+  (`usuarios/{uid}`) já concedia `.write` completo a `auth.uid == $uid`
+  (o próprio usuário, sem checar papel nenhum) — e regras do Firebase
+  RTDB cascateiam de forma só-permissiva (uma regra mais profunda nunca
+  consegue restringir o que uma ancestral já concedeu, mesmíssimo
+  mecanismo do achado raiz da 4a rodada, só que desta vez dentro do
+  próprio nó `usuarios`). Na prática, **qualquer usuário autenticado**
+  (inclusive um cadastro recém-criado com papel `pending`) conseguia
+  rodar uma chamada direta no console do navegador e virar `admin`
+  instantaneamente — a correção anterior fechou só metade do buraco
+  (`pcp` promovendo terceiros), não a autopromoção via `auth.uid==$uid`,
+  que sempre esteve aberta. Corrigido de vez movendo a lógica pro nó que
+  realmente concede a permissão: agora só permite (a) o próprio usuário
+  criar seu nó pela primeira vez (`!data.exists()`, cobre o cadastro em
+  `login.html`) ou (b) `admin` escrever em qualquer nó, a qualquer
+  momento (cobre `updateUserRole` em `usuarios.html`, já admin-gated no
+  cliente). `pcp` removido de vez do write de `usuarios/` — confirmado
+  via grep que nada mais dependia disso. Verificado com truth-table de 9
+  cenários em Node antes do deploy. **Deployado** (`firebase deploy
+  --only database`, syntax check do Firebase passou).
+- **`cadastros.html` (Clientes) — código editável desalinhava a chave
+  interna silenciosamente**: `editingKey` (chave Firebase) nunca muda,
+  mas o campo `codigo` era livremente editável e vira `clienteKey` do
+  produto + path do contador de SKU. Mudar o código depois de já ter
+  produto cadastrado desalinhava os dois sem nenhum erro visível.
+  Trava o campo após salvo, mesmo padrão já usado em Materiais
+  (`fTipo.disabled = !!key`). **Deployado.**
+- **`cadastros.html` (Fórmulas/BOM/Especificações) — única área do
+  arquivo sem nenhum tratamento de erro**, justamente a mais sensível
+  (entra direto na emissão de OP). Remover/salvar item de fórmula,
+  remover/salvar item de BOM, remover/salvar ensaio e o toggle
+  "Revisado" agora mostram erro visível quando a escrita falha, em vez
+  de sumir silenciosamente. **Deployado.**
+
+### Mapeado pra retomar (detalhado em `MELHORIAS_FUTURAS.md`)
+
+- Decisão pendente com o usuário: `auth_check.js` bloqueia por página,
+  mas `database.rules.json` não bloqueia por papel os mesmos dados de
+  negócio (materiais/clientes/fornecedores/compras/estoque) — qualquer
+  papel autenticado lê esse dado inteiro via SDK direto. Diferente do
+  achado de RH (dado pessoal + escalação, já corrigido), aqui é dado de
+  negócio interno — confirmar se a equipe pequena/confiável torna isso
+  aceitável ou se vale fechar por papel também.
+- `functions/index.js`: comparação de API key não constant-time, sem
+  cap em `itens[]` de `criarPedido` — ambos baixo risco.
+- `cadastros.html`: races de baixo risco em toggles/arrays sem
+  `.transaction()` (Revisado de Fornecedores/Fórmulas, Categorias);
+  performance da aba Fórmulas/BOM (listeners não escopados por
+  produto/versão, editar qualquer fórmula re-renderiza tudo em toda
+  sessão aberta, mesmo em background).
+- `emitir_op.html`: substituição de material usa `prompt()` nativo em
+  vez do padrão de autocomplete do resto do app — único ponto da
+  emissão de OP com esse padrão mais sujeito a erro de digitação.
+- Acessibilidade: `cadastros.html`/`logistica.html`/`emitir_op.html`
+  confirmam o mesmo padrão de rodadas anteriores (zero `label for=`,
+  sem Escape pra fechar modal) — mesma varredura pendente já mapeada.
+- Checado e sem achado: `functions/index.js` no geral (API key via
+  secret, revalidação de papel no servidor mesmo em `onCall`
+  autenticado, sem segredo hardcoded, sem vazamento de stack trace);
+  `logistica.html`/`emitir_op.html` estruturalmente (já têm várias
+  correções documentadas em comentários de rodadas anteriores);
+  `cadastros.html` CRUD principal de Materiais/Produtos/Fornecedores
+  (tratamento de erro consistente, sem XSS, sem hard-delete órfão).
