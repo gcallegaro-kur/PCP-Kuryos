@@ -137,6 +137,27 @@
       ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'",
       ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'"
     },
+    "rh_colaboradores_publico": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'gestor')",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'"
+    },
+    "rh_modelo_avaliacao": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'gestor')",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'"
+    },
+    "rh_avaliacoes": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'",
+      "$avKey": {
+        ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && data.child('avaliadorUid').val() == auth.uid",
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && newData.child('avaliadorUid').val() == auth.uid && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid))"
+      }
+    },
+    "rh_avaliacoes_por_avaliador": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh')",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
     ".read": "auth != null",
     ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
   }

@@ -228,6 +228,12 @@
               </select>
             </div>
             <div class="form-group"><label>Data de admissão</label><input type="date" id="fDataAdmissao-col"></div>
+            <div class="form-group full">
+              <label>Login de Gestor vinculado (opcional)</label>
+              <input type="text" id="fLogin-col" class="uc" placeholder="Digite pra buscar por nome/e-mail..." autocomplete="off">
+              <input type="hidden" id="fLoginUid-col">
+              <div class="field-hint">Só preencha se este colaborador tiver login no módulo de RH com papel "Gestor de Linha" (criado em Usuários, no PCP) -- é o que permite ele avaliar quem reporta a ele, com a hierarquia verificada no servidor.</div>
+            </div>
           </div>
 
           <div class="section-label">Dados sensíveis (visível só ao RH central)</div>
@@ -513,6 +519,7 @@ var allCargos = {};
 // ════════════════════════════════════════════════════════════════════
 (function() {
   var allColaboradores = {};
+  var allUsuariosRH = {}; // usuarios/ inteiro -- .read é auth!=null (qualquer papel logado lê), usado só pra achar logins com role='gestor' pra vincular
   var editingKey = null;
   var colSortable = makeSortableTable(document.getElementById('colThead-col'), 'nome', 'asc');
 
@@ -523,8 +530,15 @@ var allCargos = {};
     'dataAdmissao', 'salarioBase', 'dadosBancarios'
   ];
 
-  /* ── Autocomplete: Cargo (rh_cargos) e Gestor direto (outro colaborador) ── */
-  var cargoItems = [], gestorItems = [];
+  /* ── Autocomplete: Cargo (rh_cargos), Gestor direto (outro colaborador) e
+     Login vinculado (usuarios/ com role='gestor') ── */
+  var cargoItems = [], gestorItems = [], loginItems = [];
+  function refreshLoginItems() {
+    loginItems = Object.entries(allUsuariosRH)
+      .filter(function(e) { return e[1].role === 'gestor'; })
+      .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+      .map(function(e) { var label = (e[1].nome || '—') + (e[1].email ? ' — ' + e[1].email : ''); return { key: e[0], value: label, label: label }; });
+  }
   function refreshCargoItems() {
     cargoItems = Object.entries(allCargos)
       .filter(function(e) { return e[1].ativo !== false; })
@@ -626,6 +640,10 @@ var allCargos = {};
     document.getElementById('fTipoContrato-col').value = c.tipoContrato || 'CLT';
     document.getElementById('fDataAdmissao-col').value = c.dataAdmissao || '';
 
+    refreshLoginItems();
+    document.getElementById('fLogin-col').value = c.uidLogin ? ((allUsuariosRH[c.uidLogin] || {}).nome || '') : '';
+    document.getElementById('fLoginUid-col').value = c.uidLogin || '';
+
     document.getElementById('fSalario-col').value = c.salarioBase != null ? c.salarioBase : '';
     document.getElementById('fVt-col').value = c.valeTransporte != null ? c.valeTransporte : '';
     document.getElementById('fVa-col').value = c.valeAlimentacao != null ? c.valeAlimentacao : '';
@@ -662,6 +680,7 @@ var allCargos = {};
       emergenciaTelefone: document.getElementById('fEmergenciaTelefone-col').value.trim(),
       cargoKey: document.getElementById('fCargoKey-col').value || null,
       gestorKey: document.getElementById('fGestorKey-col').value || null,
+      uidLogin: document.getElementById('fLoginUid-col').value || null,
       tipoContrato: document.getElementById('fTipoContrato-col').value,
       dataAdmissao: document.getElementById('fDataAdmissao-col').value || null,
       salarioBase: salarioVal !== '' ? parseFloat(salarioVal) : null,
@@ -675,7 +694,16 @@ var allCargos = {};
     };
     var key = editingKey || db.ref('rh_colaboradores').push().key;
     document.getElementById('modalSaveBtn-col').disabled = true;
-    db.ref('rh_colaboradores/' + key).update(data)
+    // Grava o registro completo (só RH lê) E a versão pública denormalizada
+    // (Gestor também lê, sem NENHUM campo sensível) no mesmo multi-path
+    // update -- as duas nunca ficam fora de sincronia. rh_colaboradores_publico
+    // é o que sustenta a Avaliação de Desempenho (Fase 2): é ali que a regra
+    // do servidor verifica se um Gestor está avaliando alguém da própria
+    // hierarquia, sem precisar dar a ele acesso a rh_colaboradores inteiro.
+    var updates = {};
+    updates['rh_colaboradores/' + key] = data;
+    updates['rh_colaboradores_publico/' + key] = { nome: data.nome, cargoKey: data.cargoKey, gestorKey: data.gestorKey, uidLogin: data.uidLogin, status: data.status };
+    db.ref().update(updates)
       .then(function() { showAlert('Colaborador salvo com sucesso!', 'success'); closeModal(); })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
       .finally(function() { document.getElementById('modalSaveBtn-col').disabled = false; });
@@ -694,14 +722,20 @@ var allCargos = {};
     if (!editingKey) return;
     var data = document.getElementById('dData-col').value;
     if (!data) { showAlert('Informe a data efetiva do desligamento.', 'danger'); return; }
-    var updates = {
+    var camposDesligamento = {
       status: 'Desligado',
       dataDesligamento: data,
       tipoDesligamento: document.getElementById('dTipo-col').value,
       motivoDesligamento: document.getElementById('dMotivo-col').value.trim()
     };
     document.getElementById('dConfirmBtn-col').disabled = true;
-    db.ref('rh_colaboradores/' + editingKey).update(updates)
+    var updates = {};
+    updates['rh_colaboradores/' + editingKey + '/status'] = camposDesligamento.status;
+    updates['rh_colaboradores/' + editingKey + '/dataDesligamento'] = camposDesligamento.dataDesligamento;
+    updates['rh_colaboradores/' + editingKey + '/tipoDesligamento'] = camposDesligamento.tipoDesligamento;
+    updates['rh_colaboradores/' + editingKey + '/motivoDesligamento'] = camposDesligamento.motivoDesligamento;
+    updates['rh_colaboradores_publico/' + editingKey + '/status'] = camposDesligamento.status;
+    db.ref().update(updates)
       .then(function() {
         showAlert('Desligamento registrado.', 'success');
         fecharDesligar();
@@ -732,6 +766,10 @@ var allCargos = {};
       onSelect: function(it) { document.getElementById('fGestorKey-col').value = it.key; }
     });
     document.getElementById('fGestor-col').addEventListener('input', function() { document.getElementById('fGestorKey-col').value = ''; });
+    attachAutocomplete(document.getElementById('fLogin-col'), function() { return loginItems; }, {
+      onSelect: function(it) { document.getElementById('fLoginUid-col').value = it.key; }
+    });
+    document.getElementById('fLogin-col').addEventListener('input', function() { document.getElementById('fLoginUid-col').value = ''; });
 
     var _t = null;
     document.getElementById('searchInput-col').addEventListener('input', function() {
@@ -751,6 +789,8 @@ var allCargos = {};
       // em "Carregando..." pra sempre pro papel gestor.
       document.getElementById('tableBody-col').innerHTML = '<tr><td colspan="8" class="no-data">Este cadastro é visível só para RH Central nesta fase. Acesso do Gestor de linha chega numa fase futura (Avaliação de Desempenho).</td></tr>';
     } });
+
+    dbOnValue(db.ref('usuarios'), function(snap) { allUsuariosRH = snap.val() || {}; });
   });
 })();
 </script>
