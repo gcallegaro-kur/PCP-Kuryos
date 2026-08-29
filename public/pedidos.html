@@ -331,9 +331,6 @@
           <label>Linha de Produção</label>
           <select id="fLinha">
             <option value="">— Selecione —</option>
-            <option value="Linha 1">Linha 1</option>
-            <option value="Linha 2">Linha 2</option>
-            <option value="Linha 3">Linha 3</option>
           </select>
         </div>
         <div class="form-group full">
@@ -465,6 +462,15 @@
   var produtosCache = {};    // firebaseKey → produto object
   var editingKey = null;     // key being edited (null = new)
   var deleteKey = null;      // key pending delete
+  // Achado do Auditor: o <select id="fLinha"> tinha "Linha 1/2/3" fixos no
+  // HTML, mas o nome real das linhas é texto livre editável em admin.html
+  // (config.linhas) -- planejamento.html/horizonte.html já usam esse nome
+  // pra tudo (grade, resolução de slot). Se uma linha for renomeada, um
+  // pedido salvo com o texto fixo nunca mais bate com o nome real, e o
+  // motor de replanejamento automático (autoAjustarPlanejamento) nunca
+  // encontra esse pedido na fila da linha. Default abaixo só cobre o caso
+  // de config ainda não ter carregado.
+  var configLinhas = ["Linha 1", "Linha 2", "Linha 3"];
 
   // ── Helpers ─────────────────────────────────────────────────────
   // isConcluido, sanitizeKey, pedidoFirebaseKey e cleanFutureSlots vêm de shared/utils.js
@@ -730,6 +736,28 @@
     produtosCache = snap.val() || {};
     fillProdutoSelect();
   });
+
+  // ── Load linhas (config.linhas) for select ────────────────────────
+  // Mesmo padrão de fillProdutoSelect logo acima -- só leitura, sem
+  // segunda fonte: o cadastro de linhas em si continua só em admin.html.
+  dbOnValue(db.ref('config/linhas'), function(snap) {
+    var v = snap.val();
+    if (v && v.length) configLinhas = v;
+    fillLinhaSelect();
+  });
+
+  function fillLinhaSelect() {
+    var sel = document.getElementById('fLinha');
+    var current = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    configLinhas.forEach(function(nome) {
+      var opt = document.createElement('option');
+      opt.value = nome;
+      opt.textContent = nome;
+      sel.appendChild(opt);
+    });
+    if (current) sel.value = current;
+  }
 
   function fillProdutoSelect() {
     var sel = document.getElementById('fProduto');

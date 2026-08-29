@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RH — Avaliação de Desempenho</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary);padding:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:var(--surface-2);padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border)}
+    td{padding:7px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+    .form-grid.cols-4{grid-template-columns:2fr 1fr 1fr 1fr}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
+    .main-tabs{display:flex;gap:4px;overflow-x:auto;max-width:96%;margin:0 auto 16px;border-bottom:2px solid var(--border)}
+    .main-tab{padding:10px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
+    .main-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .main-tab-panel{display:none}
+    .main-tab-panel.active{display:block}
+    .soma-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:14px;font-weight:700}
+    .soma-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .soma-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .pilar-card{border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}
+    .pilar-head{display:flex;gap:10px;align-items:flex-end;margin-bottom:8px}
+    .pilar-head input[type=text]{flex:2}
+    .pilar-head input[type=number]{flex:0 0 90px}
+    .nota-input{width:64px;text-align:center;font-weight:700}
+    .rating-cell{text-align:center}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+
+<div class="header">
+  <div>
+    <h1>Avaliação de Desempenho</h1>
+    <div class="header-sub">Modelo de avaliação, registro por período e histórico -- Fase 2 do módulo de RH.</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main"><div id="alertBox" class="alert alert-success"></div></div>
+
+<div class="main-tabs" id="mainTabs">
+  <button class="main-tab" data-maintab="modelo" id="tabBtnModelo">Modelo de Avaliação</button>
+  <button class="main-tab active" data-maintab="registrar">Registrar Avaliação</button>
+  <button class="main-tab" data-maintab="historico">Histórico</button>
+</div>
+
+<div class="main">
+
+  <!-- ═══ MODELO DE AVALIAÇÃO (só RH edita; escondido de Gestor via JS após login) ═══ -->
+  <div class="main-tab-panel" id="maintab-modelo">
+    <div class="section-note">O modelo vale pra empresa inteira -- não existe um modelo por cargo/setor. Editável livremente (pilares/critérios/faixas), com uma regra só: a soma dos pesos dos pilares tem que fechar em exatamente 100% pra salvar. Cada avaliação, ao ser criada, grava sua própria cópia do modelo vigente no momento -- editar o modelo depois NUNCA muda uma avaliação já registrada.</div>
+
+    <div class="card">
+      <div class="card-title"><span>Pilares</span><button class="btn btn-ghost btn-sm" id="btnAddPilar-av">+ Adicionar pilar</button></div>
+      <div id="pilaresBox-av"></div>
+      <div class="soma-bar" id="somaBar-av">Soma dos pesos: 0%</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Faixas de classificação</span><button class="btn btn-ghost btn-sm" id="btnAddFaixa-av">+ Adicionar faixa</button></div>
+      <table>
+        <thead><tr><th style="width:90px">De</th><th style="width:90px">Até</th><th>Nome</th><th>Recomendação</th><th style="width:40px"></th></tr></thead>
+        <tbody id="faixasBody-av"><tr><td colspan="5" class="no-data">Nenhuma faixa cadastrada.</td></tr></tbody>
+      </table>
+    </div>
+
+    <button class="btn btn-primary" id="btnSalvarModelo-av">Salvar modelo</button>
+    <span class="field-hint" id="modeloMeta-av" style="margin-left:10px"></span>
+  </div>
+
+  <!-- ═══ REGISTRAR AVALIAÇÃO ═══ -->
+  <div class="main-tab-panel active" id="maintab-registrar">
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Colaborador avaliado *</label>
+          <input type="text" id="avColaborador" placeholder="Digite pra buscar..." autocomplete="off">
+          <input type="hidden" id="avColaboradorId">
+          <div class="field-hint" id="avColaboradorHint"></div>
+        </div>
+        <div class="form-group"><label>Período *</label><input type="text" id="avPeriodo" placeholder="Ex: T3 2026"></div>
+        <div class="form-group"><label>Data</label><input type="date" id="avData"></div>
+      </div>
+    </div>
+
+    <div class="card" id="cardCriterios-av" style="display:none">
+      <div class="card-title">Notas por critério (escala 1-5)</div>
+      <div id="criteriosBox-av"></div>
+      <div class="soma-bar soma-ok" id="notaResumo-av" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-group full"><label>Pontos fortes</label><textarea id="avPontosFortes" rows="2"></textarea></div>
+        <div class="form-group full"><label>Pontos de melhoria</label><textarea id="avPontosMelhoria" rows="2"></textarea></div>
+        <div class="form-group full"><label>Comentário do colaborador (opcional -- autoavaliação, se compartilhada com você)</label><textarea id="avComentarioColaborador" rows="2"></textarea></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Plano de ação</span><button class="btn btn-ghost btn-sm" id="btnAddPlanoAcao-av">+ Adicionar ação</button></div>
+      <table>
+        <thead><tr><th>Ação combinada</th><th style="width:160px">Responsável</th><th style="width:130px">Prazo</th><th style="width:120px">Status</th><th style="width:40px"></th></tr></thead>
+        <tbody id="planoAcaoBody-av"><tr><td colspan="5" class="no-data">Nenhuma ação registrada ainda.</td></tr></tbody>
+      </table>
+    </div>
+
+    <button class="btn btn-primary" id="btnSalvarAvaliacao-av">Fechar e registrar avaliação</button>
+  </div>
+
+  <!-- ═══ HISTÓRICO ═══ -->
+  <div class="main-tab-panel" id="maintab-historico">
+    <div class="card">
+      <div class="card-title"><span id="histCount-av">Avaliações registradas</span></div>
+      <table>
+        <thead><tr><th>Colaborador</th><th>Período</th><th>Data</th><th style="text-align:right">Nota geral</th><th>Faixa</th><th>Avaliador</th></tr></thead>
+        <tbody id="histBody-av"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+try {
+  db.ref('.info/connected').on('value', function(snap) { setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...'); });
+} catch (err) { setStatus(false, 'Erro'); console.error(err); }
+
+var MAINTAB_ALIASES = { modelo: 'modelo', registrar: 'registrar', historico: 'historico' };
+function activateMainTab(name) {
+  if (!MAINTAB_ALIASES[name]) return;
+  document.querySelectorAll('.main-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-maintab') === name); });
+  document.querySelectorAll('.main-tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'maintab-' + name); });
+}
+document.getElementById('mainTabs').addEventListener('click', function(e) {
+  var btn = e.target.closest('.main-tab');
+  if (!btn) return;
+  activateMainTab(btn.getAttribute('data-maintab'));
+});
+
+// ── Papel logado -- Gestor nunca edita o modelo (só lê, pra preencher a
+// avaliação); a aba "Modelo de Avaliação" some da barra pra esse papel,
+// não só fica desabilitada. auth_check.js resolve window.currentUser de
+// forma assíncrona -- espera existir antes de decidir a UI (mesmo padrão
+// de retry curto usado noutras páginas desta sessão).
+var minhaColaboradorKey = null; // resolvida abaixo, a partir de rh_colaboradores_publico onde uidLogin === meu uid
+function aplicarRestricoesDePapel() {
+  if (!window.currentUser) { setTimeout(aplicarRestricoesDePapel, 200); return; }
+  if (window.currentUser.role === 'gestor') {
+    document.getElementById('tabBtnModelo').style.display = 'none';
+  }
+}
+aplicarRestricoesDePapel();
+
+// ════════════════════════════════════════════════════════════════════
+// MODELO DE AVALIAÇÃO -- staged em memória (pilaresStaged/faixasStaged),
+// só grava em rh_modelo_avaliacao/atual ao clicar Salvar. Mesma ideia da
+// Fórmula em cadastros.html (soma bloqueando ≠100%), só que aqui é 1
+// modelo só pra empresa inteira, sem dimensão de produto/versão múltipla
+// -- versionamento aqui é "grava o anterior em historico/ antes de
+// sobrescrever atual", não uma chave por versão.
+// ════════════════════════════════════════════════════════════════════
+var modeloAtual = null;
+var pilaresStaged = []; // [{key, nome, peso, criterios: [{key, nome, definicao, ancora1, ancora3, ancora5}]}]
+var faixasStaged = []; // [{key, min, max, nome, recomendacao}]
+var _idSeq = 1;
+function novoIdLocal() { return 'tmp' + (_idSeq++) + '_' + Date.now(); }
+
+function carregarStagedDoModelo(m) {
+  m = m || {};
+  pilaresStaged = Object.entries(m.pilares || {}).map(function(e) {
+    return { key: e[0], nome: e[1].nome || '', peso: e[1].peso || 0,
+      criterios: Object.entries(e[1].criterios || {}).map(function(c) {
+        return { key: c[0], nome: c[1].nome || '', definicao: c[1].definicao || '', ancora1: c[1].ancora1 || '', ancora3: c[1].ancora3 || '', ancora5: c[1].ancora5 || '' };
+      }) };
+  });
+  faixasStaged = Object.entries(m.faixas || {}).map(function(e) {
+    return { key: e[0], min: e[1].min != null ? e[1].min : '', max: e[1].max != null ? e[1].max : '', nome: e[1].nome || '', recomendacao: e[1].recomendacao || '' };
+  });
+}
+
+function somaPesos() { return pilaresStaged.reduce(function(s, p) { return s + (parseFloat(p.peso) || 0); }, 0); }
+
+function renderPilares() {
+  var box = document.getElementById('pilaresBox-av');
+  box.innerHTML = pilaresStaged.map(function(p, pi) {
+    var critHtml = p.criterios.map(function(c, ci) {
+      return '<tr>' +
+        '<td><input type="text" class="uc crit-nome" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.nome) + '" placeholder="Nome do critério"></td>' +
+        '<td><input type="text" class="crit-def" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.definicao) + '" placeholder="O que é avaliado"></td>' +
+        '<td><input type="text" class="crit-a1" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora1) + '" placeholder="Nota 1"></td>' +
+        '<td><input type="text" class="crit-a3" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora3) + '" placeholder="Nota 3"></td>' +
+        '<td><input type="text" class="crit-a5" data-pi="' + pi + '" data-ci="' + ci + '" value="' + escapeAttr(c.ancora5) + '" placeholder="Nota 5"></td>' +
+        '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-crit" data-pi="' + pi + '" data-ci="' + ci + '">✕</button></td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="pilar-card">' +
+      '<div class="pilar-head">' +
+        '<div style="flex:2"><label>Nome do pilar</label><input type="text" class="uc pilar-nome" data-pi="' + pi + '" value="' + escapeAttr(p.nome) + '" placeholder="Ex: Entrega"></div>' +
+        '<div style="flex:0 0 90px"><label>Peso (%)</label><input type="number" class="pilar-peso" data-pi="' + pi + '" value="' + escapeAttr(String(p.peso)) + '" min="0" max="100" step="0.1"></div>' +
+        '<button type="button" class="btn btn-danger-ghost btn-sm btn-rm-pilar" data-pi="' + pi + '">Remover pilar</button>' +
+      '</div>' +
+      '<table><thead><tr><th>Critério</th><th>Definição</th><th>Âncora nota 1</th><th>Âncora nota 3</th><th>Âncora nota 5</th><th></th></tr></thead>' +
+      '<tbody>' + (critHtml || '<tr><td colspan="6" class="no-data">Nenhum critério ainda.</td></tr>') + '</tbody></table>' +
+      '<button type="button" class="btn btn-ghost btn-sm btn-add-crit" data-pi="' + pi + '" style="margin-top:8px">+ Adicionar critério</button>' +
+    '</div>';
+  }).join('') || '<div class="no-data">Nenhum pilar ainda -- clique em "+ Adicionar pilar".</div>';
+
+  document.querySelectorAll('.pilar-nome').forEach(function(el) { el.addEventListener('input', function() { pilaresStaged[+el.getAttribute('data-pi')].nome = el.value; }); });
+  document.querySelectorAll('.pilar-peso').forEach(function(el) { el.addEventListener('input', function() { pilaresStaged[+el.getAttribute('data-pi')].peso = parseFloat(el.value) || 0; renderSoma(); }); });
+  document.querySelectorAll('.btn-rm-pilar').forEach(function(el) { el.addEventListener('click', function() { pilaresStaged.splice(+el.getAttribute('data-pi'), 1); renderPilares(); renderSoma(); }); });
+  document.querySelectorAll('.btn-add-crit').forEach(function(el) { el.addEventListener('click', function() {
+    pilaresStaged[+el.getAttribute('data-pi')].criterios.push({ key: novoIdLocal(), nome: '', definicao: '', ancora1: '', ancora3: '', ancora5: '' });
+    renderPilares();
+  }); });
+  document.querySelectorAll('.btn-rm-crit').forEach(function(el) { el.addEventListener('click', function() {
+    pilaresStaged[+el.getAttribute('data-pi')].criterios.splice(+el.getAttribute('data-ci'), 1);
+    renderPilares();
+  }); });
+  ['nome','def','a1','a3','a5'].forEach(function(campo) {
+    var classe = 'crit-' + campo;
+    var propriedade = { nome: 'nome', def: 'definicao', a1: 'ancora1', a3: 'ancora3', a5: 'ancora5' }[campo];
+    document.querySelectorAll('.' + classe).forEach(function(el) {
+      el.addEventListener('input', function() {
+        pilaresStaged[+el.getAttribute('data-pi')].criterios[+el.getAttribute('data-ci')][propriedade] = el.value;
+      });
+    });
+  });
+}
+
+function renderSoma() {
+  var soma = Math.round(somaPesos() * 100) / 100;
+  var bar = document.getElementById('somaBar-av');
+  bar.textContent = 'Soma dos pesos: ' + soma + '%' + (soma === 100 ? ' -- fecha certinho ✓' : ' -- precisa fechar em exatamente 100% pra salvar');
+  bar.className = 'soma-bar ' + (soma === 100 ? 'soma-ok' : 'soma-erro');
+}
+
+function renderFaixas() {
+  var tbody = document.getElementById('faixasBody-av');
+  if (!faixasStaged.length) { tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma faixa cadastrada.</td></tr>'; return; }
+  tbody.innerHTML = faixasStaged.map(function(f, i) {
+    return '<tr>' +
+      '<td><input type="number" class="faixa-min" data-i="' + i + '" value="' + escapeAttr(String(f.min)) + '" step="0.1"></td>' +
+      '<td><input type="number" class="faixa-max" data-i="' + i + '" value="' + escapeAttr(String(f.max)) + '" step="0.1"></td>' +
+      '<td><input type="text" class="uc faixa-nome" data-i="' + i + '" value="' + escapeAttr(f.nome) + '"></td>' +
+      '<td><input type="text" class="faixa-rec" data-i="' + i + '" value="' + escapeAttr(f.recomendacao) + '"></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-faixa" data-i="' + i + '">✕</button></td>' +
+    '</tr>';
+  }).join('');
+  var map = { min: 'min', max: 'max', nome: 'nome', rec: 'recomendacao' };
+  Object.keys(map).forEach(function(campo) {
+    document.querySelectorAll('.faixa-' + campo).forEach(function(el) {
+      el.addEventListener('input', function() {
+        var v = (campo === 'min' || campo === 'max') ? parseFloat(el.value) || 0 : el.value;
+        faixasStaged[+el.getAttribute('data-i')][map[campo]] = v;
+      });
+    });
+  });
+  document.querySelectorAll('.btn-rm-faixa').forEach(function(el) { el.addEventListener('click', function() { faixasStaged.splice(+el.getAttribute('data-i'), 1); renderFaixas(); }); });
+}
+
+function salvarModelo() {
+  var soma = Math.round(somaPesos() * 100) / 100;
+  if (soma !== 100) { showAlert('A soma dos pesos dos pilares precisa fechar em exatamente 100% (está em ' + soma + '%).', 'danger'); return; }
+  if (!pilaresStaged.length) { showAlert('Cadastre pelo menos 1 pilar.', 'danger'); return; }
+  var pilaresObj = {};
+  pilaresStaged.forEach(function(p) {
+    var criteriosObj = {};
+    p.criterios.forEach(function(c) { criteriosObj[c.key.indexOf('tmp') === 0 ? db.ref('rh_modelo_avaliacao').push().key : c.key] = { nome: c.nome, definicao: c.definicao, ancora1: c.ancora1, ancora3: c.ancora3, ancora5: c.ancora5 }; });
+    pilaresObj[p.key.indexOf('tmp') === 0 ? db.ref('rh_modelo_avaliacao').push().key : p.key] = { nome: p.nome, peso: p.peso, criterios: criteriosObj };
+  });
+  var faixasObj = {};
+  faixasStaged.forEach(function(f) { faixasObj[f.key && String(f.key).indexOf('tmp') !== 0 ? f.key : db.ref('rh_modelo_avaliacao').push().key] = { min: f.min, max: f.max, nome: f.nome, recomendacao: f.recomendacao }; });
+
+  var novoModelo = { pilares: pilaresObj, faixas: faixasObj, versao: ((modeloAtual && modeloAtual.versao) || 0) + 1, atualizadoEm: new Date().toISOString(), atualizadoPor: (window.currentUser && window.currentUser.nome) || 'RH' };
+  var updates = {};
+  if (modeloAtual) updates['rh_modelo_avaliacao/historico/' + db.ref('rh_modelo_avaliacao').push().key] = modeloAtual;
+  updates['rh_modelo_avaliacao/atual'] = novoModelo;
+  document.getElementById('btnSalvarModelo-av').disabled = true;
+  db.ref().update(updates)
+    .then(function() { showAlert('Modelo de avaliação salvo!', 'success'); })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('btnSalvarModelo-av').disabled = false; });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// REGISTRAR AVALIAÇÃO
+// ════════════════════════════════════════════════════════════════════
+var allColaboradoresPublico = {};
+var colaboradorItems = [];
+function refreshColaboradorItems() {
+  var role = window.currentUser ? window.currentUser.role : null;
+  colaboradorItems = Object.entries(allColaboradoresPublico)
+    .filter(function(e) {
+      if (e[1].status === 'Desligado') return false;
+      if (role === 'gestor') return minhaColaboradorKey && e[1].gestorKey === minhaColaboradorKey;
+      return true; // RH avalia qualquer um, se precisar
+    })
+    .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+    .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome }; });
+}
+
+function renderCriteriosForm() {
+  var box = document.getElementById('criteriosBox-av');
+  var card = document.getElementById('cardCriterios-av');
+  if (!modeloAtual || !modeloAtual.pilares || !Object.keys(modeloAtual.pilares).length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  box.innerHTML = Object.entries(modeloAtual.pilares).map(function(pe) {
+    var pk = pe[0], p = pe[1];
+    var linhas = Object.entries(p.criterios || {}).map(function(ce) {
+      var ck = ce[0], c = ce[1];
+      return '<tr>' +
+        '<td>' + escapeHtml(c.nome) + '<div class="field-hint">' + escapeHtml(c.definicao || '') + '</div></td>' +
+        '<td class="rating-cell"><input type="number" class="nota-input nota-criterio" data-pilar="' + escapeAttr(pk) + '" data-criterio="' + escapeAttr(ck) + '" min="1" max="5" step="1" placeholder="1-5"></td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="section-label">' + escapeHtml(p.nome) + ' (peso ' + fmtNum(p.peso) + '%)</div>' +
+      '<table><thead><tr><th>Critério</th><th style="width:100px;text-align:center">Nota</th></tr></thead><tbody>' + (linhas || '<tr><td colspan="2" class="no-data">Sem critérios neste pilar.</td></tr>') + '</tbody></table>';
+  }).join('');
+  document.querySelectorAll('.nota-criterio').forEach(function(el) { el.addEventListener('input', recalcularNotas); });
+  recalcularNotas();
+}
+
+function recalcularNotas() {
+  if (!modeloAtual) return { notaGeral: 0, notaPorPilar: {}, faixa: null, notasCriterios: {} };
+  var notasCriterios = {};
+  document.querySelectorAll('.nota-criterio').forEach(function(el) {
+    var v = parseFloat(el.value);
+    if (!isNaN(v)) notasCriterios[el.getAttribute('data-pilar') + '|' + el.getAttribute('data-criterio')] = v;
+  });
+  var notaPorPilar = {}, notaGeral = 0, pesoTotalPreenchido = 0;
+  Object.entries(modeloAtual.pilares || {}).forEach(function(pe) {
+    var pk = pe[0], p = pe[1];
+    var criterioKeys = Object.keys(p.criterios || {});
+    var notas = criterioKeys.map(function(ck) { return notasCriterios[pk + '|' + ck]; }).filter(function(n) { return n != null; });
+    if (notas.length) {
+      var media = notas.reduce(function(s, n) { return s + n; }, 0) / notas.length;
+      notaPorPilar[pk] = Math.round(media * 100) / 100;
+      notaGeral += media * (parseFloat(p.peso) || 0) / 100;
+      pesoTotalPreenchido += parseFloat(p.peso) || 0;
+    }
+  });
+  notaGeral = Math.round(notaGeral * 100) / 100;
+  var faixa = null;
+  Object.values(modeloAtual.faixas || {}).forEach(function(f) {
+    if (notaGeral >= (f.min || 0) && notaGeral <= (f.max != null ? f.max : 999)) faixa = f;
+  });
+  var resumo = document.getElementById('notaResumo-av');
+  var completo = pesoTotalPreenchido >= 99.9;
+  resumo.textContent = 'Nota geral: ' + notaGeral + (faixa ? ' -- ' + faixa.nome : '') + (completo ? '' : ' (ainda faltam critérios de algum pilar)');
+  resumo.className = 'soma-bar ' + (completo ? 'soma-ok' : 'soma-erro');
+  return { notaGeral: notaGeral, notaPorPilar: notaPorPilar, faixa: faixa, notasCriterios: notasCriterios };
+}
+
+var planoAcaoStaged = [];
+function renderPlanoAcao() {
+  var tbody = document.getElementById('planoAcaoBody-av');
+  if (!planoAcaoStaged.length) { tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma ação registrada ainda.</td></tr>'; return; }
+  tbody.innerHTML = planoAcaoStaged.map(function(a, i) {
+    return '<tr>' +
+      '<td><input type="text" class="pa-acao" data-i="' + i + '" value="' + escapeAttr(a.acao) + '"></td>' +
+      '<td><input type="text" class="uc pa-resp" data-i="' + i + '" value="' + escapeAttr(a.responsavel) + '"></td>' +
+      '<td><input type="date" class="pa-prazo" data-i="' + i + '" value="' + escapeAttr(a.prazo) + '"></td>' +
+      '<td><select class="pa-status" data-i="' + i + '"><option ' + (a.status === 'Pendente' ? 'selected' : '') + '>Pendente</option><option ' + (a.status === 'Em andamento' ? 'selected' : '') + '>Em andamento</option><option ' + (a.status === 'Concluído' ? 'selected' : '') + '>Concluído</option></select></td>' +
+      '<td><button type="button" class="btn btn-ghost btn-sm btn-rm-pa" data-i="' + i + '">✕</button></td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('.pa-acao').forEach(function(el) { el.addEventListener('input', function() { planoAcaoStaged[+el.getAttribute('data-i')].acao = el.value; }); });
+  document.querySelectorAll('.pa-resp').forEach(function(el) { el.addEventListener('input', function() { planoAcaoStaged[+el.getAttribute('data-i')].responsavel = el.value; }); });
+  document.querySelectorAll('.pa-prazo').forEach(function(el) { el.addEventListener('input', function() { planoAcaoStaged[+el.getAttribute('data-i')].prazo = el.value; }); });
+  document.querySelectorAll('.pa-status').forEach(function(el) { el.addEventListener('change', function() { planoAcaoStaged[+el.getAttribute('data-i')].status = el.value; }); });
+  document.querySelectorAll('.btn-rm-pa').forEach(function(el) { el.addEventListener('click', function() { planoAcaoStaged.splice(+el.getAttribute('data-i'), 1); renderPlanoAcao(); }); });
+}
+
+function salvarAvaliacao() {
+  var colaboradorId = document.getElementById('avColaboradorId').value;
+  var periodo = document.getElementById('avPeriodo').value.trim();
+  if (!colaboradorId) { showAlert('Selecione o colaborador avaliado (precisa ser escolhido da lista).', 'danger'); return; }
+  if (!periodo) { showAlert('Informe o período (ex: T3 2026).', 'danger'); return; }
+  if (!modeloAtual) { showAlert('Nenhum modelo de avaliação vigente cadastrado ainda.', 'danger'); return; }
+  var calc = recalcularNotas();
+  if (!Object.keys(calc.notasCriterios).length) { showAlert('Preencha pelo menos uma nota.', 'danger'); return; }
+
+  var uid = firebase.auth().currentUser.uid;
+  var planoAcaoObj = {};
+  planoAcaoStaged.forEach(function(a) { if (a.acao) planoAcaoObj[db.ref('rh_avaliacoes').push().key] = a; });
+
+  var registro = {
+    colaboradorId: colaboradorId,
+    colaboradorNome: (allColaboradoresPublico[colaboradorId] || {}).nome || '',
+    avaliadorUid: uid,
+    avaliadorNome: (window.currentUser && window.currentUser.nome) || '',
+    periodo: periodo,
+    data: document.getElementById('avData').value || todayLocal(),
+    notasCriterios: calc.notasCriterios,
+    notaPorPilar: calc.notaPorPilar,
+    notaGeral: calc.notaGeral,
+    faixaNome: calc.faixa ? calc.faixa.nome : null,
+    modeloSnapshot: modeloAtual,
+    pontosFortes: document.getElementById('avPontosFortes').value.trim(),
+    pontosMelhoria: document.getElementById('avPontosMelhoria').value.trim(),
+    comentarioColaborador: document.getElementById('avComentarioColaborador').value.trim(),
+    planoAcao: planoAcaoObj,
+    criadoEm: new Date().toISOString()
+  };
+
+  var avKey = db.ref('rh_avaliacoes').push().key;
+  var updates = {};
+  updates['rh_avaliacoes/' + avKey] = registro;
+  // Índice que o próprio avaliador escreve no seu uid -- é o que permite
+  // Gestor listar "minhas avaliações" no Histórico sem precisar de
+  // leitura ampla de rh_avaliacoes (ver database.rules.json).
+  updates['rh_avaliacoes_por_avaliador/' + uid + '/' + avKey] = true;
+
+  document.getElementById('btnSalvarAvaliacao-av').disabled = true;
+  db.ref().update(updates)
+    .then(function() {
+      showAlert('Avaliação registrada com sucesso!', 'success');
+      document.getElementById('avColaborador').value = '';
+      document.getElementById('avColaboradorId').value = '';
+      document.getElementById('avPeriodo').value = '';
+      document.getElementById('avPontosFortes').value = '';
+      document.getElementById('avPontosMelhoria').value = '';
+      document.getElementById('avComentarioColaborador').value = '';
+      planoAcaoStaged = [];
+      renderPlanoAcao();
+      document.querySelectorAll('.nota-criterio').forEach(function(el) { el.value = ''; });
+      recalcularNotas();
+      carregarHistorico();
+    })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('btnSalvarAvaliacao-av').disabled = false; });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// HISTÓRICO -- RH lê rh_avaliacoes inteiro; Gestor lê só os próprios
+// (via rh_avaliacoes_por_avaliador/{meuUid}, buscando cada registro
+// individualmente -- ver limitação de listagem por campo no RTDB,
+// documentada em database.rules.json).
+// ════════════════════════════════════════════════════════════════════
+function renderHistorico(lista) {
+  var tbody = document.getElementById('histBody-av');
+  document.getElementById('histCount-av').textContent = 'Avaliações registradas (' + lista.length + ')';
+  if (!lista.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma avaliação registrada ainda.</td></tr>'; return; }
+  lista.sort(function(a, b) { return (b.data || '').localeCompare(a.data || ''); });
+  tbody.innerHTML = lista.map(function(a) {
+    return '<tr>' +
+      '<td><strong>' + escapeHtml(a.colaboradorNome || '—') + '</strong></td>' +
+      '<td>' + escapeHtml(a.periodo || '—') + '</td>' +
+      '<td style="font-size:12px">' + (a.data ? new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—') + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(a.notaGeral || 0) + '</td>' +
+      '<td>' + (a.faixaNome ? '<span class="badge badge-blue">' + escapeHtml(a.faixaNome) + '</span>' : '—') + '</td>' +
+      '<td style="font-size:12px">' + escapeHtml(a.avaliadorNome || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+function carregarHistorico() {
+  if (!window.currentUser) { setTimeout(carregarHistorico, 300); return; }
+  if (window.currentUser.role === 'rh') {
+    dbOnValue(db.ref('rh_avaliacoes'), function(snap) { renderHistorico(Object.values(snap.val() || {})); });
+  } else {
+    db.ref('rh_avaliacoes_por_avaliador/' + firebase.auth().currentUser.uid).once('value').then(function(snap) {
+      var keys = Object.keys(snap.val() || {});
+      return Promise.all(keys.map(function(k) { return db.ref('rh_avaliacoes/' + k).once('value').then(function(s) { return s.val(); }); }));
+    }).then(function(regs) { renderHistorico(regs.filter(Boolean)); })
+      .catch(function(err) { console.error(err); document.getElementById('histBody-av').innerHTML = '<tr><td colspan="6" class="no-data">Erro ao carregar histórico.</td></tr>'; });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('btnAddPilar-av').addEventListener('click', function() {
+    pilaresStaged.push({ key: novoIdLocal(), nome: '', peso: 0, criterios: [] });
+    renderPilares(); renderSoma();
+  });
+  document.getElementById('btnAddFaixa-av').addEventListener('click', function() {
+    faixasStaged.push({ key: novoIdLocal(), min: 0, max: 5, nome: '', recomendacao: '' });
+    renderFaixas();
+  });
+  document.getElementById('btnSalvarModelo-av').addEventListener('click', salvarModelo);
+  document.getElementById('btnAddPlanoAcao-av').addEventListener('click', function() {
+    planoAcaoStaged.push({ acao: '', responsavel: '', prazo: '', status: 'Pendente' });
+    renderPlanoAcao();
+  });
+  document.getElementById('btnSalvarAvaliacao-av').addEventListener('click', salvarAvaliacao);
+
+  attachAutocomplete(document.getElementById('avColaborador'), function() { return colaboradorItems; }, {
+    onSelect: function(it) { document.getElementById('avColaboradorId').value = it.key; }
+  });
+  document.getElementById('avColaborador').addEventListener('input', function() { document.getElementById('avColaboradorId').value = ''; });
+  document.getElementById('avColaborador').addEventListener('focus', refreshColaboradorItems);
+
+  dbOnValue(db.ref('rh_modelo_avaliacao/atual'), function(snap) {
+    modeloAtual = snap.val();
+    carregarStagedDoModelo(modeloAtual);
+    renderPilares(); renderSoma(); renderFaixas();
+    document.getElementById('modeloMeta-av').textContent = modeloAtual ? ('Versão ' + modeloAtual.versao + ' -- atualizado em ' + new Date(modeloAtual.atualizadoEm).toLocaleString('pt-BR') + ' por ' + modeloAtual.atualizadoPor) : 'Nenhum modelo salvo ainda.';
+    renderCriteriosForm();
+  }, { onError: function() {
+    // Gestor não vê a aba, mas ainda assim precisa LER o modelo pra
+    // preencher avaliação -- rh_modelo_avaliacao.read já permite RH+Gestor
+    // (ver database.rules.json); se cair aqui é falha real de conexão/auth.
+    console.error('Falha ao carregar modelo de avaliação.');
+  } });
+
+  dbOnValue(db.ref('rh_colaboradores_publico'), function(snap) {
+    allColaboradoresPublico = snap.val() || {};
+    if (window.currentUser && window.currentUser.role === 'gestor' && firebase.auth().currentUser) {
+      var meu = Object.entries(allColaboradoresPublico).filter(function(e) { return e[1].uidLogin === firebase.auth().currentUser.uid; })[0];
+      minhaColaboradorKey = meu ? meu[0] : null;
+      document.getElementById('avColaboradorHint').textContent = minhaColaboradorKey ? '' : 'Seu login ainda não está vinculado a um cadastro de colaborador -- peça ao RH pra vincular em Cadastros > Colaboradores.';
+    }
+    refreshColaboradorItems();
+  });
+
+  carregarHistorico();
+});
+</script>
+
+</body>
+</html>
