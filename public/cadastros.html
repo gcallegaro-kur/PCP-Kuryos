@@ -965,7 +965,7 @@
             <div class="form-group">
               <label>Código *</label>
               <input type="text" id="fCodigo-cli" class="uc" placeholder="Ex: AFEE" maxlength="8">
-              <div class="field-hint">Curto, sem espaço, maiúsculo -- vira parte do SKU dos produtos desse cliente. Evite mudar depois de já ter produto cadastrado.</div>
+              <div class="field-hint">Curto, sem espaço, maiúsculo -- vira parte do SKU dos produtos desse cliente. Trava depois de salvo (mudar quebraria o vínculo com produtos já cadastrados).</div>
             </div>
             <div class="form-group">
               <label>CNPJ</label>
@@ -2358,6 +2358,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalTitle-cli').textContent = key ? 'Editar Cliente' : 'Novo Cliente';
     document.getElementById('fNome-cli').value = c.nome || '';
     document.getElementById('fCodigo-cli').value = c.codigo || '';
+    // Achado do agente de auditoria (5a rodada): o código era livremente
+    // editável mesmo depois de já existirem produtos vinculados -- a chave
+    // Firebase do cliente (editingKey) NUNCA muda, mas o código vira
+    // clienteKey do produto (fAutoCliente-prod usa c.codigo como value) e
+    // compõe o path do contador de SKU. Mudar o código depois de criado
+    // desalinha os dois silenciosamente (produtos novos gravam um
+    // clienteKey que não bate com nenhuma chave real de allClientes, e a
+    // numeração de SKU migra pra um contador novo, perdendo a sequência).
+    // Mesmo padrão já usado em Materiais (fTipo.disabled = !!key).
+    document.getElementById('fCodigo-cli').disabled = !!key;
     document.getElementById('fCnpj-cli').value = c.cnpj || '';
     document.getElementById('fContatoComNome-cli').value = c.contatoComNome || '';
     document.getElementById('fContatoComTelefone-cli').value = c.contatoComTelefone || '';
@@ -3531,7 +3541,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('versaoStatusBadge-form').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span> ' + revisadoBadge;
     document.querySelectorAll('.fv-toggle-revisado').forEach(function(badge) {
       badge.addEventListener('click', function() {
-        db.ref('formulas/' + key + '/revisado').set(!revisado);
+        db.ref('formulas/' + key + '/revisado').set(!revisado)
+          .catch(function(err) { showAlert('Erro ao atualizar revisão: ' + err.message, 'danger'); });
       });
     });
     renderAcoesVersao(f);
@@ -3749,7 +3760,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('#formulaBody-form .f-remove').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var itemKey = btn.getAttribute('data-item');
-        db.ref('formulas/' + formKey + '/itens/' + itemKey).remove().then(recalcularSomaFormula.bind(null, formKey));
+        // Achado do agente de auditoria (5a rodada): fórmula/BOM/especificações
+        // é a área mais sensível do cadastro (entra direto na emissão de OP) e
+        // era justamente a única sem nenhum tratamento de erro no arquivo --
+        // falha silenciosa aqui (rede instável, permissão) some sem aviso.
+        db.ref('formulas/' + formKey + '/itens/' + itemKey).remove()
+          .then(recalcularSomaFormula.bind(null, formKey))
+          .catch(function(err) { showAlert('Erro ao remover item da fórmula: ' + err.message, 'danger'); });
       });
     });
     document.querySelectorAll('#formulaBody-form .f-usar-sugestao').forEach(function(btn) {
@@ -3795,7 +3812,9 @@ document.addEventListener('DOMContentLoaded', function() {
       data.textoOriginalGeradorOPs = itemAtual.textoOriginalGeradorOPs || null;
       data.sugestaoMatch = itemAtual.sugestaoMatch || null;
     }
-    db.ref('formulas/' + formKey + '/itens/' + itemKey).set(data).then(function() { recalcularSomaFormula(formKey); });
+    db.ref('formulas/' + formKey + '/itens/' + itemKey).set(data)
+      .then(function() { recalcularSomaFormula(formKey); })
+      .catch(function(err) { showAlert('Erro ao salvar item da fórmula: ' + err.message, 'danger'); });
   }
   function recalcularSomaFormula(formKey) {
     db.ref('formulas/' + formKey + '/itens').once('value').then(function(snap) {
@@ -3840,7 +3859,10 @@ document.addEventListener('DOMContentLoaded', function() {
       el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
     });
     document.querySelectorAll('#bomBody-form .b-remove').forEach(function(btn) {
-      btn.addEventListener('click', function() { db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+      btn.addEventListener('click', function() {
+        db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove()
+          .catch(function(err) { showAlert('Erro ao remover item do BOM: ' + err.message, 'danger'); });
+      });
     });
     document.querySelectorAll('#bomBody-form .b-usar-sugestao').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -3875,7 +3897,8 @@ document.addEventListener('DOMContentLoaded', function() {
       data.textoOriginalGeradorOPs = itemAtual.textoOriginalGeradorOPs || null;
       data.sugestaoMatch = itemAtual.sugestaoMatch || null;
     }
-    db.ref('bom/' + key + '/itens/' + itemKey).set(data);
+    db.ref('bom/' + key + '/itens/' + itemKey).set(data)
+      .catch(function(err) { showAlert('Erro ao salvar item do BOM: ' + err.message, 'danger'); });
   }
 
   function renderEspecTab(key) {
@@ -3909,7 +3932,10 @@ document.addEventListener('DOMContentLoaded', function() {
       el.addEventListener('change', function() { salvarItemEspec(key, el.getAttribute('data-item')); });
     });
     document.querySelectorAll('#especBody-form .e-remove').forEach(function(btn) {
-      btn.addEventListener('click', function() { db.ref('especificacoes/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
+      btn.addEventListener('click', function() {
+        db.ref('especificacoes/' + key + '/itens/' + btn.getAttribute('data-item')).remove()
+          .catch(function(err) { showAlert('Erro ao remover ensaio: ' + err.message, 'danger'); });
+      });
     });
   }
   function salvarItemEspec(key, itemKey) {
@@ -3928,7 +3954,7 @@ document.addEventListener('DOMContentLoaded', function() {
       maximo: maximo,
       metodo: row.querySelector('.e-metodo').value.trim(),
       critico: critico
-    });
+    }).catch(function(err) { showAlert('Erro ao salvar ensaio: ' + err.message, 'danger'); });
   }
 
   document.addEventListener('DOMContentLoaded', function() {
