@@ -304,8 +304,11 @@
     .badge-status.em-producao { background: #fef3c7; color: #92400e; }
     .badge-status.producao-parcial { background: #f3e8ff; color: #7c3aed; }
     .badge-status.cancelado { background: #e5e7eb; color: #4b5563; text-decoration: line-through; }
+    .badge-status.aguardando-confirmacao { background: #ffe4c4; color: #9a5b00; }
     .btn-cancel-op { background: none; border: 1px solid #e5e7eb; border-radius: 6px; color: #4b5563; cursor: pointer; padding: 4px 7px; font-size: 12px; margin-right: 4px; }
     .btn-cancel-op:hover { background: #f3f4f6; }
+    .btn-confirm-op { background: #0ca30c; border: none; border-radius: 6px; color: #fff; cursor: pointer; padding: 6px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .btn-confirm-op:hover { filter: brightness(1.08); }
     .badge-status.cl-done { background: #d1fae5; color: #065f46; }
     .badge-status.cl-partial { background: #fef3c7; color: #92400e; }
     .badge-status.cl-pending { background: #fee2e2; color: #991b1b; }
@@ -638,6 +641,18 @@
       .map(k => ({ key: k, ...opsGlobal[k] }))
       .filter(o => opEstaAtiva(o));
 
+    // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é 100%
+    // manual pelo PCP -- quem fecha na linha (Painel de Turno/Fechar Lote)
+    // libera a linha e grava o resultado, mas o status fica 'Aguardando
+    // Confirmação' até essa ação aqui. opEstaAtiva trata esse status como
+    // "não ativa" (correto pra Alocar OP/Andon/etc, já que a linha já foi
+    // liberada), então essas OPs NÃO aparecem em activeOps -- precisam da
+    // própria seção, senão ficam invisíveis e ninguém nunca confirma nada.
+    const opsAguardandoConfirmacao = Object.keys(opsGlobal)
+      .map(k => ({ key: k, ...opsGlobal[k] }))
+      .filter(o => o && o.status === 'Aguardando Confirmação')
+      .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
+
     // Pedidos (SKU alocado no pedido comercial) que ainda não têm nenhuma OP
     // emitida vinculada — o indicativo visual de "falta emitir OP". Só conta
     // OP ATIVA (opEstaAtiva) -- uma OP cancelada não deve "esconder" o
@@ -650,7 +665,7 @@
       .map(k => ({ key: k, ...pedidosGlobal[k] }))
       .filter(p => !isConcluido(p) && !linkedSkuKeys.has(p.key));
 
-    if (activeOps.length === 0 && pedidosSemOp.length === 0) {
+    if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0) {
       tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. Todas as OPs concluídas!</td></tr>';
       return;
     }
@@ -665,6 +680,10 @@
     pedidosSemOp.sort((a, b) => String(a.cliente || '').localeCompare(String(b.cliente || '')));
 
     let html = '';
+    if (opsAguardandoConfirmacao.length) {
+      html += '<tr class="group-header pending"><td colspan="8">⏳ Aguardando Confirmação do PCP (' + opsAguardandoConfirmacao.length + ')</td></tr>';
+      html += opsAguardandoConfirmacao.map(renderOpAguardandoConfirmacaoRow).join('');
+    }
     if (activeOps.length) {
       html += '<tr class="group-header"><td colspan="8">⚙️ OPs Emitidas em Aberto (' + activeOps.length + ')</td></tr>';
       html += activeOps.map(renderOpRow).join('');
@@ -674,6 +693,62 @@
       html += pedidosSemOp.map(renderPendingRow).join('');
     }
     tbody.innerHTML = html;
+  }
+
+  // canConfirmOp (distinto de isAdmin, usado no resto do arquivo pra
+  // linha/vínculo/cancelamento): a decisão da Fase 7 foi especificamente
+  // "PCP confirma conclusão", não "só admin" -- admin continua podendo
+  // (superset natural), mas pcp ganha essa ação sem precisar de acesso
+  // admin completo.
+  function canConfirmOp() {
+    return currentRole === 'admin' || currentRole === 'pcp';
+  }
+
+  function renderOpAguardandoConfirmacaoRow(op) {
+    const escapedKeyAttr = escapeAttr(op.key);
+    const escapedLote = escapeHtml(op.lote || op.key || '-');
+    const escapedProduto = escapeHtml(op.produto || '-');
+    const escapedCliente = escapeHtml(op.cliente || '-');
+    const produzido = getProduzido(op, 'linha');
+    const planned = op.qtdPlanejada || 0;
+    const pct = planned > 0 ? Math.round(produzido / planned * 100) : 0;
+    return `
+      <tr>
+        <td><strong>${escapedLote}</strong></td>
+        <td>${escapedCliente}</td>
+        <td colspan="3">
+          <div style="font-weight: 600;">${escapedProduto}</div>
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">${produzido.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un. (${pct}%)</div>
+        </td>
+        <td><span class="badge-status aguardando-confirmacao">⏳ Aguardando confirmação</span></td>
+        <td colspan="2" style="text-align:center">
+          ${canConfirmOp()
+            ? `<button class="btn-confirm-op" onclick="confirmarConclusaoOp('${escapedKeyAttr}')" title="Confirmar que essa OP está de fato concluída">✅ Confirmar conclusão</button>`
+            : `<span style="font-size:11.5px;color:var(--muted)">Aguardando PCP</span>`}
+        </td>
+      </tr>
+    `;
+  }
+
+  // Ação central da Fase 7: só isso grava status:'Concluído' de verdade no
+  // sistema inteiro (nenhum fluxo de apontamento força mais esse valor
+  // diretamente -- ver fecharAlocacaoOP/syncNextItem em form.html). Registra
+  // quem confirmou e quando, mesmo padrão de auditoria de canceladoPor/
+  // canceladoEm já usado em cancelOp logo abaixo.
+  function confirmarConclusaoOp(opKey) {
+    if (!canConfirmOp()) return;
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    const quem = (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido';
+    database.ref('ops/' + opKey).update({
+      status: 'Concluído',
+      confirmadoPor: quem,
+      confirmadoEm: new Date().toISOString()
+    }).then(() => {
+      showToast('OP ' + (op.lote || opKey) + ' confirmada como concluída.');
+    }).catch(err => {
+      showToast('Erro ao confirmar conclusão: ' + err.message);
+    });
   }
 
   // ── Aba: Checklist de Ordens ────────────────────────────────────────
@@ -1060,7 +1135,12 @@
       'Programado': 'programado',
       'Em Produção': 'em-producao',
       'Produção Parcial': 'producao-parcial',
-      'Cancelado': 'cancelado'
+      'Cancelado': 'cancelado',
+      // Não deveria aparecer aqui na prática (opsAguardandoConfirmacao tem
+      // sua própria seção, opEstaAtiva já tira essas OPs de activeOps) --
+      // mapeado mesmo assim por completude defensiva, pra nunca cair no
+      // fallback errado ("Não Iniciado") se algo mudar.
+      'Aguardando Confirmação': 'aguardando-confirmacao'
     };
     const statusClass = statusMap[op.status] || 'nao-iniciado';
     const isCancelada = op.status === 'Cancelado';
@@ -1113,6 +1193,7 @@
                    <option value="Programado" ${op.status === 'Programado' ? 'selected' : ''}>Programado</option>
                    <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
                    <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
+                   <option value="Aguardando Confirmação" ${op.status === 'Aguardando Confirmação' ? 'selected' : ''}>Aguardando Confirmação</option>
                    <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
                  </select>` +
                 (op.statusManualOverride

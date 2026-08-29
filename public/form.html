@@ -2953,7 +2953,14 @@ function syncNextItem() {
             if (campo === 'produzidoLinha') op.produzido = op[campo];
             op.dataFimReal = new Date().toISOString();
             if (!op.dataInicioReal) op.dataInicioReal = op.dataFimReal;
-            op.status = 'Concluído';
+            // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é
+            // 100% manual pelo PCP, sem exceção -- quem fecha na linha
+            // registra o resultado (quantidade final, perdas) e libera a
+            // linha, mas só o PCP confirma 'Concluído' de verdade, em
+            // ops.html. Guarda contra o caso raro de já estar Concluído
+            // (não reabre pra "aguardando" um fechamento que já foi
+            // confirmado).
+            if (op.status !== 'Concluído') op.status = 'Aguardando Confirmação';
             return op;
           })
         : Promise.resolve(null);
@@ -3792,7 +3799,10 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
 
   btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
   document.getElementById('opForm').style.display = 'none';
-  showSuccess('OP Finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—'));
+  // Fase 7 do plano: conclusão é 100% manual pelo PCP -- deixa claro aqui
+  // que ainda falta essa confirmação, pra não parecer que já terminou de
+  // vez.
+  showSuccess('OP finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—') + ' · Aguardando confirmação do PCP');
   buildOpSuggestions();
 });
 
@@ -4303,7 +4313,11 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
     opUpdate[campoInicio] = null;
     opUpdate[campoNome] = null;
   }
-  if (opts.forcarConcluido) opUpdate.status = 'Concluído';
+  // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é 100%
+  // manual pelo PCP, sem exceção -- "Encerrar OP" (Painel de Turno) libera
+  // a linha e registra o resultado, mas não conclui mais sozinho. Fica
+  // 'Aguardando Confirmação' até o PCP confirmar em ops.html.
+  if (opts.forcarConcluido) opUpdate.status = 'Aguardando Confirmação';
 
   return db.ref('ops/' + loteKey).update(opUpdate).then(function() {
     return { delta: delta, ritmo: ritmo, lote: lote };
@@ -4441,7 +4455,9 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     btn.disabled = false;
     btn.textContent = textoOriginal;
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');
-    showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + encerrarOpAlvoAtual.nome);
+    // Fase 7 do plano: conclusão é 100% manual pelo PCP -- avisa aqui que
+    // ainda falta essa confirmação.
+    showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + encerrarOpAlvoAtual.nome + ' · Aguardando confirmação do PCP');
     encerrarOpAlvoAtual = null;
   }).catch(function(err) {
     btn.disabled = false;

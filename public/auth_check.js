@@ -714,7 +714,10 @@ window._syncOpsLoteStatusELinha = function(programacao) {
       // próxima carga de página de qualquer admin, sem aviso. statusManualOverride
       // (gravado por updateOpField em ops.html, limpo por clearStatusOverride)
       // avisa pra deixar essa OP em paz até alguém devolver pro automático.
-      if (!op || op.status === 'Concluído' || op.status === 'Cancelado' || op.statusManualOverride) return;
+      // 'Aguardando Confirmação' (Fase 7 do plano) entra no mesmo balde de
+      // Concluído/Cancelado -- já é um estado "pegajoso" aguardando o PCP,
+      // essa varredura automática não deve mais mexer nele.
+      if (!op || op.status === 'Concluído' || op.status === 'Cancelado' || op.status === 'Aguardando Confirmação' || op.statusManualOverride) return;
 
       var updates = {};
 
@@ -742,7 +745,10 @@ window._syncOpsLoteStatusELinha = function(programacao) {
 
       var newStatus;
       if (todosConcluidos) {
-        newStatus = 'Concluído';
+        // Fase 7 do plano: nunca conclui sozinho -- só sinaliza pro PCP
+        // confirmar em ops.html (mesmo raciocínio de computeOpStatus,
+        // shared/utils.js, mantido em sincronia aqui).
+        newStatus = 'Aguardando Confirmação';
       } else if (tiposTocados.length > 0) {
         newStatus = (now - lastTs) > twoHoursMs ? 'Produção Parcial' : 'Em Produção';
       } else if (op.abertaDesde || op.abertaDesdeRot) {

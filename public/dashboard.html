@@ -1141,9 +1141,15 @@ function renderOpsEncerradasHoje(regs) {
   itens = itens.slice().sort(function(a, b) { return String(b.timestamp||'').localeCompare(String(a.timestamp||'')); });
 
   c.innerHTML = itens.map(function(r) {
-    var opConcluida = r.tipo === 'fechamento_op' || (r.lote && opsCache[sanitizeKey(r.lote)] && opsCache[sanitizeKey(r.lote)].status === 'Concluído');
-    var tagTxt = r.tipo === 'registro' ? 'Posto' : (opConcluida ? 'OP concluída' : 'Checkpoint');
-    var tagCls = r.tipo === 'registro' ? 'badge-purple' : (opConcluida ? 'badge-green' : 'badge-orange');
+    // Fase 7 do plano: fechamento_op (Fechar Lote) não conclui mais
+    // sozinho, fica 'Aguardando Confirmação' até o PCP confirmar --
+    // "OP concluída" agora reflete o status real, não presume mais que
+    // todo fechamento_op é uma conclusão de verdade.
+    var opReal = r.lote && opsCache[sanitizeKey(r.lote)];
+    var opConcluida = opReal && opReal.status === 'Concluído';
+    var opAguardando = r.tipo === 'fechamento_op' || (opReal && opReal.status === 'Aguardando Confirmação');
+    var tagTxt = r.tipo === 'registro' ? 'Posto' : (opConcluida ? 'OP concluída' : (opAguardando ? 'OP fechada' : 'Checkpoint'));
+    var tagCls = r.tipo === 'registro' ? 'badge-purple' : (opConcluida ? 'badge-green' : (opAguardando ? 'badge-orange' : 'badge-orange'));
     var subParts = [r.linha];
     if (r.lote) subParts.push('OP ' + r.lote);
     if (r.horasTrabalhadas) subParts.push(r.horasTrabalhadas + 'h trabalhadas');

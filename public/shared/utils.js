@@ -418,7 +418,12 @@ function isConcluido(pedido) {
 function opEstaAtiva(op) {
   if (!op) return false;
   var status = String(op.status || '');
-  return status !== 'Concluído' && status !== 'Cancelado';
+  // 'Aguardando Confirmação' (Fase 7 do plano de Planejamento/PCP -- ver
+  // computeOpStatus) entra no mesmo balde de Concluído/Cancelado aqui: o
+  // operador já fechou a OP (registrou quantidade final, liberou a linha),
+  // só falta o PCP confirmar -- não deve mais aparecer como disponível pra
+  // nova alocação/apontamento em nenhuma lista.
+  return status !== 'Concluído' && status !== 'Cancelado' && status !== 'Aguardando Confirmação';
 }
 
 // Produção de uma OP (ops/{lote}) é sempre rastreada como 3 somatórias
@@ -456,12 +461,21 @@ function getProduzido(op, tipo) {
 function computeOpStatus(op) {
   if (!op || op.status === 'Cancelado') return op ? op.status : null;
   var planned = op.qtdPlanejada || 0;
-  if (op.status === 'Concluído') return 'Concluído';
+  // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é 100%
+  // manual pelo PCP, sem exceção, nunca automática/silenciosa -- decisão
+  // que responde diretamente ao problema original da sessão (OP com 800
+  // produzido de 1000 planejados "finalizando" sozinha, sem ninguém
+  // confirmar, até 5% de perda invisível em qualquer relatório). Uma vez
+  // 'Concluído' (só gravado por confirmação explícita do PCP em ops.html)
+  // ou 'Aguardando Confirmação' (gravado quando um operador fecha a OP,
+  // ou quando a produção bate a meta sozinha, ver abaixo), o valor é
+  // pegajoso -- essa função nunca reverte pra trás.
+  if (op.status === 'Concluído' || op.status === 'Aguardando Confirmação') return op.status;
   if (!planned) return op.status || 'Não Iniciado';
   var tipos = ['linha'].filter(function(t) { return getProduzido(op, t) > 0; });
   if (!tipos.length) return op.status || 'Não Iniciado';
-  var todosConcluidos = tipos.every(function(t) { return getProduzido(op, t) / planned >= 0.95; });
-  return todosConcluidos ? 'Concluído' : 'Em Produção';
+  var noAlvo = tipos.every(function(t) { return getProduzido(op, t) / planned >= 0.95; });
+  return noAlvo ? 'Aguardando Confirmação' : 'Em Produção';
 }
 
 function toLocalISODate(date) {
