@@ -332,11 +332,23 @@ exports.criarPedido = onRequest({secrets: [PEDIDOS_API_KEY], cors: false}, async
       sku: String(it.sku),
       produto: String(it.descricao),
       qtdTotal: Number(it.qtd) || 0,
+      // Achado do Auditor: este objeto SUBSTITUI pedidos/{pedKey} inteiro
+      // (semântica de multi-path update do RTDB, não é merge recursivo) --
+      // qualquer campo que só o app/operação controla (linha, priority,
+      // dataProd, statusManual, ultimoApontamento) e que não for preservado
+      // aqui desaparece silenciosamente toda vez que o Gerador de Pedidos
+      // reprocessa o mesmo pedido. Mesmo padrão defensivo já usado em
+      // criarOP (linha 219+ acima) -- estava faltando aqui.
       produzido: existing.produzido || 0,
       mediaPorHora: existing.mediaPorHora || 0,
       status: existing.status || "Não Iniciado",
       parentPedidoId: parentKey,
       insumosChecklist: existing.insumosChecklist || {},
+      linha: existing.linha || "",
+      priority: existing.priority != null ? existing.priority : null,
+      dataProd: existing.dataProd || null,
+      statusManual: existing.statusManual || null,
+      ultimoApontamento: existing.ultimoApontamento || null,
     };
   }
   await db.ref("pedidos").update(updates);

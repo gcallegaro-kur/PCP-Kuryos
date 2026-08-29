@@ -826,6 +826,13 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
       var nowHour = new Date().getHours();
 
       // 1. Descobre em qual linha essa OP tem slot futuro agendado
+      // Achado do Auditor: comparação direta de pedidoKey já causou bug
+      // antes (ver _kuryosNormalizePedidoKey acima) -- ops/{lote}.skuPedidoKey
+      // e o pedidoKey gravado no slot de programacao podem divergir por um
+      // zero à esquerda perdido na emissão. Normaliza os dois lados antes
+      // de comparar, mesma correção já aplicada em
+      // _kuryosBuildScheduledPedidoKeySet.
+      var pedidoKeyNorm = _kuryosNormalizePedidoKey(pedidoKey);
       var linha = null;
       Object.keys(programacao).sort().some(function(date) {
         if (date < todayStr) return false;
@@ -838,7 +845,7 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
           var hourData = dayData[hourKey] || {};
           for (var i = 1; i <= 10; i++) {
             var slot = hourData['env' + i];
-            if (slot && slot.pedidoKey === pedidoKey) {
+            if (slot && slot.pedidoKey && _kuryosNormalizePedidoKey(slot.pedidoKey) === pedidoKeyNorm) {
               linha = hourData['linha' + i] || ('Linha ' + i);
               return true;
             }
