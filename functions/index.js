@@ -570,25 +570,118 @@ async function checkLinhasParadas(config, destinatarios) {
   }
 }
 
+// Achado da 2a rodada de auditoria (PLANO_PLANEJAMENTO_PCP.md, Fase 4): a
+// versão anterior consumia uma fila de eventos ÚNICOS (alertas_pendentes/,
+// só populada quando um apontamento fechava) e descartava cada entrada
+// depois de processar, emailada ou não -- não reavaliava nada. Se ninguém
+// apontasse de novo (o cenário que mais importa: apontamento não
+// acontecendo, não a produção em si), nunca surgia outro evento e o
+// alerta nunca disparava de novo. Reescrito no mesmo padrão de
+// checkLinhasParadas: reavalia estado AO VIVO a cada tick do cron
+// (2min), com tolerância de 5min + repique a cada 10min enquanto o
+// desvio persistir (cooldown próprio, não o padrão de 60min) -- decisão
+// registrada na seção 3 do plano.
+//
+// Dois sinais independentes, cada um cobrindo um cenário que o outro não
+// cobre sozinho:
+// 1. ops/{lote}.dataInicioPlanejada/dataFimPlanejada (programação manual
+//    do PCP em ops.html) -- "não iniciada no horário" e "ainda aberta
+//    depois do término previsto". Só avalia OPs que TÊM plano (a maioria
+//    ainda não tem, Horizonte pouco usado) -- sem plano, sem alerta, não
+//    tem base pra cobrar.
+// 2. pedidos/{key}.desvioAtraso -- estado ao vivo gravado por
+//    autoAjustarPlanejamento (auth_check.js) toda vez que o ritmo real
+//    fica pior que o planejado a ponto de faltar mais horas do que
+//    faltariam no ritmo planejado, além do limiar configurável
+//    (config.opAtrasoHoras). Cobre OPs sem dataFimPlanejada também, já
+//    que se baseia no ritmo do pedido, não numa data fixa.
 async function checkOpsAtrasadas(destinatarios) {
-  const snap = await db.ref("alertas_pendentes").once("value");
-  const alertas = snap.val() || {};
-  for (const [alertId, alert] of Object.entries(alertas)) {
-    if (!alert || alert.tipo !== "op_atrasada") continue;
+  const TOLERANCIA_MIN = 5;
+  const COOLDOWN_MIN = 10;
+  const agora = Date.now();
 
-    const key = `op_atrasada_${alert.linha}_${alert.pedidoId}`;
-    if (await cooldownOk(key)) {
-      const assunto = `⚠️ OP #${alert.pedidoId} atrasada — ${alert.desvioHoras}h de desvio`;
+  // ── Sinal 1: programação manual da OP (ops/) ──────────────────────
+  const opsSnap = await db.ref("ops").once("value");
+  const ops = opsSnap.val() || {};
+
+  for (const [loteKey, op] of Object.entries(ops)) {
+    if (!op || op.status === "Concluído" || op.status === "Cancelado") continue;
+
+    const linha = op.abertaLinha || op.linha || "—";
+    const produzido = op.produzidoLinha || op.produzido || 0;
+
+    const naoIniciada = !op.abertaDesde && !op.abertaDesdeRot && !produzido;
+    if (op.dataInicioPlanejada && naoIniciada) {
+      const inicioMs = new Date(op.dataInicioPlanejada).getTime();
+      if (!isNaN(inicioMs)) {
+        const atrasoMin = (agora - inicioMs) / 60000;
+        if (atrasoMin >= TOLERANCIA_MIN) {
+          const key = `op_nao_iniciada_${loteKey}`;
+          if (await cooldownOk(key, COOLDOWN_MIN)) {
+            const assunto = `⏰ OP ${op.lote || loteKey} não iniciada — ${Math.floor(atrasoMin)} min de atraso`;
+            const corpo =
+              `A OP ${op.lote || loteKey} (${op.produto || "—"}, cliente ${op.cliente || "—"}) ` +
+              `estava programada pra começar em ${op.dataInicioPlanejada} e ainda não foi aberta ` +
+              `em nenhuma linha/rotulagem — ${Math.floor(atrasoMin)} minuto(s) de atraso.\n\n` +
+              `Quantidade planejada: ${op.qtdPlanejada || 0} un.\n` +
+              `Linha programada: ${linha}\n\n` +
+              `Pode ser simplesmente esquecimento — vale checar pessoalmente.\n\n` +
+              `Sistema PCP Kuryos — alerta automático (repete a cada ${COOLDOWN_MIN}min enquanto não iniciar).`;
+            if (await sendMailViaGraph(destinatarios, assunto, corpo)) await markSent(key);
+          }
+        }
+      }
+      continue; // já avaliada -- não checa também "atrasada em andamento" no mesmo ciclo
+    }
+
+    if (op.abertaDesde && op.dataFimPlanejada) {
+      const fimMs = new Date(op.dataFimPlanejada).getTime();
+      if (!isNaN(fimMs)) {
+        const atrasoMin = (agora - fimMs) / 60000;
+        if (atrasoMin >= TOLERANCIA_MIN) {
+          const key = `op_atrasada_prazo_${loteKey}`;
+          if (await cooldownOk(key, COOLDOWN_MIN)) {
+            const pctFeito = op.qtdPlanejada ? Math.round((produzido / op.qtdPlanejada) * 100) : null;
+            const assunto = `⚠️ OP ${op.lote || loteKey} atrasada — ${Math.floor(atrasoMin)} min além do previsto`;
+            const corpo =
+              `A OP ${op.lote || loteKey} (${op.produto || "—"}, cliente ${op.cliente || "—"}) na ${linha} ` +
+              `deveria ter terminado em ${op.dataFimPlanejada} e ainda está aberta — ` +
+              `${Math.floor(atrasoMin)} minuto(s) além do previsto.\n\n` +
+              `Produzido até agora: ${produzido} de ${op.qtdPlanejada || 0} un. planejadas` +
+              (pctFeito != null ? ` (${pctFeito}%)` : "") + `.\n\n` +
+              `Sistema PCP Kuryos — alerta automático (repete a cada ${COOLDOWN_MIN}min enquanto o desvio persistir).`;
+            if (await sendMailViaGraph(destinatarios, assunto, corpo)) await markSent(key);
+          }
+        }
+      }
+    }
+  }
+
+  // ── Sinal 2: desvio de ritmo do pedido (pedidos/{key}.desvioAtraso) ──
+  const pedSnap = await db.ref("pedidos").once("value");
+  const pedidos = pedSnap.val() || {};
+
+  for (const [pedKey, p] of Object.entries(pedidos)) {
+    const d = p && p.desvioAtraso;
+    if (!d || !d.detectadoEm) continue;
+
+    const detectadoMs = new Date(d.detectadoEm).getTime();
+    if (isNaN(detectadoMs)) continue;
+    const persisteMin = (agora - detectadoMs) / 60000;
+    if (persisteMin < TOLERANCIA_MIN) continue;
+
+    const key = `op_atrasada_ritmo_${pedKey}`;
+    if (await cooldownOk(key, COOLDOWN_MIN)) {
+      const assunto = `⚠️ OP #${p.id || pedKey} atrasada — ${d.desvioHoras}h de desvio de ritmo`;
       const corpo =
-        `A OP #${alert.pedidoId} (${alert.produto || "—"}) na ${alert.linha || "—"} ` +
-        `está produzindo a ${alert.ritmoReal || 0} un/h, abaixo do ritmo planejado de ` +
-        `${alert.ritmoPlanejado || 0} un/h — desvio projetado de ${alert.desvioHoras} hora(s).\n\n` +
+        `A OP #${p.id || pedKey} (${p.produto || "—"}) na ${d.linha || "—"} ` +
+        `está produzindo a ${d.ritmoReal || 0} un/h, abaixo do ritmo planejado de ` +
+        `${d.ritmoPlanejado || 0} un/h — desvio projetado de ${d.desvioHoras} hora(s), ` +
+        `persistindo há ${Math.floor(persisteMin)} minuto(s).\n\n` +
         `O planejamento já foi reajustado automaticamente; este e-mail é só um aviso.\n\n` +
-        `Sistema PCP Kuryos — alerta automático.`;
+        `Sistema PCP Kuryos — alerta automático (repete a cada ${COOLDOWN_MIN}min enquanto o desvio persistir).`;
       if (await sendMailViaGraph(destinatarios, assunto, corpo)) await markSent(key);
     }
-    // Consumido (emailado ou não -- não deixa a fila de alertas crescer pra sempre)
-    await db.ref("alertas_pendentes/" + alertId).remove();
   }
 }
 

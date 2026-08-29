@@ -1003,25 +1003,38 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
             updates['pedidos/' + item.key + '/mediaPorHora'] = ritmoDemonstradoVal;
           }
 
-          // OP atrasada: ritmo real pior que o planejado a ponto de faltar
-          // mais horas do que faltariam no ritmo planejado, além do limiar
-          // configurado em admin.html (config.opAtrasoHoras) — dispara alerta
-          // por e-mail (email_notifications_daemon.py consome alertas_pendentes/).
+          // OP atrasada (ritmo): ritmo real pior que o planejado a ponto de
+          // faltar mais horas do que faltariam no ritmo planejado, além do
+          // limiar configurado em admin.html (config.opAtrasoHoras).
+          // Achado da 2a rodada de auditoria (PLANO_PLANEJAMENTO_PCP.md,
+          // Fase 4): antes empurrava um evento ÚNICO pra alertas_pendentes/,
+          // que checkOpsAtrasadas (functions/index.js) consumia e descartava
+          // -- se ninguém apontasse de novo (o cenário que mais importa: o
+          // gargalo real costuma ser apontamento, não produção em si), nunca
+          // gerava outro evento e o alerta nunca repetia. Agora grava um
+          // estado AO VIVO em pedidos/{key}.desvioAtraso, recalculado a cada
+          // replanejamento (limpo quando o desvio se resolve) -- o cron de
+          // 2min do servidor reavalia esse estado direto, com tolerância de
+          // 5min + repique a cada 10min enquanto persistir (seção 3 do plano).
           if (p.mediaPorHora > 0 && ritmo > 0 && ritmo < p.mediaPorHora) {
             var horasNoRitmoPlanejado = Math.ceil(falta / p.mediaPorHora);
             var desvioHoras = horasNecessarias - horasNoRitmoPlanejado;
             if (desvioHoras >= opAtrasoHoras) {
-              db.ref('alertas_pendentes').push({
-                tipo: 'op_atrasada',
-                timestamp: new Date().toISOString(),
+              updates['pedidos/' + item.key + '/desvioAtraso'] = {
                 linha: linha,
-                pedidoId: p.id || item.key,
-                produto: p.produto || '',
                 ritmoReal: Math.round(ritmo),
                 ritmoPlanejado: Math.round(p.mediaPorHora),
-                desvioHoras: desvioHoras
-              });
+                desvioHoras: desvioHoras,
+                // Preserva o momento da PRIMEIRA detecção -- sem isso, cada
+                // replanejamento (roda a cada apontamento fechado) reseta o
+                // relógio e a tolerância de 5min do servidor nunca completa.
+                detectadoEm: (p.desvioAtraso && p.desvioAtraso.detectadoEm) || new Date().toISOString()
+              };
+            } else if (p.desvioAtraso) {
+              updates['pedidos/' + item.key + '/desvioAtraso'] = null;
             }
+          } else if (p.desvioAtraso) {
+            updates['pedidos/' + item.key + '/desvioAtraso'] = null;
           }
 
           for (var i = 0; i < horasNecessarias; i++) {
