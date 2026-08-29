@@ -268,8 +268,11 @@ retrabalho.
    reaproveita o cron de 2 minutos já existente. **Concluída e
    deployada** (ver seção 14) — `checkOpsAtrasadas` reescrita pra
    reavaliar estado ao vivo em vez de consumir fila de eventos único.
-5. **Somar paradas reais ao tempo estimado de conclusão da OP** — fecha
-   gap de dado já existente, nunca usado.
+5. ✅ **Somar paradas reais ao tempo estimado de conclusão da OP** — fecha
+   gap de dado já existente, nunca usado. **Concluída e deployada** (ver
+   seção 14) — não existia nenhum cálculo de ETA em lugar nenhum do
+   sistema; construído do zero em `ops.html` (coluna informativa,
+   read-only, ritmo produtivo descontando paradas reais do lote).
 6. **Redesenho das duas telas de planejamento** (Quantidades / OPs),
    substituindo a TELA de Horizonte (não o pipeline `alocacoes_planejamento`,
    que é recablado, não descartado), com timeline de início/fim exatos.
@@ -828,5 +831,28 @@ Fase 4 implementada, testada e deployada:
   hosting` + `firebase deploy --only functions:checkNotificacoes`,
   ambos confirmados com sucesso).
 
-**Próxima fase**: Fase 5 (somar paradas reais ao tempo estimado de
-conclusão da OP).
+**Fase 5 também concluída na sequência** (mesmo dia, instrução do
+usuário: "só encerre quando finalizar tudo"):
+
+- Não existia nenhum cálculo de ETA/previsão de término em lugar nenhum
+  do sistema pra somar as paradas a ele — construído do zero em
+  `ops.html`, na tabela de OPs Emitidas em Aberto (coluna informativa,
+  100% read-only, não escreve nada, não afeta apontamento/estoque).
+- `minutosParadasDoLote(lote, desdeISO)`: soma a duração das paradas
+  registradas pra esse lote com início dentro da janela
+  `[desdeISO, agora]` — via novo listener em `paradas_historico`.
+- `previsaoTerminoHtml(op)`: ritmo PRODUTIVO real = produzido ÷ (horas
+  decorridas desde a abertura MENOS as paradas descontadas). Sem isso,
+  uma OP com paradas longas mostraria ritmo pior do que o real (tempo
+  parado contando como produção lenta) e uma previsão mais
+  pessimista/errada do que deveria. Amostra mínima de 0.1h produtivas
+  antes de projetar, evita previsão maluca com pouquíssimo dado.
+- Testado: harness Node rodando o bloco real extraído do arquivo (12
+  asserções, todas OK). **Deployado.**
+
+**Próxima fase**: Fase 6 (redesenho das duas telas de planejamento,
+substituindo Horizonte) — a maior do roteiro, vai exigir planejamento
+cuidadoso antes de codar (schema de dados, o que exatamente cada tela
+mostra, como o pipeline `alocacoes_planejamento` existente é recablado
+em vez de descartado). Trabalho em andamento, ver próxima seção quando
+existir.
