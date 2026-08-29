@@ -341,6 +341,16 @@ corrigido e implantado, e o que fica mapeado pra retomar em cada fase.
   (`auth_check.js`) passa a respeitar essa flag em vez de sobrescrever
   silenciosamente. Badge "🔒 manual" + botão "🔓 liberar" devolve pro
   automático quando quiser. **Deployado.**
+- **Fase 3, início de turno**: novo botão "▶️ Iniciar turno" no Painel de
+  Turno (`form.html`) — confirma turno detectado + operador responsável,
+  grava `turnosIniciados/{data}/{turno}`, badge visível quando já
+  confirmado no dia. **Deployado.**
+- **Fase 3, lista de "Alocar OP" ordenada por prioridade**: era só
+  alfabética por lote; agora ordena pela `priority` do pedido comercial
+  vinculado (mesmo campo que Horizonte/Planejamento/o motor de
+  replanejamento já usam), com selo "💡 Próxima recomendada" na primeira
+  da lista completa (não da lista filtrada pela busca). **Não é trava
+  dura** — ver nota de escopo abaixo. **Deployado.**
 
 ### Mapeado pra retomar, por fase
 
@@ -356,24 +366,23 @@ um comportamento intencional a ter em mente, não um bug:
   Não é bug, é comportamento intencional, mas vale ter em mente ao
   avaliar se o motor "está funcionando" depois dos consertos.
 
-**Fase 3 (apontamento nos pontos de controle) — achados que reforçam e
-detalham o que já estava planejado:**
-- Confirma de forma independente a necessidade do botão de "início de
-  turno" já decidido: hoje não existe nenhuma ação explícita, o turno é
-  só inferido pelo relógio do dispositivo (`guessShift()`), o que pode
-  atribuir um apontamento ao turno errado sem ninguém perceber perto de
-  troca de turno ou hora extra.
+**Fase 3 (apontamento nos pontos de controle):**
+- ✅ Botão de "início de turno" — **feito** (ver seção "Já corrigido"
+  acima).
+- ✅ Lista de "Alocar OP" ordenada por prioridade + selo de recomendada —
+  **feito**, mas só como guia visual, não trava dura. **Pendente real**:
+  travar de verdade exigiria confiar em "qual linha essa OP deveria
+  rodar", e o único campo que existe hoje pra isso (`ops.linha`) é
+  sobrescrito toda vez que alguém aloca (reflete última alocação física,
+  não programação) — travar contra ele esconderia OPs válidas ainda sem
+  linha definida. Fica pra quando o modelo de blocos por OP da Fase 6
+  existir, com vínculo OP↔linha confiável desde a programação.
 - Existem **3 fluxos diferentes de "Encerrar OP"** hoje (Painel de Turno,
   Apontamento por Total, Fechar Lote/Modo Avançado) com rigor diferente —
   só um deles exige justificativa em caso de desvio e permite múltiplas
   perdas; o mais usado no dia a dia (Painel de Turno) é o que não tem
   trava nenhuma. Ao construir o apontamento simplificado desta fase, vale
   unificar num fluxo só, com a trava de justificativa portada pra ele.
-- Nenhum lugar do Painel de Turno mostra "o que vem a seguir" — quando
-  uma linha libera, a lista de OPs pra alocar é só alfabética por lote,
-  sem ordem de prioridade/programação. Isso é literalmente o requisito já
-  planejado ("produção acompanha a tela de Planejamento de OPs") — o
-  achado só confirma que hoje não existe de forma nenhuma.
 - "☕ Intervalo" e "🛑 Parar linha" são visualmente parecidos mas fazem
   coisas bem diferentes (checkpoint parcial vs. parada de linha de
   verdade) — vale um rótulo mais claro ao reformular os pontos de
