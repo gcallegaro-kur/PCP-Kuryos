@@ -62,7 +62,13 @@ const pageAccessRules = {
   'cadastros.html': ['admin'],
   'emitir_op.html': ['admin'],
   'compras.html': ['admin'],
-  'logistica.html': ['admin']
+  'logistica.html': ['admin'],
+  // Módulo de RH -- login completamente separado do PCP (decisão do
+  // usuário: sem múltiplos papéis por pessoa). 'gestor' já entra aqui
+  // porque tem login desde a Fase 1, mesmo sem ainda ler
+  // rh_colaboradores (ver database.rules.json) -- a leitura por
+  // hierarquia é desenhada na Fase 2 (Avaliação de Desempenho).
+  'rh_cadastros.html': ['rh', 'gestor']
 };
 
 // Extrai o nome da página atual
@@ -249,8 +255,17 @@ window.currentUser = null;
             const allowedRoles = pageAccessRules[activePage];
             if (allowedRoles && !allowedRoles.includes(role)) {
               clearAuthWatchdog();
-              alert('Acesso Negado: Seu perfil (' + (role === 'admin' ? 'Administrador' : (role === 'rotulagem' ? 'Rotulagem' : 'Produção')) + ') não tem permissão para acessar esta página.');
-              if (role === 'production' || role === 'rotulagem') {
+              const deniedRoleLabel = role === 'admin' ? 'Administrador'
+                : role === 'rh' ? 'RH Central'
+                : role === 'gestor' ? 'Gestor de Linha'
+                : role === 'rotulagem' ? 'Rotulagem' : 'Produção';
+              alert('Acesso Negado: Seu perfil (' + deniedRoleLabel + ') não tem permissão para acessar esta página.');
+              // Cada "família" de papel tem sua própria home -- mandar um
+              // papel de RH pra dashboard.html (que ele também não acessa)
+              // só trocaria um Acesso Negado por outro, em loop.
+              if (role === 'rh' || role === 'gestor') {
+                window.location.href = 'rh_cadastros.html';
+              } else if (role === 'production' || role === 'rotulagem') {
                 window.location.href = 'form.html';
               } else {
                 window.location.href = 'dashboard.html';
@@ -367,20 +382,28 @@ function renderUnifiedNavbar(user) {
   sidebar.id = 'unified-navbar';
   sidebar.className = 'kt-sidebar';
 
+  // Módulo de RH -- login completamente separado do PCP (decisão do
+  // usuário). Papel rh/gestor nunca vê nenhum link de PCP/Produção, e
+  // vice-versa -- os dois grupos de link são mutuamente exclusivos, não
+  // uma questão de esconder alguns itens dentro do mesmo menu.
+  const isRH = user.role === 'rh' || user.role === 'gestor';
   const isRotulagem = user.role === 'rotulagem';
-  const roleLabel = user.role === 'admin' ? 'Administrador' : (isRotulagem ? 'Rotulagem' : 'Produção');
+  const roleLabel = user.role === 'admin' ? 'Administrador'
+    : user.role === 'rh' ? 'RH Central'
+    : user.role === 'gestor' ? 'Gestor de Linha'
+    : (isRotulagem ? 'Rotulagem' : 'Produção');
   const isPcpAdmin = user.role === 'admin';
   const initials = (user.nome || '?').trim().split(/\s+/).slice(0, 2).map(function(s) { return s[0]; }).join('').toUpperCase();
 
   // Perfil Rotulagem só tem acesso a form.html -- sidebar minimalista, sem
   // links pra páginas que dariam "Acesso Negado" se clicadas.
-  const analisesGroup = isRotulagem ? '' :
+  const analisesGroup = (isRotulagem || isRH) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Análises</div>' +
     ktLink('dashboard.html', 'dashboard', 'Dashboard Diário', activePage) +
     ktLink('dashboard_analise.html', 'history', 'Histórico Pedidos/Vendas', activePage) +
     '</div>';
 
-  const pcpGroup = isRotulagem ? '' :
+  const pcpGroup = (isRotulagem || isRH) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">PCP</div>' +
     ktLink('planejamento.html', 'calendar', 'Planejamento', activePage) +
     ktLink('horizonte.html', 'chart', 'Horizonte de Produção', activePage) +
@@ -394,7 +417,7 @@ function renderUnifiedNavbar(user) {
     (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajuste de Metas / Config.', activePage) : '') +
     '</div>';
 
-  const producaoGroup =
+  const producaoGroup = isRH ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Produção</div>' +
     ktLink('form.html', 'pencil', 'Apontamento Diário', activePage) +
     (isRotulagem ? '' : ktLink('historico.html', 'history', 'Histórico Apontamentos', activePage)) +
@@ -404,9 +427,16 @@ function renderUnifiedNavbar(user) {
     ? '<div class="kt-nav-group">' + ktLink('usuarios.html', 'people', 'Usuários', activePage) + '</div>'
     : '';
 
+  // RH (Fase 1): só Colaboradores/Cargos (rh_cadastros.html) -- Avaliação,
+  // Documentos, Férias etc. entram em fases futuras (ver plano do módulo).
+  const rhGroup = !isRH ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Recursos Humanos</div>' +
+    ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
+    '</div>';
+
   sidebar.innerHTML =
-    '<div class="kt-brand" onclick="window.location.href=\'dashboard.html\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + pcpGroup + producaoGroup + usersGroup +
+    '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? 'rh_cadastros.html' : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
+    analisesGroup + pcpGroup + producaoGroup + usersGroup + rhGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +

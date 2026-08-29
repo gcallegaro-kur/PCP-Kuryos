@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RH — Colaboradores</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    /* Mesmos tokens/base de cadastros.html (Fase 6) -- módulo de RH é
+       login/sidebar separado do PCP, mas reaproveita a mesma linguagem
+       visual e os mesmos utilitários de shared/utils.js. */
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 16px;padding-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .kt-search{position:relative;flex:1;min-width:220px}
+    .kt-search .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.5}
+    .kt-search input{padding-left:32px}
+    .kt-select{padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:var(--card);color:var(--text)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}.btn-danger-ghost:hover{background:var(--tint-red-bg)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+    .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .table-wrap{overflow:auto;max-height:calc(100vh - 340px)}
+    table{width:100%;border-collapse:collapse;font-size:13px;min-width:900px}
+    thead th{background:var(--surface-2);padding:9px 12px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border);white-space:nowrap}
+    th.th-sortable{cursor:pointer;user-select:none}
+    th.th-sortable:hover{color:var(--primary)}
+    th.th-sort-active{color:var(--primary)}
+    td{padding:8px 12px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    tr:hover td{background:var(--surface-2)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:720px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal.modal-sm{max-width:440px}
+    .modal-header{background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-close:hover{opacity:1}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+    .section-label:first-child{margin-top:0}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .section-note.sensivel{border-left-color:var(--warning);background:color-mix(in srgb, var(--warning) 8%, var(--card))}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{margin-bottom:0}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],input[type=tel],input[type=email],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color .2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    input[readonly]{background:var(--surface-2);color:var(--muted)}
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
+    label.chk input{width:auto}
+    @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}}
+    .main-tabs{display:flex;gap:4px;overflow-x:auto;max-width:96%;margin:0 auto 16px;border-bottom:2px solid var(--border)}
+    .main-tab{padding:10px 16px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
+    .main-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .main-tab-panel{display:none}
+    .main-tab-panel.active{display:block}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+
+<div class="header">
+  <div>
+    <h1>Recursos Humanos</h1>
+    <div class="header-sub">Cadastro do Colaborador e Organizacional (Cargos) -- Fase 1 do módulo de RH.</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+</div>
+
+<div class="main-tabs" id="mainTabs">
+  <button class="main-tab active" data-maintab="colaboradores">Colaboradores</button>
+  <button class="main-tab" data-maintab="cargos">Cargos</button>
+</div>
+
+<div class="main">
+  <div class="main-tab-panel active" id="maintab-colaboradores">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="searchInput-col" placeholder="Buscar por nome, CPF ou cargo..."></div>
+      <select class="kt-select" id="filterStatus-col">
+        <option value="">Todos</option>
+        <option value="Ativo">Ativos</option>
+        <option value="Desligado">Desligados</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovo-col">+ Novo Colaborador (Admissão)</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="statTotal-col">—</div><div class="stat-lbl">Total</div></div>
+      <div class="stat"><div class="stat-val" id="statAtivos-col" style="color:var(--success)">—</div><div class="stat-lbl">Ativos</div></div>
+      <div class="stat"><div class="stat-val" id="statDesligados-col" style="color:var(--muted)">—</div><div class="stat-lbl">Desligados</div></div>
+      <div class="stat"><div class="stat-val" id="statClt-col" style="color:var(--primary)">—</div><div class="stat-lbl">CLT (dos ativos)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span id="tableCount-col">Colaboradores</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead id="colThead-col">
+            <tr>
+              <th style="min-width:180px" data-sort="nome">Nome</th>
+              <th style="min-width:140px" data-sort="cargoNome">Cargo</th>
+              <th style="min-width:140px" data-sort="gestorNome">Gestor direto</th>
+              <th style="min-width:100px" data-sort="tipoContrato">Contrato</th>
+              <th style="min-width:100px" data-sort="dataAdmissao">Admissão</th>
+              <th style="min-width:100px" data-sort="preenchimentoPct">Preenchido</th>
+              <th style="min-width:80px" data-sort="status">Status</th>
+              <th style="min-width:90px"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody-col"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalBg-col">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="modalTitle-col">Novo Colaborador</h2>
+          <button class="modal-close" id="modalClose-col" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="section-label">Identificação</div>
+          <div class="form-grid">
+            <div class="form-group full"><label>Nome completo *</label><input type="text" id="fNome-col" class="uc" placeholder="Ex: MARIA DA SILVA SANTOS"></div>
+            <div class="form-group"><label>Data de nascimento</label><input type="date" id="fNascimento-col"></div>
+            <div class="form-group"><label>Sexo</label>
+              <select id="fSexo-col"><option value="">Selecione...</option><option value="feminino">Feminino</option><option value="masculino">Masculino</option></select>
+            </div>
+            <div class="form-group"><label>Estado civil</label>
+              <select id="fEstadoCivil-col"><option value="">Selecione...</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option></select>
+            </div>
+            <div class="form-group"><label>Escolaridade</label>
+              <select id="fEscolaridade-col"><option value="">Selecione...</option><option>Fundamental incompleto</option><option>Fundamental completo</option><option>Médio incompleto</option><option>Médio completo</option><option>Superior incompleto</option><option>Superior completo</option><option>Pós-graduação</option></select>
+            </div>
+          </div>
+
+          <div class="section-label">Documentação</div>
+          <div class="form-grid">
+            <div class="form-group"><label>CPF</label><input type="text" id="fCpf-col" placeholder="000.000.000-00"></div>
+            <div class="form-group"><label>RG</label><input type="text" id="fRg-col"></div>
+            <div class="form-group"><label>PIS</label><input type="text" id="fPis-col"></div>
+            <div class="form-group"><label>CTPS</label><input type="text" id="fCtps-col"></div>
+          </div>
+
+          <div class="section-label">Contato</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Telefone</label><input type="tel" id="fTelefone-col"></div>
+            <div class="form-group"><label>E-mail</label><input type="email" id="fEmail-col"></div>
+            <div class="form-group full"><label>Endereço</label><input type="text" id="fEndereco-col" class="uc"></div>
+            <div class="form-group"><label>Contato de emergência -- nome</label><input type="text" id="fEmergenciaNome-col" class="uc"></div>
+            <div class="form-group"><label>Contato de emergência -- telefone</label><input type="tel" id="fEmergenciaTelefone-col"></div>
+          </div>
+
+          <div class="section-label">Vínculo</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cargo</label>
+              <input type="text" id="fCargo-col" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="fCargoKey-col">
+            </div>
+            <div class="form-group">
+              <label>Gestor direto</label>
+              <input type="text" id="fGestor-col" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
+              <input type="hidden" id="fGestorKey-col">
+              <div class="field-hint">Usado pra decidir quem avalia e quem aprova férias (fases futuras).</div>
+            </div>
+            <div class="form-group"><label>Tipo de contrato</label>
+              <select id="fTipoContrato-col">
+                <option value="CLT">CLT</option>
+                <option value="PJ">PJ</option>
+                <option value="Estágio">Estágio</option>
+                <option value="Temporário">Temporário</option>
+                <option value="Aprendiz">Aprendiz</option>
+                <option value="Terceirizado">Terceirizado</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Data de admissão</label><input type="date" id="fDataAdmissao-col"></div>
+          </div>
+
+          <div class="section-label">Dados sensíveis (visível só ao RH central)</div>
+          <div class="section-note sensivel">Nunca exibidos a Gestor de linha nem ao próprio colaborador -- restrito no `database.rules.json`, não só escondido na tela.</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Salário base (R$)</label><input type="number" id="fSalario-col" min="0" step="0.01"></div>
+            <div class="form-group"><label>Vale-transporte -- VT (R$/mês)</label><input type="number" id="fVt-col" min="0" step="0.01"></div>
+            <div class="form-group"><label>Vale-alimentação -- VA (R$/mês)</label><input type="number" id="fVa-col" min="0" step="0.01"></div>
+            <div class="form-group full"><label>Dados bancários</label><input type="text" id="fDadosBancarios-col" placeholder="Banco, agência, conta, tipo"></div>
+          </div>
+
+          <div class="section-label">Status</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Status</label><input type="text" id="fStatusDisplay-col" readonly></div>
+            <div class="form-group" id="wrapDesligamento-col" style="display:none">
+              <label>Desligamento</label>
+              <button type="button" class="btn btn-danger-ghost btn-sm" id="btnAbrirDesligar-col" style="width:100%">Desligar colaborador</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalCancelBtn-col">Cancelar</button>
+          <button class="btn btn-primary" id="modalSaveBtn-col">Salvar Colaborador</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalDesligar-col">
+      <div class="modal modal-sm">
+        <div class="modal-header"><h2>Desligamento</h2><button class="modal-close" id="modalDesligarClose-col" title="Fechar" aria-label="Fechar">×</button></div>
+        <div class="modal-body">
+          <div class="section-note">Muda o status pra "Desligado" e registra o motivo -- o histórico do colaborador (nada é apagado) fica preservado.</div>
+          <div class="form-grid">
+            <div class="form-group full"><label>Tipo</label>
+              <select id="dTipo-col">
+                <option value="Sem justa causa">Sem justa causa</option>
+                <option value="Com justa causa">Com justa causa</option>
+                <option value="Pedido de demissão">Pedido de demissão</option>
+                <option value="Término de contrato">Término de contrato</option>
+              </select>
+            </div>
+            <div class="form-group full"><label>Data efetiva</label><input type="date" id="dData-col"></div>
+            <div class="form-group full"><label>Motivo / observações</label><textarea id="dMotivo-col" rows="3"></textarea></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="dCancelBtn-col">Cancelar</button>
+          <button class="btn btn-danger-ghost" id="dConfirmBtn-col">Confirmar desligamento</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-tab-panel" id="maintab-cargos">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="searchInput-cgo" placeholder="Buscar por nome do cargo ou setor..."></div>
+      <select class="kt-select" id="filterAtivo-cgo">
+        <option value="">Todos</option>
+        <option value="ativo">Ativos</option>
+        <option value="inativo">Inativos</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovo-cgo">+ Novo Cargo</button>
+    </div>
+    <div class="section-note" style="max-width:96%;margin:0 auto 16px">A estrutura completa do plano de carreira (quantos níveis existem, critérios de progressão) ainda não foi definida com a Kuryos -- por ora "Nível/trilha" é texto livre. Ver decisão pendente D-03 na especificação do módulo.</div>
+
+    <div class="card">
+      <div class="card-title"><span id="tableCount-cgo">Cargos</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead id="cgoThead-cgo">
+            <tr>
+              <th style="min-width:200px" data-sort="nome">Nome do cargo</th>
+              <th style="min-width:140px" data-sort="nivelTrilha">Nível / trilha</th>
+              <th style="min-width:140px" data-sort="setor">Setor</th>
+              <th style="min-width:80px" data-sort="ativo">Status</th>
+              <th style="min-width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody-cgo"><tr><td colspan="5" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="modalBg-cgo">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2 id="modalTitle-cgo">Novo Cargo</h2>
+          <button class="modal-close" id="modalClose-cgo" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="form-group full"><label>Nome do cargo *</label><input type="text" id="fNome-cgo" class="uc" placeholder="Ex: Operador(a) de Produção"></div>
+            <div class="form-group full"><label>Nível / trilha</label><input type="text" id="fNivelTrilha-cgo" class="uc" placeholder="Ex: Júnior, Pleno, Sênior (a confirmar com a Kuryos)"></div>
+            <div class="form-group full"><label>Setor</label><input type="text" id="fSetor-cgo" class="uc"></div>
+            <div class="form-group full"><label class="chk"><input type="checkbox" id="fAtivo-cgo" checked> Ativo</label></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" id="modalCancelBtn-cgo">Cancelar</button>
+          <button class="btn btn-primary" id="modalSaveBtn-cgo">Salvar Cargo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+try {
+  db.ref('.info/connected').on('value', function(snap) {
+    setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+  });
+} catch (err) {
+  setStatus(false, 'Erro');
+  console.error(err);
+}
+
+document.addEventListener('input', function(e) {
+  var el = e.target;
+  if (!el || !el.classList || !el.classList.contains('uc')) return;
+  var pos = el.selectionStart;
+  var upper = el.value.toUpperCase();
+  if (upper === el.value) return;
+  el.value = upper;
+  if (pos != null && el.setSelectionRange) {
+    try { el.setSelectionRange(pos, pos); } catch (e2) { /* alguns tipos de input não suportam */ }
+  }
+});
+
+var MAINTAB_ALIASES = { colaboradores: 'colaboradores', cargos: 'cargos' };
+function activateMainTab(name, pushUrl) {
+  if (!MAINTAB_ALIASES[name]) return;
+  document.querySelectorAll('.main-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-maintab') === name); });
+  document.querySelectorAll('.main-tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'maintab-' + name); });
+  if (pushUrl) {
+    var url = new URL(location.href);
+    url.searchParams.set('tab', name);
+    history.replaceState(null, '', url);
+  }
+}
+document.getElementById('mainTabs').addEventListener('click', function(e) {
+  var btn = e.target.closest('.main-tab');
+  if (!btn) return;
+  activateMainTab(btn.getAttribute('data-maintab'), true);
+});
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(location.search);
+  var tab = params.get('tab');
+  if (tab && MAINTAB_ALIASES[tab]) activateMainTab(tab, false);
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CARGOS (Organizacional, Fase 1 -- estrutura simples, ver nota na
+// aba sobre a decisão pendente D-03). Carregada ANTES de Colaboradores
+// porque o autocomplete de Cargo, na aba de Colaboradores, depende de
+// allCargos já populado.
+// ════════════════════════════════════════════════════════════════════
+var allCargos = {};
+(function() {
+  var editingKey = null;
+  var cgoSortable = makeSortableTable(document.getElementById('cgoThead-cgo'), 'nome', 'asc');
+
+  var CAMPOS_PREENCHIMENTO_CGO = ['nome', 'nivelTrilha', 'setor'];
+
+  function renderTable() {
+    var search = norm(document.getElementById('searchInput-cgo').value);
+    var filtAtivo = document.getElementById('filterAtivo-cgo').value;
+    var rows = Object.entries(allCargos).filter(function(entry) {
+      var c = entry[1];
+      var ativo = c.ativo === false ? 'inativo' : 'ativo';
+      if (filtAtivo && ativo !== filtAtivo) return false;
+      if (search && (norm(c.nome) + ' ' + norm(c.setor)).indexOf(search) === -1) return false;
+      return true;
+    });
+    rows = cgoSortable.applySort(rows, function(entry, field) { return entry[1][field]; });
+
+    document.getElementById('tableCount-cgo').textContent = 'Cargos (' + rows.length + ' exibidos)';
+    var tbody = document.getElementById('tableBody-cgo');
+    if (!rows.length) {
+      var semNenhum = !Object.keys(allCargos).length;
+      tbody.innerHTML = '<tr><td colspan="5" class="no-data">' + (semNenhum
+        ? 'Nenhum cargo cadastrado ainda. Clique em "+ Novo Cargo" pra começar.'
+        : 'Nenhum cargo encontrado com esse filtro/busca.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], c = entry[1];
+      var ativo = c.ativo !== false;
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(c.nome || '—') + '</strong></td>' +
+        '<td>' + escapeHtml(c.nivelTrilha || '—') + '</td>' +
+        '<td>' + escapeHtml(c.setor || '—') + '</td>' +
+        '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm btn-edit-cgo" data-key="' + escapeAttr(key) + '" title="Editar cargo" aria-label="Editar cargo">✏</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.btn-edit-cgo').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+    });
+  }
+
+  function openModal(key) {
+    editingKey = key || null;
+    var c = key ? (allCargos[key] || {}) : {};
+    document.getElementById('modalTitle-cgo').textContent = key ? 'Editar Cargo' : 'Novo Cargo';
+    document.getElementById('fNome-cgo').value = c.nome || '';
+    document.getElementById('fNivelTrilha-cgo').value = c.nivelTrilha || '';
+    document.getElementById('fSetor-cgo').value = c.setor || '';
+    document.getElementById('fAtivo-cgo').checked = c.ativo !== false;
+    document.getElementById('modalBg-cgo').classList.add('open');
+  }
+  function closeModal() { document.getElementById('modalBg-cgo').classList.remove('open'); editingKey = null; }
+  function saveModal() {
+    var nome = document.getElementById('fNome-cgo').value.trim();
+    if (!nome) { showAlert('Nome do cargo é obrigatório.', 'danger'); return; }
+    var data = {
+      nome: nome,
+      nivelTrilha: document.getElementById('fNivelTrilha-cgo').value.trim(),
+      setor: document.getElementById('fSetor-cgo').value.trim(),
+      ativo: document.getElementById('fAtivo-cgo').checked
+    };
+    var key = editingKey || db.ref('rh_cargos').push().key;
+    document.getElementById('modalSaveBtn-cgo').disabled = true;
+    db.ref('rh_cargos/' + key).update(data)
+      .then(function() { showAlert('Cargo salvo com sucesso!', 'success'); closeModal(); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalSaveBtn-cgo').disabled = false; });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnNovo-cgo').addEventListener('click', function() { openModal(null); });
+    document.getElementById('modalClose-cgo').addEventListener('click', closeModal);
+    document.getElementById('modalCancelBtn-cgo').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn-cgo').addEventListener('click', saveModal);
+    document.getElementById('modalBg-cgo').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    var _t = null;
+    document.getElementById('searchInput-cgo').addEventListener('input', function() {
+      clearTimeout(_t); _t = setTimeout(renderTable, 200);
+    });
+    document.getElementById('filterAtivo-cgo').addEventListener('change', renderTable);
+    cgoSortable.wireHeaders(renderTable);
+
+    dbOnValue(db.ref('rh_cargos'), function(snap) {
+      allCargos = snap.val() || {};
+      renderTable();
+    }, { onError: function() {
+      document.getElementById('tableBody-cgo').innerHTML = '<tr><td colspan="5" class="no-data">Sem acesso a esta aba com o seu perfil atual.</td></tr>';
+    } });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: COLABORADORES (Cadastro do Colaborador, Fase 1 do módulo de RH).
+// Admissão = salvar um cadastro novo (status nasce "Ativo"); Desligamento
+// = ação no modal, não tela própria -- exatamente como a especificação
+// pede (seção 4.1/4.6). Campos sensíveis (salário/VT/VA/dados bancários)
+// ficam no mesmo registro, protegidos por database.rules.json (só role
+// 'rh' lê rh_colaboradores nesta fase -- ver plano do módulo).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var allColaboradores = {};
+  var editingKey = null;
+  var colSortable = makeSortableTable(document.getElementById('colThead-col'), 'nome', 'asc');
+
+  var CAMPOS_PREENCHIMENTO_COL = [
+    'nome', 'dataNascimento', 'sexo', 'estadoCivil', 'escolaridade',
+    'cpf', 'rg', 'pis', 'ctps', 'telefone', 'email', 'endereco',
+    'emergenciaNome', 'emergenciaTelefone', 'cargoKey', 'gestorKey',
+    'dataAdmissao', 'salarioBase', 'dadosBancarios'
+  ];
+
+  /* ── Autocomplete: Cargo (rh_cargos) e Gestor direto (outro colaborador) ── */
+  var cargoItems = [], gestorItems = [];
+  function refreshCargoItems() {
+    cargoItems = Object.entries(allCargos)
+      .filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+      .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome + (e[1].setor ? ' — ' + e[1].setor : '') }; });
+  }
+  function refreshGestorItems() {
+    gestorItems = Object.entries(allColaboradores)
+      .filter(function(e) { return e[1].status !== 'Desligado' && e[0] !== editingKey; })
+      .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+      .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome }; });
+  }
+
+  function renderTable() {
+    var search = norm(document.getElementById('searchInput-col').value);
+    var filtStatus = document.getElementById('filterStatus-col').value;
+    var rows = Object.entries(allColaboradores).filter(function(entry) {
+      var c = entry[1];
+      if (filtStatus && (c.status || 'Ativo') !== filtStatus) return false;
+      var cargoNome = (allCargos[c.cargoKey] || {}).nome || '';
+      if (search && (norm(c.nome) + ' ' + norm(c.cpf) + ' ' + norm(cargoNome)).indexOf(search) === -1) return false;
+      return true;
+    });
+    rows = colSortable.applySort(rows, function(entry, field) {
+      var c = entry[1];
+      if (field === 'cargoNome') return (allCargos[c.cargoKey] || {}).nome || '';
+      if (field === 'gestorNome') return (allColaboradores[c.gestorKey] || {}).nome || '';
+      if (field === 'preenchimentoPct') return calcularPreenchimento(c, CAMPOS_PREENCHIMENTO_COL).pct;
+      if (field === 'status') return c.status || 'Ativo';
+      return c[field];
+    });
+
+    var total = Object.keys(allColaboradores).length;
+    var ativos = Object.values(allColaboradores).filter(function(c) { return (c.status || 'Ativo') === 'Ativo'; });
+    var clt = ativos.filter(function(c) { return c.tipoContrato === 'CLT'; }).length;
+    document.getElementById('statTotal-col').textContent = fmtNum(total);
+    document.getElementById('statAtivos-col').textContent = fmtNum(ativos.length);
+    document.getElementById('statDesligados-col').textContent = fmtNum(total - ativos.length);
+    document.getElementById('statClt-col').textContent = fmtNum(clt);
+    document.getElementById('tableCount-col').textContent = 'Colaboradores (' + rows.length + ' exibidos)';
+
+    var tbody = document.getElementById('tableBody-col');
+    if (!rows.length) {
+      var semNenhum = !total;
+      tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhum
+        ? 'Nenhum colaborador cadastrado ainda. Clique em "+ Novo Colaborador" pra começar.'
+        : 'Nenhum colaborador encontrado com esse filtro/busca.') + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(function(entry) {
+      var key = entry[0], c = entry[1];
+      var status = c.status || 'Ativo';
+      var cargoNome = (allCargos[c.cargoKey] || {}).nome || '—';
+      var gestorNome = (allColaboradores[c.gestorKey] || {}).nome || '—';
+      var pct = calcularPreenchimento(c, CAMPOS_PREENCHIMENTO_COL).pct;
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(c.nome || '—') + '</strong></td>' +
+        '<td>' + escapeHtml(cargoNome) + '</td>' +
+        '<td>' + escapeHtml(gestorNome) + '</td>' +
+        '<td><span class="badge badge-blue">' + escapeHtml(c.tipoContrato || '—') + '</span></td>' +
+        '<td style="font-size:12px">' + (c.dataAdmissao ? new Date(c.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—') + '</td>' +
+        '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
+        '<td>' + (status === 'Ativo' ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Desligado</span>') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm btn-edit-col" data-key="' + escapeAttr(key) + '" title="Editar colaborador" aria-label="Editar colaborador">✏</button></td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.btn-edit-col').forEach(function(btn) {
+      btn.addEventListener('click', function() { openModal(btn.getAttribute('data-key')); });
+    });
+  }
+
+  function openModal(key) {
+    editingKey = key || null;
+    var c = key ? (allColaboradores[key] || {}) : {};
+    document.getElementById('modalTitle-col').textContent = key ? 'Editar Colaborador' : 'Novo Colaborador (Admissão)';
+    document.getElementById('fNome-col').value = c.nome || '';
+    document.getElementById('fNascimento-col').value = c.dataNascimento || '';
+    document.getElementById('fSexo-col').value = c.sexo || '';
+    document.getElementById('fEstadoCivil-col').value = c.estadoCivil || '';
+    document.getElementById('fEscolaridade-col').value = c.escolaridade || '';
+    document.getElementById('fCpf-col').value = c.cpf || '';
+    document.getElementById('fRg-col').value = c.rg || '';
+    document.getElementById('fPis-col').value = c.pis || '';
+    document.getElementById('fCtps-col').value = c.ctps || '';
+    document.getElementById('fTelefone-col').value = c.telefone || '';
+    document.getElementById('fEmail-col').value = c.email || '';
+    document.getElementById('fEndereco-col').value = c.endereco || '';
+    document.getElementById('fEmergenciaNome-col').value = c.emergenciaNome || '';
+    document.getElementById('fEmergenciaTelefone-col').value = c.emergenciaTelefone || '';
+
+    refreshCargoItems();
+    document.getElementById('fCargo-col').value = c.cargoKey ? ((allCargos[c.cargoKey] || {}).nome || '') : '';
+    document.getElementById('fCargoKey-col').value = c.cargoKey || '';
+
+    refreshGestorItems(); // depende de editingKey já atualizado, ver topo da função
+    document.getElementById('fGestor-col').value = c.gestorKey ? ((allColaboradores[c.gestorKey] || {}).nome || '') : '';
+    document.getElementById('fGestorKey-col').value = c.gestorKey || '';
+
+    document.getElementById('fTipoContrato-col').value = c.tipoContrato || 'CLT';
+    document.getElementById('fDataAdmissao-col').value = c.dataAdmissao || '';
+
+    document.getElementById('fSalario-col').value = c.salarioBase != null ? c.salarioBase : '';
+    document.getElementById('fVt-col').value = c.valeTransporte != null ? c.valeTransporte : '';
+    document.getElementById('fVa-col').value = c.valeAlimentacao != null ? c.valeAlimentacao : '';
+    document.getElementById('fDadosBancarios-col').value = c.dadosBancarios || '';
+
+    var status = c.status || 'Ativo';
+    document.getElementById('fStatusDisplay-col').value = status + (c.dataDesligamento ? ' desde ' + new Date(c.dataDesligamento + 'T00:00:00').toLocaleDateString('pt-BR') : '');
+    document.getElementById('wrapDesligamento-col').style.display = (key && status === 'Ativo') ? 'block' : 'none';
+
+    document.getElementById('modalBg-col').classList.add('open');
+  }
+  function closeModal() { document.getElementById('modalBg-col').classList.remove('open'); editingKey = null; }
+
+  function saveModal() {
+    var nome = document.getElementById('fNome-col').value.trim();
+    if (!nome) { showAlert('Nome completo é obrigatório.', 'danger'); return; }
+    var salarioVal = document.getElementById('fSalario-col').value;
+    var vtVal = document.getElementById('fVt-col').value;
+    var vaVal = document.getElementById('fVa-col').value;
+    var data = {
+      nome: nome,
+      dataNascimento: document.getElementById('fNascimento-col').value || null,
+      sexo: document.getElementById('fSexo-col').value,
+      estadoCivil: document.getElementById('fEstadoCivil-col').value,
+      escolaridade: document.getElementById('fEscolaridade-col').value,
+      cpf: document.getElementById('fCpf-col').value.trim(),
+      rg: document.getElementById('fRg-col').value.trim(),
+      pis: document.getElementById('fPis-col').value.trim(),
+      ctps: document.getElementById('fCtps-col').value.trim(),
+      telefone: document.getElementById('fTelefone-col').value.trim(),
+      email: document.getElementById('fEmail-col').value.trim(),
+      endereco: document.getElementById('fEndereco-col').value.trim(),
+      emergenciaNome: document.getElementById('fEmergenciaNome-col').value.trim(),
+      emergenciaTelefone: document.getElementById('fEmergenciaTelefone-col').value.trim(),
+      cargoKey: document.getElementById('fCargoKey-col').value || null,
+      gestorKey: document.getElementById('fGestorKey-col').value || null,
+      tipoContrato: document.getElementById('fTipoContrato-col').value,
+      dataAdmissao: document.getElementById('fDataAdmissao-col').value || null,
+      salarioBase: salarioVal !== '' ? parseFloat(salarioVal) : null,
+      valeTransporte: vtVal !== '' ? parseFloat(vtVal) : null,
+      valeAlimentacao: vaVal !== '' ? parseFloat(vaVal) : null,
+      dadosBancarios: document.getElementById('fDadosBancarios-col').value.trim(),
+      // Admissão = nasce "Ativo" (não é uma tela própria, é o valor padrão
+      // do primeiro salvamento). Editar um colaborador existente preserva
+      // o status atual -- só o botão "Desligar" (abaixo) muda pra Desligado.
+      status: editingKey ? (allColaboradores[editingKey] || {}).status || 'Ativo' : 'Ativo'
+    };
+    var key = editingKey || db.ref('rh_colaboradores').push().key;
+    document.getElementById('modalSaveBtn-col').disabled = true;
+    db.ref('rh_colaboradores/' + key).update(data)
+      .then(function() { showAlert('Colaborador salvo com sucesso!', 'success'); closeModal(); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalSaveBtn-col').disabled = false; });
+  }
+
+  /* ── Desligamento (ação, não tela própria -- seção 4.6 da especificação) ── */
+  function abrirDesligar() {
+    if (!editingKey) return;
+    document.getElementById('dTipo-col').value = 'Sem justa causa';
+    document.getElementById('dData-col').value = todayLocal ? todayLocal() : new Date().toISOString().slice(0, 10);
+    document.getElementById('dMotivo-col').value = '';
+    document.getElementById('modalDesligar-col').classList.add('open');
+  }
+  function fecharDesligar() { document.getElementById('modalDesligar-col').classList.remove('open'); }
+  function confirmarDesligar() {
+    if (!editingKey) return;
+    var data = document.getElementById('dData-col').value;
+    if (!data) { showAlert('Informe a data efetiva do desligamento.', 'danger'); return; }
+    var updates = {
+      status: 'Desligado',
+      dataDesligamento: data,
+      tipoDesligamento: document.getElementById('dTipo-col').value,
+      motivoDesligamento: document.getElementById('dMotivo-col').value.trim()
+    };
+    document.getElementById('dConfirmBtn-col').disabled = true;
+    db.ref('rh_colaboradores/' + editingKey).update(updates)
+      .then(function() {
+        showAlert('Desligamento registrado.', 'success');
+        fecharDesligar();
+        closeModal();
+      })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('dConfirmBtn-col').disabled = false; });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnNovo-col').addEventListener('click', function() { openModal(null); });
+    document.getElementById('modalClose-col').addEventListener('click', closeModal);
+    document.getElementById('modalCancelBtn-col').addEventListener('click', closeModal);
+    document.getElementById('modalSaveBtn-col').addEventListener('click', saveModal);
+    document.getElementById('modalBg-col').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+
+    document.getElementById('btnAbrirDesligar-col').addEventListener('click', abrirDesligar);
+    document.getElementById('modalDesligarClose-col').addEventListener('click', fecharDesligar);
+    document.getElementById('dCancelBtn-col').addEventListener('click', fecharDesligar);
+    document.getElementById('dConfirmBtn-col').addEventListener('click', confirmarDesligar);
+    document.getElementById('modalDesligar-col').addEventListener('click', function(e) { if (e.target === this) fecharDesligar(); });
+
+    attachAutocomplete(document.getElementById('fCargo-col'), function() { return cargoItems; }, {
+      onSelect: function(it) { document.getElementById('fCargoKey-col').value = it.key; }
+    });
+    document.getElementById('fCargo-col').addEventListener('input', function() { document.getElementById('fCargoKey-col').value = ''; });
+    attachAutocomplete(document.getElementById('fGestor-col'), function() { return gestorItems; }, {
+      onSelect: function(it) { document.getElementById('fGestorKey-col').value = it.key; }
+    });
+    document.getElementById('fGestor-col').addEventListener('input', function() { document.getElementById('fGestorKey-col').value = ''; });
+
+    var _t = null;
+    document.getElementById('searchInput-col').addEventListener('input', function() {
+      clearTimeout(_t); _t = setTimeout(renderTable, 200);
+    });
+    document.getElementById('filterStatus-col').addEventListener('change', renderTable);
+    colSortable.wireHeaders(renderTable);
+
+    dbOnValue(db.ref('rh_colaboradores'), function(snap) {
+      allColaboradores = snap.val() || {};
+      renderTable();
+    }, { onError: function() {
+      // Papel 'gestor' já tem login/página nesta fase (Cargos funciona pra
+      // ele), mas rh_colaboradores ainda é só-RH -- ver plano do módulo
+      // (Fase 2 desenha o filtro por hierarquia com cuidado, em vez de
+      // liberar leitura ampla agora). Sem isso aqui, a tela ficaria presa
+      // em "Carregando..." pra sempre pro papel gestor.
+      document.getElementById('tableBody-col').innerHTML = '<tr><td colspan="8" class="no-data">Este cadastro é visível só para RH Central nesta fase. Acesso do Gestor de linha chega numa fase futura (Avaliação de Desempenho).</td></tr>';
+    } });
+  });
+})();
+</script>
+
+</body>
+</html>

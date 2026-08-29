@@ -131,6 +131,16 @@
       color: var(--purple, #7c3aed);
     }
 
+    .badge.rh {
+      background: color-mix(in srgb, #ec4899 18%, var(--panel));
+      color: #ec4899;
+    }
+
+    .badge.gestor {
+      background: color-mix(in srgb, #0ea5e9 18%, var(--panel));
+      color: #0ea5e9;
+    }
+
     select {
       padding: 6px 10px;
       border: 1px solid var(--line);
@@ -275,8 +285,8 @@
         
         const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '-';
         
-        const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin', 'rotulagem': 'rotulagem' };
-        const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador', 'rotulagem': 'Rotulagem' };
+        const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin', 'rotulagem': 'rotulagem', 'rh': 'rh', 'gestor': 'gestor' };
+        const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador', 'rotulagem': 'Rotulagem', 'rh': 'RH Central', 'gestor': 'Gestor de Linha' };
         
         const badgeClass = badgeClasses[u.role] || 'pending';
         const badgeLabel = badgeLabels[u.role] || u.role;
@@ -297,6 +307,8 @@
               <option value="production" ${u.role === 'production' ? 'selected' : ''}>Produção</option>
               <option value="rotulagem" ${u.role === 'rotulagem' ? 'selected' : ''}>Rotulagem</option>
               <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
+              <option value="rh" ${u.role === 'rh' ? 'selected' : ''}>RH Central</option>
+              <option value="gestor" ${u.role === 'gestor' ? 'selected' : ''}>Gestor de Linha (RH)</option>
             </select>
           </td>
         `;
