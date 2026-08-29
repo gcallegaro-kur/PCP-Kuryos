@@ -1056,7 +1056,12 @@
                    <option value="Em Produção" ${op.status === 'Em Produção' ? 'selected' : ''}>Em Produção</option>
                    <option value="Produção Parcial" ${op.status === 'Produção Parcial' ? 'selected' : ''}>Produção Parcial</option>
                    <option value="Concluído" ${op.status === 'Concluído' ? 'selected' : ''}>Concluído (Arquivar)</option>
-                 </select>`
+                 </select>` +
+                (op.statusManualOverride
+                  ? `<div style="font-size:10.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:4px">🔒 manual
+                       <button type="button" class="btn-edit-inline" title="Devolver esse status pro cálculo automático" onclick="clearStatusOverride('${escapedKeyAttr}')">🔓</button>
+                     </div>`
+                  : ``)
               : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`)}
         </td>
         <td style="text-align: center; white-space: nowrap;">
@@ -1130,7 +1135,22 @@
           showToast('Erro ao concluir OP: ' + err.message);
         })
     } else {
-      database.ref('ops/' + opKey).update({ [field]: value })
+      // Achado do Auditor: correção manual de status (ex: "Produção
+      // Parcial" pra uma OP travada) era revertida silenciosamente pela
+      // sincronização automática (_syncOpsLoteStatusELinha, auth_check.js)
+      // na próxima carga de página de QUALQUER admin -- ela só protegia
+      // 'Concluído'/'Cancelado'. statusManualOverride avisa a sincronização
+      // pra deixar essa OP em paz até alguém devolver pro automático
+      // (botão 🔓, clearStatusOverride) -- mesmo espírito de
+      // pedidos.statusManual, só que reversível em vez de permanente,
+      // porque aqui é uma correção pontual, não uma decisão de negócio.
+      const updates = { [field]: value };
+      if (field === 'status') {
+        updates.statusManualOverride = true;
+        updates.statusManualOverrideEm = new Date().toISOString();
+        updates.statusManualOverridePor = window.currentUser.nome || window.currentUser.email || 'desconhecido';
+      }
+      database.ref('ops/' + opKey).update(updates)
         .then(() => {
           showToast('OP atualizada com sucesso!');
         })
@@ -1139,6 +1159,23 @@
           showToast('Erro ao atualizar campo.');
         });
     }
+  }
+
+  function clearStatusOverride(opKey) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+      alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
+      return;
+    }
+    database.ref('ops/' + opKey).update({
+      statusManualOverride: null,
+      statusManualOverrideEm: null,
+      statusManualOverridePor: null
+    }).then(() => {
+      showToast('Status devolvido ao cálculo automático.');
+    }).catch(err => {
+      console.error(err);
+      showToast('Erro ao devolver status ao automático.');
+    });
   }
 
   // Cancela sem apagar -- mantém o registro em ops/{lote} com o motivo e

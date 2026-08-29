@@ -694,7 +694,13 @@ window._syncOpsLoteStatusELinha = function(programacao) {
       // desfazendo o cancelOp (ops.html) -- a OP cancelada voltava a aparecer
       // disponível pra alocação em linha/rotulagem como se nada tivesse
       // acontecido, sem nenhum aviso.
-      if (!op || op.status === 'Concluído' || op.status === 'Cancelado') return;
+      // Achado do Auditor: mesmo problema valia pra QUALQUER correção manual
+      // de status feita em ops.html (ex: "Produção Parcial" numa OP travada
+      // por abertaDesde obsoleto) -- essa varredura sobrescrevia de volta na
+      // próxima carga de página de qualquer admin, sem aviso. statusManualOverride
+      // (gravado por updateOpField em ops.html, limpo por clearStatusOverride)
+      // avisa pra deixar essa OP em paz até alguém devolver pro automático.
+      if (!op || op.status === 'Concluído' || op.status === 'Cancelado' || op.statusManualOverride) return;
 
       var updates = {};
 
