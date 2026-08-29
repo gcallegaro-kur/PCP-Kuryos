@@ -644,9 +644,33 @@ function paradasDoDia() {
   return paradasHistoricoCache.filter(function(p) { return localDateFromIso(p.inicio || p.fim) === currentDate; });
 }
 
+// Distingue registro de Envase (linha) de Rotulagem/Posto pelo nome da
+// linha gravada no registro, contra o cadastro (cfg.linhas/postosTrabalho).
+// Extraído de dentro de renderMetaDiaria (que já usava isto certo) pra
+// também corrigir renderAll, que somava os 3 setores juntos sem filtro --
+// mesma função, uma só fonte da verdade, sem duplicar a lista de fallback.
+function isLinhaDeProducao(name) {
+  var linesList = cfg.linhas || ['Linha 01', 'Linha 02', 'Linha 03', 'Linha 04'];
+  var postosList = cfg.postosTrabalho || ['Rotuladora 01', 'Rotuladora 02'];
+  if (!name) return true;
+  if (linesList.indexOf(name) !== -1) return true;
+  if (postosList.indexOf(name) !== -1) return false;
+  return name.toLowerCase().indexOf('linha') === 0;
+}
+
 function renderAll(regs) {
-  var total = regs.reduce(function(s,r){ return s+(r.quantidade||0); }, 0);
-  var media = regs.length ? Math.round(total / regs.length) : 0;
+  // Achado do agente de auditoria: este total (o KPI de topo da tela) não
+  // filtrava por setor -- somava Linha + Rotulagem + Posto juntos pro
+  // mesmo lote, inflando o número em qualquer dia com apontamento em mais
+  // de um setor. É a MESMA classe de bug já documentada e corrigida em
+  // pedidos/{key}.produzido (form.html, isSetorEnvase -- caso real: pedido
+  // 0022/Briá Beauty, 18.657 gravado quando a soma real de envase era
+  // 13.170) -- só que aqui, no card "Total do Dia", nunca foi aplicada.
+  // "Progresso do Envase" (renderMetaDiaria, mais abaixo) já filtra
+  // certo com isLinhaDeProducao; reusa a mesma função.
+  var regsEnvase = regs.filter(function(r) { return isLinhaDeProducao(r.linha); });
+  var total = regsEnvase.reduce(function(s,r){ return s+(r.quantidade||0); }, 0);
+  var media = regsEnvase.length ? Math.round(total / regsEnvase.length) : 0;
   document.getElementById('mTotal').textContent = fmtNum(total);
   document.getElementById('mRegs').textContent = regs.length;
   document.getElementById('mMedia').textContent = fmtNum(media);
@@ -927,13 +951,10 @@ function renderMetaDiaria(regs) {
   var metaHoje = todayIsWorking ? somaLinhas : 0;
   
   card.style.display = 'block';
-  
-  function isLinhaDeProducao(name) {
-    if (!name) return true;
-    if (linesList.indexOf(name) !== -1) return true;
-    if (postosList.indexOf(name) !== -1) return false;
-    return name.toLowerCase().indexOf('linha') === 0;
-  }
+  // isLinhaDeProducao agora é a função de escopo global logo acima de
+  // renderAll -- usa cfg.linhas/postosTrabalho direto, mesmo resultado de
+  // antes (linesList/postosList aqui só continuam servindo pro cálculo de
+  // metaHoje logo acima).
 
   var byLinha = {}, byPosto = {};
   var totalEnvase = 0;
