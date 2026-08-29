@@ -315,9 +315,14 @@ var firebaseConfig = {
   measurementId: "G-PTVWKLRHTG"
 };
 
-var db, cfg = {}, chartLinhas = null, chartPostos = null, currentRef = null, progRef = null, turnosStatusRef = null;
+var db, cfg = {}, chartLinhas = null, chartPostos = null, currentRef = null, progRef = null, turnosStatusRef = null, turnosIniciadosRef = null;
 var paradasHistoricoCache = [];
 var turnosEncerradosHoje = {};
+// Achado do agente de UX: o botão "▶️ Iniciar turno" (form.html, Fase 3)
+// já grava esse checkpoint, mas este painel ainda não lia -- os badges
+// "Ainda não começou"/"Em andamento" continuavam só inferidos pelo
+// relógio, sem usar a confirmação real de quem abriu o turno.
+var turnosIniciadosHoje = {};
 var currentDate = today();
 var progData = null;
 var regsData = [];
@@ -584,9 +589,11 @@ function listenToDate(date) {
   if (currentRef) { currentRef.off(); currentRef = null; }
   if (progRef) { progRef.off(); progRef = null; }
   if (turnosStatusRef) { turnosStatusRef.off(); turnosStatusRef = null; }
+  if (turnosIniciadosRef) { turnosIniciadosRef.off(); turnosIniciadosRef = null; }
   progData = null;
   regsData = [];
   turnosEncerradosHoje = {};
+  turnosIniciadosHoje = {};
 
   currentRef = db.ref('registros/' + date);
   dbOnValue(currentRef, function(snap) {
@@ -607,6 +614,12 @@ function listenToDate(date) {
   turnosStatusRef = db.ref('turnosEncerrados/' + date);
   dbOnValue(turnosStatusRef, function(snap) {
     turnosEncerradosHoje = snap.val() || {};
+    renderTurnosStatus();
+  });
+
+  turnosIniciadosRef = db.ref('turnosIniciados/' + date);
+  dbOnValue(turnosIniciadosRef, function(snap) {
+    turnosIniciadosHoje = snap.val() || {};
     renderTurnosStatus();
   });
 }
@@ -1159,16 +1172,25 @@ function renderTurnosStatus() {
     if (isSextaCfg && cfg.turnoHorariosFimSexta && cfg.turnoHorariosFimSexta[nome]) horaFim = cfg.turnoHorariosFimSexta[nome];
     var faixa = horaIni + (horaFim ? ' às ' + horaFim : '');
     var status = turnosEncerradosHoje[sanitizeKey(nome)];
+    // Achado do agente de UX: antes daqui, "Ainda não começou"/"Em
+    // andamento" eram só inferidos pelo relógio -- agora, se alguém já
+    // confirmou o início de verdade (botão "▶️ Iniciar turno",
+    // form.html), usa esse dado real em vez de adivinhar.
+    var inicio = turnosIniciadosHoje[sanitizeKey(nome)];
     var badgeCls, badgeTxt, subTxt;
     if (status) {
       badgeCls = 'ok'; badgeTxt = '✓ Encerrado';
       var horaFechou = status.encerradoEm ? new Date(status.encerradoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
       subTxt = 'às ' + horaFechou + (status.itens ? ' · ' + status.itens + ' item(ns)' : '');
+    } else if (inicio) {
+      badgeCls = 'pending'; badgeTxt = '▶️ Iniciado';
+      var horaAbriu = inicio.iniciadoEm ? new Date(inicio.iniciadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '';
+      subTxt = 'às ' + horaAbriu + (inicio.iniciadoPor ? ' · ' + inicio.iniciadoPor : '');
     } else if (isToday && nowHm < horaIni) {
       badgeCls = 'pending'; badgeTxt = 'Ainda não começou';
       subTxt = faixa;
     } else if (isToday) {
-      badgeCls = 'pending'; badgeTxt = 'Em andamento';
+      badgeCls = 'pending'; badgeTxt = 'Em andamento (sem confirmação)';
       subTxt = faixa;
     } else {
       badgeCls = 'late'; badgeTxt = 'Não encerrado';
