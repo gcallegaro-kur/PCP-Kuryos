@@ -605,7 +605,11 @@ async function checkOpsAtrasadas(destinatarios) {
   const ops = opsSnap.val() || {};
 
   for (const [loteKey, op] of Object.entries(ops)) {
-    if (!op || op.status === "Concluído" || op.status === "Cancelado") continue;
+    // "Aguardando Confirmação" (Fase 7 do plano): a linha já foi liberada
+    // pelo operador, produção já terminou -- não faz sentido alertar
+    // "não iniciada"/"atrasada" pra uma OP que já foi fechada, só falta o
+    // PCP confirmar.
+    if (!op || op.status === "Concluído" || op.status === "Cancelado" || op.status === "Aguardando Confirmação") continue;
 
     const linha = op.abertaLinha || op.linha || "—";
     const produzido = op.produzidoLinha || op.produzido || 0;
