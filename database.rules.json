@@ -158,6 +158,12 @@
         ".write": "auth != null && auth.uid == $uid"
       }
     },
+    "rh_ferias": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'gestor')",
+      "$key": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid))"
+      }
+    },
     ".read": "auth != null",
     ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
   }

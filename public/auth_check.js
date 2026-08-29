@@ -69,7 +69,8 @@ const pageAccessRules = {
   // rh_colaboradores (ver database.rules.json) -- a leitura por
   // hierarquia é desenhada na Fase 2 (Avaliação de Desempenho).
   'rh_cadastros.html': ['rh', 'gestor'],
-  'rh_avaliacao.html': ['rh', 'gestor']
+  'rh_avaliacao.html': ['rh', 'gestor'],
+  'rh_ferias.html': ['rh', 'gestor']
 };
 
 // Extrai o nome da página atual
@@ -434,6 +435,7 @@ function renderUnifiedNavbar(user) {
     '<div class="kt-nav-group"><div class="kt-nav-cap">Recursos Humanos</div>' +
     ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
     ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage) +
+    ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
     '</div>';
 
   sidebar.innerHTML =

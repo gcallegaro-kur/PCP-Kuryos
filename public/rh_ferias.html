@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RH — Férias</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{background:transparent;color:var(--text);padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;box-shadow:none;position:static;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .kt-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0 16px}
+    .kt-select{padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;background:var(--card);color:var(--text)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid #fca5a5;color:var(--danger)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary);padding:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:var(--surface-2);padding:8px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--border)}
+    td{padding:8px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
+    .section-note.pendente{border-left-color:var(--warning);background:color-mix(in srgb, var(--warning) 8%, var(--card))}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group.full{grid-column:1/-1}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=date],textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+
+<div class="header">
+  <div>
+    <h1>Férias</h1>
+    <div class="header-sub">Solicitação e aprovação em duas etapas (Gestor → RH Central).</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <div class="section-note pendente">⚑ Regra de saldo provisória: 30 dias por período aquisitivo de 12 meses, sem limite de fracionamento aplicado ainda (a CLT permite até 3 períodos, um deles com mínimo de 14 dias -- essa checagem específica ainda não está implementada). Isso corresponde à decisão pendente <strong>D-01</strong> da especificação do módulo -- ajustar assim que a Kuryos/Contabilidade confirmar a regra definitiva.</div>
+
+  <div class="card">
+    <div class="card-title">Nova solicitação</div>
+    <div class="section-note">Autoatendimento do colaborador (ele mesmo solicitando) ainda não existe nesta fase -- Gestor ou RH registram em nome do colaborador.</div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Colaborador *</label>
+        <input type="text" id="fColaborador-fer" placeholder="Digite pra buscar..." autocomplete="off">
+        <input type="hidden" id="fColaboradorId-fer">
+        <div class="field-hint" id="saldoHint-fer"></div>
+      </div>
+      <div class="form-group"><label>Período aquisitivo *</label><input type="text" id="fPeriodoAquisitivo-fer" placeholder="Ex: 2024-2025"></div>
+      <div class="form-group"></div>
+      <div class="form-group"><label>Data de início *</label><input type="date" id="fDataInicio-fer"></div>
+      <div class="form-group"><label>Data de fim *</label><input type="date" id="fDataFim-fer"></div>
+      <div class="form-group full"><label>Observações</label><textarea id="fObs-fer" rows="2"></textarea></div>
+    </div>
+    <button class="btn btn-primary" id="btnSolicitar-fer" style="margin-top:10px">Registrar solicitação</button>
+  </div>
+
+  <div class="kt-toolbar">
+    <select class="kt-select" id="filterStatus-fer">
+      <option value="">Todos os status</option>
+      <option value="Solicitada">Solicitada</option>
+      <option value="Aprovada pelo gestor">Aprovada pelo gestor</option>
+      <option value="Aprovada pelo RH">Aprovada pelo RH</option>
+      <option value="Concluída">Concluída</option>
+      <option value="Recusada">Recusada</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span id="listCount-fer">Solicitações</span></div>
+    <table>
+      <thead><tr><th>Colaborador</th><th>Período</th><th>Datas</th><th style="text-align:right">Dias</th><th>Status</th><th style="min-width:220px">Ações</th></tr></thead>
+      <tbody id="listBody-fer"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+try { db.ref('.info/connected').on('value', function(snap) { setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...'); }); }
+catch (err) { setStatus(false, 'Erro'); console.error(err); }
+
+var SALDO_DIAS_PADRAO = 30; // ⚑ D-01 pendente -- ver nota na tela
+
+var allColaboradoresPublico = {};
+var allFerias = {};
+var minhaColaboradorKey = null;
+var colaboradorItems = [];
+
+function refreshColaboradorItems() {
+  var role = window.currentUser ? window.currentUser.role : null;
+  colaboradorItems = Object.entries(allColaboradoresPublico)
+    .filter(function(e) {
+      if (e[1].status === 'Desligado') return false;
+      if (role === 'gestor') return minhaColaboradorKey && e[1].gestorKey === minhaColaboradorKey;
+      return true;
+    })
+    .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
+    .map(function(e) { return { key: e[0], value: e[1].nome, label: e[1].nome }; });
+}
+
+function diasEntre(ini, fim) {
+  if (!ini || !fim) return 0;
+  var d1 = new Date(ini + 'T00:00:00'), d2 = new Date(fim + 'T00:00:00');
+  var dias = Math.round((d2 - d1) / 86400000) + 1;
+  return dias > 0 ? dias : 0;
+}
+
+function diasJaUsadosNoPeriodo(colaboradorId, periodoAquisitivo, excluirKey) {
+  return Object.entries(allFerias).reduce(function(soma, entry) {
+    var key = entry[0], f = entry[1];
+    if (key === excluirKey) return soma;
+    if (f.colaboradorId !== colaboradorId || f.periodoAquisitivo !== periodoAquisitivo) return soma;
+    if (f.status === 'Recusada') return soma;
+    return soma + (f.qtdDias || 0);
+  }, 0);
+}
+
+function atualizarSaldoHint() {
+  var colaboradorId = document.getElementById('fColaboradorId-fer').value;
+  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value.trim();
+  var hint = document.getElementById('saldoHint-fer');
+  if (!colaboradorId || !periodo) { hint.textContent = ''; return; }
+  var usados = diasJaUsadosNoPeriodo(colaboradorId, periodo, null);
+  var restante = SALDO_DIAS_PADRAO - usados;
+  hint.textContent = 'Saldo do período ' + periodo + ': ' + restante + ' de ' + SALDO_DIAS_PADRAO + ' dias (regra provisória, ver aviso acima).';
+  hint.style.color = restante <= 0 ? 'var(--danger)' : '';
+}
+
+function registrarSolicitacao() {
+  var colaboradorId = document.getElementById('fColaboradorId-fer').value;
+  var periodo = document.getElementById('fPeriodoAquisitivo-fer').value.trim();
+  var ini = document.getElementById('fDataInicio-fer').value;
+  var fim = document.getElementById('fDataFim-fer').value;
+  if (!colaboradorId) { showAlert('Selecione o colaborador (precisa escolher da lista).', 'danger'); return; }
+  if (!periodo) { showAlert('Informe o período aquisitivo.', 'danger'); return; }
+  if (!ini || !fim) { showAlert('Informe as datas de início e fim.', 'danger'); return; }
+  var qtdDias = diasEntre(ini, fim);
+  if (qtdDias <= 0) { showAlert('Data de fim precisa ser depois da data de início.', 'danger'); return; }
+  var usados = diasJaUsadosNoPeriodo(colaboradorId, periodo, null);
+  if (usados + qtdDias > SALDO_DIAS_PADRAO) {
+    showAlert('Saldo insuficiente: restam ' + (SALDO_DIAS_PADRAO - usados) + ' dia(s) no período ' + periodo + ' (regra provisória de ' + SALDO_DIAS_PADRAO + ' dias/período -- D-01 pendente).', 'danger');
+    return;
+  }
+
+  var registro = {
+    colaboradorId: colaboradorId,
+    colaboradorNome: (allColaboradoresPublico[colaboradorId] || {}).nome || '',
+    periodoAquisitivo: periodo,
+    dataInicioSolicitada: ini,
+    dataFimSolicitada: fim,
+    qtdDias: qtdDias,
+    status: 'Solicitada',
+    observacoes: document.getElementById('fObs-fer').value.trim(),
+    registradoPor: (window.currentUser && window.currentUser.nome) || '',
+    criadoEm: new Date().toISOString()
+  };
+  document.getElementById('btnSolicitar-fer').disabled = true;
+  db.ref('rh_ferias').push(registro)
+    .then(function() {
+      showAlert('Solicitação registrada!', 'success');
+      document.getElementById('fColaborador-fer').value = '';
+      document.getElementById('fColaboradorId-fer').value = '';
+      document.getElementById('fPeriodoAquisitivo-fer').value = '';
+      document.getElementById('fDataInicio-fer').value = '';
+      document.getElementById('fDataFim-fer').value = '';
+      document.getElementById('fObs-fer').value = '';
+      atualizarSaldoHint();
+    })
+    .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('btnSolicitar-fer').disabled = false; });
+}
+
+function aprovar(key, etapa) {
+  var f = allFerias[key];
+  if (!f) return;
+  var updates = {};
+  if (etapa === 'gestor') {
+    updates['rh_ferias/' + key + '/status'] = 'Aprovada pelo gestor';
+    updates['rh_ferias/' + key + '/aprovacaoGestor'] = { nome: (window.currentUser || {}).nome || '', em: new Date().toISOString() };
+  } else if (etapa === 'rh') {
+    updates['rh_ferias/' + key + '/status'] = 'Aprovada pelo RH';
+    updates['rh_ferias/' + key + '/aprovacaoRh'] = { nome: (window.currentUser || {}).nome || '', em: new Date().toISOString() };
+  } else if (etapa === 'concluir') {
+    updates['rh_ferias/' + key + '/status'] = 'Concluída';
+  }
+  db.ref().update(updates).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+function recusar(key) {
+  var motivo = prompt('Justificativa da recusa (obrigatória):');
+  if (motivo == null) return;
+  if (!motivo.trim()) { showAlert('Justificativa é obrigatória pra recusar.', 'danger'); return; }
+  var updates = {};
+  updates['rh_ferias/' + key + '/status'] = 'Recusada';
+  updates['rh_ferias/' + key + '/motivoRecusa'] = motivo.trim();
+  db.ref().update(updates).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+var STATUS_BADGE = {
+  'Solicitada': 'badge-orange', 'Aprovada pelo gestor': 'badge-blue', 'Aprovada pelo RH': 'badge-blue',
+  'Concluída': 'badge-green', 'Recusada': 'badge-red'
+};
+
+function renderLista() {
+  var filtStatus = document.getElementById('filterStatus-fer').value;
+  var role = window.currentUser ? window.currentUser.role : null;
+  var rows = Object.entries(allFerias).filter(function(entry) {
+    var f = entry[1];
+    if (filtStatus && f.status !== filtStatus) return false;
+    if (role === 'gestor') {
+      var col = allColaboradoresPublico[f.colaboradorId] || {};
+      if (col.gestorKey !== minhaColaboradorKey) return false;
+    }
+    return true;
+  });
+  rows.sort(function(a, b) { return (b[1].criadoEm || '').localeCompare(a[1].criadoEm || ''); });
+  document.getElementById('listCount-fer').textContent = 'Solicitações (' + rows.length + ')';
+  var tbody = document.getElementById('listBody-fer');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma solicitação encontrada.</td></tr>'; return; }
+  tbody.innerHTML = rows.map(function(entry) {
+    var key = entry[0], f = entry[1];
+    var acoes = '';
+    if (f.status === 'Solicitada' && (role === 'gestor' || role === 'rh')) {
+      acoes = '<button class="btn btn-ghost btn-sm btn-aprovar" data-key="' + escapeAttr(key) + '" data-etapa="gestor">Aprovar (1ª etapa)</button> ' +
+        '<button class="btn btn-danger-ghost btn-sm btn-recusar" data-key="' + escapeAttr(key) + '">Recusar</button>';
+    } else if (f.status === 'Aprovada pelo gestor' && role === 'rh') {
+      acoes = '<button class="btn btn-ghost btn-sm btn-aprovar" data-key="' + escapeAttr(key) + '" data-etapa="rh">Aprovar (final)</button> ' +
+        '<button class="btn btn-danger-ghost btn-sm btn-recusar" data-key="' + escapeAttr(key) + '">Recusar</button>';
+    } else if (f.status === 'Aprovada pelo RH' && role === 'rh') {
+      acoes = '<button class="btn btn-ghost btn-sm btn-aprovar" data-key="' + escapeAttr(key) + '" data-etapa="concluir">Marcar concluída</button>';
+    } else if (f.status === 'Recusada' && f.motivoRecusa) {
+      acoes = '<span class="field-hint">' + escapeHtml(f.motivoRecusa) + '</span>';
+    }
+    return '<tr>' +
+      '<td><strong>' + escapeHtml(f.colaboradorNome || '—') + '</strong></td>' +
+      '<td>' + escapeHtml(f.periodoAquisitivo || '—') + '</td>' +
+      '<td style="font-size:12px">' + (f.dataInicioSolicitada ? new Date(f.dataInicioSolicitada + 'T00:00:00').toLocaleDateString('pt-BR') : '—') + ' – ' + (f.dataFimSolicitada ? new Date(f.dataFimSolicitada + 'T00:00:00').toLocaleDateString('pt-BR') : '—') + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(f.qtdDias || 0) + '</td>' +
+      '<td><span class="badge ' + (STATUS_BADGE[f.status] || 'badge-gray') + '">' + escapeHtml(f.status || '—') + '</span></td>' +
+      '<td>' + acoes + '</td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('.btn-aprovar').forEach(function(btn) { btn.addEventListener('click', function() { aprovar(btn.getAttribute('data-key'), btn.getAttribute('data-etapa')); }); });
+  document.querySelectorAll('.btn-recusar').forEach(function(btn) { btn.addEventListener('click', function() { recusar(btn.getAttribute('data-key')); }); });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  attachAutocomplete(document.getElementById('fColaborador-fer'), function() { return colaboradorItems; }, {
+    onSelect: function(it) { document.getElementById('fColaboradorId-fer').value = it.key; atualizarSaldoHint(); }
+  });
+  document.getElementById('fColaborador-fer').addEventListener('input', function() { document.getElementById('fColaboradorId-fer').value = ''; atualizarSaldoHint(); });
+  document.getElementById('fColaborador-fer').addEventListener('focus', refreshColaboradorItems);
+  document.getElementById('fPeriodoAquisitivo-fer').addEventListener('input', atualizarSaldoHint);
+  document.getElementById('btnSolicitar-fer').addEventListener('click', registrarSolicitacao);
+  document.getElementById('filterStatus-fer').addEventListener('change', renderLista);
+
+  dbOnValue(db.ref('rh_colaboradores_publico'), function(snap) {
+    allColaboradoresPublico = snap.val() || {};
+    if (window.currentUser && window.currentUser.role === 'gestor' && firebase.auth().currentUser) {
+      var meu = Object.entries(allColaboradoresPublico).filter(function(e) { return e[1].uidLogin === firebase.auth().currentUser.uid; })[0];
+      minhaColaboradorKey = meu ? meu[0] : null;
+    }
+    refreshColaboradorItems();
+    renderLista();
+  });
+  dbOnValue(db.ref('rh_ferias'), function(snap) {
+    allFerias = snap.val() || {};
+    renderLista();
+    atualizarSaldoHint();
+  });
+});
+</script>
+
+</body>
+</html>
