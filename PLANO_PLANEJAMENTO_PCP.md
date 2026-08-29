@@ -856,3 +856,54 @@ cuidadoso antes de codar (schema de dados, o que exatamente cada tela
 mostra, como o pipeline `alocacoes_planejamento` existente é recablado
 em vez de descartado). Trabalho em andamento, ver próxima seção quando
 existir.
+
+## 15. Fase 6 — mockup pra revisão antes de construir (2026-08-29)
+
+Diferente das fases anteriores (bugs/features contidas, risco baixo,
+reversível), a Fase 6 é a maior do roteiro e a mais arriscada de
+construir às cegas: 2 telas novas que a equipe vai usar todo dia,
+substituindo um fluxo hoje quebrado (Horizonte). Errar o conceito aqui
+custa muito mais do que errar um fix pontual. Por isso, antes de investir
+o tempo de construção de verdade, um mockup visual concreto no estilo
+real do app (não um wireframe genérico) foi publicado pra revisão:
+[link do mockup — pedir ao usuário se precisar recuperar].
+
+**O que o mockup mostra**, já respeitando as decisões da seção 3:
+
+- **Planejamento de Quantidades** (substitui a lógica de "Congelar
+  Semana" do Horizonte): fila de pedidos por prioridade com % já
+  alocado, alocação em formulário simples com data/hora de início EXATA
+  (não slot de hora cheia) e prévia do término calculado
+  (`qtd ÷ ritmo`, minutos exatos, sem arredondar) — grava em
+  `alocacoes_planejamento` (mesmo pipeline, `status:'congelado'`, campos
+  novos `inicioPlanejado`/`fimPlanejado`). Lista de blocos já alocados
+  embaixo, pra contexto.
+- **Planejamento de OPs**: timeline por linha PROPORCIONAL à duração
+  real (não coluna-por-hora igual a Grade Semanal atual), um bloco por
+  OP emitida (não por pedido), cor por status (em produção/concluída/
+  programada/atrasada), linha do "agora" — o Painel de Turno passaria a
+  espelhar esses mesmos blocos em vez de manter uma lista separada.
+
+**Decisão técnica de dado, já validada pela leitura do código
+existente**: o pipeline `alocacoes_planejamento`/`necessidadeCodigo`/
+`linkAlocacaoToOP` (`functions/index.js`) e `programacao/{date}/{hora}/
+{slot}` (consumido por `planejamento.html`) continuam existindo — a
+Fase 6 ESTENDE `alocacoes_planejamento` com `inicioPlanejado`/
+`fimPlanejado` exatos (novos campos) e continua preenchendo
+`programacao` em paralelo, best-effort, só pra não quebrar os 3
+consumidores existentes (Grade Semanal, `linkAlocacaoToOP`,
+`writeLoteIntoWeekSlots`). Nada é descartado, só ganha uma UI nova e um
+grau de precisão maior.
+
+**Por que parar pra mockup em vez de construir direto**: construir a
+capacidade/priorização de pedidos do zero seria redundante e arriscado
+— a lógica de `horizonte.html` (`computeAndRender`, matriz de
+capacidade por linha/semana, ordenação por prioridade) já é testada e
+funciona; o problema reportado pelo usuário foi a TELA, não a conta. A
+estratégia de implementação (quando aprovada) é reaproveitar essa lógica
+de cálculo e só trocar a camada de apresentação/interação — não
+reescrever a capacidade do zero.
+
+**Enquanto aguarda validação do mockup**, trabalho seguiu nas fases
+seguintes do roteiro (7 em diante), que não dependem de nenhuma decisão
+de UI ainda em aberto.
