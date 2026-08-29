@@ -492,11 +492,15 @@ exports.criarRascunhoCotacao = onCall(
 // Estado de cooldown/digest -- antes era um JSON local (email_notifications_state.json),
 // agora fica no próprio Firebase já que a function não tem disco persistente
 // entre execuções.
-async function cooldownOk(key) {
+// Achado do agente de boas práticas: janela vinha fixa em NOTIF_COOLDOWN_MIN
+// (60min) sem parâmetro -- bloqueava a Fase 4 do plano (alerta de atraso
+// com repique a cada 10min, cooldown próprio, não o padrão de 60min).
+// windowMin opcional preserva os 2 call sites existentes sem mudança.
+async function cooldownOk(key, windowMin) {
   const snap = await db.ref("email_notifications_state/last_sent/" + sanitizeKey(key)).once("value");
   const last = snap.val();
   if (!last) return true;
-  return (Date.now() - new Date(last).getTime()) > NOTIF_COOLDOWN_MIN * 60 * 1000;
+  return (Date.now() - new Date(last).getTime()) > (windowMin || NOTIF_COOLDOWN_MIN) * 60 * 1000;
 }
 async function markSent(key) {
   await db.ref("email_notifications_state/last_sent/" + sanitizeKey(key)).set(new Date().toISOString());
