@@ -2654,9 +2654,26 @@ function regTimestampIso(reg, campo) {
 // o Controle de OPs e o Historico ficam com dado congelado assim que alguem
 // aponta producao numa OP. So atualiza OPs que ja existem (emitidas); nao
 // cria OP nova a partir de um apontamento solto.
-function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso) {
-  if (!lote || !qtd) return Promise.resolve();
+// Achado CRÍTICO do agente de auditoria: nos fluxos "total" (Encerrar OP/
+// Apontamento por Total/Fechar Lote), o delta somado aqui vinha calculado
+// ANTES da transaction, fora dela -- var apontado = getProduzido(op,tipo)
+// (leitura de opsCache, cache local que pode estar desatualizado, inclusive
+// por definição sempre que o item veio da fila offline). A transaction em
+// si é atômica (Firebase reexecuta o callback com o valor AO VIVO até
+// commitar), mas o VALOR sendo somado já vinha errado de fora -- dois
+// fechamentos concorrentes (ou um fechamento offline sincronizando depois
+// de outro apontamento já ter avançado o servidor) cada um soma seu delta
+// calculado contra a MESMA base velha, e o resultado passa do total real.
+// Fix: quando qtdTotalConhecido é passado (os 3 fluxos "total" já gravam
+// isso em registro.qtdTotalOP), o delta é recalculado AQUI DENTRO, contra
+// o valor ao vivo lido nesta tentativa da transaction -- correto mesmo que
+// o callback rode várias vezes por causa de conflito. qtd continua sendo
+// usado como está (delta já conhecido de verdade) pros apontamentos por
+// hora/retroativo, que nunca fazem essa subtração.
+function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso, qtdTotalConhecido) {
+  if (!lote || (!qtd && qtdTotalConhecido == null)) return Promise.resolve();
   var loteKey = sanitizeKey(lote);
+  var deltaAplicado = qtd || 0; // capturado de novo a cada tentativa da transaction abaixo -- o valor da tentativa que commitar é o que vale
   // tsIso/tsFimIso são o início/fim reais do apontamento (podem ser
   // retroativos) -- sem isso, um lançamento retroativo de dias atrás
   // carimbava a OP com o momento em que alguém clicou em salvar, não com
@@ -2682,7 +2699,11 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // `produzido` fica espelhando produzidoLinha, de rede de segurança pra
     // qualquer leitor antigo que ainda não foi migrado.
     var campo = campoProduzido(tipo);
-    op[campo] = (op[campo] || 0) + qtd;
+    var deltaDestaTentativa = (qtdTotalConhecido != null)
+      ? Math.max(qtdTotalConhecido - (op[campo] || 0), 0)
+      : (qtd || 0);
+    deltaAplicado = deltaDestaTentativa;
+    op[campo] = (op[campo] || 0) + deltaDestaTentativa;
     if (campo === 'produzidoLinha') op.produzido = op[campo];
     if (!isNaN(tsMs)) {
       var iniMs = op.dataInicioReal ? new Date(op.dataInicioReal).getTime() : NaN;
@@ -2708,7 +2729,10 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // caso de conflito) -- best-effort, não desfaz o apontamento se falhar.
     if (isSetorEnvase(tipo) && result.committed && result.snapshot.exists()) {
       var opAtual = result.snapshot.val();
-      baixarEstoqueConsumo(opAtual, qtd, 'consumo_producao', lote).catch(function(err) {
+      // deltaAplicado (não qtd) -- mesmo achado crítico acima: dar baixa de
+      // estoque pelo delta calculado fora da transaction repetiria o mesmo
+      // erro de arrastar um número stale pra um efeito colateral real.
+      baixarEstoqueConsumo(opAtual, deltaAplicado, 'consumo_producao', lote).catch(function(err) {
         console.error('Falha ao dar baixa de estoque por consumo de produção:', err);
       });
       // OP bateu o critério de "Concluído" nesse apontamento (mesmos ~95% de
@@ -2724,6 +2748,7 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
         });
       }
     }
+    result.deltaAplicado = deltaAplicado;
     return result;
   });
 }
@@ -2832,88 +2857,109 @@ function syncNextItem() {
     // únicos lugares do app onde esse campo é recalculado a partir de
     // produção real, em vez de só copiado de um valor estático.
     promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
-      if (item.registro && item.registro.lote) {
-        updateOpRecordOnApontamento(item.registro.lote, item.qtd, item.mediaPorHoraCalculada, regTimestampIso(item.registro), item.tipo);
-      }
-      if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
-        var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
-        if (pedKey) {
-          return opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
-            if (!ativa) return;
-            return db.ref('pedidos/' + pedKey).transaction(function(p) {
-              if (!p) return p;
-              p.produzido = (p.produzido || 0) + item.qtd;
-              p.ultimoApontamento = new Date().toISOString();
-              if (item.mediaPorHoraCalculada > 0) p.mediaPorHora = item.mediaPorHoraCalculada;
-              return p;
-            }).then(function(res) {
-              if (res.committed && res.snapshot.exists()) {
-                var val = res.snapshot.val();
-                if (typeof window.updateOpStatusAutomatically === 'function') {
-                  window.updateOpStatusAutomatically(pedKey);
-                  if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
+      // Achado CRÍTICO do agente de auditoria: esta chamada não tinha
+      // `return` -- rodava fire-and-forget, e o passo seguinte (pedidos/
+      // {pedKey}.produzido) usava item.qtd direto, sem esperar o delta real
+      // aplicado na OP. Agora encadeia de verdade e usa o delta que a
+      // transaction de ops/ realmente aplicou (deltaAplicado), calculado
+      // contra o total digitado (item.registro.qtdTotalOP) em vez do delta
+      // pré-calculado fora da transaction.
+      var opUpdatePromise = (item.registro && item.registro.lote)
+        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, item.mediaPorHoraCalculada, regTimestampIso(item.registro), item.tipo, undefined, item.registro.qtdTotalOP)
+        : Promise.resolve(null);
+      return opUpdatePromise.then(function(opResult) {
+        var deltaReal = (opResult && opResult.deltaAplicado != null) ? opResult.deltaAplicado : item.qtd;
+        if (item.pedidoId && deltaReal && item.produto && isSetorEnvase(item.tipo)) {
+          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          if (pedKey) {
+            return opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
+              if (!ativa) return;
+              return db.ref('pedidos/' + pedKey).transaction(function(p) {
+                if (!p) return p;
+                p.produzido = (p.produzido || 0) + deltaReal;
+                p.ultimoApontamento = new Date().toISOString();
+                if (item.mediaPorHoraCalculada > 0) p.mediaPorHora = item.mediaPorHoraCalculada;
+                return p;
+              }).then(function(res) {
+                if (res.committed && res.snapshot.exists()) {
+                  var val = res.snapshot.val();
+                  if (typeof window.updateOpStatusAutomatically === 'function') {
+                    window.updateOpStatusAutomatically(pedKey);
+                    if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
+                  }
+                  var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
+                  var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
+                  if (isDone) {
+                    return cleanFutureSlots(pedKey, db);
+                  }
                 }
-                var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
-                var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
-                if (isDone) {
-                  return cleanFutureSlots(pedKey, db);
-                }
-              }
+              });
             });
-          });
+          }
         }
-      }
+      });
     });
   } else if (item.type === 'fechamento_op') {
     promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
       var saves = [];
-      if (item.lote) {
-        // Fechamento e' uma decisao deliberada -- marca Concluido direto, nao
-        // so por percentual (pode ter fechado com sobra/falta e ainda assim
-        // ser a decisao de encerrar o lote).
-        var loteKey = sanitizeKey(item.lote);
-        saves.push(db.ref('ops/' + loteKey).transaction(function(op) {
-          if (!op) return op;
-          if (op.status === 'Cancelado') return; // defesa em profundidade, ver updateOpRecordOnApontamento
-          // Mesma separação por setor de updateOpRecordOnApontamento --
-          // "Finalizar OP" nunca soma no campo errado só porque é um
-          // encerramento deliberado.
-          var campo = campoProduzido(item.tipo);
-          op[campo] = (op[campo] || 0) + (item.qtdFinal || 0);
-          if (campo === 'produzidoLinha') op.produzido = op[campo];
-          op.dataFimReal = new Date().toISOString();
-          if (!op.dataInicioReal) op.dataInicioReal = op.dataFimReal;
-          op.status = 'Concluído';
-          return op;
-        }));
-      }
-      if (item.pedidoId && item.qtdFinal && item.produto && isSetorEnvase(item.tipo)) {
-        var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
-        if (pedKey) {
-          saves.push(opAindaAtivaAsync(item.lote).then(function(ativa) {
-            if (!ativa) return;
-            return db.ref('pedidos/' + pedKey).transaction(function(p) {
-              if (!p) return p;
-              p.produzido = (p.produzido || 0) + item.qtdFinal;
-              p.ultimoApontamento = new Date().toISOString();
-              return p;
-            }).then(function(res) {
-              if (res.committed && res.snapshot.exists()) {
-                var val = res.snapshot.val();
-                if (typeof window.updateOpStatusAutomatically === 'function') {
-                  window.updateOpStatusAutomatically(pedKey);
+      // Achado CRÍTICO do agente de auditoria: mesmo padrão do apontamento_total
+      // -- item.qtdFinal era calculado fora da transaction (contra opsCache,
+      // que pode estar velho) e usado direto tanto pra ops/{lote} quanto,
+      // em paralelo (Promise.all), pra pedidos/{pedKey}.produzido. Agora a
+      // transaction de ops/ recalcula o delta real contra o total digitado
+      // (item.registro.qtdTotalOP) e o passo de pedidos/ (que precisa do
+      // resultado, não roda mais em paralelo) usa esse delta real.
+      var deltaRealFechamento = item.qtdFinal || 0;
+      var opPromise = item.lote
+        ? db.ref('ops/' + sanitizeKey(item.lote)).transaction(function(op) {
+            if (!op) return op;
+            if (op.status === 'Cancelado') return; // defesa em profundidade, ver updateOpRecordOnApontamento
+            // Mesma separação por setor de updateOpRecordOnApontamento --
+            // "Finalizar OP" nunca soma no campo errado só porque é um
+            // encerramento deliberado.
+            var campo = campoProduzido(item.tipo);
+            var totalDigitado = item.registro && item.registro.qtdTotalOP;
+            var dReal = (typeof totalDigitado === 'number')
+              ? Math.max(totalDigitado - (op[campo] || 0), 0)
+              : (item.qtdFinal || 0);
+            deltaRealFechamento = dReal; // captura o delta da tentativa que efetivamente commitar
+            op[campo] = (op[campo] || 0) + dReal;
+            if (campo === 'produzidoLinha') op.produzido = op[campo];
+            op.dataFimReal = new Date().toISOString();
+            if (!op.dataInicioReal) op.dataInicioReal = op.dataFimReal;
+            op.status = 'Concluído';
+            return op;
+          })
+        : Promise.resolve(null);
+      saves.push(opPromise.then(function() {
+        if (item.pedidoId && deltaRealFechamento && item.produto && isSetorEnvase(item.tipo)) {
+          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          if (pedKey) {
+            return opAindaAtivaAsync(item.lote).then(function(ativa) {
+              if (!ativa) return;
+              return db.ref('pedidos/' + pedKey).transaction(function(p) {
+                if (!p) return p;
+                p.produzido = (p.produzido || 0) + deltaRealFechamento;
+                p.ultimoApontamento = new Date().toISOString();
+                return p;
+              }).then(function(res) {
+                if (res.committed && res.snapshot.exists()) {
+                  var val = res.snapshot.val();
+                  if (typeof window.updateOpStatusAutomatically === 'function') {
+                    window.updateOpStatusAutomatically(pedKey);
+                  }
+                  if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
+                  var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
+                  var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
+                  if (isDone) {
+                    return cleanFutureSlots(pedKey, db);
+                  }
                 }
-                if (typeof window.autoAjustarPlanejamento === 'function') window.autoAjustarPlanejamento(pedKey);
-                var pct = val.qtdTotal ? (val.produzido || 0) / val.qtdTotal : 0;
-                var isDone = (val.statusManual === 'encerrado') || (val.status && val.status.toLowerCase().indexOf('conclu') === 0) || (pct >= 0.95);
-                if (isDone) {
-                  return cleanFutureSlots(pedKey, db);
-                }
-              }
+              });
             });
-          }));
+          }
         }
-      }
+      }));
       if (item.perdas && item.perdas.length && item.lote) {
         var loteSafe = sanitizeKey(item.lote);
         saves.push(db.ref('perdas/' + loteSafe).push({
