@@ -7,10 +7,7 @@
     "usuarios": {
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && (auth.uid == $uid || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp'))",
-        "role": {
-          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || (auth.uid == $uid && !root.child('usuarios').child($uid).child('role').exists()))"
-        }
+        ".write": "auth != null && ((auth.uid == $uid && !data.exists()) || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
       }
     },
     "produtos": {
