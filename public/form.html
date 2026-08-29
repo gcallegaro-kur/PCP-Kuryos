@@ -4046,7 +4046,19 @@ function updatePedidosDatalistTurno(tipo) {
   var livres = Object.values(opsCache).filter(function(o) {
     return o && o.lote && opEstaAtiva(o) && !o[campoInicio];
   });
-  livres.sort(function(a, b) { return String(a.lote).localeCompare(String(b.lote), undefined, {numeric: true}); });
+  // Achado do Auditor / pedido do usuário: a lista era só alfabética por
+  // lote, sem nenhuma ordem de prioridade -- quem ia alocar tinha que
+  // adivinhar ou perguntar ao PCP qual rodar primeiro (produção não devia
+  // escolher livremente, e sim seguir o que está programado). Ordena pela
+  // prioridade do pedido comercial vinculado (mesmo campo que Horizonte/
+  // Planejamento/o motor de replanejamento automático já usam); lote como
+  // desempate estável pra quem não tem prioridade definida.
+  livres.sort(function(a, b) {
+    var pa = (a.skuPedidoKey && pedidosCache[a.skuPedidoKey] && pedidosCache[a.skuPedidoKey].priority) || 999999;
+    var pb = (b.skuPedidoKey && pedidosCache[b.skuPedidoKey] && pedidosCache[b.skuPedidoKey].priority) || 999999;
+    if (pa !== pb) return pa - pb;
+    return String(a.lote).localeCompare(String(b.lote), undefined, {numeric: true});
+  });
   alocarOpLivresAtual = livres;
 }
 
@@ -4063,12 +4075,21 @@ function renderAlocarOpLista(filtroTexto) {
     return;
   }
   var loteSelecionado = document.getElementById('alocarOpLote').value;
+  // "Recomendada" é sempre a #1 da lista completa ordenada por prioridade
+  // (não da lista já filtrada pelo campo de busca) -- senão digitar um
+  // filtro faria qualquer resultado parecer "recomendado" só por ser o
+  // primeiro do que sobrou.
+  var top = alocarOpLivresAtual[0];
+  var topTemPrioridade = top && top.skuPedidoKey && pedidosCache[top.skuPedidoKey] && pedidosCache[top.skuPedidoKey].priority != null;
+  var loteRecomendado = topTemPrioridade ? String(top.lote) : null;
   cont.innerHTML = itens.map(function(o) {
     var saldo = (o.qtdPlanejada || 0) - getProduzido(o, alocarOpAlvoAtual ? alocarOpAlvoAtual.tipo : 'linha');
     var sel = String(o.lote) === loteSelecionado;
+    var recomendada = loteRecomendado && String(o.lote) === loteRecomendado;
     return '<div class="alocar-op-card' + (sel ? ' selected' : '') + '" data-op-lote="' + escTurno(String(o.lote)) + '">' +
       '<div class="alocar-op-card-top"><span class="alocar-op-card-lote">OP ' + escTurno(String(o.lote)) + '</span>' +
         '<span class="alocar-op-card-check">' + (sel ? '✓' : '') + '</span></div>' +
+      (recomendada ? '<div style="font-size:11px;font-weight:700;color:var(--success);margin-bottom:2px">💡 Próxima recomendada (prioridade)</div>' : '') +
       '<div class="alocar-op-card-prod">' + escTurno(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escTurno(o.sku) + ']</span>' : '') + '</div>' +
       '<div class="alocar-op-card-sub">Saldo: ' + fmtNum(saldo) + '</div>' +
     '</div>';
