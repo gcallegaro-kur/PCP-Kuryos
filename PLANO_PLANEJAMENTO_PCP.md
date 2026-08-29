@@ -80,22 +80,39 @@ apontamento de produção.
 
 ## 3. Decisões já tomadas com o usuário
 
-- **Granularidade de 15 minutos é do PLANEJAMENTO (grade/slots e ciclo de
-  acompanhamento do sistema), não do apontamento.** Correção importante do
-  usuário: são duas coisas separadas. Os 15 minutos valem pra como a grade
-  de programação é fatiada e pra de quanto em quanto tempo o sistema
-  reavalia/atualiza o andamento contra o planejado (monitoramento do lado
-  do PCP/sistema). **O apontamento em si — o que a produção efetivamente
-  registra — fica só em dois eventos por OP, por enquanto: abertura e
-  encerramento.** Sem check-in intermediário obrigatório pro operador. É
-  essa simplificação (não a granularidade da grade) que ataca a
-  dificuldade real relatada de manter a rotina de apontamento — o esforço
-  manual do operador não cresce com a granularidade do planejamento, os
-  dois são independentes. Paradas de linha continuam via Andon
-  (`estado_linhas`/`paradas_historico`), que já é um mecanismo à parte do
-  apontamento de quantidade. Se no futuro houver contagem automática
-  (sensor/contador), apontamento intermediário mais granular passa a fazer
-  sentido sem custo de operador — não antes disso.
+- **Granularidade do PLANEJAMENTO é do sistema, não do apontamento — e uma
+  vez desacoplada do esforço do operador, vale ir com precisão real, não
+  slot fixo.** Correção importante do usuário: são duas coisas separadas.
+  **O apontamento em si — o que a produção efetivamente registra — fica só
+  em dois eventos por OP, por enquanto: abertura e encerramento.** Sem
+  check-in intermediário obrigatório pro operador. É essa simplificação
+  (não a granularidade da grade) que ataca a dificuldade real relatada de
+  manter a rotina de apontamento — o esforço manual do operador não cresce
+  com a granularidade do planejamento, os dois são independentes. Paradas
+  de linha continuam via Andon (`estado_linhas`/`paradas_historico`), que
+  já é um mecanismo à parte do apontamento de quantidade.
+
+  Com o operador fora da equação, a pergunta virou só "qual a melhor
+  granularidade pro sistema calcular capacidade?" — e slot fixo (mesmo que
+  5 minutos) ainda arredonda: 1.300 peças a 1.000/h são 78 minutos reais;
+  slot de 15min arredonda pra 90min (15% de capacidade perdida só de
+  arredondamento), slot de 5min arredonda pra 80min (2,6%) — melhor, mas
+  ainda perde. **Decisão final: cada bloco planejado guarda início/fim
+  exatos (minuto real, não slot fixo)** — a OP de 1.300 peças ocupa
+  exatamente 78 minutos na conta de capacidade, zero arredondamento. 5
+  minutos vira só o "snap" da interface (granularidade de arraste/ajuste
+  na grade visual), não uma limitação de precisão do dado. Implica que a
+  grade diária (`planejamento.html`, hoje uma coluna por `hourKey`) precisa
+  virar uma timeline de verdade (bloco posicionado proporcionalmente ao
+  minuto), não esticar o modelo atual de colunas discretas — que já não
+  aguentaria a densidade de 5 em 5 minutos como colunas mesmo se quiséssemos
+  ficar só no slot fixo. Ciclo de reavaliação do sistema (de quanto em
+  quanto tempo o motor de auto-ajuste e os alertas de atraso reconferem o
+  andamento) continua com folga de sobra rodando a cada 5-15 minutos —
+  não precisa ser mais frequente que isso, é monitoramento, não a fonte da
+  precisão. Se no futuro houver contagem automática (sensor/contador), dá
+  pra reduzir ainda mais o ciclo de reavaliação sem custo nenhum de
+  operador — a decisão de hoje já não depende disso pra ser precisa.
 - **Conclusão de OP: 100% manual pelo PCP no início, sem exceção — não
   gated por desvio.** Volume é baixo (poucas OPs/dia, 3 linhas), e o
   objetivo é construir a rotina/fluxo bem amarrado primeiro. Automação por
@@ -161,7 +178,9 @@ retrabalho.
 4. **Somar paradas reais ao tempo estimado + alerta de atraso (15min)** —
    fecha gap de dado já existente, reaproveita o cron já existente.
 5. **Redesenho das duas telas de planejamento** (Quantidades / OPs) sobre
-   o pipeline `alocacoes_planejamento` já existente.
+   o pipeline `alocacoes_planejamento` já existente, com a grade diária
+   virando timeline de início/fim exatos (não mais coluna por `hourKey`) —
+   ver decisão de granularidade acima.
 6. **Conclusão de OP gated por PCP** (100% manual no início, conforme
    decisão acima).
 7. **Changeover configurável** (tempo-padrão por linha).
