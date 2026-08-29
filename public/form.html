@@ -278,8 +278,30 @@
         <div class="form-hint" style="margin:0;display:block">Turno atual</div>
         <div style="font-size:17px;font-weight:800;color:var(--text)" id="turnoAtualLabel">--</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span id="turnoIniciadoBadge" style="display:none;font-size:12px;color:var(--muted);font-weight:600"></span>
+        <button type="button" class="btn-cancel" style="width:auto;padding:11px 20px;margin:0" id="btnIniciarTurno">▶️ Iniciar turno</button>
         <button type="button" class="btn-submit" style="width:auto;padding:11px 20px;margin:0" id="btnEncerrarTurno">🏁 Encerrar turno</button>
+      </div>
+    </div>
+
+    <!-- Achado do Auditor: turno era só inferido pelo relógio do dispositivo
+         (guessShift()), sem nenhuma ação explícita -- perto de troca de
+         turno ou hora extra, um apontamento podia ser atribuído ao turno
+         errado sem ninguém perceber. "Iniciar turno" é o checkpoint que
+         faltava: confirma turno detectado + quem está abrindo, antes de
+         qualquer apontamento daquele turno. -->
+    <div id="iniciarTurnoBox" style="display:none;margin-bottom:16px" class="card">
+      <div style="padding:14px 16px">
+        <div style="font-weight:700;margin-bottom:8px" id="iniciarTurnoTitulo">Confirmar início do turno</div>
+        <div class="form-group full">
+          <label>Responsável abrindo o turno</label>
+          <input type="text" id="iniciarTurnoOperador" placeholder="Nome do operador/responsável" autocomplete="off">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button type="button" class="btn-submit" style="width:auto;padding:9px 16px;margin:0" id="btnConfirmarIniciarTurno">Confirmar início</button>
+          <button type="button" class="btn-cancel" style="width:auto;padding:9px 16px;margin:0" id="btnCancelarIniciarTurno">Cancelar</button>
+        </div>
       </div>
     </div>
 
@@ -1267,6 +1289,14 @@ dbOnValue(db.ref('estado_linhas'), function(snap) {
 // ── Postos de trabalho abertos no turno (sem OP obrigatória) ────────
 dbOnValue(db.ref('atividadesPosto'), function(snap) {
   atividadesPostoCache = snap.val() || {};
+  renderPainelTurno();
+});
+
+// ── Checkpoint de início de turno (achado do Auditor: turno era só
+// inferido pelo relógio, sem confirmação de ninguém) ──────────────────
+var turnosIniciadosHoje = {};
+dbOnValue(db.ref('turnosIniciados/' + today()), function(snap) {
+  turnosIniciadosHoje = snap.val() || {};
   renderPainelTurno();
 });
 
@@ -3831,10 +3861,26 @@ function renderPainelTurno() {
   aplicarRestricaoRotulagem();
 
   var label = document.getElementById('turnoAtualLabel');
+  var turnoNome = (typeof guessShift === 'function') ? guessShift() : '';
   if (label) {
-    var turnoNome = (typeof guessShift === 'function') ? guessShift() : '';
     var horarioIni = configTurnoHorarios[turnoNome];
     label.textContent = (turnoNome || '—') + (horarioIni ? ' · início ' + horarioIni : '');
+  }
+
+  var badge = document.getElementById('turnoIniciadoBadge');
+  var btnIniciar = document.getElementById('btnIniciarTurno');
+  if (badge && btnIniciar) {
+    var registro = turnoNome ? turnosIniciadosHoje[sanitizeKey(turnoNome)] : null;
+    if (registro) {
+      var hIni = '--';
+      try { hIni = new Date(registro.iniciadoEm).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); } catch (e) {}
+      badge.textContent = '✅ Iniciado às ' + hIni + ' por ' + (registro.iniciadoPor || '—');
+      badge.style.display = '';
+      btnIniciar.textContent = '↻ Reabrir turno';
+    } else {
+      badge.style.display = 'none';
+      btnIniciar.textContent = '▶️ Iniciar turno';
+    }
   }
 
   renderTurnoGrupo('turnoGridLinhas', configLinhas, 'linha', true);
@@ -4349,6 +4395,37 @@ document.getElementById('btnEncerrarTurno').addEventListener('click', function()
   abrirConfirmacaoTurno({ tipo: 'turno' });
 });
 
+document.getElementById('btnIniciarTurno').addEventListener('click', function() {
+  var turnoNome = (typeof guessShift === 'function') ? guessShift() : '';
+  document.getElementById('iniciarTurnoTitulo').textContent = turnoNome
+    ? 'Confirmar início do turno (' + turnoNome + ')'
+    : 'Confirmar início do turno';
+  document.getElementById('iniciarTurnoOperador').value = '';
+  document.getElementById('iniciarTurnoBox').style.display = 'block';
+  document.getElementById('iniciarTurnoOperador').focus();
+});
+document.getElementById('btnCancelarIniciarTurno').addEventListener('click', function() {
+  document.getElementById('iniciarTurnoBox').style.display = 'none';
+});
+document.getElementById('btnConfirmarIniciarTurno').addEventListener('click', function() {
+  var turnoNome = (typeof guessShift === 'function') ? guessShift() : '';
+  var operador = document.getElementById('iniciarTurnoOperador').value.trim();
+  if (!turnoNome) { alert('Não foi possível identificar o turno atual.'); return; }
+  if (!operador) { alert('Informe quem está abrindo o turno.'); return; }
+  var btn = document.getElementById('btnConfirmarIniciarTurno');
+  btn.disabled = true;
+  db.ref('turnosIniciados/' + today() + '/' + sanitizeKey(turnoNome)).set({
+    turno: turnoNome, iniciadoEm: new Date().toISOString(), iniciadoPor: operador
+  }).then(function() {
+    document.getElementById('iniciarTurnoBox').style.display = 'none';
+    showSuccess('Turno iniciado!', turnoNome + ' aberto por ' + operador + '.');
+  }).catch(function(err) {
+    alert('Erro ao confirmar início do turno: ' + err.message);
+  }).finally(function() {
+    btn.disabled = false;
+  });
+});
+
 // opts.tipo: 'turno' (fecha tudo, padrão) ou 'intervalo' (checkpoint de
 // almoço/pausa programada -- mesmo fluxo de pedir qtd total por linha, mas
 // sem Posto [não tem "voltar do intervalo" pra Posto] e sem marcar as OPs
@@ -4615,6 +4692,7 @@ attachAutocomplete(document.getElementById('rPedidoId'), function() { return ped
 // alocarOpPedidoId virou lista de seleção (item 10 da auditoria) -- não é
 // mais um campo de texto livre, não usa attachAutocomplete. Ver
 // renderAlocarOpLista/setSelecaoAlocarOp acima.
+attachAutocomplete(document.getElementById('iniciarTurnoOperador'), function() { return operadoresItems; });
 attachAutocomplete(document.getElementById('fOperador'), function() { return operadoresItems; });
 attachAutocomplete(document.getElementById('tOperador'), function() { return operadoresItems; });
 attachAutocomplete(document.getElementById('rOperador'), function() { return operadoresItems; });
