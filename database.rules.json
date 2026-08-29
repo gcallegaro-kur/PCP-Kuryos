@@ -153,7 +153,7 @@
       ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'",
       "$avKey": {
         ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && data.child('avaliadorUid').val() == auth.uid",
-        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && newData.child('avaliadorUid').val() == auth.uid && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid))"
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && (!data.exists() || data.child('avaliadorUid').val() == auth.uid) && newData.child('avaliadorUid').val() == auth.uid && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid))"
       }
     },
     "rh_avaliacoes_por_avaliador": {
@@ -163,9 +163,16 @@
       }
     },
     "rh_ferias": {
-      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'gestor')",
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'rh'",
       "$key": {
-        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid))"
+        ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(data.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid",
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || (root.child('usuarios').child(auth.uid).child('role').val() == 'gestor' && root.child('rh_colaboradores_publico').child(root.child('rh_colaboradores_publico').child(newData.child('colaboradorId').val()).child('gestorKey').val()).child('uidLogin').val() == auth.uid && ((!data.exists() && newData.child('status').val() == 'Solicitada') || (data.exists() && data.child('status').val() == 'Solicitada' && (newData.child('status').val() == 'Aprovada pelo gestor' || newData.child('status').val() == 'Recusada')))))"
+      }
+    },
+    "rh_ferias_por_gestor": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh')",
+        ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh')"
       }
     },
     ".read": "auth != null",
