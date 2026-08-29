@@ -427,3 +427,121 @@ Relatórios completos dos 3 agentes (achados descartados por não terem
 ganho real, contexto adicional, arquivo:linha exato de cada ponto) ficam
 só no histórico da conversa — o que está aqui já é o filtrado/priorizado
 pra ação futura.
+
+## 10. Segunda rodada de auditoria (2026-08-29) — achado crítico
+
+Nova rodada de 3 agentes, focada nos 3 fluxos de "Encerrar OP" (que a
+Fase 3 ainda vai unificar), na infra de notificação (base da Fase 4) e
+nas telas base pras Fases 9/10 (`dashboard.html`, `historico.html`,
+`dashboard_analise.html`).
+
+### Já corrigido e em produção
+
+- **🔴 CRÍTICO — double-count de produção nos 3 fluxos de Encerrar OP**:
+  o delta de produção (quanto somar) era calculado FORA da transaction do
+  Firebase, contra `opsCache` (cache local que pode estar desatualizado —
+  por definição sempre que o apontamento vem da fila offline). Dois
+  fechamentos concorrentes (ou um fechamento offline sincronizando depois
+  de outro apontamento já ter avançado o servidor) cada um somava seu
+  delta contra a MESMA base velha — resultado passava do total real,
+  contaminando `ops/{lote}.produzidoLinha`, `pedidos/{pedKey}.produzido`
+  (produção do pedido do cliente) e a baixa de estoque por consumo.
+  Corrigido: os 3 fluxos já gravam o total realmente digitado em
+  `registro.qtdTotalOP` — o delta agora é recalculado DENTRO da própria
+  transaction, contra o valor ao vivo, correto mesmo com retry por
+  conflito. **Deployado.** Ver `form.html` (`updateOpRecordOnApontamento`,
+  `syncNextItem`).
+- **`dashboard.html` — "Total do Dia" somava todos os setores juntos**:
+  mesma classe de bug do achado acima, já documentada e corrigida em
+  `pedidos.produzido` (caso real pedido 0022/Briá Beauty) mas nunca
+  aplicada nesse KPI de topo. Corrigido com a mesma função de filtro que
+  "Progresso do Envase" já usava corretamente (extraída pra escopo
+  global, sem duplicar). **Deployado.**
+- **`historico.html` — "% completo" da aba Por Pedido somava todos os
+  setores juntos**, podendo passar de 100%. `isLinhaEnvase()` já existia
+  nessa mesma página (usada certo em "Motivos Recorrentes"), só não
+  estava aplicada aqui. **Deployado.**
+- **`dashboard.html` — "Turnos do Dia" agora lê `turnosIniciados`**: o
+  botão "Iniciar turno" (Fase 3) já gravava o dado, mas o painel de
+  status ainda não lia — badges eram só inferidos pelo relógio. Novo
+  estado "▶️ Iniciado" (hora + quem confirmou); "Em andamento" ganha
+  "(sem confirmação)" quando ninguém confirmou o início. **Deployado.**
+
+### Mapeado pra retomar, por fase
+
+**Fase 3 (unificação dos 3 fluxos de Encerrar OP) — mapa do que preservar
+e do que resolver:**
+- Só o Painel de Turno grava `status:'Concluído'` direto; os outros dois
+  dependem de `computeOpStatus()` (derivado, calculado só em leitura) —
+  pré-requisito direto da Fase 7 (conclusão 100% manual pelo PCP), que
+  hoje só funciona de verdade em 1 dos 3 fluxos.
+- Perdas: 3 formatos incompatíveis (texto livre no Painel de Turno vs.
+  dropdown estruturado no Fechar Lote vs. nenhum campo no Apontamento por
+  Total) — e o fluxo mais usado é o mais pobre, prejudicando qualquer
+  Pareto futuro (tudo cai em "Outro").
+- `salvarPerdaOP` (Painel de Turno) é a única gravação de perda que não
+  passa pela fila offline (`queueOfflineWrite`) — falha silenciosa se
+  confirmar sem conexão.
+- O write que limpa `abertaDesde`/`abertaLinha` ao encerrar também
+  bypassa a fila offline — se fechar offline e o app fechar antes de
+  reconectar, a OP fica "aberta" pra sempre, bloqueando a linha.
+  "Encerrar Turno" (fechamento em lote) não tem recuperação de falha
+  parcial — um item falhando rejeita o lote inteiro sem rollback dos que
+  já commitaram.
+- Justificativa de desvio (Fechar Lote) compara contra uma base diferente
+  do % mostrado no Painel de Turno (`qtdEsperada` do bloco de alocação vs.
+  `qtdPlanejada` da OP) — escolher 1 base ao unificar.
+- Diferencial real a preservar (não é sobre rigor, é sobre qualidade de
+  informação): hint de ritmo real (un./h) antes de confirmar, hoje só no
+  Apontamento por Total.
+- `escTurno` duplicava `escapeHtml` — já corrigido (ver seção 9).
+
+**Fase 4 (alertas) — achado que muda o desenho:**
+- `checkOpsAtrasadas` consome uma fila de eventos ÚNICOS
+  (`alertas_pendentes`, gerada só quando um apontamento fecha) e
+  DESCARTA cada entrada depois de processar, mandando e-mail ou não. Não
+  há reavaliação contínua. **O alerta de "repique a cada 10min enquanto
+  o desvio persistir" não funciona construído em cima disso** — se
+  ninguém fechar um novo apontamento, nada dispara de novo, exatamente o
+  cenário que a Fase 4 mais precisa cobrir (apontamento não acontecendo).
+  Precisa do padrão de `checkLinhasParadas` (reavalia o estado AO VIVO a
+  cada tick do cron de 2min), não o padrão de fila de eventos.
+- `cooldownOk`/`markSent` já aceita janela customizada (ver seção 9), mas
+  o check-then-write não é atômico — duas execuções do cron sobrepostas
+  (`onSchedule` sem `maxInstances`) podem ambas ler cooldown-OK antes de
+  qualquer uma escrever `markSent`, mandando e-mail em dobro. Mais
+  provável de acontecer porque `getGraphToken()` busca token OAuth novo a
+  cada e-mail individual (sem cache), alongando runs com vários alertas.
+
+**Fase 9/10 (Fechamento do Dia / KPI) — mapeamento útil:**
+- `dashboard.html` já tem quase toda a base estrutural do Fechamento do
+  Dia (navegação por data, "Turnos do Dia", "Lançamentos por OP/Posto",
+  Andon ao vivo, card de Paradas) — não é greenfield. Sugestão: nasce como
+  novo card "Pendências do dia" NESTA tela (linha parada X min sem
+  parada registrada, OP que devia ter fechado e não fechou), não uma tela
+  nova desconectada.
+- Duas fontes de paradas divergentes, nunca reconciliadas: `op.paradas`
+  (embutido, só existe após a OP concluir) vs. `paradas_historico`
+  (coleção separada, mais madura, já é o que o dashboard usa). Padronizar
+  em `paradas_historico` ao construir qualquer Pareto agregado.
+- `dashboard_analise.html` é o lugar certo pro dashboard de KPI (Fase
+  10) — mas as abas "Logística" e "OPs" mostram dado **congelado desde
+  18/05/2026** (blob JSON estático embutido, +3 meses desatualizado hoje).
+  **Nunca plugar KPI novo nessas duas abas** — só nas que já reconstroem
+  ao vivo (Visão Geral/Produção/Pedidos), sob risco real de alguém achar
+  que está vendo dado atual.
+- "Eficiência por linha" (aba Produção) é *throughput* (un./h), não
+  *rendimento* (produzido ÷ planejado) que a Fase 10 pede — métricas
+  diferentes, não reaproveitar um pelo outro.
+- Status de pedido em `dashboard_analise.html` usa `p.status || 'Não
+  Iniciado'` bruto, divergente de `isConcluido()` (global,
+  `shared/utils.js`) que `dashboard.html`/`historico.html` já usam — o
+  mesmo pedido pode aparecer com status diferente em telas diferentes ao
+  mesmo tempo. Trocar pela função global ao tocar essa tela.
+- "Motivos Recorrentes" (`historico.html`) é o protótipo mais próximo do
+  Pareto de paradas da Fase 10 — grão errado (período arbitrário, não
+  turno/dia/semana) e fonte errada de paradas (ver acima), mas a lógica
+  de agregação por motivo já funciona e é reaproveitável.
+
+Relatórios completos desta rodada (achados descartados, contexto
+adicional, arquivo:linha exato) ficam no histórico da conversa.
