@@ -3818,10 +3818,6 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
 // continuar de onde parou (reseta abertaDesde sem limpar abertaLinha).
 // ════════════════════════════════════════════════════════
 
-function escTurno(s) {
-  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 var alocarOpAlvoAtual = null;
 var encerrarOpAlvoAtual = null;
 var atividadePostoAlvoAtual = null;
@@ -3905,7 +3901,7 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
     card.className = 'andon-card ' + (andonState && andonState.status === 'parada' ? 'stopped' : 'active');
 
     var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-      '<span class="andon-line-title" style="margin-bottom:0">' + escTurno(nome) + '</span>' +
+      '<span class="andon-line-title" style="margin-bottom:0">' + escapeHtml(nome) + '</span>' +
       '<span class="turno-badge ' + tipo + '">' + (tipo === 'linha' ? 'Linha' : 'Rotulagem') + '</span></div>';
 
     if (comParada && andonState && andonState.status === 'parada') {
@@ -3914,42 +3910,42 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
       if (confirmingResumeLinha === nome) {
         html += '<div class="andon-confirm-row" style="margin-bottom:10px">' +
           '<span>Confirmar retomada?</span>' +
-          '<button type="button" class="andon-btn btn-resume-yes" data-resume-yes="' + escTurno(nome) + '">Sim</button>' +
+          '<button type="button" class="andon-btn btn-resume-yes" data-resume-yes="' + escapeHtml(nome) + '">Sim</button>' +
           '<button type="button" class="andon-btn btn-resume-no" data-resume-no="1">Não</button></div>';
       } else {
         html += '<div style="background:color-mix(in srgb, var(--danger) 10%, transparent);border-radius:8px;padding:8px;margin-bottom:10px;font-size:11.5px;color:var(--danger);font-weight:700">' +
-          '🔴 Parada: ' + escTurno(andonState.motivoParada || 'Parada') + ' · desde ' + timeStr + '</div>' +
-          '<button type="button" class="andon-btn btn-resume" data-resume="' + escTurno(nome) + '" style="margin-bottom:10px">▶️ Retomar Produção</button>';
+          '🔴 Parada: ' + escapeHtml(andonState.motivoParada || 'Parada') + ' · desde ' + timeStr + '</div>' +
+          '<button type="button" class="andon-btn btn-resume" data-resume="' + escapeHtml(nome) + '" style="margin-bottom:10px">▶️ Retomar Produção</button>';
       }
     } else if (comParada) {
-      html += '<button type="button" class="andon-btn btn-stop" data-parar="' + escTurno(nome) + '" style="margin-bottom:10px">🛑 Parar linha</button>';
+      html += '<button type="button" class="andon-btn btn-stop" data-parar="' + escapeHtml(nome) + '" style="margin-bottom:10px">🛑 Parar linha</button>';
     }
 
     if (!op) {
       html += '<div class="turno-card-empty">Nenhuma OP alocada</div>' +
-        '<button type="button" class="btn-submit" style="margin-top:10px" data-alocar-nome="' + escTurno(nome) + '" data-alocar-tipo="' + tipo + '">+ Alocar OP</button>';
+        '<button type="button" class="btn-submit" style="margin-top:10px" data-alocar-nome="' + escapeHtml(nome) + '" data-alocar-tipo="' + tipo + '">+ Alocar OP</button>';
     } else {
       var pct = op.qtdPlanejada ? Math.min(100, Math.round(getProduzido(op, tipo) / op.qtdPlanejada * 100)) : 0;
       var mins = Math.round(horasDesde(op[campoAberturaInicio(tipo)]) * 60);
       var horasTxt = mins >= 60 ? Math.floor(mins / 60) + 'h' + String(mins % 60).padStart(2, '0') + 'min' : mins + 'min';
       var emSetup = op[campoSetupInicio(tipo)] && !op[campoSetupFim(tipo)];
-      html += '<div class="turno-op-lote">OP ' + escTurno(op.lote) + '</div>' +
-        '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escTurno(op.produto || '') + '</div>';
+      html += '<div class="turno-op-lote">OP ' + escapeHtml(op.lote) + '</div>' +
+        '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(op.produto || '') + '</div>';
       if (emSetup) {
         html += '<div class="turno-badge posto" style="margin-bottom:8px">🔧 Em setup</div>' +
           '<div class="turno-stat-line">Setup desde ' + horasTxt + '</div>' +
-          '<button type="button" class="andon-btn btn-resume" data-fim-setup="' + escTurno(op.lote) + '" data-fim-setup-tipo="' + tipo + '" style="margin-bottom:8px">Fim de Setup → iniciar envase</button>';
+          '<button type="button" class="andon-btn btn-resume" data-fim-setup="' + escapeHtml(op.lote) + '" data-fim-setup-tipo="' + tipo + '" style="margin-bottom:8px">Fim de Setup → iniciar envase</button>';
       } else {
         html += '<div class="turno-progress-wrap"><div class="turno-progress-fill" style="width:' + pct + '%"></div></div>' +
           '<div class="turno-progress-nums"><span>' + fmtNum(getProduzido(op, tipo)) + ' / ' + fmtNum(op.qtdPlanejada || 0) + ' un.</span><span>' + pct + '%</span></div>' +
           '<div class="turno-stat-line">Envase há ' + horasTxt + '</div>';
       }
-      html += '<button type="button" class="andon-btn btn-resume" data-encerrar-op="' + escTurno(op.lote) + '" data-encerrar-nome="' + escTurno(nome) + '" data-encerrar-tipo="' + tipo + '">✅ Encerrar OP</button>' +
+      html += '<button type="button" class="andon-btn btn-resume" data-encerrar-op="' + escapeHtml(op.lote) + '" data-encerrar-nome="' + escapeHtml(nome) + '" data-encerrar-tipo="' + tipo + '">✅ Encerrar OP</button>' +
         // Achado do agente de UX: parecido demais com "🛑 Parar linha" (mesmo
         // card, botão full-width logo acima) -- gente confundia achando que
         // registra uma parada de linha de verdade. Isto aqui só salva
         // "quanto foi produzido até agora", a linha continua rodando/aberta.
-        '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar a linha -- diferente de &quot;Parar linha&quot;" data-intervalo-nome="' + escTurno(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
+        '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar a linha -- diferente de &quot;Parar linha&quot;" data-intervalo-nome="' + escapeHtml(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
     }
 
     card.innerHTML = html;
@@ -4008,10 +4004,10 @@ function renderTurnoGridPostos() {
     var card = document.createElement('div');
     card.className = 'andon-card active';
     card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-      '<span class="andon-line-title" style="margin-bottom:0">' + escTurno(label) + '</span>' +
+      '<span class="andon-line-title" style="margin-bottom:0">' + escapeHtml(label) + '</span>' +
       '<span class="turno-badge posto">Posto</span></div>' +
-      '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escTurno(a.produto || 'Atividade') + '</div>' +
-      '<div class="turno-stat-line">' + fmtNum(a.quantidadeTurno || 0) + ' un. neste turno' + (a.operador ? ' · ' + escTurno(a.operador) : '') + '</div>' +
+      '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(a.produto || 'Atividade') + '</div>' +
+      '<div class="turno-stat-line">' + fmtNum(a.quantidadeTurno || 0) + ' un. neste turno' + (a.operador ? ' · ' + escapeHtml(a.operador) : '') + '</div>' +
       '<button type="button" class="andon-btn btn-resume" data-somar-posto="' + id + '" style="margin-bottom:8px">+ Somar produção</button>' +
       '<button type="button" class="andon-btn btn-stop" data-fechar-posto="' + id + '">Encerrar</button>';
     container.appendChild(card);
@@ -4090,11 +4086,11 @@ function renderAlocarOpLista(filtroTexto) {
     var saldo = (o.qtdPlanejada || 0) - getProduzido(o, alocarOpAlvoAtual ? alocarOpAlvoAtual.tipo : 'linha');
     var sel = String(o.lote) === loteSelecionado;
     var recomendada = loteRecomendado && String(o.lote) === loteRecomendado;
-    return '<div class="alocar-op-card' + (sel ? ' selected' : '') + '" data-op-lote="' + escTurno(String(o.lote)) + '">' +
-      '<div class="alocar-op-card-top"><span class="alocar-op-card-lote">OP ' + escTurno(String(o.lote)) + '</span>' +
+    return '<div class="alocar-op-card' + (sel ? ' selected' : '') + '" data-op-lote="' + escapeHtml(String(o.lote)) + '">' +
+      '<div class="alocar-op-card-top"><span class="alocar-op-card-lote">OP ' + escapeHtml(String(o.lote)) + '</span>' +
         '<span class="alocar-op-card-check">' + (sel ? '✓' : '') + '</span></div>' +
       (recomendada ? '<div style="font-size:11px;font-weight:700;color:var(--success);margin-bottom:2px">💡 Próxima recomendada (prioridade)</div>' : '') +
-      '<div class="alocar-op-card-prod">' + escTurno(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escTurno(o.sku) + ']</span>' : '') + '</div>' +
+      '<div class="alocar-op-card-prod">' + escapeHtml(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escapeHtml(o.sku) + ']</span>' : '') + '</div>' +
       '<div class="alocar-op-card-sub">Saldo: ' + fmtNum(saldo) + '</div>' +
     '</div>';
   }).join('');
