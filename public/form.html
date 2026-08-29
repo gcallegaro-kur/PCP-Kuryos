@@ -4313,16 +4313,20 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
 function abrirEncerrarOpModal(nome, tipo, lote) {
   encerrarOpAlvoAtual = { nome: nome, tipo: tipo, lote: lote };
   document.getElementById('encerrarOpTurnoSubtitle').textContent = nome + ' · OP ' + lote;
-  document.getElementById('encerrarOpTurnoQtd').value = '';
+  // Achado do agente de auditoria (4a rodada): o modal abria "cego" -- campo
+  // vazio e hint zerado, sem nenhuma pista do que já foi produzido até o
+  // operador começar a digitar. O modal irmão (Apontamento por Total,
+  // prepararEncerrarOP) já pré-preenche com o valor atual; replica aqui.
+  var opAtual = findOpByLote(lote) || {};
+  document.getElementById('encerrarOpTurnoQtd').value = getProduzido(opAtual, tipo) || '';
   document.getElementById('encerrarOpTurnoOperador').value = '';
-  document.getElementById('encerrarOpTurnoRitmoHint').textContent = '';
-  document.getElementById('encerrarOpTurnoRitmoHint').className = 'form-hint prog';
   var perdasList = document.getElementById('encerrarOpTurnoPerdasList');
   perdasList.querySelectorAll('.perda-entry').forEach(function(el) { el.remove(); });
   document.getElementById('encerrarOpTurnoNoPerdasMsg').style.display = '';
   document.getElementById('encerrarOpTurnoJustificaWrap').style.display = 'none';
   document.getElementById('encerrarOpTurnoJustificativa').value = '';
   document.getElementById('encerrarOpTurnoModal').classList.add('open');
+  updateEncerrarOpTurnoRitmoHint();
 }
 
 // Mesmo cálculo/estilo de updateRitmoHint() (Apontamento por Total, Modo
@@ -4340,22 +4344,29 @@ function updateEncerrarOpTurnoRitmoHint() {
   var qtdTotal = parseInt(document.getElementById('encerrarOpTurnoQtd').value) || 0;
   var apontado = getProduzido(op, encerrarOpAlvoAtual.tipo);
   var delta = qtdTotal - apontado;
+  // Achado do agente de auditoria (4a rodada): a referência "de X un.
+  // planejadas" só aparecia com o campo vazio -- assim que o operador
+  // digitava algo (inclusive o valor pré-preenchido), ela sumia bem na hora
+  // em que o campo de justificativa aparece por causa dessa mesma
+  // divergência, deixando o operador sem o número de referência na tela.
+  // Agora fica sempre visível, igual opCalcHint ("Fechar Lote") já faz.
+  var refPlanejada = op.qtdPlanejada ? ' · Planejado: ' + fmtNum(op.qtdPlanejada) + ' un.' : '';
   if (!qtdTotal) {
     hintEl.className = 'form-hint prog';
-    hintEl.textContent = 'Já registrado: ' + fmtNum(apontado) + ' un.' + (op.qtdPlanejada ? ' de ' + fmtNum(op.qtdPlanejada) + ' un. planejadas' : '');
+    hintEl.textContent = 'Já registrado: ' + fmtNum(apontado) + ' un.' + refPlanejada;
   } else if (delta < 0) {
     hintEl.className = 'form-hint manual';
-    hintEl.textContent = '⚠️ Quantidade digitada é menor que o já registrado (' + fmtNum(apontado) + ' un.) — confira antes de salvar.';
+    hintEl.textContent = '⚠️ Quantidade digitada é menor que o já registrado (' + fmtNum(apontado) + ' un.) — confira antes de salvar.' + refPlanejada;
   } else {
     var campoInicio = campoAberturaInicio(encerrarOpAlvoAtual.tipo);
     var horas = op[campoInicio] ? horasDesde(op[campoInicio]) : 0;
     if (horas) {
       var ritmo = Math.round(delta / horas);
       hintEl.className = 'form-hint prog';
-      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un. em ' + (Math.round(horas*10)/10) + 'h · Ritmo real: ' + fmtNum(ritmo) + ' un./h';
+      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un. em ' + (Math.round(horas*10)/10) + 'h · Ritmo real: ' + fmtNum(ritmo) + ' un./h (atualiza o ritmo da OP e do pedido)' + refPlanejada;
     } else {
       hintEl.className = 'form-hint prog';
-      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un.';
+      hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un.' + refPlanejada;
     }
   }
   // Desvio contra o planejado da OP -- só exige justificativa quando há uma
@@ -4411,7 +4422,14 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     }
   }
   var btn = this;
+  // Achado do agente de auditoria (4a rodada): só `disabled=true` não dá
+  // sinal visível nenhum aqui (a classe .btn-confirm-danger não tem regra
+  // :disabled, e o botão tem cor inline fixa) -- em rede lenta o operador
+  // não sabia se o clique registrou e podia tocar de novo. Mesmo padrão de
+  // texto de "Finalizar OP" (opForm).
+  var textoOriginal = btn.textContent;
   btn.disabled = true;
+  btn.textContent = 'Encerrando...';
   var pedKeyResolvido = opAlvo.skuPedidoKey ? resolvePedidoKeyBySkuKey(opAlvo.skuPedidoKey, pedidosCache) : null;
   var pedidoIdAlvo = (pedKeyResolvido && pedidosCache[pedKeyResolvido]) ? (pedidosCache[pedKeyResolvido].id || '') : '';
   fecharAlocacaoOP(encerrarOpAlvoAtual.lote, qtd, operador, {
@@ -4421,11 +4439,13 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     return salvarPerdasEncerrarOP(encerrarOpAlvoAtual.lote, opAlvo.produto || '', encerrarOpAlvoAtual.nome, pedidoIdAlvo, perdas).then(function() { return res; });
   }).then(function(res) {
     btn.disabled = false;
+    btn.textContent = textoOriginal;
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');
     showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + encerrarOpAlvoAtual.nome);
     encerrarOpAlvoAtual = null;
   }).catch(function(err) {
     btn.disabled = false;
+    btn.textContent = textoOriginal;
     alert('Erro ao encerrar OP: ' + err.message);
   });
 });

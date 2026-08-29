@@ -178,6 +178,13 @@
       color: var(--good);
       display: block;
     }
+
+    .feedback-message.warning {
+      background: color-mix(in srgb, var(--warn) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+      color: color-mix(in srgb, var(--warn) 65%, black);
+      display: block;
+    }
   </style>
 </head>
 <body class="kuryos-theme">
@@ -306,9 +313,13 @@
   }
   
   function showFeedback(type, text) {
+    // Achado do agente de auditoria (4a rodada): 'warning' caía no branch
+    // else e ganhava a classe/cor de 'success' -- um aviso de "acesso ainda
+    // não liberado" aparecia verde, como se o cadastro tivesse dado certo.
     const feedback = document.getElementById('feedback');
     feedback.textContent = text;
-    feedback.className = 'feedback-message ' + (type === 'error' ? 'error' : 'success');
+    var cls = (type === 'error' || type === 'warning') ? type : 'success';
+    feedback.className = 'feedback-message ' + cls;
     feedback.style.display = 'block';
   }
   
@@ -360,8 +371,14 @@
     
     auth.createUserWithEmailAndPassword(email, pass)
       .then(cred => {
-        // Create user node in DB
-        db.ref('usuarios/' + cred.user.uid).set({
+        // Create user node in DB. Achado do agente de auditoria (4a rodada):
+        // esse .then() interno não tinha `return` nem `.catch()` próprio --
+        // se a escrita do perfil falhasse (rede instável etc.), a rejeição
+        // não chegava no .catch() externo (vira unhandled rejection) e o
+        // usuário não via nem sucesso nem erro, ficando sem saber se o
+        // cadastro funcionou. Tentar de novo com o mesmo e-mail dava
+        // "e-mail já em uso" -- confuso, porque pra ele nada tinha dado certo.
+        return db.ref('usuarios/' + cred.user.uid).set({
           nome: name,
           email: email,
           role: 'pending',
@@ -372,6 +389,10 @@
           showFeedback('success', 'Cadastro realizado com sucesso! Sua conta (' + email + ') agora aguarda ativação pelo administrador do PCP.');
           document.getElementById('form-register').reset();
           switchTab('login');
+        })
+        .catch(err => {
+          auth.signOut();
+          showFeedback('error', 'Sua conta foi criada, mas houve uma falha ao salvar seu perfil de acesso. Contate o administrador do PCP informando o e-mail ' + email + '. (' + err.message + ')');
         });
       })
       .catch(err => {

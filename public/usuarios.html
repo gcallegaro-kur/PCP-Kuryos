@@ -258,6 +258,15 @@
         if (p && p.role === 'admin' && !jaEscutandoUsuarios) {
           jaEscutandoUsuarios = true;
           listenToUsers();
+        } else if (p && p.role !== 'admin') {
+          // Achado do agente de auditoria (4a rodada): o menu mostra este
+          // link pra qualquer isPcpAdmin (inclui 'pcp', ver auth_check.js),
+          // mas só 'admin' de fato carrega a tabela -- sem este aviso, quem
+          // não é admin ficava vendo "Carregando..." pra sempre, parecendo
+          // um bug de carregamento em vez de uma restrição de acesso.
+          document.getElementById('users-tbody').innerHTML =
+            '<tr><td colspan="5" style="text-align:center; color:var(--ink-mute); padding:30px;">' +
+            'Apenas administradores podem gerenciar usuários.</td></tr>';
         }
       });
     }
