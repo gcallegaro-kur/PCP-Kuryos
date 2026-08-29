@@ -619,3 +619,74 @@ seção 10) foi concluído.
   `empenharMateriais` — deltas sempre calculados dentro da transaction),
   `ops.html` (sem `.transaction()` no arquivo; `.update()`s escrevem
   campos absolutos/flags, não somas).
+
+## 12. Quarta rodada de auditoria (2026-08-29)
+
+3 agentes em paralelo, território novo: `produtos.html`, `usuarios.html`,
+`login.html`, `admin.html`, `dashboard_analise.html`, `database.rules.json`,
+mais uma revisão de UX com olhos frescos no modal "Encerrar OP" recém
+enriquecido (seção 11).
+
+### Já corrigido e em produção
+
+- **🔴 SEGURANÇA CRÍTICA — `database.rules.json` vazava dados de RH pra
+  qualquer usuário autenticado e permitia escalação de privilégio**: o
+  nó raiz tinha um fallback `.read`/`.write` que, por como o Firebase
+  RTDB cascateia permissões (um ancestral concede acesso que nenhum
+  filho consegue revogar), anulava silenciosamente as restrições
+  cuidadosas dos nós `rh_*` — qualquer login (inclusive
+  production/rotulagem) conseguia ler avaliações de desempenho e dados
+  de férias de toda a empresa direto pelo console do navegador.
+  Separadamente, `usuarios/{uid}/role` permitia que `pcp` escrevesse o
+  papel de qualquer usuário, inclusive o próprio — self-promotion pra
+  `admin`, que por sua vez também vazava RH via o mesmo fallback.
+  Removido o fallback (conferido antes: todo nó realmente usado pelo app
+  já tinha regra própria explícita, nada dependia dele) e removido `pcp`
+  da escrita de `role`. **Deployado** (`firebase deploy --only
+  database`, syntax check do Firebase passou).
+- **`login.html`**: aviso de "conta pendente de ativação"
+  (`showFeedback('warning', ...)`) aparecia com a cor/classe de
+  "sucesso" (verde) — usuário podia achar que deu tudo certo quando na
+  verdade está bloqueado. Nova classe `.feedback-message.warning`.
+  Escrita do perfil após criar a conta não tinha `.catch()` próprio —
+  falha nessa escrita virava unhandled rejection, sem mensagem nenhuma
+  pro usuário. **Deployado.**
+- **`usuarios.html`**: usuário com papel `pcp` (link "Usuários" visível
+  pra ele no menu) ficava vendo "Carregando..." pra sempre — só `admin`
+  de fato carregava a tabela, sem nenhum aviso de que era uma restrição
+  de acesso, não um bug de carregamento. **Deployado.**
+- **Modal "Encerrar OP" (Painel de Turno) — 4 melhorias de UX** vindas da
+  revisão com olhos frescos no que foi construído na seção 11: não abre
+  mais "cego" (quantidade pré-preenche com o já produzido, hint de
+  ritmo já calculado ao abrir, mesmo padrão do modal irmão); referência
+  "Planejado: X un." fica visível em qualquer estado do hint (antes
+  sumia assim que o operador digitava algo, bem na hora em que o campo
+  de justificativa aparece por essa mesma divergência); hint ganha o
+  mesmo sufixo explicativo do modal irmão; botão de confirmar troca de
+  texto durante o salvamento (antes só desabilitava, sem sinal visível).
+  **Deployado.**
+
+### Mapeado pra retomar (detalhado em `MELHORIAS_FUTURAS.md`)
+
+- `admin.html` — `saveConfig()` regrava o nó `config` inteiro a cada
+  edição (`.set()` em vez de `.update()` escopado): duas edições
+  concorrentes em `config` (de `admin.html`, `planejamento.html` ou
+  `cadastros.html`) podem se sobrescrever silenciosamente. Confirmado
+  por 2 agentes independentes — merece ciclo próprio (~10 pontos de
+  chamada pra corrigir, tela mais usada de configuração global).
+  Encerrar OP (Painel de Turno) — mensagem de erro ambígua quando só a
+  gravação de perdas falha depois da OP já ter encerrado de verdade.
+- Acessibilidade: zero `<label for=>` em `admin.html`/
+  `dashboard_analise.html`, cores hardcoded ignorando tema escuro em
+  ambos, dropdowns multi-seleção sem fechar com Esc — varredura pendente,
+  mecânica mas espalhada.
+- Limpeza: `produtos.html`/`clientes.html`/`formulas.html`/
+  `materiais.html` são stubs de redirect carregando ~1000 linhas mortas
+  cada por trás; `admin.html` tem 2 listas de config sem nenhum
+  consumidor (`config.produtos`/`config.operadores`) e uma função morta
+  (`calcDias`).
+- `dashboard_analise.html`: blob JSON de 316 KB sempre parseado mesmo
+  sem abrir as abas que o usam, 5 leituras Firebase seriais que
+  poderiam rodar em paralelo, `renderAll()` com ~610 linhas fazendo 5
+  domínios de negócio numa função só. Aviso de "dados congelados" já
+  está visível na UI (confirmado, sem ação necessária).

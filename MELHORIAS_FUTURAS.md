@@ -137,6 +137,88 @@ escopo por enquanto:
   confiável desde a programação — nesse ponto também vale pensar num
   "escape hatch" pro PCP resolver exceção na hora, sem travar produção
   de verdade se o dado estiver incompleto.
+- **Modal "Encerrar OP" (Painel de Turno, `form.html`) — mensagem de erro
+  ambígua em falha parcial**: `fecharAlocacaoOP` já grava
+  `status:'Concluído'` no Firebase antes de `salvarPerdasEncerrarOP`
+  rodar; se só a escrita de perdas falhar (rede instável), o operador vê
+  "Erro ao encerrar OP" mesmo com a OP já encerrada de verdade — e uma
+  nova tentativa erra de novo com "Essa OP não está mais aberta",
+  contradizendo a primeira mensagem. Achado da 4a rodada de auditoria
+  (2026-08-29). Vale separar a mensagem desse cenário específico
+  ("OP encerrada, mas falha ao salvar perdas — registre manualmente").
+- **Campo "Operador" obrigatório só em alguns dos 3 fluxos de Encerrar
+  OP**: Painel de Turno exige; "Fechar Lote" (Modo Avançado) nunca grava
+  responsável nenhum. Achado da 4a rodada — não é bug, é decisão de
+  design ainda não tomada (Painel de Turno = multi-operador vs. Modo
+  Avançado = uso administrativo?). Decidir ao unificar os 3 fluxos
+  (Fase 3, já mapeado em `PLANO_PLANEJAMENTO_PCP.md`).
+
+## Admin / Configuração
+
+- **`admin.html` — `saveConfig()` regrava o nó `config` inteiro a cada
+  pequena edição** (`db.ref('config').set(dataToSave)`, chamado por
+  praticamente todo botão da página): se dois admins editarem `config`
+  quase ao mesmo tempo — um em `admin.html`, outro em `planejamento.html`
+  (`config/planejamento`) ou `cadastros.html` (`config/categoriasProduto`)
+  — o último `.set()` vence e apaga silenciosamente a mudança do outro,
+  porque cada `.set()` parte de um snapshot em memória que pode já estar
+  velho. Achado da 4a rodada de auditoria (2026-08-29), confirmado por 2
+  agentes independentes. Não corrigido nesta rodada porque a correção
+  correta é trocar `.set()` por `.update()` com paths escopados
+  (`config/linhas`, `config/turnosExtras/{key}` etc.) em cada um dos ~10
+  pontos de chamada — mudança maior, merece ciclo próprio com teste
+  dedicado (é a tela mais usada pra configuração global do sistema).
+- **Duplicação da regra "dia útil"** (`admin.html`): calculada de forma
+  independente em `renderMetasPorLinha()` e `calcDiasUteis()`. Se a regra
+  mudar (ex: feriados por linha), fácil corrigir um e esquecer o outro.
+- **Listas de config mortas**: "Produtos / Itens" (`config.produtos`) e
+  "Operadores" (`config.operadores`) em `admin.html` não são lidas por
+  nenhuma outra página do app (confirmado por busca em todo `public/`).
+  "Produtos / Itens" tem nome quase idêntico ao catálogo real de
+  produtos (`produtos/`, gerenciado em `cadastros.html`) — confuso, um
+  admin pode achar que está populando o catálogo. Candidato a remoção,
+  ou esclarecer se há uso planejado.
+- **Cores de UI hardcoded ignoram o tema escuro** (`admin.html`,
+  `dashboard_analise.html`): `.tag.linha`/`.tag.posto`/`.alert-success`/
+  `.alert-danger`/`.matrix-table tr:hover`/`.meta-totals` (admin.html) e
+  `.bar-row .lbl`/`.bar-row .bar` (dashboard_analise.html) usam hex fixo
+  de fundo/texto claro em vez dos tokens de tema já definidos nesses
+  mesmos arquivos — em modo escuro viram "ilhas" claras ou texto de
+  baixo contraste sobre fundo preto.
+
+## Acessibilidade (varredura pendente)
+
+Achados da 4a rodada de auditoria (2026-08-29), nenhum corrigido ainda —
+é trabalho mecânico mas espalhado (dezenas de campos), merece um passe
+dedicado por tela em vez de fixes pontuais:
+
+- **`admin.html`**: zero `<label>` com `for=` no arquivo inteiro (~35
+  labels) — nenhum campo de texto/data/número tem nome acessível pra
+  leitor de tela (só os checkboxes de dias da semana, que aninham
+  `<input>` dentro do `<label>`, estão corretos). Os 9 campos de
+  "tag-add" (Linhas, Rotulagem, Postos, Motivos de Parada, etc.) não têm
+  label nenhum, nem visual.
+- **`dashboard_analise.html`**: mesmo padrão (Período, Cliente,
+  Categoria, Sub-categoria, Viscosidade, Linha, Status, Tipo de serviço,
+  Busca, Agrupar por — nenhum ligado por `for=`). Dropdowns
+  multi-seleção customizados (`setupMultiSelect`) não fecham com Esc, só
+  clicando fora com o mouse — ruim pra quem usa teclado (equipe de
+  PCP/escritório, uso plausível nesta tela específica).
+
+## Limpeza de código (stubs legados)
+
+- **`produtos.html`/`clientes.html`/`formulas.html`/`materiais.html`
+  são stubs de redirect** (`location.replace(...)` pra `cadastros.html`)
+  que ainda carregam ~1000 linhas cada da implementação antiga completa
+  por trás — nunca executa pro usuário (o redirect já navegou a página
+  antes do `DOMContentLoaded` disparar essa lógica), mas gera leituras
+  desnecessárias no Firebase por uma fração de segundo a cada acesso, e
+  é peso morto pra manutenção (alguém pode abrir o arquivo errado achando
+  que é a versão viva). Achado da 4a rodada — padrão repetido
+  deliberadamente (não é acidente isolado), mas vale reduzir a um stub
+  mínimo sem SDK/lógica de negócio, ou marcar visivelmente como legado.
+- **`admin.html:405-409`**: `calcDias(ini, fim)` definida mas nunca
+  chamada (`calcDiasUteis()` é usada no lugar) — código morto, remover.
 
 ## Ordens de Serviço / Roteiro de Produção / Estoque de Produto Acabado
 
