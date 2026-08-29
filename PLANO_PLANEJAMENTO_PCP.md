@@ -293,3 +293,118 @@ retrabalho.
   deve ser implantada sem teste prévio (harness/emulador local) e sem
   plano de rollback, mesmo padrão de cautela já seguido no resto desta
   sessão.
+
+## 9. Progresso registrado (2026-08-28)
+
+Nesta rodada, três agentes de auditoria rodaram em paralelo (read-only,
+sem escrever código) sobre o núcleo de planejamento/OP/apontamento —
+correção de bugs, UI/UX, e boas práticas/limpeza. Abaixo, o que já foi
+corrigido e implantado, e o que fica mapeado pra retomar em cada fase.
+
+### Já corrigido e em produção
+
+- **Fase 2 concluída (parcial)**: `ops.html` ganhou edição manual de
+  `dataInicioPlanejada`/`dataFimPlanejada` (coluna "Programação", só
+  admin) — ponto de entrada pro PCP programar horário até as duas telas
+  novas (Fase 6) existirem.
+- **Causa raiz real do motor de replanejamento (Fase 1), achado crítico**:
+  `exports.criarPedido` (`functions/index.js`) sobrescrevia
+  `pedidos/{pedKey}` inteiro a cada resync do Gerador de Pedidos,
+  apagando silenciosamente `linha`, `priority`, `dataProd`,
+  `statusManual` (inclusive `'encerrado'` — um pedido fechado manualmente
+  podia reabrir sozinho) e `ultimoApontamento`. Isso explica por que
+  `pedidos/{key}.linha` nunca ficava populado de forma durável, mesmo
+  quando corrigido manualmente. Corrigido com o mesmo padrão defensivo já
+  usado em `criarOP` (preserva `existing.*`). **Deployado.**
+- **Segundo achado, mesma investigação**: `autoAjustarPlanejamento`
+  (`auth_check.js`) comparava `pedidoKey` sem normalizar zero à esquerda
+  — helper pra isso já existia (`_kuryosNormalizePedidoKey`), só não
+  estava aplicado nesse ponto. Corrigido. **Deployado.**
+- **UI/UX — 2 achados corrigidos**: `.andon-btn` (Painel de Turno) sem
+  altura mínima (~30px, abaixo do alvo de toque confiável) — agora
+  `min-height:44px`. 3 blocos com cor hex fixa (`.parada-section`,
+  `#scheduleBanner`, `#fPedidoIdLocked`/`#btnTrocarOP`) que ficavam quase
+  brancos no dark mode — trocados por `color-mix()` sobre os tokens já
+  usados no resto da página. **Deployado.**
+
+### Mapeado pra retomar, por fase
+
+**Fase 1 (motor de replanejamento) — ainda incompleta mesmo com a causa
+raiz corrigida:**
+- `pedidos.html` só oferece "Linha 1"/"Linha 2"/"Linha 3" fixos no campo
+  `linha` de um pedido, mas o nome real das linhas vem de `config.linhas`
+  (texto livre, editável em `admin.html`) — se uma linha foi renomeada,
+  `pedidos/{key}.linha` nunca vai bater com o nome real na grade, e o
+  filtro do motor de replanejamento continua vazio mesmo com os dois
+  achados acima corrigidos. Precisa trocar o campo fixo por um `<select>`
+  vindo de `config.linhas`.
+- Correção manual de `ops/{lote}.status` (via `ops.html`) é revertida
+  silenciosamente pela sincronização automática (`_syncOpsLoteStatusELinha`,
+  que só protege `'Concluído'`/`'Cancelado'`) na próxima carga de página
+  de qualquer admin. Precisa de um flag tipo `statusManualOverride` que a
+  sincronização automática respeite, mesmo padrão que `statusManual`
+  já tem em `pedidos/`.
+- Zona fixa de 7 dias (`config/congelamento.diasFixos`) protege da
+  automação qualquer slot dentro da próxima semana — combinado com os
+  achados acima, reforça a percepção de "nada muda" porque a semana
+  corrente (o que a pessoa está olhando) fica fora do alcance do motor.
+  Não é bug, é comportamento intencional, mas vale ter em mente ao
+  avaliar se o motor "está funcionando" depois dos consertos.
+
+**Fase 3 (apontamento nos pontos de controle) — achados que reforçam e
+detalham o que já estava planejado:**
+- Confirma de forma independente a necessidade do botão de "início de
+  turno" já decidido: hoje não existe nenhuma ação explícita, o turno é
+  só inferido pelo relógio do dispositivo (`guessShift()`), o que pode
+  atribuir um apontamento ao turno errado sem ninguém perceber perto de
+  troca de turno ou hora extra.
+- Existem **3 fluxos diferentes de "Encerrar OP"** hoje (Painel de Turno,
+  Apontamento por Total, Fechar Lote/Modo Avançado) com rigor diferente —
+  só um deles exige justificativa em caso de desvio e permite múltiplas
+  perdas; o mais usado no dia a dia (Painel de Turno) é o que não tem
+  trava nenhuma. Ao construir o apontamento simplificado desta fase, vale
+  unificar num fluxo só, com a trava de justificativa portada pra ele.
+- Nenhum lugar do Painel de Turno mostra "o que vem a seguir" — quando
+  uma linha libera, a lista de OPs pra alocar é só alfabética por lote,
+  sem ordem de prioridade/programação. Isso é literalmente o requisito já
+  planejado ("produção acompanha a tela de Planejamento de OPs") — o
+  achado só confirma que hoje não existe de forma nenhuma.
+- "☕ Intervalo" e "🛑 Parar linha" são visualmente parecidos mas fazem
+  coisas bem diferentes (checkpoint parcial vs. parada de linha de
+  verdade) — vale um rótulo mais claro ao reformular os pontos de
+  controle.
+
+**Fase 6 (redesenho das telas de planejamento) — oportunidade de já
+resolver de vez:**
+- Cluster inteiro de lógica de capacidade/turno (`dowToConfig`,
+  `expandHourRange`, `horasEPausasDoDia`, etc.) duplicado byte-a-byte
+  entre `horizonte.html` e `planejamento.html` — como as duas telas vão
+  ser substituídas mesmo, a extração pra `shared/utils.js` deve acontecer
+  naturalmente ali, não como um refactor separado agora.
+  - **Achado colateral real**: dentro dessa duplicação, o fallback de
+    ritmo zero diverge (`auth_check.js` usa `horasNecessarias = 1` quando
+    ritmo é 0; as cópias em `planejamento.html`/`horizonte.html` usam
+    `0`) — um risco de comportamento sutilmente diferente entre o motor
+    de auto-ajuste e a UI que só existe por causa da duplicação.
+  - "Programação Semanal Consolidada" e a grade diária não são usáveis em
+    tela pequena hoje — se produção realmente consulta isso (confirmar),
+    a Fase 6 já nasce pensando em cards por linha/dia, não tabela.
+  - O simulador de capacidade de `horizonte.html` usa o mesmo componente
+    visual dos dados reais, sem contraste forte indicando "isto é
+    hipotético" — se algo equivalente sobreviver na tela nova, dar uma
+    moldura visualmente distinta.
+- `ops.html` reimplementa `normalizePedidoKey` como cópia local de
+  `_kuryosNormalizePedidoKey` (já global via `auth_check.js`, carregado
+  antes) — trocar pela função já existente, zero custo.
+- Labels de formulário (`planejamento.html`, `form.html`) quase nunca têm
+  `for=` ligando ao campo — mudança mecânica, baixo risco, ajuda toque e
+  leitor de tela. Vale fazer ao reconstruir os formulários da Fase 6, ou
+  antes se sobrar tempo.
+- `alert()`/`confirm()` nativos do navegador quebram a consistência visual
+  do resto do app (que já tem um padrão de modal customizado) — trocar
+  por toast/modal no mesmo padrão ao tocar em cada fluxo.
+
+Relatórios completos dos 3 agentes (achados descartados por não terem
+ganho real, contexto adicional, arquivo:linha exato de cada ponto) ficam
+só no histórico da conversa — o que está aqui já é o filtrado/priorizado
+pra ação futura.
