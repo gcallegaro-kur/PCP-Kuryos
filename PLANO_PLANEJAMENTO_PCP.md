@@ -246,16 +246,28 @@ retrabalho.
    a auto-derivação ficaria ociosa na prática na maior parte das vezes.
    Retomar isso automaticamente já dentro do modelo de blocos por OP da
    Fase 6, onde o vínculo nasce confiável por construção.
-3. **Apontamento nos pontos de controle** — **parcial**: início de turno
-   ✅, lista de Alocar OP por prioridade ✅ (trava dura movida pro
-   backlog), clareza Intervalo×Parar linha ✅. Falta: unificar os 3
-   fluxos de "Encerrar OP" (Painel de Turno/Apontamento por Total/Fechar
-   Lote) num só, com a trava de justificativa portada pro fluxo do dia a
-   dia.
-4. **Alertas ao PCP**: OP não iniciada no horário programado + OP atrasada
-   em andamento, 5min de tolerância inicial + repique a cada 10min
-   (cooldown próprio, não o padrão de 60min do sistema atual) —
-   reaproveita o cron de 2 minutos já existente.
+3. **Apontamento nos pontos de controle** — **essencialmente concluída**:
+   início de turno ✅, lista de Alocar OP por prioridade ✅ (trava dura
+   movida pro backlog), clareza Intervalo×Parar linha ✅, paridade de
+   recursos entre os 3 fluxos de Encerrar OP ✅ (perdas estruturadas +
+   hint de ritmo + justificativa em Painel de Turno e Fechar Lote — ver
+   seção 12; Apontamento por Total deliberadamente sem perdas, é
+   atualização parcial por design). Reavaliado nesta revisão: 2 dos 3
+   fluxos (Painel de Turno e Fechar Lote) já forçam `status:'Concluído'`
+   diretamente hoje — a nota antiga desta seção ("só o Painel de Turno
+   grava direto") estava desatualizada. Os 3 continuam estruturalmente
+   separados por decisão (seção 10), não fundidos num só. Resta só
+   polimento de baixo risco, documentado em `MELHORIAS_FUTURAS.md`
+   (gap de fila offline na gravação de perdas, base de comparação da
+   justificativa divergente entre Fechar Lote e Painel de Turno,
+   recuperação de falha parcial em "Encerrar Turno" em lote) — não
+   bloqueia a Fase 4, que já foi concluída.
+4. ✅ **Alertas ao PCP**: OP não iniciada no horário programado + OP
+   atrasada em andamento, 5min de tolerância inicial + repique a cada
+   10min (cooldown próprio, não o padrão de 60min do sistema atual) —
+   reaproveita o cron de 2 minutos já existente. **Concluída e
+   deployada** (ver seção 14) — `checkOpsAtrasadas` reescrita pra
+   reavaliar estado ao vivo em vez de consumir fila de eventos único.
 5. **Somar paradas reais ao tempo estimado de conclusão da OP** — fecha
    gap de dado já existente, nunca usado.
 6. **Redesenho das duas telas de planejamento** (Quantidades / OPs),
@@ -767,3 +779,54 @@ stubs de redirect pra cá), `logistica.html`, `emitir_op.html`.
   correções documentadas em comentários de rodadas anteriores);
   `cadastros.html` CRUD principal de Materiais/Produtos/Fornecedores
   (tratamento de erro consistente, sem XSS, sem hard-delete órfão).
+
+## 14. Fase 4 concluída — alertas de OP atrasada (2026-08-29)
+
+Instrução do usuário: seguir sem parar até finalizar o plano inteiro.
+Antes de avançar, revisão da Fase 3 confirmou que ela está
+essencialmente concluída (ver nota atualizada na seção 6) — os itens
+restantes são polimento de baixo risco, já no backlog, não bloqueiam.
+Fase 4 implementada, testada e deployada:
+
+- **`functions/index.js` — `checkOpsAtrasadas` reescrita por completo**,
+  saindo do padrão de fila de eventos único (`alertas_pendentes/`) pro
+  padrão de reavaliação de estado ao vivo a cada tick do cron de 2min
+  (mesmo desenho de `checkLinhasParadas`), com tolerância de 5min pra
+  primeira notificação e repique a cada 10min enquanto o desvio
+  persistir (`cooldownOk(key, 10)`, cooldown próprio — não o padrão de
+  60min do resto do sistema).
+- **Dois sinais independentes**, cada um cobrindo um cenário que o
+  outro sozinho não cobre:
+  1. `ops/{lote}.dataInicioPlanejada`/`dataFimPlanejada` (programação
+     manual do PCP em `ops.html`, Fase 2) — "OP não iniciada no
+     horário" (ninguém abriu na linha/rotulagem, nem há produção) e
+     "OP ainda aberta depois do término previsto". Só avalia OPs que
+     TÊM plano — a maioria ainda não tem (Horizonte pouco usado), então
+     essas nunca disparam esse alerta especificamente: sem plano, sem
+     base pra cobrar.
+  2. `pedidos/{key}.desvioAtraso` — **novo estado ao vivo**, gravado por
+     `autoAjustarPlanejamento` (`auth_check.js`) toda vez que o ritmo
+     real de um pedido fica pior que o planejado a ponto de faltar mais
+     horas do que faltariam no ritmo planejado, além do limiar
+     configurável em `admin.html` (`config.opAtrasoHoras` — campo que
+     já existia na UI mas estava órfão desde que essa lógica só
+     empurrava um evento único pra `alertas_pendentes/`, nunca mais
+     consumido depois desta mudança). Preserva o timestamp da PRIMEIRA
+     detecção entre replanejamentos sucessivos (o motor roda a cada
+     apontamento fechado — sem preservar, a tolerância de 5min do
+     servidor nunca completaria) e limpa o campo quando o desvio se
+     resolve, evitando alerta perpétuo. Cobre OPs sem
+     `dataFimPlanejada` também, já que se baseia no ritmo do pedido —
+     hoje tem cobertura maior que o sinal 1.
+- Testado antes do deploy: `node --check` nos 2 arquivos; harness Node
+  rodando o bloco REAL de `checkOpsAtrasadas` extraído do arquivo (24
+  asserções, cobrindo os 2 sinais isolados e combinados, tolerância de
+  5min, repique real após 10min simulando o avanço do relógio, OPs
+  concluídas/canceladas ignoradas, OPs sem plano nunca gerando falso
+  positivo); lógica de gravar/preservar/limpar `desvioAtraso` testada
+  isoladamente (6 asserções). **Deployado** (`firebase deploy --only
+  hosting` + `firebase deploy --only functions:checkNotificacoes`,
+  ambos confirmados com sucesso).
+
+**Próxima fase**: Fase 5 (somar paradas reais ao tempo estimado de
+conclusão da OP).
