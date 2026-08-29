@@ -33,6 +33,18 @@ relevante para retomar o trabalho depois.
   urgente porque MU nunca entra em BOM.
 - **MU fora da Busca Avançada Fornecedores × Material** — `BF_FACET_CONFIG`
   (`compras.html`) só cobre MPGR/MPES/EP/ES/ET.
+- **`insumos.html` — recebimento de insumos sem `.transaction()` (race
+  condition, mesma classe do achado crítico de produção)**:
+  `executeBatchAllocation` (Alocação em lote) e `recvModalSave`
+  (recebimento manual pontual) calculam `qtdRecebida` a partir de uma
+  leitura (`.once('value')`) fora de transaction, depois escrevem o
+  valor absoluto via `db.ref().update()`. Se Compras registra um
+  recebimento manual pontual enquanto o PCP revisa/confirma uma alocação
+  em lote do mesmo insumo, um sobrescreve o outro silenciosamente — acha
+  crítico da 3ª rodada de auditoria (2026-08-29), documentado com mais
+  contexto em `PLANO_PLANEJAMENTO_PCP.md` seção 11. Não corrigido ainda
+  porque merece um ciclo próprio com teste dedicado (tela usada por
+  Compras, não só PCP).
 
 ## Materiais / Cadastros
 

@@ -475,13 +475,18 @@ e do que resolver:**
   dependem de `computeOpStatus()` (derivado, calculado só em leitura) —
   pré-requisito direto da Fase 7 (conclusão 100% manual pelo PCP), que
   hoje só funciona de verdade em 1 dos 3 fluxos.
-- Perdas: 3 formatos incompatíveis (texto livre no Painel de Turno vs.
+- ~~Perdas: 3 formatos incompatíveis (texto livre no Painel de Turno vs.
   dropdown estruturado no Fechar Lote vs. nenhum campo no Apontamento por
   Total) — e o fluxo mais usado é o mais pobre, prejudicando qualquer
-  Pareto futuro (tudo cai em "Outro").
-- `salvarPerdaOP` (Painel de Turno) é a única gravação de perda que não
-  passa pela fila offline (`queueOfflineWrite`) — falha silenciosa se
-  confirmar sem conexão.
+  Pareto futuro (tudo cai em "Outro").~~ **Resolvido (ver seção 11):**
+  Painel de Turno agora usa o mesmo formato estruturado do Fechar Lote
+  (tipo + material específico, com baixa de estoque). Apontamento por
+  Total continua sem perda, por design (é um update parcial que
+  deliberadamente não força conclusão).
+- `salvarPerdaOP` (Painel de Turno) — renomeada `salvarPerdasEncerrarOP`
+  na seção 11 — continua sendo a única gravação de perda que não passa
+  pela fila offline (`queueOfflineWrite`) — falha silenciosa se confirmar
+  sem conexão. Segue não resolvido.
 - O write que limpa `abertaDesde`/`abertaLinha` ao encerrar também
   bypassa a fila offline — se fechar offline e o app fechar antes de
   reconectar, a OP fica "aberta" pra sempre, bloqueando a linha.
@@ -491,9 +496,10 @@ e do que resolver:**
 - Justificativa de desvio (Fechar Lote) compara contra uma base diferente
   do % mostrado no Painel de Turno (`qtdEsperada` do bloco de alocação vs.
   `qtdPlanejada` da OP) — escolher 1 base ao unificar.
-- Diferencial real a preservar (não é sobre rigor, é sobre qualidade de
+- ~~Diferencial real a preservar (não é sobre rigor, é sobre qualidade de
   informação): hint de ritmo real (un./h) antes de confirmar, hoje só no
-  Apontamento por Total.
+  Apontamento por Total.~~ **Resolvido (ver seção 11):** Painel de Turno
+  agora também mostra o hint em tempo real.
 - `escTurno` duplicava `escapeHtml` — já corrigido (ver seção 9).
 
 **Fase 4 (alertas) — achado que muda o desenho:**
@@ -545,3 +551,71 @@ e do que resolver:**
 
 Relatórios completos desta rodada (achados descartados, contexto
 adicional, arquivo:linha exato) ficam no histórico da conversa.
+
+## 11. Terceira rodada de auditoria (2026-08-29)
+
+Agente validou os fixes da 2ª rodada (todos confirmados corretos, sem
+regressão) e varreu o que ainda não tinha sido auditado nesta sessão
+(`planejamento.html`, `horizonte.html`, `compras.html`, `insumos.html`,
+`shared/utils.js`) mais um novo achado nos próprios arquivos já tocados.
+Em paralelo, o enriquecimento do Painel de Turno (Fase 3, mapeado na
+seção 10) foi concluído.
+
+### Já corrigido e em produção
+
+- **🔴 CRÍTICO — apontamento horário normal (`syncNextItem`, branch
+  `item.type === 'registro'`, o fluxo mais usado do app) rodava
+  fire-and-forget**: `updateOpRecordOnApontamento(...)` era chamada sem
+  `return` e fora do array `saves` — `Promise.all(saves)` resolvia (e o
+  item saía da fila offline local) sem esperar a transaction de
+  `ops/{lote}` committar. Se a aba fechasse/recarregasse nesse
+  meio-tempo (comum em tablet de chão de fábrica), o incremento de
+  `produzidoLinha` se perdia silenciosamente e o item já tinha sumido da
+  fila — sem erro, sem retry possível. Mesma classe do achado crítico já
+  fechado na 2ª rodada em `apontamento_total`/`fechamento_op`, agora
+  fechada também aqui. **Deployado.**
+- **`dashboard.html`/`historico.html` — mais 4 double-counts da mesma
+  classe** (soma Linha+Rotulagem+Posto onde só envase deveria contar,
+  usando `isLinhaDeProducao`/`isLinhaEnvase` já existentes):
+  `updateStackedMetas()` (barras Hoje/Semana/Período PCP), `renderProdutos`/
+  `renderColaboradores` (numerador vinha de `regs` cru contra um
+  denominador `total` já filtrado, desde o fix parcial da 2ª rodada —
+  podia passar de 100%), `renderLotes` ("Por Lote" inflado), e
+  `historico.html`'s `updateStats()` (stat "Produzido" do topo). Todos
+  **deployados**.
+- **Fase 3 — Encerrar OP do Painel de Turno enriquecido** (o fluxo mais
+  usado do dia a dia, que era o mais pobre): perdas estruturadas (tipo +
+  material específico, com baixa de estoque automática — o campo texto
+  livre antigo nunca descontava estoque), hint de ritmo em tempo real
+  (mesmo cálculo do Apontamento por Total, generalizado por setor), e
+  justificativa obrigatória quando a quantidade diverge de
+  `op.qtdPlanejada` (mesmo padrão de `opForm`, agora também suportado por
+  `fecharAlocacaoOP` via `opts.justificativa` →
+  `registro.justificativaDivergencia`). **Deployado.** Os 3 fluxos
+  continuam estruturalmente separados (decisão já tomada, seção 10) — só
+  os recursos foram nivelados.
+
+### Mapeado pra retomar
+
+- **`insumos.html` — `executeBatchAllocation` (Alocação em lote de
+  recebimento) e `recvModalSave` (recebimento manual pontual)**: delta
+  de `qtdRecebida` calculado fora de `.transaction()`, contra uma leitura
+  (`.once('value')`) que pode já estar velha quando o `db.ref().update()`
+  final escreve o valor absoluto. Mesma classe do achado crítico já
+  corrigido em produção física, aplicada ao controle de
+  insumos/embalagens — não contamina estoque físico nem produção (por
+  isso não foi corrigido nesta rodada, junto dos outros), mas pode
+  sobrescrever silenciosamente um recebimento manual feito por Compras
+  enquanto o PCP revisa uma alocação em lote do mesmo insumo. Precisa de
+  um ciclo próprio: migrar os dois pontos pra `.transaction()`
+  recalculando o delta contra o valor ao vivo (mesmo padrão já usado em
+  `updateOpRecordOnApontamento`), com teste dedicado antes de ir pra
+  produção — tela usada por Compras, não só PCP, então qualquer regressão
+  aqui afeta outro time.
+- Checados e sem achado nesta rodada: `planejamento.html`/`horizonte.html`
+  (`.transaction()` em `programacao/...` — compare-and-swap correto),
+  `compras.html` (todos os `.transaction()` corretos), `shared/utils.js`
+  (`ajustarEstoque`/`baixarEmpenho`/`liberarEmpenhoLote`/
+  `empenharMateriais` — deltas sempre calculados dentro da transaction),
+  `ops.html` (sem `.transaction()` no arquivo; `.update()`s escrevem
+  campos absolutos/flags, não somas).
