@@ -527,6 +527,64 @@
       opsGlobal = opsSnap.val() || {};
       recalculateAndRenderOps();
     });
+
+    // Fase 5 do plano (PLANO_PLANEJAMENTO_PCP.md): paradas são bem
+    // rastreadas (paradas_historico, duração exata) mas nenhum cálculo do
+    // sistema as lia -- "gap de dado já existente, nunca usado". Usado
+    // abaixo em previsaoTerminoHtml() pra descontar tempo parado do ritmo
+    // produtivo real de cada OP aberta, em vez de tratar todo o tempo
+    // decorrido desde a abertura como se fosse produção.
+    dbOnValue(database.ref('paradas_historico'), pSnap => {
+      paradasHistoricoGlobal = pSnap.val() || {};
+      recalculateAndRenderOps();
+    });
+  }
+  let paradasHistoricoGlobal = {};
+
+  // Minutos parados de um lote desde um instante ISO -- soma a duração
+  // (gravada em minutos, form.html/resumeLine) de toda parada registrada
+  // pra esse lote com início dentro da janela [desdeISO, agora]. Paradas de
+  // uma abertura ANTERIOR da mesma OP (fechou e reabriu) ficam fora porque
+  // o filtro é por inicio >= desdeISO, não pelo lote sozinho.
+  function minutosParadasDoLote(lote, desdeISO) {
+    if (!lote || !desdeISO) return 0;
+    var desdeMs = new Date(desdeISO).getTime();
+    if (isNaN(desdeMs)) return 0;
+    var total = 0;
+    Object.values(paradasHistoricoGlobal).forEach(function(p) {
+      if (!p || p.lote !== lote || !p.inicio) return;
+      var inicioMs = new Date(p.inicio).getTime();
+      if (isNaN(inicioMs) || inicioMs < desdeMs) return;
+      total += p.duracao || 0;
+    });
+    return total;
+  }
+
+  // Previsão de término = agora + (quantidade restante ÷ ritmo PRODUTIVO
+  // real, ou seja, descontando as paradas registradas do tempo decorrido
+  // desde a abertura -- sem isso, uma OP com paradas longas mostraria um
+  // ritmo pior do que o real (tempo parado contando como se fosse produção
+  // lenta) e uma previsão de término mais pessimista/errada.
+  function previsaoTerminoHtml(op) {
+    if (!op.abertaDesde || !op.qtdPlanejada) return '';
+    var produzido = getProduzido(op, 'linha');
+    var qtdRestante = Math.max(op.qtdPlanejada - produzido, 0);
+    if (qtdRestante <= 0) return '';
+    var horasDecorridas = horasDesde(op.abertaDesde);
+    var minutosParados = minutosParadasDoLote(op.lote, op.abertaDesde);
+    var horasProdutivas = Math.max(horasDecorridas - (minutosParados / 60), 0);
+    // Menos de ~6min produtivos ainda não é amostra confiável de ritmo --
+    // evita projetar uma previsão maluca (ex: 1 unidade em 2min -> "30 un/h").
+    if (horasProdutivas < 0.1 || produzido <= 0) return '';
+    var ritmoProdutivo = produzido / horasProdutivas;
+    if (ritmoProdutivo <= 0) return '';
+    var horasRestantes = qtdRestante / ritmoProdutivo;
+    var previsao = new Date(Date.now() + horasRestantes * 3600000);
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    var previsaoTxt = pad(previsao.getDate()) + '/' + pad(previsao.getMonth() + 1) + ' ' + pad(previsao.getHours()) + ':' + pad(previsao.getMinutes());
+    var descontoTxt = minutosParados > 0 ? (' · ' + minutosParados + 'min de parada descontados') : '';
+    return '<div style="font-size:10.5px;color:var(--muted);margin-top:3px" title="Ritmo produtivo real: ' +
+      Math.round(ritmoProdutivo) + ' un/h (exclui tempo parado)">📅 Previsão: ' + previsaoTxt + descontoTxt + '</div>';
   }
 
   function recalculateAndRenderOps() {
@@ -1045,7 +1103,7 @@
               : ``}
           </div>
         </td>
-        <td>${produzidoBreakdownHtml(op)}</td>
+        <td>${produzidoBreakdownHtml(op)}${previsaoTerminoHtml(op)}</td>
         <td>
           ${isCancelada
             ? `<span class="badge-status cancelado" title="${escapeAttr('Cancelada' + (op.motivoCancelamento ? ': ' + op.motivoCancelamento : ''))}">Cancelada</span>`
