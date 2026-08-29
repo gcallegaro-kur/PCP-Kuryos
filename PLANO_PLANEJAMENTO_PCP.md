@@ -238,15 +238,20 @@ retrabalho.
    deployados (ver seção 9). Falta só confirmar com o time, ao vivo, que
    o motor está de fato empurrando/adiantando slots agora que os
    bloqueios sumiram.
-2. **Popular `dataInicioPlanejada`/`dataFimPlanejada` de verdade na
-   emissão da OP** — pré-requisito de quase tudo abaixo. **Parcial**:
-   edição manual já existe em `ops.html` (seção 9); falta decidir se vale
-   também auto-derivar de slots vinculados na emissão, ou se manual basta
-   até a Fase 6.
-3. **Apontamento nos pontos de controle** (início de turno — novo botão
-   dedicado —, abertura de OP, paradas via Andon, encerramento de OP, fim
-   de turno) + travar na OP programada — baixo risco, ataca a dor real
-   que a equipe já relatou na rotina de apontamento.
+2. ✅ **Popular `dataInicioPlanejada`/`dataFimPlanejada` de verdade na
+   emissão da OP** — **decidido**: manual (`ops.html`, seção 9) basta até
+   a Fase 6. Auto-derivar de slots vinculados na emissão não compensaria
+   o esforço agora — a mesma investigação da Fase 1 já mostrou que a
+   maioria das OPs não tem slot vinculado (Horizonte pouco usado), então
+   a auto-derivação ficaria ociosa na prática na maior parte das vezes.
+   Retomar isso automaticamente já dentro do modelo de blocos por OP da
+   Fase 6, onde o vínculo nasce confiável por construção.
+3. **Apontamento nos pontos de controle** — **parcial**: início de turno
+   ✅, lista de Alocar OP por prioridade ✅ (trava dura movida pro
+   backlog), clareza Intervalo×Parar linha ✅. Falta: unificar os 3
+   fluxos de "Encerrar OP" (Painel de Turno/Apontamento por Total/Fechar
+   Lote) num só, com a trava de justificativa portada pro fluxo do dia a
+   dia.
 4. **Alertas ao PCP**: OP não iniciada no horário programado + OP atrasada
    em andamento, 5min de tolerância inicial + repique a cada 10min
    (cooldown próprio, não o padrão de 60min do sistema atual) —
