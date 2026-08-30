@@ -287,7 +287,11 @@ retrabalho.
    "apurado a cada OP/dia" fica coberto pelo próprio tempo MEDIDO
    (`setupInicio`/`setupFim`, já existia, agora mostrado); o "padrão
    inicial" é o novo fallback configurável em `admin.html`.
-9. **Fechamento do Dia** — painel de conferência agregado (seção 5).
+9. ✅ **Fechamento do Dia** — painel de conferência agregado (seção 5).
+   **Concluída e deployada** (ver seção 18) — card novo em `dashboard.html`,
+   uma linha por linha de produção, cruzando produção×meta, paradas do
+   dia e OPs em "Aguardando Confirmação" (essa última sem filtro de
+   data — é pendência até alguém agir).
 10. **Dashboard de KPI agregado** (lista da seção 4, priorizada conforme
     dado disponível).
 11. **Reavaliar Machine Learning**, só quando houver base de dado limpa
@@ -1055,3 +1059,41 @@ em seguida (ver seção 17) depois de fechar o desenho com o usuário.
   desenho original (seção 3), ainda não iniciado. É uma mudança de UX no
   fluxo mais usado do sistema (Painel de Turno, `form.html`) — merece o
   mesmo cuidado das fases anteriores antes de tocar.
+
+## 18. Fase 9 concluída — Fechamento do Dia (2026-08-30)
+
+Implementado o painel descrito na seção 5: card "🔒 Fechamento do Dia" em
+`dashboard.html`, posicionado logo antes de "Meta do Dia". É deliberadamente
+um painel de **conferência**, não de digitação — não introduz nenhum campo
+novo pro operador preencher, só agrega o que 3 fontes já gravam ao longo do
+dia:
+
+- **Produção × meta** por linha (reusa a mesma base de `regs` e a lógica de
+  dia útil de `isWorking`, já usada em `renderMetaDiaria`).
+- **Paradas do dia** por linha, contagem + minutos somados (reusa
+  `paradasDoDia()`, já timezone-safe via `localDateFromIso` — não reimplementa
+  filtro de data).
+- **OPs em `'Aguardando Confirmação'`** por linha (Fase 7), com lote e produto
+  listados. Deliberadamente **sem filtro de data** — uma OP presa nesse
+  estado é pendência até alguém agir, não importa há quantos dias; filtrar
+  por "hoje" esconderia justamente as mais esquecidas.
+
+Badge por linha: verde "✓ Tudo certo" só quando não há OP pendente **e** a
+meta (em dia útil) está em pelo menos 80%; qualquer um dos dois vira badge
+laranja com o motivo. O caso que motivou o painel inteiro: uma linha pode
+bater 100% da meta e ainda assim aparecer com pendência, se tiver OP
+aguardando confirmação — nenhuma outra tela do sistema cruza essas duas
+informações.
+
+Sem `cfg.linhas` configurado, o card fica oculto (sem erro). Recalculado em
+4 pontos de mudança: `renderAll`, listener de `config`, listener de
+`paradas_historico` e listener de `ops`.
+
+**Testado**: syntax check completo de `dashboard.html`; harness Node com o
+bloco real de `renderFechamentoDoDia` extraído do arquivo (10 asserções:
+linha 100%-sem-pendência → verde; OP aguardando confirmação → pendência
+mesmo com meta 100%; meta abaixo de 80% → pendência com percentual certo;
+meta 80–99% → NÃO é pendência; paradas contam certo por linha mesmo sem
+produção registrada nela; card oculto sem linhas configuradas).
+
+**Deployado** (`firebase deploy --only hosting`) e enviado pro `main`.
