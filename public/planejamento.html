@@ -143,6 +143,23 @@
     .gantt-setup{border-radius:6px;min-height:48px;background:repeating-linear-gradient(45deg,transparent,transparent 4px,color-mix(in srgb, var(--warning) 30%, transparent) 4px,color-mix(in srgb, var(--warning) 30%, transparent) 8px);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8a5c00;text-align:center;line-height:1.3}
     .gantt-setup-editavel{border:1px dashed color-mix(in srgb, var(--warning) 60%, transparent)}
     .gantt-setup-editavel:hover{background:repeating-linear-gradient(45deg,transparent,transparent 4px,color-mix(in srgb, var(--warning) 45%, transparent) 4px,color-mix(in srgb, var(--warning) 45%, transparent) 8px)}
+    /* Arrastar/redimensionar OPs -- pedido do usuário: esticar borda muda
+       início/fim planejado, arrastar o bloco inteiro muda de linha. */
+    .gantt-resize-handle{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:3}
+    .gantt-resize-handle.left{left:-3px}
+    .gantt-resize-handle.right{right:-3px}
+    .gantt-resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:3px;height:16px;border-radius:2px;background:rgba(0,0,0,.18);opacity:0;transition:opacity .12s}
+    .gantt-block:hover .gantt-resize-handle::after{opacity:1}
+    .gantt-resize-handle:hover::after{background:var(--primary-light);opacity:1}
+    .gantt-block-draggable{cursor:grab}
+    .gantt-block-draggable:active{cursor:grabbing}
+    .gantt-block.op-dragging{filter:brightness(.97);box-shadow:0 0 0 2px var(--primary-light)}
+    .gantt-block.op-pushed{animation:opPushFlash .5s ease-out}
+    @keyframes opPushFlash{0%{filter:brightness(1.3) saturate(1.25)}100%{filter:none}}
+    .gantt-rate-tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .1s;white-space:nowrap;z-index:5}
+    .gantt-rate-tag.show{opacity:1}
+    .gantt-ghost-block{position:fixed;pointer-events:none;z-index:100;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;color:#fff;background:var(--primary);box-shadow:0 8px 22px rgba(0,0,0,.28);white-space:nowrap;opacity:.94}
+    .gantt-linha-label.drop-target{background:color-mix(in srgb, var(--primary-light) 12%, transparent);border-radius:8px}
     .gantt-block.past:not(.done):not(.vinculado){opacity:.6}
     .gantt-block-nome{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .gantt-block-meta{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -728,7 +745,7 @@ window.addEventListener('DOMContentLoaded',function(){
   currentWeekStart=getMon(new Date());
   var dw=new Date().getDay();
   currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;
-  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupSetupModal();setupConfigTab();
+  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupSetupModal();setupOpsGridDrag();setupConfigTab();
   
   var agdSearch = document.getElementById('agdSearchInput');
   var agdFilter = document.getElementById('agdFilterClient');
@@ -1420,6 +1437,95 @@ function idxParaHoraFim(allH,iso){
   return idxParaHora(allH,new Date(d.getTime()-1).toISOString(),true);
 }
 
+// Converte um índice de coluna da grade (allH[idx]='HH:00') de volta pra um
+// timestamp ISO real, no dia `dateYMD` ('YYYY-MM-DD'). Inverso de
+// idxParaHora/idxParaHoraFim -- usado ao SOLTAR um arrasto de OP (Fase de
+// arrastar/redimensionar), pra gravar dataInicioPlanejada/dataFimPlanejada
+// de verdade. `endExclusive`: um bloco ocupando as colunas [start,start+span)
+// termina no INÍCIO da coluna start+span (mesma convenção de
+// idxParaHoraFim). Se estourar o fim do expediente do dia, rola pro 00:00
+// do dia seguinte -- não existe hora "23:00 e pouquinho" fora do expediente
+// configurado. .toISOString() no final -- mesmo formato que ops.html já
+// grava nesses campos (editor manual de data/hora), consistência entre os
+// dois jeitos de editar a mesma coisa.
+function colIdxParaISO(allH,dateYMD,idx,endExclusive){
+  if(idx<allH.length){
+    return new Date(dateYMD+'T'+allH[idx]+':00').toISOString();
+  }
+  if(!endExclusive)return null;
+  var d=new Date(dateYMD+'T00:00:00');
+  d.setDate(d.getDate()+1);
+  return d.toISOString();
+}
+
+// Reorganiza os blocos de uma linha (ou duas, se mudou de linha) depois de
+// um arrasto (esticar borda, ou mover o bloco inteiro pra outra posição/
+// linha). blocks: [{id,linha,start,span,locked}] -- lista COMPLETA do dia
+// (todas as linhas). Muta os blocos afetados in-place e devolve os ids que
+// mudaram de posição (pra saber o que precisa ser regravado no Firebase).
+//
+// Regra (confirmada com o usuário): quem vem DEPOIS do bloco arrastado, na
+// mesma linha, é SEMPRE reencostado -- empurrado se ia sobrepor, puxado se
+// sobrou buraco -- formando uma cadeia sem espaço vazio a partir do bloco
+// arrastado até o fim da linha (span de cada um preservado, ninguém
+// "espreme"). Isso vale mesmo pra buracos que já existiam entre blocos mais
+// à frente e não tinham nada a ver com o arrasto em si -- a régua é "a
+// sequência inteira depois do ponto tocado fica compacta", não "só quem
+// encostava direto". Quem vem ANTES nunca é tocado por este arrasto -- quem
+// chama esta função é responsável por travar o arrasto (via limiteEsquerdo)
+// antes que o bloco arrastado tente invadir o espaço de quem vem antes dele.
+// Bloco `locked` (Concluído/Aguardando Confirmação, ou já aberto de verdade
+// -- ver flags em buildDayOpsGanttModel) nunca muda de posição, mas
+// continua contando como obstáculo pra quem vier depois DELE.
+function reflowAposArrasto(blocks,movedId,novaLinha,novoStart,novoSpan){
+  var moved=blocks.filter(function(b){return b.id===movedId;})[0];
+  if(!moved)return[];
+  var changed={};
+  var linhaAntiga=moved.linha;
+
+  moved.linha=novaLinha;
+  moved.start=novoStart;
+  moved.span=novoSpan;
+  changed[moved.id]=true;
+
+  function repackDepoisDe(linha,ancoraFim,candidatos){
+    var frontier=ancoraFim;
+    candidatos.forEach(function(b){
+      if(b.locked){frontier=Math.max(frontier,b.start+b.span);return;}
+      if(b.start!==frontier){b.start=frontier;changed[b.id]=true;}
+      frontier=b.start+b.span;
+    });
+  }
+
+  var destino=blocks.filter(function(b){return b.linha===novaLinha&&b.id!==movedId;})
+    .sort(function(a,b){return a.start-b.start;});
+  repackDepoisDe(novaLinha,novoStart+novoSpan,destino.filter(function(b){return b.start>=novoStart;}));
+
+  if(linhaAntiga!==novaLinha){
+    var origem=blocks.filter(function(b){return b.linha===linhaAntiga;})
+      .sort(function(a,b){return a.start-b.start;});
+    repackDepoisDe(linhaAntiga,0,origem);
+  }
+
+  return Object.keys(changed);
+}
+
+// Trava a borda esquerda (ou o início de um movimento inteiro) pra nunca
+// ultrapassar pra trás o fim do bloco mais próximo que vem antes na linha
+// ALVO -- usa um retrato de ANTES do arrasto começar (blocksOriginais,
+// tirado no mousedown) como referência de "quem vinha antes de mim", pra
+// não cair num cálculo circular com o valor que o próprio arrasto em
+// andamento está tentando produzir. Devolve o start mínimo permitido.
+function limiteEsquerdo(blocksOriginais,movedId,linhaAlvo){
+  var moved=blocksOriginais.filter(function(b){return b.id===movedId;})[0];
+  var refStart=moved?moved.start:Infinity;
+  var anteriores=blocksOriginais.filter(function(b){
+    return b.linha===linhaAlvo&&b.id!==movedId&&(b.start+b.span)<=refStart;
+  });
+  if(!anteriores.length)return 0;
+  return Math.max.apply(null,anteriores.map(function(b){return b.start+b.span;}));
+}
+
 // Monta os blocos de OP (+ setup medido antes de cada uma) pra 1 dia,
 // mesmo shape de buildDayGanttModel ({allH,pausas,rows}) pra reaproveitar
 // o mesmo laço de renderização.
@@ -1499,8 +1605,20 @@ function buildDayOpsGanttModel(dateObj){
         }
       }
 
+      // Editabilidade do arrasto (Fase de arrastar/redimensionar): OP
+      // Concluída/Aguardando Confirmação é histórico fechado, trava total.
+      // OP já aberta de verdade (abertaDesde/abertaDesdeRot) tem um início
+      // que JÁ ACONTECEU -- não dá pra arrastar o passado, então só o fim
+      // (replanejar quando deve terminar) fica livre, e nunca muda de
+      // linha (não "teletransporta" uma produção que já está rodando numa
+      // máquina física). Só quando a OP ainda nem começou é que fica
+      // totalmente livre: início, fim e linha.
+      var travada=(op.status==='Concluído'||op.status==='Aguardando Confirmação');
+      var jaAberta=!!(op.abertaDesde||op.abertaDesdeRot);
       blocks.push({startIdx:startIdx,span:span,cls:cls,lote:op.lote||e.key,produto:op.produto||'?',
-        qtdPlanejada:op.qtdPlanejada||0,produzido:getProduzido(op,'linha'),status:op.status||'',opKey:e.key});
+        qtdPlanejada:op.qtdPlanejada||0,produzido:getProduzido(op,'linha'),status:op.status||'',opKey:e.key,
+        linhaNum:l,linhaName:linhaName,
+        locked:travada,podeArrastarInicio:!travada&&!jaAberta,podeArrastarFim:!travada,podeMudarLinha:!travada&&!jaAberta});
     });
     blocks.sort(function(a,b){return a.startIdx-b.startIdx;});
     // Bloco de setup e bloco de produção da MESMA OP podem cair no mesmo
@@ -1534,15 +1652,34 @@ function buildOpBlockHTML(block){
   var pct=block.qtdPlanejada?Math.min(100,Math.round(block.produzido/block.qtdPlanejada*100)):0;
   var lotePill='<span class="gantt-lote-pill">🏷️ '+escapeHtml(block.lote)+'</span>';
   var statusTxt=block.status==='Concluído'?'concluída':(block.status==='Aguardando Confirmação'?'aguardando PCP':(block.cls==='atrasado'?'atrasada':'em produção'));
-  return '<div class="gantt-block '+block.cls+'" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="'+escapeAttr(statusTxt)+'">'+
+  // Arrastar/redimensionar (pedido do usuário): OP travada (Concluído/
+  // Aguardando Confirmação) não recebe handle nem fica arrastável -- é
+  // histórico fechado. OP já aberta de verdade só libera a borda direita
+  // (replanejar o fim, o início já aconteceu) e nunca vira arrastável pra
+  // trocar de linha (não "teletransporta" uma produção que já está rodando
+  // fisicamente numa máquina).
+  var draggableCls=block.podeMudarLinha?' gantt-block-draggable':'';
+  var lockedCls=block.locked?' locked':'';
+  var handles=(block.podeArrastarInicio?'<div class="gantt-resize-handle left" data-edge="left"></div>':'')+
+    (block.podeArrastarFim?'<div class="gantt-resize-handle right" data-edge="right"></div>':'');
+  var dataAttrs=' data-op-key="'+escapeAttr(block.opKey)+'" data-linha-num="'+block.linhaNum+'" data-start-idx="'+block.startIdx+'" data-span="'+block.span+'" data-qtd="'+(block.qtdPlanejada||0)+'"';
+  return '<div class="gantt-block '+block.cls+lockedCls+draggableCls+'"'+dataAttrs+' style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="'+escapeAttr(statusTxt)+'">'+
     '<div class="gantt-block-nome" title="'+escapeAttr(block.produto)+'">'+escapeHtml(block.produto)+'</div>'+
     '<div class="gantt-block-meta">'+lotePill+'<span>'+fmtNum(block.produzido)+(block.qtdPlanejada?' / '+fmtNum(block.qtdPlanejada):'')+' un · '+pct+'%'+'</span></div>'+
+    handles+
+    '<div class="gantt-rate-tag"></div>'+
   '</div>';
 }
 
 function renderOpsGrid(){
   var container=document.getElementById('ganttGridOps');
   if(!container)return;
+  // Um arrasto em andamento controla o DOM na unha (ver opsDrag) -- um
+  // re-render vindo de um listener do Firebase no meio do gesto destruiria
+  // os elementos que o mouse está segurando. Volta a renderizar normal
+  // assim que o arrasto solta (onOpsGridMouseUp chama renderOpsGrid de
+  // novo no final).
+  if(opsDrag)return;
   var date=toYMD(addDays(currentWeekStart,currentDayIdx));
   var model=buildDayOpsGanttModel(parsYMD(date));
   var allH=model.allH;
@@ -1593,6 +1730,196 @@ function renderOpsGrid(){
   if(s2)s2.textContent=totConcluidas;
   if(s3)s3.textContent=totAtrasadas;
   if(s4)s4.textContent=totSetupMin>0?(totSetupMin+'min'):'—';
+}
+
+// ═══ Arrastar/redimensionar OPs direto na Grade (pedido do usuário) ═══
+// Esticar a borda direita/esquerda de um bloco muda dataFimPlanejada/
+// dataInicioPlanejada; arrastar o bloco inteiro (só quando ainda não
+// começou de verdade -- ver podeMudarLinha em buildDayOpsGanttModel) muda
+// também de linha. O reflowAposArrasto/limiteEsquerdo (mesmos usados no
+// protótipo revisado com o usuário) cuidam de empurrar/puxar quem vem
+// depois na sequência. Escopo desta 1a versão: só dentro do MESMO dia
+// visível na grade -- não arrasta pra outro dia.
+var opsDrag=null;
+
+function setupOpsGridDrag(){
+  var container=document.getElementById('ganttGridOps');
+  if(!container)return;
+  container.addEventListener('mousedown',onOpsGridMouseDown);
+  window.addEventListener('mousemove',onOpsGridMouseMove);
+  window.addEventListener('mouseup',onOpsGridMouseUp);
+}
+
+// Achata o model (todas as linhas) numa lista só de blocos DE PRODUÇÃO
+// (setup fica de fora -- é derivado, sempre recalculado do zero a partir
+// da posição da OP, nunca precisa de reflow próprio) pro
+// reflowAposArrasto/limiteEsquerdo, que são funções puras sem noção de
+// Gantt/Firebase.
+function blocosPurosDoModel(model){
+  var out=[];
+  model.rows.forEach(function(row){
+    row.blocks.forEach(function(b){
+      if(b.setup)return;
+      out.push({id:b.opKey,linha:b.linhaNum,start:b.startIdx,span:b.span,locked:b.locked});
+    });
+  });
+  return out;
+}
+
+function onOpsGridMouseDown(e){
+  var handle=e.target.closest('.gantt-resize-handle');
+  var blockEl=e.target.closest('.gantt-block');
+  if(!blockEl||blockEl.classList.contains('locked'))return;
+  var opKey=blockEl.dataset.opKey;
+  if(!opKey)return;
+  var mode=handle?handle.dataset.edge:(blockEl.classList.contains('gantt-block-draggable')?'move':null);
+  if(!mode)return;
+
+  var container=document.getElementById('ganttGridOps');
+  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
+  var model=buildDayOpsGanttModel(parsYMD(date));
+  var blocos=blocosPurosDoModel(model);
+  var meu=blocos.filter(function(b){return b.id===opKey;})[0];
+  if(!meu){return;}
+
+  var hdrCell=container.querySelector('.gantt-hour-hdr');
+  var colWidth=hdrCell?(hdrCell.getBoundingClientRect().width+3):60;
+  var linhaLabels=Array.prototype.slice.call(container.querySelectorAll('.gantt-linha-label'));
+
+  opsDrag={
+    opKey:opKey,mode:mode,startX:e.clientX,colWidth:colWidth,allH:model.allH,dateYMD:date,
+    blocosSnap:blocos,origLinha:meu.linha,origStart:meu.start,origSpan:meu.span,
+    qtdPlanejada:parseInt(blockEl.dataset.qtd)||0,linhaLabels:linhaLabels,blockEl:blockEl,
+    container:container,ghostEl:null,previewStart:null,previewSpan:null,previewLinha:null,
+  };
+  blockEl.classList.add('op-dragging');
+  document.body.style.cursor=(mode==='move')?'grabbing':'ew-resize';
+  if(mode==='move'){
+    var ghost=document.createElement('div');
+    ghost.className='gantt-ghost-block';
+    document.body.appendChild(ghost);
+    opsDrag.ghostEl=ghost;
+  }
+  e.preventDefault();
+}
+
+function onOpsGridMouseMove(e){
+  if(!opsDrag)return;
+  var deltaCols=Math.round((e.clientX-opsDrag.startX)/opsDrag.colWidth);
+  if(opsDrag.mode==='right'){
+    var novoSpan=Math.max(1,opsDrag.origSpan+deltaCols);
+    novoSpan=Math.min(novoSpan,opsDrag.allH.length-opsDrag.origStart);
+    aplicarPreviewResizeOps(opsDrag.origStart,novoSpan,opsDrag.origLinha);
+  } else if(opsDrag.mode==='left'){
+    var pisoEsq=limiteEsquerdo(opsDrag.blocosSnap,opsDrag.opKey,opsDrag.origLinha);
+    var fimFixo=opsDrag.origStart+opsDrag.origSpan;
+    var novoStartTentativa=opsDrag.origStart+deltaCols;
+    var novoStart=Math.max(pisoEsq,Math.min(novoStartTentativa,fimFixo-1));
+    aplicarPreviewResizeOps(novoStart,fimFixo-novoStart,opsDrag.origLinha);
+  } else if(opsDrag.mode==='move'){
+    aplicarPreviewMoveOps(e);
+  }
+}
+
+function aplicarPreviewResizeOps(novoStart,novoSpan,linha){
+  opsDrag.previewStart=novoStart;
+  opsDrag.previewSpan=novoSpan;
+  opsDrag.previewLinha=linha;
+  opsDrag.blockEl.style.gridColumn=(novoStart+2)+' / span '+novoSpan;
+  var tag=opsDrag.blockEl.querySelector('.gantt-rate-tag');
+  if(!tag)return;
+  var taxa=(opsDrag.qtdPlanejada&&novoSpan>0)?Math.round(opsDrag.qtdPlanejada/novoSpan):null;
+  // Simula o reflow só em memória (não toca no Firebase) pra avisar quantos
+  // blocos seriam empurrados/puxados -- pedido do usuário: "ir simulando e
+  // informando".
+  var working=JSON.parse(JSON.stringify(opsDrag.blocosSnap));
+  var mudados=reflowAposArrasto(working,opsDrag.opKey,linha,novoStart,novoSpan).filter(function(id){return id!==opsDrag.opKey;});
+  var txt=taxa!=null?('≈ '+fmtNum(taxa)+' un/h'):(novoSpan+'h');
+  if(mudados.length)txt+=' · move '+mudados.length+' OP(s)';
+  tag.textContent=txt;
+  tag.classList.add('show');
+}
+
+function aplicarPreviewMoveOps(e){
+  var deltaCols=Math.round((e.clientX-opsDrag.startX)/opsDrag.colWidth);
+  var novoStartTentativa=opsDrag.origStart+deltaCols;
+
+  var linhaAlvo=opsDrag.origLinha;
+  for(var i=0;i<opsDrag.linhaLabels.length;i++){
+    var r=opsDrag.linhaLabels[i].getBoundingClientRect();
+    if(e.clientY>=r.top&&e.clientY<=r.bottom){linhaAlvo=i+1;break;}
+  }
+
+  var pisoEsq=limiteEsquerdo(opsDrag.blocosSnap,opsDrag.opKey,linhaAlvo);
+  var novoStart=Math.max(pisoEsq,Math.min(novoStartTentativa,opsDrag.allH.length-opsDrag.origSpan));
+  opsDrag.previewStart=novoStart;
+  opsDrag.previewSpan=opsDrag.origSpan;
+  opsDrag.previewLinha=linhaAlvo;
+
+  opsDrag.linhaLabels.forEach(function(el,i){el.classList.toggle('drop-target',i+1===linhaAlvo);});
+
+  var taxa=(opsDrag.qtdPlanejada&&opsDrag.origSpan>0)?Math.round(opsDrag.qtdPlanejada/opsDrag.origSpan):null;
+  var horaIni=opsDrag.allH[novoStart]||'?';
+  var linhaNome=configLinhas[linhaAlvo-1]||'?';
+  var working=JSON.parse(JSON.stringify(opsDrag.blocosSnap));
+  var mudados=reflowAposArrasto(working,opsDrag.opKey,linhaAlvo,novoStart,opsDrag.origSpan).filter(function(id){return id!==opsDrag.opKey;});
+  var txt='🏷️ '+linhaNome+' · '+horaIni+(taxa!=null?(' · ≈'+fmtNum(taxa)+' un/h'):'');
+  if(mudados.length)txt+=' · move '+mudados.length+' OP(s)';
+  opsDrag.ghostEl.textContent=txt;
+  opsDrag.ghostEl.style.left=(e.clientX+16)+'px';
+  opsDrag.ghostEl.style.top=(e.clientY+16)+'px';
+}
+
+function onOpsGridMouseUp(e){
+  if(!opsDrag)return;
+  var d=opsDrag;
+  document.body.style.cursor='';
+  if(d.blockEl)d.blockEl.classList.remove('op-dragging');
+  if(d.ghostEl)d.ghostEl.remove();
+  d.linhaLabels.forEach(function(el){el.classList.remove('drop-target');});
+
+  var mudou=d.previewStart!=null&&(d.previewStart!==d.origStart||d.previewSpan!==d.origSpan||d.previewLinha!==d.origLinha);
+  opsDrag=null;
+  if(!mudou){renderOpsGrid();return;}
+
+  // Recalcula em cima de um retrato FRESCO (não o do mousedown, que já pode
+  // estar velho se algo mudou no Firebase durante o arrasto) -- evita
+  // gravar em cima de uma mudança concorrente.
+  var dateAtual=toYMD(addDays(currentWeekStart,currentDayIdx));
+  var modelFresco=buildDayOpsGanttModel(parsYMD(dateAtual));
+  var blocosFrescos=blocosPurosDoModel(modelFresco);
+  if(!blocosFrescos.some(function(b){return b.id===d.opKey;})){renderOpsGrid();return;}
+
+  var mudados=reflowAposArrasto(blocosFrescos,d.opKey,d.previewLinha,d.previewStart,d.previewSpan);
+
+  // Valida TODOS os horários antes de gravar qualquer um -- tudo ou nada.
+  // Um bloco empurrado em cadeia pode ter estourado o fim do expediente do
+  // dia (colIdxParaISO devolve null pro INÍCIO nesse caso, nunca inventa
+  // hora) -- melhor cancelar com aviso claro do que gravar 3 OPs certas e
+  // deixar a 4a incoerente.
+  var updates={};
+  var erro=null;
+  blocosFrescos.forEach(function(b){
+    if(erro||mudados.indexOf(b.id)===-1)return;
+    var iniISO=colIdxParaISO(modelFresco.allH,dateAtual,b.start,false);
+    var fimISO=colIdxParaISO(modelFresco.allH,dateAtual,b.start+b.span,true);
+    if(!iniISO||!fimISO){erro='Não coube dentro do expediente do dia -- reduza a duração ou solte numa posição com mais espaço.';return;}
+    updates['ops/'+b.id+'/dataInicioPlanejada']=iniISO;
+    updates['ops/'+b.id+'/dataFimPlanejada']=fimISO;
+    if(b.id===d.opKey&&d.previewLinha!==d.origLinha){
+      updates['ops/'+b.id+'/linha']=configLinhas[d.previewLinha-1]||null;
+    }
+  });
+  if(erro){showToast(erro);renderOpsGrid();return;}
+  if(!Object.keys(updates).length){renderOpsGrid();return;}
+
+  db.ref().update(updates).then(function(){
+    showToast(d.previewLinha!==d.origLinha?'OP movida pra outra linha!':(d.mode==='move'?'OP reposicionada!':'Duração ajustada!'));
+    renderOpsGrid();
+  }).catch(function(err){
+    showToast('Erro ao gravar: '+err.message);
+    renderOpsGrid();
+  });
 }
 
 // Resumo Semanal por Linha da aba OPs -- mesmo componente visual
