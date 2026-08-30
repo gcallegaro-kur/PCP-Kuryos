@@ -135,6 +135,12 @@
     .gantt-block.vinculado{background:#dbeafe;border-left-color:#1e40af}
     .gantt-block.congelado{background:#ede9fe;border-left-color:#7c3aed}
     .gantt-block.zona-fixa{background:#fef3c7;border-left-color:#b45309}
+    .gantt-block.aguardando{background:#fff7e6;border-left-color:#fab219}
+    .gantt-block.atrasado{background:#fee2e2;border-left-color:#dc2626}
+    /* Setup/limpeza entre OPs (Fase 6/8 do plano) -- mesmo padrão visual
+       hachurado de .gantt-cell-pausa, cor de aviso pra distinguir de
+       "pausa de turno". */
+    .gantt-setup{border-radius:6px;min-height:48px;background:repeating-linear-gradient(45deg,transparent,transparent 4px,color-mix(in srgb, var(--warning) 30%, transparent) 4px,color-mix(in srgb, var(--warning) 30%, transparent) 8px);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8a5c00;text-align:center;line-height:1.3}
     .gantt-block.past:not(.done):not(.vinculado){opacity:.6}
     .gantt-block-nome{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .gantt-block-meta{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -271,7 +277,8 @@
 <div class="main">
 
   <div class="top-tabs">
-    <button class="top-tab active" data-tab="grade">📅 Grade Semanal</button>
+    <button class="top-tab active" data-tab="grade">📅 Planejamento de Quantidades</button>
+    <button class="top-tab" data-tab="ops">📦 Planejamento de OPs</button>
     <button class="top-tab" data-tab="agendamento">📋 Agendamento</button>
     <button class="top-tab" data-tab="config">⚙️ Configurações</button>
   </div>
@@ -345,6 +352,51 @@
       </div>
       <div style="overflow-x:auto">
         <div id="weekBoardGrid" class="week-board"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPS -- Fase 6 do plano: mesma interface da Grade acima, mas é só um
+       resultado visual (somente leitura) -- blocos são OPs de verdade
+       (ops/), não pedidos planejados (programacao/). Compartilha a mesma
+       semana/dia selecionados (currentWeekStart/currentDayIdx) da aba
+       Planejamento de Quantidades -- navegar numa reflete na outra. -->
+  <div class="tab-content" id="tabOps">
+    <div class="week-bar">
+      <div style="flex:1"><div class="week-label" id="weekLabelOps">—</div><div class="week-sub" id="weekRangeOps">—</div></div>
+      <button class="week-nav-btn" id="btnPrevOps">← Anterior</button>
+      <button class="week-nav-btn" id="btnTodayOps" style="background:#eff6ff;border-color:#bfdbfe;color:var(--primary)">Hoje</button>
+      <button class="week-nav-btn" id="btnNextOps">Próxima →</button>
+      <button class="week-nav-btn" id="btnPrevDayOps" title="Volta pro dia útil anterior -- de segunda volta direto pra sexta da semana passada">← Dia Anterior</button>
+      <button class="week-nav-btn" id="btnNextDayOps" title="Avança pro próximo dia útil -- de sexta pula direto pra segunda da semana seguinte">Próximo Dia →</button>
+    </div>
+    <div class="summary-grid">
+      <div class="sum-card"><div class="sum-val" id="sumOpsHoje">—</div><div class="sum-lbl">OPs no dia</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumOpsConcluidas">—</div><div class="sum-lbl">Concluídas</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumOpsAtrasadas">—</div><div class="sum-lbl">Atrasadas</div></div>
+      <div class="sum-card"><div class="sum-val" id="sumOpsSetup">—</div><div class="sum-lbl">Setup acumulado no dia</div></div>
+    </div>
+
+    <div class="day-tabs" id="dayTabsOps"></div>
+    <div class="grid-card">
+      <div class="plan-table-wrap">
+        <div id="ganttGridOps" class="gantt-grid"></div>
+      </div>
+      <div style="display:flex;gap:16px;padding:0 16px 14px;font-size:11.5px;color:var(--muted);flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;border-left:3px solid #1e40af;background:#dbeafe"></i>Em produção</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;border-left:3px solid #10b981;background:#f0fdf4"></i>Concluída</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;border-left:3px solid #fab219;background:#fff7e6"></i>Aguardando confirmação do PCP</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;border-left:3px solid #dc2626;background:#fee2e2"></i>Atrasada</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:14px;height:9px;border-radius:2px;background:repeating-linear-gradient(45deg,transparent,transparent 3px,#c9910a 3px,#c9910a 5px)"></i>Setup (medido, form.html)</span>
+      </div>
+    </div>
+
+    <div class="grid-card" id="weekBoardCardOps" style="margin-top:14px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:15px;font-weight:800;color:var(--text)">
+        🗓️ Resumo Semanal por Linha
+      </div>
+      <div style="overflow-x:auto">
+        <div id="weekBoardGridOps" class="week-board"></div>
       </div>
     </div>
   </div>
@@ -829,7 +881,7 @@ function loadOps(){
     opsCache=snap.val()||{};
     lotesMemo={};
     weekLoteAssignMemo={};
-    if(!firstLoad){ updateWeeklySummaryTable(); renderWeekBoard(); renderGrid(); }
+    if(!firstLoad){ updateWeeklySummaryTable(); renderWeekBoard(); renderGrid(); renderOpsGrid(); renderOpsWeekBoard(); }
   });
 }
 
@@ -993,6 +1045,22 @@ function setupGradeControls(){
   });
   document.getElementById('btnPrevDay').addEventListener('click',goToPrevDay);
   document.getElementById('btnNextDay').addEventListener('click',goToNextDay);
+
+  // Fase 6 do plano: "Planejamento de OPs" compartilha a MESMA semana/dia
+  // selecionados (currentWeekStart/currentDayIdx) da aba de Quantidades --
+  // os botões daqui só chamam os mesmos handlers de cima, nada de estado
+  // duplicado pra manter em sincronia.
+  var opsPrev=document.getElementById('btnPrevOps');
+  if(opsPrev){
+    opsPrev.addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,-7);loadWeek();});
+    document.getElementById('btnNextOps').addEventListener('click',function(){currentWeekStart=addDays(currentWeekStart,7);loadWeek();});
+    document.getElementById('btnTodayOps').addEventListener('click',function(){
+      currentWeekStart=getMon(new Date());var dw=new Date().getDay();
+      currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;loadWeek();
+    });
+    document.getElementById('btnPrevDayOps').addEventListener('click',goToPrevDay);
+    document.getElementById('btnNextDayOps').addEventListener('click',goToNextDay);
+  }
 }
 
 // Pula pro próximo/anterior dia ÚTIL, não pro próximo dia do calendário --
@@ -1006,7 +1074,7 @@ function goToNextDay(){
   var pos=workDays.findIndex(function(wd){return wd.idx===currentDayIdx;});
   if(pos!==-1&&pos+1<workDays.length){
     currentDayIdx=workDays[pos+1].idx;
-    buildDayTabs();renderGrid();
+    buildDayTabs();renderGrid();renderOpsGrid();
     return;
   }
   // Já era o último dia útil da semana (ou o dia atual nem é útil) -- avança
@@ -1022,7 +1090,7 @@ function goToPrevDay(){
   var pos=workDays.findIndex(function(wd){return wd.idx===currentDayIdx;});
   if(pos>0){
     currentDayIdx=workDays[pos-1].idx;
-    buildDayTabs();renderGrid();
+    buildDayTabs();renderGrid();renderOpsGrid();
     return;
   }
   // Já era o primeiro dia útil da semana (ou o dia atual nem é útil) --
@@ -1037,6 +1105,9 @@ function loadWeek(){
   var wn=weekNum(currentWeekStart);var fri=addDays(currentWeekStart,4);
   document.getElementById('weekLabel').textContent=wn+'ª SEMANA DE '+currentWeekStart.getFullYear();
   document.getElementById('weekRange').textContent=fmtBR(currentWeekStart)+' — '+fmtBR(fri);
+  var wlo=document.getElementById('weekLabelOps'),wro=document.getElementById('weekRangeOps');
+  if(wlo)wlo.textContent=wn+'ª SEMANA DE '+currentWeekStart.getFullYear();
+  if(wro)wro.textContent=fmtBR(currentWeekStart)+' — '+fmtBR(fri);
   var hs=document.getElementById('headerSub');if(hs)hs.textContent=wn+'ª Semana · '+fmtBR(currentWeekStart)+' a '+fmtBR(fri);
   weekListeners.forEach(function(r){try{r.off();}catch(e){}});weekListeners=[];weekData={};
   regsListeners.forEach(function(r){try{r.off();}catch(e){}});regsListeners=[];weekRegs={};
@@ -1047,8 +1118,8 @@ function loadWeek(){
   // carregamento inicial da semana) — evita reconstruir a tabela inteira a
   // cada atualização em outro dia da semana que não o exibido no momento.
   function maybeRenderGrid(date){
-    if(!initialRenderDone){initialRenderDone=true;renderGrid();return;}
-    if(isCurrentDay(date))renderGrid();
+    if(!initialRenderDone){initialRenderDone=true;renderGrid();renderOpsGrid();return;}
+    if(isCurrentDay(date)){renderGrid();renderOpsGrid();}
   }
   dates.forEach(function(date){
     var ref=db.ref('programacao/'+date);weekListeners.push(ref);
@@ -1080,19 +1151,26 @@ function workDaysOfWeek(weekStart){
   return workDays;
 }
 
+// Constrói as duas barras de dia (Quantidades e OPs) de uma vez -- ambas
+// mostram a mesma semana/dia selecionados (currentWeekStart/currentDayIdx),
+// clicar em qualquer uma das duas re-renderiza os dois grids.
 function buildDayTabs(){
-  var container=document.getElementById('dayTabs');container.innerHTML='';
   var today=toYMD(new Date());
   var workDays=workDaysOfWeek(currentWeekStart);
-  workDays.forEach(function(wd){
-    var ds=toYMD(wd.date);var isBlocked=config.feriados&&config.feriados[ds];
-    var btn=document.createElement('button');
-    btn.className='day-tab'+(wd.idx===currentDayIdx?' active':'')+(ds===today?' is-today':'');
-    var dowIdx=(wd.date.getDay()+6)%7;
-    btn.textContent=DIAS_SHORT[dowIdx]+' '+fmtBR(wd.date)+(isBlocked?' 🚫':'');
-    if(isBlocked)btn.title=config.feriados[ds];
-    (function(idx){btn.addEventListener('click',function(){currentDayIdx=idx;buildDayTabs();renderGrid();});})(wd.idx);
-    container.appendChild(btn);
+  ['dayTabs','dayTabsOps'].forEach(function(containerId){
+    var container=document.getElementById(containerId);
+    if(!container)return;
+    container.innerHTML='';
+    workDays.forEach(function(wd){
+      var ds=toYMD(wd.date);var isBlocked=config.feriados&&config.feriados[ds];
+      var btn=document.createElement('button');
+      btn.className='day-tab'+(wd.idx===currentDayIdx?' active':'')+(ds===today?' is-today':'');
+      var dowIdx=(wd.date.getDay()+6)%7;
+      btn.textContent=DIAS_SHORT[dowIdx]+' '+fmtBR(wd.date)+(isBlocked?' 🚫':'');
+      if(isBlocked)btn.title=config.feriados[ds];
+      (function(idx){btn.addEventListener('click',function(){currentDayIdx=idx;buildDayTabs();renderGrid();renderOpsGrid();});})(wd.idx);
+      container.appendChild(btn);
+    });
   });
 }
 
@@ -1271,6 +1349,241 @@ function buildBlockHTML(block,row,date,isToday,isPast){
     '<div class="gantt-block-nome" title="'+escapeAttr(block.produto||'?')+'">'+escapeHtml(block.produto||'?')+'</div>'+
     '<div class="gantt-block-meta">'+insumoDot+lotePill+'<span>'+fmtNum(totalQty)+' un · '+block.span+'h'+actualTxt+'</span></div>'+
   '</div>';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Planejamento de OPs (Fase 6 do plano) -- MESMA interface da Grade
+// acima (mesmo eixo de horas, mesmo mecanismo de bloco proporcional via
+// grid-column), mas é só um resultado visual (somente leitura): blocos
+// são OPs de verdade (ops/), não pedidos planejados (programacao/), com
+// o tempo de setup medido (form.html, cronômetro já existente) aparecendo
+// como bloco hachurado entre uma OP e a próxima na mesma linha.
+// ════════════════════════════════════════════════════════════════════
+
+// Acha em qual índice de allH um instante ISO cai -- usado pra posicionar
+// os blocos de OP na mesma grade de horas da Grade de Quantidades. Fora
+// do expediente do dia (antes da 1a hora ou depois da última), gruda na
+// borda mais próxima (clampFim controla se é a borda de início ou fim --
+// um evento que começou ontem à noite ainda deve aparecer "grudado" no
+// início do expediente de hoje, não sumir).
+function idxParaHora(allH,iso,clampFim){
+  if(!iso)return null;
+  var d=new Date(iso);
+  if(isNaN(d.getTime()))return null;
+  var hStr=pad2(d.getHours())+':00';
+  var idx=allH.indexOf(hStr);
+  if(idx!==-1)return idx;
+  return clampFim?allH.length-1:0;
+}
+// Índice do fim de um intervalo -- subtrai 1ms antes de perguntar "em qual
+// hora isso cai" pra não incluir a hora seguinte quando o fim bate EXATO
+// numa hora cheia (ex: 07:00–09:00 ocupa as colunas 07h e 08h, não a 09h
+// -- às 09:00 em ponto a produção já não está mais rodando naquela hora).
+// Um fim tipo 09:30 (não bate na hora cheia) continua incluindo a coluna
+// 09h normalmente, já que -1ms não muda o resultado nesse caso.
+function idxParaHoraFim(allH,iso){
+  if(!iso)return null;
+  var d=new Date(iso);
+  if(isNaN(d.getTime()))return null;
+  return idxParaHora(allH,new Date(d.getTime()-1).toISOString(),true);
+}
+
+// Monta os blocos de OP (+ setup medido antes de cada uma) pra 1 dia,
+// mesmo shape de buildDayGanttModel ({allH,pausas,rows}) pra reaproveitar
+// o mesmo laço de renderização.
+function buildDayOpsGanttModel(dateObj){
+  var hp=horasEPausasDoDia(dateObj);
+  var allH=hp.horasAtivas.filter(function(h){return ALL_HOURS.includes(h);})
+    .slice().sort(function(a,b){return ALL_HOURS.indexOf(a)-ALL_HOURS.indexOf(b);});
+  var pausas=hp.pausas;
+  var dateYMD=toYMD(dateObj);
+  var agora=new Date().toISOString();
+
+  var rows=configLinhas.map(function(linhaName,idx){
+    var l=idx+1;
+    var opsDaLinha=Object.keys(opsCache).map(function(k){return {key:k,op:opsCache[k]};}).filter(function(e){
+      var op=e.op;
+      if(!op||op.status==='Cancelado')return false;
+      var linhaOp=op.abertaLinha||op.linha;
+      if(linhaOp!==linhaName)return false;
+      var ini=op.dataInicioReal||op.abertaDesde||op.dataInicioPlanejada;
+      if(!ini)return false;
+      var fim=op.dataFimReal||op.dataFimPlanejada||(op.abertaDesde?agora:null)||ini;
+      // Toca esse dia se o intervalo [ini,fim] cruza [00:00,23:59] de dateYMD.
+      return toYMD(new Date(ini))<=dateYMD&&dateYMD<=toYMD(new Date(fim));
+    });
+
+    var blocks=[];
+    opsDaLinha.forEach(function(e){
+      var op=e.op;
+      var ini=op.dataInicioReal||op.abertaDesde||op.dataInicioPlanejada;
+      var fim=op.dataFimReal||op.dataFimPlanejada||(op.abertaDesde?agora:null)||ini;
+      var startIdx=idxParaHora(allH,ini,false);
+      var endIdx=idxParaHoraFim(allH,fim);
+      if(startIdx==null||endIdx==null)return;
+      if(endIdx<startIdx)endIdx=startIdx;
+      var span=Math.max(endIdx-startIdx+1,1);
+
+      var atrasada=false;
+      if(op.status!=='Concluído'&&op.status!=='Aguardando Confirmação'&&op.dataFimPlanejada){
+        atrasada=new Date(op.dataFimPlanejada).getTime()<Date.now();
+      }
+      var cls=op.status==='Concluído'?'done':(op.status==='Aguardando Confirmação'?'aguardando':(atrasada?'atrasado':'vinculado'));
+
+      // Setup medido (form.html, campoSetupInicio/Fim) -- só a parte
+      // linha (rotulagem fica pra depois, mesmo escopo beta já usado em
+      // computeOpStatus/_syncOpsLoteStatusELinha). Vira um bloco PRÓPRIO,
+      // hachurado, logo antes do bloco de produção.
+      if(op.setupInicio&&op.setupFim){
+        var setupStartIdx=idxParaHora(allH,op.setupInicio,false);
+        var setupEndIdx=idxParaHoraFim(allH,op.setupFim);
+        if(setupStartIdx!=null&&setupEndIdx!=null&&toYMD(new Date(op.setupInicio))<=dateYMD&&dateYMD<=toYMD(new Date(op.setupFim))){
+          if(setupEndIdx<setupStartIdx)setupEndIdx=setupStartIdx;
+          var setupMin=Math.round((new Date(op.setupFim)-new Date(op.setupInicio))/60000);
+          blocks.push({startIdx:setupStartIdx,span:Math.max(setupEndIdx-setupStartIdx+1,1),setup:true,setupMin:setupMin,lote:op.lote||e.key});
+        }
+      }
+
+      blocks.push({startIdx:startIdx,span:span,cls:cls,lote:op.lote||e.key,produto:op.produto||'?',
+        qtdPlanejada:op.qtdPlanejada||0,produzido:getProduzido(op,'linha'),status:op.status||'',opKey:e.key});
+    });
+    blocks.sort(function(a,b){return a.startIdx-b.startIdx;});
+    // Bloco de setup e bloco de produção da MESMA OP podem cair no mesmo
+    // índice de hora (setup rápido, <1h) -- desloca a produção pra não
+    // sobrepor na grade (mesma lógica simples de "empurra pro lado").
+    for(var bi=1;bi<blocks.length;bi++){
+      if(blocks[bi].startIdx<blocks[bi-1].startIdx+blocks[bi-1].span){
+        blocks[bi].startIdx=blocks[bi-1].startIdx+blocks[bi-1].span;
+      }
+    }
+    return {linhaNum:l,linhaName:linhaName,blocks:blocks};
+  });
+  return {allH:allH,pausas:pausas,rows:rows};
+}
+
+function buildOpBlockHTML(block){
+  if(block.setup){
+    return '<div class="gantt-setup" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="Setup medido: '+block.setupMin+'min · OP '+escapeAttr(block.lote)+'">setup<br>'+block.setupMin+'min</div>';
+  }
+  var pct=block.qtdPlanejada?Math.min(100,Math.round(block.produzido/block.qtdPlanejada*100)):0;
+  var lotePill='<span class="gantt-lote-pill">🏷️ '+escapeHtml(block.lote)+'</span>';
+  var statusTxt=block.status==='Concluído'?'concluída':(block.status==='Aguardando Confirmação'?'aguardando PCP':(block.cls==='atrasado'?'atrasada':'em produção'));
+  return '<div class="gantt-block '+block.cls+'" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="'+escapeAttr(statusTxt)+'">'+
+    '<div class="gantt-block-nome" title="'+escapeAttr(block.produto)+'">'+escapeHtml(block.produto)+'</div>'+
+    '<div class="gantt-block-meta">'+lotePill+'<span>'+fmtNum(block.produzido)+(block.qtdPlanejada?' / '+fmtNum(block.qtdPlanejada):'')+' un · '+pct+'%'+'</span></div>'+
+  '</div>';
+}
+
+function renderOpsGrid(){
+  var container=document.getElementById('ganttGridOps');
+  if(!container)return;
+  var date=toYMD(addDays(currentWeekStart,currentDayIdx));
+  var model=buildDayOpsGanttModel(parsYMD(date));
+  var allH=model.allH;
+  if(!allH.length){
+    container.style.display='block';
+    container.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted)">Nenhuma hora configurada. Ajuste em <strong>Configurações</strong>.</div>';
+    return;
+  }
+  container.style.display='grid';
+  container.style.gridTemplateColumns='170px repeat('+allH.length+', minmax(56px,1fr)) 84px';
+
+  var html='<div class="gantt-corner">Linha</div>';
+  allH.forEach(function(h){
+    var isPausa=model.pausas.includes(h);
+    html+='<div class="gantt-hour-hdr'+(isPausa?' is-pausa':'')+'">'+escapeHtml(h)+'</div>';
+  });
+  html+='<div class="gantt-hour-hdr gantt-total-hdr">Total<br>do dia</div>';
+
+  var totOpsHoje=0,totConcluidas=0,totAtrasadas=0,totSetupMin=0;
+  model.rows.forEach(function(row){
+    html+='<div class="gantt-linha-label"><span class="gantt-linha-nome">'+escapeHtml(row.linhaName)+'</span></div>';
+    var covered={};
+    row.blocks.forEach(function(b){for(var k=0;k<b.span;k++)covered[b.startIdx+k]=b;});
+    var ci=0;
+    while(ci<allH.length){
+      var h=allH[ci];
+      if(model.pausas.includes(h)){html+='<div class="gantt-cell-pausa" style="grid-column:'+(ci+2)+'"></div>';ci++;continue;}
+      var block=covered[ci];
+      if(!block){html+='<div class="gantt-cell-empty" style="grid-column:'+(ci+2)+'"></div>';ci++;continue;}
+      html+=buildOpBlockHTML(block);
+      ci+=block.span;
+    }
+    var diaTotal=0;
+    row.blocks.forEach(function(b){
+      if(b.setup){totSetupMin+=b.setupMin;return;}
+      totOpsHoje++;
+      if(b.status==='Concluído')totConcluidas++;
+      if(b.cls==='atrasado')totAtrasadas++;
+      diaTotal+=b.produzido||0;
+    });
+    html+='<div class="gantt-day-total">'+(diaTotal>0?fmtNum(diaTotal):'—')+(diaTotal>0?'<small>un</small>':'')+'</div>';
+  });
+  container.innerHTML=html;
+
+  var s1=document.getElementById('sumOpsHoje'),s2=document.getElementById('sumOpsConcluidas'),
+      s3=document.getElementById('sumOpsAtrasadas'),s4=document.getElementById('sumOpsSetup');
+  if(s1)s1.textContent=totOpsHoje;
+  if(s2)s2.textContent=totConcluidas;
+  if(s3)s3.textContent=totAtrasadas;
+  if(s4)s4.textContent=totSetupMin>0?(totSetupMin+'min'):'—';
+}
+
+// Resumo Semanal por Linha da aba OPs -- mesmo componente visual
+// (.week-board/.wb-*) do Resumo da aba Quantidades, mas cada célula soma
+// o produzido REAL das OPs daquele dia/linha em vez do programado.
+function renderOpsWeekBoard(){
+  var container=document.getElementById('weekBoardGridOps');
+  if(!container)return;
+  var dates=[];for(var i=0;i<7;i++)dates.push(toYMD(addDays(currentWeekStart,i)));
+  var todayYMD=toYMD(new Date());
+
+  // Um buildDayOpsGanttModel por DIA (não por linha x dia) -- a função já
+  // computa todas as linhas de uma vez; chamar de novo pra cada linha
+  // seria refazer o mesmo trabalho N vezes à toa.
+  var modelsByDate={};
+  dates.forEach(function(date){ modelsByDate[date]=buildDayOpsGanttModel(parsYMD(date)); });
+  function opsDoDia(date,linhaName){
+    var row=modelsByDate[date].rows.find(function(r){return r.linhaName===linhaName;});
+    return row?row.blocks.filter(function(b){return !b.setup;}):[];
+  }
+
+  var html='<div class="wb-hdr-corner"></div>';
+  dates.forEach(function(date,i){
+    var isToday=date===todayYMD;
+    html+='<div class="wb-hdr'+(isToday?' is-today':'')+'">'+DIAS_SHORT[i]+' '+fmtBR(parsYMD(date))+'</div>';
+  });
+  html+='<div class="wb-hdr wb-total-hdr">Total</div>';
+
+  var grandTotal=0;
+  configLinhas.forEach(function(linhaName){
+    html+='<div class="wb-linha-lbl">'+escapeHtml(linhaName)+'</div>';
+    var linhaTotal=0;
+    dates.forEach(function(date){
+      var isToday=date===todayYMD;
+      var opsCell=opsDoDia(date,linhaName);
+      var cellQty=opsCell.reduce(function(s,b){return s+(b.produzido||0);},0);
+      linhaTotal+=cellQty;
+      var chips=opsCell.map(function(b){
+        return '<div class="wb-chip'+(b.cls==='done'?' done':(b.cls==='vinculado'?' vinculado':''))+'"><div class="wb-chip-top">🏷️ '+escapeHtml(b.lote)+'</div><div class="wb-chip-qty">'+fmtNum(b.produzido)+' un</div></div>';
+      }).join('');
+      var total=cellQty>0?'<div class="wb-cell-total">'+fmtNum(cellQty)+' un</div>':'';
+      html+='<div class="wb-cell'+(isToday?' is-today':'')+'">'+chips+total+'</div>';
+    });
+    grandTotal+=linhaTotal;
+    html+='<div class="wb-total-col">'+(linhaTotal>0?fmtNum(linhaTotal)+' un':'—')+'</div>';
+  });
+
+  html+='<div class="wb-total-row-lbl">Total</div>';
+  dates.forEach(function(date){
+    var dayTotal=0;
+    configLinhas.forEach(function(linhaName){
+      dayTotal+=opsDoDia(date,linhaName).reduce(function(s,b){return s+(b.produzido||0);},0);
+    });
+    html+='<div class="wb-total-cell">'+(dayTotal>0?fmtNum(dayTotal)+' un':'—')+'</div>';
+  });
+  html+='<div class="wb-grand-total">'+(grandTotal>0?fmtNum(grandTotal)+' un':'—')+'</div>';
+  container.innerHTML=html;
 }
 
 // Delegação de eventos (montada uma única vez) -- o Gantt é reconstruído via
@@ -1554,6 +1867,7 @@ function updateSummary(){
 
   updateWeeklySummaryTable();
   renderWeekBoard();
+  renderOpsWeekBoard();
 }
 
 // Quanto uma meta pode se desviar do padrão do pedido/produto antes de
