@@ -1014,21 +1014,32 @@ em seguida (ver seção 17) depois de fechar o desenho com o usuário.
   `_syncOpsLoteStatusELinha`/`autoAjustarPlanejamento` (auth_check.js),
   "Necessidades de Emissão" (horizonte.html).
 
-### Falta implementar (próximos passos)
+### Implementado e deployado (2026-08-30)
 
-- **Tela "Planejamento de Quantidades"**: hoje é a aba "Grade Semanal"
-  de `planejamento.html` — decidir se vira uma tela própria
-  (renomear/mover) ou se `planejamento.html` É essa tela (renomeando o
-  menu). Reaproveita quase 100% do código existente.
-- **Tela "Planejamento de OPs"**: nova, mesma estrutura de Grade, mas
-  lendo `ops/` (com `dataInicioPlanejada`/`dataFimPlanejada`, Fase 2) em
-  vez de `programacao/` — cada bloco = 1 OP, cor por status real
-  (Em Produção/Concluído/Aguardando Confirmação/Atrasada, usando o que
-  já existe da Fase 7). Bloco de setup entre OPs consecutivas na mesma
-  linha: usar `setupInicio`/`setupFim` já gravado por OP quando
-  existir (dado capturado hoje, nunca mostrado em lugar nenhum — mesmo
-  padrão de "gap de dado existente" da Fase 5), com um valor padrão
-  configurável por linha como fallback (a parte "configurável" da
-  Fase 8, que passa a viver aqui visualmente).
+- ✅ **"Planejamento de Quantidades"**: aba "Grade Semanal" de
+  `planejamento.html` renomeada — mesma tela, mesmo comportamento,
+  zero mudança estrutural (era basicamente isso mesmo, só faltava o
+  nome bater com o resto do plano).
+- ✅ **"Planejamento de OPs"**: nova aba em `planejamento.html`, mesma
+  interface (mesmo `.gantt-grid`/`.gantt-block`, mesma navegação por
+  semana/dia — compartilha `currentWeekStart`/`currentDayIdx` com a
+  aba de Quantidades, sem estado duplicado), mas é só resultado visual
+  (somente leitura): blocos são OPs de verdade (`ops/`), cor por
+  status real (Em Produção/Concluído/Aguardando Confirmação/Atrasada,
+  usando o status da Fase 7). Bloco de setup: usa `setupInicio`/
+  `setupFim` já gravado por OP (dado capturado desde sempre, nunca
+  mostrado em lugar nenhum até agora — mesmo padrão de "gap de dado
+  existente" da Fase 5), aparece como bloco hachurado antes da
+  produção. Testado com harness Node (22 asserções) contra o bloco
+  real extraído do arquivo — pegou e corrigiu um bug de fronteira real
+  (fim exato numa hora cheia contava uma hora a mais) durante o
+  próprio teste.
+
+### Falta implementar
+
+- **Setup com valor padrão configurável por linha** (fallback quando a
+  OP não tem `setupInicio`/`setupFim` medido) — a parte "configurável"
+  da Fase 8 propriamente dita, ainda não construída; hoje só mostra o
+  setup quando foi de fato medido.
 - **Painel de Turno espelhando a grade de OPs** — item já confirmado no
   desenho original (seção 3), ainda não iniciado.
