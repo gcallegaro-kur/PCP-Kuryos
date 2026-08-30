@@ -262,6 +262,13 @@
     </div>
   </div>
 
+  <!-- Fechamento do Dia (Fase 9 do plano) -->
+  <div class="card" id="fechamentoDoDiaCard" style="display:none">
+    <div class="card-title">🔒 Fechamento do Dia</div>
+    <div class="section-note" style="font-size:11.5px;color:var(--muted);margin:-10px 0 14px">Painel de conferência, não de digitação — agrega o que já foi capturado ao longo do dia (apontamento, paradas, encerramento de OP) pra você confirmar e tratar exceções, não preencher de novo.</div>
+    <div id="fechamentoDoDiaBody"></div>
+  </div>
+
   <!-- Meta diaria por linha -->
   <div class="card" id="metaDiariaCard" style="display:none">
     <div class="card-title">Progresso Diário por Linha / Posto</div>
@@ -698,6 +705,7 @@ function renderAll(regs) {
   renderColaboradores(regs, total);
   renderLotes(regs);
   renderMetaDiaria(regs);
+  renderFechamentoDoDia(regs);
   renderProgramacao(progData, regs);
   renderFeed(regs.slice().reverse().slice(0,8));
 }
@@ -1063,6 +1071,83 @@ function renderMetaDiaria(regs) {
   document.getElementById('metaDiariaContent').innerHTML = html;
 }
 
+// Fase 9 do plano (PLANO_PLANEJAMENTO_PCP.md, seção 5): "não deveria ser
+// um formulário novo de digitação -- deveria ser um painel de
+// conferência que já vem pré-preenchido" pelos pontos de controle que já
+// existem (apontamento, paradas via Andon, encerramento de OP). Por
+// linha: produção vs meta, paradas do dia, e o achado que só existe
+// desde a Fase 7 -- OPs que foram fechadas na linha mas ainda esperam o
+// PCP confirmar (opsCache já é lido ao vivo em outro lugar deste
+// arquivo, sem leitura nova do Firebase aqui).
+function renderFechamentoDoDia(regs) {
+  var card = document.getElementById('fechamentoDoDiaCard');
+  if (!card) return;
+  var linesList = cfg.linhas || [];
+  if (!linesList.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  var metasPadrao = cfg.metasPorLinha || {};
+  var todayDateObj = new Date(currentDate + 'T12:00:00');
+  var todayIsWorking = isWorking(todayDateObj);
+
+  var paradasPorLinha = {};
+  paradasDoDia().forEach(function(p) {
+    var l = (p && p.linha) || '—';
+    if (!paradasPorLinha[l]) paradasPorLinha[l] = { count: 0, minutos: 0 };
+    paradasPorLinha[l].count++;
+    paradasPorLinha[l].minutos += (p && p.duracao) || 0;
+  });
+
+  // Não filtra por data -- uma OP "Aguardando Confirmação" é pendência
+  // até alguém agir, não importa há quantos dias ficou parada nesse
+  // estado (se ficou, é ainda MAIS motivo pra aparecer aqui).
+  var opsAguardandoPorLinha = {};
+  Object.keys(opsCache).forEach(function(k) {
+    var op = opsCache[k];
+    if (!op || op.status !== 'Aguardando Confirmação') return;
+    var l = op.abertaLinha || op.linha || '—';
+    if (!opsAguardandoPorLinha[l]) opsAguardandoPorLinha[l] = [];
+    opsAguardandoPorLinha[l].push(op);
+  });
+
+  var html = linesList.map(function(linha) {
+    var qtd = regs.filter(function(r) { return isLinhaDeProducao(r.linha) && r.linha === linha; })
+      .reduce(function(s, r) { return s + (r.quantidade || 0); }, 0);
+    var meta = todayIsWorking ? Number(metasPadrao[linha] || 0) : 0;
+    var pct = meta ? Math.round(qtd / meta * 100) : null;
+    var paradas = paradasPorLinha[linha] || { count: 0, minutos: 0 };
+    var opsAguardando = opsAguardandoPorLinha[linha] || [];
+
+    var problemas = [];
+    if (opsAguardando.length) problemas.push(opsAguardando.length + ' OP(s) aguardando confirmação');
+    if (meta && pct < 80) problemas.push('meta não atingida (' + pct + '%)');
+
+    var statusBadge = problemas.length
+      ? '<span class="badge badge-orange" title="' + escapeAttr(problemas.join(' · ')) + '">⚠️ ' + problemas.join(' · ') + '</span>'
+      : '<span class="badge badge-green">✓ Tudo certo</span>';
+
+    var opsListHtml = opsAguardando.length
+      ? '<div style="font-size:11px;color:var(--muted);margin-top:5px">' +
+          opsAguardando.map(function(op) { return '🏷️ ' + escapeHtml(op.lote || '') + ' (' + escapeHtml(op.produto || '—') + ')'; }).join(' · ') +
+        '</div>'
+      : '';
+
+    return '<div style="padding:12px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<div style="font-weight:700;font-size:13.5px">' + escapeHtml(linha) + '</div>' +
+        statusBadge +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:4px">' +
+        fmtNum(qtd) + (meta ? ' / ' + fmtNum(meta) + ' un (' + pct + '%)' : ' un') +
+        ' · ' + paradas.count + ' parada(s)' + (paradas.minutos ? ', ' + paradas.minutos + 'min' : '') +
+      '</div>' +
+      opsListHtml +
+    '</div>';
+  }).join('');
+
+  document.getElementById('fechamentoDoDiaBody').innerHTML = html || '<div class="no-data">Nenhuma linha configurada.</div>';
+}
+
 function renderProgramacao(progData, regs) {
   var card = document.getElementById('progCard');
   if (!progData) { card.style.display = 'none'; return; }
@@ -1410,6 +1495,7 @@ dbOnValue(db.ref('config'), function(snap) {
   cfg = snap.val() || {};
   rebuildAndonDashboardGrid();
   renderMetaDiaria(regsData);
+  renderFechamentoDoDia(regsData);
   updateStackedMetas();
   renderTurnosStatus();
 });
@@ -1417,6 +1503,7 @@ dbOnValue(db.ref('config'), function(snap) {
 dbOnValue(db.ref('paradas_historico'), function(snap) {
   paradasHistoricoCache = Object.values(snap.val() || {});
   renderParadas(regsData);
+  renderFechamentoDoDia(regsData);
 });
 
 dbOnValue(db.ref('pedidos'), function(snap) {
@@ -1438,6 +1525,7 @@ dbOnValue(db.ref('ops'), function(snap) {
   opsCache = snap.val() || {};
   renderPedidos(regsData);
   updateAndonUI();
+  renderFechamentoDoDia(regsData);
 });
 
 function linhasDoPedido(pedidoKey) {
