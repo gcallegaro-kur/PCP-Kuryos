@@ -282,8 +282,11 @@ retrabalho.
    aos 95% (a causa raiz do problema original da sessão) foi eliminada
    de vez; só uma confirmação explícita do PCP em `ops.html` grava
    `status:'Concluído'` agora.
-8. **Changeover configurável** com setup padrão inicial por linha, apurado
-   a cada OP/dia.
+8. ✅ **Changeover configurável** com setup padrão inicial por linha,
+   apurado a cada OP/dia. **Concluída e deployada** (ver seção 17) — o
+   "apurado a cada OP/dia" fica coberto pelo próprio tempo MEDIDO
+   (`setupInicio`/`setupFim`, já existia, agora mostrado); o "padrão
+   inicial" é o novo fallback configurável em `admin.html`.
 9. **Fechamento do Dia** — painel de conferência agregado (seção 5).
 10. **Dashboard de KPI agregado** (lista da seção 4, priorizada conforme
     dado disponível).
@@ -1035,11 +1038,20 @@ em seguida (ver seção 17) depois de fechar o desenho com o usuário.
   (fim exato numa hora cheia contava uma hora a mais) durante o
   próprio teste.
 
+### Fase 8 concluída (2026-08-30)
+
+- ✅ **Setup padrão configurável por linha**: novo card em `admin.html`
+  ("Setup Padrão por Linha", 1 campo de minutos por linha, grava em
+  `config/setupPadraoPorLinha`). Usado como fallback em "Planejamento de
+  OPs" só quando a OP não tem `setupInicio`/`setupFim` medido — bloco
+  marcado como "estimado" (prefixo `~`, tooltip explícito), nunca
+  confundido com o dado medido de verdade. Testado com harness Node (30
+  asserções no total, incluindo os casos de fallback aplicado/omitido).
+  **Deployado.**
+
 ### Falta implementar
 
-- **Setup com valor padrão configurável por linha** (fallback quando a
-  OP não tem `setupInicio`/`setupFim` medido) — a parte "configurável"
-  da Fase 8 propriamente dita, ainda não construída; hoje só mostra o
-  setup quando foi de fato medido.
 - **Painel de Turno espelhando a grade de OPs** — item já confirmado no
-  desenho original (seção 3), ainda não iniciado.
+  desenho original (seção 3), ainda não iniciado. É uma mudança de UX no
+  fluxo mais usado do sistema (Painel de Turno, `form.html`) — merece o
+  mesmo cuidado das fases anteriores antes de tocar.
