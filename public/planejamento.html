@@ -578,6 +578,10 @@ var configTurnoHorarios={};
 var configTurnoHorariosFim={};
 var configTurnoHorariosFimSexta={};
 var configTurnoPausas={};
+// Fase 8 do plano: fallback de changeover (admin.html) -- só usado no
+// bloco de setup da grade de OPs quando a OP não tem setupInicio/setupFim
+// medido de verdade.
+var configSetupPadraoPorLinha={};
 var configModoOperacaoTurno='auto';
 var configTurnoFixoNome='';
 var configTurnosExtras={};
@@ -789,6 +793,7 @@ function loadConfig(){
     configTurnoFixoNome = cVal.turnoFixoNome || '';
     configTurnosExtras = cVal.turnosExtras || {};
     configCongelamentoDiasFixos = (cVal.congelamento && cVal.congelamento.diasFixos != null) ? cVal.congelamento.diasFixos : 7;
+    configSetupPadraoPorLinha = cVal.setupPadraoPorLinha || {};
     updateDynamicLinhasUI();
 
     db.ref('config/planejamento').once('value',function(snap){
@@ -1442,6 +1447,22 @@ function buildDayOpsGanttModel(dateObj){
           var setupMin=Math.round((new Date(op.setupFim)-new Date(op.setupInicio))/60000);
           blocks.push({startIdx:setupStartIdx,span:Math.max(setupEndIdx-setupStartIdx+1,1),setup:true,setupMin:setupMin,lote:op.lote||e.key});
         }
+      } else {
+        // Fase 8 do plano: sem cronômetro medido, cai no padrão configurável
+        // por linha (admin.html) como ESTIMATIVA -- mostra encostado antes
+        // do início da OP, dentro do próprio dia (não sabemos a que horas
+        // um setup nunca medido teria começado de verdade, só a duração
+        // configurada; se a OP abre logo na 1a hora do expediente, não tem
+        // onde encaixar a estimativa nesse dia, e ela simplesmente não
+        // aparece -- melhor omitir do que inventar um horário errado).
+        var setupPadraoMin=configSetupPadraoPorLinha[linhaName];
+        if(setupPadraoMin>0&&startIdx>0){
+          var fallbackSpan=Math.max(Math.ceil(setupPadraoMin/60),1);
+          var fallbackStart=Math.max(startIdx-fallbackSpan,0);
+          if(startIdx-fallbackStart>0){
+            blocks.push({startIdx:fallbackStart,span:startIdx-fallbackStart,setup:true,setupMin:setupPadraoMin,lote:op.lote||e.key,estimado:true});
+          }
+        }
       }
 
       blocks.push({startIdx:startIdx,span:span,cls:cls,lote:op.lote||e.key,produto:op.produto||'?',
@@ -1463,7 +1484,9 @@ function buildDayOpsGanttModel(dateObj){
 
 function buildOpBlockHTML(block){
   if(block.setup){
-    return '<div class="gantt-setup" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="Setup medido: '+block.setupMin+'min · OP '+escapeAttr(block.lote)+'">setup<br>'+block.setupMin+'min</div>';
+    var prefixo=block.estimado?'~':'';
+    var tituloOrigem=block.estimado?'estimado (padrão configurado em Admin)':'medido (Painel de Turno)';
+    return '<div class="gantt-setup" style="grid-column:'+(block.startIdx+2)+' / span '+block.span+'" title="Setup '+tituloOrigem+': '+block.setupMin+'min · OP '+escapeAttr(block.lote)+'">setup<br>'+prefixo+block.setupMin+'min</div>';
   }
   var pct=block.qtdPlanejada?Math.min(100,Math.round(block.produzido/block.qtdPlanejada*100)):0;
   var lotePill='<span class="gantt-lote-pill">🏷️ '+escapeHtml(block.lote)+'</span>';

@@ -137,6 +137,14 @@
     <div style="margin-top:16px"><button class="btn btn-success" id="btnSalvarMetas">Salvar Metas</button></div>
   </div>
 
+  <!-- SETUP PADRAO POR LINHA (Fase 8 do plano de Planejamento/PCP) -->
+  <div class="card">
+    <div class="card-title">Setup Padrao por Linha</div>
+    <div class="section-note">Tempo de changeover (setup + limpeza) usado como estimativa em "Planejamento de OPs" quando a OP nao tem o cronometro de setup medido (form.html, Painel de Turno). Nao substitui o tempo real medido -- so preenche a lacuna quando ele nao existe.</div>
+    <div id="setupPadraoContainer"><div class="empty-metas">Cadastre linhas primeiro.</div></div>
+    <div style="margin-top:16px"><button class="btn btn-success" id="btnSalvarSetupPadrao">Salvar Setup Padrao</button></div>
+  </div>
+
   <!-- LINHAS -->
   <div class="card">
     <div class="card-title">Linhas de Producao</div>
@@ -391,7 +399,11 @@ var configData = {
   motivosAtrasoEncerramento: [],
   andonParadaMinutos: 15,
   opAtrasoHoras: 1,
-  emailNotificacoes: []
+  emailNotificacoes: [],
+  // Fase 8 do plano (PLANO_PLANEJAMENTO_PCP.md): fallback de changeover
+  // usado em "Planejamento de OPs" (planejamento.html) só quando a OP não
+  // tem setupInicio/setupFim medido de verdade.
+  setupPadraoPorLinha: {}
 };
 
 // fmtNum vem de shared/utils.js
@@ -1051,7 +1063,48 @@ function renderAll() {
   document.getElementById('iCongelamentoDiasFixos').value = (configData.congelamento && configData.congelamento.diasFixos != null) ? configData.congelamento.diasFixos : 7;
 
   renderMetasPorLinha();
+  renderSetupPadrao();
 }
+
+// Fase 8 do plano: 1 input de minutos por linha, mesmo padrão simples da
+// Seção 1 de renderMetasPorLinha ("Metas Diárias Padrão"), sem o
+// calendário dia-a-dia (não faz sentido pra changeover, que é um valor
+// fixo por linha, não algo que varia dia a dia).
+function renderSetupPadrao() {
+  var container = document.getElementById('setupPadraoContainer');
+  if (!container) return;
+  var linhas = configData.linhas || [];
+  if (!linhas.length) {
+    container.innerHTML = '<div class="empty-metas">Cadastre linhas primeiro.</div>';
+    return;
+  }
+  var setupPadrao = configData.setupPadraoPorLinha || {};
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:10px">';
+  linhas.forEach(function(nome) {
+    var val = setupPadrao[nome] != null ? setupPadrao[nome] : '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px">';
+    html += '<label style="font-weight:600;color:var(--text)">' + nome + ':</label>';
+    html += '<input type="number" class="setup-padrao-input" data-nome="' + nome + '" value="' + val + '" min="0" placeholder="0" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;width:90px;text-align:right;font-size:13px"> <span style="font-size:11px;color:var(--muted)">min</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function salvarSetupPadrao() {
+  var setupPadrao = {};
+  document.querySelectorAll('.setup-padrao-input').forEach(function(input) {
+    var v = parseInt(input.value, 10);
+    if (v > 0) setupPadrao[input.dataset.nome] = v;
+  });
+  configData.setupPadraoPorLinha = setupPadrao;
+  db.ref('config/setupPadraoPorLinha').set(setupPadrao).then(function() {
+    showAlert('Setup padrão salvo! ' + Object.keys(setupPadrao).length + ' linha(s) configurada(s).', 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao salvar setup padrão: ' + err.message, 'danger');
+  });
+}
+document.getElementById('btnSalvarSetupPadrao').addEventListener('click', salvarSetupPadrao);
 
 // Bind tag adding buttons
 document.getElementById('btnAddLinha').addEventListener('click', function() { addItem('linhas', 'iLinha'); });
@@ -1125,6 +1178,7 @@ try {
     configData.checkpointsPorTurno = val.checkpointsPorTurno || 0; // 0 = usa a grade horária completa (comportamento atual)
     configData.andonParadaMinutos = val.andonParadaMinutos || 15;
     configData.opAtrasoHoras = val.opAtrasoHoras || 1;
+    configData.setupPadraoPorLinha = val.setupPadraoPorLinha || {};
     configData.emailNotificacoes = val.emailNotificacoes || [];
     configData.categoriasProduto = val.categoriasProduto || [];
     renderAll();
