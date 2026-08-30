@@ -1173,3 +1173,45 @@ e deployado (Fases 1 a 10). Só resta:
   ao longo da sessão (gaps de fila offline, recuperação de falha parcial em
   lote, acessibilidade, limpeza de código legado) — nenhum bloqueia nada do
   que foi entregue.
+
+## 21. Pós-plano — melhorias pedidas depois das 10 fases (2026-08-30)
+
+Com o plano original encerrado, o usuário pediu 3 melhorias direto na Grade
+de OPs, testando o app já em produção:
+
+1. **Setup ajustável direto na tela** (`planejamento.html`) — clique num
+   bloco de setup estimado (manual ou padrão de linha) abre um modal
+   pequeno pra ajustar os minutos só daquela OP (`ops/{key}.
+   setupMinutosManual`), sem precisar ir em Admin mudar o padrão da linha
+   inteira. **Deployado.**
+2. **"Programação Semanal Consolidada" movida pra baixo** na aba
+   Quantidades (fica depois do "Resumo Semanal por Linha", já que é pouco
+   usada) + corrigido o bug relatado ("digitei 8.000, virou 8.002") — na
+   verdade dois bugs parecidos: a edição da coluna "Programado na Semana"
+   já tinha sido corrigida em 26/08, mas o botão "⚡ Agendar" (auto-
+   agendamento) ainda distribuía um ritmo/hora arredondado igual em toda
+   hora, o que quase nunca soma exato. **Deployado.**
+3. **Arrastar/redimensionar OPs com o mouse**, com empurrar/puxar em
+   cadeia nos blocos seguintes, mudança de linha, e uma etiqueta ao vivo
+   mostrando a taxa (un/h) estimada enquanto arrasta. Revisado antes de
+   implementar via um protótipo interativo (Artifact) com dado de
+   exemplo, pra confirmar o comportamento exato (empurra E puxa, muda de
+   linha, informa a taxa) antes de mexer em dado real de produção.
+   **Deployado** -- ver commit "arrastar/redimensionar OPs direto na
+   Grade de OPs" pros detalhes de regra (que OPs são arrastáveis por
+   status, cadeia de reflow, limite ao mês do dia atual).
+
+Junto: **KPI de setup planejado × realizado** (`dashboard_analise.html`,
+aba Indicadores PCP) — pedido do usuário pra alimentar a calibração de um
+futuro ajuste automático (ML). Só compara OPs com plano explícito por-OP
+(`setupMinutosManual`, o mesmo campo do item 1 acima) E medição real do
+Painel de Turno -- o padrão de linha do Admin fica de fora por ser um
+valor global mutável, não reconstruível retroativamente. **Deployado.**
+
+Nenhum desses 4 itens tinha sido testado num navegador real com clique-e-
+arrasta de verdade (limite do ambiente desta sessão) -- a lógica foi
+validada com harnesses Node contra o bloco de código real (não
+reimplementação), mesmo padrão de rigor de toda a sessão, mas vale
+conferir na prática antes de confiar de olhos fechados. Ponto de
+`standby` (git tag `standby-pre-fase4-planejamento-pcp` + canal de preview
+do Firebase Hosting) segue disponível caso algo precise ser revertido.
