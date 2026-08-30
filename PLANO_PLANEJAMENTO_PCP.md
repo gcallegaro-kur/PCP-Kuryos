@@ -292,8 +292,13 @@ retrabalho.
    uma linha por linha de produção, cruzando produção×meta, paradas do
    dia e OPs em "Aguardando Confirmação" (essa última sem filtro de
    data — é pendência até alguém agir).
-10. **Dashboard de KPI agregado** (lista da seção 4, priorizada conforme
-    dado disponível).
+10. ✅ **Dashboard de KPI agregado** (lista da seção 4, priorizada conforme
+    dado disponível). **Concluída e deployada** (ver seção 19) — nova
+    aba "Indicadores PCP" em `dashboard_analise.html` com os 3 KPIs que já
+    tinham dado pronto sem captura nova (pontualidade de início,
+    rendimento produzido÷planejado, pareto de motivo de parada); os 4
+    restantes da lista da seção 4 ficam pra quando o dado que dependem
+    existir/amadurecer.
 11. **Reavaliar Machine Learning**, só quando houver base de dado limpa
     suficiente.
 
@@ -1097,3 +1102,74 @@ meta 80–99% → NÃO é pendência; paradas contam certo por linha mesmo sem
 produção registrada nela; card oculto sem linhas configuradas).
 
 **Deployado** (`firebase deploy --only hosting`) e enviado pro `main`.
+
+## 19. Fase 10 concluída — Indicadores PCP (2026-08-30)
+
+Nova aba "Indicadores PCP" em `dashboard_analise.html`, ao lado das abas já
+existentes (Visão Geral, Produção, Pedidos, Insumos, Logística, OPs).
+Diferença importante em relação à aba OPs: essa aba nova é **100% dado ao
+vivo do Firebase** (`ops`, `paradas_historico`) — não depende do retrato
+estático que Logística/OPs usam (banner na própria aba deixa isso
+explícito).
+
+Da lista de 8 KPIs propostos na seção 4, implementados os 3 que já tinham
+dado pronto sem exigir nenhuma captura nova:
+
+- **% de OPs pontuais no início + atraso médio quando atrasa** — só entram
+  no cálculo OPs que têm `dataInicioPlanejada` **e** já começaram (mesmo
+  critério do alerta de OP atrasada em `functions/index.js`: sem plano, sem
+  base pra cobrar — a maioria das OPs ainda não tem plano, então a base de
+  cálculo tende a ser pequena por enquanto). Tolerância de 15min pra não
+  contar o tempo normal de setup como atraso.
+- **Rendimento médio (produzido ÷ planejado)**, geral e por linha — o
+  indicador que motivou a conversa original desde o início. Só entram OPs
+  com produção já registrada — uma OP ainda não iniciada não é "rendimento
+  ruim", fica de fora em vez de puxar a média artificialmente pra baixo.
+- **Pareto de motivo de parada**, agregado por período — já existia por
+  turno individual no e-mail de fechamento, nunca tinha virado indicador
+  agregado.
+
+Os 4 KPIs restantes da lista (disponibilidade de linha agregada, aderência
+ao apontamento, setup real vs. padrão, % de dias com Fechamento do Dia
+limpo) ficam pra quando o dado que dependem existir ou amadurecer — não é
+lista pra construir tudo de uma vez (a própria seção 4 já dizia isso).
+
+Reusa a infraestrutura já existente do arquivo: os mesmos filtros de
+período/linha da barra de filtro (`filterOpsLive`/`filterParadasLive`
+espelham `filterProducao`/`filterPedidos`, já existentes), `getProduzido`/
+`computeOpStatus` de `shared/utils.js` (mesma leitura usada em
+`ops.html`/`dashboard.html`, não reimplementada), e o snapshot de `ops` que
+o arquivo já carregava pra outro propósito (`opsCountByPedKey`) — sem
+round-trip extra ao Firebase.
+
+**Testado**: syntax check completo do arquivo; harness Node com o bloco
+real (`filterOpsLive`/`filterParadasLive`/`renderKpis` + o trecho de
+`renderAll` que computa os KPIs/gráficos da aba nova) — 20 asserções em 9
+cenários: pontualidade dentro/fora da tolerância, OP sem plano fica fora da
+base de cálculo (não conta nem a favor nem contra), rendimento ignora OP
+sem produção, agrupamento por linha, pareto ordena e soma minutos certo,
+filtro de linha e de período aplicados corretamente, estado vazio sem
+quebrar.
+
+**Deployado** (`firebase deploy --only hosting`) e enviado pro `main`. Não
+verificado visualmente ao vivo logado no sistema — a página exige login e
+a sessão desta conversa não entra credenciais em nenhuma hipótese; a
+verificação ficou no syntax check + harness Node contra o bloco real, mesmo
+padrão de rigor das fases anteriores.
+
+## 20. Plano do PCP — todas as 10 fases de implementação concluídas
+
+Com a Fase 10 encerrada, todo o sequenciamento da seção 6 está implementado
+e deployado (Fases 1 a 10). Só resta:
+
+- **Fase 11 (Machine Learning)** — deliberadamente fora de escopo por ora,
+  precisa de 2-3 meses de dado limpo e com desvio justificado antes de fazer
+  sentido tentar.
+- **Painel de Turno espelhando a grade de OPs** (`form.html`) — item
+  confirmado no desenho da Fase 6 mas ainda não iniciado; é o fluxo mais
+  usado do sistema no dia a dia, merece uma passada de escopo dedicada
+  antes de tocar, não encaixar apressado no fim de uma sessão longa.
+- Itens de polimento de baixo risco já catalogados em `MELHORIAS_FUTURAS.md`
+  ao longo da sessão (gaps de fila offline, recuperação de falha parcial em
+  lote, acessibilidade, limpeza de código legado) — nenhum bloqueia nada do
+  que foi entregue.
