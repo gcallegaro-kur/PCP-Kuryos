@@ -190,6 +190,7 @@ table tr:hover { background: #f8fafc; }
     <button class="tab" data-tab="insumos">Insumos</button>
     <button class="tab" data-tab="logistica">Logística</button>
     <button class="tab" data-tab="ops">OPs</button>
+    <button class="tab" data-tab="planejamento">Indicadores PCP</button>
   </div>
 
   <section id="overview" class="pane">
@@ -365,6 +366,18 @@ table tr:hover { background: #f8fafc; }
       </div>
     </div>
   </section>
+
+  <!-- ===== Aba Indicadores PCP (Fase 10 do plano — KPIs ao vivo, sem retrato estático) ===== -->
+  <section id="planejamento" class="pane hidden">
+    <div class="card" style="margin-bottom:12px;border-left:3px solid #2456d6;background:#eff4ff">
+      <span style="color:#1e3a8a">ℹ️ Dados ao vivo do Firebase (<code>ops</code>/<code>paradas_historico</code>), mesma fonte das abas Produção/Pedidos — não usa o retrato estático das abas Logística/OPs.</span>
+    </div>
+    <div class="kpi-grid" id="kpi-planejamento"></div>
+    <div class="row">
+      <div class="card"><h3>Rendimento por linha <small>produzido ÷ planejado, OPs com produção no período</small></h3><div id="rendimento-bars"></div></div>
+      <div class="card"><h3>Pareto de motivo de parada <small>minutos parados no período</small></h3><div id="paradas-pareto-bars"></div></div>
+    </div>
+  </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
@@ -407,6 +420,17 @@ function loadFirebaseAndRun() {
     if (typeof apply === 'function') apply(); // re-renderiza o KPI assim que chegar (chega depois do restante)
   }, handleLoadError);
 
+  // Fase 10 do plano (Indicadores PCP) -- independente do restante da cadeia,
+  // não precisa de skuMap/pedidosDb pra nada.
+  db.ref('paradas_historico').once('value', function(parSnap) {
+    const parDb = parSnap.val() || {};
+    RAW.paradasLive = Object.values(parDb).map(p => {
+      const d = _safeDate(p && (p.inicio || p.fim));
+      return Object.assign({}, p, { _d: d, _ymd: d ? d.toISOString().slice(0,10) : null });
+    });
+    if (typeof apply === 'function') apply();
+  }, handleLoadError);
+
   db.ref('produtos').once('value', function(prodSnap) {
     const produtos = prodSnap.val() || {};
     const skuMap = {};
@@ -430,6 +454,25 @@ function loadFirebaseAndRun() {
           // como se ainda tivesse uma emitida de verdade.
           if (!op || !op.skuPedidoKey || op.status === 'Cancelado') return;
           opsCountByPedKey[op.skuPedidoKey] = (opsCountByPedKey[op.skuPedidoKey] || 0) + 1;
+        });
+
+        // Fase 10 do plano (Indicadores PCP) -- mesmo snapshot de `opsDb` já
+        // carregado acima pra opsCountByPedKey, sem round-trip extra ao
+        // Firebase. Ignora Cancelado (não é OP "de verdade" pra indicador
+        // nenhum daqui). getProduzido/computeOpStatus vêm de shared/utils.js
+        // -- mesma leitura usada em ops.html/dashboard.html, não reimplementa.
+        RAW.opsLive = Object.values(opsDb).filter(op => op && op.status !== 'Cancelado').map(op => {
+          const dIni = _safeDate(op.dataInicioPlanejada || op.abertaDesde || op.abertaDesdeRot);
+          const inicioReal = _safeDate(op.abertaDesde || op.abertaDesdeRot);
+          const inicioPlan = _safeDate(op.dataInicioPlanejada);
+          return {
+            lote: op.lote, linha: op.abertaLinha || op.linha || 'S/LINHA',
+            status: computeOpStatus(op), qtdPlanejada: op.qtdPlanejada || 0,
+            produzido: getProduzido(op, 'linha'),
+            inicioPlanMs: inicioPlan ? inicioPlan.getTime() : null,
+            inicioRealMs: inicioReal ? inicioReal.getTime() : null,
+            _ymd: dIni ? dIni.toISOString().slice(0,10) : null,
+          };
         });
 
       // Produto renomeado (troca de SKU em cadastros.html) não reescreve
@@ -923,6 +966,24 @@ function filterPedidos() {
       const q = normalizeSearch(filters.search);
       if (!(normalizeSearch(p.sku||'').includes(q) || normalizeSearch(p.prod||'').includes(q) || normalizeSearch(p.id||'').includes(q))) return false;
     }
+    return true;
+  });
+}
+
+function filterOpsLive() {
+  return (RAW.opsLive || []).filter(op => {
+    if (filters.dateFrom && op._ymd && op._ymd < filters.dateFrom) return false;
+    if (filters.dateTo && op._ymd && op._ymd > filters.dateTo) return false;
+    if (filters.linha.length && !filters.linha.includes(op.linha)) return false;
+    return true;
+  });
+}
+
+function filterParadasLive() {
+  return (RAW.paradasLive || []).filter(p => {
+    if (filters.dateFrom && p._ymd && p._ymd < filters.dateFrom) return false;
+    if (filters.dateTo && p._ymd && p._ymd > filters.dateTo) return false;
+    if (filters.linha.length && !filters.linha.includes(p.linha || 'S/LINHA')) return false;
     return true;
   });
 }
@@ -1580,6 +1641,73 @@ function renderAll() {
     const list = Object.values(orfasUnicas).sort((a,b) => (b.dt||'').localeCompare(a.dt||''));
     orfasTbody.innerHTML = list.slice(0, 300).map(o => `<tr><td><strong>${escapeHtml(o.lot)}</strong></td><td>${escapeHtml(o.sku||'-')}</td><td>${escapeHtml(o.cli||'-')}</td><td>${o.dt ? new Date(o.dt).toLocaleDateString('pt-BR') : '-'}</td><td style="text-align:right">${fmt(o.u||0)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--g)">✓ Tudo casa</td></tr>';
   }
+
+  // ===== Aba Indicadores PCP (Fase 10 do plano) =====
+  const opsFiltradas = filterOpsLive();
+  const paradasFiltradas = filterParadasLive();
+
+  // Pontualidade de início: só entram OPs que TÊM plano E já começaram --
+  // sem plano não tem base pra cobrar (mesmo critério do alerta de OP
+  // atrasada em functions/index.js). Tolerância de 15min pra não marcar
+  // como "atrasada" um início que só demorou o tempo normal de setup.
+  const TOLERANCIA_MIN = 15;
+  const comPlanoEInicio = opsFiltradas.filter(o => o.inicioPlanMs != null && o.inicioRealMs != null);
+  const pontuais = comPlanoEInicio.filter(o => o.inicioRealMs <= o.inicioPlanMs + TOLERANCIA_MIN * 60000);
+  const atrasadas = comPlanoEInicio.filter(o => o.inicioRealMs > o.inicioPlanMs + TOLERANCIA_MIN * 60000);
+  const pctPontualidade = comPlanoEInicio.length ? Math.round(pontuais.length / comPlanoEInicio.length * 100) : null;
+  const atrasoMedioMin = atrasadas.length
+    ? atrasadas.reduce((s,o) => s + (o.inicioRealMs - o.inicioPlanMs) / 60000, 0) / atrasadas.length
+    : null;
+
+  // Rendimento: só OPs com planejado>0 e alguma produção já registrada --
+  // uma OP ainda não iniciada não é "rendimento ruim", é só ainda não
+  // começou (fica de fora da média em vez de puxá-la artificialmente pra
+  // baixo).
+  const comProducao = opsFiltradas.filter(o => o.qtdPlanejada > 0 && o.produzido > 0);
+  const rendimentoMedioPct = comProducao.length
+    ? Math.round(comProducao.reduce((s,o) => s + o.produzido/o.qtdPlanejada, 0) / comProducao.length * 100)
+    : null;
+
+  const paradasMin = paradasFiltradas.reduce((s,p) => s + (p.duracao||0), 0);
+
+  renderKpis('kpi-planejamento', [
+    {label: '% OPs pontuais no início', value: pctPontualidade != null ? pctPontualidade + '%' : '—', sub: comPlanoEInicio.length + ' OP(s) com plano e início registrados · tolerância ' + TOLERANCIA_MIN + 'min'},
+    {label: 'Atraso médio no início', value: atrasoMedioMin != null ? fmt1(atrasoMedioMin) + ' min' : '—', sub: atrasadas.length + ' OP(s) atrasada(s) no período'},
+    {label: 'Rendimento médio', value: rendimentoMedioPct != null ? rendimentoMedioPct + '%' : '—', sub: comProducao.length + ' OP(s) produzido ÷ planejado'},
+    {label: 'Paradas no período', value: fmt(paradasFiltradas.length), sub: paradasMin ? fmt(paradasMin) + ' min parados' : 'sem minutos registrados'},
+  ]);
+
+  const rendBars = document.getElementById('rendimento-bars');
+  if (rendBars) {
+    const porLinha = {};
+    comProducao.forEach(o => {
+      if (!porLinha[o.linha]) porLinha[o.linha] = {soma: 0, n: 0};
+      porLinha[o.linha].soma += o.produzido/o.qtdPlanejada;
+      porLinha[o.linha].n++;
+    });
+    const linhasRend = Object.entries(porLinha).map(([lin, v]) => ({lin, pct: v.soma/v.n*100, n: v.n})).sort((a,b) => b.pct - a.pct);
+    if (linhasRend.length) {
+      rendBars.innerHTML = linhasRend.map((r,i) => `<div class="bar-row"><div class="lbl">${escapeHtml(r.lin)}</div>
+        <div class="bar"><div class="bar-fill" style="width:${Math.min(100, r.pct).toFixed(0)}%;background:${colorForLinha(r.lin, i)}">${fmt1(r.pct)}%</div></div>
+        <div class="pct">${r.n} OP(s)</div></div>`).join('');
+    } else rendBars.innerHTML = '<div class="empty">Sem OPs com produção registrada no período</div>';
+  }
+
+  const paretoBars = document.getElementById('paradas-pareto-bars');
+  if (paretoBars) {
+    const porMotivo = {};
+    paradasFiltradas.forEach(p => {
+      const m = p.motivo || p.motivoParada || '—';
+      porMotivo[m] = (porMotivo[m] || 0) + (p.duracao || 0);
+    });
+    const motivos = Object.entries(porMotivo).sort((a,b) => b[1]-a[1]).slice(0, 12);
+    if (motivos.length) {
+      const max = Math.max(...motivos.map(m => m[1]));
+      paretoBars.innerHTML = motivos.map((m,i) => `<div class="bar-row"><div class="lbl">${escapeHtml(m[0])}</div>
+        <div class="bar"><div class="bar-fill" style="width:${max ? (m[1]/max*100).toFixed(0) : 0}%;background:${COLORS[i%COLORS.length]}">${fmt(m[1])}min</div></div>
+        <div class="pct"></div></div>`).join('');
+    } else paretoBars.innerHTML = '<div class="empty">Sem paradas registradas no período</div>';
+  }
 }
 
 function resetFilters() {
@@ -1620,7 +1748,7 @@ function initDashboard() {
   setupMultiSelect('categoria', distinct(RAW.producao, 'cat'));
   setupMultiSelect('subcategoria', distinct(RAW.producao, 'sub'));
   setupMultiSelect('viscosidade', distinct(RAW.producao, 'visc'));
-  const linhas = new Set([...RAW.producao.map(p => p.lin || 'S/LINHA'), ...RAW.pedidos.map(p => p.lin || 'S/LINHA')]);
+  const linhas = new Set([...RAW.producao.map(p => p.lin || 'S/LINHA'), ...RAW.pedidos.map(p => p.lin || 'S/LINHA'), ...(RAW.opsLive||[]).map(o => o.linha), ...(RAW.paradasLive||[]).map(p => p.linha || 'S/LINHA')]);
   setupMultiSelect('linha', [...linhas].filter(v => v));
   setupMultiSelect('status', distinct(RAW.pedidos, 'status'));
   setupMultiSelect('servico', distinct(RAW.pedidos, 'serv'));
