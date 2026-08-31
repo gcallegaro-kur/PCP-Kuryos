@@ -152,6 +152,30 @@ escopo por enquanto:
   design ainda não tomada (Painel de Turno = multi-operador vs. Modo
   Avançado = uso administrativo?). Decidir ao unificar os 3 fluxos
   (Fase 3, já mapeado em `PLANO_PLANEJAMENTO_PCP.md`).
+- **Sincronizar OP arrastada (Planejamento de OPs) com as horas
+  programadas do pedido (Planejamento de Quantidades)** — hoje são duas
+  fontes independentes pra essencialmente a mesma informação: o arrasto
+  de uma OP (`planejamento.html`, seção "pós-plano") só grava
+  `dataInicioPlanejada`/`dataFimPlanejada`/`linha` na própria OP, sem
+  tocar nos slots de `programacao/` que a Grade de Quantidades usa pra
+  mostrar "Horas Programadas"/"Programado na Semana" daquele pedido. Se a
+  OP esticar/encolher/mudar de horário, os dois números podem passar a
+  discordar sem ninguém perceber. Usuário apontou o risco e confirmou a
+  direção pra quando isso for implementado: **sincronização automática
+  nos dois sentidos** — arrastar a OP livre, mas a mudança se propaga
+  sozinha de volta pra reescrever os slots de `programacao/` daquele
+  pedido/dia/linha (não trava o arrasto, não exige reconciliação manual).
+  Adiado deliberadamente pelo usuário ("tirar a trava da programação por
+  ora... deixar isto como melhoria pra depois, quando tivermos a operação
+  mais madura") — por enquanto o arrastar de OP fica sem nenhuma
+  validação cruzada com a Grade de Quantidades. Ao retomar: como um
+  pedido pode virar N OPs (Fase 6), o design final precisa decidir como
+  atribuir/dividir os slots de `programacao/` entre múltiplas OPs do
+  mesmo pedido sem um já ter uma noção de "quais horas são minhas" hoje —
+  provavelmente reaproveitando a técnica de distribuição exata já usada
+  em `applyExactQtdToWeekSlots`/`writeLoteIntoWeekSlots`, com detecção de
+  conflito (não sobrescrever silenciosamente slot de outro pedido) antes
+  de gravar.
 
 ## Admin / Configuração
 
