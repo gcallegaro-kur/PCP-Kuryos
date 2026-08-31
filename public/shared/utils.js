@@ -1273,3 +1273,98 @@ function montarFichasOP(op, formulaItens, especs, msAnvisa) {
   var itensTodos = Object.values(op.materiaisConsumo || {});
   return paginaOP1(op) + paginaOF(op, formulaItens, especs) + paginaOrdemEnvase(op, itensTodos, msAnvisa) + paginaRotulagem(op, itensTodos) + paginaRelatorioPA(op, especs);
 }
+
+/* ── Etiqueta de caixa de embarque (código de barras Code 39) ──
+   Pedido do usuário: "minimizaria muitos dos erros que temos hoje, de
+   impressão errada de etiqueta" -- em vez de exigir que alguém digite os
+   dados da caixa à mão de novo (fonte do erro), a etiqueta é gerada
+   automaticamente com o que já está gravado na própria OP.
+
+   Code 39 escolhido em vez de Code 128/QR: é o formato mais simples de
+   implementar corretamente do zero (cada caractere tem um padrão FIXO e
+   independente, sem checksum obrigatório nem tabela de correção de erro
+   como QR) -- ISO/IEC 16388, suporta 0-9/A-Z/espaço/-.$/+%. Ainda assim,
+   ATENÇÃO: essa tabela foi escrita de memória, não gerada por uma lib
+   testada em campo -- validar com leitor de código de barras real antes
+   de confiar em produção. Se algum caractere não ler certo, é a linha
+   dele nesta tabela que precisa ajustar, o resto do mecanismo (SVG,
+   contagem de caixas, layout) não muda. */
+var CODE39_PATTERNS = {
+  '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
+  '4': 'nnnwwnnnw', '5': 'wnnwwnnnn', '6': 'nnwwwnnnn', '7': 'nnnwnnwnw',
+  '8': 'wnnwnnwnn', '9': 'nnwwnnwnn',
+  'A': 'wnnnnwnnw', 'B': 'nnwnnwnnw', 'C': 'wnwnnwnnn', 'D': 'nnnnwwnnw',
+  'E': 'wnnnwwnnn', 'F': 'nnwnwwnnn', 'G': 'nnnnnwwnw', 'H': 'wnnnnwwnn',
+  'I': 'nnwnnwwnn', 'J': 'nnnnwwwnn', 'K': 'wnnnnnnww', 'L': 'nnwnnnnww',
+  'M': 'wnwnnnnwn', 'N': 'nnnnwnnww', 'O': 'wnnnwnnwn', 'P': 'nnwnwnnwn',
+  'Q': 'nnnnnnwww', 'R': 'wnnnnnwwn', 'S': 'nnwnnnwwn', 'T': 'nnnnwnwwn',
+  'U': 'wwnnnnnnw', 'V': 'nwwnnnnnw', 'W': 'wwwnnnnnn', 'X': 'nwnnwnnnw',
+  'Y': 'wwnnwnnnn', 'Z': 'nwwnwnnnn',
+  '-': 'nwnnnnwnw', '.': 'wwnnnnnwn', ' ': 'nwwnnnwnn', '$': 'nwnwnwnnn',
+  '/': 'nwnwnnwnn', '+': 'nwnnnwnwn', '%': 'nnnwnwnwn',
+  '*': 'nwnnwnwnn' // start/stop
+};
+// Só o que a Kuryos realmente usa em lote/SKU (dígitos, A-Z, "/") tem
+// garantia de leitura razoável -- qualquer outro caractere vira "-".
+function code39Sanitizar(texto) {
+  return String(texto || '').toUpperCase().split('').map(function(c) {
+    return CODE39_PATTERNS[c] ? c : (c === ' ' ? ' ' : '-');
+  }).join('');
+}
+// Gera o SVG do código de barras (largura em módulos: barra estreita = 1
+// módulo, larga = 3 módulos, mesma proporção clássica do Code 39).
+function code39Svg(texto, alturaMm, moduloMm) {
+  alturaMm = alturaMm || 12; moduloMm = moduloMm || 0.33;
+  var conteudo = '*' + code39Sanitizar(texto) + '*'; // start/stop obrigatórios
+  var x = 0;
+  var barras = [];
+  conteudo.split('').forEach(function(ch, idx) {
+    var padrao = CODE39_PATTERNS[ch] || CODE39_PATTERNS['-'];
+    for (var i = 0; i < padrao.length; i++) {
+      var largura = (padrao[i] === 'w' ? 3 : 1) * moduloMm;
+      var ehBarra = i % 2 === 0; // Code 39 sempre começa e intercala em barra
+      if (ehBarra) barras.push('<rect x="' + x.toFixed(3) + '" y="0" width="' + largura.toFixed(3) + '" height="' + alturaMm + '" fill="#000"/>');
+      x += largura;
+    }
+    x += moduloMm; // espaço estreito fixo entre caracteres
+  });
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + x.toFixed(2) + 'mm" height="' + alturaMm + 'mm" viewBox="0 0 ' + x.toFixed(2) + ' ' + alturaMm + '">' + barras.join('') + '</svg>';
+}
+
+// Quantas etiquetas gerar -- 1 por caixa de embarque, calculado a partir
+// do que já está gravado na OP (peças ÷ peças-por-caixa do cadastro do
+// produto, arredondado pra cima -- mesmo princípio "nunca falta caixa"
+// já aplicado ao consumo de embalagem). Sem peças-por-caixa cadastrado,
+// gera 1 etiqueta só (fallback honesto, não inventa uma contagem).
+function totalCaixasDaOP(op) {
+  var pecasPorCaixa = op.pecasPorCaixa || 0;
+  if (!pecasPorCaixa || !op.qtdPlanejada) return 1;
+  return Math.max(1, Math.ceil(op.qtdPlanejada / pecasPorCaixa));
+}
+
+function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
+  var qtdNestaCaixa = op.pecasPorCaixa
+    ? (numeroCaixa < totalCaixas ? op.pecasPorCaixa : (op.qtdPlanejada - op.pecasPorCaixa * (totalCaixas - 1)))
+    : op.qtdPlanejada;
+  return '<div class="etiqueta-page">' +
+    '<div class="etq-header"><b>' + escapeHtml(op.cliente || '—') + '</b><span>Caixa ' + numeroCaixa + ' de ' + totalCaixas + '</span></div>' +
+    '<div class="etq-produto">' + escapeHtml(op.produto || '—') + '</div>' +
+    '<div class="etq-grid">' +
+      '<div><span class="etq-lbl">SKU</span><span class="etq-val">' + escapeHtml(op.sku || '—') + '</span></div>' +
+      '<div><span class="etq-lbl">Lote</span><span class="etq-val">' + escapeHtml(op.lote || '—') + '</span></div>' +
+      '<div><span class="etq-lbl">Qtde. nesta caixa</span><span class="etq-val">' + fmtNum(qtdNestaCaixa) + ' un.</span></div>' +
+      '<div><span class="etq-lbl">Validade</span><span class="etq-val">' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</span></div>' +
+    '</div>' +
+    '<div class="etq-barcode">' + code39Svg(op.lote || '') + '<div class="etq-barcode-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
+  '</div>';
+}
+
+// Ponto de entrada -- 1 página por caixa, cada uma com "Caixa X de Y" pra
+// quem confere na expedição saber se falta alguma.
+function montarEtiquetasCaixa(op) {
+  if (!op) return '';
+  var total = totalCaixasDaOP(op);
+  var paginas = '';
+  for (var i = 1; i <= total; i++) paginas += paginaEtiquetaCaixa(op, i, total);
+  return paginas;
+}

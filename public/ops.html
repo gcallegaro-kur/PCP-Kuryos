@@ -348,6 +348,18 @@
     .print-sign-line{display:inline-block;border-bottom:1px solid #333;min-width:160px;margin-left:6px}
     .print-blank-table td{height:22px}
     .print-check{display:inline-block;width:11px;height:11px;border:1px solid #333;margin-right:4px;vertical-align:middle}
+    /* Etiqueta de caixa de embarque -- mesmo bloco de emitir_op.html, ver
+       comentário lá pra detalhe de por que é @page nomeada. */
+    @page etiqueta { size: 100mm 150mm; margin: 3mm; }
+    .etiqueta-page{page:etiqueta;page-break-after:always;width:94mm;height:144mm;box-sizing:border-box;font-family:Arial,sans-serif;display:flex;flex-direction:column;justify-content:space-between}
+    .etiqueta-page:last-child{page-break-after:auto}
+    .etq-header{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;border-bottom:2px solid #000;padding-bottom:4px}
+    .etq-produto{font-size:16px;font-weight:700;margin:8px 0;line-height:1.25}
+    .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;margin:8px 0}
+    .etq-lbl{display:block;color:#555;font-size:9px;text-transform:uppercase}
+    .etq-val{display:block;font-weight:700;font-size:13px}
+    .etq-barcode{text-align:center;margin-top:auto}
+    .etq-barcode-txt{font-size:11px;letter-spacing:2px;margin-top:2px}
   }
 
 </style>
@@ -1229,6 +1241,9 @@
           ${op.materiaisConsumo
             ? `<button class="btn-edit-inline" onclick="reimprimirFichas('${escapedKeyAttr}')" title="Reimprimir as 5 fichas desta OP (só disponível pras emitidas por Emitir OP -- OP vinda do Excel não tem esse dado gravado)">🖨️</button>`
             : ``}
+          ${op.materiaisConsumo
+            ? `<button class="btn-edit-inline" onclick="reimprimirEtiquetas('${escapedKeyAttr}')" title="Reimprimir etiquetas de caixa de embarque desta OP">🏷️</button>`
+            : ``}
           ${isAdmin
             ? (!isCancelada
                 ? `<button class="btn-cancel-op" onclick="cancelOp('${escapedKeyAttr}')" title="Cancelar OP (mantém o registro, some das listas ativas)">🚫</button>`
@@ -1273,6 +1288,21 @@
       console.error('Falha ao montar fichas pra reimpressão da OP ' + opKey + ':', err);
       showToast('Erro ao montar as fichas -- tente de novo.');
     });
+  }
+
+  // Reimprime as etiquetas de caixa de embarque -- não depende de
+  // formulas/especificacoes (só do que já está na própria OP:
+  // pecasPorCaixa, lote, sku, produto, cliente, validade), então não
+  // precisa nem buscar nada no Firebase, diferente de reimprimirFichas.
+  function reimprimirEtiquetas(opKey) {
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    if (!op.materiaisConsumo) {
+      showToast('Esta OP foi emitida pelo Excel -- não tem os dados que as etiquetas precisam.');
+      return;
+    }
+    document.getElementById('printArea').innerHTML = montarEtiquetasCaixa(op);
+    window.print();
   }
 
   // O vínculo com pedido comercial agora vem preenchido sozinho (derivado do

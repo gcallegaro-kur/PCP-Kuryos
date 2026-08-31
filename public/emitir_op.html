@@ -89,6 +89,21 @@
       .print-fill-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:10px 0;font-size:11px}
       .print-blank-table td{height:22px}
       .print-check{display:inline-block;width:11px;height:11px;border:1px solid #333;margin-right:4px;vertical-align:middle}
+      /* Etiqueta de caixa de embarque -- página nomeada (CSS Paged Media)
+         com tamanho PRÓPRIO (100x150mm, etiqueta térmica padrão), diferente
+         do A4 das 5 fichas -- os dois tipos de página coexistem no mesmo
+         #printArea, cada elemento pega o tamanho certo pela classe.
+         Suportado em navegadores Chromium (o que a fábrica já usa hoje). */
+      @page etiqueta { size: 100mm 150mm; margin: 3mm; }
+      .etiqueta-page{page:etiqueta;page-break-after:always;width:94mm;height:144mm;box-sizing:border-box;font-family:Arial,sans-serif;display:flex;flex-direction:column;justify-content:space-between}
+      .etiqueta-page:last-child{page-break-after:auto}
+      .etq-header{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;border-bottom:2px solid #000;padding-bottom:4px}
+      .etq-produto{font-size:16px;font-weight:700;margin:8px 0;line-height:1.25}
+      .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;margin:8px 0}
+      .etq-lbl{display:block;color:#555;font-size:9px;text-transform:uppercase}
+      .etq-val{display:block;font-weight:700;font-size:13px}
+      .etq-barcode{text-align:center;margin-top:auto}
+      .etq-barcode-txt{font-size:11px;letter-spacing:2px;margin-top:2px}
     }
     @media(max-width:600px){.form-grid{grid-template-columns:1fr}.resumo-grid{grid-template-columns:1fr 1fr}}
   </style>
@@ -200,8 +215,9 @@
   <div id="cardSucesso" class="card" style="display:none;text-align:center">
     <div style="font-size:32px">✅</div>
     <div style="font-size:18px;font-weight:700;margin:8px 0">OP <span id="loteEmitido"></span> emitida com sucesso</div>
-    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnImprimir">🖨 Abrir documento pra impressão</button>
+      <button class="btn btn-primary" id="btnImprimirEtiquetas">🏷️ Imprimir etiquetas de caixa</button>
       <button class="btn btn-ghost" id="btnNovaOp">Emitir outra OP</button>
     </div>
   </div>
@@ -813,6 +829,7 @@ function montarDadosOP(lote, janela) {
     bomVersao: formulaEscolhida ? formulaEscolhida.versao : null,
     massaLoteKg: calc.massaLoteKg, volumeGranelL: calc.volumeGranelL,
     pesoTeoricoUnG: calc.pesoTeoricoUnG, volumeTeoricoUnMl: calc.volumeTeoricoUnMl,
+    pecasPorCaixa: produtoSelecionado.unCx || 0, // pra gerar as etiquetas de caixa de embarque (ver montarEtiquetasCaixa em shared/utils.js)
     densidadeGranelUsada: calc.densidadeGranelUsada, overfillPctUsado: calc.overfillPctUsado,
     perdaProcessoPctUsado: calc.perdaProcessoPctUsado, validade: calc.validade,
     materiaisConsumo: materiaisConsumo
@@ -971,6 +988,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnEmitir').addEventListener('click', emitirOP);
   document.getElementById('btnImprimir').addEventListener('click', function() {
     document.getElementById('printArea').innerHTML = montarDocumentoImpressao();
+    window.print();
+  });
+  document.getElementById('btnImprimirEtiquetas').addEventListener('click', function() {
+    if (!opJaEmitida) return;
+    document.getElementById('printArea').innerHTML = montarEtiquetasCaixa(opJaEmitida);
     window.print();
   });
   document.getElementById('btnNovaOp').addEventListener('click', function() { location.reload(); });
