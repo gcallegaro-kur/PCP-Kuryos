@@ -1345,3 +1345,15 @@ Testado: harness Node do bloco real -- 26 asserções, incluindo
 regressão direta do bug reportado, o loop de auto-seleção, e a
 confirmação obrigatória (com cancelamento real abortando a emissão).
 **Deployado e no `main`.**
+
+**Quarto complemento (mesmo dia): `horizonte.html` desativado.** Usuário
+confirmou o achado acima como o motivo de já ter pedido isso antes: "não
+é utilizado para nada hoje... nem vale pensar em mecânicas envolvendo o
+horizonte de produção, ele é só mais uma tela de dash". Tirado do menu
+(`auth_check.js`) -- página em si continua existindo (dados históricos
+preservados), com um banner avisando que foi desativada pra quem chegar
+por link direto. Confirmado por grep que nenhuma outra tela depende de
+`horizonte.html` rodar. Sobre a sugestão de múltiplos pedidos do mesmo
+SKU acumulados: **já funciona** -- o card 2 de `emitir_op.html` lista
+todos os pedidos elegíveis, auto-seleciona o de maior prioridade, e
+qualquer outro é um clique (nenhuma mudança de código precisou).
