@@ -119,10 +119,10 @@
     </div>
   </div>
 
-  <!-- 2. Vincular a um pedido programado -->
+  <!-- 2. Vincular a um pedido -->
   <div id="cardAlocacao" class="card" style="display:none">
-    <div class="card-title">2. Vincular a um pedido programado</div>
-    <div class="field-hint" style="margin-bottom:10px">Se essa quantidade já foi programada na Grade de Quantidades, vincule aqui -- a OP nasce já com linha e data no planejamento, sem precisar copiar código nenhum de outra tela. Emitir sem vincular também é permitido (OP avulsa).</div>
+    <div class="card-title">2. Vincular a um pedido</div>
+    <div class="field-hint" style="margin-bottom:10px">Toda OP deve sair vinculada a um pedido -- é assim que ele conta como atendido e a OP fica rastreável. "Emitir sem vincular" é só pra exceção de verdade (amostra, teste, retrabalho sem pedido).</div>
     <div id="alocacaoLista"></div>
   </div>
 
@@ -223,11 +223,12 @@ kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 
 var allProdutos = {}, allMateriais = {}, allFormulas = {}, allBom = {}, allEspecificacoes = {}, configData = {};
-var allAlocacoes = {}, allOps = {}, configPlanejamento = {diasSemana:[1,2,3,4,5], feriados:{}};
+var allAlocacoes = {}, allOps = {}, allPedidos = {}, configPlanejamento = {diasSemana:[1,2,3,4,5], feriados:{}};
 var produtoSelecionado = null; // {key, ...campos}
 var formulaEscolhida = null;   // registro de formulas/ escolhido (APROVADA de preferência)
 var bomEscolhido = null;
-var alocacaoSelecionada = null; // {id, ...campos de alocacoes_planejamento} ou null (OP avulsa)
+var pedidoVinculado = null; // {pedidoKey, pedido, aloc} -- aloc é opcional (só se houver bloco congelado casando). null = OP avulsa.
+var vinculoJaEscolhido = false; // true assim que alguma seleção (automática ou manual) acontece pro produto atual -- ver renderAlocacoesDoProduto
 var calc = null;               // resultado do dimensionamento
 var materiaisConsumo = {};     // itemKey local -> {mpCodigo, mpNome, quantidade, unidade, origem, substituiMpCodigo}
 var opJaEmitida = null;        // dados da OP recém-emitida, pra imprimir
@@ -268,61 +269,98 @@ function renderProdutoResultados(termo) {
 }
 
 /* ── Vínculo com Programação (Fase 1 do plano "Emissão de OP nativa") ──
-   alocacoes_planejamento/{id} só grava pedidoKey/qtd/linha/semanaISO/status
-   (ver horizonte.html, onde é criada) -- pedidoKey é sanitizeKey(pedidoComercialId)
-   + "__" + sanitizeKey(sku), o mesmo formato que linkAlocacaoToOP
-   (functions/index.js) já usa pro VBA. Não existe um pedidoComercialId
-   legível gravado na própria alocação -- mostra semana/linha/quantidade,
-   que é o que a PCP already usa pra reconhecer o bloco certo em
-   horizonte.html, em vez de tentar reconstruir um rótulo que pode não bater
-   exatamente com o texto original (sanitizeKey não é reversível). */
-function codigoDaAlocacao(id) { return 'NEC-' + id.slice(-6).toUpperCase(); }
-
+   Achado do usuário, corrigindo a primeira versão desta tela: ela só
+   oferecia vínculo via alocacoes_planejamento (bloco "congelado" em
+   horizonte.html) -- só que esse nó está VAZIO em produção (ninguém usa
+   o botão de congelar ainda), então TODA emissão caía em "sem vincular"
+   por padrão, mesmo com pedido ativo esperando. O pedido do usuário foi
+   claro: "sempre temos que emitir OPs com pedido vinculado, só em
+   extremas exceções" -- então o vínculo primário agora é direto no
+   `pedidos/{key}`, sem depender de ninguém ter congelado nada antes.
+   A key do próprio nó pedidos/{key} já É o skuPedidoKey que o resto do
+   sistema usa (mesmo formato de functions/index.js: sanitizeKey(id) +
+   "__" + sanitizeKey(sku)) -- não precisa reconstruir nada.
+   alocacoes_planejamento continua consultado como ENRIQUECIMENTO
+   opcional: se existir um bloco congelado pra esse pedido específico,
+   ele empresta linha/semana pra auto-programação e é consumido
+   (qtdConsumida) como antes; se não existir (caso comum hoje), o
+   vínculo com o pedido acontece do mesmo jeito, só sem auto-programação
+   automática (a OP cai na fila "OPs aguardando programação", igual
+   qualquer emissão sem alocação já caía). */
 function fmtDataBRCurta(ymd) {
   if (!ymd) return '—';
   var p = ymd.split('-');
   return p.length === 3 ? (p[2] + '/' + p[1]) : ymd;
 }
 
-function alocacoesDoProduto(sku) {
-  var sufixo = '__' + sanitizeKey(sku);
-  return Object.keys(allAlocacoes).filter(function(id) {
-    var a = allAlocacoes[id];
-    if (!a || a.status !== 'congelado' || !a.pedidoKey) return false;
-    if (a.pedidoKey.indexOf(sufixo) === -1) return false;
-    return ((a.qtd || 0) - (a.qtdConsumida || 0)) > 0;
-  }).sort(function(x, y) { return (allAlocacoes[x].semanaISO || '').localeCompare(allAlocacoes[y].semanaISO || ''); });
+function pedidosDoProduto(sku) {
+  return Object.keys(allPedidos).filter(function(key) {
+    var p = allPedidos[key];
+    if (!p || p.sku !== sku || isConcluido(p)) return false;
+    return ((p.qtdTotal || 0) - (p.produzido || 0)) > 0;
+  }).sort(function(x, y) {
+    var pa = allPedidos[x].priority, pb = allPedidos[y].priority;
+    if (pa == null && pb == null) return 0;
+    if (pa == null) return 1;
+    if (pb == null) return -1;
+    return pa - pb;
+  });
+}
+// Alocação congelada específica pra este pedido, se houver -- só usada
+// como bônus de programação (linha/semana), nunca como pré-requisito
+// pra vincular.
+function alocacaoCongeladaDoPedido(pedidoKey) {
+  var id = Object.keys(allAlocacoes).find(function(k) {
+    var a = allAlocacoes[k];
+    return a && a.pedidoKey === pedidoKey && a.status === 'congelado' && ((a.qtd || 0) - (a.qtdConsumida || 0)) > 0;
+  });
+  return id ? Object.assign({ id: id }, allAlocacoes[id]) : null;
 }
 
 function renderAlocacoesDoProduto() {
   if (!produtoSelecionado) return;
-  var ids = alocacoesDoProduto(produtoSelecionado.sku);
+  var keys = pedidosDoProduto(produtoSelecionado.sku);
+  // Auto-seleciona o pedido de maior prioridade assim que a lista carrega
+  // (ou muda de produto) -- "avulsa" nunca é o padrão quando existe pedido
+  // pra vincular. Achado ao testar: checar só "!pedidoVinculado" aqui
+  // criava um loop -- se o usuário clicasse em "Emitir sem vincular" de
+  // propósito, pedidoVinculado virava null, e a PRÓPRIA re-renderização
+  // que o clique dispara auto-selecionava de novo, sem deixar escolher
+  // avulsa nunca. vinculoJaEscolhido existe só pra isso: marca que já
+  // houve UMA escolha (automática ou manual) pra este produto -- só
+  // reseta quando troca de produto (selecionarProduto).
+  if (keys.length && !vinculoJaEscolhido) selecionarVinculo(keys[0]);
   var el = document.getElementById('alocacaoLista');
-  var htmlOpcoes = ids.map(function(id) {
-    var a = allAlocacoes[id];
-    var restante = (a.qtd || 0) - (a.qtdConsumida || 0);
-    var sel = alocacaoSelecionada && alocacaoSelecionada.id === id;
-    return '<div class="aloc-opt' + (sel ? ' sel' : '') + '" data-id="' + escapeAttr(id) + '">' +
-      '<div class="aloc-opt-info"><b>' + escapeHtml(a.linha || '?') + ' · semana de ' + fmtDataBRCurta(a.semanaISO) + '</b>' +
-      '<div class="aloc-opt-meta">' + fmtNum(restante) + ' un. restantes de ' + fmtNum(a.qtd || 0) + ' programadas · ' + codigoDaAlocacao(id) + '</div></div>' +
+  var htmlOpcoes = keys.map(function(key) {
+    var p = allPedidos[key];
+    var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
+    var aloc = alocacaoCongeladaDoPedido(key);
+    var sel = pedidoVinculado && pedidoVinculado.pedidoKey === key;
+    return '<div class="aloc-opt' + (sel ? ' sel' : '') + '" data-key="' + escapeAttr(key) + '">' +
+      '<div class="aloc-opt-info"><b>Pedido ' + escapeHtml(p.id || key) + ' · ' + escapeHtml(p.cliente || '—') + '</b>' +
+      '<div class="aloc-opt-meta">Saldo: ' + fmtNum(saldo) + ' de ' + fmtNum(p.qtdTotal || 0) + ' un.' +
+        (p.priority != null ? ' · prioridade ' + p.priority : '') +
+        (aloc ? ' · 📅 já tem bloco programado (' + escapeHtml(aloc.linha || '?') + ')' : '') +
+      '</div></div>' +
       (sel ? '<span class="badge badge-green">Selecionado</span>' : '') +
     '</div>';
   }).join('');
-  var semVinculoSel = !alocacaoSelecionada;
-  var htmlSemVinculo = '<div class="aloc-opt' + (semVinculoSel ? ' sel' : '') + '" data-id="">' +
-    '<div class="aloc-opt-info"><b>Emitir sem vincular (OP avulsa)</b>' +
-    '<div class="aloc-opt-meta">Não consome nenhuma alocação -- fica pendente de programação manual, igual já era antes.</div></div>' +
+  var semVinculoSel = !pedidoVinculado;
+  var htmlSemVinculo = '<div class="aloc-opt' + (semVinculoSel ? ' sel' : '') + '" data-key="">' +
+    '<div class="aloc-opt-info"><b>⚠️ Emitir sem vincular (OP avulsa)</b>' +
+    '<div class="aloc-opt-meta">Só use pra exceção de verdade -- amostra, teste, retrabalho sem pedido. Não conta pra atendimento de nenhum pedido.</div></div>' +
     (semVinculoSel ? '<span class="badge badge-orange">Selecionado</span>' : '') +
   '</div>';
   el.innerHTML = htmlOpcoes + htmlSemVinculo +
-    (ids.length ? '' : '<div class="field-hint" style="margin-top:2px">Nenhum pedido programado pendente de emissão pra este produto -- confira em Planejamento → Planejamento de Quantidades → Horizonte.</div>');
+    (keys.length ? '' : '<div class="field-hint" style="margin-top:2px">Nenhum pedido ativo com saldo pendente pra este produto -- confira em Pedidos se o pedido certo está cadastrado e não concluído.</div>');
   el.querySelectorAll('.aloc-opt').forEach(function(div) {
-    div.addEventListener('click', function() { selecionarAlocacao(div.getAttribute('data-id')); });
+    div.addEventListener('click', function() { selecionarVinculo(div.getAttribute('data-key')); });
   });
 }
 
-function selecionarAlocacao(id) {
-  alocacaoSelecionada = id ? Object.assign({ id: id }, allAlocacoes[id]) : null;
+function selecionarVinculo(pedidoKey) {
+  pedidoVinculado = pedidoKey ? { pedidoKey: pedidoKey, pedido: allPedidos[pedidoKey], aloc: alocacaoCongeladaDoPedido(pedidoKey) } : null;
+  vinculoJaEscolhido = true; // ANTES de renderizar de novo, senão o auto-select da própria renderização desfaz esta escolha
   renderAlocacoesDoProduto();
 }
 
@@ -347,7 +385,7 @@ function selecionarProduto(key) {
     'Cliente: ' + (p.cliente || '—') + ' · Volume nominal: ' + (p.volume || '—') + ' ' + (p.unidadeVolume || '') +
     ' · Validade cadastrada: ' + (p.prazoValidadeMeses || '—') + ' meses';
 
-  alocacaoSelecionada = null;
+  pedidoVinculado = null; vinculoJaEscolhido = false; // renderAlocacoesDoProduto() abaixo auto-seleciona o pedido de maior prioridade, se houver
   document.getElementById('cardAlocacao').style.display = 'block';
   renderAlocacoesDoProduto();
 
@@ -640,7 +678,7 @@ function janelaLivre(linhaNome, dataYMD, duracaoHoras) {
     var oi = new Date(opIni).getTime(), of = new Date(opFim).getTime();
     return oi < fim.getTime() && of > inicio.getTime();
   });
-  return conflita ? null : { dataYMD: dataYMD, dataInicioPlanejada: inicio.toISOString(), dataFimPlanejada: fim.toISOString() };
+  return conflita ? null : { dataYMD: dataYMD, dataInicioPlanejada: inicio.toISOString(), dataFimPlanejada: fim.toISOString(), linhaUsada: linhaNome };
 }
 function acharProximaJanela(linhaNome, semanaISOInicial, duracaoHoras) {
   if (!linhaNome || !semanaISOInicial) return null;
@@ -690,8 +728,8 @@ function montarDadosOP(lote, janela) {
   return {
     lote: lote, sku: produtoSelecionado.sku, produto: produtoSelecionado.descricao, cliente: produtoSelecionado.cliente || '',
     qtdPlanejada: calc.pecasPrevistas,
-    skuPedidoKey: alocacaoSelecionada ? (alocacaoSelecionada.pedidoKey || '') : '',
-    linha: alocacaoSelecionada ? (alocacaoSelecionada.linha || '') : '', produzidoLinha: 0, produzidoRotulagem: 0, produzidoPosto: 0, produzido: 0,
+    skuPedidoKey: pedidoVinculado ? pedidoVinculado.pedidoKey : '',
+    linha: pedidoVinculado ? ((pedidoVinculado.aloc && pedidoVinculado.aloc.linha) || pedidoVinculado.pedido.linha || '') : '', produzidoLinha: 0, produzidoRotulagem: 0, produzidoPosto: 0, produzido: 0,
     status: 'Não Iniciado',
     dataInicioReal: null, dataFimReal: null,
     dataInicioPlanejada: janela ? janela.dataInicioPlanejada : null,
@@ -747,14 +785,28 @@ function emitirOP() {
     showAlert('Preencha o dimensionamento do lote antes de emitir.', 'danger');
     return;
   }
+  // Achado do usuário: emitir sem vincular tem que ser exceção de
+  // verdade, não o padrão silencioso -- se existe pedido ativo com saldo
+  // pra esse produto e mesmo assim ninguém foi selecionado (ou o próprio
+  // "Emitir sem vincular" foi escolhido de propósito), confirma
+  // explicitamente antes de seguir.
+  if (!pedidoVinculado && pedidosDoProduto(produtoSelecionado.sku).length > 0) {
+    if (!confirm('Existe pedido ativo com saldo pra este produto e a OP vai sair sem vincular a nenhum. Confirma que é mesmo uma exceção (amostra, teste, retrabalho)?')) return;
+  }
   document.getElementById('btnEmitir').disabled = true;
 
-  // Auto-programação (Fase 1 do plano) -- só entra em jogo quando uma
-  // alocação foi escolhida no card 2; emissão avulsa continua sem data
-  // nenhuma, igual já era.
-  var janela = alocacaoSelecionada
-    ? acharProximaJanela(alocacaoSelecionada.linha, alocacaoSelecionada.semanaISO, duracaoEstimadaHoras())
-    : null;
+  // Auto-programação (Fase 1 do plano) -- usa o bloco congelado (linha+
+  // semana) quando existir; sem ele, tenta a linha já cadastrada no
+  // próprio pedido a partir de hoje; sem nenhum dos dois, a OP fica sem
+  // data (cai na fila "OPs aguardando programação", igual emissão avulsa).
+  var janela = null;
+  if (pedidoVinculado) {
+    if (pedidoVinculado.aloc) {
+      janela = acharProximaJanela(pedidoVinculado.aloc.linha, pedidoVinculado.aloc.semanaISO, duracaoEstimadaHoras());
+    } else if (pedidoVinculado.pedido.linha) {
+      janela = acharProximaJanela(pedidoVinculado.pedido.linha, toYMDLocal(new Date()), duracaoEstimadaHoras());
+    }
+  }
 
   reservarLoteEEmitir(5, janela).then(function(res) {
     opJaEmitida = res.data;
@@ -766,10 +818,12 @@ function emitirOP() {
     document.getElementById('cardSucesso').style.display = 'block';
 
     var msg = 'OP ' + res.lote + ' emitida com sucesso.';
-    if (alocacaoSelecionada) {
+    if (pedidoVinculado) {
       msg += janela
-        ? (' Vinculada ao pedido e já programada em ' + alocacaoSelecionada.linha + ', ' + fmtDataBRCurta(janela.dataYMD) + ' -- ajuste fino disponível arrastando na Grade de OPs.')
-        : ' Vinculada ao pedido, mas não achei horário livre nos próximos 30 dias pra programar sozinho -- programe manualmente na Grade de OPs.';
+        ? (' Vinculada ao pedido ' + (pedidoVinculado.pedido.id || pedidoVinculado.pedidoKey) + ' e já programada em ' + janela.linhaUsada + ', ' + fmtDataBRCurta(janela.dataYMD) + ' -- ajuste fino disponível arrastando na Grade de OPs.')
+        : (' Vinculada ao pedido ' + (pedidoVinculado.pedido.id || pedidoVinculado.pedidoKey) + ', mas ainda sem programação automática -- programe manualmente na Grade de OPs.');
+    } else {
+      msg += ' Emitida SEM vínculo com pedido (exceção confirmada).';
     }
     showAlert(msg, 'success');
 
@@ -795,15 +849,17 @@ function emitirOP() {
       console.error('Falha ao enfileirar aviso por e-mail da OP ' + res.lote + ':', err);
     });
 
-    // Vínculo com a alocação -- também best-effort, fora da transaction de
-    // emissão: a OP já foi criada e é o que importa; se o vínculo falhar
-    // (ex: alocação sumiu por corrida com outra emissão), avisa mas não
-    // desfaz a OP -- ela fica como avulsa, dá pra vincular manualmente
-    // depois se precisar.
-    if (alocacaoSelecionada) {
-      vincularAlocacaoClientSide(alocacaoSelecionada.id, res.lote, res.data.qtdPlanejada).catch(function(err) {
-        console.error('Falha ao vincular OP ' + res.lote + ' à alocação ' + alocacaoSelecionada.id + ':', err);
-        showAlert('OP ' + res.lote + ' emitida, mas houve um erro ao vincular ao pedido programado -- confira manualmente em Planejamento → Horizonte.', 'danger');
+    // Consumo da alocação congelada -- só existe se pedidoVinculado.aloc
+    // veio preenchido (bônus de programação, ver comentário no topo do
+    // bloco de vínculo). O vínculo com o PEDIDO em si já está gravado
+    // (skuPedidoKey, dentro da própria transaction de emissão) --
+    // independe disto dar certo. Também best-effort: se falhar (ex:
+    // alocação sumiu por corrida com outra emissão), avisa mas não desfaz
+    // a OP.
+    if (pedidoVinculado && pedidoVinculado.aloc) {
+      vincularAlocacaoClientSide(pedidoVinculado.aloc.id, res.lote, res.data.qtdPlanejada).catch(function(err) {
+        console.error('Falha ao consumir a alocação da OP ' + res.lote + ':', err);
+        showAlert('OP ' + res.lote + ' emitida e vinculada ao pedido, mas houve um erro ao consumir o bloco programado -- confira manualmente em Planejamento → Horizonte.', 'danger');
       });
     }
   }).catch(function(err) {
@@ -1024,6 +1080,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // e das OPs já existentes (pra auto-programar sem bater de frente com
     // uma OP que já ocupa aquele horário/linha).
     dbOnValue(db.ref('alocacoes_planejamento'), function(snap) { allAlocacoes = snap.val() || {}; if (produtoSelecionado) renderAlocacoesDoProduto(); });
+    dbOnValue(db.ref('pedidos'), function(snap) { allPedidos = snap.val() || {}; if (produtoSelecionado) renderAlocacoesDoProduto(); });
     dbOnValue(db.ref('ops'), function(snap) { allOps = snap.val() || {}; });
     db.ref('config/planejamento').once('value', function(snap) {
       var s = snap.val() || {};
