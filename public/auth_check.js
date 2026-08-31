@@ -423,7 +423,11 @@ function renderUnifiedNavbar(user) {
   const pcpGroup = (isRotulagem || isRH) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">PCP</div>' +
     ktLink('planejamento.html', 'calendar', 'Planejamento', activePage) +
-    ktLink('horizonte.html', 'chart', 'Horizonte de Produção', activePage) +
+    // horizonte.html tirado do menu a pedido do usuário -- "não é usado
+    // pra nada hoje" (o botão de congelar, que era a única mecânica ativa
+    // da tela, nunca pegou uso real -- alocacoes_planejamento ficou vazio
+    // o tempo todo). Página continua existindo (histórico/dados não
+    // apagados), só não é mais oferecida como parte do fluxo ativo.
     ktLink('ops.html', 'gear', 'Controle de OPs', activePage) +
     (isPcpAdmin ? ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage) : '') +
     (isPcpAdmin ? ktLink('pedidos.html', 'list', 'Pedidos', activePage) : '') +
