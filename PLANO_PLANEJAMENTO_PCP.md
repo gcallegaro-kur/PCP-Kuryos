@@ -1462,3 +1462,34 @@ só muda via apontamento real de produção, `form.html`) -- isso é
 consistente com o modelo alvo, onde só "faturado e expedido" (etapa
 ainda não implementada) deveria dar baixa de verdade; por ora,
 apontamento real de produção já serve como proxy.
+
+**Nono complemento (mesmo dia): etiqueta de caixa de embarque gerada
+automaticamente, com código de barras.** Usuário refinou o pedido
+anterior -- em vez de cadastrar a etiqueta no BOM, um "espaço fixo" na
+própria OP, com layout padrão já pronto pra imprimir: "minimizaria
+muitos dos erros que temos hoje, de impressão errada de etiqueta".
+
+`montarEtiquetasCaixa()` (novo, `shared/utils.js`) gera 1 etiqueta por
+caixa -- quantidade calculada automaticamente (peças ÷ `pecasPorCaixa`,
+arredondado pra cima, mesmo princípio já usado no BOM), com Cliente/
+Produto/SKU/Lote/Validade/"Caixa X de Y" (última caixa mostra a
+quantidade real que sobrou) e um **código de barras Code 39** do lote
+pra leitor na expedição. `pecasPorCaixa` vem do cadastro do produto
+(`unCx`, já existia) e passou a ser gravado na própria OP na emissão,
+pra reimpressão não depender do cadastro. Layout impresso em página
+nomeada (CSS Paged Media, 100x150mm -- etiqueta térmica padrão,
+ajustável numa linha se o hardware real for outro tamanho), botão tanto
+na emissão fresca quanto na reimpressão via `ops.html`.
+
+**Aviso honesto, repassado ao usuário**: a tabela de padrões Code 39 foi
+escrita de memória, não copiada de uma lib testada em campo. O harness
+confirma que ela é *estruturalmente* válida (todo caractere usado seguindo
+a regra "3 de 9" do formato), mas isso não garante leitura correta num
+scanner físico real -- recomendado escanear uma etiqueta impressa de
+verdade antes de confiar em produção; se algum caractere não ler certo,
+é rápido de corrigir (só a linha dele na tabela).
+
+Testado: 17 asserções (tabela estruturalmente válida, sanitização,
+contagem de barras, arredondamento de caixas, numeração e quantidade
+real na caixa parcial, fallback sem cadastro, XSS). **Deployado e no
+`main`.**
