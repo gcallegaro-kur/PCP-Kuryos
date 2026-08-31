@@ -581,6 +581,14 @@ function montarMateriaisConsumo() {
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null
     };
   });
+  // Achado do usuário: embalagem arredondada pro mais próximo (Math.round)
+  // podia arredondar PRA BAIXO -- numa caixa de embarque isso significa
+  // faltar caixa de verdade no fim da linha. Embalagem sempre arredonda
+  // PRA CIMA (Math.ceil) -- melhor sobrar um pouco do que faltar. Unidade
+  // discreta (não dá pra ter "meia caixa") arredonda pro inteiro; unidade
+  // contínua (kg/L/etc, onde fração faz sentido físico) arredonda só na
+  // 3ª casa decimal, mesma precisão de antes.
+  var UNIDADES_BOM_DISCRETAS = { un: 1, cx: 1, pct: 1, par: 1, rolo: 1 };
   var itensBom = (bomEscolhido && bomEscolhido.itens) || {};
   Object.keys(itensBom).forEach(function(itemKey) {
     var it = itensBom[itemKey];
@@ -590,11 +598,13 @@ function montarMateriaisConsumo() {
     // embalagem também pode estar cadastrado em 'kg' (ex: filme vendido a
     // peso) -- usa a unidade real do cadastro, com 'un' só como fallback.
     var matCadastrado = findMaterialByCodigo(it.materialCodigo);
+    var unidadeBom = (matCadastrado && matCadastrado.unidade) || 'un';
+    var qtdBrutaBom = calc.pecasPrevistas * (it.qtdPorPeca || 0);
     materiaisConsumo[key] = {
       mpCodigo: prev ? prev.mpCodigo : it.materialCodigo,
       mpNome: prev ? prev.mpNome : it.materialNome,
-      quantidade: Math.round((calc.pecasPrevistas * (it.qtdPorPeca || 0)) * 1000) / 1000,
-      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0,
+      quantidade: UNIDADES_BOM_DISCRETAS[unidadeBom] ? Math.ceil(qtdBrutaBom) : Math.ceil(qtdBrutaBom * 1000) / 1000,
+      unidade: unidadeBom, origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null
     };
   });
@@ -654,11 +664,20 @@ function renderMateriaisTable() {
   });
 }
 
+// Achado real ao investigar o pedido do usuário: essa checagem nunca
+// bateu com nenhum material de verdade -- o cadastro (cadastros.html)
+// usa categorias granulares (MPGR/MPES pra matéria-prima, EP/ES/ET/MU
+// pra embalagem), nunca os literais 'MP'/'EMBALAGEM' que este filtro
+// comparava. Resultado: "Substituir" sempre mostrava uma lista vazia,
+// silenciosamente, desde que essa tela foi construída -- conferido
+// direto nos 904 materiais reais de produção, nenhum tem esses tipos.
+var TIPOS_MP = { MPGR: 1, MPES: 1 };
+var TIPOS_EMBALAGEM = { EP: 1, ES: 1, ET: 1, MU: 1 };
 function abrirSubstituicao(key) {
   var it = materiaisConsumo[key];
   if (!it) return;
-  var tipo = it.origem === 'formula' ? 'MP' : 'EMBALAGEM';
-  var opcoes = Object.values(allMateriais).filter(function(m) { return m.tipo === tipo; });
+  var tiposValidos = it.origem === 'formula' ? TIPOS_MP : TIPOS_EMBALAGEM;
+  var opcoes = Object.values(allMateriais).filter(function(m) { return tiposValidos[m.tipo]; });
   var lista = opcoes.map(function(m, i) { return (i + 1) + '. ' + m.mpCodigo + ' — ' + m.mpNome; }).join('\n');
   var escolha = prompt('Substituir "' + it.mpCodigo + '" por (digite o código do material):\n\n' + lista);
   if (escolha === null) return;
