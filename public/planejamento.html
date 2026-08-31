@@ -171,6 +171,15 @@
        a etiqueta inteira, sem aparecer nunca (mesmo bug dos handles). */
     .gantt-rate-tag,.gantt-ghost-block{position:fixed;pointer-events:none;z-index:100;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:#fff;background:var(--primary);box-shadow:0 6px 18px rgba(0,0,0,.28);white-space:nowrap;opacity:.96}
     .gantt-linha-label.drop-target{background:color-mix(in srgb, var(--primary-light) 12%, transparent);border-radius:8px}
+    /* Fila de OPs aguardando programação (sem dataInicioPlanejada nenhum) */
+    .prog-op-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto}
+    .prog-op-card{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+    .prog-op-card-info{flex:1;min-width:0}
+    .prog-op-card-nome{font-size:12.5px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .prog-op-card-meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+    .prog-op-card-emissao{font-size:10.5px;color:var(--muted)}
+    .btn-programar-op{flex:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;border:none;background:var(--primary);color:#fff;cursor:pointer;white-space:nowrap}
+    .btn-programar-op:hover{filter:brightness(1.08)}
     .gantt-block.past:not(.done):not(.vinculado){opacity:.6}
     .gantt-block-nome{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .gantt-block-meta{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center;flex-wrap:wrap}
@@ -409,6 +418,18 @@
       <div class="sum-card"><div class="sum-val" id="sumOpsSetup">—</div><div class="sum-lbl">Setup acumulado no dia</div></div>
     </div>
 
+    <!-- OPs emitidas mas nunca programadas (sem dataInicioPlanejada/
+         abertaDesde/dataInicioReal nenhum) -- sem isso elas nunca aparecem
+         em NENHUM dia da grade abaixo, não tem o que arrastar. Fica aberta
+         por padrão -- é justamente a fila de trabalho pra popular a grade. -->
+    <div class="grid-card" id="opsSemProgramacaoCard" style="margin-bottom:12px">
+      <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" id="opsSemProgramacaoHeader">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">📥 <span id="opsSemProgramacaoCount">0</span> OP(s) aguardando programação</span>
+        <span id="opsSemProgramacaoChevron" style="font-size:12px;color:var(--muted)">▼</span>
+      </div>
+      <div id="opsSemProgramacaoBody" style="display:block;padding:0 14px 14px"></div>
+    </div>
+
     <div class="day-tabs" id="dayTabsOps"></div>
     <div class="grid-card">
       <div class="plan-table-wrap">
@@ -608,6 +629,41 @@
   </div>
 </div>
 
+<!-- Programar uma OP emitida que ainda não tem NENHUMA data -- só depois
+     disso ela aparece na Grade de OPs e vira arrastável pra ajustar fino. -->
+<div class="modal-overlay" id="progOpModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-hdr">
+      <div><div class="modal-ttl">Programar OP</div><div class="modal-sub" id="progOpModalSub">—</div></div>
+      <button class="modal-x" id="progOpModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="agd-field">
+        <label>Linha</label>
+        <div class="linha-btns" id="progOpLinhaSelector"></div>
+      </div>
+      <div class="agd-field">
+        <label>Data</label>
+        <input type="date" id="progOpData">
+      </div>
+      <div class="agd-field">
+        <label>Hora de início</label>
+        <select id="progOpHoraInicio"></select>
+      </div>
+      <div class="agd-field">
+        <label>Duração (horas)</label>
+        <input type="number" id="progOpDuracao" min="1" max="40" step="1">
+        <div class="form-hint" style="font-size:11px;color:var(--muted);margin-top:3px" id="progOpDuracaoHint"></div>
+      </div>
+      <div class="form-hint" style="font-size:11px;color:var(--danger,#d03b3b);margin-top:6px;display:none" id="progOpErro"></div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-ghost" id="progOpCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="progOpConfirmBtn">📅 Programar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><div class="toast-dot"></div><span id="toastMsg">Salvando...</span></div>
 
 <script>
@@ -756,7 +812,7 @@ window.addEventListener('DOMContentLoaded',function(){
   currentWeekStart=getMon(new Date());
   var dw=new Date().getDay();
   currentDayIdx=(dw>=1&&dw<=5)?dw-1:0;
-  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupSetupModal();setupOpsGridDrag();setupConfigTab();
+  setupTabBar();setupGradeControls();setupProdModal();setupAgdModal();setupSetupModal();setupOpsGridDrag();setupOpsSemProgramacao();setupProgOpModal();setupConfigTab();
   
   var agdSearch = document.getElementById('agdSearchInput');
   var agdFilter = document.getElementById('agdFilterClient');
@@ -941,7 +997,58 @@ function loadOps(){
     opsCache=snap.val()||{};
     lotesMemo={};
     weekLoteAssignMemo={};
+    // Independente do resto do primeiro carregamento (não depende de
+    // pedidos/semana) -- roda sempre que `ops` mudar.
+    renderOpsSemProgramacao();
     if(!firstLoad){ updateWeeklySummaryTable(); renderWeekBoard(); renderGrid(); renderOpsGrid(); renderOpsWeekBoard(); }
+  });
+}
+
+// ═══ OPs emitidas sem NENHUMA data (achado do usuário: dado real de
+// produção mostrou 0 de ~1270 OPs com dataInicioPlanejada preenchido --
+// sem isso elas nunca aparecem em nenhum dia da Grade de OPs, não tem o
+// que arrastar). Lista aqui + um jeito rápido de dar a elas uma primeira
+// posição -- depois disso o arrasto já construído assume o ajuste fino. ═══
+function opsSemProgramacaoList(){
+  return Object.keys(opsCache).map(function(k){return {key:k,op:opsCache[k]};}).filter(function(e){
+    var op=e.op;
+    if(!op||op.status==='Cancelado'||op.status==='Concluído'||op.status==='Aguardando Confirmação')return false;
+    return !(op.dataInicioReal||op.abertaDesde||op.abertaDesdeRot||op.dataInicioPlanejada);
+  }).sort(function(a,b){return (a.op.dataEmissao||'').localeCompare(b.op.dataEmissao||'');});
+}
+
+function renderOpsSemProgramacao(){
+  var body=document.getElementById('opsSemProgramacaoBody');
+  var countEl=document.getElementById('opsSemProgramacaoCount');
+  if(!body)return;
+  var lista=opsSemProgramacaoList();
+  if(countEl)countEl.textContent=lista.length;
+  if(!lista.length){
+    body.innerHTML='<div style="padding:10px 0;color:var(--success);font-size:12.5px;font-weight:600">✓ Todas as OPs emitidas já têm uma posição na grade.</div>';
+    return;
+  }
+  body.innerHTML='<div class="prog-op-list">'+lista.map(function(e){
+    var op=e.op;
+    var emissao=op.dataEmissao?fmtBR(new Date(op.dataEmissao)):'—';
+    return '<div class="prog-op-card">'+
+      '<div class="prog-op-card-info">'+
+        '<div class="prog-op-card-nome" title="'+escapeAttr(op.produto||'')+'">🏷️ '+escapeHtml(op.lote||e.key)+' — '+escapeHtml(op.produto||'?')+'</div>'+
+        '<div class="prog-op-card-meta"><span>'+escapeHtml(op.cliente||'—')+'</span><span>'+fmtNum(op.qtdPlanejada||0)+' un</span><span class="prog-op-card-emissao">emitida '+emissao+'</span></div>'+
+      '</div>'+
+      '<button class="btn-programar-op" onclick="abrirProgOpModal(\''+escapeAttr(e.key)+'\')">📅 Programar</button>'+
+    '</div>';
+  }).join('')+'</div>';
+}
+
+function setupOpsSemProgramacao(){
+  var header=document.getElementById('opsSemProgramacaoHeader');
+  var body=document.getElementById('opsSemProgramacaoBody');
+  var chevron=document.getElementById('opsSemProgramacaoChevron');
+  if(!header)return;
+  header.addEventListener('click',function(){
+    var open=body.style.display!=='none';
+    body.style.display=open?'none':'block';
+    chevron.textContent=open?'▶':'▼';
   });
 }
 
@@ -2706,6 +2813,140 @@ function saveSetupManual(){
     showToast('Setup ajustado!');
     closeSetupModal();
     renderOpsGrid();
+  });
+}
+
+// ═══ Programar OP (dar a primeira posição pra uma OP emitida que nunca
+// teve nenhuma data) -- depois de gravada, o arrasto já construído assume
+// o ajuste fino (esticar, mudar de linha, empurrar/puxar vizinhas). ═══
+var progOpKey=null;
+var progOpLinha=1;
+
+function setupProgOpModal(){
+  document.getElementById('progOpModalClose').addEventListener('click',closeProgOpModal);
+  document.getElementById('progOpCancelBtn').addEventListener('click',closeProgOpModal);
+  document.getElementById('progOpModal').addEventListener('click',function(e){if(e.target===this)closeProgOpModal();});
+  document.getElementById('progOpData').addEventListener('change',atualizarProgOpHoras);
+  document.getElementById('progOpConfirmBtn').addEventListener('click',confirmarProgOp);
+}
+
+function abrirProgOpModal(opKey){
+  var op=opsCache[opKey];
+  if(!op)return;
+  progOpKey=opKey;
+  document.getElementById('progOpModalSub').textContent='OP '+(op.lote||opKey)+' · '+(op.produto||'?')+' · '+fmtNum(op.qtdPlanejada||0)+' un';
+  document.getElementById('progOpErro').style.display='none';
+
+  var sel=document.getElementById('progOpLinhaSelector');
+  sel.innerHTML='';
+  progOpLinha=1;
+  configLinhas.forEach(function(nome,idx){
+    var lNum=idx+1;
+    var btn=document.createElement('div');
+    btn.className='linha-btn'+(lNum===1?' active-e1':'');
+    btn.textContent=nome;
+    btn.addEventListener('click',function(){
+      progOpLinha=lNum;
+      Array.prototype.slice.call(sel.children).forEach(function(b,i){b.className='linha-btn'+(i+1===lNum?(' active-e'+lNum):'');});
+    });
+    sel.appendChild(btn);
+  });
+
+  // Data padrão: hoje (a fila é independente do dia que estava sendo
+  // visto na grade -- essas OPs nunca tiveram posição nenhuma).
+  var hoje=new Date();
+  document.getElementById('progOpData').value=toYMD(hoje);
+
+  // Duração padrão: quantidade planejada ÷ ritmo de referência do produto
+  // (mesma fonte que o Agendamento usa), arredondada pra cima, mínimo 1h.
+  var prod=getProdutoBySku(op.sku||'');
+  var speedPadrao=op.mediaPorHora||prod.prodHoraRef||0;
+  var duracaoPadrao=speedPadrao>0?Math.max(1,Math.ceil((op.qtdPlanejada||0)/speedPadrao)):8;
+  document.getElementById('progOpDuracao').value=duracaoPadrao;
+  document.getElementById('progOpDuracaoHint').textContent=speedPadrao>0
+    ?('Sugestão baseada no ritmo de referência do produto ('+fmtNum(speedPadrao)+'/h) -- ajuste à vontade.')
+    :'Sem ritmo de referência cadastrado pro produto -- ajuste manualmente.';
+
+  atualizarProgOpHoras();
+  document.getElementById('progOpModal').classList.add('open');
+}
+
+function atualizarProgOpHoras(){
+  var dataStr=document.getElementById('progOpData').value;
+  if(!dataStr)return;
+  var hp=horasEPausasDoDia(parsYMD(dataStr));
+  var allH=hp.horasAtivas.filter(function(h){return ALL_HOURS.includes(h)&&!hp.pausas.includes(h);})
+    .slice().sort(function(a,b){return ALL_HOURS.indexOf(a)-ALL_HOURS.indexOf(b);});
+  var sel=document.getElementById('progOpHoraInicio');
+  sel.innerHTML=allH.length
+    ?allH.map(function(h){return '<option value="'+h+'">'+h+'</option>';}).join('')
+    :'<option value="">Nenhuma hora útil configurada pra esse dia</option>';
+}
+
+function closeProgOpModal(){
+  document.getElementById('progOpModal').classList.remove('open');
+  progOpKey=null;
+}
+
+function confirmarProgOp(){
+  var errEl=document.getElementById('progOpErro');
+  errEl.style.display='none';
+  if(!progOpKey)return;
+  var op=opsCache[progOpKey];
+  if(!op){errEl.textContent='Essa OP não existe mais.';errEl.style.display='block';return;}
+
+  var dataStr=document.getElementById('progOpData').value;
+  var horaIni=document.getElementById('progOpHoraInicio').value;
+  var duracao=parseInt(document.getElementById('progOpDuracao').value);
+  if(!dataStr||!horaIni){errEl.textContent='Escolha uma data com hora útil disponível.';errEl.style.display='block';return;}
+  if(!duracao||duracao<1){errEl.textContent='Duração inválida.';errEl.style.display='block';return;}
+
+  var dateObj=parsYMD(dataStr);
+  var hp=horasEPausasDoDia(dateObj);
+  var allH=hp.horasAtivas.filter(function(h){return ALL_HOURS.includes(h)&&!hp.pausas.includes(h);})
+    .slice().sort(function(a,b){return ALL_HOURS.indexOf(a)-ALL_HOURS.indexOf(b);});
+  var startIdx=allH.indexOf(horaIni);
+  if(startIdx===-1){errEl.textContent='Hora de início inválida pra esse dia.';errEl.style.display='block';return;}
+
+  var linhaNome=configLinhas[progOpLinha-1];
+  if(!linhaNome){errEl.textContent='Escolha uma linha.';errEl.style.display='block';return;}
+
+  // Conflito: só checa o dia de início (se a duração passar pra o dia
+  // seguinte, o ajuste fino de eventual sobreposição no 2o dia fica pro
+  // arrasto, depois que a OP já aparece na grade).
+  var modelDia=buildDayOpsGanttModel(dateObj);
+  var blocosDia=blocosPurosDoModel(modelDia);
+  var novoFimIdx=startIdx+duracao;
+  var conflito=blocosDia.some(function(b){
+    return b.linha===progOpLinha&&b.start<novoFimIdx&&(b.start+b.span)>startIdx;
+  });
+  if(conflito){
+    errEl.textContent='Já tem outra OP nesse horário/linha nesse dia -- escolha outro horário ou ajuste depois pelo arrasto.';
+    errEl.style.display='block';
+    return;
+  }
+
+  var iniISO=colIdxParaISO(allH,dataStr,startIdx,false);
+  var fimISO=colIdxParaISO(allH,dataStr,novoFimIdx,true);
+  if(!iniISO||!fimISO){errEl.textContent='Não foi possível calcular o horário -- tente uma duração menor.';errEl.style.display='block';return;}
+
+  var updates={};
+  updates['ops/'+progOpKey+'/dataInicioPlanejada']=iniISO;
+  updates['ops/'+progOpKey+'/dataFimPlanejada']=fimISO;
+  updates['ops/'+progOpKey+'/linha']=linhaNome;
+
+  var btn=document.getElementById('progOpConfirmBtn');
+  btn.disabled=true;btn.textContent='Programando...';
+  db.ref().update(updates).then(function(){
+    btn.disabled=false;btn.textContent='📅 Programar';
+    showToast('OP programada! Agora já dá pra ajustar arrastando na grade.');
+    closeProgOpModal();
+    renderOpsSemProgramacao();
+    renderOpsGrid();
+  }).catch(function(err){
+    btn.disabled=false;btn.textContent='📅 Programar';
+    errEl.textContent='Erro ao gravar: '+err.message;
+    errEl.style.display='block';
   });
 }
 
