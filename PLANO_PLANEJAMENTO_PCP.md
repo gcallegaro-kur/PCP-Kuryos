@@ -1315,3 +1315,33 @@ o CSS de impressão real, servido localmente e lido via `get_page_text`
 conseguir screenshot nesta sessão porque o painel de preview não estava
 visível, mas o texto extraído bate 1:1 com o esperado). **Deployado e
 no `main`.**
+
+**Terceiro complemento (mesmo dia): bug real -- emissão sempre caía em
+avulsa.** Usuário reportou: "mesmo selecionando um item com pedido
+ativo, ele aparece a chave de 'Emitir sem vincular'... isto nunca deve
+ocorrer, só em extremas exceções". Investigado direto na produção
+(Firebase CLI): `alocacoes_planejamento` está **vazio** -- ninguém nunca
+usou o botão "congelar" de `horizonte.html`. A Fase 1 só oferecia
+vínculo através desse nó, então toda emissão caía em avulsa, sempre,
+mesmo com pedido ativo esperando.
+
+Corrigido pra vincular direto em `pedidos/{key}` -- a própria key do nó
+já é o `skuPedidoKey` que o resto do sistema usa, não depende de
+ninguém ter congelado nada antes. `alocacoes_planejamento` virou bônus
+opcional (linha/semana pra auto-programação, se existir). O card 2
+agora auto-seleciona o pedido de maior prioridade assim que carrega --
+"avulsa" nunca é mais o padrão silencioso -- e `emitirOP()` exige
+`confirm()` explícito se o usuário insistir em avulsa com pedido
+disponível.
+
+Achado ESCREVENDO o teste, não presente na primeira versão desta
+correção: o auto-select criava um loop -- clicar em "Emitir sem
+vincular" de propósito virava `null`, e a própria re-renderização que o
+clique dispara auto-selecionava de novo, sem deixar escolher avulsa
+nunca. Corrigido com uma flag que trava o auto-select após a primeira
+escolha (automática ou manual) pro produto atual.
+
+Testado: harness Node do bloco real -- 26 asserções, incluindo
+regressão direta do bug reportado, o loop de auto-seleção, e a
+confirmação obrigatória (com cancelamento real abortando a emissão).
+**Deployado e no `main`.**
