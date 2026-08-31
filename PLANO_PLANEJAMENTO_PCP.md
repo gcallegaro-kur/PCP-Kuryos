@@ -1437,3 +1437,28 @@ mesmo padrão da Ficha 2 impressa) e, pra item de BOM consumido em fração
 de peça (ex: 1 caixa a cada 48 peças = 0,02083333), um hint "(48
 un./cx)" ao lado da quantidade em vez do decimal cru. Testado (14
 asserções). **Deployado e no `main`.**
+
+**Oitavo complemento (mesmo dia): embalagem arredonda pra cima + bug real
+no "Substituir".** Usuário pediu arredondamento pra cima na embalagem
+("nunca faltar caixa") -- `montarMateriaisConsumo()` trocou `Math.round`
+por `Math.ceil` pra itens de BOM: unidade discreta (un/cx/pct/par/rolo)
+arredonda pro inteiro, unidade contínua (kg/L) só na 3ª casa decimal.
+Fórmula (MP) não mudou -- o pedido era específico de embalagem.
+
+Investigando a segunda pergunta (etiqueta de caixa como "material de uso
+e consumo"), achado real: a categoria `MU` já existe no cadastro (junto
+com EP/ES/ET pra embalagem, MPGR/MPES pra matéria-prima -- confirmado
+nos 904 materiais reais), mas `abrirSubstituicao()` (botão "Substituir"
+na tabela de materiais) filtrava por `tipo==='MP'`/`tipo==='EMBALAGEM'`
+-- literais que **nunca existem** em nenhum material real. A lista de
+opções pra substituir qualquer item, fórmula ou embalagem, sempre veio
+vazia, silenciosamente, desde que essa tela foi construída. Corrigido
+pra comparar contra os tipos reais. Testado (+8 asserções, 22 no total).
+**Deployado e no `main`.**
+
+Também esclarecido com o usuário (sem mudança de código -- já estava
+certo): emissão de OP **não** dá baixa em saldo de pedido (`produzido`
+só muda via apontamento real de produção, `form.html`) -- isso é
+consistente com o modelo alvo, onde só "faturado e expedido" (etapa
+ainda não implementada) deveria dar baixa de verdade; por ora,
+apontamento real de produção já serve como proxy.
