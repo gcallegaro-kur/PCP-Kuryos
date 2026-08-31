@@ -428,31 +428,42 @@ function currentUserNome() {
 }
 
 /* ── Cálculo de dimensionamento (ver GERADOR_OP_SPEC.md + fórmulas reais extraídas do Gerador de OPs.xlsm) ── */
-// Achado do Auditor: a fórmula abaixo só faz sentido fisicamente pra volume
-// (ml/L) -- mas produtos.html permite cadastrar unidadeVolume como g/kg/un
-// também. Calcular como se fosse ml pra esses casos gera números sem
-// nenhum aviso (ex: produto cadastrado em L saía 1000x menor). Convertemos
-// explicitamente ml/L pra litro; qualquer outra unidade bloqueia o cálculo
-// com uma mensagem clara em vez de produzir um resultado fisicamente errado.
-function volumeNominalEmLitros(produto) {
-  var vol = parseFloat(produto.volume) || 0;
+// Achado do Auditor original: a fórmula de volume só fazia sentido
+// fisicamente pra ml/L -- mas produtos.html permite cadastrar
+// unidadeVolume como g/kg/un também, e calcular como se fosse ml pra
+// esses casos geraria números sem nenhum aviso.
+// Achado do usuário em produção (34 de 373 produtos cadastrados, ~9% do
+// catálogo -- esfoliantes, cremes, hidratante em bisnaga): não é erro de
+// cadastro, são produtos DE VERDADE dosados por massa, não por volume.
+// Confirmado nos dados: só 7 dos 34 têm densidade cadastrada -- pra um
+// produto de massa a densidade nem é necessária (o peso por unidade já
+// vem direto do cadastro, sem precisar converter via volume×densidade).
+// Por isso agora tem DOIS modos físicos, não um: 'volume' (ml/L, precisa
+// de densidade pra virar massa) e 'massa' (g/kg, já é massa, densidade
+// vira só informativa/opcional). 'un' continua sem fórmula própria --
+// nenhum produto real usa hoje, bloqueia com mensagem clara em vez de
+// arriscar um número fisicamente errado.
+function dimensaoNominalDoProduto(produto) {
+  var val = parseFloat(produto.volume) || 0;
   var un = (produto.unidadeVolume || 'ml').toLowerCase();
-  if (un === 'ml') return {litros: vol / 1000, ok: true};
-  if (un === 'l') return {litros: vol, ok: true};
-  return {litros: 0, ok: false, unidade: produto.unidadeVolume};
+  if (un === 'ml') return {tipo: 'volume', valor: val / 1000, ok: true};
+  if (un === 'l') return {tipo: 'volume', valor: val, ok: true};
+  if (un === 'g') return {tipo: 'massa', valor: val, ok: true};
+  if (un === 'kg') return {tipo: 'massa', valor: val * 1000, ok: true};
+  return {tipo: null, valor: 0, ok: false, unidade: produto.unidadeVolume};
 }
 function recalcular() {
   if (!produtoSelecionado) return;
-  var modo = document.querySelector('input[name=modoQtd]:checked').value;
-  var volInfo = volumeNominalEmLitros(produtoSelecionado);
+  var modoQtd = document.querySelector('input[name=modoQtd]:checked').value;
+  var dimInfo = dimensaoNominalDoProduto(produtoSelecionado);
   var densidade = parseFloat(document.getElementById('fDensidade').value) || 0;
   var overfillPct = parseFloat(document.getElementById('fOverfill').value) || 0;
   var perdaProcessoPct = parseFloat(document.getElementById('fPerdaProcesso').value) || 0;
   var erroBox = document.getElementById('dimensionamentoErro');
 
-  if (!volInfo.ok) {
+  if (!dimInfo.ok) {
     erroBox.style.display = 'block';
-    erroBox.textContent = '⚠️ Este produto está cadastrado com unidade de volume "' + escapeHtml(volInfo.unidade || '—') + '", mas o dimensionamento do lote só sabe calcular a partir de ml ou L. Corrija a unidade em Cadastro de Produtos antes de emitir, ou ajuste o cálculo pra esse tipo de produto.';
+    erroBox.textContent = '⚠️ Este produto está cadastrado com unidade "' + escapeHtml(dimInfo.unidade || '—') + '", que o dimensionamento do lote ainda não sabe calcular (só ml, L, g ou kg). Corrija a unidade em Cadastro de Produtos antes de emitir, ou peça pra ajustar o cálculo pra esse tipo de produto.';
     document.getElementById('rPecas').textContent = '—';
     document.getElementById('rMassa').textContent = '—';
     document.getElementById('rVolume').textContent = '—';
@@ -461,9 +472,11 @@ function recalcular() {
     return;
   }
   erroBox.style.display = 'none';
-  var volumeNominalL = volInfo.litros;
+  // Produto de volume precisa de densidade pra virar massa; produto de
+  // massa NÃO precisa (a massa por unidade já vem direto do cadastro).
+  var faltaDado = !dimInfo.valor || (dimInfo.tipo === 'volume' && !densidade);
 
-  if (!volumeNominalL || !densidade) {
+  if (faltaDado) {
     document.getElementById('rPecas').textContent = '—';
     document.getElementById('rMassa').textContent = '—';
     document.getElementById('rVolume').textContent = '—';
@@ -472,22 +485,41 @@ function recalcular() {
     return;
   }
 
-  var pecas;
-  if (modo === 'massa') {
-    // Math.max(0, ...) nos dois ramos: o campo tem min="0" no HTML, mas
-    // isso não impede ler um valor negativo via .value em JS (achado do
-    // Auditor) -- sem essa guarda, a OP era emitida com consumo de
-    // material e qtdPlanejada negativos, sem nenhum erro visível.
-    var massaInformada = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
-    pecas = massaInformada > 0 ? massaInformada / (volumeNominalL * densidade) : 0;
+  // Math.max(0, ...) nos dois ramos: o campo tem min="0" no HTML, mas
+  // isso não impede ler um valor negativo via .value em JS (achado do
+  // Auditor) -- sem essa guarda, a OP era emitida com consumo de
+  // material e qtdPlanejada negativos, sem nenhum erro visível.
+  var pecas, massaLoteKg, volumeGranelL;
+  if (dimInfo.tipo === 'volume') {
+    var volumeNominalL = dimInfo.valor;
+    if (modoQtd === 'massa') {
+      var massaInformadaKg = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
+      pecas = massaInformadaKg > 0 ? massaInformadaKg / (volumeNominalL * densidade) : 0;
+    } else {
+      pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
+    }
+    pecas = Math.round(pecas);
+    var volumeTeoricoFinalMlPorUn = (volumeNominalL * (1 + overfillPct / 100)) * 1000;
+    volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
+    massaLoteKg = volumeGranelL * densidade;
   } else {
-    pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
+    // tipo 'massa' (g/kg): o peso por unidade já é o próprio cadastro --
+    // não precisa converter por densidade nenhuma pra virar massa.
+    var massaNominalG = dimInfo.valor;
+    if (modoQtd === 'massa') {
+      var massaInformadaKg2 = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
+      pecas = massaInformadaKg2 > 0 ? (massaInformadaKg2 * 1000) / massaNominalG : 0;
+    } else {
+      pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
+    }
+    pecas = Math.round(pecas);
+    var massaTeoricaFinalGPorUn = massaNominalG * (1 + overfillPct / 100);
+    massaLoteKg = pecas * massaTeoricaFinalGPorUn * (1 + perdaProcessoPct / 100) / 1000;
+    // Volume granel só é informativo aqui (a maioria dos produtos de
+    // massa não tem densidade cadastrada, e não precisa ter) -- fica em
+    // branco em vez de forçar um zero enganoso.
+    volumeGranelL = densidade > 0 ? massaLoteKg / densidade : 0;
   }
-  pecas = Math.round(pecas);
-
-  var volumeTeoricoFinalMlPorUn = (volumeNominalL * (1 + overfillPct / 100)) * 1000;
-  var volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
-  var massaLoteKg = volumeGranelL * densidade;
 
   var prazoMeses = parseInt(produtoSelecionado.prazoValidadeMeses) || 0;
   var dataValidade = null;
