@@ -144,21 +144,32 @@
     .gantt-setup-editavel{border:1px dashed color-mix(in srgb, var(--warning) 60%, transparent)}
     .gantt-setup-editavel:hover{background:repeating-linear-gradient(45deg,transparent,transparent 4px,color-mix(in srgb, var(--warning) 45%, transparent) 4px,color-mix(in srgb, var(--warning) 45%, transparent) 8px)}
     /* Arrastar/redimensionar OPs -- pedido do usuário: esticar borda muda
-       início/fim planejado, arrastar o bloco inteiro muda de linha. */
-    .gantt-resize-handle{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:3}
-    .gantt-resize-handle.left{left:-3px}
-    .gantt-resize-handle.right{right:-3px}
-    .gantt-resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:3px;height:16px;border-radius:2px;background:rgba(0,0,0,.18);opacity:0;transition:opacity .12s}
+       início/fim planejado, arrastar o bloco inteiro muda de linha.
+       CRÍTICO: a alça tem que ficar 100% DENTRO do bloco (left/right:0,
+       nunca negativo) -- .gantt-block tem overflow:hidden (pros cantos
+       arredondados), então qualquer parte da alça que ficasse fora da
+       caixa (ex: left:-3px) era recortada e ficava sem receber clique
+       nenhum, mesmo aparecendo visualmente colada na borda. */
+    .gantt-resize-handle{position:absolute;top:0;bottom:0;width:13px;cursor:ew-resize;z-index:3}
+    .gantt-resize-handle.left{left:0}
+    .gantt-resize-handle.right{right:0}
+    .gantt-resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:3px;height:16px;border-radius:2px;background:rgba(0,0,0,.22);opacity:.55;transition:opacity .12s,background .12s}
     .gantt-block:hover .gantt-resize-handle::after{opacity:1}
-    .gantt-resize-handle:hover::after{background:var(--primary-light);opacity:1}
+    .gantt-resize-handle:hover::after{background:var(--primary-light);opacity:1;width:4px}
+    /* Sinal visual permanente (não só no hover) de que o bloco aceita
+       arrasto pra outra linha -- sem isso, um bloco arrastável e um
+       travado pareciam idênticos até o usuário tentar e nada acontecer. */
     .gantt-block-draggable{cursor:grab}
     .gantt-block-draggable:active{cursor:grabbing}
+    .gantt-block-draggable::before{content:'⠿';position:absolute;top:3px;left:6px;font-size:11px;color:rgba(0,0,0,.32);line-height:1;z-index:2}
     .gantt-block.op-dragging{filter:brightness(.97);box-shadow:0 0 0 2px var(--primary-light)}
     .gantt-block.op-pushed{animation:opPushFlash .5s ease-out}
     @keyframes opPushFlash{0%{filter:brightness(1.3) saturate(1.25)}100%{filter:none}}
-    .gantt-rate-tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .1s;white-space:nowrap;z-index:5}
-    .gantt-rate-tag.show{opacity:1}
-    .gantt-ghost-block{position:fixed;pointer-events:none;z-index:100;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;color:#fff;background:var(--primary);box-shadow:0 8px 22px rgba(0,0,0,.28);white-space:nowrap;opacity:.94}
+    /* position:fixed, criada/anexada no body pelo JS (ver aplicarPreview*Ops)
+       -- NUNCA como filha do bloco. Um teste anterior tinha isso como div
+       filha com top negativo, e o overflow:hidden do .gantt-block cortava
+       a etiqueta inteira, sem aparecer nunca (mesmo bug dos handles). */
+    .gantt-rate-tag,.gantt-ghost-block{position:fixed;pointer-events:none;z-index:100;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;color:#fff;background:var(--primary);box-shadow:0 6px 18px rgba(0,0,0,.28);white-space:nowrap;opacity:.96}
     .gantt-linha-label.drop-target{background:color-mix(in srgb, var(--primary-light) 12%, transparent);border-radius:8px}
     .gantt-block.past:not(.done):not(.vinculado){opacity:.6}
     .gantt-block-nome{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1667,7 +1678,6 @@ function buildOpBlockHTML(block){
     '<div class="gantt-block-nome" title="'+escapeAttr(block.produto)+'">'+escapeHtml(block.produto)+'</div>'+
     '<div class="gantt-block-meta">'+lotePill+'<span>'+fmtNum(block.produzido)+(block.qtdPlanejada?' / '+fmtNum(block.qtdPlanejada):'')+' un · '+pct+'%'+'</span></div>'+
     handles+
-    '<div class="gantt-rate-tag"></div>'+
   '</div>';
 }
 
@@ -1786,20 +1796,21 @@ function onOpsGridMouseDown(e){
   var colWidth=hdrCell?(hdrCell.getBoundingClientRect().width+3):60;
   var linhaLabels=Array.prototype.slice.call(container.querySelectorAll('.gantt-linha-label'));
 
+  // Etiqueta flutuante (position:fixed, fora do overflow:hidden do bloco --
+  // ver comentário no CSS) pra mostrar a taxa/destino ao vivo durante
+  // QUALQUER modo de arrasto (esticar OU mover o bloco inteiro).
+  var tag=document.createElement('div');
+  tag.className=(mode==='move')?'gantt-ghost-block':'gantt-rate-tag';
+  document.body.appendChild(tag);
+
   opsDrag={
     opKey:opKey,mode:mode,startX:e.clientX,colWidth:colWidth,allH:model.allH,dateYMD:date,
     blocosSnap:blocos,origLinha:meu.linha,origStart:meu.start,origSpan:meu.span,
     qtdPlanejada:parseInt(blockEl.dataset.qtd)||0,linhaLabels:linhaLabels,blockEl:blockEl,
-    container:container,ghostEl:null,previewStart:null,previewSpan:null,previewLinha:null,
+    container:container,tagEl:tag,previewStart:null,previewSpan:null,previewLinha:null,
   };
   blockEl.classList.add('op-dragging');
   document.body.style.cursor=(mode==='move')?'grabbing':'ew-resize';
-  if(mode==='move'){
-    var ghost=document.createElement('div');
-    ghost.className='gantt-ghost-block';
-    document.body.appendChild(ghost);
-    opsDrag.ghostEl=ghost;
-  }
   e.preventDefault();
 }
 
@@ -1826,8 +1837,6 @@ function aplicarPreviewResizeOps(novoStart,novoSpan,linha){
   opsDrag.previewSpan=novoSpan;
   opsDrag.previewLinha=linha;
   opsDrag.blockEl.style.gridColumn=(novoStart+2)+' / span '+novoSpan;
-  var tag=opsDrag.blockEl.querySelector('.gantt-rate-tag');
-  if(!tag)return;
   var taxa=(opsDrag.qtdPlanejada&&novoSpan>0)?Math.round(opsDrag.qtdPlanejada/novoSpan):null;
   // Simula o reflow só em memória (não toca no Firebase) pra avisar quantos
   // blocos seriam empurrados/puxados -- pedido do usuário: "ir simulando e
@@ -1836,8 +1845,14 @@ function aplicarPreviewResizeOps(novoStart,novoSpan,linha){
   var mudados=reflowAposArrasto(working,opsDrag.opKey,linha,novoStart,novoSpan).filter(function(id){return id!==opsDrag.opKey;});
   var txt=taxa!=null?('≈ '+fmtNum(taxa)+' un/h'):(novoSpan+'h');
   if(mudados.length)txt+=' · move '+mudados.length+' OP(s)';
+  var tag=opsDrag.tagEl;
   tag.textContent=txt;
-  tag.classList.add('show');
+  // Flutua colada em cima do bloco sendo esticado (não do cursor -- fica
+  // mais fácil de acompanhar o número olhando pro bloco em si).
+  var r=opsDrag.blockEl.getBoundingClientRect();
+  tag.style.left=(r.left+r.width/2)+'px';
+  tag.style.top=(r.top-26)+'px';
+  tag.style.transform='translateX(-50%)';
 }
 
 function aplicarPreviewMoveOps(e){
@@ -1865,9 +1880,10 @@ function aplicarPreviewMoveOps(e){
   var mudados=reflowAposArrasto(working,opsDrag.opKey,linhaAlvo,novoStart,opsDrag.origSpan).filter(function(id){return id!==opsDrag.opKey;});
   var txt='🏷️ '+linhaNome+' · '+horaIni+(taxa!=null?(' · ≈'+fmtNum(taxa)+' un/h'):'');
   if(mudados.length)txt+=' · move '+mudados.length+' OP(s)';
-  opsDrag.ghostEl.textContent=txt;
-  opsDrag.ghostEl.style.left=(e.clientX+16)+'px';
-  opsDrag.ghostEl.style.top=(e.clientY+16)+'px';
+  opsDrag.tagEl.style.transform='';
+  opsDrag.tagEl.textContent=txt;
+  opsDrag.tagEl.style.left=(e.clientX+16)+'px';
+  opsDrag.tagEl.style.top=(e.clientY+16)+'px';
 }
 
 function onOpsGridMouseUp(e){
@@ -1875,7 +1891,7 @@ function onOpsGridMouseUp(e){
   var d=opsDrag;
   document.body.style.cursor='';
   if(d.blockEl)d.blockEl.classList.remove('op-dragging');
-  if(d.ghostEl)d.ghostEl.remove();
+  if(d.tagEl)d.tagEl.remove();
   d.linhaLabels.forEach(function(el){el.classList.remove('drop-target');});
 
   var mudou=d.previewStart!=null&&(d.previewStart!==d.origStart||d.previewSpan!==d.origSpan||d.previewLinha!==d.origLinha);
