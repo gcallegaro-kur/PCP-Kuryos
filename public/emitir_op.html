@@ -775,6 +775,21 @@ function emitirOP() {
       console.error('Falha ao empenhar materiais da OP ' + res.lote + ':', err);
     });
 
+    // Aviso por e-mail de "OP emitida" -- quem manda de fato é a Cloud
+    // Function checkOpsEmitidas (functions/index.js), que só varre
+    // alertas_pendentes a cada 2min e envia via Microsoft Graph. Até aqui
+    // só o VBA (via criarOP) gravava essa fila -- OP emitida por esta tela
+    // nunca disparava e-mail nenhum. Mesmo formato exato que criarOP já usa,
+    // pra não precisar mexer no consumidor.
+    db.ref('alertas_pendentes').push({
+      tipo: 'op_emitida', timestamp: new Date().toISOString(),
+      lote: res.lote, sku: res.data.sku, produto: res.data.produto, cliente: res.data.cliente,
+      qtdPlanejada: res.data.qtdPlanejada, pedidoComercialId: res.data.skuPedidoKey || '',
+      emitidoPor: res.data.emitidoPor,
+    }).catch(function(err) {
+      console.error('Falha ao enfileirar aviso por e-mail da OP ' + res.lote + ':', err);
+    });
+
     // Vínculo com a alocação -- também best-effort, fora da transaction de
     // emissão: a OP já foi criada e é o que importa; se o vínculo falhar
     // (ex: alocação sumiu por corrida com outra emissão), avisa mas não
