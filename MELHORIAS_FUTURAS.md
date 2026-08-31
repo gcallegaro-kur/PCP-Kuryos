@@ -176,8 +176,24 @@ escopo por enquanto:
   em `applyExactQtdToWeekSlots`/`writeLoteIntoWeekSlots`, com detecção de
   conflito (não sobrescrever silenciosamente slot de outro pedido) antes
   de gravar.
-
-## Admin / Configuração
+- **Zona fixa rolante (`config/congelamento.diasFixos`) desligada por
+  ora** — desativada em produção (`diasFixos: 0`, valor gravado direto no
+  Firebase em 2026-08-31, sem mudança de código) a pedido do usuário, no
+  mesmo espírito do item acima: mecanismo de proteção fazia sentido numa
+  operação mais madura, mas por ora é atrito sem benefício claro.
+  Mecanismo original: `autoAjustarPlanejamento` (`auth_check.js`)
+  protegia da reshuffle automática qualquer slot de `programacao/` já
+  preenchido dentro dos próximos N dias (padrão 7, nunca tinha sido
+  configurado diferente — não eram "duas semanas" como o usuário lembrava,
+  mas o mesmo mecanismo). Com `diasFixos:0`, esse desconto de segurança
+  extra deixa de existir — o motor pode reshufflar slots preenchidos até
+  pra hoje/amanhã. Continua intacta a ÚNICA proteção que não depende
+  dessa config: slots com OP DE VERDADE já emitida (`vinculadoSet`,
+  baseado em `alocacoes_planejamento`) nunca são tocados pelo reajuste
+  automático, isso é estrutural, não uma janela de tempo. Retomar
+  reativando a zona fixa (valor razoável pra começar: os mesmos 7 dias
+  do padrão anterior, configurável em Admin → "Congelamento") quando a
+  disciplina de apontamento/planejamento estiver mais consolidada.
 
 - **`admin.html` — `saveConfig()` regrava o nó `config` inteiro a cada
   pequena edição** (`db.ref('config').set(dataToSave)`, chamado por
