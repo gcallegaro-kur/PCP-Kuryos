@@ -147,7 +147,7 @@
       <div class="form-group">
         <label>Densidade do granel (g/ml)</label>
         <input type="number" id="fDensidade" min="0" step="any">
-        <div class="field-hint">Vem do cadastro do produto -- ajuste se tiver valor medido mais recente pra esse lote.</div>
+        <div class="field-hint">Obrigatório pra todo produto (mesmo os cadastrados por peso) -- vem do cadastro quando existe, senão estime aqui. Ajuste se tiver valor medido mais recente pra esse lote.</div>
       </div>
       <div class="form-group">
         <label>Overfill (%)</label>
@@ -160,8 +160,10 @@
     </div>
     <div class="resumo-grid" id="resumoCalc">
       <div class="resumo-item"><div class="resumo-val" id="rPecas">—</div><div class="resumo-lbl">Peças previstas</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rPesoUn">—</div><div class="resumo-lbl">Peso teórico da unidade (g)</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rVolumeUn">—</div><div class="resumo-lbl">Volume teórico da unidade (mL)</div></div>
       <div class="resumo-item"><div class="resumo-val" id="rMassa">—</div><div class="resumo-lbl">Massa do lote (kg)</div></div>
-      <div class="resumo-item"><div class="resumo-val" id="rVolume">—</div><div class="resumo-lbl">Volume granel (L)</div></div>
+      <div class="resumo-item"><div class="resumo-val" id="rVolume">—</div><div class="resumo-lbl">Volume total do batch (L)</div></div>
       <div class="resumo-item"><div class="resumo-val" id="rValidade">—</div><div class="resumo-lbl">Validade</div></div>
     </div>
   </div>
@@ -428,21 +430,18 @@ function currentUserNome() {
 }
 
 /* ── Cálculo de dimensionamento (ver GERADOR_OP_SPEC.md + fórmulas reais extraídas do Gerador de OPs.xlsm) ── */
-// Achado do Auditor original: a fórmula de volume só fazia sentido
-// fisicamente pra ml/L -- mas produtos.html permite cadastrar
-// unidadeVolume como g/kg/un também, e calcular como se fosse ml pra
-// esses casos geraria números sem nenhum aviso.
-// Achado do usuário em produção (34 de 373 produtos cadastrados, ~9% do
-// catálogo -- esfoliantes, cremes, hidratante em bisnaga): não é erro de
-// cadastro, são produtos DE VERDADE dosados por massa, não por volume.
-// Confirmado nos dados: só 7 dos 34 têm densidade cadastrada -- pra um
-// produto de massa a densidade nem é necessária (o peso por unidade já
-// vem direto do cadastro, sem precisar converter via volume×densidade).
-// Por isso agora tem DOIS modos físicos, não um: 'volume' (ml/L, precisa
-// de densidade pra virar massa) e 'massa' (g/kg, já é massa, densidade
-// vira só informativa/opcional). 'un' continua sem fórmula própria --
-// nenhum produto real usa hoje, bloqueia com mensagem clara em vez de
-// arriscar um número fisicamente errado.
+// Modelo corrigido a pedido do usuário, depois de uma primeira tentativa
+// que tratava densidade como opcional pra produto cadastrado em massa
+// (g/kg) -- errado: "massa é a unidade canônica" (GERADOR_OP_SPEC.md
+// §2), mas densidade continua SEMPRE obrigatória, porque volume teórico
+// da unidade e volume total do batch são resultados padrão esperados de
+// TODA emissão (o reator tem uma capacidade em litros que precisa ser
+// checada, não importa se o produto é rotulado em ml ou em g). A ideia
+// (do próprio usuário) é começar preenchendo densidade manualmente a
+// cada emissão -- o campo já é editável, só pré-preenchido do cadastro
+// -- até uma fase futura de ML usando o histórico de análises de
+// qualidade pra sugerir sozinho. 'un' continua sem fórmula própria --
+// nenhum produto real usa hoje.
 function dimensaoNominalDoProduto(produto) {
   var val = parseFloat(produto.volume) || 0;
   var un = (produto.unidadeVolume || 'ml').toLowerCase();
@@ -451,6 +450,15 @@ function dimensaoNominalDoProduto(produto) {
   if (un === 'g') return {tipo: 'massa', valor: val, ok: true};
   if (un === 'kg') return {tipo: 'massa', valor: val * 1000, ok: true};
   return {tipo: null, valor: 0, ok: false, unidade: produto.unidadeVolume};
+}
+function limparResumoCalc() {
+  document.getElementById('rPecas').textContent = '—';
+  document.getElementById('rMassa').textContent = '—';
+  document.getElementById('rVolume').textContent = '—';
+  document.getElementById('rPesoUn').textContent = '—';
+  document.getElementById('rVolumeUn').textContent = '—';
+  document.getElementById('rValidade').textContent = '—';
+  calc = null;
 }
 function recalcular() {
   if (!produtoSelecionado) return;
@@ -464,62 +472,55 @@ function recalcular() {
   if (!dimInfo.ok) {
     erroBox.style.display = 'block';
     erroBox.textContent = '⚠️ Este produto está cadastrado com unidade "' + escapeHtml(dimInfo.unidade || '—') + '", que o dimensionamento do lote ainda não sabe calcular (só ml, L, g ou kg). Corrija a unidade em Cadastro de Produtos antes de emitir, ou peça pra ajustar o cálculo pra esse tipo de produto.';
-    document.getElementById('rPecas').textContent = '—';
-    document.getElementById('rMassa').textContent = '—';
-    document.getElementById('rVolume').textContent = '—';
-    document.getElementById('rValidade').textContent = '—';
-    calc = null;
+    limparResumoCalc();
     return;
   }
   erroBox.style.display = 'none';
-  // Produto de volume precisa de densidade pra virar massa; produto de
-  // massa NÃO precisa (a massa por unidade já vem direto do cadastro).
-  var faltaDado = !dimInfo.valor || (dimInfo.tipo === 'volume' && !densidade);
-
-  if (faltaDado) {
-    document.getElementById('rPecas').textContent = '—';
-    document.getElementById('rMassa').textContent = '—';
-    document.getElementById('rVolume').textContent = '—';
-    document.getElementById('rValidade').textContent = '—';
-    calc = null;
+  // Densidade sempre obrigatória -- mesmo pra produto cadastrado em
+  // massa, onde ela não é necessária pra achar o peso por unidade (esse
+  // já vem direto do cadastro), mas É necessária pra derivar o volume
+  // teórico da unidade e o volume total do batch, que são resultado
+  // padrão esperado de toda emissão.
+  if (!dimInfo.valor || !densidade) {
+    limparResumoCalc();
     return;
+  }
+
+  // Peso/volume NOMINAL da unidade -- SEM overfill, é o que está no
+  // rótulo. Usado só pra decidir quantas peças cabem numa massa
+  // informada (a contagem de peças é em unidades "de rótulo": o
+  // overfill é folga extra de enchimento, não conta como peça a mais).
+  // Densidade sempre conecta os dois lados, não importa o tipo do
+  // cadastro -- peso(g) = volume(mL) × densidade(g/mL), sempre.
+  var pesoNominalUnG, volumeNominalUnMl;
+  if (dimInfo.tipo === 'volume') {
+    volumeNominalUnMl = dimInfo.valor * 1000;
+    pesoNominalUnG = volumeNominalUnMl * densidade;
+  } else {
+    pesoNominalUnG = dimInfo.valor;
+    volumeNominalUnMl = pesoNominalUnG / densidade;
   }
 
   // Math.max(0, ...) nos dois ramos: o campo tem min="0" no HTML, mas
   // isso não impede ler um valor negativo via .value em JS (achado do
   // Auditor) -- sem essa guarda, a OP era emitida com consumo de
   // material e qtdPlanejada negativos, sem nenhum erro visível.
-  var pecas, massaLoteKg, volumeGranelL;
-  if (dimInfo.tipo === 'volume') {
-    var volumeNominalL = dimInfo.valor;
-    if (modoQtd === 'massa') {
-      var massaInformadaKg = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
-      pecas = massaInformadaKg > 0 ? massaInformadaKg / (volumeNominalL * densidade) : 0;
-    } else {
-      pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
-    }
-    pecas = Math.round(pecas);
-    var volumeTeoricoFinalMlPorUn = (volumeNominalL * (1 + overfillPct / 100)) * 1000;
-    volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
-    massaLoteKg = volumeGranelL * densidade;
+  var pecas;
+  if (modoQtd === 'massa') {
+    var massaInformadaKg = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
+    pecas = massaInformadaKg > 0 ? (massaInformadaKg * 1000) / pesoNominalUnG : 0;
   } else {
-    // tipo 'massa' (g/kg): o peso por unidade já é o próprio cadastro --
-    // não precisa converter por densidade nenhuma pra virar massa.
-    var massaNominalG = dimInfo.valor;
-    if (modoQtd === 'massa') {
-      var massaInformadaKg2 = Math.max(0, parseFloat(document.getElementById('fMassaTotal').value) || 0);
-      pecas = massaInformadaKg2 > 0 ? (massaInformadaKg2 * 1000) / massaNominalG : 0;
-    } else {
-      pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
-    }
-    pecas = Math.round(pecas);
-    var massaTeoricaFinalGPorUn = massaNominalG * (1 + overfillPct / 100);
-    massaLoteKg = pecas * massaTeoricaFinalGPorUn * (1 + perdaProcessoPct / 100) / 1000;
-    // Volume granel só é informativo aqui (a maioria dos produtos de
-    // massa não tem densidade cadastrada, e não precisa ter) -- fica em
-    // branco em vez de forçar um zero enganoso.
-    volumeGranelL = densidade > 0 ? massaLoteKg / densidade : 0;
+    pecas = Math.max(0, parseFloat(document.getElementById('fPecasDesejadas').value) || 0);
   }
+  pecas = Math.round(pecas);
+
+  // Peso/volume TEÓRICO da unidade -- COM overfill, é o que efetivamente
+  // vai dentro de cada unidade na linha (a folga de segurança já
+  // contada). É a partir daqui que o batch inteiro é dimensionado.
+  var pesoTeoricoUnG = pesoNominalUnG * (1 + overfillPct / 100);
+  var volumeTeoricoUnMl = volumeNominalUnMl * (1 + overfillPct / 100);
+  var volumeGranelL = pecas * volumeTeoricoUnMl * (1 + perdaProcessoPct / 100) / 1000;
+  var massaLoteKg = volumeGranelL * densidade;
 
   var prazoMeses = parseInt(produtoSelecionado.prazoValidadeMeses) || 0;
   var dataValidade = null;
@@ -533,6 +534,8 @@ function recalcular() {
     pecasPrevistas: pecas,
     massaLoteKg: Math.round(massaLoteKg * 1000) / 1000,
     volumeGranelL: Math.round(volumeGranelL * 1000) / 1000,
+    pesoTeoricoUnG: Math.round(pesoTeoricoUnG * 1000) / 1000,
+    volumeTeoricoUnMl: Math.round(volumeTeoricoUnMl * 1000) / 1000,
     densidadeGranelUsada: densidade,
     overfillPctUsado: overfillPct,
     perdaProcessoPctUsado: perdaProcessoPct,
@@ -542,6 +545,8 @@ function recalcular() {
   document.getElementById('rPecas').textContent = pecas ? fmtNum(pecas) : '—';
   document.getElementById('rMassa').textContent = calc.massaLoteKg ? fmtNum(calc.massaLoteKg) : '—';
   document.getElementById('rVolume').textContent = calc.volumeGranelL ? fmtNum(calc.volumeGranelL) : '—';
+  document.getElementById('rPesoUn').textContent = calc.pesoTeoricoUnG ? fmtNum(calc.pesoTeoricoUnG) : '—';
+  document.getElementById('rVolumeUn').textContent = calc.volumeTeoricoUnMl ? fmtNum(calc.volumeTeoricoUnMl) : '—';
   document.getElementById('rValidade').textContent = dataValidade ? dataValidade.toLocaleDateString('pt-BR') : '—';
 
   montarMateriaisConsumo();
@@ -776,6 +781,7 @@ function montarDadosOP(lote, janela) {
     formulaVersao: formulaEscolhida ? formulaEscolhida.versao : null,
     bomVersao: formulaEscolhida ? formulaEscolhida.versao : null,
     massaLoteKg: calc.massaLoteKg, volumeGranelL: calc.volumeGranelL,
+    pesoTeoricoUnG: calc.pesoTeoricoUnG, volumeTeoricoUnMl: calc.volumeTeoricoUnMl,
     densidadeGranelUsada: calc.densidadeGranelUsada, overfillPctUsado: calc.overfillPctUsado,
     perdaProcessoPctUsado: calc.perdaProcessoPctUsado, validade: calc.validade,
     materiaisConsumo: materiaisConsumo
@@ -946,7 +952,11 @@ function paginaOP1(op) {
     '</div>' +
     '<div class="print-h" style="font-size:13px;margin-top:12px">Produto</div>' +
     '<table class="print-table"><thead><tr><th>SKU</th><th>Descrição</th><th>Qtde. Teórica</th><th>Volume</th><th>Dens.</th></tr></thead><tbody>' +
-    '<tr><td>' + escapeHtml(op.sku) + '</td><td>' + escapeHtml(op.produto) + '</td><td>' + fmtNum(op.qtdPlanejada) + ' Un.</td><td>' + fmtNum(op.volumeGranelL) + ' L</td><td>' + fmtNum(op.densidadeGranelUsada) + '</td></tr>' +
+    // "Volume" aqui é por UNIDADE (igual à ficha real do Excel -- ex:
+    // "0,215 l" pra um produto de 200ml, já com overfill/perda contados),
+    // não o volume total do batch (esse já aparece na Ordem de
+    // Fabricação, ficha 2, como "Volume teórico").
+    '<tr><td>' + escapeHtml(op.sku) + '</td><td>' + escapeHtml(op.produto) + '</td><td>' + fmtNum(op.qtdPlanejada) + ' Un.</td><td>' + fmtNum((op.volumeTeoricoUnMl || 0) / 1000) + ' l</td><td>' + fmtNum(op.densidadeGranelUsada) + '</td></tr>' +
     '</tbody></table>' +
     '<div class="print-h" style="font-size:13px;margin-top:14px">Material</div>' +
     '<table class="print-table"><thead><tr><th>Código</th><th>Descrição do Material</th><th>Quantidade</th><th>Qtde. Separada</th></tr></thead><tbody>' +
