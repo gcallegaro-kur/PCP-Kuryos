@@ -1215,3 +1215,60 @@ reimplementação), mesmo padrão de rigor de toda a sessão, mas vale
 conferir na prática antes de confiar de olhos fechados. Ponto de
 `standby` (git tag `standby-pre-fase4-planejamento-pcp` + canal de preview
 do Firebase Hosting) segue disponível caso algo precise ser revertido.
+
+## 22. Emissão de OP nativa — Fase 1 concluída: vínculo com Programação (2026-08-31)
+
+Usuário perguntou como automatizar a alocação de OP e tirar a emissão do
+Excel/VBA (`Gerador de OPs.xlsm`) de vez. Investigação encontrou um quadro
+bem diferente do esperado — ver plano completo em
+`C:\Users\gcall\.claude\plans\valiant-singing-teacup.md`:
+
+- **`emitir_op.html` já existia, já linkada no menu, e já era madura**
+  (busca de produto, dimensionamento massa/peças com densidade/overfill/
+  perda de processo, consumo de fórmula+BOM com substituição, numeração de
+  lote segura contra corrida, empenho de estoque reversível) — mesmo assim,
+  **zero das ~1270 OPs reais passaram por ela**. O gap real: ela nunca
+  vinculava a OP a nenhuma alocação de planejamento nem programava
+  (`skuPedidoKey`/`linha`/`dataInicioPlanejada` sempre vazios) — caía
+  direto na fila "OPs aguardando programação" (seção 21).
+- **Escopo maior confirmado com o usuário**: ele quer isso integrado com a
+  especificação de qualidade/rastreabilidade completa já levantada em
+  `GERADOR_OP_SPEC.md` (formulação em %m/m, versionamento de fórmula com
+  dupla aprovação, MP rastreada por lote com bloqueio de vencido, pesagem
+  com duplo check, ajustes de reator registrados, liberação pela
+  Qualidade) — e documento impresso com paridade das 5 fichas atuais do
+  Excel + novas por demanda. Isso é maior que este plano de Planejamento
+  sozinho — vira um roadmap próprio (Fase 2+ no plano acima), sequenciado
+  mas não detalhado até chegar a vez de cada etapa (mesmo processo já
+  usado aqui, fase por fase).
+
+**Fase 1 implementada e deployada**: `emitir_op.html` ganhou um passo
+"Vincular a um pedido programado" (lista `alocacoes_planejamento`
+congeladas com capacidade restante, filtradas pelo SKU — substitui o
+código `NEC-XXXXXX` que antes só existia pra copiar/colar manual vindo de
+`horizonte.html`). Ao emitir vinculado: consome a alocação
+(`opsVinculadas`/`qtdConsumida`/`status`, via `.transaction()`, mesma
+semântica de `linkAlocacaoToOP` no server) **e** auto-programa (acha o
+primeiro dia útil livre na linha/semana da alocação, grava
+`dataInicioPlanejada`/`dataFimPlanejada`/`linha` na própria emissão) — a
+OP já nasce visível e arrastável na Grade de OPs, sem precisar do passo
+manual "📅 Programar" que a fila da seção 21 exige. Emissão sem vincular
+continua permitida (OP avulsa, comportamento anterior inalterado).
+
+Simplificação deliberada: a auto-programação usa um horário de início
+fixo (07h) e checa só conflito com outras OPs na mesma linha/dia — não
+replica o grid completo de turnos/pausas de `planejamento.html`. Ajuste
+fino sempre disponível arrastando na Grade de OPs.
+
+Achado real ao testar: `.transaction()` do Firebase retornando `null`
+**não aborta** — commita `null` silenciosamente. Corrigido: o vínculo com
+a alocação agora rejeita explicitamente se ela sumiu (corrida com outra
+sessão), em vez de resolver sem avisar ninguém.
+
+Testado: syntax check + cross-reference de todo `getElementById`; harness
+Node com o bloco real — 28 asserções (filtro de alocação, estimativa de
+duração, auto-programação com conflito/fim de semana/OP cancelada, vínculo
+parcial vs. total N:1, alocação sumida rejeita certo, fluxo ponta a ponta).
+**Deployado e no `main`.** Ainda não emitida nenhuma OP real de teste por
+essa via em produção — vale um teste manual ponta a ponta antes de
+divulgar pro time como caminho oficial.

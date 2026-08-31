@@ -176,6 +176,14 @@ escopo por enquanto:
   em `applyExactQtdToWeekSlots`/`writeLoteIntoWeekSlots`, com detecção de
   conflito (não sobrescrever silenciosamente slot de outro pedido) antes
   de gravar.
+  **Atualização (2026-08-31, Fase 1 de "Emissão de OP nativa" — ver
+  `PLANO_PLANEJAMENTO_PCP.md` seção 22):** o momento da EMISSÃO agora
+  vincula certo (`emitir_op.html` grava `skuPedidoKey` e consome
+  `qtdConsumida` da alocação) e auto-programa a posição inicial na Grade
+  de OPs. **O gap descrito acima continua exatamente igual** — é sobre o
+  que acontece DEPOIS, quando a OP já emitida é arrastada/redimensionada;
+  isso ainda não toca em `programacao/` nenhum. As duas telas seguem
+  podendo divergir a partir do primeiro arrasto.
 - **Zona fixa rolante (`config/congelamento.diasFixos`) desligada por
   ora** — desativada em produção (`diasFixos: 0`, valor gravado direto no
   Firebase em 2026-08-31, sem mudança de código) a pedido do usuário, no
