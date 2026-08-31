@@ -1375,3 +1375,39 @@ densidade vira só um bônus opcional pro volume granel informativo).
 ainda). Testado: 17 asserções (regressão completa do cálculo de volume
 + os cenários novos de massa, com/sem densidade, pelos dois modos de
 entrada, conversão kg→g). **Deployado e no `main`.**
+
+**Sexto complemento (mesmo dia): correção do modelo (densidade sempre
+obrigatória) + painel de emissões.** Usuário corrigiu a Fase 5 acima:
+"massa é a unidade canônica" (`GERADOR_OP_SPEC.md` §2), mas densidade
+continua **sempre** obrigatória -- peso/volume teórico da unidade e
+volume total do batch são resultado padrão de toda emissão, e densidade
+é o que conecta os dois, não importa como o produto é rotulado. Revertida
+a opcionalidade da Fase 5, adicionados 2 outputs novos e explícitos
+(peso teórico da unidade em g, volume teórico da unidade em mL) --
+antes só existiam como variáveis internas. Achado ao comparar com o PDF
+real: a Ficha 1 mostrava o volume TOTAL do batch onde a ficha real do
+Excel mostra o volume POR UNIDADE ("0,215 l") -- corrigido.
+
+Junto, o usuário pediu um "painel de logs" mostrando cada emissão --
+`ops.html` já listava por data de emissão mas não mostrava quem emitiu
+nem reimprimia as 5 fichas de uma OP passada. As 5 fichas foram
+**movidas de `emitir_op.html` pra `shared/utils.js`** (generalizadas,
+sem ler mais variáveis globais da tela de emissão) pra `ops.html` poder
+chamar o mesmo código -- zero duplicação, um bug de formatação futuro se
+corrige uma vez só. `ops.html` ganhou "Emitida por Fulano" na legenda de
+cada linha e um botão 🖨️ que reimprime as 5 fichas de qualquer OP com
+`materiaisConsumo` gravado (só as emitidas pelo sistema; OP do Excel
+mostra aviso claro).
+
+Sobre salvar as fichas direto na pasta de rede / automação de e-mail:
+**adiado como melhoria futura**, documentado em `MELHORIAS_FUTURAS.md`
+com o achado real (não existe automação de e-mail hoje pra esse fluxo --
+conferido no VBA, que grava direto em disco via `ExportAsFixedFormat`) e
+as duas peças que faltariam construir (geração de PDF real no servidor +
+algo observando uma caixa de e-mail).
+
+Testado: 25 asserções nas 5 fichas (confirmando que mover de arquivo não
+mudou o resultado) + 10 na reimpressão via `ops.html` (OP do Excel avisa
+e não tenta nada, OP completa reimprime com fórmula/especificação
+corretas, produto sumido do cadastro não trava). **Deployado e no
+`main`.**
