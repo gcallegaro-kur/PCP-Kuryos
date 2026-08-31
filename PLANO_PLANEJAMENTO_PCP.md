@@ -1411,3 +1411,29 @@ mudou o resultado) + 10 na reimpressão via `ops.html` (OP do Excel avisa
 e não tenta nada, OP completa reimprime com fórmula/especificação
 corretas, produto sumido do cadastro não trava). **Deployado e no
 `main`.**
+
+**Sétimo complemento (mesmo dia): validação de "massa do lote" contra a
+planilha real + UX do Consumo de Materiais.** Usuário testou o mesmo SKU
+(MRARBS01) nos dois sistemas e achou uma diferença real: meu sistema
+calculava 962,09kg, a planilha mostrava "Massa total de Fabricação" de
+929,28kg. Reverse-engineering completo dos números da planilha confirmou
+a fórmula exata que ela usa hoje (peso teórico da unidade = nominal sem
+overfill; volume teórico = nominal com overfill; volume total do batch
+= peças × volume teórico × (1+perda) -- essa parte bate 100% com o meu
+sistema) -- só que a "massa pesada" da planilha nunca infla por
+overfill/perda, ao contrário do meu sistema. Comparado contra o próprio
+`GERADOR_OP_SPEC.md` (`massa_lote_kg = volume_granel × densidade`,
+onde `volume_granel` já é o volume COM overfill+perda) -- **o meu
+sistema já bate com o modelo documentado como alvo**; a planilha atual
+é que faz a conta simplificada (sem cobrir perda/overfill na pesagem).
+Nenhuma mudança de código -- só confirmação. Aviso relevante passado ao
+usuário: isso significa consumir ~3,5% mais matéria-prima por OP do que
+a planilha calcula hoje -- vale avisar quem cuida de custo/compra antes
+de finalizar operação real com o novo sistema.
+
+Junto, dois ajustes de UX no card "4. Consumo de Materiais" da tela de
+emissão: coluna de % pra cada item de fórmula (+ linha TOTAL somando,
+mesmo padrão da Ficha 2 impressa) e, pra item de BOM consumido em fração
+de peça (ex: 1 caixa a cada 48 peças = 0,02083333), um hint "(48
+un./cx)" ao lado da quantidade em vez do decimal cru. Testado (14
+asserções). **Deployado e no `main`.**
