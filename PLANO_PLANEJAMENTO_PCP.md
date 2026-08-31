@@ -1287,3 +1287,31 @@ registro no Firebase, disponibilidade pra programação, disponibilidade
 pra apontamento (confirmado: `form.html`'s lista de Alocar OP não exige
 `linha` preenchida, só status ativo) e aviso por e-mail — todos batem
 com o fluxo do VBA.
+
+**Segundo complemento (mesmo dia): as 5 fichas impressas.** Usuário
+apontou o bloqueio real pra conseguir usar a emissão de verdade: "ainda
+que comecemos continuando imprimindo, ainda não apontando via sistema,
+mas precisamos das folhas pra impressão". `montarDocumentoImpressao()`
+só gerava 1 página simples -- reconferi um PDF real já emitido em
+produção (OP 26243/06, lido diretamente do `.pdf` na pasta de rede) pra
+replicar fielmente as 5 fichas do Gerador de OPs: **OP 1** (separação +
+produto acabado), **OF** (fabricação/pesagem, % da fórmula com 3 casas
+decimais fixas igual ao Excel), **Ordem de Envase**, **Rotulagem**,
+**Relatório de Produto Acabado** (bulk + envasado). Campos que hoje só
+existem pra preenchimento à mão no chão de fábrica (horários de
+setup/envase, responsáveis, paradas por turno, resultado de qualidade)
+ficam em branco de propósito -- o apontamento continua em papel até a
+Fase 2+ digitalizar isso.
+
+Simplificação documentada no código: o Excel separa a "Equipe de
+Trabalho" por componente (Válvulas/Frascos/Tampas/...) porque cada item
+de BOM tem uma categoria lá -- esse cadastro não existe ainda no
+Firebase, então as fichas listam todos os insumos em vez de arriscar
+categorizar errado e esconder um componente real.
+
+Testado: harness Node do bloco real (22 asserções) + o HTML gerado com
+o CSS de impressão real, servido localmente e lido via `get_page_text`
+(conteúdo das 5 fichas na ordem certa, nada cortado/vazio -- sem
+conseguir screenshot nesta sessão porque o painel de preview não estava
+visível, mas o texto extraído bate 1:1 com o esperado). **Deployado e
+no `main`.**
