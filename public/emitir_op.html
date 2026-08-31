@@ -172,7 +172,7 @@
   <div id="cardMateriais" class="card" style="display:none">
     <div class="card-title">4. Consumo de Materiais (fórmula + embalagem)</div>
     <table>
-      <thead><tr><th>Material</th><th>Origem</th><th class="num">Quantidade</th><th></th></tr></thead>
+      <thead><tr><th>Material</th><th>Origem</th><th class="num">%</th><th class="num">Quantidade</th><th></th></tr></thead>
       <tbody id="materiaisBody"></tbody>
     </table>
     <div class="field-hint" style="margin-top:8px">"Substituir" troca só o consumo dessa OP -- não altera a fórmula/BOM cadastrada.</div>
@@ -577,7 +577,7 @@ function montarMateriaisConsumo() {
       mpCodigo: prev ? prev.mpCodigo : it.mpCodigo,
       mpNome: prev ? prev.mpNome : it.mpNome,
       quantidade: Math.round((calc.massaLoteKg * (it.percentualMM || 0) / 100) * 1000) / 1000,
-      unidade: 'kg', origem: 'formula',
+      unidade: 'kg', origem: 'formula', percentual: it.percentualMM || 0,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null
     };
   });
@@ -594,7 +594,7 @@ function montarMateriaisConsumo() {
       mpCodigo: prev ? prev.mpCodigo : it.materialCodigo,
       mpNome: prev ? prev.mpNome : it.materialNome,
       quantidade: Math.round((calc.pecasPrevistas * (it.qtdPorPeca || 0)) * 1000) / 1000,
-      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom',
+      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null
     };
   });
@@ -619,13 +619,23 @@ function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
 }
 
+// Achado do usuário: pra item de embalagem consumido em fração de peça
+// (ex: 1 caixa a cada 48 peças -> qtdPorPeca=0,02083333), a quantidade
+// bruta ("0,02083333 cx") não diz nada útil de cabeça -- vira "48un/cx",
+// que é como a operação realmente pensa nisso.
+function fmtBomHint(it) {
+  if (it.origem !== 'bom' || !it.qtdPorPeca || it.qtdPorPeca >= 1) return '';
+  var unPorEmbalagem = Math.round(1 / it.qtdPorPeca);
+  return ' <span class="field-hint">(' + fmtNum(unPorEmbalagem) + ' un./' + escapeHtml(it.unidade || 'un') + ')</span>';
+}
 function renderMateriaisTable() {
   var tbody = document.getElementById('materiaisBody');
   var entries = Object.entries(materiaisConsumo);
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted)">Nenhum item -- confira a fórmula/BOM cadastrada.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Nenhum item -- confira a fórmula/BOM cadastrada.</td></tr>';
     return;
   }
+  var somaPct = entries.reduce(function(s, e) { return s + (e[1].origem === 'formula' ? (e[1].percentual || 0) : 0); }, 0);
   tbody.innerHTML = entries.map(function(entry) {
     var key = entry[0], it = entry[1];
     var origemBadge = it.origem === 'formula' ? '<span class="badge badge-green">Fórmula</span>' : '<span class="badge badge-orange">Embalagem</span>';
@@ -633,10 +643,12 @@ function renderMateriaisTable() {
     return '<tr>' +
       '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + '</td>' +
       '<td>' + origemBadge + '</td>' +
-      '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + '</td>' +
+      '<td class="num">' + (it.origem === 'formula' ? fmtPct3(it.percentual) + '%' : '—') + '</td>' +
+      '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + fmtBomHint(it) + '</td>' +
       '<td><button class="btn btn-ghost btn-sm subst-btn" data-key="' + escapeAttr(key) + '">Substituir</button></td>' +
     '</tr>';
-  }).join('');
+  }).join('') +
+    '<tr style="font-weight:700"><td colspan="2">TOTAL (fórmula)</td><td class="num">' + fmtPct3(somaPct) + '%</td><td colspan="2"></td></tr>';
   tbody.querySelectorAll('.subst-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirSubstituicao(btn.getAttribute('data-key')); });
   });
