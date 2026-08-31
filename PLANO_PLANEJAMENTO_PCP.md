@@ -1357,3 +1357,21 @@ por link direto. Confirmado por grep que nenhuma outra tela depende de
 SKU acumulados: **já funciona** -- o card 2 de `emitir_op.html` lista
 todos os pedidos elegíveis, auto-seleciona o de maior prioridade, e
 qualquer outro é um clique (nenhuma mudança de código precisou).
+
+**Quinto complemento (mesmo dia): dimensionamento não sabia produto de
+massa (g/kg).** Usuário reportou erro ao emitir uma OP real: "Este
+produto está cadastrado com unidade de volume g...". Confirmado na
+produção que não é cadastro errado -- **34 de 373 produtos (~9% do
+catálogo)** são legitimamente dosados por massa (esfoliantes, cremes,
+hidratante em bisnaga), não por volume. Só 7 dos 34 têm densidade
+cadastrada -- confirma que densidade nem é necessária pra esse tipo.
+
+`dimensaoNominalDoProduto()` (ex-`volumeNominalEmLitros`) agora
+reconhece dois tipos físicos: **volume** (ml/L, precisa de densidade,
+fórmula original intocada) e **massa** (g/kg, novo -- a massa por
+unidade já é o próprio cadastro, sem precisar de densidade nenhuma;
+densidade vira só um bônus opcional pro volume granel informativo).
+"un" continua bloqueado (nenhum produto real usa, sem fórmula própria
+ainda). Testado: 17 asserções (regressão completa do cálculo de volume
++ os cenários novos de massa, com/sem densidade, pelos dois modos de
+entrada, conversão kg→g). **Deployado e no `main`.**
