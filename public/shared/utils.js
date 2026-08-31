@@ -1087,3 +1087,189 @@ var PADRAO_ETIQUETA_FORNECEDOR = [
   { campo: 'numeroVolumes', label: 'Número de volumes (ex: 2 de 5), se a entrega vier fracionada' },
   { campo: 'codigoBarras', label: 'Código de barras ou QR (material + lote)' }
 ];
+
+/* ── Fichas impressas de uma OP (5 fichas, paridade com o Gerador de OPs
+   Excel/VBA: OP 1, OF, Ordem de Envase, Rotulagem, Relatório de Produto
+   Acabado) -- construído originalmente só em emitir_op.html (emissão
+   fresca, via opJaEmitida em memória) e movido pra cá pra ops.html
+   também poder reimprimir a fiche de uma OP JÁ emitida antes, usando só
+   o que está gravado no próprio registro ops/{lote} (nenhum estado em
+   memória necessário). Campos que só existem pra preenchimento à mão no
+   chão de fábrica (horários, responsáveis, paradas, resultado de
+   qualidade) ficam em branco de propósito -- o apontamento continua em
+   papel até uma fase futura digitalizar isso. ── */
+function fmtPct3(n) {
+  return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+function campoAssinatura(label) {
+  return '<div class="print-sign"><b>' + escapeHtml(label) + ':</b><span class="print-sign-line">&nbsp;</span></div>';
+}
+function tabelaEmBranco(titulo, colunas, linhas) {
+  var n = linhas || 4;
+  var linhasHtml = '';
+  for (var i = 0; i < n; i++) linhasHtml += '<tr class="print-blank-table">' + colunas.map(function() { return '<td>&nbsp;</td>'; }).join('') + '</tr>';
+  return (titulo ? '<div class="print-h" style="font-size:13px;margin-top:14px">' + escapeHtml(titulo) + '</div>' : '') +
+    '<table class="print-table print-blank-table"><thead><tr>' + colunas.map(function(c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') + '</tr></thead>' +
+    '<tbody>' + linhasHtml + '</tbody></table>';
+}
+function tabelaMateriaisSimples(itens) {
+  return '<table class="print-table"><thead><tr><th>Código</th><th>Material</th><th>Quantidade</th></tr></thead><tbody>' +
+    itens.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td></tr>'; }).join('') +
+    '</tbody></table>';
+}
+function tabelaEspecificacoes(especs, comResultado) {
+  if (!Object.keys(especs).length) return '<div class="field-hint">Nenhuma especificação de qualidade cadastrada pra esta versão da fórmula.</div>';
+  return '<table class="print-table"><thead><tr><th>Ensaio</th><th>Especificação</th>' + (comResultado ? '<th>Resultado</th>' : '') + '<th>PA</th></tr></thead><tbody>' +
+    Object.values(especs).map(function(e) {
+      return '<tr><td>' + escapeHtml(e.ensaio) + '</td><td>' + escapeHtml(e.especificacaoTexto || '') + '</td>' + (comResultado ? '<td>&nbsp;</td>' : '') + '<td>' + escapeHtml(e.metodo || '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function paginaOP1(op) {
+  var itensTodos = Object.values(op.materiaisConsumo || {});
+  return '<div class="print-page">' +
+    '<div class="print-h">Ordem de Separação e Produto Acabado — OP ' + escapeHtml(op.lote) + '</div>' +
+    '<div class="print-sub">Emitida em ' + new Date(op.dataEmissao).toLocaleString('pt-BR') + ' por ' + escapeHtml(op.emitidoPor) + '</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
+      '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</div>' +
+    '</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:12px">Produto</div>' +
+    '<table class="print-table"><thead><tr><th>SKU</th><th>Descrição</th><th>Qtde. Teórica</th><th>Volume</th><th>Dens.</th></tr></thead><tbody>' +
+    // "Volume" aqui é por UNIDADE (igual à ficha real do Excel -- ex:
+    // "0,215 l" pra um produto de 200ml, já com overfill/perda contados),
+    // não o volume total do batch (esse já aparece na Ordem de
+    // Fabricação, ficha 2, como "Volume teórico").
+    '<tr><td>' + escapeHtml(op.sku) + '</td><td>' + escapeHtml(op.produto) + '</td><td>' + fmtNum(op.qtdPlanejada) + ' Un.</td><td>' + fmtNum((op.volumeTeoricoUnMl || 0) / 1000) + ' l</td><td>' + fmtNum(op.densidadeGranelUsada) + '</td></tr>' +
+    '</tbody></table>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Material</div>' +
+    '<table class="print-table"><thead><tr><th>Código</th><th>Descrição do Material</th><th>Quantidade</th><th>Qtde. Separada</th></tr></thead><tbody>' +
+    itensTodos.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td><td>&nbsp;</td></tr>'; }).join('') +
+    '</tbody></table>' +
+    tabelaEmBranco('Controle de Quantidade Produzida', ['Pallet', 'Qtde. (cx)', 'Qtde. (Un.)', 'Conferido estoque', 'Observações'], 3) +
+    '<div class="print-sign">Entrada sistema em ___/___/___ por: <span class="print-sign-line">&nbsp;</span></div>' +
+    campoAssinatura('Responsável') +
+  '</div>';
+}
+
+function paginaOF(op, formulaItens, especs) {
+  return '<div class="print-page">' +
+    '<div class="print-h">Ordem de Fabricação — OP ' + escapeHtml(op.lote) + '</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Produto:</b> ' + escapeHtml(op.produto) + ' (' + escapeHtml(op.sku) + ')</div>' +
+      '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
+      '<div><b>Lote:</b> ' + escapeHtml(op.lote) + '</div>' +
+      '<div><b>Qtde.:</b> ' + fmtNum(op.massaLoteKg) + ' kg</div>' +
+      '<div><b>Volume teórico:</b> ' + fmtNum(op.volumeGranelL) + ' L</div>' +
+      '<div><b>Batelada:</b> 1</div>' +
+    '</div>' +
+    campoAssinatura('Pesado por') + campoAssinatura('Peso conferido por') + campoAssinatura('Manipulado por') +
+    '<div class="print-sign">Início: ___/____/___ - ___:___ &nbsp;&nbsp;&nbsp; Término: ___/____/___ - ___:___</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Fórmula (pesagem)</div>' +
+    '<table class="print-table"><thead><tr><th>SKU</th><th>Matéria-prima</th><th>%</th><th>QT (kg)</th><th>QT. Pesada</th><th>Lote MP</th><th>Conf.</th></tr></thead><tbody>' +
+    formulaItens.map(function(i) {
+      return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtPct3(i.percentualMM) + '</td><td>' + fmtNum(i.quantidade) + ' kg</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
+    }).join('') +
+    '<tr style="font-weight:700"><td colspan="2">TOTAL</td><td>' + fmtPct3(formulaItens.reduce(function(s, i) { return s + (i.percentualMM || 0); }, 0)) + '</td><td>' + fmtNum(op.massaLoteKg) + ' kg</td><td colspan="3"></td></tr>' +
+    '</tbody></table>' +
+    '<div class="field-hint" style="margin-top:8px">Instruções conforme ficha técnica -- seguir o procedimento de manipulação já cadastrado pra esta fórmula.</div>' +
+    '<div class="print-sign">Ocorrência: <span class="print-sign-line" style="min-width:320px">&nbsp;</span></div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Especificações de Qualidade (granel)</div>' +
+    tabelaEspecificacoes(especs, true) +
+    campoAssinatura('Aprovado por') +
+    '<div class="print-sign">Data: ___/___/___</div>' +
+  '</div>';
+}
+
+function paginaOrdemEnvase(op, itensTodos, msAnvisa) {
+  // Achado do Auditor / simplificação deliberada: o Excel separa Válvulas/
+  // Frascos/Tampas/Lacres/Caixas em linhas próprias da "Equipe de Trabalho"
+  // porque cada estação física do envase é responsável por um componente.
+  // Aqui não existe (ainda) uma categoria por item de BOM pra fazer essa
+  // separação automaticamente sem arriscar esconder um componente
+  // real -- lista TODOS os insumos consumidos (fórmula + embalagem) e
+  // deixa a atribuição de responsável em branco pra ser preenchida à mão,
+  // mais seguro que categorizar errado.
+  return '<div class="print-page">' +
+    '<div class="print-h">Ordem de Envase — OP ' + escapeHtml(op.lote) + '</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Produto:</b> ' + escapeHtml(op.produto) + '</div>' +
+      '<div><b>MS ANVISA:</b> ' + escapeHtml(msAnvisa || '—') + '</div>' +
+      '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</div>' +
+    '</div>' +
+    campoAssinatura('Operador') + campoAssinatura('Linha de produção') + campoAssinatura('Máquinas utilizadas') +
+    '<div class="print-sign">Início de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Início de envase: ___/____/___ - ___:___</div>' +
+    '<div class="print-sign">Término de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Término de envase: ___/____/___ - ___:___</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">SKU / Insumos</div>' +
+    tabelaMateriaisSimples(itensTodos) +
+    tabelaEmBranco('Equipe de Trabalho', ['Operação', 'Responsável'], 5) +
+    tabelaEmBranco('Paradas por Turno', ['Início', 'Final', 'Turno', 'Responsável'], 4) +
+    tabelaEmBranco('Apontamentos de Perdas', ['Código', 'Descrição', 'Qtde', 'Lote'], 4) +
+    tabelaEmBranco('Apontamentos da Ordem de Produção', ['Início (data e hora)', 'Término (data e hora)'], 3) +
+    '<div class="print-sign">Prod. KITS: <span class="print-sign-line">&nbsp;</span> &nbsp;&nbsp; Observações: <span class="print-sign-line" style="min-width:260px">&nbsp;</span></div>' +
+  '</div>';
+}
+
+function paginaRotulagem(op, itensTodos) {
+  // Mesma simplificação da Ordem de Envase (ver comentário acima) -- lista
+  // todos os insumos, não só frasco+rótulo.
+  return '<div class="print-page">' +
+    '<div class="print-h">Rotulagem — OP ' + escapeHtml(op.lote) + '</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
+      '<div><b>SKU:</b> ' + escapeHtml(op.sku) + '</div>' +
+    '</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:12px">Máquina / Material</div>' +
+    tabelaMateriaisSimples(itensTodos) +
+    tabelaEmBranco('Apontamentos da Ordem de Produção', ['Início (data e hora)', 'Término (data e hora)'], 3) +
+    tabelaEmBranco('Paradas por Turno', ['Início', 'Final', 'Turno', 'Responsável'], 4) +
+    tabelaEmBranco('Apontamentos de Perdas', ['Código', 'Descrição', 'Qtde', 'Lote'], 4) +
+    '<table class="print-table" style="margin-top:14px"><thead><tr><th>Item</th><th>Unidade</th><th>Qtde</th></tr></thead><tbody>' +
+    itensTodos.filter(function(i) { return i.origem === 'bom'; }).map(function(i) { return '<tr><td>' + escapeHtml(i.mpNome) + '</td><td>' + escapeHtml(i.unidade || 'UN') + '</td><td>' + fmtNum(i.quantidade) + '</td></tr>'; }).join('') +
+    '</tbody></table>' +
+    campoAssinatura('Responsável') +
+    '<div class="print-sign">Observação: <span class="print-sign-line" style="min-width:320px">&nbsp;</span></div>' +
+  '</div>';
+}
+
+function paginaRelatorioPA(op, especs) {
+  return '<div class="print-page">' +
+    '<div class="print-h">Laboratório de Controle de Qualidade — Relatório de Produto Acabado</div>' +
+    '<div class="print-grid">' +
+      '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
+      '<div><b>Produto:</b> ' + escapeHtml(op.produto) + '</div>' +
+      '<div><b>Lote:</b> ' + escapeHtml(op.lote) + '</div>' +
+      '<div><b>Data de Fabricação:</b> ___/____/___</div>' +
+      '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</div>' +
+      '<div><b>Quantidade de itens:</b> ' + fmtNum(op.qtdPlanejada) + ' un.</div>' +
+    '</div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Análise Bulk — Semi Acabado Manipulado</div>' +
+    tabelaEspecificacoes(especs, true) +
+    '<div class="print-sign"><span class="print-check"></span>Aprovado &nbsp;&nbsp; <span class="print-check"></span>Reprovado &nbsp;&nbsp; Responsável: <span class="print-sign-line">&nbsp;</span></div>' +
+    '<div class="print-h" style="font-size:13px;margin-top:16px">Análise Produto Envasado</div>' +
+    tabelaEspecificacoes(especs, true) +
+    '<div class="print-sign"><span class="print-check"></span>Aprovado &nbsp;&nbsp; <span class="print-check"></span>Reprovado &nbsp;&nbsp; Responsável: <span class="print-sign-line">&nbsp;</span></div>' +
+  '</div>';
+}
+
+// Transforma formulaEscolhida.itens (fórmula cadastrada, com percentualMM)
+// + op.materiaisConsumo (o que essa OP específica consumiu de fato, com
+// possíveis substituições de material) numa lista pronta pra paginaOF --
+// mesma transformação que emitir_op.html já fazia inline, extraída pra
+// dar pra reusar na reimpressão a partir de ops.html.
+function formulaItensParaFichas(op, formulaRegistro) {
+  var itensTodos = Object.values(op.materiaisConsumo || {});
+  var itensFormula = itensTodos.filter(function(i) { return i.origem === 'formula'; });
+  return Object.values(formulaRegistro ? (formulaRegistro.itens || {}) : {}).map(function(fi, idx) {
+    var consumo = itensFormula[idx];
+    return { mpCodigo: (consumo && consumo.mpCodigo) || '', mpNome: (consumo && consumo.mpNome) || '', percentualMM: fi.percentualMM, quantidade: consumo && consumo.quantidade };
+  });
+}
+
+// Ponto de entrada único das 5 fichas -- usado tanto por emitir_op.html
+// (emissão fresca) quanto por ops.html (reimpressão de OP já emitida).
+function montarFichasOP(op, formulaItens, especs, msAnvisa) {
+  if (!op) return '';
+  var itensTodos = Object.values(op.materiaisConsumo || {});
+  return paginaOP1(op) + paginaOF(op, formulaItens, especs) + paginaOrdemEnvase(op, itensTodos, msAnvisa) + paginaRotulagem(op, itensTodos) + paginaRelatorioPA(op, especs);
+}

@@ -327,10 +327,28 @@
       display: none;
       z-index: 11000;
     }
-  
 
 
-
+  /* Reimpressão das 5 fichas (mesmo bloco CSS de emitir_op.html --
+     montarFichasOP/paginaOP1/etc. em shared/utils.js já espera essas
+     classes prontas). */
+  #printArea{display:none}
+  @media print {
+    body *{visibility:hidden}
+    #printArea, #printArea *{visibility:visible}
+    #printArea{display:block;position:absolute;top:0;left:0;width:100%}
+    .print-page{page-break-after:always;padding:24px;font-size:12px}
+    .print-page:last-child{page-break-after:auto}
+    .print-h{font-size:16px;font-weight:700;margin-bottom:4px}
+    .print-sub{font-size:11px;color:#555;margin-bottom:12px}
+    .print-table{width:100%;border-collapse:collapse;margin-top:8px}
+    .print-table th,.print-table td{border:1px solid #999;padding:4px 8px;font-size:11px;text-align:left}
+    .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:10px 0;font-size:12px}
+    .print-sign{margin-top:14px;font-size:11px}
+    .print-sign-line{display:inline-block;border-bottom:1px solid #333;min-width:160px;margin-left:6px}
+    .print-blank-table td{height:22px}
+    .print-check{display:inline-block;width:11px;height:11px;border:1px solid #333;margin-right:4px;vertical-align:middle}
+  }
 
 </style>
 </head>
@@ -452,6 +470,9 @@
 </div>
 
 <div id="toast" class="toast"></div>
+
+<!-- Reimpressão das 5 fichas de uma OP já emitida (ver reimprimirFichas) -->
+<div id="printArea"></div>
 
 <!-- Firebase Config -->
 <script>
@@ -1166,6 +1187,7 @@
         <td>
           <div style="font-weight: 600;">${escapedProduto}</div>
           <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku}</div>
+          ${op.emitidoPor ? `<div style="font-size: 11px; color: var(--muted); margin-top: 1px;" title="${escapeAttr(op.dataEmissao ? new Date(op.dataEmissao).toLocaleString('pt-BR') : '')}">Emitida por ${escapeHtml(op.emitidoPor)}</div>` : ``}
         </td>
         <td>
           ${isAdmin
@@ -1204,14 +1226,53 @@
               : `<span class="badge-status ${statusClass}">${escapedStatus}</span>`)}
         </td>
         <td style="text-align: center; white-space: nowrap;">
+          ${op.materiaisConsumo
+            ? `<button class="btn-edit-inline" onclick="reimprimirFichas('${escapedKeyAttr}')" title="Reimprimir as 5 fichas desta OP (só disponível pras emitidas por Emitir OP -- OP vinda do Excel não tem esse dado gravado)">🖨️</button>`
+            : ``}
           ${isAdmin
             ? (!isCancelada
                 ? `<button class="btn-cancel-op" onclick="cancelOp('${escapedKeyAttr}')" title="Cancelar OP (mantém o registro, some das listas ativas)">🚫</button>`
-                : `-`)
-            : `-`}
+                : ``)
+            : ``}
+          ${!op.materiaisConsumo && (!isAdmin || isCancelada) ? `-` : ``}
         </td>
       </tr>
     `;
+  }
+
+  // "Painel de logs" de emissão -- reimprime as 5 fichas de uma OP JÁ
+  // emitida antes, sem precisar de nenhum estado em memória tipo
+  // opJaEmitida (que só existe em emitir_op.html, logo após emitir): tudo
+  // que as fichas precisam (materiaisConsumo, formulaVersao, os campos de
+  // dimensionamento) já está gravado no próprio ops/{lote}. Só formulas/
+  // especificacoes/produtos precisam ser buscados -- e só quando alguém
+  // clica (não vale a pena manter esses 3 nós carregados o tempo todo só
+  // por causa de um botão usado ocasionalmente).
+  function reimprimirFichas(opKey) {
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    if (!op.materiaisConsumo) {
+      showToast('Esta OP foi emitida pelo Excel -- não tem os dados que as fichas do sistema precisam.');
+      return;
+    }
+    const produtoEntry = Object.values(produtosGlobal).find(p => p && p.sku === op.sku);
+    const produtoKey = Object.keys(produtosGlobal).find(k => produtosGlobal[k] && produtosGlobal[k].sku === op.sku);
+    const msAnvisa = produtoEntry ? produtoEntry.msAnvisa : '';
+
+    Promise.all([
+      database.ref('formulas').once('value'),
+      produtoKey ? database.ref('especificacoes/' + chaveVersao(produtoKey, op.formulaVersao)).once('value') : Promise.resolve(null),
+    ]).then(([formulasSnap, especsSnap]) => {
+      const todasFormulas = formulasSnap.val() || {};
+      const formulaRegistro = Object.values(todasFormulas).find(f => f && f.codProduto === produtoKey && f.versao === op.formulaVersao) || null;
+      const especs = (especsSnap && especsSnap.val() && especsSnap.val().itens) || {};
+      const formulaItens = formulaItensParaFichas(op, formulaRegistro);
+      document.getElementById('printArea').innerHTML = montarFichasOP(op, formulaItens, especs, msAnvisa);
+      window.print();
+    }).catch(err => {
+      console.error('Falha ao montar fichas pra reimpressão da OP ' + opKey + ':', err);
+      showToast('Erro ao montar as fichas -- tente de novo.');
+    });
   }
 
   // O vínculo com pedido comercial agora vem preenchido sozinho (derivado do

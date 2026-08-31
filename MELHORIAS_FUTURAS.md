@@ -233,6 +233,23 @@ escopo por enquanto:
   de fundo/texto claro em vez dos tokens de tema já definidos nesses
   mesmos arquivos — em modo escuro viram "ilhas" claras ou texto de
   baixo contraste sobre fundo preto.
+- **Salvar as 5 fichas de `emitir_op.html` direto na pasta de rede do
+  Gerador de OPs** — pedido do usuário, adiado deliberadamente como
+  melhoria futura. Confirmado que não é possível vindo do navegador
+  (sem acesso a caminho de rede, restrição do próprio browser) e que
+  **não existe hoje** nenhuma automação de "e-mail chega → salva na
+  pasta" pra esse fluxo (conferido direto no VBA: `GerarOP_PDF` usa
+  `ExportAsFixedFormat`, um write direto em disco a partir do Excel
+  rodando como desktop app com a rede mapeada — não passa por e-mail
+  nenhum). Pra fazer isso funcionar de verdade faltam duas peças, nenhuma
+  construída ainda: (1) geração de PDF real no servidor (hoje só existe
+  a visualização HTML de impressão, `montarDocumentoImpressao()`) --
+  precisaria de uma Cloud Function com alguma lib de PDF (ex: Puppeteer);
+  (2) algo observando uma caixa de e-mail e salvando anexos na pasta —
+  não existe nada assim hoje pra este fluxo, precisaria descobrir se a
+  Kuryos já tem Power Automate/licenciamento M365 pra isso ou se também
+  entra do zero. Enquanto isso, o caminho manual (Salvar como PDF do
+  próprio navegador na hora de imprimir) já funciona sem infra nova.
 
 ## Acessibilidade (varredura pendente)
 
