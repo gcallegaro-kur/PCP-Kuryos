@@ -1272,3 +1272,18 @@ parcial vs. total N:1, alocação sumida rejeita certo, fluxo ponta a ponta).
 **Deployado e no `main`.** Ainda não emitida nenhuma OP real de teste por
 essa via em produção — vale um teste manual ponta a ponta antes de
 divulgar pro time como caminho oficial.
+
+**Complemento (mesmo dia)**: usuário perguntou se a emissão nativa já
+seguia o fluxo completo — incluindo aviso por e-mail. Não seguia: o
+e-mail de "OP emitida" é mandado por uma Cloud Function
+(`checkOpsEmitidas`, Microsoft Graph, cron de 2min — o daemon Outlook
+local antigo está `.DEPRECATED`) que só consome `alertas_pendentes/`,
+onde só o VBA (via `criarOP`) gravava. `emitir_op.html` agora enfileira
+o mesmo formato, best-effort, tanto pra OP vinculada quanto avulsa — sem
+precisar mudar `database.rules.json` (a página já é `admin`/`pcp`, que
+já tinham escrita ali). Testado (+4 asserções, 32 no total),
+**deployado**. Com isso, os 4 pontos perguntados pelo usuário —
+registro no Firebase, disponibilidade pra programação, disponibilidade
+pra apontamento (confirmado: `form.html`'s lista de Alocar OP não exige
+`linha` preenchida, só status ativo) e aviso por e-mail — todos batem
+com o fluxo do VBA.
