@@ -1823,3 +1823,55 @@ disparando (agora confirmam que NÃO dispara, em nenhum ciclo, mesmo com
 atraso enorme ou repetido), mantendo os 16 cenários das outras 2
 checagens inalterados. **Deployado (functions:checkNotificacoes) e no
 `main`.**
+
+**Vigésimo segundo complemento (2026-09-01): conteúdo das fichas
+impressas passa a ser específico por papel (Separação/Envase/
+Rotulagem).** Usuário: "na ficha de separação, não vamos mostrar a
+formula, apenas os itens do BOM / Na ficha de envase, vamos mostrar a
+formula (em kg e litro, concluida, como se fosse um semi acabado) e o
+BOM, com as quantidades necessarias / na ficha de rotulagem, vamos
+mostrar apenas frasco e rotulo, nao vamos mostrar outros itens".
+
+Três ajustes em `shared/utils.js`, todos dentro das mesmas 3 funções já
+tocadas no complemento décimo sétimo (`paginaOP1`/`paginaOrdemEnvase`/
+`paginaRotulagem`):
+
+- **Ficha 1 (Separação)**: tabela de materiais volta a filtrar só
+  `origem === 'bom'` -- os itens de fórmula (MP) somem de vez dessa
+  ficha, já que pesar MP é trabalho da Ficha 2 (OF), não da separação
+  de embalagem.
+- **Ficha 3 (Ordem de Envase)**: ganha uma nova seção "Granel
+  (semi-acabado)" com uma única linha consolidada -- nome+versão da
+  fórmula, massa do lote em kg (`calc.massaLoteKg`) e volume do lote em
+  L (`calc.volumeGranelL`) -- representando o granel pronto como se
+  fosse um único insumo semi-acabado, exatamente como pedido. Abaixo,
+  mantém a tabela completa de BOM ("Embalagem") com as quantidades
+  necessárias de cada item (substitui a simplificação "Fórmula: X" em
+  texto puro do complemento décimo sétimo, que ficou obsoleta por esse
+  pedido).
+- **Ficha 4 (Rotulagem)**: a tabela de materiais é filtrada para
+  mostrar só frasco/rótulo -- novo helper `ehFrascoOuRotulo(mpNome)`,
+  regex por nome (`FRASCO|BISNAGA|POTE|BILHA|R[ÓO]TULO`), título da
+  seção trocado de "Embalagem" para "Frasco / Rótulo".
+
+**Sobre a pergunta direta do usuário ("é muito complexo isto?")**: não,
+implementar não é complexo -- é um filtro de uma linha por regex de
+nome. O ponto de atenção real é que é uma heurística por texto, não um
+campo de categoria dedicado no cadastro de materiais (não existe hoje).
+Validado contra os 175 materiais reais tipo EP via Firebase CLI: 79
+FRASCO + 14 BISNAGA + 3 POTE = 96 bateram limpo contra 39 VALVULA + 33
+TAMPA, zero sobreposição; 222/222 rótulos reais bateram com "ROTULO" no
+nome. Risco disclosed: um material cadastrado com nome fora desse
+padrão (ex.: um frasco chamado só "EMB-004") ficaria ausente
+especificamente da Ficha 4/Rotulagem -- continua aparecendo
+normalmente nas Fichas 1 e 3. Se isso incomodar no uso real, o caminho
+mais robusto é adicionar um campo "papel" (frasco/rótulo/tampa/válvula/
+outro) no cadastro de materiais e trocar o regex por esse campo -- fica
+registrado como melhoria futura caso o usuário priorize.
+
+Testado: harness Node do bloco real (`run_print5fichas_test.js`,
+mesmo arquivo dos complementos décimo sétimo/décimo oitavo) --
+reescreveu as asserções das Fichas 1/3/4 pro novo conteúdo, e
+acrescentou um bloco de teste direto do `ehFrascoOuRotulo` com 10 nomes
+reais/reais-like (frasco/bisnaga/pote/rótulo → true; válvula/tampa/
+caixa/lacre → false). **Deployado (hosting) e no `main`.**
