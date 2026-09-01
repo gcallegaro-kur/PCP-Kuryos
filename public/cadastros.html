@@ -892,6 +892,26 @@
         <button class="btn btn-ghost btn-sm" id="btnAddTipoEnsaio-cat">+ Adicionar</button>
       </div>
     </div>
+    <div class="card" style="padding:16px;margin-top:14px">
+      <div class="card-title">Área de Endereço (Estoque / WMS)</div>
+      <div class="section-note">Lista usada na Estrutura de Ruas (aba Endereços) pra marcar a qual área cada rua pertence -- fechada, pra manter relatório e filtro consistentes. Clique numa área pra ativar/desativar.</div>
+      <div class="tag-area" id="tAreasEndereco-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar área fora da lista</div>
+      <div class="tag-add">
+        <input type="text" id="iAreaEnderecoNome-cat" class="uc" placeholder="Ex: PRODUTO ACABADO" style="flex:2">
+        <button class="btn btn-ghost btn-sm" id="btnAddAreaEndereco-cat">+ Adicionar</button>
+      </div>
+    </div>
+    <div class="card" style="padding:16px;margin-top:14px">
+      <div class="card-title">Motivo de Movimento de Estoque</div>
+      <div class="section-note">Lista usada no histórico de movimentações do Estoque/WMS (recebimento, transferência entre endereços, saída manual, etc.) -- fechada, pra manter relatório por motivo confiável em vez de texto livre divergente. Clique num motivo pra ativar/desativar.</div>
+      <div class="tag-area" id="tMotivosMovEstoque-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar motivo fora da lista</div>
+      <div class="tag-add">
+        <input type="text" id="iMotivoMovEstoqueNome-cat" class="uc" placeholder="Ex: INVENTÁRIO ROTATIVO" style="flex:2">
+        <button class="btn btn-ghost btn-sm" id="btnAddMotivoMovEstoque-cat">+ Adicionar</button>
+      </div>
+    </div>
   </div>
   <div class="main-tab-panel" id="maintab-clientes">
     <div class="kt-toolbar">
@@ -2964,6 +2984,184 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       tiposEnsaio = val;
       renderTiposEnsaio();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CATEGORIAS -- ÁREA DE ENDEREÇO (Estoque / WMS). Mesmo padrão
+// exato de Tipos de Ensaio acima (lista fechada em config/, seed
+// inicial, ativa/desativa, "adicionar fora da lista") -- pedido do
+// usuário: as 5 áreas confirmadas (Galpão/Fábrica/Rótulos/Matéria
+// Prima/Material de Uso e Consumo), mas editável, não travada nessas 5
+// pra sempre (ex: se um dia precisar separar "Produto Acabado" da
+// "Fábrica", basta adicionar aqui).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var areasEndereco = [];
+
+  var AREAS_ENDERECO_SEED = [
+    { nome: 'GALPÃO' }, { nome: 'FÁBRICA' }, { nome: 'RÓTULOS' },
+    { nome: 'MATÉRIA PRIMA' }, { nome: 'MATERIAL DE USO E CONSUMO' }
+  ];
+
+  function renderAreasEndereco() {
+    var el = document.getElementById('tAreasEndereco-cat');
+    if (!areasEndereco.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>'; return; }
+    el.innerHTML = '';
+    areasEndereco.forEach(function(a, i) {
+      var ativo = a.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativo ? '' : 'opacity:.5');
+      span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = a.nome;
+      span.appendChild(nm);
+      span.addEventListener('click', function() {
+        areasEndereco[i] = Object.assign({}, a, { ativo: !ativo });
+        db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+          showAlert('Área ' + (!ativo ? 'ativada' : 'desativada') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      if (!a.padrao) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover esta área?')) return;
+          areasEndereco.splice(i, 1);
+          db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+            showAlert('Área removida.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+      el.appendChild(span);
+    });
+  }
+
+  function addAreaEndereco() {
+    var input = document.getElementById('iAreaEnderecoNome-cat');
+    var nome = input.value.trim().toUpperCase();
+    if (!nome) { showAlert('Informe um nome pra área.', 'danger'); return; }
+    if (areasEndereco.some(function(a) { return a.nome === nome; })) {
+      showAlert('Já existe uma área com esse nome.', 'danger');
+      return;
+    }
+    areasEndereco.push({ nome: nome, ativo: true, padrao: false });
+    db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+      input.value = '';
+      showAlert('Área adicionada.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddAreaEndereco-cat').addEventListener('click', addAreaEndereco);
+    document.getElementById('iAreaEnderecoNome-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addAreaEndereco(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/areasEndereco'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        var seed = AREAS_ENDERECO_SEED.map(function(a) { return Object.assign({ ativo: true, padrao: true }, a); });
+        db.ref('config/areasEndereco').set(seed);
+        return;
+      }
+      areasEndereco = val;
+      renderAreasEndereco();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CATEGORIAS -- MOTIVO DE MOVIMENTO DE ESTOQUE (Estoque / WMS).
+// Mesmo padrão exato das duas listas acima. Pedido do usuário: "Lista
+// fechada, gerenciável em Cadastros" pro motivo de cada movimentação
+// (recebimento/transferência/devolução/etc.) -- mesmo raciocínio de
+// Tipos de Ensaio (evita grafia divergente tipo "Transferência" x
+// "Transferencia" cadastrados como 2 motivos diferentes).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var motivosMovEstoque = [];
+
+  var MOTIVOS_MOV_ESTOQUE_SEED = [
+    { nome: 'RECEBIMENTO' }, { nome: 'CONSUMO DE PRODUÇÃO' }, { nome: 'PERDA' },
+    { nome: 'AJUSTE DE INVENTÁRIO' }, { nome: 'TRANSFERÊNCIA ENTRE ENDEREÇOS' },
+    { nome: 'DEVOLUÇÃO' }, { nome: 'REMESSA' }, { nome: 'OUTRO' }
+  ];
+
+  function renderMotivosMovEstoque() {
+    var el = document.getElementById('tMotivosMovEstoque-cat');
+    if (!motivosMovEstoque.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>'; return; }
+    el.innerHTML = '';
+    motivosMovEstoque.forEach(function(m, i) {
+      var ativo = m.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativo ? '' : 'opacity:.5');
+      span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = m.nome;
+      span.appendChild(nm);
+      span.addEventListener('click', function() {
+        motivosMovEstoque[i] = Object.assign({}, m, { ativo: !ativo });
+        db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+          showAlert('Motivo ' + (!ativo ? 'ativado' : 'desativado') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      if (!m.padrao) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover este motivo?')) return;
+          motivosMovEstoque.splice(i, 1);
+          db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+            showAlert('Motivo removido.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+      el.appendChild(span);
+    });
+  }
+
+  function addMotivoMovEstoque() {
+    var input = document.getElementById('iMotivoMovEstoqueNome-cat');
+    var nome = input.value.trim().toUpperCase();
+    if (!nome) { showAlert('Informe um nome pro motivo.', 'danger'); return; }
+    if (motivosMovEstoque.some(function(m) { return m.nome === nome; })) {
+      showAlert('Já existe um motivo com esse nome.', 'danger');
+      return;
+    }
+    motivosMovEstoque.push({ nome: nome, ativo: true, padrao: false });
+    db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+      input.value = '';
+      showAlert('Motivo adicionado.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddMotivoMovEstoque-cat').addEventListener('click', addMotivoMovEstoque);
+    document.getElementById('iMotivoMovEstoqueNome-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addMotivoMovEstoque(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/motivosMovimentoEstoque'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        var seed = MOTIVOS_MOV_ESTOQUE_SEED.map(function(m) { return Object.assign({ ativo: true, padrao: true }, m); });
+        db.ref('config/motivosMovimentoEstoque').set(seed);
+        return;
+      }
+      motivosMovEstoque = val;
+      renderMotivosMovEstoque();
     });
   });
 })();
