@@ -1132,6 +1132,9 @@ function tabelaEmBranco(titulo, colunas, linhas) {
     '<table class="print-table print-blank-table"><thead><tr>' + colunas.map(function(c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') + '</tr></thead>' +
     '<tbody>' + linhasHtml + '</tbody></table>';
 }
+// Não usada por nenhuma ficha no momento (paginaOrdemEnvase/paginaRotulagem
+// pararam de listar todos os insumos, a pedido do usuário -- viram só uma
+// referência "Fórmula: X" agora). Mantida por poder ser útil de novo.
 function tabelaMateriaisSimples(itens) {
   return '<table class="print-table"><thead><tr><th>Código</th><th>Material</th><th>Quantidade</th></tr></thead><tbody>' +
     itens.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td></tr>'; }).join('') +
@@ -1202,26 +1205,24 @@ function paginaOF(op, formulaItens, especs) {
 }
 
 function paginaOrdemEnvase(op, itensTodos, msAnvisa) {
-  // Achado do Auditor / simplificação deliberada: o Excel separa Válvulas/
-  // Frascos/Tampas/Lacres/Caixas em linhas próprias da "Equipe de Trabalho"
-  // porque cada estação física do envase é responsável por um componente.
-  // Aqui não existe (ainda) uma categoria por item de BOM pra fazer essa
-  // separação automaticamente sem arriscar esconder um componente
-  // real -- lista TODOS os insumos consumidos (fórmula + embalagem) e
-  // deixa a atribuição de responsável em branco pra ser preenchida à mão,
-  // mais seguro que categorizar errado.
+  // Achado do usuário: a lista completa de MPs consumidas (fórmula) não é
+  // necessária aqui -- essa conferência já mora na Ordem de Fabricação
+  // (ficha "Fórmula (pesagem)"). O processo real de envase só precisa
+  // saber QUAL fórmula, por referência, igual o Excel já fazia ("Fórmula
+  // XPTO"). Insumos de EMBALAGEM continuam fora daqui de propósito --
+  // cada estação do envase (válvula/frasco/tampa/lacre/caixa) tem seu
+  // próprio manuseio físico, não cabe numa lista genérica sem virar ruído.
   return '<div class="print-page">' +
     '<div class="print-h">Ordem de Envase — OP ' + escapeHtml(op.lote) + '</div>' +
     '<div class="print-grid">' +
       '<div><b>Produto:</b> ' + escapeHtml(op.produto) + '</div>' +
+      '<div><b>Fórmula:</b> ' + escapeHtml(op.produto) + (op.formulaVersao ? ' (versão ' + escapeHtml(op.formulaVersao) + ')' : '') + '</div>' +
       '<div><b>MS ANVISA:</b> ' + escapeHtml(msAnvisa || '—') + '</div>' +
       '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</div>' +
     '</div>' +
     campoAssinatura('Operador') + campoAssinatura('Linha de produção') + campoAssinatura('Máquinas utilizadas') +
     '<div class="print-sign">Início de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Início de envase: ___/____/___ - ___:___</div>' +
     '<div class="print-sign">Término de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Término de envase: ___/____/___ - ___:___</div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">SKU / Insumos</div>' +
-    tabelaMateriaisSimples(itensTodos) +
     tabelaEmBranco('Equipe de Trabalho', ['Operação', 'Responsável'], 5) +
     tabelaEmBranco('Paradas por Turno', ['Início', 'Final', 'Turno', 'Responsável'], 4) +
     tabelaEmBranco('Apontamentos de Perdas', ['Código', 'Descrição', 'Qtde', 'Lote'], 4) +
@@ -1231,20 +1232,23 @@ function paginaOrdemEnvase(op, itensTodos, msAnvisa) {
 }
 
 function paginaRotulagem(op, itensTodos) {
-  // Mesma simplificação da Ordem de Envase (ver comentário acima) -- lista
-  // todos os insumos, não só frasco+rótulo.
+  // Achado do usuário: mesma simplificação da Ordem de Envase -- a lista
+  // completa de MPs não é necessária aqui, só a referência da fórmula
+  // ("Fórmula XPTO", igual o Excel já fazia). A tabela de embalagem mais
+  // abaixo (só itens de BOM) continua -- essa sim é o que rotulagem
+  // precisa saber de verdade (qual rótulo/frasco/lacre usar).
   return '<div class="print-page">' +
     '<div class="print-h">Rotulagem — OP ' + escapeHtml(op.lote) + '</div>' +
     '<div class="print-grid">' +
       '<div><b>Cliente:</b> ' + escapeHtml(op.cliente) + '</div>' +
       '<div><b>SKU:</b> ' + escapeHtml(op.sku) + '</div>' +
+      '<div><b>Fórmula:</b> ' + escapeHtml(op.produto) + (op.formulaVersao ? ' (versão ' + escapeHtml(op.formulaVersao) + ')' : '') + '</div>' +
     '</div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:12px">Máquina / Material</div>' +
-    tabelaMateriaisSimples(itensTodos) +
     tabelaEmBranco('Apontamentos da Ordem de Produção', ['Início (data e hora)', 'Término (data e hora)'], 3) +
     tabelaEmBranco('Paradas por Turno', ['Início', 'Final', 'Turno', 'Responsável'], 4) +
     tabelaEmBranco('Apontamentos de Perdas', ['Código', 'Descrição', 'Qtde', 'Lote'], 4) +
-    '<table class="print-table" style="margin-top:14px"><thead><tr><th>Item</th><th>Unidade</th><th>Qtde</th></tr></thead><tbody>' +
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Embalagem</div>' +
+    '<table class="print-table"><thead><tr><th>Item</th><th>Unidade</th><th>Qtde</th></tr></thead><tbody>' +
     itensTodos.filter(function(i) { return i.origem === 'bom'; }).map(function(i) { return '<tr><td>' + escapeHtml(i.mpNome) + '</td><td>' + escapeHtml(i.unidade || 'UN') + '</td><td>' + fmtNum(i.quantidade) + '</td></tr>'; }).join('') +
     '</tbody></table>' +
     campoAssinatura('Responsável') +

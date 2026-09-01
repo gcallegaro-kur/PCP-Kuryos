@@ -619,7 +619,14 @@ function recalcular() {
   document.getElementById('rVolume').textContent = calc.volumeGranelL ? fmtNum(calc.volumeGranelL) : '—';
   document.getElementById('rPesoUn').textContent = calc.pesoTeoricoUnG ? fmtNum(calc.pesoTeoricoUnG) : '—';
   document.getElementById('rVolumeUn').textContent = calc.volumeTeoricoUnMl ? fmtNum(calc.volumeTeoricoUnMl) : '—';
-  document.getElementById('rValidade').textContent = dataValidade ? dataValidade.toLocaleDateString('pt-BR') : '—';
+  // Pedido do usuário: "não pode ser possível emitir uma OP sem data de
+  // validade" -- sinal visual cedo (vermelho) além do bloqueio de verdade
+  // em emitirOP(). Validade vem SÓ do cadastro do produto (Parâmetros de
+  // Lote > Prazo de Validade) -- sem entrada manual aqui de propósito,
+  // pra continuar auditável (não pode inventar validade na hora da OP).
+  var rValidadeEl = document.getElementById('rValidade');
+  rValidadeEl.textContent = dataValidade ? dataValidade.toLocaleDateString('pt-BR') : 'Sem validade!';
+  rValidadeEl.style.color = dataValidade ? '' : 'var(--danger)';
 
   montarMateriaisConsumo();
 }
@@ -1100,6 +1107,16 @@ function reservarLoteEEmitir(tentativasRestantes, janela) {
 function emitirOP() {
   if (!produtoSelecionado || !calc || calc.pecasPrevistas <= 0) {
     showAlert('Preencha o dimensionamento do lote antes de emitir.', 'danger');
+    return;
+  }
+  // Pedido do usuário: "não pode ser possível emitir uma OP sem data de
+  // validade". calc.validade só existe quando o produto tem
+  // prazoValidadeMeses cadastrado (Cadastros > Produtos > Parâmetros de
+  // Lote) -- sem isso, bloqueia e explica onde corrigir, em vez de deixar
+  // uma OP sem validade sair (o Relatório de Produto Acabado mostra
+  // "___/___/___" em branco pra quem preencher à mão hoje).
+  if (!calc.validade) {
+    showAlert('Este produto não tem "Prazo de Validade" cadastrado -- a OP não pode ser emitida sem data de validade. Corrija em Cadastros > Produtos > Parâmetros de Lote antes de emitir.', 'danger');
     return;
   }
   var erroMateriais = validarMateriaisConsumo();
