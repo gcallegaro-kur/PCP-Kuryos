@@ -1771,3 +1771,34 @@ Testado: harness Node do bloco real -- 12 asserções em EAN13 (relações
 matemáticas L/G/R nos 10 dígitos, checksum contra 2 EAN13 reais,
 validação de entrada) e 21 na etiqueta completa, com a biblioteca de QR
 de verdade carregada. **Deployado e no `main`.**
+
+**Vigésimo complemento (2026-09-01): "Alocar OP" passa a puxar da Grade
+Semanal, não só prioridade.** Usuário: "na alocação de OP, ele não esta
+puxando pela programação, indicando qual a proxima OP deve entrar na
+linha em questão".
+
+Achado real confirmado via Firebase CLI antes de corrigir: o modal
+"Alocar OP" (`form.html`, chão de fábrica) recomendava a OP só pela
+prioridade genérica do pedido -- nunca olhava a Grade Semanal
+(`programacao/`) pra ver o que está de fato programado pra aquela
+linha específica. Pior: a lista de candidatas nem filtrava por linha --
+e não dava pra corrigir só filtrando por `op.linha`, porque só 6 das 49
+OPs abertas aguardando alocação têm esse campo preenchido hoje (12%).
+
+`proximoPedidoProgramadoParaLinha(linha)` (novo) consulta `progData`
+(programação de hoje, já carregada ao vivo pra outro uso do mesmo
+arquivo) achando o próximo slot futuro com `pedidoKey` pra essa linha --
+mesmo padrão de busca já usado no fallback de `updateFormFromSchedule()`
+(auto-seleção de OP em "Parar Linha"), reaproveitado em vez de
+duplicado. Se a Grade tem algo programado pra a linha agora, essa OP
+vence a prioridade genérica -- vira a recomendada ("📅 Próxima da
+programação (Linha X)"), reordenada pro topo da lista exibida mesmo que
+a prioridade aponte outra. Sem nada programado, cai no comportamento de
+sempre (prioridade). Tipo "rotulagem"/"posto" não tenta cruzar com a
+Grade (que só modela linha de produção) -- inalterado pra esses dois.
+
+Testado: harness Node do bloco real -- 9 asserções (fallback de
+prioridade sem Grade preenchida, Grade vence prioridade pior quando
+programada, normalização de pedidoKey com zero à esquerda, horário já
+passado não conta, linha errada não interfere, rotulagem/posto
+inalterados). **Deployado e no `main`.**
