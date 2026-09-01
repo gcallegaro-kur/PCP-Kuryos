@@ -1665,3 +1665,67 @@ componente, independência entre os 3, bloqueios não vazam mais entre
 componentes, botão desabilitado com motivo, gates de Excluir/+Nova
 versão nos 4 estados possíveis, exclusão ainda funciona sem nenhum
 aprovado). **Deployado e no `main`.**
+
+**Décimo quinto complemento (2026-09-01): Tipos de Ensaio -- lista
+fechada em vez de digitação livre.** Usuário perguntou quais tipos de
+ensaio existiam cadastrados -- levantamento real via Firebase CLI (180
+versões com Especificações, 1330 ensaios) achou 9 nomes distintos em
+uso, mas 2 registros com "TEOR DE ALCOOL" (sem acento) em vez de "TEOR
+DE ÁLCOOL". Usuário: "eu queria unificar estes todos, deixar algo mais
+centralizado, e não aberto para digitação livre". `config/tiposEnsaio`
+(novo) -- lista fechada gerenciável, mesmo padrão de Categorias de
+Produto (ativa/desativa + "adicionar fora da lista"), semeada com os 9
+nomes reais já unificados. Campo "Ensaio" das Especificações virou
+`<select>` em vez de texto livre -- valor já salvo fora da lista nunca
+some, aparece marcado "(fora da lista)". Corrigidos os 2 registros reais
+com o typo direto via Firebase CLI. **Deployado e no `main`.**
+
+**Décimo sexto complemento (2026-09-01): substituição de material --
+ajustar quantidade/% + regras de bloqueio.** Usuário: "quando substituir
+um item, poder também ajustar a quantidade (ou %) e isto ajustar a
+dedução de estoque e as regras de bloqueio (soma da formula tem que ser
+= 100%, nao pode existir item negativo...)". Fluxo de substituição
+(`emitir_op.html`) virou 2 etapas: escolher o material abre uma
+confirmação pré-preenchida com o valor calculado (percentual pra
+fórmula, quantidade pro BOM), editável antes de confirmar. Valor
+editado marca `editado:true` -- sobrevive a um recalcular() posterior
+(fórmula: percentual fica fixo, kg sempre recalcula contra a massa do
+lote atual; BOM: quantidade absoluta fica fixa). `validarMateriaisConsumo()`
+(novo) bloqueia a emissão se algum item ficou negativo ou se a soma dos
+percentuais de fórmula não fecha em 100%; dedução de estoque (empenho)
+usa o valor editado automaticamente, sem mudança adicional. TOTAL da
+tabela fica vermelho quando a soma foge de 100%, aviso antes de tentar
+emitir. Testado: 50 asserções (31 já existentes + 19 novas). **Deployado
+e no `main`.**
+
+**Décimo sétimo complemento (2026-09-01): validade obrigatória +
+fichas de Envase/Rotulagem simplificadas.** Dois pedidos na mesma
+mensagem: (1) "Não pode ser possível emitir uma OP sem data de
+validade" -- `emitirOP()` bloqueia quando `calc.validade` é null, antes
+até de checar vínculo com pedido; resumo mostra "Sem validade!" em
+vermelho como aviso cedo; validade continua vindo só do cadastro do
+produto (Parâmetros de Lote), sem entrada manual, pra continuar
+auditável. (2) "Na ordem de envase e rotulagem, não é necessário
+informar as MPs que foram alocadas, nós colocávamos apenas 'Fórmula
+xpto'" -- `paginaOrdemEnvase`/`paginaRotulagem` (`shared/utils.js`)
+trocaram a tabela completa de insumos por uma referência simples
+"Fórmula: [produto] (versão vX)", igual o Excel fazia; Rotulagem manteve
+a tabela de EMBALAGEM (frasco/rótulo/tampa) -- só a lista de MP saiu.
+Testado: 27 asserções em emitirOpFase1 (3 novas) e 29 em print5fichas
+(5 novas). **Deployado e no `main`.**
+
+**Décimo oitavo complemento (2026-09-01): Ordem de Envase cortando pra
+2ª página impressa.** Usuário: "A OP de envase estava cortada em 2
+paginas, quero que fique em uma pagina unica... cada ficha da OP assume
+uma página única (5 páginas ao todo)". Confirmado (impressora Zebra
+imprime via driver do Windows, não ZPL -- o HTML/CSS de impressão atual
+é o caminho certo, sem precisar gerar arquivo nativo). Junto com a
+simplificação do complemento anterior (tirou a tabela de insumos),
+apertou o CSS de impressão pra dar folga real: padding da página 24px→
+18px, célula de tabela 4px→3px, margem de campo assinatura 14px→10px,
+altura de linha em branco 22px→18px -- ainda legível pra preencher à
+mão. Cálculo de conferência (sem conseguir renderizar de verdade no
+ambiente disponível pra medir em pixel): ficha de Envase estimada em
+~923px de conteúdo contra ~1046px disponíveis numa A4 com margem padrão
+do Chrome -- folga de ~120px; recomendado confirmar num teste de
+impressão real. **Deployado e no `main`.**
