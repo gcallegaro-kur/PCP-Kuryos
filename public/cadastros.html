@@ -877,6 +877,17 @@
         <button class="btn btn-ghost btn-sm" id="btnAddCategoriaProduto-cat">+ Adicionar</button>
       </div>
     </div>
+    <div class="card" style="padding:16px;margin-top:14px">
+      <div class="card-title">Tipos de Ensaio (Especificações)</div>
+      <div class="section-note">Lista usada no campo "Ensaio" das Especificações de cada fórmula (aba Fórmulas/BOM/Especificações) -- fechada, pra manter o cadastro consistente em vez de digitação livre (evita duplicidade tipo "Teor de Álcool" x "Teor de Alcool" cadastrados como 2 ensaios diferentes). Clique num item pra ativar/desativar.</div>
+      <div class="tag-area" id="tTiposEnsaio-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar tipo fora da lista</div>
+      <div class="field-hint" style="margin-bottom:8px">Use isto só quando surgir um ensaio genuinamente novo, que nenhuma fórmula ainda usa.</div>
+      <div class="tag-add">
+        <input type="text" id="iTipoEnsaioNome-cat" class="uc" placeholder="Ex: VISCOSIDADE" style="flex:2">
+        <button class="btn btn-ghost btn-sm" id="btnAddTipoEnsaio-cat">+ Adicionar</button>
+      </div>
+    </div>
   </div>
   <div class="main-tab-panel" id="maintab-clientes">
     <div class="kt-toolbar">
@@ -2856,9 +2867,107 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 
 // ════════════════════════════════════════════════════════════════════
+// TIPOS DE ENSAIO (Especificações) -- pedido do usuário: "eu queria
+// unificar estes todos, deixar algo mais centralizado, e não aberto
+// para digitação livre". Achado real (Firebase, 180 versões com
+// Especificações cadastradas): 9 nomes de ensaio distintos em uso, mas
+// 2 registros com "TEOR DE ALCOOL" (sem acento) em vez de "TEOR DE
+// ÁLCOOL" -- exatamente o tipo de duplicidade que digitação livre
+// permite e uma lista fechada evita. Mesmo padrão de Categorias de
+// Produto (lista fechada + ativa/desativa + "adicionar fora da lista"),
+// mas mais simples (só um nome, sem código de 3 letras).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var tiposEnsaio = [];
+
+  // Seed = os 9 nomes reais já em uso na produção (levantado via Firebase
+  // CLI antes de construir isto), já com a grafia unificada/correta.
+  var TIPOS_ENSAIO_SEED = [
+    { nome: 'ASPECTO' }, { nome: 'COR' }, { nome: 'ODOR' }, { nome: 'DENSIDADE' },
+    { nome: 'PH' }, { nome: 'CONTEÚDO LÍQUIDO MÉDIO' }, { nome: 'TEOR DE ÁLCOOL' },
+    { nome: 'APLICAÇÃO EM MECHA' }, { nome: 'RESÍDUO SECO' }
+  ];
+
+  function renderTiposEnsaio() {
+    var el = document.getElementById('tTiposEnsaio-cat');
+    if (!tiposEnsaio.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>'; return; }
+    el.innerHTML = '';
+    tiposEnsaio.forEach(function(t, i) {
+      var ativo = t.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativo ? '' : 'opacity:.5');
+      span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = t.nome;
+      span.appendChild(nm);
+      span.addEventListener('click', function() {
+        tiposEnsaio[i] = Object.assign({}, t, { ativo: !ativo });
+        db.ref('config/tiposEnsaio').set(tiposEnsaio).then(function() {
+          showAlert('Tipo de ensaio ' + (!ativo ? 'ativado' : 'desativado') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      // Os 9 da lista original (padrao:true) não têm botão de remover,
+      // só ativa/desativa -- igual Categorias de Produto com "anvisa".
+      if (!t.padrao) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover este tipo de ensaio?')) return;
+          tiposEnsaio.splice(i, 1);
+          db.ref('config/tiposEnsaio').set(tiposEnsaio).then(function() {
+            showAlert('Tipo de ensaio removido.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+      el.appendChild(span);
+    });
+  }
+
+  function addTipoEnsaio() {
+    var input = document.getElementById('iTipoEnsaioNome-cat');
+    var nome = input.value.trim().toUpperCase();
+    if (!nome) { showAlert('Informe um nome pro tipo de ensaio.', 'danger'); return; }
+    if (tiposEnsaio.some(function(t) { return t.nome === nome; })) {
+      showAlert('Já existe um tipo de ensaio com esse nome.', 'danger');
+      return;
+    }
+    tiposEnsaio.push({ nome: nome, ativo: true, padrao: false });
+    db.ref('config/tiposEnsaio').set(tiposEnsaio).then(function() {
+      input.value = '';
+      showAlert('Tipo de ensaio adicionado.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddTipoEnsaio-cat').addEventListener('click', addTipoEnsaio);
+    document.getElementById('iTipoEnsaioNome-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addTipoEnsaio(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/tiposEnsaio'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        // Primeira vez -- semeia com os 9 nomes reais já em uso. Escrita
+        // escopada (config/tiposEnsaio), nunca db.ref('config') inteiro.
+        var seed = TIPOS_ENSAIO_SEED.map(function(t) { return Object.assign({ ativo: true, padrao: true }, t); });
+        db.ref('config/tiposEnsaio').set(seed);
+        return; // o próprio set acima dispara este listener de novo, já com dado
+      }
+      tiposEnsaio = val;
+      renderTiposEnsaio();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
 // ABA: PRODUTOS (portado de produtos.html -- Fase 6.5). Maior seção,
-// modal com 6 sub-abas próprias (Identificação/Classificação/Embalagem/
-// Regulatório/CQ/Parâmetros de Lote) -- o querySelectorAll('.tab') delas
+// modal com 5 sub-abas próprias (Identificação/Classificação/Embalagem/
+// Regulatório/Parâmetros de Lote) -- o querySelectorAll('.tab') delas
 // é escopado a #modalBg-prod (não document), pra não reagir a cliques nas
 // abas de nível página nem, mais adiante, às de Fórmulas/BOM/Especificações.
 // ════════════════════════════════════════════════════════════════════
@@ -3371,6 +3480,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var allFormulas = {};
   var allBom = {};
   var allEspecificacoes = {};
+  var tiposEnsaioCad = []; // config/tiposEnsaio -- lista fechada gerenciada na aba Categorias
 
   var produtoSelecionadoKey = null;
   var produtoSelecionadoSku = '';
@@ -3945,6 +4055,25 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function(err) { showAlert('Erro ao salvar item do BOM: ' + err.message, 'danger'); });
   }
 
+  // Lista fechada (config/tiposEnsaio, gerenciada na aba Categorias) em
+  // vez de digitação livre -- pedido do usuário: "unificar estes todos,
+  // deixar algo mais centralizado, e não aberto para digitação livre".
+  // Se o valor JÁ SALVO não estiver entre os ativos (veio de antes da
+  // lista existir, ou foi desativado depois), inclui ele mesmo assim no
+  // topo -- nunca esconde/perde o que já está gravado, só não deixa
+  // escolher esse valor de novo num ensaio novo.
+  function opcoesTiposEnsaio(valorAtual) {
+    var ativos = tiposEnsaioCad.filter(function(t) { return t.ativo !== false; });
+    var opcoes = ativos.slice();
+    if (valorAtual && !opcoes.some(function(t) { return t.nome === valorAtual; })) {
+      opcoes.unshift({ nome: valorAtual, foraDaLista: true });
+    }
+    return '<option value="">Selecione...</option>' + opcoes.map(function(t) {
+      return '<option value="' + escapeAttr(t.nome) + '"' + (t.nome === valorAtual ? ' selected' : '') + '>' +
+        escapeHtml(t.nome) + (t.foraDaLista ? ' (fora da lista)' : '') + '</option>';
+    }).join('');
+  }
+
   function renderEspecTab(key) {
     var e = allEspecificacoes[key] || { itens: {} };
     // Editável enquanto a Especificação (não a Fórmula) estiver em
@@ -3963,7 +4092,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return '<tr><td>' + escapeHtml(it.ensaio || '') + '</td><td>' + escapeHtml(it.especificacaoTexto || '') + '</td><td>' + escapeHtml(it.minimo || '') + '</td><td>' + escapeHtml(it.maximo || '') + '</td><td>' + escapeHtml(it.metodo || '') + '</td><td>' + (it.critico ? 'Sim' : 'Não') + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-          '<td><input type="text" class="e-ensaio uc" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.ensaio || '') + '"></td>' +
+          '<td><select class="e-ensaio" data-item="' + escapeAttr(itemKey) + '">' + opcoesTiposEnsaio(it.ensaio) + '</select></td>' +
           '<td><input type="text" class="e-texto uc" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.especificacaoTexto || '') + '"></td>' +
           '<td><input type="text" class="e-min" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.minimo || '') + '"></td>' +
           '<td><input type="text" class="e-max" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.maximo || '') + '"></td>' +
@@ -3974,7 +4103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.getElementById('btnAddEspecItem-form').style.display = editavel ? 'inline-flex' : 'none';
     if (!editavel) return;
-    document.querySelectorAll('#especBody-form input').forEach(function(el) {
+    document.querySelectorAll('#especBody-form input, #especBody-form select').forEach(function(el) {
       el.addEventListener('change', function() { salvarItemEspec(key, el.getAttribute('data-item')); });
     });
     document.querySelectorAll('#especBody-form .e-remove').forEach(function(btn) {
@@ -4038,6 +4167,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
     dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    // Semeado/gerenciado na aba Categorias (mesma config/tiposEnsaio) --
+    // aqui só lê, pra montar o <select> de Ensaio nas Especificações.
+    dbOnValue(db.ref('config/tiposEnsaio'), function(snap) {
+      tiposEnsaioCad = snap.val() || [];
+      if (produtoSelecionadoKey && versaoAtual) renderEspecTab(chaveVersao(produtoSelecionadoKey, versaoAtual));
+    });
     dbOnValue(db.ref('formulas'), function(snap) {
       allFormulas = snap.val() || {};
       if (produtoSelecionadoKey) { renderVersoes(); if (versaoAtual) selecionarVersao(versaoAtual); }
