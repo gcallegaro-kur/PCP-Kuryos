@@ -727,9 +727,45 @@ function montarMateriaisConsumo() {
     bomBox.style.display = 'none';
   }
 
+  recomputarItemAjuste();
   renderMateriaisTable();
   document.getElementById('cardMateriais').style.display = 'block';
   document.getElementById('cardEmissao').style.display = 'block';
+}
+
+// Pedido do usuário: "quando substituo algum item e modifico a % de
+// concentração, ela fica diferente de 100%, sem conseguir ajustar as
+// demais em nenhum local" -- decisão do usuário: em vez de rebalancear
+// TODOS os itens proporcionalmente (mexeria em itens que ninguém pediu
+// pra tocar), a fórmula pode marcar UM item como "Ajuste (QSP)" em
+// cadastros.html (normalmente água ou álcool -- achado real: é o maior
+// item em 89% das 163 fórmulas de produção). Esse item nunca é editado
+// manualmente aqui: seu percentual é sempre recalculado como o
+// complemento pra fechar 100% contra a soma dos OUTROS itens da fórmula.
+// Fórmulas sem item de ajuste marcado continuam exatamente como antes
+// (usuário corrige manualmente item a item) -- é um comportamento por
+// opt-in, não muda nada em fórmula nenhuma até alguém marcar em Cadastros.
+function recomputarItemAjuste() {
+  if (!formulaEscolhida || !formulaEscolhida.itemAjusteKey) return;
+  var ajusteKey = 'f_' + formulaEscolhida.itemAjusteKey;
+  var itemAjuste = materiaisConsumo[ajusteKey];
+  // Item marcado pode não existir mais nesta versão específica (removido
+  // do cadastro depois de marcado, ou versão trocada) -- se sumiu, não há
+  // o que ajustar, cai de volta no comportamento manual de sempre.
+  if (!itemAjuste || itemAjuste.origem !== 'formula') return;
+  var somaOutros = 0;
+  Object.keys(materiaisConsumo).forEach(function(k) {
+    if (k === ajusteKey) return;
+    var it = materiaisConsumo[k];
+    if (it.origem === 'formula') somaOutros += (it.percentual || 0);
+  });
+  var novoPct = Math.round((100 - somaOutros) * 1000) / 1000;
+  itemAjuste.percentual = novoPct;
+  itemAjuste.quantidade = calc ? Math.round((calc.massaLoteKg * novoPct / 100) * 1000) / 1000 : 0;
+  // Nunca "congela" via editado:true -- é sempre recalculado a partir dos
+  // outros itens, nunca preservado entre recálculos como os demais.
+  itemAjuste.editado = false;
+  itemAjuste.ajusteAutomatico = true;
 }
 function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
@@ -756,8 +792,11 @@ function renderMateriaisTable() {
     var key = entry[0], it = entry[1];
     var origemBadge = it.origem === 'formula' ? '<span class="badge badge-green">Fórmula</span>' : '<span class="badge badge-orange">Embalagem</span>';
     var subLabel = it.substituiMpCodigo ? ' <span class="field-hint">(substitui ' + escapeHtml(it.substituiMpCodigo) + ')</span>' : '';
+    // Item marcado em Cadastros como "Ajuste (QSP)" desta fórmula -- seu %
+    // é sempre calculado (ver recomputarItemAjuste), nunca digitado.
+    var ajusteLabel = it.ajusteAutomatico ? ' <span class="badge badge-blue" title="Percentual recalculado automaticamente pra fechar 100%">🧪 Ajuste (QSP)</span>' : '';
     return '<tr>' +
-      '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + '</td>' +
+      '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + ajusteLabel + '</td>' +
       '<td>' + origemBadge + '</td>' +
       '<td class="num">' + (it.origem === 'formula' ? fmtPct3(it.percentual) + '%' : '—') + '</td>' +
       '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + fmtBomHint(it) + '</td>' +
@@ -879,11 +918,31 @@ function mostrarConfirmacaoSubstituicao(codigo) {
   if (!it || !novoMat) return;
   substMaterialEscolhido = novoMat;
 
+  var box = document.getElementById('substLista');
+
+  // Item marcado em Cadastros como "Ajuste (QSP)" desta fórmula -- seu %
+  // nunca é digitado aqui, só o material pode ser trocado (a proporção é
+  // sempre o complemento pra fechar 100%, recalculada por
+  // recomputarItemAjuste() em confirmarSubstituicao()).
+  if (it.ajusteAutomatico) {
+    box.innerHTML =
+      '<div class="subst-confirma">' +
+        '<div class="subst-opt-info" style="margin-bottom:12px"><b>' + escapeHtml(novoMat.mpCodigo) + '</b> — ' + escapeHtml(novoMat.mpNome || '') + '</div>' +
+        '<div class="field-hint">🧪 Este item é o <b>Ajuste (QSP)</b> desta fórmula -- o percentual não é digitado aqui, é sempre recalculado automaticamente pra fechar 100% contra os demais itens.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:14px">' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="substVoltarBtn">← Voltar à lista</button>' +
+          '<button type="button" class="btn btn-green btn-sm" id="substConfirmarBtn">Confirmar troca de material</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('substVoltarBtn').addEventListener('click', function() { renderSubstResultados(document.getElementById('substBusca').value); });
+    document.getElementById('substConfirmarBtn').addEventListener('click', confirmarSubstituicao);
+    return;
+  }
+
   var ehFormula = it.origem === 'formula';
   var valorAtual = ehFormula ? it.percentual : it.quantidade;
   var rotulo = ehFormula ? 'Percentual (% m/m)' : ('Quantidade (' + escapeHtml(novoMat.unidade || it.unidade || '') + ')');
 
-  var box = document.getElementById('substLista');
   box.innerHTML =
     '<div class="subst-confirma">' +
       '<div class="subst-opt-info" style="margin-bottom:12px"><b>' + escapeHtml(novoMat.mpCodigo) + '</b> — ' + escapeHtml(novoMat.mpNome || '') + '</div>' +
@@ -907,6 +966,25 @@ function confirmarSubstituicao() {
   var it = materiaisConsumo[substKeyAtual];
   var novoMat = substMaterialEscolhido;
   if (!it || !novoMat) { fecharModalSubst(); return; }
+  // mpCodigoOriginal é o material que estava na fórmula/BOM antes de qualquer substituição nesta OP
+  // (se já houve uma troca, it.substituiMpCodigo guarda o original; senão, o próprio it.mpCodigo já é o original).
+  var mpCodigoOriginal = it.substituiMpCodigo || it.mpCodigo;
+  var ehFormula = it.origem === 'formula';
+
+  if (it.ajusteAutomatico) {
+    // Só troca o material -- o percentual continua sendo calculado,
+    // nunca digitado (ver recomputarItemAjuste()).
+    materiaisConsumo[substKeyAtual] = Object.assign({}, it, {
+      mpCodigo: novoMat.mpCodigo, mpNome: novoMat.mpNome,
+      substituiMpCodigo: novoMat.mpCodigo === mpCodigoOriginal ? null : mpCodigoOriginal,
+      editado: false
+    });
+    recomputarItemAjuste();
+    renderMateriaisTable();
+    fecharModalSubst();
+    return;
+  }
+
   var valor = parseFloat(document.getElementById('substQtdInput').value);
   // Pedido do usuário: "não pode existir item negativo" -- bloqueia aqui,
   // não deixa nem chegar a gravar em materiaisConsumo.
@@ -914,10 +992,6 @@ function confirmarSubstituicao() {
     showAlert('Informe um valor válido (não pode ser negativo).', 'danger');
     return;
   }
-  // mpCodigoOriginal é o material que estava na fórmula/BOM antes de qualquer substituição nesta OP
-  // (se já houve uma troca, it.substituiMpCodigo guarda o original; senão, o próprio it.mpCodigo já é o original).
-  var mpCodigoOriginal = it.substituiMpCodigo || it.mpCodigo;
-  var ehFormula = it.origem === 'formula';
   var atualizado = Object.assign({}, it, {
     mpCodigo: novoMat.mpCodigo, mpNome: novoMat.mpNome,
     // Escolher de volta o material original desfaz a substituição (limpa o rótulo em vez de
@@ -936,6 +1010,10 @@ function confirmarSubstituicao() {
     atualizado.quantidade = valor;
   }
   materiaisConsumo[substKeyAtual] = atualizado;
+  // Se o item editado é da fórmula, a diferença precisa ser refletida no
+  // item de ajuste (se a fórmula tiver um marcado) imediatamente, sem
+  // esperar o próximo recálculo completo de dimensionamento.
+  if (ehFormula) recomputarItemAjuste();
   renderMateriaisTable();
   fecharModalSubst();
 }

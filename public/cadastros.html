@@ -820,18 +820,22 @@
 
       <div class="tab-panel active" id="tab-form-formula">
         <div id="formulasAcoes-form" style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px"></div>
+        <div class="field-hint" style="margin-bottom:8px">O item marcado como <b>Ajuste (QSP)</b> é o único que a Emissão de OP recalcula sozinho pra fechar 100% quando outro item da fórmula é substituído (o resto da fórmula não muda) -- normalmente água ou álcool. Escolha no máximo um por versão.</div>
         <table>
           <thead><tr>
             <th style="min-width:160px">Matéria-Prima</th>
             <th style="width:80px">Fase</th>
             <th style="width:90px">Ordem</th>
             <th style="width:120px">% m/m</th>
+            <th style="width:110px">Ajuste (QSP)</th>
             <th style="width:40px"></th>
           </tr></thead>
           <tbody id="formulaBody-form"></tbody>
         </table>
         <button class="btn btn-ghost btn-sm" id="btnAddFormulaItem-form" style="margin-top:10px">+ Adicionar item</button>
         <div class="soma-bar" id="somaBar-form">Soma: 0,000%</div>
+        <div class="field-hint" id="ajusteHint-form" style="margin-top:6px;display:none"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnRemoverAjuste-form" style="margin-top:6px;display:none">✕ Remover item de ajuste automático</button>
       </div>
 
       <div class="tab-panel" id="tab-form-bom">
@@ -3796,6 +3800,7 @@ document.addEventListener('DOMContentLoaded', function() {
       status: 'RASCUNHO',
       itens: {},
       somaPercentual: 0,
+      itemAjusteKey: null,
       aprovadoPD: null,
       aprovadoQualidade: null,
       substituiVersao: null,
@@ -3834,6 +3839,11 @@ document.addEventListener('DOMContentLoaded', function() {
     updates['formulas/' + novaKey] = {
       codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO',
       itens: origemFormula.itens || {}, somaPercentual: origemFormula.somaPercentual || 0,
+      // Carrega o item de ajuste (QSP) junto -- os itens foram clonados com
+      // as MESMAS chaves da versão de origem, então a referência continua
+      // válida; sem isso, toda nova versão perderia a marcação e voltaria a
+      // pedir ajuste manual em emitir_op.html até alguém remarcar.
+      itemAjusteKey: origemFormula.itemAjusteKey || null,
       aprovadoPD: null, aprovadoQualidade: null, substituiVersao: origemVersao,
       criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
     };
@@ -3852,16 +3862,62 @@ document.addEventListener('DOMContentLoaded', function() {
     var editavel = f.status === 'RASCUNHO';
     var entries = Object.entries(itens);
     if (!entries.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhum item na fórmula ainda.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum item na fórmula ainda.</td></tr>';
     } else {
       tbody.innerHTML = entries.map(function(entry) {
         var itemKey = entry[0], it = entry[1];
-        return linhaFormula(key, itemKey, it, editavel);
+        return linhaFormula(key, itemKey, it, editavel, f.itemAjusteKey || null);
       }).join('');
     }
     atualizarSomaBar(f);
     document.getElementById('btnAddFormulaItem-form').style.display = editavel ? 'inline-flex' : 'none';
     wireFormulaRowEvents(key, editavel);
+
+    // Pedido do usuário: "quando substituo algum item, deve fechar 100%
+    // automaticamente" -- em vez de rebalancear tudo proporcionalmente (o
+    // que mexeria em itens que ninguém pediu pra mexer), o item marcado
+    // aqui como "Ajuste (QSP)" absorve sozinho a diferença na hora da
+    // emissão da OP (ver recomputarItemAjuste em emitir_op.html). Sugere
+    // automaticamente o candidato mais comum (água/álcool, achado real:
+    // 146 das 163 fórmulas de produção já têm um desses dois como maior
+    // item) -- mas nunca aplica sozinho, só sugere; alguém de
+    // Qualidade/P&D precisa confirmar clicando.
+    var hintEl = document.getElementById('ajusteHint-form');
+    var removerBtn = document.getElementById('btnRemoverAjuste-form');
+    if (editavel && !f.itemAjusteKey) {
+      var sug = sugestaoItemAjuste(itens);
+      if (sug) {
+        hintEl.style.display = 'block';
+        hintEl.innerHTML = '💡 Sugestão de item de ajuste (QSP): <b>' + escapeHtml(sug[1].mpNome || sug[1].mpCodigo || '') + '</b> (' + fmtNum(sug[1].percentualMM || 0) + '%) — ' +
+          '<button type="button" class="btn btn-ghost btn-sm" id="btnUsarSugestaoAjuste-form">Usar esta sugestão</button>';
+        document.getElementById('btnUsarSugestaoAjuste-form').addEventListener('click', function() {
+          db.ref('formulas/' + key + '/itemAjusteKey').set(sug[0])
+            .catch(function(err) { showAlert('Erro ao definir item de ajuste: ' + err.message, 'danger'); });
+        });
+      } else {
+        hintEl.style.display = 'none';
+        hintEl.innerHTML = '';
+      }
+    } else {
+      hintEl.style.display = 'none';
+      hintEl.innerHTML = '';
+    }
+    removerBtn.style.display = (editavel && f.itemAjusteKey) ? 'inline-flex' : 'none';
+    removerBtn.onclick = function() {
+      db.ref('formulas/' + key + '/itemAjusteKey').remove()
+        .catch(function(err) { showAlert('Erro ao remover item de ajuste: ' + err.message, 'danger'); });
+    };
+  }
+  // Acha o melhor candidato a item de ajuste (água/álcool -- validado
+  // contra os dados reais: são o item de maior % em 89% das fórmulas de
+  // produção) pra sugerir, nunca pra aplicar sozinho.
+  function sugestaoItemAjuste(itens) {
+    var candidatos = Object.entries(itens).filter(function(e) {
+      return /AGUA|ÁGUA|ALCOOL|ÁLCOOL/i.test(e[1].mpNome || '');
+    });
+    if (!candidatos.length) return null;
+    candidatos.sort(function(a, b) { return (b[1].percentualMM || 0) - (a[1].percentualMM || 0); });
+    return candidatos[0];
   }
   // tipos: array de tipos aceitos (ver enum atual em Materiais -- MPGR/MPES
   // pra matéria-prima, EP/ES/ET pra embalagem), ou null/vazio pra não filtrar.
@@ -3887,13 +3943,16 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button type="button" class="btn btn-ghost btn-sm ' + classeBtn + '" ' + dataAttr + ' data-sugestao="' + escapeAttr(sug.mpCodigo) + '">Usar sugestão</button>' : ' · sem sugestão, buscar manualmente') +
       '</div>';
   }
-  function linhaFormula(formKey, itemKey, it, editavel) {
+  function linhaFormula(formKey, itemKey, it, editavel, itemAjusteKey) {
+    var ehAjuste = itemKey === itemAjusteKey;
     if (!editavel) {
       return '<tr data-item="' + escapeAttr(itemKey) + '">' +
         '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.fase || '') + '</td>' +
         '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
-        '<td>' + fmtNum(it.percentualMM || 0) + '%</td><td></td></tr>';
+        '<td>' + fmtNum(it.percentualMM || 0) + '%</td>' +
+        '<td>' + (ehAjuste ? '<span class="badge badge-blue">🧪 QSP</span>' : '') + '</td>' +
+        '<td></td></tr>';
     }
     return '<tr data-item="' + escapeAttr(itemKey) + '">' +
       '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['MPGR', 'MPES'], it.mpCodigo) + '</select>' +
@@ -3903,12 +3962,19 @@ document.addEventListener('DOMContentLoaded', function() {
       '</select></td>' +
       '<td><input type="number" class="f-ordem" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" value="' + (it.ordemAdicao != null ? it.ordemAdicao : '') + '"></td>' +
       '<td><input type="number" class="f-pct" data-item="' + escapeAttr(itemKey) + '" min="0" step="0.001" value="' + (it.percentualMM != null ? it.percentualMM : '') + '"></td>' +
+      '<td style="text-align:center"><input type="radio" name="f-ajuste-radio" class="f-ajuste" data-item="' + escapeAttr(itemKey) + '" title="Marcar como item de ajuste (QSP)"' + (ehAjuste ? ' checked' : '') + '></td>' +
       '<td><button class="btn btn-danger-ghost btn-sm f-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
   }
   function wireFormulaRowEvents(formKey, editavel) {
     if (!editavel) return;
     document.querySelectorAll('#formulaBody-form .f-mp, #formulaBody-form .f-fase, #formulaBody-form .f-ordem, #formulaBody-form .f-pct').forEach(function(el) {
       el.addEventListener('change', function() { salvarItemFormula(formKey, el.getAttribute('data-item')); });
+    });
+    document.querySelectorAll('#formulaBody-form .f-ajuste').forEach(function(el) {
+      el.addEventListener('change', function() {
+        db.ref('formulas/' + formKey + '/itemAjusteKey').set(el.getAttribute('data-item'))
+          .catch(function(err) { showAlert('Erro ao definir item de ajuste: ' + err.message, 'danger'); });
+      });
     });
     document.querySelectorAll('#formulaBody-form .f-remove').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -3917,7 +3983,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // é a área mais sensível do cadastro (entra direto na emissão de OP) e
         // era justamente a única sem nenhum tratamento de erro no arquivo --
         // falha silenciosa aqui (rede instável, permissão) some sem aviso.
-        db.ref('formulas/' + formKey + '/itens/' + itemKey).remove()
+        var updates = {};
+        updates['formulas/' + formKey + '/itens/' + itemKey] = null;
+        // Remover o item marcado como ajuste (QSP) tem que limpar a marcação
+        // junto -- senão fica um itemAjusteKey apontando pra um item que não
+        // existe mais (recomputarItemAjuste em emitir_op.html ignora isso com
+        // segurança, mas fica um dado órfão sem necessidade).
+        if ((allFormulas[formKey] || {}).itemAjusteKey === itemKey) {
+          updates['formulas/' + formKey + '/itemAjusteKey'] = null;
+        }
+        db.ref().update(updates)
           .then(recalcularSomaFormula.bind(null, formKey))
           .catch(function(err) { showAlert('Erro ao remover item da fórmula: ' + err.message, 'danger'); });
       });
