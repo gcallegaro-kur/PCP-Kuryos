@@ -878,6 +878,23 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
 // positivo (entrada) ou negativo (saída); `dbRef` é a instância `db` de
 // quem chama (mesmo padrão de nextSequential). Sempre .transaction() --
 // dois ajustes concorrentes no mesmo material nunca se perdem um no outro.
+//
+// WMS Fase 1: mapa tipo (código técnico, o que sempre existiu em
+// ultimaMovimentacao.tipo) -> motivo (nome humano da lista fechada
+// gerenciada em Cadastros > Categorias, config/motivosMovimentoEstoque).
+// Cobre só os tipos AUTOMÁTICOS que já passam por ajustarEstoque hoje --
+// ações manuais (transferência entre endereços, saída manual) deixam o
+// usuário escolher o motivo na tela, não usam este mapa.
+var MOTIVO_POR_TIPO_MOVIMENTACAO = {
+  recebimento_pc: 'RECEBIMENTO',
+  consumo_producao: 'CONSUMO DE PRODUÇÃO',
+  perda: 'PERDA',
+  ajuste_manual: 'AJUSTE DE INVENTÁRIO'
+};
+function motivoPadraoPorTipoMovimentacao(tipo) {
+  return MOTIVO_POR_TIPO_MOVIMENTACAO[tipo] || 'OUTRO';
+}
+
 function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, extras) {
   if (!materialCodigo || !delta) return Promise.resolve();
   extras = extras || {};
@@ -891,6 +908,25 @@ function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, ext
     atual.ultimaAtualizacao = new Date().toISOString();
     atual.ultimaMovimentacao = { tipo: tipoMovimentacao, qtd: delta, ref: ref || null, em: new Date().toISOString() };
     return atual;
+  }).then(function(resultado) {
+    // WMS Fase 1: ultimaMovimentacao acima só guarda a ÚLTIMA movimentação
+    // (sobrescrita a cada chamada) -- sem histórico nenhum de tudo que já
+    // aconteceu antes. movimentos_estoque é um log append-only (push),
+    // alimentado automaticamente por QUALQUER chamada a ajustarEstoque --
+    // os 3 pontos de chamada existentes (logistica.html, form.html x2)
+    // ganham log completo sem precisar editar nenhum deles. Best-effort:
+    // se o push falhar, não desfaz o ajuste de saldo (que já é a fonte de
+    // verdade) -- o log é um reflexo dele, não pré-requisito.
+    var novoSaldo = (resultado && resultado.committed && resultado.snapshot && resultado.snapshot.val()) ? resultado.snapshot.val().saldoAtual : null;
+    dbRef.ref('movimentos_estoque/' + key).push({
+      tipo: tipoMovimentacao || null,
+      motivo: motivoPadraoPorTipoMovimentacao(tipoMovimentacao),
+      qtd: delta, saldoApos: novoSaldo, ref: ref || null,
+      itemTipo: 'material', itemCodigo: materialCodigo,
+      itemNome: extras.materialNome || null, unidade: extras.unidade || null,
+      autor: extras.autor || null, em: new Date().toISOString()
+    }).catch(function(err) { console.error('Falha ao gravar log de movimentação de estoque:', err); });
+    return resultado;
   });
 }
 
@@ -977,6 +1013,73 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
       return atual;
     });
   }));
+}
+
+// ── WMS Fase 1: lote/endereço granular (estoque_lotes/enderecos_estoque) ──
+// Nós IRMÃOS de estoque/{materialKey}, não aninhados dentro dele -- o
+// agregado (saldoAtual/saldoEmpenhado) continua sendo a fonte de verdade
+// do saldo físico total de MP/embalagem, inalterado; estes dois nós novos
+// só adicionam RASTREABILIDADE de entrada (de qual lote, validade, onde
+// foi guardado), sem mudar nada de como o agregado funciona.
+//
+// itemTipo distingue de onde vem o item: 'material' (materiais/, entra
+// pelo recebimento em logistica.html) ou 'produto' (produtos/, SKU --
+// entra pela conclusão de OP em ops.html, ver seção Produto Acabado do
+// plano). itemKey = sanitizeKey(materialCodigo) ou sanitizeKey(sku),
+// mesma função já usada em todo o resto do app.
+
+// Chamado no recebimento (logistica.html, item com lote/validade/endereço
+// preenchidos) e na conclusão de OP com endereço de destino (ops.html,
+// produto acabado). Só cria (push simples, sem .transaction() -- cada
+// chamada gera uma chave nova, não existe corrida a proteger aqui, mesmo
+// raciocínio já usado em pedidos_compra/.../recebimentos.push()). Nunca
+// toca em estoque/{materialKey} -- quem chama isto continua chamando
+// ajustarEstoque/incrementarEstoque separadamente pro saldo agregado.
+function putawayEstoqueLote(dbRef, itemTipo, itemCodigo, dadosLote) {
+  if (!itemTipo || !itemCodigo || !dadosLote || !dadosLote.enderecoKey) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var agora = new Date().toISOString();
+  var registro = Object.assign({
+    itemTipo: itemTipo, itemCodigo: itemCodigo,
+    status: 'LIBERADO', criadoEm: agora, atualizadoEm: agora
+  }, dadosLote);
+  return dbRef.ref('estoque_lotes/' + itemKey).push(registro).then(function(ref) {
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: itemTipo === 'produto' ? 'producao_op' : 'recebimento_pc',
+      motivo: itemTipo === 'produto' ? 'ENTRADA DE PRODUÇÃO' : 'RECEBIMENTO',
+      qtd: dadosLote.saldoLote || dadosLote.qtdOriginal || 0, saldoApos: null,
+      ref: dadosLote.origemRef || null, loteKey: ref.key, enderecoKey: dadosLote.enderecoKey,
+      itemTipo: itemTipo, itemCodigo: itemCodigo,
+      itemNome: dadosLote.itemNome || null, unidade: dadosLote.unidade || null,
+      autor: dadosLote.criadoPor || null, em: agora
+    }).then(function() { return ref; });
+  }).catch(function(err) { console.error('Falha ao registrar putaway de estoque:', err); throw err; });
+}
+
+// Move um lote já registrado de um endereço pra outro (não muda saldo
+// nenhum, só a localização) -- usado pela ação "Transferir" em
+// estoque.html. `motivo` vem de config/motivosMovimentoEstoque (lista
+// fechada), escolhido pelo usuário na tela -- pedido do usuário: "Lista
+// fechada, gerenciável em Cadastros" pro motivo de cada movimentação.
+function transferirLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, novoEnderecoKey, motivo, autor) {
+  if (!itemCodigo || !loteKey || !novoEnderecoKey) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  return loteRef.once('value').then(function(snap) {
+    var lote = snap.val();
+    if (!lote) return Promise.resolve(); // lote já não existe mais (removido/consumido) -- nada a transferir
+    var enderecoAnterior = lote.enderecoKey;
+    return loteRef.update({ enderecoKey: novoEnderecoKey, atualizadoEm: new Date().toISOString() }).then(function() {
+      return dbRef.ref('movimentos_estoque/' + itemKey).push({
+        tipo: 'transferencia', motivo: motivo || 'TRANSFERÊNCIA ENTRE ENDEREÇOS',
+        qtd: 0, saldoApos: null, ref: enderecoAnterior + ' -> ' + novoEnderecoKey,
+        loteKey: loteKey, enderecoKey: novoEnderecoKey,
+        itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+        itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+        autor: autor || null, em: new Date().toISOString()
+      });
+    });
+  });
 }
 
 // ── Tipos de fornecedor (multi) ─────────────────────────────────────────
