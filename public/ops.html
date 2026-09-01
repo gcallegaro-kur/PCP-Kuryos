@@ -946,7 +946,7 @@
     if (!pageItems.length) {
       tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma OP encontrada com esses filtros.</td></tr>';
     } else {
-      const isAdmin = currentRole === 'admin';
+      const isAdmin = currentRole === 'admin' || currentRole === 'pcp';
       tbody.innerHTML = pageItems.map(op => renderChecklistRow(op, isAdmin)).join('');
     }
 
@@ -1003,8 +1003,8 @@
   }
 
   function cycleClChecklist(opKey, tipoKey) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem confirmar o recebimento das ordens.');
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'pcp')) {
+      alert('Acesso Negado: Apenas administradores ou PCP podem confirmar o recebimento das ordens.');
       listenToActiveOps();
       return;
     }
@@ -1166,7 +1166,7 @@
   }
 
   function renderOpRow(op) {
-    const isAdmin = currentRole === 'admin';
+    const isAdmin = currentRole === 'admin' || currentRole === 'pcp';
     let optionsHtml = `<option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>`;
     configGlobal.linhas.forEach(lName => {
       optionsHtml += `<option value="${escapeAttr(lName)}" ${op.linha === lName ? 'selected' : ''}>${escapeHtml(lName)}</option>`;
@@ -1353,8 +1353,8 @@
   }
   
   function updateOpField(opKey, field, value) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'pcp')) {
+      alert('Acesso Negado: Apenas administradores ou PCP podem atualizar OPs.');
       listenToActiveOps();
       return;
     }
@@ -1401,8 +1401,8 @@
   }
 
   function clearStatusOverride(opKey) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem atualizar OPs.');
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'pcp')) {
+      alert('Acesso Negado: Apenas administradores ou PCP podem atualizar OPs.');
       return;
     }
     database.ref('ops/' + opKey).update({
@@ -1434,8 +1434,8 @@
   // esse trabalho seria perder rastro de produção de verdade. Só libera com
   // uma segunda confirmação de identidade (senha) + justificativa.
   function cancelOp(opKey) {
-    if (!window.currentUser || window.currentUser.role !== 'admin') {
-      alert('Acesso Negado: Apenas administradores podem cancelar OPs.');
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'pcp')) {
+      alert('Acesso Negado: Apenas administradores ou PCP podem cancelar OPs.');
       return;
     }
     const op = opsGlobal[opKey];
