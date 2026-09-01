@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/qrcode-lib.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -132,8 +133,14 @@
       .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:7px;margin:3px 0}
       .etq-lbl{display:block;color:#555;font-size:6px;text-transform:uppercase}
       .etq-val{display:block;font-weight:700;font-size:8px}
-      .etq-barcode{text-align:center;margin-top:auto}
-      .etq-barcode-txt{font-size:7px;letter-spacing:1px;margin-top:1px}
+      /* EAN13 (produto) + QR (lote) lado a lado -- cada um cabe na mesma
+         faixa de altura, dá pra ler os dois sem espremer a etiqueta. */
+      .etq-codigos{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;gap:6px}
+      .etq-ean{text-align:center;flex:1;min-width:0}
+      .etq-ean svg{max-width:100%}
+      .etq-ean-vazio{font-size:6px;color:#777;font-style:italic;padding:6px 0}
+      .etq-qr{text-align:center}
+      .etq-codigo-txt{font-size:6px;letter-spacing:.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     }
     @media(max-width:600px){.form-grid{grid-template-columns:1fr}.resumo-grid{grid-template-columns:1fr 1fr}}
   </style>
@@ -1075,6 +1082,11 @@ function montarDadosOP(lote, janela) {
     massaLoteKg: calc.massaLoteKg, volumeGranelL: calc.volumeGranelL,
     pesoTeoricoUnG: calc.pesoTeoricoUnG, volumeTeoricoUnMl: calc.volumeTeoricoUnMl,
     pecasPorCaixa: produtoSelecionado.unCx || 0, // pra gerar as etiquetas de caixa de embarque (ver montarEtiquetasCaixa em shared/utils.js)
+    // Snapshot do EAN13 do produto na hora da emissão -- mesmo raciocínio
+    // do pecasPorCaixa acima: reimpressão (ops.html) não depende de
+    // buscar o cadastro do produto de novo. Pedido do usuário: "a
+    // etiqueta tem que ser com codigo de barras do produto".
+    ean13: produtoSelecionado.ean13 || '',
     densidadeGranelUsada: calc.densidadeGranelUsada, overfillPctUsado: calc.overfillPctUsado,
     perdaProcessoPctUsado: calc.perdaProcessoPctUsado, validade: calc.validade,
     materiaisConsumo: materiaisConsumo

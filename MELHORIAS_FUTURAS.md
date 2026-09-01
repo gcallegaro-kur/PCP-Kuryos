@@ -250,6 +250,23 @@ escopo por enquanto:
   Kuryos já tem Power Automate/licenciamento M365 pra isso ou se também
   entra do zero. Enquanto isso, o caminho manual (Salvar como PDF do
   próprio navegador na hora de imprimir) já funciona sem infra nova.
+- **Etiqueta de caixa de embarque maior, com mais informações** — hoje
+  fixa em 90x55mm (padrão real informado pelo usuário). Usuário: "estamos
+  avaliando ajustar pra ter uma etiqueta maior, com mais informações. Por
+  hora mantemos, mas deixe no repo de melhorias". Se/quando confirmado,
+  precisa de um layout novo (mais espaço = pode caber mais campos, não é
+  só esticar o atual) e, se surgir necessidade real de trocar de tamanho
+  com frequência (ex: por cliente), um seletor de dimensão em vez de um
+  valor fixo no CSS -- discutido e adiado deliberadamente por enquanto
+  (dimensão única é mais simples e menos sujeita a erro).
+- **Código de barras DUM14 (ITF-14)** — hoje a etiqueta usa só EAN13 do
+  produto (`shared/utils.js`, `ean13Svg`). Confirmado via Firebase CLI
+  que `dum14` está preenchido exatamente nos mesmos 28 produtos que têm
+  `ean13` (nunca um sem o outro, nos 373 produtos reais) -- por isso não
+  há ganho prático em implementar DUM14 agora. Se um dia existir produto
+  com DUM14 mas sem EAN13, seria necessário implementar o padrão ITF-14
+  (Interleaved 2 of 5 numérico, diferente do EAN13/Code 39 já
+  implementados) do zero.
 
 ## Acessibilidade (varredura pendente)
 

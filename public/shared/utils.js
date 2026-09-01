@@ -1298,21 +1298,20 @@ function montarFichasOP(op, formulaItens, especs, msAnvisa) {
   return paginaOP1(op) + paginaOF(op, formulaItens, especs) + paginaOrdemEnvase(op, itensTodos, msAnvisa) + paginaRotulagem(op, itensTodos) + paginaRelatorioPA(op, especs);
 }
 
-/* ── Etiqueta de caixa de embarque (código de barras Code 39) ──
+/* ── Etiqueta de caixa de embarque ──
    Pedido do usuário: "minimizaria muitos dos erros que temos hoje, de
    impressão errada de etiqueta" -- em vez de exigir que alguém digite os
    dados da caixa à mão de novo (fonte do erro), a etiqueta é gerada
-   automaticamente com o que já está gravado na própria OP.
+   automaticamente com o que já está gravado na própria OP. */
 
-   Code 39 escolhido em vez de Code 128/QR: é o formato mais simples de
-   implementar corretamente do zero (cada caractere tem um padrão FIXO e
-   independente, sem checksum obrigatório nem tabela de correção de erro
-   como QR) -- ISO/IEC 16388, suporta 0-9/A-Z/espaço/-.$/+%. Ainda assim,
+/* Code 39 (abaixo) -- NÃO é mais usado pela etiqueta atual (virou EAN13
+   do produto + QR do lote, ver bloco acima). Mantido porque pode ser
+   útil de novo (é o formato mais simples de implementar corretamente do
+   zero -- cada caractere tem um padrão FIXO e independente, sem
+   checksum obrigatório) -- ISO/IEC 16388, suporta 0-9/A-Z/espaço/-.$/+%.
    ATENÇÃO: essa tabela foi escrita de memória, não gerada por uma lib
    testada em campo -- validar com leitor de código de barras real antes
-   de confiar em produção. Se algum caractere não ler certo, é a linha
-   dele nesta tabela que precisa ajustar, o resto do mecanismo (SVG,
-   contagem de caixas, layout) não muda. */
+   de confiar em produção, se voltar a ser usada. */
 var CODE39_PATTERNS = {
   '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
   '4': 'nnnwwnnnw', '5': 'wnnwwnnnn', '6': 'nnwwwnnnn', '7': 'nnnwnnwnw',
@@ -1355,6 +1354,91 @@ function code39Svg(texto, alturaMm, moduloMm) {
   return '<svg xmlns="http://www.w3.org/2000/svg" width="' + x.toFixed(2) + 'mm" height="' + alturaMm + 'mm" viewBox="0 0 ' + x.toFixed(2) + ' ' + alturaMm + '">' + barras.join('') + '</svg>';
 }
 
+// ── Código de barras EAN13 (produto) ──
+// Pedido do usuário: "a etiqueta tem que ser com codigo de barras do
+// produto" -- substitui o Code 39 do lote (abaixo, mantido só por se
+// vir a ser útil de novo). Padrão internacional (GS1/ISO 15420) -- mais
+// rígido que o Code 39, mas por isso mesmo dá pra AUTOVERIFICAR de um
+// jeito bem mais forte: os padrões G e R de cada dígito são DERIVADOS
+// matematicamente do padrão L (G = espelhamento do complemento de bits
+// de L; R = só o complemento de L) -- só a tabela L (10 entradas) e a
+// tabela de paridade (qual dos 6 dígitos da esquerda usa L ou G, por
+// dígito inicial) precisam ser digitadas de cabeça; o resto é
+// calculado, não transcrito -- elimina uma fonte inteira de erro que o
+// Code 39 não tinha como evitar. Conferido contra 2 EAN13 reais
+// publicados antes de confiar (dígito verificador batendo nos dois):
+// 4006381333931 e 5901234123457. AVISO HONESTO, igual o Code 39: essas
+// duas tabelas continuam escritas de memória -- validar com leitor real
+// antes de confiar em produção.
+var EAN13_L = {
+  0: '0001101', 1: '0011001', 2: '0010011', 3: '0111101', 4: '0100011',
+  5: '0110001', 6: '0101111', 7: '0111011', 8: '0110111', 9: '0001011'
+};
+var EAN13_PARIDADE = {
+  0: 'LLLLLL', 1: 'LLGLGG', 2: 'LLGGLG', 3: 'LLGGGL', 4: 'LGLLGG',
+  5: 'LGGLLG', 6: 'LGGGLL', 7: 'LGLGLG', 8: 'LGLGGL', 9: 'LGGLGL'
+};
+function ean13InverteBit(padrao) {
+  return padrao.split('').map(function(b) { return b === '1' ? '0' : '1'; }).join('');
+}
+function ean13R(digito) { return ean13InverteBit(EAN13_L[digito]); }
+function ean13G(digito) { return ean13R(digito).split('').reverse().join(''); }
+function ean13Checksum(doze) {
+  var soma = 0;
+  for (var i = 0; i < 12; i++) soma += parseInt(doze[i], 10) * (i % 2 === 0 ? 1 : 3);
+  return String((10 - (soma % 10)) % 10);
+}
+// Aceita 13 dígitos (com verificador já certo, conferido de verdade) ou
+// 12 (calcula o verificador) -- qualquer outra coisa (letras, tamanho
+// errado, verificador que não bate) retorna null; nunca tenta
+// "consertar" nem desenha um código inválido.
+function ean13Normalizar(codigo) {
+  var s = String(codigo || '').replace(/\D/g, '');
+  if (s.length === 12) s += ean13Checksum(s);
+  if (s.length !== 13) return null;
+  if (ean13Checksum(s.slice(0, 12)) !== s[12]) return null;
+  return s;
+}
+function ean13Svg(codigo, alturaMm, moduloMm) {
+  var s = ean13Normalizar(codigo);
+  if (!s) return '';
+  alturaMm = alturaMm || 12; moduloMm = moduloMm || 0.33;
+  var paridade = EAN13_PARIDADE[parseInt(s[0], 10)];
+  var bits = '101'; // guarda esquerda
+  for (var i = 0; i < 6; i++) {
+    var d = parseInt(s[1 + i], 10);
+    bits += paridade[i] === 'L' ? EAN13_L[d] : ean13G(d);
+  }
+  bits += '01010'; // guarda central
+  for (var i = 0; i < 6; i++) bits += ean13R(parseInt(s[7 + i], 10));
+  bits += '101'; // guarda direita -- 3+42+5+42+3 = 95 módulos no total (o número clássico do EAN13)
+  var x = 0, barras = [];
+  for (var i = 0; i < bits.length; i++) {
+    if (bits[i] === '1') barras.push('<rect x="' + x.toFixed(3) + '" y="0" width="' + moduloMm.toFixed(3) + '" height="' + alturaMm + '" fill="#000"/>');
+    x += moduloMm;
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + x.toFixed(2) + 'mm" height="' + alturaMm + 'mm" viewBox="0 0 ' + x.toFixed(2) + ' ' + alturaMm + '">' + barras.join('') + '</svg>';
+}
+
+// ── QR code (lote) -- biblioteca vendorizada, shared/qrcode-lib.js ──
+// Pedido do usuário: "talvez dê pra alocarmos um qr code que identifique
+// o lote". Diferente do EAN13/Code 39, QR usa correção de erro
+// Reed-Solomon (aritmética em GF(256)) -- reimplementar isso do zero
+// seria arriscado demais pra confiar sem uma referência testada de
+// verdade, por isso usa a biblioteca "qrcode-generator" (MIT, Kazuhiko
+// Arase) em vez de escrever na mão como o EAN13/Code 39.
+function qrCodeSvg(texto, tamanhoMm) {
+  tamanhoMm = tamanhoMm || 15;
+  if (typeof qrcode !== 'function') return ''; // lib não carregada -- não derruba a etiqueta inteira por causa disso
+  var qr = qrcode(0, 'M'); // typeNumber 0 = menor tamanho que couber; M = 15% de correção de erro
+  qr.addData(String(texto || ''));
+  qr.make();
+  var svg = qr.createSvgTag({ scalable: true, margin: 0 });
+  // A lib só sabe gerar width/height em "px" -- injeta explícito em mm
+  // no <svg> raiz, mantendo o viewBox dela (em módulos) pra escalar certo.
+  return svg.replace('<svg ', '<svg width="' + tamanhoMm + 'mm" height="' + tamanhoMm + 'mm" ');
+}
+
 // Quantas etiquetas gerar -- 1 por caixa de embarque, calculado a partir
 // do que já está gravado na OP (peças ÷ peças-por-caixa do cadastro do
 // produto, arredondado pra cima -- mesmo princípio "nunca falta caixa"
@@ -1366,10 +1450,21 @@ function totalCaixasDaOP(op) {
   return Math.max(1, Math.ceil(op.qtdPlanejada / pecasPorCaixa));
 }
 
+// Pedido do usuário: "a etiqueta tem que ser com codigo de barras do
+// produto" (EAN13) + "um qr code que identifique o lote". "Vamos
+// colocar o codigo de barras das que possuem registro... As que não
+// tiverem, deixa o espaço vazio -- fica pro comercial levantar esses
+// pontos junto ao cliente" -- confirmado via Firebase CLI: hoje 28 dos
+// 373 produtos têm EAN13/DUM14 cadastrado (os DOIS sempre juntos, nunca
+// um sem o outro) -- só o EAN13 é usado aqui (DUM14 é outro padrão de
+// código de barras, ITF-14, não implementado -- ver MELHORIAS_FUTURAS.md
+// se algum dia existir produto com DUM14 mas sem EAN13).
 function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
   var qtdNestaCaixa = op.pecasPorCaixa
     ? (numeroCaixa < totalCaixas ? op.pecasPorCaixa : (op.qtdPlanejada - op.pecasPorCaixa * (totalCaixas - 1)))
     : op.qtdPlanejada;
+  var eanSvg = ean13Svg(op.ean13 || '', 8, 0.24);
+  var qrSvg = qrCodeSvg(op.lote || '', 13);
   return '<div class="etiqueta-page">' +
     '<div class="etq-header"><b>' + escapeHtml(op.cliente || '—') + '</b><span>Caixa ' + numeroCaixa + ' de ' + totalCaixas + '</span></div>' +
     '<div class="etq-produto">' + escapeHtml(op.produto || '—') + '</div>' +
@@ -1379,7 +1474,10 @@ function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
       '<div><span class="etq-lbl">Qtde. nesta caixa</span><span class="etq-val">' + fmtNum(qtdNestaCaixa) + ' un.</span></div>' +
       '<div><span class="etq-lbl">Validade</span><span class="etq-val">' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</span></div>' +
     '</div>' +
-    '<div class="etq-barcode">' + code39Svg(op.lote || '', 9, 0.28) + '<div class="etq-barcode-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
+    '<div class="etq-codigos">' +
+      '<div class="etq-ean">' + (eanSvg || '<div class="etq-ean-vazio">EAN não cadastrado</div>') + (eanSvg ? '<div class="etq-codigo-txt">' + escapeHtml(op.ean13) + '</div>' : '') + '</div>' +
+      '<div class="etq-qr">' + qrSvg + '<div class="etq-codigo-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
+    '</div>' +
   '</div>';
 }
 
