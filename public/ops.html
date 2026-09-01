@@ -521,6 +521,7 @@
   let opsGlobal = {};
   let produtosGlobal = {};
   let pedidosComerciaisGlobal = {};
+  let enderecosEstoqueGlobal = {}; // WMS Fase 1 -- popula o select de endereço no putaway de produto acabado
   
   // Wait for user authentication to determine role permissions
   firebase.auth().onAuthStateChanged(user => {
@@ -549,6 +550,10 @@
     dbOnValue(database.ref('pedidos_comerciais'), snap => {
       pedidosComerciaisGlobal = snap.val() || {};
       recalculateAndRenderOps();
+    });
+
+    dbOnValue(database.ref('enderecos_estoque'), snap => {
+      enderecosEstoqueGlobal = snap.val() || {};
     });
 
     dbOnValue(database.ref('config'), snap => {
@@ -800,9 +805,74 @@
           console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
         });
       }
+      // WMS Fase 1: pergunta (sem travar a conclusão -- ela já commitou
+      // acima) se quer registrar ONDE o produto acabado foi guardado.
+      // Pedido do usuário respondido diretamente: "é muito mais complexo?"
+      // -- não, a entrada de PA reaproveita o mesmo putawayEstoqueLote do
+      // recebimento de MP, só troca itemTipo -- quase tudo já vem pronto
+      // do próprio registro da OP (lote, validade, sku, quantidade).
+      if (typeof abrirPutawayProdutoModal === 'function') abrirPutawayProdutoModal(op);
     }).catch(err => {
       showToast('Erro ao confirmar conclusão: ' + err.message);
     });
+  }
+
+  // Modal simples (DOM direto, mesmo padrão de abrirCancelamentoComSenhaModal
+  // logo abaixo) -- opcional, aparece só DEPOIS da OP já estar confirmada
+  // como concluída (nunca trava nem atrasa a conclusão em si). "Pular" ou
+  // fechar o modal simplesmente deixa o produto sem endereço registrado --
+  // continua contabilizado normalmente em tudo o resto do sistema, só sem
+  // o rastreio granular de posição.
+  function abrirPutawayProdutoModal(op) {
+    var qtdProduzida = (typeof getProduzido === 'function') ? getProduzido(op, 'linha') : (op.produzidoLinha || op.produzido || 0);
+    if (!op.sku || !qtdProduzida) return; // nada pra guardar (OP sem SKU ou sem produção real registrada)
+    var opcoesEndereco = Object.entries(enderecosEstoqueGlobal)
+      .filter(function(e) { return e[1].ativo !== false; })
+      .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:var(--card);border-radius:16px;padding:22px;max-width:420px;width:100%;box-shadow:var(--shadow)';
+    box.innerHTML = `
+      <div style="font-weight:800;font-size:16px;margin-bottom:6px">📍 Onde o produto foi guardado?</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">OP ${escapeHtml(op.lote || '')} — ${escapeHtml(op.sku)} · ${fmtNum(qtdProduzida)} produzido${qtdProduzida === 1 ? '' : 's'}. Opcional -- só registra o lote de produto acabado nesse endereço se você escolher um. Pular não afeta a conclusão da OP, já confirmada.</div>
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Endereço de destino</label>
+      <select id="pwEndereco" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:14px;background:var(--card);color:var(--text)">
+        <option value="">Sem endereço (pular)</option>
+        ${opcoesEndereco.map(function(e) { return '<option value="' + escapeHtml(e[0]) + '">' + escapeHtml(e[1].codigo) + ' (' + escapeHtml(e[1].area || '') + ')</option>'; }).join('')}
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="pwPularBtn" class="btn-sync" style="background:var(--card);color:var(--text);border:1.5px solid var(--border)">Pular</button>
+        <button type="button" id="pwRegistrarBtn" class="btn-sync">Registrar entrada</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    var fechar = function() { document.body.removeChild(overlay); };
+    document.getElementById('pwPularBtn').onclick = fechar;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) fechar(); });
+    document.getElementById('pwRegistrarBtn').onclick = function() {
+      var enderecoKey = document.getElementById('pwEndereco').value;
+      if (!enderecoKey) { fechar(); return; } // "pular" via select vazio também é válido
+      var enderecoInfo = enderecosEstoqueGlobal[enderecoKey];
+      putawayEstoqueLote(database, 'produto', op.sku, {
+        itemNome: op.produtoNome || op.descricao || null, unidade: 'un',
+        loteOrigem: op.lote || null, dataValidade: op.validade || null,
+        dataRecebimento: new Date().toISOString().slice(0, 10),
+        saldoLote: qtdProduzida, qtdOriginal: qtdProduzida,
+        enderecoKey: enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
+        origemTipo: 'producao_op', origemRef: op.lote || null,
+        criadoPor: (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido'
+      }).then(function() {
+        showToast('Entrada de produto acabado registrada em ' + (enderecoInfo ? enderecoInfo.codigo : enderecoKey) + '.');
+        fechar();
+      }).catch(function(err) {
+        console.error('Falha ao registrar putaway de produto acabado:', err);
+        showToast('Erro ao registrar entrada: ' + err.message);
+      });
+    };
   }
 
   // ── Aba: Checklist de Ordens ────────────────────────────────────────
@@ -1391,6 +1461,8 @@
               console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
             });
           }
+          // Mesmo putaway opcional de confirmarConclusaoOp -- este é o outro caminho de conclusão.
+          if (op && typeof abrirPutawayProdutoModal === 'function') abrirPutawayProdutoModal(op);
         })
         .catch(err => {
           console.error(err);
