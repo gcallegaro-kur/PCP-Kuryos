@@ -1477,9 +1477,9 @@ quantidade real que sobrou) e um **código de barras Code 39** do lote
 pra leitor na expedição. `pecasPorCaixa` vem do cadastro do produto
 (`unCx`, já existia) e passou a ser gravado na própria OP na emissão,
 pra reimpressão não depender do cadastro. Layout impresso em página
-nomeada (CSS Paged Media, 100x150mm -- etiqueta térmica padrão,
-ajustável numa linha se o hardware real for outro tamanho), botão tanto
-na emissão fresca quanto na reimpressão via `ops.html`.
+nomeada (CSS Paged Media, tamanho ajustado no complemento seguinte pro
+padrão real da Kuryos), botão tanto na emissão fresca quanto na
+reimpressão via `ops.html`.
 
 **Aviso honesto, repassado ao usuário**: a tabela de padrões Code 39 foi
 escrita de memória, não copiada de uma lib testada em campo. O harness
@@ -1493,3 +1493,48 @@ Testado: 17 asserções (tabela estruturalmente válida, sanitização,
 contagem de barras, arredondamento de caixas, numeração e quantidade
 real na caixa parcial, fallback sem cadastro, XSS). **Deployado e no
 `main`.**
+
+**Décimo complemento (2026-08-31): etiqueta redimensionada pro padrão
+real + busca de substituição com detalhe técnico.** Duas correções do
+usuário sobre features recém-entregues.
+
+1. *Tamanho da etiqueta*: eu tinha assumido 100x150mm (etiqueta térmica
+   "4x6" genérica, por causa da menção a impressora Zebra). O padrão
+   real da Kuryos é **90x55mm** -- bem mais compacto. Redesenhei o
+   layout inteiro (header, nome do produto com corte de 2 linhas, grid
+   2x2, código de barras) pra caber em ~51mm de altura útil, com fontes
+   e espaçamentos reduzidos e o código de barras de 12mm pra 9mm de
+   altura. Aplicado em `emitir_op.html` e `ops.html` (mesmo bloco de
+   CSS/print nos dois arquivos).
+
+2. *Busca na substituição de material*: "ao clicar em substituir, dentro
+   da OP, preciso ter um campo de pesquisa que de alguma forma traga
+   maiores detalhes sobre o item, pra conseguir substituir dentro da
+   mesma tela (sem precisar sair pra pesquisar)". A tela de "Substituir"
+   ainda usava um `prompt()` com lista numerada em texto puro -- só
+   código+nome, sem nenhum dado técnico (cor, gargalo/rosca, resina,
+   INCI...) pra decidir com segurança, obrigando a sair pra Cadastros
+   conferir e voltar depois. Virou um modal com campo de busca: filtra
+   por código, nome OU qualquer detalhe técnico do material (cor,
+   formato, gargalo/rosca, resina, textura, fixação, INCI, função,
+   marca/modelo, especificações técnicas), ignora acento na busca, cada
+   resultado já mostra os detalhes relevantes na própria linha, o item
+   atualmente selecionado vem marcado com um badge "atual", e materiais
+   inativos (`ativo:false`, 44 dos 904 reais) nunca aparecem como opção.
+   Um clique substitui, sem sair da tela.
+
+**Achado incidental, não corrigido agora (fora de escopo, risco zero em
+produção)**: `materiais.html` é uma tela de cadastro **órfã** -- sem
+link em nenhum menu (só `cadastros.html` é a tela real usada hoje) --
+que ainda compara `tipo` com os literais antigos `'MP'`/`'EMBALAGEM'`,
+o mesmo bug já corrigido em `emitir_op.html` no complemento anterior,
+mas nesta tela morta. Como ninguém navega até ela, fica só registrado
+pra uma limpeza futura (provavelmente exclusão do arquivo).
+
+Testado: harness Node do bloco real -- 19 asserções em etiquetas
+(incluindo checagem específica da altura compacta do código de barras)
+e 38 em materiais/substituição (12 novas: abertura do modal, filtro por
+tipo/inativo, busca por cada campo técnico, busca ignorando acento,
+badge "atual", comitar substituição, ignorar código fora da lista,
+desfazer substituição escolhendo o original de volta, limpeza de
+estado ao fechar). **Deployado e no `main`.**
