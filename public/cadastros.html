@@ -3529,6 +3529,17 @@ document.addEventListener('DOMContentLoaded', function() {
           : (!revisadoOk ? 'Marque esta versão como "Revisado" antes de aprovar' : '')));
         b1.addEventListener('click', aprovarPD);
         el.appendChild(b1);
+        // Pedido do usuário: "como excluo uma versão que criei sem
+        // querer?" -- só existia "+ Nova Versão", nenhum jeito de desfazer.
+        // Restrito a rascunho AINDA sem aprovação de P&D (mesmo bloco do
+        // botão acima) -- uma vez que alguém já aprovou algo, não é mais
+        // "cliquei sem querer", é histórico de verdade.
+        var bDel = document.createElement('button');
+        bDel.className = 'btn btn-danger-ghost btn-sm';
+        bDel.textContent = '🗑 Excluir versão';
+        bDel.title = 'Só disponível pra rascunho ainda sem aprovação -- pra desfazer "+ Nova Versão" clicado sem querer.';
+        bDel.addEventListener('click', excluirVersaoRascunho);
+        el.appendChild(bDel);
       } else if (!f.aprovadoQualidade) {
         var b2 = document.createElement('button');
         b2.className = 'btn btn-green btn-sm';
@@ -3551,6 +3562,44 @@ document.addEventListener('DOMContentLoaded', function() {
   function fmtData(iso) {
     if (!iso) return '';
     try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return iso; }
+  }
+
+  // Antes de apagar, confere se alguma OP real já foi emitida usando essa
+  // versão -- em teoria só devia acontecer com uma versão APROVADA, mas o
+  // dimensionamento em emitir_op.html tem fallback pra fórmula ainda em
+  // rascunho quando não existe nenhuma aprovada, então uma OP real pode sim
+  // ter consumido uma versão que nunca chegou a ser aprovada. Se achou,
+  // recusa a exclusão -- apagar quebraria a reimpressão de qualidade
+  // daquela OP (a ficha de especificações leria um nó que não existe mais).
+  // ops/ não é um listener permanente desta tela -- só uma leitura pontual
+  // no momento da exclusão, evita carregar a coleção inteira à toa.
+  function excluirVersaoRascunho() {
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    var f = allFormulas[key] || {};
+    if (f.status !== 'RASCUNHO' || f.aprovadoPD) return; // mesma guarda do botão
+
+    var sku = (allProdutos[produtoSelecionadoKey] || {}).sku || '';
+    db.ref('ops').once('value').then(function(snap) {
+      var todasOps = snap.val() || {};
+      var opQueUsou = Object.values(todasOps).find(function(op) {
+        return op && op.sku === sku && op.formulaVersao === versaoAtual;
+      });
+      if (opQueUsou) {
+        showAlert('Essa versão já foi usada pela OP ' + (opQueUsou.lote || '—') + ' -- não pode ser excluída (marque como Obsoleta, na aprovação, se quiser tirar de circulação).', 'danger');
+        return;
+      }
+      if (!confirm('Excluir a versão ' + versaoAtual + ' (rascunho)? Apaga fórmula, BOM e especificações dessa versão. Não pode ser desfeito.')) return;
+      var updates = {};
+      updates['formulas/' + key] = null;
+      updates['bom/' + key] = null;
+      updates['especificacoes/' + key] = null;
+      db.ref().update(updates).then(function() {
+        showAlert('Versão ' + versaoAtual + ' excluída.', 'success');
+        versaoAtual = null;
+        document.getElementById('areaEdicao-form').style.display = 'none';
+        renderVersoes();
+      }).catch(function(err) { showAlert('Erro ao excluir: ' + err.message, 'danger'); });
+    }).catch(function(err) { showAlert('Erro ao checar uso: ' + err.message, 'danger'); });
   }
 
   function btnNovaVersaoClick() {
