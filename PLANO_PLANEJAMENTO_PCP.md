@@ -1875,3 +1875,49 @@ reescreveu as asserções das Fichas 1/3/4 pro novo conteúdo, e
 acrescentou um bloco de teste direto do `ehFrascoOuRotulo` com 10 nomes
 reais/reais-like (frasco/bisnaga/pote/rótulo → true; válvula/tampa/
 caixa/lacre → false). **Deployado (hosting) e no `main`.**
+
+**Vigésimo terceiro complemento (2026-09-01): item de ajuste (QSP) por
+fórmula -- fecha 100% sozinho ao substituir.** Usuário: "quando fazemos
+uma substituição de MP ou insumo... e modificamos a % de concentração,
+ela simplesmente fica diferente de 100%, não podendo ajustar as demais,
+em nenhum local. O que seria ideal fazermos pra ajustar isto?".
+
+Investigado antes de propor: as 163 fórmulas reais de produção
+(Firebase CLI) mostram que Água ou Álcool já é o item de MAIOR
+percentual em 146 delas (89%) -- o "item veículo" que formulador usa
+pra fechar a conta (QSP, *quantum satis*) já existe na prática, só não
+estava marcado em lugar nenhum do sistema. Apresentados 2 caminhos ao
+usuário (rebalanceamento proporcional automático vs. item de ajuste
+designado) -- escolheu o item designado, por ser o modelo quimicamente
+correto (não redistribui em itens que ninguém pediu pra tocar).
+
+`cadastros.html` (aba Fórmulas): nova coluna "Ajuste (QSP)" na tabela
+de itens -- radio button, no máximo um item marcado por versão, grava
+`formulas/{key}/itemAjusteKey`. Sugere automaticamente o candidato
+(água/álcool de maior %) com um botão pra confirmar -- nunca aplica
+sozinho. Nova versão criada a partir de uma existente carrega a
+marcação junto; remover o item marcado limpa a marcação também (evita
+referência órfã).
+
+`emitir_op.html`: nova `recomputarItemAjuste()` -- quando a fórmula tem
+item de ajuste marcado, ele nunca é editado manualmente: seu percentual
+é sempre o complemento (100% menos a soma dos outros itens da fórmula),
+recalculado a cada substituição de qualquer outro item. Fórmulas SEM
+item de ajuste continuam exatamente como antes (correção manual, item a
+item) -- é opt-in, não muda nada até alguém marcar em Cadastros. Na
+tela de substituição, o item de ajuste só permite trocar o material
+(nunca digitar %) -- tela simplificada, sem campo numérico. Se os
+outros itens sozinhos já passarem de 100%, o item de ajuste vai a
+percentual negativo, capturado pela mesma checagem de negativo que já
+existia em `validarMateriaisConsumo()` (nenhuma lógica nova precisou
+ser criada pra esse caso).
+
+Testado: harness Node do bloco real (`run_materiais_test.js`, mesmo
+arquivo do complemento décimo sexto) -- 90 asserções ao todo, 7
+cenários novos: fórmula sem item de ajuste (regressão, inalterado),
+percentual calculado como complemento, recálculo automático ao editar
+outro item (sem o usuário tocar no item de ajuste), tela de confirmação
+sem input numérico, troca de material do próprio item de ajuste, item
+de ajuste indo a negativo quando os outros excedem 100% (bloqueio
+reaproveitado), e `itemAjusteKey` órfão (item removido do cadastro) não
+quebrando nada. **Deployado (hosting) e no `main`.**
