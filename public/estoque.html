@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estoque / WMS</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .kt-search{display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;flex:1;min-width:220px}
+    .kt-search input{border:none;outline:none;flex:1;font-size:13px;background:transparent;color:var(--text)}
+    .kt-select{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-danger-ghost{background:var(--card);border:1.5px solid var(--tint-red-fg);color:var(--tint-red-fg)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .tabs{display:flex;gap:2px;max-width:96%;margin:0 auto 14px;border-bottom:2px solid var(--border)}
+    .tab{padding:10px 18px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .section-note{font-size:12px;color:var(--muted);max-width:96%;margin:0 auto 12px;line-height:1.5}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .stats{display:flex;gap:10px;max-width:96%;margin:0 auto 14px;flex-wrap:wrap}
+    .stat{background:var(--card);border-radius:12px;padding:10px 16px;box-shadow:var(--shadow);min-width:120px}
+    .stat-val{font-size:20px;font-weight:700}
+    .stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .table-wrap{overflow-x:auto;padding:0 16px 14px}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .row-lotes{background:var(--surface-2)}
+    .row-lotes td{padding:0}
+    .row-lotes-inner{padding:8px 20px 12px 40px}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:560px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header.blue{background:linear-gradient(135deg,#1e3a8a,var(--primary))}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2)}
+    .form-group{margin-bottom:14px}
+    .form-group:last-child{margin-bottom:0}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .empty-hint{color:var(--muted);font-size:12.5px;padding:10px 0}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Estoque / WMS</h1>
+    <div class="header-sub">Saldo agregado, rastreio por lote/endereço, lotes vencendo e histórico de movimentações</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main" style="padding-top:6px">
+  <div id="alertBox" class="alert alert-success"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="agregado">Saldo Agregado</button>
+  <button class="tab" data-tab="lotes">Saldo por Lote/Endereço</button>
+  <button class="tab" data-tab="vencendo">Lotes Vencendo</button>
+  <button class="tab" data-tab="historico">Histórico de Movimentações</button>
+</div>
+
+<div class="main">
+
+  <!-- ═══ Aba: Saldo Agregado (MP/Embalagem) ═══ -->
+  <div class="tab-panel active" id="tab-agregado">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="esSearch" placeholder="Buscar por código ou nome do material..."></div>
+      <button class="btn btn-ghost" id="btnAjustarEstoque">⚖️ Ajustar Saldo</button>
+    </div>
+    <div class="section-note">Saldo Atual sobe a cada recebimento em Logística e desce a cada apontamento real de produção (consumo) ou perda com material específico. Empenhado é quanto desse saldo já está reservado por OPs emitidas ainda não totalmente apontadas; Disponível (= Atual − Empenhado) é o que sobra pra novos compromissos. Use Ajustar Saldo pra corrigir o Atual depois de uma contagem física. Clique numa linha pra ver os lotes/endereços que compõem esse saldo.</div>
+    <div class="card">
+      <div class="card-title" id="esCount">Estoque</div>
+      <div class="table-wrap">
+        <table>
+          <thead id="esThead"><tr>
+            <th data-sort="materialCodigo">Material</th>
+            <th data-sort="saldoAtual" style="text-align:right">Saldo Atual</th>
+            <th data-sort="saldoEmpenhado" style="text-align:right">Empenhado</th>
+            <th data-sort="saldoDisponivel" style="text-align:right">Disponível</th>
+            <th data-sort="ultimaAtualizacao">Última Atualização</th>
+            <th style="min-width:130px">Ações</th>
+          </tr></thead>
+          <tbody id="esBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Aba: Saldo por Lote/Endereço ═══ -->
+  <div class="tab-panel" id="tab-lotes">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="slSearch" placeholder="Buscar por código/nome do item ou nº do lote..."></div>
+      <select class="kt-select" id="slFiltroTipo">
+        <option value="">Material e Produto</option>
+        <option value="material">Só Matéria-Prima/Embalagem</option>
+        <option value="produto">Só Produto Acabado</option>
+      </select>
+      <select class="kt-select" id="slFiltroStatus">
+        <option value="">Todos os status</option>
+        <option value="LIBERADO">Liberado</option>
+        <option value="QUARENTENA">Quarentena</option>
+        <option value="REPROVADO">Reprovado</option>
+        <option value="VENCIDO">Vencido</option>
+      </select>
+    </div>
+    <div class="section-note">Cada linha é um lote específico (de uma entrada de recebimento ou de uma conclusão de OP) numa posição -- uma mesma posição pode ter vários lotes/itens misturados. O saldo aqui é do LOTE, independente do agregado da aba anterior (que não escolhe lote no consumo -- ver limitação no plano).</div>
+    <div class="card">
+      <div class="card-title" id="slCount">Lotes em estoque</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Status</th>
+            <th style="text-align:right">Saldo</th><th style="min-width:170px">Ações</th>
+          </tr></thead>
+          <tbody id="slBody"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Aba: Lotes Vencendo ═══ -->
+  <div class="tab-panel" id="tab-vencendo">
+    <div class="kt-toolbar">
+      <label style="margin:0;white-space:nowrap">Vencendo em até</label>
+      <select class="kt-select" id="lvDias">
+        <option value="7">7 dias</option>
+        <option value="15">15 dias</option>
+        <option value="30" selected>30 dias</option>
+        <option value="60">60 dias</option>
+        <option value="90">90 dias</option>
+      </select>
+    </div>
+    <div class="section-note">Lotes com saldo maior que zero e validade cadastrada, ordenados do mais urgente pro mais distante. Já vencidos aparecem primeiro, em vermelho.</div>
+    <div class="card">
+      <div class="card-title" id="lvCount">Lotes vencendo</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Situação</th><th style="text-align:right">Saldo</th></tr></thead>
+          <tbody id="lvBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Aba: Histórico de Movimentações ═══ -->
+  <div class="tab-panel" id="tab-historico">
+    <div class="kt-toolbar">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="hmCodigo" placeholder="Código do material ou SKU do produto..."></div>
+      <button class="btn btn-primary" id="btnBuscarHistorico">Buscar</button>
+    </div>
+    <div class="section-note">Busque pelo código exato do material (ex: MPAL001) ou SKU do produto -- o histórico é por item, não uma lista geral (evita carregar todo o histórico do sistema de uma vez).</div>
+    <div class="card">
+      <div class="card-title" id="hmCount">Histórico de movimentações</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Tipo</th><th>Motivo</th><th style="text-align:right">Qtd</th><th style="text-align:right">Saldo após</th><th>Endereço</th><th>Autor</th></tr></thead>
+          <tbody id="hmBody"><tr><td colspan="7" class="no-data">Busque um item acima pra ver o histórico.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: Ajustar Saldo de Estoque -->
+<div class="modal-bg" id="modalAjusteEstoque">
+  <div class="modal">
+    <div class="modal-header"><h2>⚖️ Ajustar Saldo de Estoque</h2><button class="modal-close" id="modalAjusteEstoqueClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Material *</label>
+        <input type="text" id="aeMaterial" placeholder="Digite pra buscar..." autocomplete="off">
+        <input type="hidden" id="aeMaterialKey">
+      </div>
+      <div class="field-hint" id="aeSaldoAtualHint" style="margin:8px 0"></div>
+      <div class="form-group">
+        <label>Novo saldo (quantidade real, contada agora) *</label>
+        <input type="number" id="aeNovoSaldo" min="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>Justificativa *</label>
+        <textarea id="aeJustificativa" rows="2" placeholder="Ex: contagem física de 15/09, divergência por avaria..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalAjusteEstoqueCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalAjusteEstoqueSave">Salvar Ajuste</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Transferir Lote -->
+<div class="modal-bg" id="modalTransferir">
+  <div class="modal">
+    <div class="modal-header blue"><h2>Transferir Lote</h2><button class="modal-close" id="modalTransferirClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="trLoteInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div class="form-group">
+        <label>Novo endereço *</label>
+        <select id="trNovoEndereco"></select>
+      </div>
+      <div class="form-group">
+        <label>Motivo *</label>
+        <select id="trMotivo"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalTransferirCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalTransferirSave">Confirmar Transferência</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Registrar Saída -->
+<div class="modal-bg" id="modalSaida">
+  <div class="modal">
+    <div class="modal-header"><h2>Registrar Saída</h2><button class="modal-close" id="modalSaidaClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="saLoteInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div class="form-group">
+        <label>Quantidade a dar baixa *</label>
+        <input type="number" id="saQtd" min="0" step="any">
+      </div>
+      <div class="form-group">
+        <label>Motivo *</label>
+        <select id="saMotivo"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalSaidaCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalSaidaSave">Confirmar Saída</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function setStatus(on, txt) {
+  document.getElementById('sDot').classList.toggle('on', !!on);
+  document.getElementById('sTxt').textContent = txt;
+}
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.textContent = msg;
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+function fmtData(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR');
+}
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+/* ══════════════ Tabs ══════════════ */
+document.querySelectorAll('.tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    var target = tab.getAttribute('data-tab');
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  });
+});
+
+var allEstoque = {};
+var allMateriais = {};
+var allEstoqueLotes = {};   // itemKey -> {loteKey: lote}
+var allEnderecosEstoque = {};
+var motivosMovEstoqueAtivos = [];
+var expandedKeys = {}; // materialKey -> true, drill-down da aba Saldo Agregado
+
+/* ═══════════════════════════════════════════════════════════════════
+   Aba: Saldo Agregado (MP/Embalagem) -- migrado de compras.html (a aba
+   "📦 Estoque" de lá é retirada nesta mesma rodada) sem mudar a lógica,
+   só o lugar -- mais um drill-down novo por lote/endereço.
+   ═══════════════════════════════════════════════════════════════════ */
+var esSortable = makeSortableTable(document.getElementById('esThead'), 'materialCodigo', 'asc');
+function renderEstoqueAgregado() {
+  var search = norm(document.getElementById('esSearch').value);
+  var rows = Object.entries(allEstoque).filter(function(e) {
+    if (!search) return true;
+    return (norm(e[1].materialCodigo) + ' ' + norm(e[1].materialNome)).indexOf(search) !== -1;
+  });
+  rows = esSortable.applySort(rows, function(entry, field) {
+    if (field === 'saldoDisponivel') return (entry[1].saldoAtual || 0) - (entry[1].saldoEmpenhado || 0);
+    return entry[1][field];
+  });
+
+  document.getElementById('esCount').textContent = 'Estoque (' + rows.length + ' material(is) com movimento)';
+  var tbody = document.getElementById('esBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(entry) {
+    var key = entry[0], e = entry[1];
+    var empenhado = e.saldoEmpenhado || 0;
+    var disponivel = (e.saldoAtual || 0) - empenhado;
+    var linhas = '<tr>' +
+      '<td><button class="btn btn-ghost btn-sm es-expandir" data-key="' + escapeAttr(key) + '" title="Ver lotes/endereços">' + (expandedKeys[key] ? '▾' : '▸') + '</button> ' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
+      '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
+      '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
+      '<td style="font-size:12px">' + fmtData(e.ultimaAtualizacao) + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm es-ajustar" data-key="' + escapeAttr(key) + '">⚖️ Ajustar</button></td>' +
+    '</tr>';
+    if (expandedKeys[key]) linhas += '<tr class="row-lotes"><td colspan="6"><div class="row-lotes-inner">' + renderLotesDrillDownHtml(key) + '</div></td></tr>';
+    return linhas;
+  }).join('');
+  tbody.querySelectorAll('.es-ajustar').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalAjusteEstoque(btn.getAttribute('data-key')); });
+  });
+  tbody.querySelectorAll('.es-expandir').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var key = btn.getAttribute('data-key');
+      expandedKeys[key] = !expandedKeys[key];
+      renderEstoqueAgregado();
+    });
+  });
+}
+// Drill-down: lista os lotes/endereços que compõem o saldo de UM material
+// (estoque_lotes/{materialKey}) -- só leitura aqui, ações reais (transferir/
+// mudar status/dar baixa) ficam centralizadas na aba "Saldo por Lote/Endereço".
+function renderLotesDrillDownHtml(materialKey) {
+  var lotes = Object.entries(allEstoqueLotes[materialKey] || {}).filter(function(e) { return (e[1].saldoLote || 0) > 0; });
+  if (!lotes.length) return '<span class="empty-hint">Nenhum lote rastreado granularmente pra este material ainda (o saldo acima veio de recebimentos sem endereço preenchido).</span>';
+  return '<table><thead><tr><th>Lote</th><th>Endereço</th><th>Validade</th><th>Status</th><th style="text-align:right">Saldo</th></tr></thead><tbody>' +
+    lotes.map(function(entry) {
+      var l = entry[1];
+      return '<tr>' +
+        '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+        '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
+        '<td>' + fmtData(l.dataValidade) + '</td>' +
+        '<td>' + statusBadge(l.status) + '</td>' +
+        '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table>';
+}
+function statusBadge(status) {
+  var map = { LIBERADO: 'badge-green', QUARENTENA: 'badge-orange', REPROVADO: 'badge-red', VENCIDO: 'badge-red' };
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + escapeHtml(status || 'LIBERADO') + '</span>';
+}
+
+var aeItems = []; // opções pro autocomplete -- todo material cadastrado, mesmo sem estoque ainda (primeiro ajuste pode ser a entrada inicial)
+function refreshAeItems() {
+  aeItems = Object.values(allMateriais).filter(function(m) { return m.ativo !== false; })
+    .sort(function(a, b) { return norm(a.mpNome).localeCompare(norm(b.mpNome)); })
+    .map(function(m) {
+      var label = m.mpCodigo + ' — ' + m.mpNome;
+      return { key: sanitizeKey(m.mpCodigo), value: label, label: label };
+    });
+}
+function abrirModalAjusteEstoque(estoqueKey) {
+  refreshAeItems();
+  document.getElementById('aeJustificativa').value = '';
+  if (estoqueKey) {
+    var e = allEstoque[estoqueKey] || {};
+    document.getElementById('aeMaterial').value = (e.materialCodigo || estoqueKey) + ' — ' + (e.materialNome || '');
+    document.getElementById('aeMaterialKey').value = estoqueKey;
+    document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e.saldoAtual || 0) + ' ' + (e.unidade || '');
+    document.getElementById('aeNovoSaldo').value = e.saldoAtual != null ? e.saldoAtual : '';
+  } else {
+    document.getElementById('aeMaterial').value = '';
+    document.getElementById('aeMaterialKey').value = '';
+    document.getElementById('aeSaldoAtualHint').textContent = '';
+    document.getElementById('aeNovoSaldo').value = '';
+  }
+  document.getElementById('modalAjusteEstoque').classList.add('open');
+}
+function fecharModalAjusteEstoque() { document.getElementById('modalAjusteEstoque').classList.remove('open'); }
+function salvarAjusteEstoque() {
+  var key = document.getElementById('aeMaterialKey').value;
+  if (!key) { showAlert('Digite e selecione um material da lista.', 'danger'); return; }
+  var novoSaldoStr = document.getElementById('aeNovoSaldo').value;
+  if (novoSaldoStr === '') { showAlert('Informe o novo saldo.', 'danger'); return; }
+  var novoSaldo = parseFloat(novoSaldoStr);
+  if (isNaN(novoSaldo) || novoSaldo < 0) { showAlert('Saldo inválido.', 'danger'); return; }
+  var justificativa = document.getElementById('aeJustificativa').value.trim();
+  if (!justificativa) { showAlert('Justificativa é obrigatória pra ajuste manual de estoque.', 'danger'); return; }
+
+  var mat = allMateriais[key];
+  document.getElementById('modalAjusteEstoqueSave').disabled = true;
+
+  db.ref('estoque/' + key).transaction(function(atual) {
+    var saldoAnterior = (atual && atual.saldoAtual) || 0;
+    atual = atual || {};
+    atual.saldoAtual = novoSaldo;
+    atual.materialCodigo = mat ? mat.mpCodigo : (atual.materialCodigo || key);
+    atual.materialNome = mat ? mat.mpNome : (atual.materialNome || '');
+    atual.unidade = mat ? mat.unidade : (atual.unidade || '');
+    atual.ultimaAtualizacao = new Date().toISOString();
+    atual.ultimaMovimentacao = { tipo: 'ajuste_manual', qtd: novoSaldo - saldoAnterior, ref: justificativa, em: new Date().toISOString() };
+    return atual;
+  }).then(function(result) {
+    if (!result.committed) { showAlert('Não foi possível salvar o ajuste. Tente de novo.', 'danger'); return; }
+    var saldoAnterior = (result.snapshot.val().saldoAtual || 0) - (result.snapshot.val().ultimaMovimentacao.qtd || 0);
+    return Promise.all([
+      db.ref('estoque/' + key + '/ajustes').push({
+        saldoAnterior: saldoAnterior, saldoNovo: novoSaldo, justificativa: justificativa,
+        ajustadoPor: currentUserNome(), ajustadoEm: new Date().toISOString()
+      }),
+      // WMS Fase 1: log unificado -- salvarAjusteEstoque é a única escrita em
+      // estoque/ que não passa por ajustarEstoque (seta um valor absoluto,
+      // não um delta), então precisa desta linha extra pra também entrar em
+      // movimentos_estoque (o log de ajustes/ acima continua intacto).
+      db.ref('movimentos_estoque/' + key).push({
+        tipo: 'ajuste_manual', motivo: 'AJUSTE DE INVENTÁRIO',
+        qtd: novoSaldo - saldoAnterior, saldoApos: novoSaldo, ref: justificativa,
+        itemTipo: 'material', itemCodigo: mat ? mat.mpCodigo : (result.snapshot.val().materialCodigo || key),
+        itemNome: mat ? mat.mpNome : (result.snapshot.val().materialNome || null), unidade: mat ? mat.unidade : (result.snapshot.val().unidade || null),
+        autor: currentUserNome(), em: new Date().toISOString()
+      })
+    ]).then(function() {
+      showAlert('Ajuste de estoque salvo!', 'success');
+      fecharModalAjusteEstoque();
+    });
+  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalAjusteEstoqueSave').disabled = false; });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Aba: Saldo por Lote/Endereço
+   ═══════════════════════════════════════════════════════════════════ */
+function todosOsLotes() {
+  var lista = [];
+  Object.keys(allEstoqueLotes).forEach(function(itemKey) {
+    Object.entries(allEstoqueLotes[itemKey]).forEach(function(entry) {
+      lista.push({ itemKey: itemKey, loteKey: entry[0], lote: entry[1] });
+    });
+  });
+  return lista;
+}
+function renderSaldoLotes() {
+  var search = norm(document.getElementById('slSearch').value);
+  var filtroTipo = document.getElementById('slFiltroTipo').value;
+  var filtroStatus = document.getElementById('slFiltroStatus').value;
+
+  var linhas = todosOsLotes().filter(function(x) {
+    if (filtroTipo && x.lote.itemTipo !== filtroTipo) return false;
+    if (filtroStatus && (x.lote.status || 'LIBERADO') !== filtroStatus) return false;
+    if (search) {
+      var hay = norm(x.lote.itemCodigo) + ' ' + norm(x.lote.itemNome) + ' ' + norm(x.lote.loteOrigem);
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  }).sort(function(a, b) { return norm(a.lote.itemCodigo).localeCompare(norm(b.lote.itemCodigo)); });
+
+  document.getElementById('slCount').textContent = 'Lotes em estoque (' + linhas.length + ')';
+  var tbody = document.getElementById('slBody');
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum lote encontrado com esse filtro.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = linhas.map(function(x) {
+    var l = x.lote;
+    var tipoBadge = l.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span>' : '<span class="badge badge-blue">MP</span>';
+    return '<tr>' +
+      '<td>' + tipoBadge + ' ' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + '</td>' +
+      '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+      '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
+      '<td>' + fmtData(l.dataValidade) + '</td>' +
+      '<td><select class="sl-status" data-item="' + escapeAttr(x.itemKey) + '" data-lote="' + escapeAttr(x.loteKey) + '">' +
+        ['LIBERADO', 'QUARENTENA', 'REPROVADO', 'VENCIDO'].map(function(s) { return '<option value="' + s + '"' + ((l.status || 'LIBERADO') === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
+      '</select></td>' +
+      '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+      '<td>' +
+        '<button class="btn btn-ghost btn-sm sl-transferir" data-item="' + escapeAttr(x.itemKey) + '" data-lote="' + escapeAttr(x.loteKey) + '">Transferir</button> ' +
+        '<button class="btn btn-danger-ghost btn-sm sl-saida" data-item="' + escapeAttr(x.itemKey) + '" data-lote="' + escapeAttr(x.loteKey) + '">Saída</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  tbody.querySelectorAll('.sl-status').forEach(function(sel) {
+    sel.addEventListener('change', function() { mudarStatusLote(sel.getAttribute('data-item'), sel.getAttribute('data-lote'), sel.value); });
+  });
+  tbody.querySelectorAll('.sl-transferir').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalTransferir(btn.getAttribute('data-item'), btn.getAttribute('data-lote')); });
+  });
+  tbody.querySelectorAll('.sl-saida').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalSaida(btn.getAttribute('data-item'), btn.getAttribute('data-lote')); });
+  });
+}
+function mudarStatusLote(itemKey, loteKey, novoStatus) {
+  db.ref('estoque_lotes/' + itemKey + '/' + loteKey).update({ status: novoStatus, atualizadoEm: new Date().toISOString() })
+    .then(function() { showAlert('Status atualizado.', 'success'); })
+    .catch(function(err) { showAlert('Erro ao mudar status: ' + err.message, 'danger'); renderSaldoLotes(); });
+}
+
+var trAtual = null; // {itemKey, loteKey, lote}
+function opcoesEnderecoModalSelect() {
+  var entries = Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
+  return entries.map(function(entry) { return '<option value="' + escapeAttr(entry[0]) + '">' + escapeHtml(entry[1].codigo) + ' (' + escapeHtml(entry[1].area || '') + ')</option>'; }).join('');
+}
+function opcoesMotivoSelect() {
+  return motivosMovEstoqueAtivos.map(function(m) { return '<option value="' + escapeAttr(m.nome) + '">' + escapeHtml(m.nome) + '</option>'; }).join('');
+}
+function abrirModalTransferir(itemKey, loteKey) {
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
+  if (!lote) return;
+  trAtual = { itemKey: itemKey, loteKey: loteKey, lote: lote };
+  document.getElementById('trLoteInfo').textContent = escapeHtml(lote.itemCodigo) + ' — ' + escapeHtml(lote.itemNome || '') + ' · lote ' + escapeHtml(lote.loteOrigem || '—') + ' · atualmente em ' + escapeHtml(lote.enderecoCodigo || '—');
+  document.getElementById('trNovoEndereco').innerHTML = opcoesEnderecoModalSelect();
+  document.getElementById('trMotivo').innerHTML = opcoesMotivoSelect();
+  // Pré-seleciona "Transferência entre Endereços" se existir na lista, sem travar se o nome mudou
+  var selMotivo = document.getElementById('trMotivo');
+  Array.from(selMotivo.options).forEach(function(opt) { if (opt.value === 'TRANSFERÊNCIA ENTRE ENDEREÇOS') selMotivo.value = opt.value; });
+  document.getElementById('modalTransferir').classList.add('open');
+}
+function fecharModalTransferir() { document.getElementById('modalTransferir').classList.remove('open'); trAtual = null; }
+function salvarTransferir() {
+  if (!trAtual) return;
+  var novoEnderecoKey = document.getElementById('trNovoEndereco').value;
+  var motivo = document.getElementById('trMotivo').value;
+  if (!novoEnderecoKey) { showAlert('Selecione o novo endereço.', 'danger'); return; }
+  if (!motivo) { showAlert('Selecione o motivo.', 'danger'); return; }
+  document.getElementById('modalTransferirSave').disabled = true;
+  transferirLoteEndereco(db, trAtual.lote.itemTipo, trAtual.lote.itemCodigo, trAtual.loteKey, novoEnderecoKey, motivo, currentUserNome())
+    .then(function() { showAlert('Lote transferido!', 'success'); fecharModalTransferir(); })
+    .catch(function(err) { showAlert('Erro ao transferir: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalTransferirSave').disabled = false; });
+}
+
+var saAtual = null;
+function abrirModalSaida(itemKey, loteKey) {
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
+  if (!lote) return;
+  saAtual = { itemKey: itemKey, loteKey: loteKey, lote: lote };
+  document.getElementById('saLoteInfo').textContent = escapeHtml(lote.itemCodigo) + ' — ' + escapeHtml(lote.itemNome || '') + ' · lote ' + escapeHtml(lote.loteOrigem || '—') + ' · saldo atual ' + fmtNum(lote.saldoLote || 0) + ' ' + escapeHtml(lote.unidade || '');
+  document.getElementById('saQtd').value = '';
+  document.getElementById('saMotivo').innerHTML = opcoesMotivoSelect();
+  document.getElementById('modalSaida').classList.add('open');
+}
+function fecharModalSaida() { document.getElementById('modalSaida').classList.remove('open'); saAtual = null; }
+function salvarSaida() {
+  if (!saAtual) return;
+  var qtd = parseFloat(document.getElementById('saQtd').value);
+  var motivo = document.getElementById('saMotivo').value;
+  if (isNaN(qtd) || qtd <= 0) { showAlert('Informe uma quantidade válida.', 'danger'); return; }
+  if (!motivo) { showAlert('Selecione o motivo.', 'danger'); return; }
+  document.getElementById('modalSaidaSave').disabled = true;
+  darBaixaLoteManual(db, saAtual.lote.itemTipo, saAtual.lote.itemCodigo, saAtual.loteKey, qtd, motivo, currentUserNome())
+    .then(function() { showAlert('Saída registrada!', 'success'); fecharModalSaida(); })
+    .catch(function(err) { showAlert('Erro ao registrar saída: ' + err.message, 'danger'); })
+    .finally(function() { document.getElementById('modalSaidaSave').disabled = false; });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Aba: Lotes Vencendo -- cálculo client-side (sem Cloud Function nesta
+   fase), sobre os mesmos dados já carregados de estoque_lotes.
+   ═══════════════════════════════════════════════════════════════════ */
+function renderLotesVencendo() {
+  var dias = parseInt(document.getElementById('lvDias').value, 10) || 30;
+  var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  var limite = new Date(hoje.getTime() + dias * 86400000);
+
+  var linhas = todosOsLotes().filter(function(x) {
+    if (!((x.lote.saldoLote || 0) > 0)) return false;
+    if (!x.lote.dataValidade) return false;
+    var validade = new Date(x.lote.dataValidade);
+    if (isNaN(validade)) return false;
+    return validade <= limite;
+  }).sort(function(a, b) { return new Date(a.lote.dataValidade) - new Date(b.lote.dataValidade); });
+
+  document.getElementById('lvCount').textContent = 'Lotes vencendo em até ' + dias + ' dias (' + linhas.length + ')';
+  var tbody = document.getElementById('lvBody');
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum lote vencendo nesse período.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = linhas.map(function(x) {
+    var l = x.lote;
+    var validade = new Date(l.dataValidade);
+    var diasRestantes = Math.round((validade - hoje) / 86400000);
+    var situacao = diasRestantes < 0
+      ? '<span class="badge badge-red">Vencido há ' + fmtNum(Math.abs(diasRestantes)) + ' d</span>'
+      : diasRestantes <= 7 ? '<span class="badge badge-orange">Vence em ' + fmtNum(diasRestantes) + ' d</span>'
+      : '<span class="badge badge-gray">Vence em ' + fmtNum(diasRestantes) + ' d</span>';
+    return '<tr>' +
+      '<td>' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + '</td>' +
+      '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+      '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
+      '<td>' + fmtData(l.dataValidade) + '</td>' +
+      '<td>' + situacao + '</td>' +
+      '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Aba: Histórico de Movimentações -- busca por item, lê só
+   movimentos_estoque/{itemKey} (não a árvore inteira).
+   ═══════════════════════════════════════════════════════════════════ */
+function buscarHistorico() {
+  var codigo = document.getElementById('hmCodigo').value.trim();
+  if (!codigo) { showAlert('Informe o código do material ou SKU.', 'danger'); return; }
+  var itemKey = sanitizeKey(codigo);
+  document.getElementById('hmBody').innerHTML = '<tr><td colspan="7" class="no-data">Buscando...</td></tr>';
+  db.ref('movimentos_estoque/' + itemKey).once('value').then(function(snap) {
+    renderHistorico(snap.val() || {});
+  }).catch(function(err) {
+    showAlert('Erro ao buscar histórico: ' + err.message, 'danger');
+    document.getElementById('hmBody').innerHTML = '<tr><td colspan="7" class="no-data">Erro ao buscar.</td></tr>';
+  });
+}
+function renderHistorico(movimentos) {
+  var linhas = Object.values(movimentos).sort(function(a, b) { return new Date(b.em) - new Date(a.em); });
+  document.getElementById('hmCount').textContent = 'Histórico de movimentações (' + linhas.length + ')';
+  var tbody = document.getElementById('hmBody');
+  if (!linhas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhuma movimentação encontrada pra esse item.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = linhas.map(function(m) {
+    return '<tr>' +
+      '<td style="font-size:12px">' + fmtDataHora(m.em) + '</td>' +
+      '<td><span class="badge badge-gray">' + escapeHtml(m.tipo || '—') + '</span></td>' +
+      '<td>' + escapeHtml(m.motivo || '—') + '</td>' +
+      '<td style="text-align:right' + ((m.qtd || 0) < 0 ? ';color:var(--danger)' : ';color:var(--tint-green-fg)') + ';font-weight:700">' + (m.qtd > 0 ? '+' : '') + fmtNum(m.qtd || 0) + ' ' + escapeHtml(m.unidade || '') + '</td>' +
+      '<td style="text-align:right">' + (m.saldoApos != null ? fmtNum(m.saldoApos) : '—') + '</td>' +
+      '<td>' + escapeHtml(m.enderecoKey ? (allEnderecosEstoque[m.enderecoKey] ? allEnderecosEstoque[m.enderecoKey].codigo : m.enderecoKey) : '—') + '</td>' +
+      '<td>' + escapeHtml(m.autor || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ══════════════ Boot ══════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+  var _tes = null;
+  document.getElementById('esSearch').addEventListener('input', function() { clearTimeout(_tes); _tes = setTimeout(renderEstoqueAgregado, 200); });
+  esSortable.wireHeaders(renderEstoqueAgregado);
+  document.getElementById('btnAjustarEstoque').addEventListener('click', function() { abrirModalAjusteEstoque(null); });
+  document.getElementById('modalAjusteEstoqueClose').addEventListener('click', fecharModalAjusteEstoque);
+  document.getElementById('modalAjusteEstoqueCancel').addEventListener('click', fecharModalAjusteEstoque);
+  document.getElementById('modalAjusteEstoqueSave').addEventListener('click', salvarAjusteEstoque);
+  document.getElementById('modalAjusteEstoque').addEventListener('click', function(e) { if (e.target === this) fecharModalAjusteEstoque(); });
+  attachAutocomplete(document.getElementById('aeMaterial'), function() { return aeItems; }, {
+    onSelect: function(it) {
+      document.getElementById('aeMaterialKey').value = it.key;
+      var e = allEstoque[it.key];
+      document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e ? (e.saldoAtual || 0) : 0) + ' ' + (e ? (e.unidade || '') : '');
+      document.getElementById('aeNovoSaldo').value = e && e.saldoAtual != null ? e.saldoAtual : 0;
+    }
+  });
+  document.getElementById('aeMaterial').addEventListener('input', function() {
+    document.getElementById('aeMaterialKey').value = '';
+    document.getElementById('aeSaldoAtualHint').textContent = '';
+  });
+
+  var _tsl = null;
+  document.getElementById('slSearch').addEventListener('input', function() { clearTimeout(_tsl); _tsl = setTimeout(renderSaldoLotes, 200); });
+  document.getElementById('slFiltroTipo').addEventListener('change', renderSaldoLotes);
+  document.getElementById('slFiltroStatus').addEventListener('change', renderSaldoLotes);
+  document.getElementById('modalTransferirClose').addEventListener('click', fecharModalTransferir);
+  document.getElementById('modalTransferirCancel').addEventListener('click', fecharModalTransferir);
+  document.getElementById('modalTransferirSave').addEventListener('click', salvarTransferir);
+  document.getElementById('modalTransferir').addEventListener('click', function(e) { if (e.target === this) fecharModalTransferir(); });
+  document.getElementById('modalSaidaClose').addEventListener('click', fecharModalSaida);
+  document.getElementById('modalSaidaCancel').addEventListener('click', fecharModalSaida);
+  document.getElementById('modalSaidaSave').addEventListener('click', salvarSaida);
+  document.getElementById('modalSaida').addEventListener('click', function(e) { if (e.target === this) fecharModalSaida(); });
+
+  document.getElementById('lvDias').addEventListener('change', renderLotesVencendo);
+
+  document.getElementById('btnBuscarHistorico').addEventListener('click', buscarHistorico);
+  document.getElementById('hmCodigo').addEventListener('keydown', function(e) { if (e.key === 'Enter') buscarHistorico(); });
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('estoque'), function(snap) {
+      allEstoque = snap.val() || {};
+      renderEstoqueAgregado();
+    });
+    dbOnValue(db.ref('materiais'), function(snap) {
+      allMateriais = snap.val() || {};
+      refreshAeItems();
+    });
+    dbOnValue(db.ref('estoque_lotes'), function(snap) {
+      allEstoqueLotes = snap.val() || {};
+      renderEstoqueAgregado();
+      renderSaldoLotes();
+      renderLotesVencendo();
+    });
+    dbOnValue(db.ref('enderecos_estoque'), function(snap) {
+      allEnderecosEstoque = snap.val() || {};
+      renderSaldoLotes();
+      renderLotesVencendo();
+    });
+    dbOnValue(db.ref('config/motivosMovimentoEstoque'), function(snap) {
+      motivosMovEstoqueAtivos = (snap.val() || []).filter(function(m) { return m.ativo !== false; });
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>
