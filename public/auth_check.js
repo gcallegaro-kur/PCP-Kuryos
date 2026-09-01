@@ -49,8 +49,13 @@ window.cycleKuryosTheme = function() {
 // 'admin' virou o papel "vê literalmente tudo, sem exceção" -- ganhou
 // acesso às páginas de RH também (ver grupo rh_* abaixo), que antes eram
 // só de 'rh'/'gestor'.
+// Regra permanente (pedido do usuário): onde quer que 'production' apareça
+// abaixo, 'pcp' entra junto -- PCP precisa sempre ter acesso a tudo que é
+// "produção", nunca menos que o operador de chão de fábrica. As regras de
+// escrita em database.rules.json já seguem esse mesmo padrão em todo lugar;
+// aqui só faltava form.html (Apontamento/Registro de Produção).
 const pageAccessRules = {
-  'form.html': ['production', 'admin', 'rotulagem'],
+  'form.html': ['production', 'admin', 'rotulagem', 'pcp'],
   'planejamento.html': ['production', 'admin', 'pcp'],
   'horizonte.html': ['production', 'admin', 'pcp'],
   'dashboard.html': ['production', 'admin', 'pcp'],
