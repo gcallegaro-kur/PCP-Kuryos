@@ -1802,3 +1802,24 @@ prioridade sem Grade preenchida, Grade vence prioridade pior quando
 programada, normalização de pedidoKey com zero à esquerda, horário já
 passado não conta, linha errada não interfere, rotulagem/posto
 inalterados). **Deployado e no `main`.**
+
+**Vigésimo primeiro complemento (2026-09-01): congelado o alerta de "OP
+não iniciada".** Usuário: "Vamos congelar os anuncios de OPs não
+iniciadas, ainda não estão adaptados aos apontamentos em tempo real".
+
+`checkOpsAtrasadas` (`functions/index.js`), Sinal 1, ramo "não
+iniciada" (`abertaDesde`/`abertaDesdeRot`/`produzido` todos vazios,
+`dataInicioPlanejada` vencida) -- pulado com um `continue` logo no topo
+do bloco, corpo original comentado ali mesmo (não apagado) pra retomar
+quando o critério for revisado/reescrito pra bater com o fluxo real de
+apontamento hoje (ex: "Alocar OP" agora puxa da Grade Semanal, ver
+complemento anterior). As outras 2 checagens da mesma função continuam
+ativas normalmente: Sinal 1 "atrasada em andamento" (OP já aberta,
+prazo vencido) e Sinal 2 (desvio de ritmo do pedido).
+
+Testado: harness Node do bloco real (já existente desta sessão) -- 20
+asserções, reescrevendo os 4 cenários que testavam "não iniciada"
+disparando (agora confirmam que NÃO dispara, em nenhum ciclo, mesmo com
+atraso enorme ou repetido), mantendo os 16 cenários das outras 2
+checagens inalterados. **Deployado (functions:checkNotificacoes) e no
+`main`.**
