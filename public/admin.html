@@ -346,6 +346,19 @@
         <input type="number" id="iOpAtrasoHoras" min="1" placeholder="1">
       </div>
     </div>
+    <div class="form-grid" style="margin-bottom:12px">
+      <div class="fg">
+        <label>Operação estendida hoje (libera alertas fora do horário normal)</label>
+        <input type="date" id="iOperacaoEstendidaData">
+        <div class="section-note" style="margin-top:4px">
+          Fora do horário de turno configurado (ou fim de semana/feriado), os alertas de linha
+          parada e OP atrasada ficam em silêncio -- ninguém está operando pra agir em cima deles.
+          Marque uma data aqui só quando a fábrica for operar fora do horário normal naquele dia
+          específico (turno extra, virada por demanda) -- volta a silenciar sozinho no dia seguinte,
+          sem precisar lembrar de desligar.
+        </div>
+      </div>
+    </div>
     <label style="display:block;margin-bottom:6px">Destinatários</label>
     <div class="tag-area" id="tEmails"></div>
     <div class="tag-add">
@@ -400,6 +413,12 @@ var configData = {
   andonParadaMinutos: 15,
   opAtrasoHoras: 1,
   emailNotificacoes: [],
+  // Silêncio noturno (pedido do usuário): fora do horário de operação
+  // configurado, alertas de monitoramento (linha parada, OP atrasada) não
+  // são enviados por e-mail -- essa data (AAAA-MM-DD, fuso São Paulo) é o
+  // override manual pra "hoje vamos operar fora do horário normal", válido
+  // só naquele dia. Ver functions/index.js, dentroDoHorarioDeOperacao.
+  operacaoEstendidaData: '',
   // Fase 8 do plano (PLANO_PLANEJAMENTO_PCP.md): fallback de changeover
   // usado em "Planejamento de OPs" (planejamento.html) só quando a OP não
   // tem setupInicio/setupFim medido de verdade.
@@ -737,6 +756,8 @@ function renderNotificacoesConfig() {
   var oEl = document.getElementById('iOpAtrasoHoras');
   if (pEl) pEl.value = configData.andonParadaMinutos || 15;
   if (oEl) oEl.value = configData.opAtrasoHoras || 1;
+  var eEl = document.getElementById('iOperacaoEstendidaData');
+  if (eEl) eEl.value = configData.operacaoEstendidaData || '';
 }
 
 document.getElementById('btnAddEmail').addEventListener('click', function() {
@@ -759,6 +780,7 @@ document.getElementById('btnAddEmail').addEventListener('click', function() {
 document.getElementById('btnSalvarNotificacoes').addEventListener('click', function() {
   configData.andonParadaMinutos = parseInt(document.getElementById('iAndonParadaMinutos').value) || 15;
   configData.opAtrasoHoras = parseFloat(document.getElementById('iOpAtrasoHoras').value) || 1;
+  configData.operacaoEstendidaData = document.getElementById('iOperacaoEstendidaData').value || '';
   saveConfig().then(function() {
     showAlert('Configuração de notificações salva.', 'success');
   }).catch(function(err) {
@@ -1178,6 +1200,7 @@ try {
     configData.checkpointsPorTurno = val.checkpointsPorTurno || 0; // 0 = usa a grade horária completa (comportamento atual)
     configData.andonParadaMinutos = val.andonParadaMinutos || 15;
     configData.opAtrasoHoras = val.opAtrasoHoras || 1;
+    configData.operacaoEstendidaData = val.operacaoEstendidaData || '';
     configData.setupPadraoPorLinha = val.setupPadraoPorLinha || {};
     configData.emailNotificacoes = val.emailNotificacoes || [];
     configData.categoriasProduto = val.categoriasProduto || [];

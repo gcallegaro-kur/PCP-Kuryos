@@ -763,6 +763,67 @@ function turnoHorariosAtivos(config) {
   return turnoHorarios;
 }
 
+// Horário de fim configurado pra um turno específico -- extraído de dentro
+// de checkTurnoNaoEncerrado pra ser reaproveitado também por
+// dentroDoHorarioDeOperacao (silêncio noturno), sem duplicar a mesma regra
+// de fallback em dois lugares. turnosOrdenados já vem ordenado por horário
+// de início (menor primeiro); idx é a posição do turno dentro dela.
+function resolverFimTurno(turnoNome, turnosOrdenados, idx, config, isSexta) {
+  const turnoHorariosFim = config.turnoHorariosFim || {};
+  const turnoHorariosFimSexta = config.turnoHorariosFimSexta || {};
+  let horaFim = isSexta && turnoHorariosFimSexta[turnoNome] ? turnoHorariosFimSexta[turnoNome] : turnoHorariosFim[turnoNome];
+  if (!horaFim) {
+    // Sem "Fim do turno" configurado pra esse turno -- turno corrido, cai
+    // no início do PRÓXIMO turno; se for o último do dia, 23:59.
+    horaFim = idx + 1 < turnosOrdenados.length ? turnosOrdenados[idx + 1][1] : "23:59";
+  }
+  return horaFim;
+}
+
+// "Silêncio noturno": entre o fim do último turno do dia e o início do
+// primeiro turno do dia seguinte (ou em fim de semana/feriado), os alertas
+// de MONITORAMENTO EM TEMPO REAL (linha parada, OP atrasada) não fazem
+// sentido -- ninguém está operando pra agir em cima deles, e o estado
+// "parado"/"atrasado" simplesmente persiste a noite toda, reenviando o
+// e-mail a cada cooldown (10min no caso de OP atrasada) até a manhã
+// seguinte. Pedido direto do usuário: "após as 17h e antes das 7h não deve
+// enviar emails de notificação" -- na config real hoje isso é exatamente o
+// turno "Padrao" (07:00-17:00, seg-sex), mas construído em cima do horário
+// CONFIGURADO (turnoHorariosAtivos/turnoHorariosFim), não um 7/17 fixo no
+// código -- se o horário de turno mudar em Admin, o silêncio acompanha
+// automaticamente, e já funciona certo com múltiplos turnos (silencia só
+// entre o fim do último e o início do primeiro).
+//
+// Deliberadamente NÃO aplicado a checkTurnoNaoEncerrado (é sobre o próprio
+// instante de fim de turno -- silenciar isso faria a cobrança de "esqueceu
+// de encerrar" nunca disparar) nem a checkOpsEmitidas/checkIntervalosPendentes
+// (refletem uma ação humana que acabou de acontecer, não um estado que fica
+// "preso" repetindo sozinho -- ver comentário de cada uma).
+//
+// Override: config.operacaoEstendidaData guarda a data (AAAA-MM-DD, fuso
+// São Paulo) de um dia em que a fábrica avisou que vai operar fora do
+// horário normal -- toggle em Admin > Turnos, vale só naquele dia
+// específico (não precisa lembrar de desligar depois).
+function dentroDoHorarioDeOperacao(config) {
+  const {dateStr: hojeStr, hm: nowHm} = saoPauloParts(new Date());
+  if (config.operacaoEstendidaData === hojeStr) return true;
+  if (!isWorkingDay(hojeStr, config.planejamento)) return false;
+
+  const turnoHorarios = turnoHorariosAtivos(config);
+  const entries = Object.entries(turnoHorarios);
+  if (!entries.length) return true; // sem turno configurado -- sem base pra decidir, não bloqueia (comportamento anterior)
+
+  const nowMin = hmToMinutes(nowHm);
+  const isSexta = new Date(hojeStr + "T12:00:00").getDay() === 5;
+  const turnosOrdenados = entries.slice().sort((a, b) => hmToMinutes(a[1]) - hmToMinutes(b[1]));
+
+  const primeiroInicio = hmToMinutes(turnosOrdenados[0][1]);
+  const idxUltimo = turnosOrdenados.length - 1;
+  const ultimoFim = hmToMinutes(resolverFimTurno(turnosOrdenados[idxUltimo][0], turnosOrdenados, idxUltimo, config, isSexta));
+
+  return nowMin >= primeiroInicio && nowMin < ultimoFim;
+}
+
 // Vira hábito só se alguém cobrar quando não acontece -- alerta o time se um
 // turno passou do horário configurado de fim e ninguém clicou em "Encerrar
 // Turno" no Painel de Turno (form.html). Diferente de onTurnoEncerrado (que
@@ -773,9 +834,6 @@ async function checkTurnoNaoEncerrado(config, destinatarios) {
   const turnoHorarios = turnoHorariosAtivos(config);
   const entries = Object.entries(turnoHorarios);
   if (!entries.length) return;
-
-  const turnoHorariosFim = config.turnoHorariosFim || {};
-  const turnoHorariosFimSexta = config.turnoHorariosFimSexta || {};
 
   const {dateStr: hojeStr, hm: nowHm} = saoPauloParts(new Date());
   // Sem isso, esse alerta dispara TODO dia (inclusive fim de semana/feriado)
@@ -791,13 +849,7 @@ async function checkTurnoNaoEncerrado(config, destinatarios) {
   for (let i = 0; i < turnosOrdenados.length; i++) {
     const [turnoNome] = turnosOrdenados[i];
 
-    let horaFim = turnoHorariosFim[turnoNome];
-    if (isSexta && turnoHorariosFimSexta[turnoNome]) horaFim = turnoHorariosFimSexta[turnoNome];
-    if (!horaFim) {
-      // Sem "Fim do turno" configurado pra esse turno -- cai no mesmo
-      // fallback do checkFimDeTurno (início do próximo turno).
-      horaFim = i + 1 < turnosOrdenados.length ? turnosOrdenados[i + 1][1] : "23:59";
-    }
+    const horaFim = resolverFimTurno(turnoNome, turnosOrdenados, i, config, isSexta);
     const fimMin = hmToMinutes(horaFim);
 
     const diffMin = nowMin - fimMin;
@@ -1257,12 +1309,20 @@ exports.checkNotificacoes = onSchedule(
     const config = configSnap.val() || {};
     const destinatarios = config.emailNotificacoes || [];
 
+    // Silêncio noturno (pedido do usuário): fora do horário de operação
+    // configurado (ou fim de semana/feriado), os alertas de monitoramento
+    // em tempo real (linha parada, OP atrasada) não fazem sentido -- viram
+    // e-mail repetido a cada cooldown a noite toda sem ninguém pra agir.
+    // Ver comentário de dentroDoHorarioDeOperacao pra detalhe de por que as
+    // outras 3 checagens continuam rodando mesmo fora do horário.
+    const operando = dentroDoHorarioDeOperacao(config);
+
     // Cada checagem isolada -- uma falhar não pode impedir as outras (ex:
     // um alerta de OP emitida é urgente, não pode ficar preso porque a
     // checagem de linha parada deu erro).
     const checks = [
-      ["linhas paradas", () => checkLinhasParadas(config, destinatarios)],
-      ["ops atrasadas", () => checkOpsAtrasadas(destinatarios)],
+      ["linhas paradas", () => operando ? checkLinhasParadas(config, destinatarios) : Promise.resolve()],
+      ["ops atrasadas", () => operando ? checkOpsAtrasadas(destinatarios) : Promise.resolve()],
       ["ops emitidas", () => checkOpsEmitidas(destinatarios)],
       ["turno não encerrado", () => checkTurnoNaoEncerrado(config, destinatarios)],
       ["intervalos pendentes", () => checkIntervalosPendentes(config, destinatarios)],
