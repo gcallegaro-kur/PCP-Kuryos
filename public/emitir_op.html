@@ -71,6 +71,29 @@
     .aloc-opt-info b{font-size:13px}
     .aloc-opt-meta{color:var(--muted);font-size:11px;margin-top:2px}
 
+    /* Modal de substituição de material -- pedido do usuário: "campo de
+       pesquisa que traga maiores detalhes sobre o item, pra conseguir
+       substituir dentro da mesma tela, sem precisar sair pra pesquisar"
+       (antes era um prompt() com lista numerada em texto puro, sem
+       nenhum detalhe técnico pra decidir com segurança). Mesmo padrão
+       visual de modal já usado em materiais.html/cadastros.html. */
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:560px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#1e3a8a,var(--primary));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header h2{font-size:15px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:16px 20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;background:var(--surface-2)}
+    .subst-lista{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+    .subst-opt{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;cursor:pointer;text-align:left;width:100%;background:var(--card);font-family:inherit}
+    .subst-opt:hover{border-color:var(--primary);background:var(--surface-2)}
+    .subst-opt.subst-atual{border-color:var(--success);background:var(--tint-green-bg)}
+    .subst-opt-info{font-size:12.5px}
+    .subst-opt-info b{font-size:13px}
+    .subst-opt-det{color:var(--muted);font-size:11px;margin-top:2px}
+    .subst-opt-un{font-size:11px;color:var(--muted);white-space:nowrap}
+
     /* Impressão */
     #printArea{display:none}
     @media print {
@@ -90,20 +113,20 @@
       .print-blank-table td{height:22px}
       .print-check{display:inline-block;width:11px;height:11px;border:1px solid #333;margin-right:4px;vertical-align:middle}
       /* Etiqueta de caixa de embarque -- página nomeada (CSS Paged Media)
-         com tamanho PRÓPRIO (100x150mm, etiqueta térmica padrão), diferente
+         com tamanho PRÓPRIO (90x55mm, padrão real da Kuryos), diferente
          do A4 das 5 fichas -- os dois tipos de página coexistem no mesmo
          #printArea, cada elemento pega o tamanho certo pela classe.
          Suportado em navegadores Chromium (o que a fábrica já usa hoje). */
-      @page etiqueta { size: 100mm 150mm; margin: 3mm; }
-      .etiqueta-page{page:etiqueta;page-break-after:always;width:94mm;height:144mm;box-sizing:border-box;font-family:Arial,sans-serif;display:flex;flex-direction:column;justify-content:space-between}
+      @page etiqueta { size: 90mm 55mm; margin: 2mm; }
+      .etiqueta-page{page:etiqueta;page-break-after:always;width:86mm;height:51mm;box-sizing:border-box;font-family:Arial,sans-serif;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
       .etiqueta-page:last-child{page-break-after:auto}
-      .etq-header{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;border-bottom:2px solid #000;padding-bottom:4px}
-      .etq-produto{font-size:16px;font-weight:700;margin:8px 0;line-height:1.25}
-      .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;margin:8px 0}
-      .etq-lbl{display:block;color:#555;font-size:9px;text-transform:uppercase}
-      .etq-val{display:block;font-weight:700;font-size:13px}
+      .etq-header{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;border-bottom:1px solid #000;padding-bottom:2px}
+      .etq-produto{font-size:10px;font-weight:700;margin:3px 0;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:7px;margin:3px 0}
+      .etq-lbl{display:block;color:#555;font-size:6px;text-transform:uppercase}
+      .etq-val{display:block;font-weight:700;font-size:8px}
       .etq-barcode{text-align:center;margin-top:auto}
-      .etq-barcode-txt{font-size:11px;letter-spacing:2px;margin-top:2px}
+      .etq-barcode-txt{font-size:7px;letter-spacing:1px;margin-top:1px}
     }
     @media(max-width:600px){.form-grid{grid-template-columns:1fr}.resumo-grid{grid-template-columns:1fr 1fr}}
   </style>
@@ -219,6 +242,27 @@
       <button class="btn btn-primary" id="btnImprimir">🖨 Abrir documento pra impressão</button>
       <button class="btn btn-primary" id="btnImprimirEtiquetas">🏷️ Imprimir etiquetas de caixa</button>
       <button class="btn btn-ghost" id="btnNovaOp">Emitir outra OP</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de substituição de material -->
+<div class="modal-bg" id="substModalBg">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="substModalTitle">Substituir material</h2>
+      <button class="modal-close" id="substModalClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Buscar</label>
+        <input type="text" id="substBusca" placeholder="Código, nome, cor, gargalo/rosca, resina, INCI...">
+        <div class="field-hint" id="substContagem"></div>
+      </div>
+      <div class="subst-lista" id="substLista"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="substModalCancelBtn">Cancelar</button>
     </div>
   </div>
 </div>
@@ -689,26 +733,104 @@ function renderMateriaisTable() {
 // direto nos 904 materiais reais de produção, nenhum tem esses tipos.
 var TIPOS_MP = { MPGR: 1, MPES: 1 };
 var TIPOS_EMBALAGEM = { EP: 1, ES: 1, ET: 1, MU: 1 };
+
+// Pedido do usuário: "campo de pesquisa que de alguma forma traga maiores
+// detalhes sobre o item, pra conseguir substituir dentro da mesma tela,
+// sem precisar sair pra pesquisar" -- antes disto, "Substituir" era um
+// prompt() com uma lista numerada em texto puro (só código + nome), sem
+// nenhum dado técnico (cor, gargalo/rosca, resina, INCI...) pra decidir
+// com segurança se o substituto realmente encaixa. Campos abaixo cobrem
+// tanto embalagem (EP/ES/ET) quanto MP/fragrância (MPGR/MPES) -- só
+// aparece o que o material realmente tem preenchido.
+var SUBST_DETALHE_CAMPOS = [
+  ['cor', 'Cor'], ['formato', 'Formato'], ['gargaloRosca', 'Gargalo/rosca'],
+  ['materialResina', 'Resina'], ['textura', 'Textura'], ['fixacao', 'Fixação'],
+  ['inci', 'INCI'], ['funcaoFormula', 'Função'], ['marcaModelo', 'Marca/modelo'],
+  ['especificacoesTecnicas', 'Espec.']
+];
+function detalhesSubstMaterial(m) {
+  return SUBST_DETALHE_CAMPOS
+    .map(function(f) { return m[f[0]] ? (f[1] + ': ' + m[f[0]]) : null; })
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(' · ');
+}
+function haystackSubstMaterial(m) {
+  return normalizeSearch([m.mpCodigo, m.mpNome, m.cor, m.formato, m.gargaloRosca,
+    m.materialResina, m.textura, m.fixacao, m.inci, m.funcaoFormula, m.marcaModelo,
+    m.especificacoesTecnicas].filter(Boolean).join(' '));
+}
+
+var substKeyAtual = null; // chave dentro de materiaisConsumo sendo substituída agora
+var substOpcoes = [];     // candidatos válidos pra essa substituição (mesmo "tipo" e ativos)
+
 function abrirSubstituicao(key) {
   var it = materiaisConsumo[key];
   if (!it) return;
   var tiposValidos = it.origem === 'formula' ? TIPOS_MP : TIPOS_EMBALAGEM;
-  var opcoes = Object.values(allMateriais).filter(function(m) { return tiposValidos[m.tipo]; });
-  var lista = opcoes.map(function(m, i) { return (i + 1) + '. ' + m.mpCodigo + ' — ' + m.mpNome; }).join('\n');
-  var escolha = prompt('Substituir "' + it.mpCodigo + '" por (digite o código do material):\n\n' + lista);
-  if (escolha === null) return;
-  var novoMat = opcoes.find(function(m) { return norm(m.mpCodigo) === norm(escolha.trim()); });
-  if (!novoMat) { showAlert('Material não encontrado (digite o código exatamente como aparece na lista).', 'danger'); return; }
+  substKeyAtual = key;
+  // Nunca oferece material inativo/descontinuado como substituto (44 dos
+  // 904 materiais reais estão ativo:false no cadastro).
+  substOpcoes = Object.values(allMateriais).filter(function(m) { return tiposValidos[m.tipo] && m.ativo !== false; });
+  document.getElementById('substModalTitle').textContent = 'Substituir "' + it.mpCodigo + (it.mpNome ? ' — ' + it.mpNome : '') + '"';
+  document.getElementById('substBusca').value = '';
+  renderSubstResultados('');
+  document.getElementById('substModalBg').classList.add('open');
+  document.getElementById('substBusca').focus();
+}
+
+function fecharModalSubst() {
+  document.getElementById('substModalBg').classList.remove('open');
+  substKeyAtual = null;
+  substOpcoes = [];
+}
+
+function renderSubstResultados(query) {
+  var box = document.getElementById('substLista');
+  var it = materiaisConsumo[substKeyAtual];
+  var q = normalizeSearch(query);
+  var filtrados = !q ? substOpcoes : substOpcoes.filter(function(m) { return haystackSubstMaterial(m).indexOf(q) !== -1; });
+  document.getElementById('substContagem').textContent =
+    filtrados.length + ' de ' + substOpcoes.length + ' materiais compatíveis' + (q ? ' (filtrado pela busca)' : '');
+  if (!filtrados.length) {
+    box.innerHTML = '<div class="empty-state">Nenhum material encontrado com esse termo -- confira o cadastro em Cadastros.</div>';
+    return;
+  }
+  // Lista sem paginação de verdade, mas corta em 60 resultados -- a busca
+  // já filtra rápido o suficiente na prática (materiais tem ~900 registros,
+  // cada substituição já reduz pelo tipo antes de mostrar).
+  box.innerHTML = filtrados.slice(0, 60).map(function(m) {
+    var ehAtual = it && norm(m.mpCodigo) === norm(it.mpCodigo);
+    var det = detalhesSubstMaterial(m);
+    return '<button type="button" class="subst-opt' + (ehAtual ? ' subst-atual' : '') + '" data-codigo="' + escapeAttr(m.mpCodigo) + '">' +
+      '<span class="subst-opt-info"><b>' + escapeHtml(m.mpCodigo) + '</b> — ' + escapeHtml(m.mpNome || '') +
+        (ehAtual ? ' <span class="badge badge-green">atual</span>' : '') +
+        (det ? '<div class="subst-opt-det">' + escapeHtml(det) + '</div>' : '') +
+      '</span>' +
+      '<span class="subst-opt-un">' + escapeHtml(m.unidade || '') + '</span>' +
+    '</button>';
+  }).join('');
+  box.querySelectorAll('.subst-opt').forEach(function(btn) {
+    btn.addEventListener('click', function() { escolherSubstituto(btn.getAttribute('data-codigo')); });
+  });
+}
+
+function escolherSubstituto(codigo) {
+  var it = materiaisConsumo[substKeyAtual];
+  if (!it) { fecharModalSubst(); return; }
+  var novoMat = substOpcoes.find(function(m) { return norm(m.mpCodigo) === norm(codigo); });
+  if (!novoMat) return;
   // mpCodigoOriginal é o material que estava na fórmula/BOM antes de qualquer substituição nesta OP
   // (se já houve uma troca, it.substituiMpCodigo guarda o original; senão, o próprio it.mpCodigo já é o original).
   var mpCodigoOriginal = it.substituiMpCodigo || it.mpCodigo;
-  materiaisConsumo[key] = Object.assign({}, it, {
+  materiaisConsumo[substKeyAtual] = Object.assign({}, it, {
     mpCodigo: novoMat.mpCodigo, mpNome: novoMat.mpNome,
     // Escolher de volta o material original desfaz a substituição (limpa o rótulo em vez de
     // mostrar "MPGR001 (substitui MPGR001)").
     substituiMpCodigo: novoMat.mpCodigo === mpCodigoOriginal ? null : mpCodigoOriginal
   });
   renderMateriaisTable();
+  fecharModalSubst();
 }
 
 /* ── Numeração de lote (AADDD/NN) -- mesmo formato já em produção nos milhares de OPs existentes ── */
@@ -996,6 +1118,11 @@ document.addEventListener('DOMContentLoaded', function() {
     window.print();
   });
   document.getElementById('btnNovaOp').addEventListener('click', function() { location.reload(); });
+
+  document.getElementById('substModalClose').addEventListener('click', fecharModalSubst);
+  document.getElementById('substModalCancelBtn').addEventListener('click', fecharModalSubst);
+  document.getElementById('substModalBg').addEventListener('click', function(e) { if (e.target === this) fecharModalSubst(); });
+  document.getElementById('substBusca').addEventListener('input', function() { renderSubstResultados(this.value); });
 
   try {
     db.ref('.info/connected').on('value', function(snap) {

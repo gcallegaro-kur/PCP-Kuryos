@@ -1355,7 +1355,7 @@ function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
       '<div><span class="etq-lbl">Qtde. nesta caixa</span><span class="etq-val">' + fmtNum(qtdNestaCaixa) + ' un.</span></div>' +
       '<div><span class="etq-lbl">Validade</span><span class="etq-val">' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</span></div>' +
     '</div>' +
-    '<div class="etq-barcode">' + code39Svg(op.lote || '') + '<div class="etq-barcode-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
+    '<div class="etq-barcode">' + code39Svg(op.lote || '', 9, 0.28) + '<div class="etq-barcode-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
   '</div>';
 }
 
