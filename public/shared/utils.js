@@ -1092,6 +1092,38 @@ function transferirLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, novoEndere
   });
 }
 
+// Baixa manual de um lote específico -- usado pela ação "Registrar Saída"
+// em estoque.html (ex: saída de produto acabado por expedição manual, já
+// que não existe hoje um fluxo de expedição automatizado pra ligar nisso;
+// ou correção pontual do saldo de um lote específico de MP). Nunca muda
+// estoque/{materialKey} (o agregado) -- só o saldoLote granular desse
+// lote. `motivo` vem da lista fechada (config/motivosMovimentoEstoque),
+// escolhido pelo usuário na tela. Nunca deixa saldoLote negativo (mesmo
+// princípio de baixarEmpenho -- abate o mínimo entre o pedido e o que
+// realmente sobra).
+function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, autor) {
+  if (!itemCodigo || !loteKey || !qtd || qtd <= 0) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  return loteRef.transaction(function(atual) {
+    if (!atual) return atual; // lote já não existe mais -- aborta sem gravar nada
+    var abatido = Math.min(qtd, atual.saldoLote || 0);
+    atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatido) * 1000) / 1000;
+    atual.atualizadoEm = new Date().toISOString();
+    return atual;
+  }).then(function(resultado) {
+    var lote = (resultado && resultado.committed && resultado.snapshot) ? resultado.snapshot.val() : null;
+    if (!lote) return resultado;
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: 'saida_manual', motivo: motivo || 'REMESSA',
+      qtd: -qtd, saldoApos: null, ref: null, loteKey: loteKey, enderecoKey: lote.enderecoKey || null,
+      itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+      itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+      autor: autor || null, em: new Date().toISOString()
+    }).then(function() { return resultado; });
+  });
+}
+
 // ── Tipos de fornecedor (multi) ─────────────────────────────────────────
 // Achado do usuário: um fornecedor real (ex: uma matriz com 3 CNPJs)
 // costuma vender em mais de uma categoria ao mesmo tempo -- embalagem,
