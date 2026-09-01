@@ -1729,3 +1729,45 @@ ambiente disponível pra medir em pixel): ficha de Envase estimada em
 ~923px de conteúdo contra ~1046px disponíveis numa A4 com margem padrão
 do Chrome -- folga de ~120px; recomendado confirmar num teste de
 impressão real. **Deployado e no `main`.**
+
+**Décimo nono complemento (2026-09-01): etiqueta -- EAN13 do produto +
+QR code do lote.** Usuário confirmou (depois de eu perguntar o que
+achava): "a etiqueta tem que ser com codigo de barras do produto,
+talvez dê pra alocarmos um qr code que identifique o lote" -- "Legal,
+vamos construir então!". E sobre produtos sem registro: "Vamos colocar
+o codigo de barras das que possuem registro. EAN e DUM. As que não
+tiverem, deixa o espaço vazio > fica pro comercial levantar esses
+pontos junto ao cliente". Confirmado antes: impressora Zebra imprime
+via driver do Windows (não ZPL), então o HTML/CSS de impressão
+continua o caminho certo.
+
+`ean13Svg` (`shared/utils.js`) -- EAN13 é bem mais rígido que Code 39,
+mas por isso mesmo dá pra autoverificar de um jeito mais forte: G e R
+de cada dígito são DERIVADOS matematicamente de L (G = espelhamento do
+complemento de L; R = complemento de L) -- só a tabela L e a de
+paridade precisam ser digitadas de cabeça, o resto é calculado, não
+transcrito. Conferido contra 2 EAN13 reais publicados (dígito
+verificador batendo) antes de confiar. `qrCodeSvg` -- QR usa correção
+de erro Reed-Solomon, arriscado demais pra reimplementar do zero sem
+referência testada -- vendorizada a biblioteca "qrcode-generator" (MIT,
+Kazuhiko Arase, `shared/qrcode-lib.js`, não modificada).
+
+Confirmado via Firebase CLI antes de decidir: hoje 28 dos 373 produtos
+têm EAN13/DUM14 cadastrado -- **sempre os dois juntos, nunca um sem o
+outro** -- por isso só EAN13 foi implementado agora (DUM14 é outro
+padrão, ITF-14, sem ganho prático hoje; registrado em
+`MELHORIAS_FUTURAS.md` se isso mudar). Produto sem EAN13: mostra "EAN
+não cadastrado" (aviso discreto), nunca espaço em branco silencioso ou
+código inválido -- fica pro comercial resolver com o cliente. QR do
+lote é gerado independente do EAN13 existir ou não. `op.ean13` vira
+snapshot na emissão, mesmo raciocínio de `pecasPorCaixa` (reimpressão
+não depende do cadastro do produto de novo).
+
+Também registrado em `MELHORIAS_FUTURAS.md`: etiqueta maior/mais
+informações (usuário avaliando, mantém 90x55mm por ora) e DUM14/ITF-14
+(sem uso real hoje).
+
+Testado: harness Node do bloco real -- 12 asserções em EAN13 (relações
+matemáticas L/G/R nos 10 dígitos, checksum contra 2 EAN13 reais,
+validação de entrada) e 21 na etiqueta completa, com a biblioteca de QR
+de verdade carregada. **Deployado e no `main`.**
