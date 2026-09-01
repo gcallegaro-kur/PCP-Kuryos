@@ -4123,6 +4123,43 @@ function renderTurnoGridPostos() {
 // o único lugar que escreve em #alocarOpLote.
 var alocarOpLivresAtual = [];
 
+// Achado do usuário: "na alocação de OP, ele não esta puxando pela
+// programação, indicando qual a proxima OP deve entrar na linha em
+// questão" -- confirmado no código real: a recomendação vinha só da
+// PRIORIDADE genérica do pedido (abaixo), nunca olhava a Grade Semanal
+// (programacao/) pra ver o que está DE FATO programado pra ESTA linha
+// específica. Pior: o filtro nem restringia por linha (opsCache inteiro,
+// qualquer linha) -- conferido contra produção real: só 6 das 49 OPs
+// abertas aguardando alocação têm `linha` já preenchida no próprio
+// registro (12%), então filtrar direto por op.linha deixaria a lista
+// vazia na maioria das vezes. A fonte confiável é a Grade (progData, já
+// carregada ao vivo pra hoje) -- mesmo padrão de busca já usado no
+// fallback de updateFormFromSchedule() (auto-seleção da OP em "Parar
+// Linha"), reaproveitado aqui em vez de duplicado com lógica própria.
+function proximoPedidoProgramadoParaLinha(linha) {
+  var nowH = new Date().getHours();
+  var horasOrdenadas = Object.keys(progData).sort(function(a, b) {
+    return a.replace('_', ':').localeCompare(b.replace('_', ':'));
+  });
+  for (var hIdx = 0; hIdx < horasOrdenadas.length; hIdx++) {
+    var hourKey = horasOrdenadas[hIdx];
+    var h = parseInt(hourKey.replace('_', ':').split(':')[0], 10);
+    if (isNaN(h) || h < nowH) continue; // hora já passou hoje
+    var hourData = progData[hourKey];
+    if (!hourData) continue;
+    var lineIdx = null;
+    for (var i = 1; i <= 10; i++) {
+      var lName = hourData['linha' + i];
+      if (!lName) { if (linha === 'Linha ' + i) { lineIdx = i; break; } }
+      else if (lName === linha) { lineIdx = i; break; }
+    }
+    if (!lineIdx) continue;
+    var slotVal = hourData['env' + lineIdx];
+    if (slotVal && typeof slotVal === 'object' && slotVal.pedidoKey) return slotVal.pedidoKey;
+  }
+  return null;
+}
+
 function updatePedidosDatalistTurno(tipo) {
   var campoInicio = campoAberturaInicio(tipo);
   var livres = Object.values(opsCache).filter(function(o) {
@@ -4134,7 +4171,10 @@ function updatePedidosDatalistTurno(tipo) {
   // escolher livremente, e sim seguir o que está programado). Ordena pela
   // prioridade do pedido comercial vinculado (mesmo campo que Horizonte/
   // Planejamento/o motor de replanejamento automático já usam); lote como
-  // desempate estável pra quem não tem prioridade definida.
+  // desempate estável pra quem não tem prioridade definida. É o
+  // FALLBACK -- se a linha tem algo programado na Grade agora, isso vence
+  // (ver renderAlocarOpLista), mas a Grade nem sempre está preenchida pra
+  // toda linha/hora, então esse critério continua valendo de base.
   livres.sort(function(a, b) {
     var pa = (a.skuPedidoKey && pedidosCache[a.skuPedidoKey] && pedidosCache[a.skuPedidoKey].priority) || 999999;
     var pb = (b.skuPedidoKey && pedidosCache[b.skuPedidoKey] && pedidosCache[b.skuPedidoKey].priority) || 999999;
@@ -4157,13 +4197,43 @@ function renderAlocarOpLista(filtroTexto) {
     return;
   }
   var loteSelecionado = document.getElementById('alocarOpLote').value;
-  // "Recomendada" é sempre a #1 da lista completa ordenada por prioridade
-  // (não da lista já filtrada pelo campo de busca) -- senão digitar um
-  // filtro faria qualquer resultado parecer "recomendado" só por ser o
-  // primeiro do que sobrou.
-  var top = alocarOpLivresAtual[0];
-  var topTemPrioridade = top && top.skuPedidoKey && pedidosCache[top.skuPedidoKey] && pedidosCache[top.skuPedidoKey].priority != null;
-  var loteRecomendado = topTemPrioridade ? String(top.lote) : null;
+
+  // Pedido do usuário: a recomendação tem que "puxar pela programação" --
+  // se a Grade Semanal tem algo programado pra ESTA linha agora, isso
+  // vence a prioridade genérica (que não sabe nada sobre linha). Calculado
+  // sobre a lista COMPLETA (não a filtrada) -- mesmo raciocínio de sempre:
+  // digitar um filtro não pode fazer um resultado parecer "recomendado"
+  // só por sobrar sozinho.
+  var pedidoKeyProgramado = (alocarOpAlvoAtual && alocarOpAlvoAtual.tipo === 'linha')
+    ? proximoPedidoProgramadoParaLinha(alocarOpAlvoAtual.nome) : null;
+  var opDaProgramacao = pedidoKeyProgramado
+    ? alocarOpLivresAtual.find(function(o) {
+        return o.skuPedidoKey && _kuryosNormalizePedidoKey(o.skuPedidoKey) === _kuryosNormalizePedidoKey(pedidoKeyProgramado);
+      })
+    : null;
+
+  var loteRecomendado, motivoRecomendacao;
+  if (opDaProgramacao) {
+    loteRecomendado = String(opDaProgramacao.lote);
+    motivoRecomendacao = '📅 Próxima da programação (' + escapeHtml(alocarOpAlvoAtual.nome) + ')';
+    // Traz pro topo da lista exibida, mesmo que a prioridade genérica
+    // aponte outra -- é um compromisso mais forte (a Grade foi montada
+    // olhando capacidade/sequência real, prioridade sozinha não sabe
+    // disso). Só reordena dentro do que já passou pelo filtro de busca.
+    var idxProg = itens.indexOf(opDaProgramacao);
+    if (idxProg > 0) { itens.splice(idxProg, 1); itens.unshift(opDaProgramacao); }
+  } else {
+    // Fallback: nenhum pedido programado pra esta linha agora (Grade vazia
+    // pra esse horário/linha) -- volta pro critério de sempre, só
+    // prioridade. "Recomendada" é a #1 da lista COMPLETA ordenada por
+    // prioridade (não a filtrada), mesmo raciocínio de não deixar um
+    // filtro forjar uma recomendação.
+    var top = alocarOpLivresAtual[0];
+    var topTemPrioridade = top && top.skuPedidoKey && pedidosCache[top.skuPedidoKey] && pedidosCache[top.skuPedidoKey].priority != null;
+    loteRecomendado = topTemPrioridade ? String(top.lote) : null;
+    motivoRecomendacao = '💡 Próxima recomendada (prioridade)';
+  }
+
   cont.innerHTML = itens.map(function(o) {
     var saldo = (o.qtdPlanejada || 0) - getProduzido(o, alocarOpAlvoAtual ? alocarOpAlvoAtual.tipo : 'linha');
     var sel = String(o.lote) === loteSelecionado;
@@ -4171,7 +4241,7 @@ function renderAlocarOpLista(filtroTexto) {
     return '<div class="alocar-op-card' + (sel ? ' selected' : '') + '" data-op-lote="' + escapeHtml(String(o.lote)) + '">' +
       '<div class="alocar-op-card-top"><span class="alocar-op-card-lote">OP ' + escapeHtml(String(o.lote)) + '</span>' +
         '<span class="alocar-op-card-check">' + (sel ? '✓' : '') + '</span></div>' +
-      (recomendada ? '<div style="font-size:11px;font-weight:700;color:var(--success);margin-bottom:2px">💡 Próxima recomendada (prioridade)</div>' : '') +
+      (recomendada ? '<div style="font-size:11px;font-weight:700;color:var(--success);margin-bottom:2px">' + motivoRecomendacao + '</div>' : '') +
       '<div class="alocar-op-card-prod">' + escapeHtml(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escapeHtml(o.sku) + ']</span>' : '') + '</div>' +
       '<div class="alocar-op-card-sub">Saldo: ' + fmtNum(saldo) + '</div>' +
     '</div>';
