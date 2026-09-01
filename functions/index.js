@@ -653,25 +653,39 @@ async function checkOpsAtrasadas(destinatarios) {
 
     const naoIniciada = !op.abertaDesde && !op.abertaDesdeRot && !produzido;
     if (op.dataInicioPlanejada && naoIniciada) {
-      const inicioMs = new Date(op.dataInicioPlanejada).getTime();
-      if (!isNaN(inicioMs)) {
-        const atrasoMin = (agora - inicioMs) / 60000;
-        if (atrasoMin >= TOLERANCIA_MIN) {
-          const key = `op_nao_iniciada_${loteKey}`;
-          if (await cooldownOk(key, COOLDOWN_MIN)) {
-            const assunto = `⏰ OP ${op.lote || loteKey} não iniciada — ${Math.floor(atrasoMin)} min de atraso`;
-            const corpo =
-              `A OP ${op.lote || loteKey} (${op.produto || "—"}, cliente ${op.cliente || "—"}) ` +
-              `estava programada pra começar em ${op.dataInicioPlanejada} e ainda não foi aberta ` +
-              `em nenhuma linha/rotulagem — ${Math.floor(atrasoMin)} minuto(s) de atraso.\n\n` +
-              `Quantidade planejada: ${op.qtdPlanejada || 0} un.\n` +
-              `Linha programada: ${linha}\n\n` +
-              `Pode ser simplesmente esquecimento — vale checar pessoalmente.\n\n` +
-              `Sistema PCP Kuryos — alerta automático (repete a cada ${COOLDOWN_MIN}min enquanto não iniciar).`;
-            if (await sendMailViaGraph(destinatarios, assunto, corpo)) await markSent(key);
-          }
-        }
-      }
+      // CONGELADO a pedido do usuário (2026-09-01): "Vamos congelar os
+      // anuncios de OPs não iniciadas, ainda não estão adaptados aos
+      // apontamentos em tempo real" -- com o fluxo de apontamento em
+      // evolução (ex: "Alocar OP" agora puxa da Grade Semanal, ver
+      // form.html/proximoPedidoProgramadoParaLinha), o critério de "não
+      // iniciada" abaixo (abertaDesde/abertaDesdeRot/produzido) ficou
+      // defasado do jeito real que uma OP passa a estar "em andamento"
+      // hoje -- gerava falso positivo. Ninguém recebe mais este e-mail
+      // até isso ser revisado e reescrito. As outras 2 checagens desta
+      // função (OP atrasada já em andamento, logo abaixo; desvio de
+      // ritmo do pedido) continuam ativas normalmente -- só este bloco
+      // está desligado. O corpo original fica comentado pra não perder
+      // o texto quando isso for retomado:
+      //
+      // const inicioMs = new Date(op.dataInicioPlanejada).getTime();
+      // if (!isNaN(inicioMs)) {
+      //   const atrasoMin = (agora - inicioMs) / 60000;
+      //   if (atrasoMin >= TOLERANCIA_MIN) {
+      //     const key = `op_nao_iniciada_${loteKey}`;
+      //     if (await cooldownOk(key, COOLDOWN_MIN)) {
+      //       const assunto = `⏰ OP ${op.lote || loteKey} não iniciada — ${Math.floor(atrasoMin)} min de atraso`;
+      //       const corpo =
+      //         `A OP ${op.lote || loteKey} (${op.produto || "—"}, cliente ${op.cliente || "—"}) ` +
+      //         `estava programada pra começar em ${op.dataInicioPlanejada} e ainda não foi aberta ` +
+      //         `em nenhuma linha/rotulagem — ${Math.floor(atrasoMin)} minuto(s) de atraso.\n\n` +
+      //         `Quantidade planejada: ${op.qtdPlanejada || 0} un.\n` +
+      //         `Linha programada: ${linha}\n\n` +
+      //         `Pode ser simplesmente esquecimento — vale checar pessoalmente.\n\n` +
+      //         `Sistema PCP Kuryos — alerta automático (repete a cada ${COOLDOWN_MIN}min enquanto não iniciar).`;
+      //       if (await sendMailViaGraph(destinatarios, assunto, corpo)) await markSent(key);
+      //     }
+      //   }
+      // }
       continue; // já avaliada -- não checa também "atrasada em andamento" no mesmo ciclo
     }
 
