@@ -174,8 +174,9 @@
         </div>
       </div>
       <div class="section-label" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Itens recebidos nesta entrega</div>
+      <div class="field-hint" style="margin-bottom:8px">Lote do fornecedor, validade e endereço de destino são opcionais por item -- preenchendo, o saldo desse item fica rastreável por lote/posição em Estoque/WMS; deixando em branco, o saldo total sobe normalmente, só sem esse detalhe.</div>
       <table>
-        <thead><tr><th>Material</th><th>Pedido</th><th>Já recebido</th><th style="min-width:110px">Recebendo agora</th></tr></thead>
+        <thead><tr><th>Material</th><th>Pedido</th><th>Já recebido</th><th style="min-width:110px">Recebendo agora</th><th style="min-width:110px">Lote do fornecedor</th><th style="min-width:120px">Validade</th><th style="min-width:140px">Endereço de destino</th></tr></thead>
         <tbody id="rcItensBody"></tbody>
       </table>
       <div class="form-group full" style="margin-top:14px">
@@ -225,6 +226,7 @@ kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 var allPedidosCompra = {};
 var allTransportadoras = {};
+var allEnderecosEstoque = {}; // WMS Fase 1 -- popula o <select> de endereço de destino no recebimento
 var agendandoKey = null;
 var recebendoKey = null;
 
@@ -470,9 +472,27 @@ function openModalReceber(key) {
       '<td>' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
       '<td>' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
       '<td><input type="number" class="rc-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (restante > 0 ? restante : '') + '"></td>' +
+      '<td><input type="text" class="rc-lote" data-item="' + escapeAttr(itemKey) + '" placeholder="Opcional"></td>' +
+      '<td><input type="date" class="rc-validade" data-item="' + escapeAttr(itemKey) + '"></td>' +
+      '<td><select class="rc-endereco" data-item="' + escapeAttr(itemKey) + '">' + opcoesEnderecoSelect() + '</select></td>' +
     '</tr>';
   }).join('');
   document.getElementById('modalReceber').classList.add('open');
+}
+
+// WMS Fase 1: opções do <select> de endereço de destino, uma por posição
+// cadastrada em Endereços (cadastros.html) -- ordenado por código pra ficar
+// fácil de achar (1.1.1, 1.1.2, 1.1.3...). Vazio ("Sem endereço") é sempre
+// a opção padrão -- preencher é opcional por item, ver hint no modal.
+function opcoesEnderecoSelect() {
+  var entries = Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
+  var opts = '<option value="">Sem endereço</option>';
+  entries.forEach(function(entry) {
+    var key = entry[0], e = entry[1];
+    opts += '<option value="' + escapeAttr(key) + '">' + escapeHtml(e.codigo) + ' (' + escapeHtml(e.area || '') + ')</option>';
+  });
+  return opts;
 }
 function closeModalReceber() { document.getElementById('modalReceber').classList.remove('open'); recebendoKey = null; }
 // Achado do Auditor: a versão anterior lia `qtdRecebida` do estado em
@@ -507,6 +527,26 @@ function saveReceber() {
   });
   if (erroLocal) { showAlert(erroLocal, 'danger'); return; }
   if (!Object.keys(qtdsDigitadas).length) { showAlert('Informe ao menos uma quantidade recebida maior que zero.', 'danger'); return; }
+
+  // WMS Fase 1: lote/validade/endereço por item, opcionais (ver hint no
+  // modal) -- só entram no putaway quem tiver os 3 preenchidos (endereço é
+  // o que decide: sem endereço, não dá pra registrar ONDE o lote está, então
+  // não cria o registro granular, mas o saldo total sobe normalmente).
+  var dadosLotePorItem = {};
+  Object.keys(qtdsDigitadas).forEach(function(itemKey) {
+    var linha = document.querySelector('tr[data-item="' + CSS.escape(itemKey) + '"]');
+    if (!linha) return;
+    var loteInput = linha.querySelector('.rc-lote');
+    var validadeInput = linha.querySelector('.rc-validade');
+    var enderecoSelect = linha.querySelector('.rc-endereco');
+    var enderecoKey = enderecoSelect ? enderecoSelect.value : '';
+    if (!enderecoKey) return; // sem endereço, não registra o lote granular pra este item
+    dadosLotePorItem[itemKey] = {
+      loteOrigem: (loteInput && loteInput.value.trim()) || '',
+      dataValidade: (validadeInput && validadeInput.value) || null,
+      enderecoKey: enderecoKey
+    };
+  });
 
   document.getElementById('modalReceberSave').disabled = true;
   var recKey = db.ref('pedidos_compra/' + recebendoKey + '/recebimentos').push().key;
@@ -573,8 +613,42 @@ function saveReceber() {
       console.error('Falha ao atualizar saldo de estoque:', err);
       showAlert('Recebimento registrado, mas o saldo de estoque não pôde ser atualizado agora: ' + err.message, 'danger');
     });
+    // WMS Fase 1: putaway granular (lote/validade/endereço) -- também
+    // secundário e best-effort, mesmo espírito de incrementarEstoque acima.
+    // Só roda pros itens que tiveram endereço preenchido (dadosLotePorItem
+    // já filtra isso na coleta) -- o saldo agregado sobe de qualquer jeito
+    // via incrementarEstoque, independente disso.
+    registrarPutawayRecebimento(itensRecebidosParaEstoque, dadosLotePorItem, recKey).catch(function(err) {
+      console.error('Falha ao registrar putaway do recebimento:', err);
+      showAlert('Recebimento registrado, mas o detalhe de lote/endereço não pôde ser salvo agora: ' + err.message, 'danger');
+    });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalReceberSave').disabled = false; });
+}
+
+// WMS Fase 1: cria o registro granular (estoque_lotes) pra cada item
+// recebido que teve endereço de destino preenchido -- itensRecebidos vem
+// da MESMA transaction que já commitou o recebimento (fonte de verdade),
+// dadosLotePorItem só tem entradas pros itens com endereço (ver saveReceber).
+function registrarPutawayRecebimento(itensRecebidos, dadosLotePorItem, recKey) {
+  var recebidoPor = currentUserNome();
+  var itens = Object.entries(itensRecebidos || {}).filter(function(entry) {
+    return entry[1].qtdRecebidaAgora > 0 && dadosLotePorItem[entry[0]];
+  });
+  if (!itens.length) return Promise.resolve();
+  return Promise.all(itens.map(function(entry) {
+    var itemKey = entry[0], it = entry[1], dadosLote = dadosLotePorItem[itemKey];
+    var enderecoInfo = allEnderecosEstoque[dadosLote.enderecoKey];
+    return putawayEstoqueLote(db, 'material', it.materialCodigo, {
+      itemNome: it.materialNome, unidade: it.unidade,
+      loteOrigem: dadosLote.loteOrigem || null, dataValidade: dadosLote.dataValidade || null,
+      dataRecebimento: new Date().toISOString().slice(0, 10),
+      saldoLote: it.qtdRecebidaAgora, qtdOriginal: it.qtdRecebidaAgora,
+      enderecoKey: dadosLote.enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
+      origemTipo: 'recebimento_pc', origemRef: recebendoKey, recebimentoKey: recKey,
+      criadoPor: recebidoPor
+    });
+  }));
 }
 
 /* ══════════════ Estoque (Fase 4a -- entrada) ══════════════ */
@@ -663,6 +737,9 @@ document.addEventListener('DOMContentLoaded', function() {
       allPedidosCompra = snap.val() || {};
       renderReceberList();
       renderHistoricoList();
+    });
+    dbOnValue(db.ref('enderecos_estoque'), function(snap) {
+      allEnderecosEstoque = snap.val() || {};
     });
   } catch (err) {
     setStatus(false, 'Erro');
