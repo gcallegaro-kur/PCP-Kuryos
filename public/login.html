@@ -409,10 +409,19 @@
   }
   
   function redirectUser(role) {
-    if (role === 'admin') {
+    // Achado (relato do usuário: Adlai, perfil 'pcp', caiu aqui no "Perfil
+    // desconhecido" ao logar): esta função nunca foi atualizada quando os
+    // papéis 'pcp'/'rh'/'gestor' foram criados -- só reconhecia
+    // 'admin'/'production'/'rotulagem'. Mesmo destino de página que
+    // auth_check.js já usa pra cada papel (isPcpAdmin, rhHome).
+    if (role === 'admin' || role === 'pcp') {
       window.location.href = 'dashboard.html';
     } else if (role === 'production' || role === 'rotulagem') {
       window.location.href = 'form.html';
+    } else if (role === 'rh') {
+      window.location.href = 'rh_dashboard.html';
+    } else if (role === 'gestor') {
+      window.location.href = 'rh_avaliacao.html';
     } else {
       showFeedback('error', 'Perfil desconhecido no sistema.');
     }
