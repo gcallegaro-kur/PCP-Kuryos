@@ -794,10 +794,30 @@ function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
 // Prefere a versão APROVADA mais recente; sem nenhuma aprovada, cai pra
 // mais recente de qualquer status (com temAprovada:false pro chamador
 // decidir se avisa/bloqueia).
-function melhorFormulaDoProduto(codProduto, allFormulas) {
+//
+// Fórmula, BOM e Especificação têm aprovação PRÓPRIA e independente
+// (pedido do usuário: "o certo é ter 3 aprovações, da formula, do bom e
+// da spec"), cada uma no seu próprio nó (formulas/bom/especificacoes,
+// mesma chave). allBom/allEspecificacoes são OPCIONAIS -- quando o
+// chamador não passa (compras.html gerando solicitação de compra,
+// form.html baixando estoque no apontamento -- os dois já existiam antes
+// dessa mudança e nunca devem ficar bloqueados por um campo de aprovação
+// que não existia quando foram escritos), "aprovada" continua olhando só
+// a Fórmula, exatamente como sempre foi. Só quando os 3 argumentos são
+// passados (emitir_op.html) uma versão passa a contar como aprovada
+// quando Fórmula, BOM E Especificação estiverem TODAS com status
+// APROVADA.
+function melhorFormulaDoProduto(codProduto, allFormulas, allBom, allEspecificacoes) {
   var versoes = Object.values(allFormulas || {}).filter(function(f) { return f && f.codProduto === codProduto; });
   if (!versoes.length) return null;
-  var aprovadas = versoes.filter(function(f) { return f.status === 'APROVADA'; });
+  var exigeTudo = !!(allBom && allEspecificacoes);
+  var aprovadas = versoes.filter(function(f) {
+    if (f.status !== 'APROVADA') return false;
+    if (!exigeTudo) return true;
+    var key = chaveVersao(codProduto, f.versao);
+    var b = allBom[key], e = allEspecificacoes[key];
+    return !!(b && b.status === 'APROVADA') && !!(e && e.status === 'APROVADA');
+  });
   var pool = aprovadas.length ? aprovadas : versoes;
   pool.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
   return { registro: pool[0], temAprovada: aprovadas.length > 0 };

@@ -807,9 +807,10 @@
 
     <div id="areaEdicao-form" class="card" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-        <div class="card-title" style="margin-bottom:0">Versão <span id="versaoAtualLabel-form"></span> <span id="versaoStatusBadge-form"></span></div>
+        <div class="card-title" style="margin-bottom:0">Versão <span id="versaoAtualLabel-form"></span></div>
         <div id="versaoAcoes-form" style="display:flex;gap:8px"></div>
       </div>
+      <div class="section-note" style="margin-top:-4px;margin-bottom:10px">Fórmula, BOM e Especificações têm aprovação própria e independente -- cada aba tem seu status e seus botões de aprovação.</div>
 
       <div class="tabs" id="formulasInnerTabs">
         <button class="tab active" data-tab="form-formula">Fórmula</button>
@@ -818,6 +819,7 @@
       </div>
 
       <div class="tab-panel active" id="tab-form-formula">
+        <div id="formulasAcoes-form" style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px"></div>
         <table>
           <thead><tr>
             <th style="min-width:160px">Matéria-Prima</th>
@@ -833,6 +835,7 @@
       </div>
 
       <div class="tab-panel" id="tab-form-bom">
+        <div id="bomAcoes-form" style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px"></div>
         <table>
           <thead><tr>
             <th style="min-width:160px">Material (Embalagem)</th>
@@ -845,6 +848,7 @@
       </div>
 
       <div class="tab-panel" id="tab-form-espec">
+        <div id="especificacoesAcoes-form" style="margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px"></div>
         <table>
           <thead><tr>
             <th style="min-width:140px">Ensaio</th>
@@ -3441,6 +3445,15 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
 
+  // Quantos dos 3 componentes (Fórmula/BOM/Especificação) dessa versão já
+  // estão com status APROVADA -- usado só pro resumo compacto da pill de
+  // versão (não faz mais sentido mostrar 1 status só, agora que cada um
+  // tem o seu).
+  function contarComponentesAprovados(key) {
+    var f = allFormulas[key] || {}, b = allBom[key] || {}, e = allEspecificacoes[key] || {};
+    return [f, b, e].filter(function(r) { return r.status === 'APROVADA'; }).length;
+  }
+
   function renderVersoes() {
     var versoes = versoesDoProduto();
     var el = document.getElementById('listaVersoes-form');
@@ -3451,8 +3464,10 @@ document.addEventListener('DOMContentLoaded', function() {
       versoes.forEach(function(f) {
         var pill = document.createElement('div');
         pill.className = 'version-pill' + (f.versao === versaoAtual ? ' active' : '');
-        var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
-        pill.innerHTML = escapeHtml(f.versao) + ' <span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span>';
+        var key = chaveVersao(produtoSelecionadoKey, f.versao);
+        var n = contarComponentesAprovados(key);
+        var badgeClass = n === 3 ? 'badge-aprovada' : (n === 0 ? 'badge-rascunho' : 'badge-orange');
+        pill.innerHTML = escapeHtml(f.versao) + ' <span class="badge ' + badgeClass + '">' + n + '/3 aprovado' + (n === 1 ? '' : 's') + '</span>';
         pill.addEventListener('click', function() { selecionarVersao(f.versao); });
         el.appendChild(pill);
       });
@@ -3465,26 +3480,12 @@ document.addEventListener('DOMContentLoaded', function() {
     renderVersoes();
     document.getElementById('areaEdicao-form').style.display = 'block';
     var key = chaveVersao(produtoSelecionadoKey, versao);
-    var f = allFormulas[key] || { status: 'RASCUNHO', itens: {} };
     document.getElementById('versaoAtualLabel-form').textContent = versao;
-    var badgeClass = f.status === 'APROVADA' ? 'badge-aprovada' : (f.status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
-    // Mesmo padrão de badge clicável de Fornecedores/Materiais -- "nasce
-    // revisado" (revisado !== false) pra quem já existia antes desse campo
-    // existir; só quem veio do import em lote (revisado:false explícito)
-    // precisa de alguém confirmar antes de poder aprovar.
-    var revisado = f.revisado !== false;
-    var revisadoBadge = revisado
-      ? '<span class="badge badge-green fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
-      : '<span class="badge badge-orange fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como revisado">Pendente</span>';
-    document.getElementById('versaoStatusBadge-form').innerHTML = '<span class="badge ' + badgeClass + '">' + escapeHtml(f.status) + '</span> ' + revisadoBadge;
-    document.querySelectorAll('.fv-toggle-revisado').forEach(function(badge) {
-      badge.addEventListener('click', function() {
-        db.ref('formulas/' + key + '/revisado').set(!revisado)
-          .catch(function(err) { showAlert('Erro ao atualizar revisão: ' + err.message, 'danger'); });
-      });
-    });
-    renderAcoesVersao(f);
-    renderFormulaTab(key, f);
+    renderVersaoAcoes(key);
+    renderAcoesComponente('formulas', key);
+    renderAcoesComponente('bom', key);
+    renderAcoesComponente('especificacoes', key);
+    renderFormulaTab(key, allFormulas[key] || { status: 'RASCUNHO', itens: {} });
     renderBomTab(key);
     renderEspecTab(key);
   }
@@ -3500,58 +3501,129 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Item pendente do import (Fórmula ou BOM) bloqueia aprovação -- ninguém
-  // aprova receita com material não identificado, mesmo que a soma feche.
-  function temItemPendente(key) {
-    var itensForm = ((allFormulas[key] || {}).itens) || {};
-    var itensBom = ((allBom[key] || {}).itens) || {};
-    return Object.values(itensForm).some(function(it) { return it.pendente; }) ||
-      Object.values(itensBom).some(function(it) { return it.pendente; });
+  // A partir daqui: 3 aprovações INDEPENDENTES (Fórmula/BOM/Especificação),
+  // pedido do usuário -- "O certo é ter 3 aprovações, da formula, do bom e
+  // da spec". Antes disso era 1 aprovação (P&D + Qualidade) cobrindo os 3
+  // juntos -- inclusive bloqueando a Fórmula por causa de um ensaio de
+  // Especificação sem faixa, ou de um item pendente do BOM, mistura que
+  // não faz mais sentido agora que cada um tem seu próprio ciclo. Rótulos
+  // por componente conforme o usuário descreveu (P&D/Qualidade pra
+  // Fórmula e Especificação, PCP/Comercial pro BOM) -- sem diferença de
+  // permissão real entre eles, porque hoje não existem papéis de usuário
+  // distintos pra isso ("só dupla aprovação qualquer acho que bastaria").
+  var APROVACAO_CONFIG = {
+    formulas: { campo1: 'aprovadoPD', campo2: 'aprovadoQualidade', rotulo1: 'P&D', rotulo2: 'Qualidade', nome: 'Fórmula' },
+    bom: { campo1: 'aprovadoPCP', campo2: 'aprovadoComercial', rotulo1: 'PCP', rotulo2: 'Comercial', nome: 'BOM' },
+    especificacoes: { campo1: 'aprovadoPD', campo2: 'aprovadoQualidade', rotulo1: 'P&D', rotulo2: 'Qualidade', nome: 'Especificação' }
+  };
+  function registroComponente(tipo, key) {
+    var col = tipo === 'formulas' ? allFormulas : (tipo === 'bom' ? allBom : allEspecificacoes);
+    return col[key] || { itens: {} };
   }
-  function renderAcoesVersao(f) {
+  // Bloqueio específico de CADA componente antes de liberar a 1ª etapa --
+  // cada checagem mora perto do que ela realmente valida agora (antes,
+  // aprovar a Fórmula checava ensaio crítico de Especificação, uma mistura
+  // que só existia porque tudo era uma aprovação só).
+  function bloqueioAprovacaoComponente(tipo, key) {
+    if (tipo === 'formulas') {
+      var f = registroComponente('formulas', key);
+      if (Math.abs((f.somaPercentual || 0) - 100) >= 0.0005) return 'Soma da fórmula precisa fechar em 100% antes de aprovar';
+      if (Object.values(f.itens || {}).some(function(it) { return it.pendente; })) return 'Há item de Fórmula ainda pendente de revisão (vindo da importação)';
+      if (f.revisado === false) return 'Marque a Fórmula como "Revisado" antes de aprovar';
+      return '';
+    }
+    if (tipo === 'bom') {
+      var b = registroComponente('bom', key);
+      if (Object.values(b.itens || {}).some(function(it) { return it.pendente; })) return 'Há item de BOM ainda pendente de revisão (vindo da importação)';
+      return '';
+    }
+    if (especCriticaSemFaixa(key)) return 'Há ensaio crítico sem faixa mínima/máxima definida';
+    return '';
+  }
+  function aprovarComponente(tipo, etapa) {
+    var cfg = APROVACAO_CONFIG[tipo];
+    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
+    var campo = etapa === 1 ? cfg.campo1 : cfg.campo2;
+    var updates = {};
+    updates[tipo + '/' + key + '/' + campo] = { nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() };
+    if (etapa === 2) {
+      updates[tipo + '/' + key + '/status'] = 'APROVADA';
+      updates[tipo + '/' + key + '/dataAprovacao'] = new Date().toISOString();
+    }
+    db.ref().update(updates)
+      .then(function() { showAlert(cfg.nome + (etapa === 2 ? ' aprovada -- concluída!' : ' aprovada (' + cfg.rotulo1 + ').'), 'success'); })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+  }
+  // Badge "Revisado" só existe pra Fórmula (era assim antes de dividir em
+  // 3 -- BOM e Especificação nunca tiveram esse conceito, e o usuário não
+  // pediu pra criar um novo pros outros dois).
+  function toggleRevisadoFormula(key) {
+    var revisado = (allFormulas[key] || {}).revisado !== false;
+    db.ref('formulas/' + key + '/revisado').set(!revisado)
+      .catch(function(err) { showAlert('Erro ao atualizar revisão: ' + err.message, 'danger'); });
+  }
+  function renderAcoesComponente(tipo, key) {
+    var cfg = APROVACAO_CONFIG[tipo];
+    var reg = registroComponente(tipo, key);
+    var status = reg.status || 'RASCUNHO'; // registro antigo sem status nasce RASCUNHO -- preserva edição
+    var el = document.getElementById(tipo + 'Acoes-form');
+    if (!el) return;
+
+    var badgeClass = status === 'APROVADA' ? 'badge-aprovada' : (status === 'OBSOLETA' ? 'badge-obsoleta' : 'badge-rascunho');
+    var html = '<span class="badge ' + badgeClass + '">' + escapeHtml(status) + '</span>';
+
+    if (tipo === 'formulas') {
+      var revisado = reg.revisado !== false;
+      html += revisado
+        ? ' <span class="badge badge-green fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como pendente">✓ Revisado</span>'
+        : ' <span class="badge badge-orange fv-toggle-revisado" style="cursor:pointer" title="Clique pra marcar como revisado">Pendente</span>';
+    }
+
+    if (status === 'RASCUNHO') {
+      if (!reg[cfg.campo1]) {
+        var motivo = bloqueioAprovacaoComponente(tipo, key);
+        html += ' <button type="button" class="btn btn-primary btn-sm ac-btn" data-tipo="' + tipo + '" data-etapa="1"' + (motivo ? ' disabled title="' + escapeAttr(motivo) + '"' : '') + '>Aprovar (' + cfg.rotulo1 + ')</button>';
+      } else if (!reg[cfg.campo2]) {
+        html += ' <span class="field-hint">' + cfg.rotulo1 + ': ' + escapeHtml(reg[cfg.campo1].nome || '') + ' em ' + fmtData(reg[cfg.campo1].em) + '</span>';
+        html += ' <button type="button" class="btn btn-green btn-sm ac-btn" data-tipo="' + tipo + '" data-etapa="2">Aprovar (' + cfg.rotulo2 + ') — conclui</button>';
+      }
+    } else if (status === 'APROVADA') {
+      html += ' <span class="field-hint">' + cfg.rotulo1 + ': ' + escapeHtml((reg[cfg.campo1] || {}).nome || '') + ' · ' + cfg.rotulo2 + ': ' + escapeHtml((reg[cfg.campo2] || {}).nome || '') + ' em ' + fmtData(reg.dataAprovacao) + '</span>';
+    }
+
+    el.innerHTML = html;
+    el.querySelectorAll('.ac-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { aprovarComponente(btn.getAttribute('data-tipo'), parseInt(btn.getAttribute('data-etapa'), 10)); });
+    });
+    if (tipo === 'formulas') {
+      el.querySelectorAll('.fv-toggle-revisado').forEach(function(badge) {
+        badge.addEventListener('click', function() { toggleRevisadoFormula(key); });
+      });
+    }
+  }
+
+  // Ações no nível da versão inteira, não de um componente específico:
+  // excluir (só quando NENHUM dos 3 tiver aprovação iniciada -- senão não
+  // é mais "cliquei sem querer", é histórico de verdade) e "nova versão a
+  // partir desta" (só quando os 3 estiverem completos -- pedido do
+  // usuário: emissão de OP só libera com as 3 aprovadas, então "pronta
+  // pra evoluir" também passa a significar as 3, não só a Fórmula).
+  function renderVersaoAcoes(key) {
     var el = document.getElementById('versaoAcoes-form');
     el.innerHTML = '';
-    if (f.status === 'RASCUNHO') {
-      var key = chaveVersao(f.codProduto, f.versao);
-      var somaOk = Math.abs((f.somaPercentual || 0) - 100) < 0.0005;
-      var especOk = !especCriticaSemFaixa(key);
-      var pendenciaOk = !temItemPendente(key);
-      var revisadoOk = f.revisado !== false;
-      var podeAprovar = somaOk && especOk && pendenciaOk && revisadoOk;
-      if (!f.aprovadoPD) {
-        var b1 = document.createElement('button');
-        b1.className = 'btn btn-primary btn-sm';
-        b1.textContent = 'Aprovar (P&D)';
-        b1.disabled = !podeAprovar;
-        b1.title = !somaOk ? 'Soma da fórmula precisa fechar em 100% antes de aprovar'
-          : (!especOk ? 'Há ensaio crítico sem faixa mínima/máxima definida'
-          : (!pendenciaOk ? 'Há item de Fórmula ou BOM ainda pendente de revisão (vindo da importação)'
-          : (!revisadoOk ? 'Marque esta versão como "Revisado" antes de aprovar' : '')));
-        b1.addEventListener('click', aprovarPD);
-        el.appendChild(b1);
-        // Pedido do usuário: "como excluo uma versão que criei sem
-        // querer?" -- só existia "+ Nova Versão", nenhum jeito de desfazer.
-        // Restrito a rascunho AINDA sem aprovação de P&D (mesmo bloco do
-        // botão acima) -- uma vez que alguém já aprovou algo, não é mais
-        // "cliquei sem querer", é histórico de verdade.
-        var bDel = document.createElement('button');
-        bDel.className = 'btn btn-danger-ghost btn-sm';
-        bDel.textContent = '🗑 Excluir versão';
-        bDel.title = 'Só disponível pra rascunho ainda sem aprovação -- pra desfazer "+ Nova Versão" clicado sem querer.';
-        bDel.addEventListener('click', excluirVersaoRascunho);
-        el.appendChild(bDel);
-      } else if (!f.aprovadoQualidade) {
-        var b2 = document.createElement('button');
-        b2.className = 'btn btn-green btn-sm';
-        b2.textContent = 'Aprovar (Qualidade) — conclui';
-        b2.addEventListener('click', aprovarQualidade);
-        el.appendChild(b2);
-        var info = document.createElement('span');
-        info.style.cssText = 'font-size:12px;color:var(--muted);align-self:center';
-        info.textContent = 'P&D: ' + (f.aprovadoPD.nome || '') + ' em ' + fmtData(f.aprovadoPD.em);
-        el.appendChild(info);
-      }
-    } else if (f.status === 'APROVADA') {
+    var f = registroComponente('formulas', key), b = registroComponente('bom', key), e = registroComponente('especificacoes', key);
+    var ninguemComecouAprovar = !f.aprovadoPD && !b.aprovadoPCP && !e.aprovadoPD;
+    var todasAprovadas = f.status === 'APROVADA' && b.status === 'APROVADA' && e.status === 'APROVADA';
+
+    if (ninguemComecouAprovar) {
+      var bDel = document.createElement('button');
+      bDel.className = 'btn btn-danger-ghost btn-sm';
+      bDel.textContent = '🗑 Excluir versão';
+      bDel.title = 'Só disponível enquanto nenhum dos 3 (Fórmula/BOM/Especificação) tiver aprovação iniciada -- pra desfazer "+ Nova Versão" clicado sem querer.';
+      bDel.addEventListener('click', excluirVersaoRascunho);
+      el.appendChild(bDel);
+    }
+    if (todasAprovadas) {
       var b3 = document.createElement('button');
       b3.className = 'btn btn-purple btn-sm';
       b3.textContent = '+ Nova versão a partir desta';
@@ -3565,18 +3637,19 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Antes de apagar, confere se alguma OP real já foi emitida usando essa
-  // versão -- em teoria só devia acontecer com uma versão APROVADA, mas o
-  // dimensionamento em emitir_op.html tem fallback pra fórmula ainda em
-  // rascunho quando não existe nenhuma aprovada, então uma OP real pode sim
-  // ter consumido uma versão que nunca chegou a ser aprovada. Se achou,
-  // recusa a exclusão -- apagar quebraria a reimpressão de qualidade
-  // daquela OP (a ficha de especificações leria um nó que não existe mais).
-  // ops/ não é um listener permanente desta tela -- só uma leitura pontual
-  // no momento da exclusão, evita carregar a coleção inteira à toa.
+  // versão -- em teoria só devia acontecer com uma versão totalmente
+  // aprovada, mas o dimensionamento em emitir_op.html tem fallback pra
+  // fórmula ainda em rascunho quando não existe nenhuma aprovada, então
+  // uma OP real pode sim ter consumido uma versão que nunca chegou a ser
+  // aprovada. Se achou, recusa a exclusão -- apagar quebraria a
+  // reimpressão de qualidade daquela OP (a ficha de especificações leria
+  // um nó que não existe mais). ops/ não é um listener permanente desta
+  // tela -- só uma leitura pontual no momento da exclusão, evita carregar
+  // a coleção inteira à toa.
   function excluirVersaoRascunho() {
     var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
-    var f = allFormulas[key] || {};
-    if (f.status !== 'RASCUNHO' || f.aprovadoPD) return; // mesma guarda do botão
+    var f = registroComponente('formulas', key), b = registroComponente('bom', key), e = registroComponente('especificacoes', key);
+    if (f.aprovadoPD || b.aprovadoPCP || e.aprovadoPD) return; // mesma guarda do botão -- qualquer um dos 3 já iniciado, recusa
 
     var sku = (allProdutos[produtoSelecionadoKey] || {}).sku || '';
     db.ref('ops').once('value').then(function(snap) {
@@ -3628,8 +3701,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // em Materiais. Cria os 3 juntos agora, mesmo formato.
     var updates = {};
     updates['formulas/' + key] = data;
-    updates['bom/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: {} };
-    updates['especificacoes/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: {} };
+    updates['bom/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO', itens: {} };
+    updates['especificacoes/' + key] = { codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO', itens: {} };
     db.ref().update(updates).then(function() {
       showAlert('Versão ' + novaVersao + ' criada (rascunho).', 'success');
     }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
@@ -3654,30 +3727,13 @@ document.addEventListener('DOMContentLoaded', function() {
       aprovadoPD: null, aprovadoQualidade: null, substituiVersao: origemVersao,
       criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
     };
-    updates['bom/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: origemBom.itens || {} };
-    updates['especificacoes/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, itens: origemEspec.itens || {} };
+    updates['bom/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO', itens: origemBom.itens || {} };
+    updates['especificacoes/' + novaKey] = { codProduto: produtoSelecionadoKey, versao: novaVersao, status: 'RASCUNHO', itens: origemEspec.itens || {} };
 
     db.ref().update(updates).then(function() {
       showAlert('Versão ' + novaVersao + ' criada a partir de ' + origemVersao + '.', 'success');
       versaoAtual = novaVersao;
     }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
-  }
-
-  function aprovarPD() {
-    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
-    db.ref('formulas/' + key + '/aprovadoPD').set({ nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() })
-      .then(function() { showAlert('Aprovação de P&D registrada.', 'success'); })
-      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
-  }
-  function aprovarQualidade() {
-    var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
-    var updates = {};
-    updates['formulas/' + key + '/aprovadoQualidade'] = { nome: currentUserNome(), uid: currentUserUid(), em: new Date().toISOString() };
-    updates['formulas/' + key + '/status'] = 'APROVADA';
-    updates['formulas/' + key + '/dataAprovacao'] = new Date().toISOString();
-    db.ref().update(updates)
-      .then(function() { showAlert('Fórmula aprovada! Versão ' + versaoAtual + ' agora é a versão oficial.', 'success'); })
-      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
   }
 
   function renderFormulaTab(key, f) {
@@ -3820,8 +3876,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderBomTab(key) {
     var b = allBom[key] || { itens: {} };
-    var f = allFormulas[key] || {};
-    var editavel = f.status === 'RASCUNHO';
+    // Editável enquanto o BOM (não a Fórmula) estiver em rascunho -- cada
+    // componente trava sozinho quando SUA PRÓPRIA aprovação conclui.
+    var editavel = (b.status || 'RASCUNHO') === 'RASCUNHO';
     var itens = b.itens || {};
     var tbody = document.getElementById('bomBody-form');
     var entries = Object.entries(itens);
@@ -3890,8 +3947,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderEspecTab(key) {
     var e = allEspecificacoes[key] || { itens: {} };
-    var f = allFormulas[key] || {};
-    var editavel = f.status === 'RASCUNHO';
+    // Editável enquanto a Especificação (não a Fórmula) estiver em
+    // rascunho -- cada componente trava sozinho quando SUA PRÓPRIA
+    // aprovação conclui.
+    var editavel = (e.status || 'RASCUNHO') === 'RASCUNHO';
     var itens = e.itens || {};
     var tbody = document.getElementById('especBody-form');
     var entries = Object.entries(itens);
@@ -3988,9 +4047,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (produtoSelecionadoKey && versaoAtual) {
         var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
         renderBomTab(key);
-        // pendência de BOM também entra no gate de aprovação (temItemPendente) --
-        // sem isso, resolver a última pendência do BOM não reativava o botão.
-        if (allFormulas[key]) renderAcoesVersao(allFormulas[key]);
+        // Pendência de item de BOM entra só no gate de aprovação do PRÓPRIO
+        // BOM agora -- resolver a última pendência precisa reativar o botão
+        // "Aprovar (PCP)" do BOM, e também pode liberar "+ Nova versão" no
+        // cabeçalho se os outros 2 já estavam aprovados.
+        renderAcoesComponente('bom', key);
+        renderVersaoAcoes(key);
       }
     });
     dbOnValue(db.ref('especificacoes'), function(snap) {
@@ -3998,7 +4060,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (produtoSelecionadoKey && versaoAtual) {
         var key = chaveVersao(produtoSelecionadoKey, versaoAtual);
         renderEspecTab(key);
-        if (allFormulas[key]) renderAcoesVersao(allFormulas[key]);
+        renderAcoesComponente('especificacoes', key);
+        renderVersaoAcoes(key);
       }
     });
   });

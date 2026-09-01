@@ -426,14 +426,13 @@ function selecionarVinculo(pedidoKey) {
   renderAlocacoesDoProduto();
 }
 
-function melhorFormulaDoProduto(codProduto) {
-  var versoes = Object.values(allFormulas).filter(function(f) { return f && f.codProduto === codProduto; });
-  if (!versoes.length) return null;
-  var aprovadas = versoes.filter(function(f) { return f.status === 'APROVADA'; });
-  var pool = aprovadas.length ? aprovadas : versoes;
-  pool.sort(function(a, b) { return parseVersaoNum(b.versao) - parseVersaoNum(a.versao); });
-  return { registro: pool[0], temAprovada: aprovadas.length > 0 };
-}
+// melhorFormulaDoProduto vem de shared/utils.js -- era uma cópia local
+// duplicada aqui (só olhava allFormulas.status), removida a favor da
+// versão compartilhada, que agora sabe exigir Fórmula+BOM+Especificação
+// TODAS aprovadas quando os 3 coletores são passados (é o caso aqui:
+// emissão de OP é o único fluxo que realmente precisa da versão
+// "completa" -- pedido do usuário, "3 aprovações... as 3 aprovadas"
+// liberam a versão).
 
 function selecionarProduto(key) {
   var p = allProdutos[key];
@@ -451,7 +450,7 @@ function selecionarProduto(key) {
   document.getElementById('cardAlocacao').style.display = 'block';
   renderAlocacoesDoProduto();
 
-  var achado = melhorFormulaDoProduto(key);
+  var achado = melhorFormulaDoProduto(key, allFormulas, allBom, allEspecificacoes);
   var warnBox = document.getElementById('formulaWarning');
   if (!achado) {
     warnBox.style.display = 'block';
@@ -465,8 +464,21 @@ function selecionarProduto(key) {
   formulaEscolhida = achado.registro;
   bomEscolhido = allBom[chaveVersao(key, formulaEscolhida.versao)] || { itens: {} };
   if (!achado.temAprovada) {
+    // Fórmula, BOM e Especificação têm aprovação própria agora (pedido do
+    // usuário: "3 aprovações... as 3 aprovadas" definem a versão como
+    // pronta) -- lista qual delas ainda falta, em vez de só dizer "não
+    // aprovada" sem dizer o quê. Deliberadamente um AVISO, não um bloqueio
+    // duro: travar a emissão agora deixaria toda OP parada até alguém
+    // reaprovar em 3 etapas cada fórmula já cadastrada (nenhuma tem BOM/
+    // Especificação aprovados ainda, são campos novos) -- mesma lógica que
+    // já existia pra fórmula sozinha antes desta mudança.
+    var especEscolhida = allEspecificacoes[chaveVersao(key, formulaEscolhida.versao)] || {};
+    var faltando = [];
+    if (formulaEscolhida.status !== 'APROVADA') faltando.push('Fórmula');
+    if ((bomEscolhido.status || 'RASCUNHO') !== 'APROVADA') faltando.push('BOM');
+    if ((especEscolhida.status || 'RASCUNHO') !== 'APROVADA') faltando.push('Especificação');
     warnBox.style.display = 'block';
-    warnBox.textContent = '⚠️ Não existe versão APROVADA da fórmula pra este produto -- usando a versão mais recente (' + formulaEscolhida.versao + ', status ' + formulaEscolhida.status + '). Emitir mesmo assim é permitido, mas confira com P&D/Qualidade antes de liberar o lote.';
+    warnBox.textContent = '⚠️ Nenhuma versão com Fórmula + BOM + Especificação todas aprovadas pra este produto -- usando a versão mais recente (' + formulaEscolhida.versao + '), ainda falta aprovar: ' + faltando.join(', ') + '. Emitir mesmo assim é permitido, mas confira com os responsáveis antes de liberar o lote.';
   } else {
     warnBox.style.display = 'none';
   }
