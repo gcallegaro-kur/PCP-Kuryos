@@ -1591,3 +1591,27 @@ Removida dos dois cadastros que a duplicavam (`produtos.html` e
 `cq.*` saiu da lista de % de preenchimento. Dado histórico em
 `produtos/*/cq` no Firebase não foi apagado (não destrutivo), só a UI.
 **Deployado e no `main`.**
+
+**Décimo terceiro complemento (2026-08-31): excluir versão de fórmula
+criada por engano.** Usuário: "como excluo uma versão que criei sem
+querer?" -- em Cadastros > Fórmulas só existia "+ Nova Versão", nenhum
+jeito de desfazer um clique acidental.
+
+Novo botão "🗑 Excluir versão", restrito ao mesmo bloco RASCUNHO sem
+`aprovadoPD` do botão "Aprovar (P&D)" -- uma vez que P&D já aprovou algo,
+não é mais "cliquei sem querer", é histórico de verdade. Antes de apagar,
+confere se alguma OP real já foi emitida usando exatamente esse
+sku+`formulaVersao` -- o dimensionamento em `emitir_op.html` tem fallback
+pra fórmula ainda em rascunho quando não existe nenhuma aprovada, então
+uma OP real *pode* ter consumido uma versão nunca aprovada; se achou,
+recusa a exclusão e avisa qual OP (lote) usou, em vez de quebrar
+silenciosamente a reimpressão de qualidade daquela OP. Confirmação via
+`confirm()` antes de apagar de verdade -- apaga `formulas`/`bom`/
+`especificacoes` da versão juntos (os 3 nascem juntos em
+`btnNovaVersaoClick`, saem juntos aqui).
+
+Testado: harness Node do bloco real -- 16 asserções (apaga os 3 nós
+juntos, cancelar o `confirm()` não apaga nada, dupla guarda de status/
+aprovação, recusa quando já usada por uma OP real e avisa qual lote, OP
+de outro sku/versão não bloqueia à toa, reset de estado da tela depois
+de excluir). **Deployado e no `main`.**
