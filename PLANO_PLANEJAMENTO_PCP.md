@@ -1538,3 +1538,56 @@ tipo/inativo, busca por cada campo técnico, busca ignorando acento,
 badge "atual", comitar substituição, ignorar código fora da lista,
 desfazer substituição escolhendo o original de volta, limpeza de
 estado ao fechar). **Deployado e no `main`.**
+
+**Décimo primeiro complemento (2026-08-31): silêncio noturno nos
+alertas de PCP.** Usuário: "os alarmes do PCP entre o fim de turno e
+início de turno não deve ficar enviando emails. Estou recebendo a cada
+10min, porém não faz sentido. Após as 17h e antes das 7h não deve
+enviar emails de notificação (apenas se instruir que estaremos
+operando, coisa do tipo)".
+
+Achado real: `checkOpsAtrasadas` (`functions/index.js`) tem cooldown de
+10min -- exatamente o sintoma relatado. OPs programadas pro dia que não
+terminaram ficam "atrasadas" a noite inteira sem ninguém pra agir,
+reenviando o e-mail sem parar até de manhã.
+
+`dentroDoHorarioDeOperacao(config)` (novo) decide se `checkLinhasParadas`
+e `checkOpsAtrasadas` rodam em cada tick do cron (a cada 2min) -- construído
+em cima do horário de turno **configurado** (`turnoHorariosAtivos`/
+`turnoHorariosFim`, mesma fonte que `checkTurnoNaoEncerrado` já usava),
+não um 7h/17h fixo no código: acompanha automaticamente se o horário
+mudar em Admin, já funciona certo com múltiplos turnos (silencia só
+entre o fim do último e o início do primeiro) e com sexta-feira reduzida.
+Também respeita dia não-útil/feriado.
+
+Deliberadamente **não** aplicado a `checkTurnoNaoEncerrado` (é sobre o
+próprio instante de fim de turno -- silenciar isso faria a cobrança de
+"esqueceu de encerrar" nunca disparar) nem a `checkOpsEmitidas`/
+`checkIntervalosPendentes` (refletem uma ação humana que acabou de
+acontecer, não um estado que fica "preso" reenviando sozinho).
+
+Override manual: `config.operacaoEstendidaData` -- toggle novo em
+Admin > Notificações por E-mail, guarda a data de um dia em que a
+fábrica avisa que vai operar fora do horário normal, válido só naquele
+dia (não precisa lembrar de desligar depois).
+
+Testado: harness Node do bloco real -- 18 asserções (config real de
+produção, bordas exatas de horário, fim de semana, feriado, override e
+sua expiração automática, sexta reduzida, sem turno configurado,
+múltiplos turnos). **Deployado (functions + hosting) e no `main`.**
+
+**Décimo segundo complemento (2026-08-31): removida a aba "Controle de
+Qualidade" do cadastro de produto.** Usuário perguntou se não era
+redundante com "Especificações" (de `formulas.html`) -- investigação
+confirmou que sim, e pior: os 8 campos da aba CQ (`produtos/{sku}.cq`)
+nunca eram lidos em nenhuma ficha de OP, só entravam no cálculo de % de
+cadastro preenchido, apesar da própria tela dizer "usadas no Relatório
+de Produto Acabado da OP". `paginaRelatorioPA` sempre leu exclusivamente
+de `especificacoes/` (versionado por fórmula, com mínimo/máximo/método/
+crítico -- estritamente mais completo). Usuário: "vamos apagar a aba
+cq, acho que ninguém usou nada lá, a aba especificações ficou melhor".
+Removida dos dois cadastros que a duplicavam (`produtos.html` e
+`cadastros.html`) -- botão, painel, carregamento, gravação e o campo
+`cq.*` saiu da lista de % de preenchimento. Dado histórico em
+`produtos/*/cq` no Firebase não foi apagado (não destrutivo), só a UI.
+**Deployado e no `main`.**
