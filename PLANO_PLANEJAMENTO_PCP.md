@@ -1615,3 +1615,53 @@ juntos, cancelar o `confirm()` não apaga nada, dupla guarda de status/
 aprovação, recusa quando já usada por uma OP real e avisa qual lote, OP
 de outro sku/versão não bloqueia à toa, reset de estado da tela depois
 de excluir). **Deployado e no `main`.**
+
+**Décimo quarto complemento (2026-08-31/09-01): 3 aprovações
+independentes -- Fórmula, BOM e Especificação.** Usuário: "O certo é
+ter 3 aprovações, da formula, do bom e da spec. É possivel colocarmos
+como 3 diferentes?". Antes era 1 aprovação (P&D + Qualidade) cobrindo
+os 3 juntos num nó só -- inclusive bloqueando a Fórmula por causa de um
+ensaio de Especificação sem faixa, ou de um item de BOM pendente.
+
+Confirmado com o usuário antes de construir (2 perguntas): cada
+componente mantém 2 etapas, com rótulos diferentes por natureza --
+Fórmula e Especificação usam P&D → Qualidade; BOM usa PCP → Comercial
+("hoje não temos users definidos, então só dupla aprovação qualquer
+acho que bastaria" -- sem diferença de permissão real). E "Emitir OP"
+passa a preferir uma versão só quando os 3 estiverem TODAS aprovadas
+("As 3 aprovadas").
+
+`formulas`/`bom`/`especificacoes/{chaveVersao}` ganham `status` e
+aprovação PRÓPRIOS -- `bom.aprovadoPCP`/`aprovadoComercial` e
+`especificacoes.aprovadoPD`/`aprovadoQualidade` são novos, independentes
+da Fórmula. `renderAcoesComponente(tipo, key)` -- função única
+parametrizada, reutilizada nas 3 abas internas, cada uma travando a
+edição sozinha quando A PRÓPRIA aprovação conclui (antes, BOM e
+Especificação travavam quando a FÓRMULA era aprovada -- bug de
+acoplamento corrigido de brinde). Bloqueios (soma 100%, item pendente,
+ensaio crítico sem faixa) movidos pra perto de quem realmente checam,
+em vez de todos bloquearem só a Fórmula. Cabeçalho da versão
+simplificado: "🗑 Excluir versão" só quando nenhum dos 3 começou a ser
+aprovado, "+ Nova versão a partir desta" só quando os 3 estiverem
+completos, pill da lista mostra "X/3 aprovados".
+
+`melhorFormulaDoProduto` (`shared/utils.js`) ganha `allBom`/
+`allEspecificacoes` **opcionais** -- sem eles (`compras.html`,
+`form.html`, que já existiam antes e nunca devem travar por um campo de
+aprovação que não existia quando foram escritos), continua olhando só a
+Fórmula; só com os 3 argumentos (`emitir_op.html`) uma versão conta
+como aprovada com os 3 componentes em `APROVADA`. Removida a cópia local
+duplicada dessa função dentro de `emitir_op.html`. Mensagem de aviso
+agora lista qual componente ainda falta. **Deliberadamente mantido como
+aviso** (emitir mesmo assim continua permitido), não bloqueio duro --
+travar a emissão pararia toda OP até reaprovar em 3 etapas cada fórmula
+já cadastrada, já que nenhuma tem BOM/Especificação aprovados ainda
+(são campos novos no dia do deploy).
+
+Testado: harness Node do bloco real -- 9 asserções em
+`melhorFormulaDoProduto` (compatibilidade com 2 argumentos, exigência
+dos 3 com 4 argumentos) e 27 em `cadastros.html` (rótulos por
+componente, independência entre os 3, bloqueios não vazam mais entre
+componentes, botão desabilitado com motivo, gates de Excluir/+Nova
+versão nos 4 estados possíveis, exclusão ainda funciona sem nenhum
+aprovado). **Deployado e no `main`.**
