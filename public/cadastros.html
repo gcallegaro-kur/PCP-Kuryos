@@ -590,7 +590,6 @@
             <button class="tab" data-tab="prod-classif">Classificação</button>
             <button class="tab" data-tab="prod-embal">Embalagem</button>
             <button class="tab" data-tab="prod-reg">Regulatório</button>
-            <button class="tab" data-tab="prod-cq">Controle de Qualidade</button>
             <button class="tab" data-tab="prod-lote">Parâmetros de Lote</button>
           </div>
 
@@ -746,46 +745,6 @@
               <div class="form-group full">
                 <label>Observações</label>
                 <textarea id="fObs-prod" class="uc" rows="3" placeholder="Informações adicionais..."></textarea>
-              </div>
-            </div>
-          </div>
-
-          <div class="tab-panel" id="tab-prod-cq">
-            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
-              Especificações de CQ usadas no Relatório de Produto Acabado da OP.
-            </div>
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Aspecto</label>
-                <input type="text" id="fCqAspecto-prod" class="uc" placeholder="Ex: Líquido">
-              </div>
-              <div class="form-group">
-                <label>Cor</label>
-                <input type="text" id="fCqCor-prod" class="uc" placeholder="Ex: Translúcido">
-              </div>
-              <div class="form-group">
-                <label>Odor</label>
-                <input type="text" id="fCqOdor-prod" class="uc" placeholder="Ex: Característico">
-              </div>
-              <div class="form-group">
-                <label>Densidade (faixa)</label>
-                <input type="text" id="fCqDensidade-prod" placeholder="Ex: 0,85 - 0,95">
-              </div>
-              <div class="form-group">
-                <label>pH</label>
-                <input type="text" id="fCqPh-prod" placeholder="Ex: 4,5 - 6,5">
-              </div>
-              <div class="form-group">
-                <label>Teor de Álcool</label>
-                <input type="text" id="fCqTeorAlcool-prod" placeholder="Ex: 50°g/L - 60°g/L">
-              </div>
-              <div class="form-group">
-                <label>Viscosidade (especificação)</label>
-                <input type="text" id="fCqViscosidade-prod" placeholder="Ex: 5.000 - 10.000 cP">
-              </div>
-              <div class="form-group">
-                <label>Faixa de Peso</label>
-                <input type="text" id="fCqFaixaPeso-prod" placeholder="Ex: 185g - 195g">
               </div>
             </div>
           </div>
@@ -2911,8 +2870,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var CAMPOS_PREENCHIMENTO_PROD = [
     'sku', 'descricao', 'linhaProduto', 'volume', 'cliente', 'viscosidade', 'categoria', 'subcategoria',
     'unCx', 'lotePadrao', 'msAnvisa', 'lp', 'obs', 'ean13', 'dum14',
-    'densidadeGranel', 'prazoValidadeMeses', 'overfillPct', 'perdaProcessoPct', 'perdaLinhaPct',
-    'cq.aspecto', 'cq.cor', 'cq.odor', 'cq.densidade', 'cq.ph', 'cq.teorAlcool', 'cq.viscosidade', 'cq.faixaPeso'
+    'densidadeGranel', 'prazoValidadeMeses', 'overfillPct', 'perdaProcessoPct', 'perdaLinhaPct'
   ];
 
   function sanitizeSkuKey(str) {
@@ -3131,16 +3089,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fLp-prod').value = p.lp || 0;
     document.getElementById('fObs-prod').value = p.obs || '';
 
-    var cq = p.cq || {};
-    document.getElementById('fCqAspecto-prod').value = cq.aspecto || '';
-    document.getElementById('fCqCor-prod').value = cq.cor || '';
-    document.getElementById('fCqOdor-prod').value = cq.odor || '';
-    document.getElementById('fCqDensidade-prod').value = cq.densidade || '';
-    document.getElementById('fCqPh-prod').value = cq.ph || '';
-    document.getElementById('fCqTeorAlcool-prod').value = cq.teorAlcool || '';
-    document.getElementById('fCqViscosidade-prod').value = cq.viscosidade || '';
-    document.getElementById('fCqFaixaPeso-prod').value = cq.faixaPeso || '';
-
     document.getElementById('fDensidadeGranel-prod').value = p.densidadeGranel != null ? p.densidadeGranel : '';
     document.getElementById('fPrazoValidadeMeses-prod').value = p.prazoValidadeMeses != null ? p.prazoValidadeMeses : '';
     document.getElementById('fOverfillPct-prod').value = p.overfillPct != null ? p.overfillPct : '';
@@ -3223,16 +3171,6 @@ document.addEventListener('DOMContentLoaded', function() {
       msAnvisa: document.getElementById('fMsAnvisa-prod').value.trim(),
       lp: parseFloat(document.getElementById('fLp-prod').value) || 0,
       obs: document.getElementById('fObs-prod').value.trim(),
-      cq: {
-        aspecto: document.getElementById('fCqAspecto-prod').value.trim(),
-        cor: document.getElementById('fCqCor-prod').value.trim(),
-        odor: document.getElementById('fCqOdor-prod').value.trim(),
-        densidade: document.getElementById('fCqDensidade-prod').value.trim(),
-        ph: document.getElementById('fCqPh-prod').value.trim(),
-        teorAlcool: document.getElementById('fCqTeorAlcool-prod').value.trim(),
-        viscosidade: document.getElementById('fCqViscosidade-prod').value.trim(),
-        faixaPeso: document.getElementById('fCqFaixaPeso-prod').value.trim()
-      },
       densidadeGranel: (function() { var v = document.getElementById('fDensidadeGranel-prod').value; return v !== '' ? parseFloat(v) : null; })(),
       prazoValidadeMeses: parseInt(document.getElementById('fPrazoValidadeMeses-prod').value) || 0,
       overfillPct: parseFloat(document.getElementById('fOverfillPct-prod').value) || 0,

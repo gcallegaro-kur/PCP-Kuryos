@@ -206,7 +206,6 @@
         <button class="tab" data-tab="classif">Classificação</button>
         <button class="tab" data-tab="embal">Embalagem</button>
         <button class="tab" data-tab="reg">Regulatório</button>
-        <button class="tab" data-tab="cq">Controle de Qualidade</button>
         <button class="tab" data-tab="lote">Parâmetros de Lote</button>
       </div>
 
@@ -366,47 +365,6 @@
           <div class="form-group full">
             <label>Observações</label>
             <textarea id="fObs" rows="3" placeholder="Informações adicionais..."></textarea>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab: Controle de Qualidade -->
-      <div class="tab-panel" id="tab-cq">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--tint-green-bg);border-radius:6px;border-left:3px solid var(--success)">
-          Especificações de CQ usadas no Relatório de Produto Acabado da OP.
-        </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Aspecto</label>
-            <input type="text" id="fCqAspecto" placeholder="Ex: Líquido">
-          </div>
-          <div class="form-group">
-            <label>Cor</label>
-            <input type="text" id="fCqCor" placeholder="Ex: Translúcido">
-          </div>
-          <div class="form-group">
-            <label>Odor</label>
-            <input type="text" id="fCqOdor" placeholder="Ex: Característico">
-          </div>
-          <div class="form-group">
-            <label>Densidade (faixa)</label>
-            <input type="text" id="fCqDensidade" placeholder="Ex: 0,85 - 0,95">
-          </div>
-          <div class="form-group">
-            <label>pH</label>
-            <input type="text" id="fCqPh" placeholder="Ex: 4,5 - 6,5">
-          </div>
-          <div class="form-group">
-            <label>Teor de Álcool</label>
-            <input type="text" id="fCqTeorAlcool" placeholder="Ex: 50°g/L - 60°g/L">
-          </div>
-          <div class="form-group">
-            <label>Viscosidade (especificação)</label>
-            <input type="text" id="fCqViscosidade" placeholder="Ex: 5.000 - 10.000 cP">
-          </div>
-          <div class="form-group">
-            <label>Faixa de Peso</label>
-            <input type="text" id="fCqFaixaPeso" placeholder="Ex: 185g - 195g">
           </div>
         </div>
       </div>
@@ -711,17 +669,6 @@ function openModal(key) {
   document.getElementById('fLp').value = p.lp || 0;
   document.getElementById('fObs').value = p.obs || '';
 
-  // CQ
-  var cq = p.cq || {};
-  document.getElementById('fCqAspecto').value = cq.aspecto || '';
-  document.getElementById('fCqCor').value = cq.cor || '';
-  document.getElementById('fCqOdor').value = cq.odor || '';
-  document.getElementById('fCqDensidade').value = cq.densidade || '';
-  document.getElementById('fCqPh').value = cq.ph || '';
-  document.getElementById('fCqTeorAlcool').value = cq.teorAlcool || '';
-  document.getElementById('fCqViscosidade').value = cq.viscosidade || '';
-  document.getElementById('fCqFaixaPeso').value = cq.faixaPeso || '';
-
   // Parâmetros de Lote
   document.getElementById('fDensidadeGranel').value = p.densidadeGranel != null ? p.densidadeGranel : '';
   document.getElementById('fPrazoValidadeMeses').value = p.prazoValidadeMeses != null ? p.prazoValidadeMeses : '';
@@ -825,16 +772,6 @@ function finishSaveModal(sku, descricao) {
     msAnvisa: document.getElementById('fMsAnvisa').value.trim(),
     lp: parseFloat(document.getElementById('fLp').value) || 0,
     obs: document.getElementById('fObs').value.trim(),
-    cq: {
-      aspecto: document.getElementById('fCqAspecto').value.trim(),
-      cor: document.getElementById('fCqCor').value.trim(),
-      odor: document.getElementById('fCqOdor').value.trim(),
-      densidade: document.getElementById('fCqDensidade').value.trim(),
-      ph: document.getElementById('fCqPh').value.trim(),
-      teorAlcool: document.getElementById('fCqTeorAlcool').value.trim(),
-      viscosidade: document.getElementById('fCqViscosidade').value.trim(),
-      faixaPeso: document.getElementById('fCqFaixaPeso').value.trim()
-    },
     densidadeGranel: (function() { var v = document.getElementById('fDensidadeGranel').value; return v !== '' ? parseFloat(v) : null; })(),
     prazoValidadeMeses: parseInt(document.getElementById('fPrazoValidadeMeses').value) || 0,
     overfillPct: parseFloat(document.getElementById('fOverfillPct').value) || 0,
