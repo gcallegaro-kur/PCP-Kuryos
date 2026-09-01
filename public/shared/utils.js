@@ -1065,11 +1065,21 @@ function transferirLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, novoEndere
   if (!itemCodigo || !loteKey || !novoEnderecoKey) return Promise.resolve();
   var itemKey = sanitizeKey(itemCodigo);
   var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
-  return loteRef.once('value').then(function(snap) {
-    var lote = snap.val();
+  return Promise.all([
+    loteRef.once('value'),
+    dbRef.ref('enderecos_estoque/' + novoEnderecoKey).once('value')
+  ]).then(function(snaps) {
+    var lote = snaps[0].val();
     if (!lote) return Promise.resolve(); // lote já não existe mais (removido/consumido) -- nada a transferir
+    // enderecoCodigo é denormalizado (mesmo princípio do putaway) -- sem
+    // resolver de novo aqui, a exibição do lote ficaria mostrando o código
+    // do endereço ANTIGO pra sempre depois de uma transferência.
+    var novoEndereco = snaps[1].val();
     var enderecoAnterior = lote.enderecoKey;
-    return loteRef.update({ enderecoKey: novoEnderecoKey, atualizadoEm: new Date().toISOString() }).then(function() {
+    return loteRef.update({
+      enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
+      atualizadoEm: new Date().toISOString()
+    }).then(function() {
       return dbRef.ref('movimentos_estoque/' + itemKey).push({
         tipo: 'transferencia', motivo: motivo || 'TRANSFERÊNCIA ENTRE ENDEREÇOS',
         qtd: 0, saldoApos: null, ref: enderecoAnterior + ' -> ' + novoEnderecoKey,
