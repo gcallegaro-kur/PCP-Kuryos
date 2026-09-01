@@ -788,6 +788,18 @@
       confirmadoEm: new Date().toISOString()
     }).then(() => {
       showToast('OP ' + (op.lote || opKey) + ' confirmada como concluída.');
+      // Achado do Auditor: liberarEmpenhoLote só era chamado no cancelamento
+      // (executarCancelamentoOp) -- toda OP concluída pelo fluxo normal
+      // (este aqui) nunca liberava a sobra reservada na emissão, deixando
+      // saldoEmpenhado "fantasma" acumulando pra sempre. Idempotente por
+      // design (sem sobra, não faz nada) -- seguro mesmo se o dropdown
+      // manual (updateOpField) também disparar pra essa mesma OP.
+      if (op.lote && op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
+        var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+        liberarEmpenhoLote(database, op.lote, codigosEmpenho).catch(function(err) {
+          console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
+        });
+      }
     }).catch(err => {
       showToast('Erro ao confirmar conclusão: ' + err.message);
     });
@@ -1365,9 +1377,20 @@
         listenToActiveOps(); // recarrega os dropdowns originais
         return;
       }
+      const op = opsGlobal[opKey];
       database.ref('ops/' + opKey).update({ status: 'Concluído' })
         .then(() => {
           showToast('OP concluída com sucesso!');
+          // Mesmo fix de confirmarConclusaoOp -- este é o OUTRO caminho que
+          // marca 'Concluído' (dropdown manual), que também nunca liberava
+          // o empenho. Idempotente: seguro rodar mesmo que já tenha rodado
+          // pelo caminho normal.
+          if (op && op.lote && op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
+            var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+            liberarEmpenhoLote(database, op.lote, codigosEmpenho).catch(function(err) {
+              console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
+            });
+          }
         })
         .catch(err => {
           console.error(err);
