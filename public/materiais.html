@@ -79,6 +79,27 @@
     label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
     label.chk input{width:auto}
     @media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}}
+    /* Filtros estilo e-commerce -- pedido do usuário: "ter a opção de
+       pesquisar, mais opções de filtros... como se fosse rodando em um
+       ecommerce, de ir aplicando filtros e ir eliminando as opções que
+       são mostradas". Cada grupo (Tipo/Status/Controlado/Fornecedor/
+       Proprietário) é multi-seleção (várias caixas ao mesmo tempo dentro
+       do mesmo grupo = OU; grupos diferentes = E), com contagem ao vivo
+       e opção some (não só fica cinza) quando a combinação atual não
+       teria nenhum resultado -- é o "eliminando as opções" literal. */
+    .facet-panel{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;padding:14px 16px}
+    .facet-group{min-width:0}
+    .facet-group-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+    .facet-opts{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto}
+    .facet-opt{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer}
+    .facet-opt input{width:auto;flex-shrink:0}
+    .facet-opt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .facet-opt-count{color:var(--muted);font-size:11px;flex-shrink:0}
+    .facet-opt.facet-opt-selected .facet-opt-label{font-weight:700;color:var(--primary)}
+    .facet-empty-hint{font-size:11.5px;color:var(--muted)}
+    .facet-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 14px}
+    .facet-chip{display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--primary) 10%, transparent);color:var(--primary);border-radius:20px;padding:4px 10px 4px 12px;font-size:12px;font-weight:600}
+    .facet-chip button{background:none;border:none;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -95,21 +116,22 @@
     <span class="icon">🔍</span>
     <input type="text" id="searchInput" placeholder="Buscar por código ou nome...">
   </div>
-  <select class="kt-select" id="filterTipo">
-    <option value="">Todos os tipos</option>
-    <option value="MP">Matéria-Prima</option>
-    <option value="EMBALAGEM">Embalagem</option>
-  </select>
-  <select class="kt-select" id="filterAtivo">
-    <option value="">Todos</option>
-    <option value="ativo">Ativos</option>
-    <option value="inativo">Inativos</option>
-  </select>
+  <button class="btn btn-ghost btn-sm" id="btnLimparFiltros" style="display:none">Limpar filtros</button>
   <button class="btn btn-primary" id="btnNovo">+ Novo Material</button>
 </div>
 
 <div class="main">
   <div id="alertBox" class="alert alert-success"></div>
+
+  <!-- Pedido do usuário: "ter a opção de pesquisar, mais opções de
+       filtros... como se fosse rodando em um ecommerce, de ir aplicando
+       filtros e ir eliminando as opções que são mostradas". Cada grupo é
+       multi-seleção com contagem ao vivo; opções que ficariam com 0
+       resultado dado o resto dos filtros ativos somem da lista. -->
+  <div class="card">
+    <div class="facet-chips" id="facetChips" style="display:none"></div>
+    <div class="facet-panel" id="facetPanel"></div>
+  </div>
 
   <div class="stats">
     <div class="stat"><div class="stat-val" id="statTotal">—</div><div class="stat-lbl">Total</div></div>
@@ -283,19 +305,121 @@ function refreshFornecedorOptions() {
   if (cur) sel.value = cur;
 }
 
+// ── Filtros estilo e-commerce (facetas) -- pedido do usuário: "ter a
+// opção de pesquisar, mais opções de filtros... como se fosse rodando em
+// um ecommerce, de ir aplicando filtros e ir eliminando as opções que são
+// mostradas". Cada grupo é multi-seleção (várias caixas no MESMO grupo =
+// OU; grupos DIFERENTES = E) -- mesmo raciocínio de qualquer filtro
+// faceteado real. `valor` extrai o valor do material pra aquele grupo;
+// sentinelas (PROPRIETARIO_KURYOS, FACET_SEM_FORNECEDOR) cobrem "nenhum
+// vinculado", senão esses materiais nunca apareceriam em grupo nenhum.
+var FACET_SEM_FORNECEDOR = '__SEM_FORNECEDOR__';
+var FACET_DEFS = [
+  { key: 'tipo', titulo: 'Tipo', valor: function(m) { return m.tipo === 'EMBALAGEM' ? 'EMBALAGEM' : 'MP'; },
+    rotulo: function(v) { return v === 'EMBALAGEM' ? 'Embalagem' : 'Matéria-Prima'; } },
+  { key: 'status', titulo: 'Status', valor: function(m) { return m.ativo === false ? 'inativo' : 'ativo'; },
+    rotulo: function(v) { return v === 'inativo' ? 'Inativo' : 'Ativo'; } },
+  { key: 'controlado', titulo: 'Controlado', valor: function(m) { return m.controlado ? 'sim' : 'nao'; },
+    rotulo: function(v) { return v === 'sim' ? 'Sim' : 'Não'; } },
+  { key: 'proprietario', titulo: 'Proprietário', valor: function(m) { return m.proprietarioMaterialKey || PROPRIETARIO_KURYOS; },
+    rotulo: function(v) { return v === PROPRIETARIO_KURYOS ? 'Kuryos' : ((allClientes[v] || {}).nome || 'Kuryos'); } },
+  { key: 'fornecedor', titulo: 'Fornecedor', valor: function(m) { return m.fornecedorKey || FACET_SEM_FORNECEDOR; },
+    rotulo: function(v) { return v === FACET_SEM_FORNECEDOR ? 'Sem fornecedor' : (fornecedorNome(allFornecedores[v]) || 'Sem fornecedor'); } },
+];
+var facetSelecoes = {}; // facetKey -> { valor: true }
+
+// ignorarFacetKey: usado pra calcular a CONTAGEM de um grupo consigo mesmo
+// excluído -- é isso que faz as opções de UM grupo responderem aos
+// filtros dos OUTROS grupos, sem travar em looping (uma faceta nunca
+// filtra a si mesma quando está calculando suas próprias contagens).
+function materialPassaFacetas(m, ignorarFacetKey) {
+  return FACET_DEFS.every(function(f) {
+    if (f.key === ignorarFacetKey) return true;
+    var sel = facetSelecoes[f.key];
+    if (!sel) return true;
+    var chaves = Object.keys(sel).filter(function(k) { return sel[k]; });
+    if (!chaves.length) return true; // nenhuma caixa marcada neste grupo = não filtra
+    return chaves.indexOf(String(f.valor(m))) !== -1;
+  });
+}
+function materiaisFiltrados(search, ignorarFacetKey) {
+  return Object.entries(allMateriais).filter(function(entry) {
+    var m = entry[1];
+    if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome)).indexOf(search) === -1) return false;
+    return materialPassaFacetas(m, ignorarFacetKey);
+  });
+}
+// Monta os grupos de checkbox com contagem ao vivo -- só entra na lista o
+// valor que tem PELO MENOS 1 resultado dado o resto dos filtros ativos
+// (a contagem já vem de materiaisFiltrados ignorando esta própria
+// faceta); é isso que faz opções SUMIREM, não só ficarem acinzentadas.
+function renderFacetas(search) {
+  var panel = document.getElementById('facetPanel');
+  panel.innerHTML = FACET_DEFS.map(function(f) {
+    var baseSet = materiaisFiltrados(search, f.key).map(function(e) { return e[1]; });
+    var contagens = {};
+    baseSet.forEach(function(m) {
+      var v = f.valor(m);
+      contagens[v] = (contagens[v] || 0) + 1;
+    });
+    var selAtual = facetSelecoes[f.key] || {};
+    var valores = Object.keys(contagens).sort(function(a, b) {
+      var aSel = !!selAtual[a], bSel = !!selAtual[b];
+      if (aSel !== bSel) return aSel ? -1 : 1; // selecionados primeiro -- não some da vista quando marcado
+      return norm(f.rotulo(a)).localeCompare(norm(f.rotulo(b)));
+    });
+    if (!valores.length) return '';
+    var opts = valores.map(function(v) {
+      var marcado = !!selAtual[v];
+      return '<label class="facet-opt' + (marcado ? ' facet-opt-selected' : '') + '">' +
+        '<input type="checkbox" data-facet="' + escapeAttr(f.key) + '" data-valor="' + escapeAttr(v) + '"' + (marcado ? ' checked' : '') + '>' +
+        '<span class="facet-opt-label">' + escapeHtml(f.rotulo(v)) + '</span>' +
+        '<span class="facet-opt-count">(' + fmtNum(contagens[v]) + ')</span>' +
+      '</label>';
+    }).join('');
+    return '<div class="facet-group"><div class="facet-group-title">' + escapeHtml(f.titulo) + '</div><div class="facet-opts">' + opts + '</div></div>';
+  }).join('') || '<div class="facet-empty-hint">Nenhum material cadastrado ainda -- os filtros aparecem assim que houver dado.</div>';
+  panel.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var facetKey = cb.getAttribute('data-facet'), valor = cb.getAttribute('data-valor');
+      facetSelecoes[facetKey] = facetSelecoes[facetKey] || {};
+      facetSelecoes[facetKey][valor] = cb.checked;
+      renderTable();
+    });
+  });
+}
+// Chips dos filtros ativos, acima do painel -- sempre visíveis mesmo se a
+// opção correspondente tiver saído do grupo (combinação ficou impossível
+// nos OUTROS grupos) -- é o jeito de sempre dar pra remover, mesmo quando
+// o checkbox já não está mais na tela.
+function renderChipsAtivos() {
+  var chips = [];
+  FACET_DEFS.forEach(function(f) {
+    var sel = facetSelecoes[f.key] || {};
+    Object.keys(sel).forEach(function(v) { if (sel[v]) chips.push({ facet: f.key, valor: v, texto: f.titulo + ': ' + f.rotulo(v) }); });
+  });
+  var container = document.getElementById('facetChips');
+  var btnLimpar = document.getElementById('btnLimparFiltros');
+  if (!chips.length) { container.style.display = 'none'; container.innerHTML = ''; btnLimpar.style.display = 'none'; return; }
+  container.style.display = 'flex';
+  btnLimpar.style.display = 'inline-flex';
+  container.innerHTML = chips.map(function(c) {
+    return '<span class="facet-chip">' + escapeHtml(c.texto) + '<button data-facet="' + escapeAttr(c.facet) + '" data-valor="' + escapeAttr(c.valor) + '" title="Remover filtro" aria-label="Remover filtro">×</button></span>';
+  }).join('');
+  container.querySelectorAll('button').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      facetSelecoes[btn.getAttribute('data-facet')][btn.getAttribute('data-valor')] = false;
+      renderTable();
+    });
+  });
+}
+
 function renderTable() {
   var search = norm(document.getElementById('searchInput').value);
-  var filtTipo = document.getElementById('filterTipo').value;
-  var filtAtivo = document.getElementById('filterAtivo').value;
-
-  var rows = Object.entries(allMateriais).filter(function(entry) {
-    var m = entry[1];
-    var ativo = m.ativo === false ? 'inativo' : 'ativo';
-    if (filtTipo && m.tipo !== filtTipo) return false;
-    if (filtAtivo && ativo !== filtAtivo) return false;
-    if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome)).indexOf(search) === -1) return false;
-    return true;
-  }).sort(function(a, b) { return norm(a[1].mpCodigo).localeCompare(norm(b[1].mpCodigo)); });
+  var rows = materiaisFiltrados(search, null)
+    .sort(function(a, b) { return norm(a[1].mpCodigo).localeCompare(norm(b[1].mpCodigo)); });
+  renderFacetas(search);
+  renderChipsAtivos();
 
   var total = Object.keys(allMateriais).length;
   var mp = Object.values(allMateriais).filter(function(m) { return m.tipo === 'MP'; }).length;
@@ -420,8 +544,10 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('searchInput').addEventListener('input', function() {
     clearTimeout(_t); _t = setTimeout(renderTable, 200);
   });
-  document.getElementById('filterTipo').addEventListener('change', renderTable);
-  document.getElementById('filterAtivo').addEventListener('change', renderTable);
+  document.getElementById('btnLimparFiltros').addEventListener('click', function() {
+    facetSelecoes = {};
+    renderTable();
+  });
 
   try {
     db.ref('.info/connected').on('value', function(snap) {
