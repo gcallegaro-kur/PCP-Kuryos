@@ -167,6 +167,15 @@
     .planta-bloco-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .planta-bloco-parcial{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .planta-bloco-cheio{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    /* Visão por nível -- o bloco da rua se abre nas posições de palete */
+    .planta-bloco-nivel{background:var(--card);color:var(--text);justify-content:flex-start;padding:2px;gap:1px}
+    .planta-bloco-semnivel{background:var(--tint-gray-bg);color:var(--muted);opacity:.35;border-style:dotted}
+    .planta-bloco-label{font-size:8px;line-height:1;color:var(--muted);font-weight:600;align-self:flex-start;padding-left:2px}
+    .planta-bloco-cells{display:flex;flex:1;gap:1px;width:100%;min-height:0}
+    .planta-cell{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:2px;font-size:9px;font-weight:600;border:1px solid var(--border)}
+    .planta-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -992,7 +1001,10 @@
         <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>
       </div>
       <div id="plantaBaixaContainer-end" style="display:none">
-        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos, cor pela % de ocupação. Clique numa rua pra ver o detalhe posição a posição. Arrastar os blocos pra ajustar a planta é feito em Estoque / WMS, não aqui.</div>
+        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos. Em "Todos os níveis" a cor é a % de ocupação da rua inteira; escolhendo um nível, o bloco se abre nas posições de palete daquele nível (verde = livre, laranja = ocupada, cinza = não gerada). Clique numa rua pra ver a elevação dela. Arrastar os blocos pra ajustar a planta é feito em Estoque / WMS, não aqui.</div>
+        <div style="margin-bottom:10px">
+          <select class="kt-select" id="plantaNivel-end" style="max-width:230px"><option value="0">Todos os níveis (ocupação da rua)</option></select>
+        </div>
         <div class="planta-baixa-scroll">
           <div id="plantaBaixaCanvas-end" class="planta-baixa-canvas"></div>
         </div>
@@ -3467,8 +3479,14 @@ document.addEventListener('DOMContentLoaded', function() {
   // existe) -- arrastar os blocos pra ajustar a posição real no chão é uma
   // ação OPERACIONAL, fica só em estoque.html (mesmo raciocínio de "detalhe
   // por clique fica na versão de estoque.html" já usado no Mapa por rua).
+  // nivelPlantaSelecionado: 0 = agregado (% da rua), N = abre as posições
+  // de palete daquele nível vistas de cima -- pedido do usuário depois de
+  // ver a planta agregada ("visualizar as posições de palete também na
+  // planta baixa, talvez visualizando algo em nivel?"). Aqui as posições
+  // são só visuais (tooltip); clicar pra ver o conteúdo é em estoque.html.
+  var nivelPlantaSelecionado = 0;
   function renderPlantaBaixa() {
-    document.getElementById('plantaBaixaCanvas-end').innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+    document.getElementById('plantaBaixaCanvas-end').innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelPlantaSelecionado);
     document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
       bloco.addEventListener('click', function() {
         var codigoRua = bloco.getAttribute('data-codigo-rua');
@@ -3477,6 +3495,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
+  }
+  function refreshPlantaNivelSelect() {
+    var sel = document.getElementById('plantaNivel-end');
+    var maxNiveis = Object.values(estruturaRuas).reduce(function(max, r) { return Math.max(max, r.niveis || 0); }, 0);
+    var atual = sel.value;
+    var opcoes = ['<option value="0">Todos os níveis (ocupação da rua)</option>'];
+    for (var n = 1; n <= maxNiveis; n++) opcoes.push('<option value="' + n + '">Nível ' + n + ' (posições de palete)</option>');
+    sel.innerHTML = opcoes.join('');
+    // Cai pra '0' no primeiro carregamento (atual === '') e quando o nível
+    // escolhido deixou de existir -- senão o select ficaria em branco.
+    var escolhido = (Number(atual) >= 1 && Number(atual) <= maxNiveis) ? String(Number(atual)) : '0';
+    sel.value = escolhido;
+    nivelPlantaSelecionado = Number(escolhido) || 0;
   }
 
   function refreshFiltroRuaSelect() {
@@ -3516,6 +3547,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
     document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
     document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
+    document.getElementById('plantaNivel-end').addEventListener('change', function() {
+      nivelPlantaSelecionado = Number(this.value) || 0;
+      renderPlantaBaixa();
+    });
 
     dbOnValue(db.ref('config/areasEndereco'), function(snap) {
       areasEnderecoAtivas = (snap.val() || []).filter(function(a) { return a.ativo !== false; });
@@ -3525,6 +3560,8 @@ document.addEventListener('DOMContentLoaded', function() {
       estruturaRuas = snap.val() || {};
       renderRuasTable();
       refreshFiltroRuaSelect();
+      refreshPlantaNivelSelect(); // quantidade de níveis pode ter mudado ao editar/gerar uma rua
+      if (visaoAtualPosicoes === 'planta') renderPlantaBaixa();
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       enderecosEstoque = snap.val() || {};

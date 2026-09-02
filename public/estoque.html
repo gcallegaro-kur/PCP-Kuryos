@@ -111,6 +111,16 @@
     .planta-bloco-cheio{background:var(--tint-red-bg);color:var(--tint-red-fg)}
     .planta-bloco-arrastavel{cursor:grab}
     .planta-bloco-arrastando{cursor:grabbing;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:10}
+    /* Visão por nível -- o bloco da rua se abre nas posições de palete */
+    .planta-bloco-nivel{background:var(--card);color:var(--text);justify-content:flex-start;padding:2px;gap:1px}
+    .planta-bloco-semnivel{background:var(--tint-gray-bg);color:var(--muted);opacity:.35;border-style:dotted}
+    .planta-bloco-label{font-size:8px;line-height:1;color:var(--muted);font-weight:600;align-self:flex-start;padding-left:2px}
+    .planta-bloco-cells{display:flex;flex:1;gap:1px;width:100%;min-height:0}
+    .planta-cell{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:2px;font-size:9px;font-weight:600;cursor:pointer;border:1px solid var(--border)}
+    .planta-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55;cursor:default}
+    .planta-cell-selecionada{outline:2px solid var(--primary);outline-offset:1px}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -295,25 +305,30 @@
       <div id="mapaVisualContainer-end" style="display:none">
         <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Clique numa posição ocupada pra ver o detalhe.</div>
         <div id="mapaVisualGrid-end"></div>
-        <div class="card" id="mapaDetalheCard-end" style="display:none;margin-top:14px">
-          <div class="card-title" id="mapaDetalheTitulo-end">Detalhe</div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Item</th><th>Lote</th><th>Validade</th><th>Status</th><th style="text-align:right">Saldo</th></tr></thead>
-              <tbody id="mapaDetalheBody-end"></tbody>
-            </table>
-          </div>
-        </div>
       </div>
       <div id="plantaBaixaContainer-end" style="display:none">
-        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos, cor pela % de ocupação. Clique numa rua pra ver o detalhe posição a posição. "Editar layout" libera arrastar os blocos pra deixar a planta parecida com o galpão de verdade.</div>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos. Em "Todos os níveis" a cor é a % de ocupação da rua inteira; escolhendo um nível, o bloco se abre nas posições de palete daquele nível (verde = livre, laranja = ocupada, cinza = não gerada) e dá pra clicar posição a posição. "Editar layout" libera arrastar os blocos pra deixar a planta parecida com o galpão de verdade.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+          <select class="kt-select" id="plantaNivel-end" style="max-width:230px"><option value="0">Todos os níveis (ocupação da rua)</option></select>
           <button class="btn btn-ghost btn-sm" id="btnEditarPlanta-end">✏️ Editar layout</button>
           <button class="btn btn-primary btn-sm" id="btnSalvarPlanta-end" style="display:none">💾 Salvar posições</button>
           <button class="btn btn-ghost btn-sm" id="btnCancelarPlanta-end" style="display:none">Cancelar</button>
         </div>
         <div class="planta-baixa-scroll">
           <div id="plantaBaixaCanvas-end" class="planta-baixa-canvas"></div>
+        </div>
+      </div>
+      <!-- Detalhe de posição -- COMPARTILHADO pelo Mapa por rua e pela Planta
+           baixa por nível (as duas mostram posição, só que de ângulos
+           diferentes). Um card só, escondido a cada troca de visão pra nunca
+           deixar detalhe velho de outro modo na tela. -->
+      <div class="card" id="mapaDetalheCard-end" style="display:none;margin-top:14px">
+        <div class="card-title" id="mapaDetalheTitulo-end">Detalhe</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Item</th><th>Lote</th><th>Validade</th><th>Status</th><th style="text-align:right">Saldo</th></tr></thead>
+            <tbody id="mapaDetalheBody-end"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -998,6 +1013,10 @@ function trocarVisaoPosicoes(visao) {
   document.getElementById('cardListaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
   document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
   document.getElementById('plantaBaixaContainer-end').style.display = visao === 'planta' ? 'block' : 'none';
+  // O card de detalhe é compartilhado pelos 2 modos visuais -- esconde na
+  // troca, senão fica detalhe de uma posição do mapa pendurado embaixo da
+  // planta (ou da lista), sem nada selecionado explicando de onde veio.
+  document.getElementById('mapaDetalheCard-end').style.display = 'none';
   if (visao === 'mapa') renderMapaVisual();
   if (visao === 'planta') renderPlantaBaixa();
 }
@@ -1013,23 +1032,63 @@ function trocarVisaoPosicoes(visao) {
 // verdade) grava a posição só quando "Salvar posições" é clicado.
 var editandoPlanta = false;
 var posicoesPlantaPendentes = {}; // codigoRua -> {x,y}, só das ruas movidas nesta edição
+// Pedido do usuário depois de ver a planta agregada: "não da pra colocar
+// algo que de pra visualizar as posições de palete também na planta baixa,
+// talvez visualizando algo em nivel?" -- 0 = agregado (% da rua, responde
+// "qual rua está cheia"), N = abre as posições daquele nível vistas de
+// cima (responde "qual palete está livre, e onde ele fica").
+var nivelPlantaSelecionado = 0;
 
 function renderPlantaBaixa() {
   var canvas = document.getElementById('plantaBaixaCanvas-end');
-  canvas.innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  canvas.innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelPlantaSelecionado);
   document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
     if (editandoPlanta) {
       bloco.classList.add('planta-bloco-arrastavel');
       wireArrastarBlocoPlanta(bloco);
-    } else {
-      bloco.addEventListener('click', function() {
-        var codigoRua = bloco.getAttribute('data-codigo-rua');
-        trocarVisaoPosicoes('mapa');
-        var alvo = document.getElementById('mapa-rua-' + codigoRua);
-        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      return; // em edição o bloco é pra arrastar -- nenhum clique de navegação/detalhe
     }
+    // Na visão agregada o bloco inteiro é o alvo (leva pra elevação da rua).
+    // Na visão por nível quem manda são as células -- clicar o bloco em volta
+    // não deve pular de tela, senão errar a mira numa célula te tira do lugar.
+    if (nivelPlantaSelecionado > 0) return;
+    bloco.addEventListener('click', function() {
+      var codigoRua = bloco.getAttribute('data-codigo-rua');
+      trocarVisaoPosicoes('mapa');
+      var alvo = document.getElementById('mapa-rua-' + codigoRua);
+      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
+  if (!editandoPlanta && nivelPlantaSelecionado > 0) {
+    document.querySelectorAll('#plantaBaixaCanvas-end .planta-cell').forEach(function(cell) {
+      cell.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        if (cell.classList.contains('planta-cell-naogerada')) return; // posição nem existe ainda
+        document.querySelectorAll('#plantaBaixaCanvas-end .planta-cell').forEach(function(c) { c.classList.remove('planta-cell-selecionada'); });
+        cell.classList.add('planta-cell-selecionada');
+        mostrarDetalheEndereco(cell.getAttribute('data-endereco-key'), cell.getAttribute('data-codigo'));
+      });
+    });
+  }
+}
+
+// Opções de nível vêm do maior número de níveis entre as ruas cadastradas
+// -- ruas mais baixas (posição de chão, 1 nível) simplesmente aparecem
+// apagadas nos níveis que não têm, tratado dentro de plantaBaixaRuasHtml.
+function refreshPlantaNivelSelect() {
+  var sel = document.getElementById('plantaNivel-end');
+  var maxNiveis = Object.values(estruturaRuas).reduce(function(max, r) { return Math.max(max, r.niveis || 0); }, 0);
+  var atual = sel.value;
+  var opcoes = ['<option value="0">Todos os níveis (ocupação da rua)</option>'];
+  for (var n = 1; n <= maxNiveis; n++) opcoes.push('<option value="' + n + '">Nível ' + n + ' (posições de palete)</option>');
+  sel.innerHTML = opcoes.join('');
+  // Preserva a escolha se ela ainda existir (regerar estrutura não deve
+  // jogar a pessoa de volta pro agregado sem aviso). Cai pra '0' também no
+  // primeiro carregamento (atual === ''), senão o select ficaria com
+  // selectedIndex -1 -- em branco, sem nem mostrar "Todos os níveis".
+  var escolhido = (Number(atual) >= 1 && Number(atual) <= maxNiveis) ? String(Number(atual)) : '0';
+  sel.value = escolhido;
+  nivelPlantaSelecionado = Number(escolhido) || 0;
 }
 
 function wireArrastarBlocoPlanta(bloco) {
@@ -1198,6 +1257,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
   document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
   document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
+  document.getElementById('plantaNivel-end').addEventListener('change', function() {
+    nivelPlantaSelecionado = Number(this.value) || 0;
+    document.getElementById('mapaDetalheCard-end').style.display = 'none'; // detalhe da posição do nível anterior não vale mais
+    renderPlantaBaixa();
+  });
   document.getElementById('btnEditarPlanta-end').addEventListener('click', ativarEdicaoPlanta);
   document.getElementById('btnSalvarPlanta-end').addEventListener('click', salvarPosicoesPlanta);
   document.getElementById('btnCancelarPlanta-end').addEventListener('click', cancelarEdicaoPlanta);
@@ -1254,6 +1318,8 @@ document.addEventListener('DOMContentLoaded', function() {
       estruturaRuas = snap.val() || {};
       renderRuasTable();
       refreshFiltroRuaSelect();
+      refreshPlantaNivelSelect(); // quantidade de níveis pode ter mudado ao editar/gerar uma rua
+      if (visaoAtualPosicoes === 'planta' && !editandoPlanta) renderPlantaBaixa();
     });
   } catch (err) {
     setStatus(false, 'Erro');

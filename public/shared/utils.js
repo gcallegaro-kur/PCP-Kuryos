@@ -1100,11 +1100,22 @@ function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEnderec
 // agregada da rua inteira. Só MONTA o HTML (string) -- arrastar e o clique
 // pra abrir a elevação daquela rua são wireados por quem chama, igual o
 // mapa por rua acima.
-function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco) {
+//
+// nivelSelecionado (opcional): pedido do usuário depois de ver a planta
+// agregada -- "não da pra colocar algo que de pra visualizar as posições
+// de palete também na planta baixa, talvez visualizando algo em nivel?".
+// Ausente/0 = visão agregada (% de ocupação da rua inteira, responde
+// "qual rua está cheia"). Com um nível escolhido, o bloco se ABRE nas
+// posições individuais daquele nível, olhadas de cima -- responde "qual
+// palete está livre, e onde ele fica no galpão". A geometria do bloco
+// (posição/tamanho) é IDÊNTICA nos dois modos, senão trocar de nível
+// embaralharia a planta que a pessoa arrumou arrastando.
+function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelSelecionado) {
   var ruas = Object.values(estruturaRuas || {}).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
   if (!ruas.length) return '<div class="empty-hint">Nenhuma rua cadastrada ainda -- gere posições em "Estrutura de Ruas" primeiro.</div>';
   var UNIDADE = 60; // px por módulo (2 prédios) de largura -- também usado como grid de encaixe ao arrastar
   var GAP_AUTO = 20; // espaço entre blocos no layout automático (sem posição salva)
+  var nivelFoco = Number(nivelSelecionado) || 0; // 0 = visão agregada
   var proximoXAuto = 0;
   return ruas.map(function(r) {
     var niveis = r.niveis || 0, predios = r.predios || 0;
@@ -1115,6 +1126,36 @@ function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndere
     var x = temPosicaoSalva ? r.layoutX : proximoXAuto;
     var y = temPosicaoSalva ? r.layoutY : 0;
     if (!temPosicaoSalva) proximoXAuto += largura + GAP_AUTO;
+    var estiloAttr = 'left:' + x + 'px;top:' + y + 'px;width:' + largura + 'px;height:' + altura + 'px';
+    var idAttr = 'planta-rua-' + escapeAttr(String(r.codigoRua));
+    var ruaAttr = escapeAttr(String(r.codigoRua));
+
+    // ── Visão POR NÍVEL: abre o bloco nas posições de palete daquele nível ──
+    if (nivelFoco > 0) {
+      // Rua mais baixa que o nível escolhido (ex: posições de chão, 1 nível
+      // só, quando se olha o nível 3): fica apagada mas NO LUGAR -- sumir
+      // faria a pessoa perder a referência de onde está no galpão.
+      if (nivelFoco > niveis) {
+        return '<div class="planta-bloco planta-bloco-semnivel" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" style="' + estiloAttr + '" ' +
+          'title="' + escapeAttr('Rua ' + r.codigoRua + ' — não tem nível ' + nivelFoco + ' (vai só até o ' + niveis + ')') + '">' +
+          '<div class="planta-bloco-numero">' + escapeHtml(String(r.codigoRua)) + '</div></div>';
+      }
+      var celulas = '';
+      for (var p = 1; p <= predios; p++) {
+        var codigoPos = r.codigoRua + '.' + nivelFoco + '.' + p;
+        var keyPos = sanitizeKey(codigoPos);
+        var endPos = enderecosEstoque[keyPos];
+        var ocupPos = ocupantesPorEndereco[keyPos] || 0;
+        var classeCel = !endPos ? 'planta-cell-naogerada' : (ocupPos > 0 ? 'planta-cell-ocupada' : 'planta-cell-livre');
+        var tituloCel = !endPos ? (codigoPos + ' -- não gerada ainda') : (codigoPos + (ocupPos > 0 ? (' -- ' + ocupPos + ' item' + (ocupPos > 1 ? 's' : '')) : ' -- livre'));
+        celulas += '<div class="planta-cell ' + classeCel + '" data-endereco-key="' + escapeAttr(keyPos) + '" data-codigo="' + escapeAttr(codigoPos) + '" title="' + escapeAttr(tituloCel) + '">' + p + '</div>';
+      }
+      return '<div class="planta-bloco planta-bloco-nivel" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" style="' + estiloAttr + '" ' +
+        'title="' + escapeAttr('Rua ' + r.codigoRua + ' — ' + (r.area || '') + ' — nível ' + nivelFoco) + '">' +
+        '<div class="planta-bloco-label">R' + escapeHtml(String(r.codigoRua)) + '</div>' +
+        '<div class="planta-bloco-cells">' + celulas + '</div>' +
+      '</div>';
+    }
 
     var totalPosicoes = 0, ocupadas = 0;
     for (var nivel = 1; nivel <= niveis; nivel++) {
@@ -1129,8 +1170,8 @@ function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndere
     var classePct = totalPosicoes === 0 ? 'planta-bloco-vazio' : (pct === 0 ? 'planta-bloco-livre' : (pct >= 90 ? 'planta-bloco-cheio' : 'planta-bloco-parcial'));
     var tituloAttr = 'Rua ' + r.codigoRua + ' — ' + (r.area || '') + (totalPosicoes ? (' — ' + ocupadas + '/' + totalPosicoes + ' posições ocupadas (' + pct + '%)') : ' — nenhuma posição gerada ainda');
 
-    return '<div class="planta-bloco ' + classePct + '" id="planta-rua-' + escapeAttr(String(r.codigoRua)) + '" data-codigo-rua="' + escapeAttr(String(r.codigoRua)) + '" ' +
-      'style="left:' + x + 'px;top:' + y + 'px;width:' + largura + 'px;height:' + altura + 'px" title="' + escapeAttr(tituloAttr) + '">' +
+    return '<div class="planta-bloco ' + classePct + '" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" ' +
+      'style="' + estiloAttr + '" title="' + escapeAttr(tituloAttr) + '">' +
       '<div class="planta-bloco-numero">' + escapeHtml(String(r.codigoRua)) + '</div>' +
       '<div class="planta-bloco-pct">' + (totalPosicoes ? (pct + '%') : '—') + '</div>' +
       '</div>';
