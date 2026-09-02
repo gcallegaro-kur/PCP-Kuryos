@@ -86,6 +86,18 @@
     input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
     .empty-hint{color:var(--muted);font-size:12.5px;padding:10px 0}
+    /* WMS Fase 1 -- Mapa Visual do armazém (mapaVisualRuasHtml, shared/utils.js) */
+    .mapa-rua{margin-bottom:22px}
+    .mapa-rua-titulo{font-weight:700;font-size:13px;margin-bottom:8px}
+    .mapa-grid-scroll{overflow-x:auto;padding-bottom:6px}
+    .mapa-grid-rows{display:flex;flex-direction:column;gap:3px;width:max-content}
+    .mapa-nivel-row{display:flex;align-items:center;gap:3px}
+    .mapa-nivel-label{width:26px;font-size:10px;color:var(--muted);text-align:right;padding-right:4px;flex-shrink:0}
+    .mapa-cell{width:28px;height:28px;border-radius:4px;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border);flex-shrink:0}
+    .mapa-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .mapa-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .mapa-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55;cursor:default}
+    .mapa-cell-selecionada{outline:2px solid var(--primary);outline-offset:1px}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -248,18 +260,35 @@
           <option value="ocupadas">Só ocupadas</option>
           <option value="livres">Só livres</option>
         </select>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa</button>
+        </div>
       </div>
       <div class="stats">
         <div class="stat"><div class="stat-val" id="statTotalPos-end">—</div><div class="stat-lbl">Total de posições</div></div>
         <div class="stat"><div class="stat-val" id="statOcupadasPos-end" style="color:var(--primary)">—</div><div class="stat-lbl">Ocupadas</div></div>
         <div class="stat"><div class="stat-val" id="statLivresPos-end" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Livres</div></div>
       </div>
-      <div class="card">
+      <div class="card" id="cardListaPosicoes-end">
         <div class="table-wrap">
           <table>
             <thead><tr><th>Código</th><th>Área</th><th>Ocupantes</th></tr></thead>
             <tbody id="posicoesBody-end"></tbody>
           </table>
+        </div>
+      </div>
+      <div id="mapaVisualContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Clique numa posição ocupada pra ver o detalhe.</div>
+        <div id="mapaVisualGrid-end"></div>
+        <div class="card" id="mapaDetalheCard-end" style="display:none;margin-top:14px">
+          <div class="card-title" id="mapaDetalheTitulo-end">Detalhe</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Item</th><th>Lote</th><th>Validade</th><th>Status</th><th style="text-align:right">Saldo</th></tr></thead>
+              <tbody id="mapaDetalheBody-end"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -918,6 +947,58 @@ function renderPosicoesTableEnd() {
   document.getElementById('statTotalPos-end').textContent = fmtNum(total);
   document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
   document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
+  if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
+}
+
+// Pedido do usuário: "conseguimos criar um mapa visual do wms... pra
+// informar no sistema a alocação de itens dentro do galpão?" --
+// mapaVisualRuasHtml (shared/utils.js) monta o grid; aqui liga o clique ao
+// detalhe (esta página já tem estoque_lotes completo carregado, diferente
+// de cadastros.html, que só guarda a contagem).
+var visaoAtualPosicoes = 'lista';
+function renderMapaVisual() {
+  document.getElementById('mapaVisualGrid-end').innerHTML = mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  document.querySelectorAll('#mapaVisualGrid-end .mapa-cell').forEach(function(cell) {
+    cell.addEventListener('click', function() {
+      if (cell.classList.contains('mapa-cell-naogerada')) return; // posição nem existe ainda, nada pra mostrar
+      document.querySelectorAll('#mapaVisualGrid-end .mapa-cell').forEach(function(c) { c.classList.remove('mapa-cell-selecionada'); });
+      cell.classList.add('mapa-cell-selecionada');
+      mostrarDetalheEndereco(cell.getAttribute('data-endereco-key'), cell.getAttribute('data-codigo'));
+    });
+  });
+}
+function trocarVisaoPosicoes(visao) {
+  visaoAtualPosicoes = visao;
+  document.getElementById('cardListaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
+  document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
+  if (visao === 'mapa') renderMapaVisual();
+}
+// Detalhe de uma posição -- varre estoque_lotes procurando quem tem esse
+// enderecoKey (mesma lógica de contagem já usada em ocupantesPorEndereco,
+// só que aqui monta a lista completa em vez de só contar).
+function mostrarDetalheEndereco(enderecoKey, codigo) {
+  var ocupantes = [];
+  Object.keys(allEstoqueLotes).forEach(function(itemKey) {
+    Object.values(allEstoqueLotes[itemKey] || {}).forEach(function(lote) {
+      if (lote && lote.enderecoKey === enderecoKey && (lote.saldoLote || 0) > 0) ocupantes.push(lote);
+    });
+  });
+  document.getElementById('mapaDetalheTitulo-end').textContent = 'Detalhe -- ' + codigo + ' (' + ocupantes.length + (ocupantes.length === 1 ? ' item)' : ' itens)');
+  var tbody = document.getElementById('mapaDetalheBody-end');
+  if (!ocupantes.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Posição livre.</td></tr>';
+  } else {
+    tbody.innerHTML = ocupantes.map(function(l) {
+      return '<tr>' +
+        '<td>' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + '</td>' +
+        '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+        '<td>' + fmtData(l.dataValidade) + '</td>' +
+        '<td>' + statusBadge(l.status) + '</td>' +
+        '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+  document.getElementById('mapaDetalheCard-end').style.display = 'block';
 }
 
 function refreshFiltroRuaSelect() {
@@ -994,6 +1075,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('filterRua-end').addEventListener('change', renderPosicoesTableEnd);
   document.getElementById('filterArea-end').addEventListener('change', renderPosicoesTableEnd);
   document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTableEnd);
+  document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
+  document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
 
   try {
     db.ref('.info/connected').on('value', function(snap) {

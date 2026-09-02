@@ -1050,6 +1050,40 @@ function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExis
   return updates;
 }
 
+// Mapa visual do armazém -- um grid por rua (nível como linha, do mais alto
+// pro mais baixo, igual se lê uma estante de verdade; prédio como coluna),
+// pedido do usuário: "conseguimos criar um mapa visual do wms, como no
+// excel que passei... ou até melhor construído". Reaproveitada em
+// cadastros.html e estoque.html (mesmo princípio de gerarUpdatesPosicoesRua
+// -- uma função só, nunca duas implementações divergindo). Só MONTA o HTML
+// (string) -- não tem clique nenhum embutido aqui; cada página wireia o
+// clique via delegação, lendo data-endereco-key/data-codigo pra abrir o
+// detalhe com os dados que ela já tem carregados (estoque_lotes).
+function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco) {
+  var ruas = Object.values(estruturaRuas || {}).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+  if (!ruas.length) return '<div class="empty-hint">Nenhuma rua cadastrada ainda -- gere posições em "Estrutura de Ruas" primeiro.</div>';
+  return ruas.map(function(r) {
+    var niveis = r.niveis || 0, predios = r.predios || 0;
+    var linhasHtml = '';
+    // Nível mais alto primeiro (topo da tela) -- é como se lê uma estante de
+    // verdade, olhando de baixo pra cima fica invertido do que a pessoa vê.
+    for (var nivel = niveis; nivel >= 1; nivel--) {
+      var celulas = '';
+      for (var predio = 1; predio <= predios; predio++) {
+        var codigo = r.codigoRua + '.' + nivel + '.' + predio;
+        var key = sanitizeKey(codigo);
+        var end = enderecosEstoque[key];
+        var ocupantes = ocupantesPorEndereco[key] || 0;
+        var classe = !end ? 'mapa-cell-naogerada' : (ocupantes > 0 ? 'mapa-cell-ocupada' : 'mapa-cell-livre');
+        var tituloAttr = !end ? (codigo + ' -- não gerada ainda') : (codigo + (ocupantes > 0 ? (' -- ' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '')) : ' -- livre'));
+        celulas += '<div class="mapa-cell ' + classe + '" data-endereco-key="' + escapeAttr(key) + '" data-codigo="' + escapeAttr(codigo) + '" title="' + escapeAttr(tituloAttr) + '">' + predio + '</div>';
+      }
+      linhasHtml += '<div class="mapa-nivel-row"><div class="mapa-nivel-label">N' + nivel + '</div>' + celulas + '</div>';
+    }
+    return '<div class="mapa-rua"><div class="mapa-rua-titulo">Rua ' + escapeHtml(String(r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
+  }).join('');
+}
+
 // ── WMS Fase 1: lote/endereço granular (estoque_lotes/enderecos_estoque) ──
 // Nós IRMÃOS de estoque/{materialKey}, não aninhados dentro dele -- o
 // agregado (saldoAtual/saldoEmpenhado) continua sendo a fonte de verdade

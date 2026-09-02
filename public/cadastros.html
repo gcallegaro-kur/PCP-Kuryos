@@ -145,6 +145,17 @@
     .soma-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:14px;font-weight:700}
     .soma-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .soma-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    /* WMS Fase 1 -- Mapa Visual do armazém (mapaVisualRuasHtml, shared/utils.js) */
+    .mapa-rua{margin-bottom:22px}
+    .mapa-rua-titulo{font-weight:700;font-size:13px;margin-bottom:8px}
+    .mapa-grid-scroll{overflow-x:auto;padding-bottom:6px}
+    .mapa-grid-rows{display:flex;flex-direction:column;gap:3px;width:max-content}
+    .mapa-nivel-row{display:flex;align-items:center;gap:3px}
+    .mapa-nivel-label{width:26px;font-size:10px;color:var(--muted);text-align:right;padding-right:4px;flex-shrink:0}
+    .mapa-cell{width:28px;height:28px;border-radius:4px;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border);flex-shrink:0}
+    .mapa-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .mapa-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .mapa-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -951,16 +962,23 @@
           <option value="ocupadas">Só ocupadas</option>
           <option value="livres">Só livres</option>
         </select>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa</button>
+        </div>
       </div>
       <div class="stats">
         <div class="stat"><div class="stat-val" id="statTotalPos-end">—</div><div class="stat-lbl">Total de posições</div></div>
         <div class="stat"><div class="stat-val" id="statOcupadasPos-end" style="color:var(--primary)">—</div><div class="stat-lbl">Ocupadas</div></div>
         <div class="stat"><div class="stat-val" id="statLivresPos-end" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Livres</div></div>
       </div>
-      <table>
+      <table id="tabelaPosicoes-end">
         <thead><tr><th>Código</th><th>Área</th><th>Ocupantes</th></tr></thead>
         <tbody id="posicoesBody-end"></tbody>
       </table>
+      <div id="mapaVisualContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>
+      </div>
     </div>
   </div>
 
@@ -3395,6 +3413,30 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('statTotalPos-end').textContent = fmtNum(total);
     document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
     document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
+    // Mapa só é montado quando visível (evita custo à toa) -- mas se já
+    // estiver aberto, atualiza junto com a lista, senão ficaria desatualizado
+    // enquanto o usuário olha pra ele.
+    if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
+  }
+
+  // Pedido do usuário: "conseguimos criar um mapa visual do wms... pra
+  // informar no sistema a alocação de itens dentro do galpão?" --
+  // mapaVisualRuasHtml (shared/utils.js) monta o grid inteiro; aqui só
+  // injeta e alterna com a lista (visaoAtualPosicoes). Nesta tela (Cadastros
+  // é mais sobre ESTRUTURA que operação do dia a dia) o mapa é só visual +
+  // tooltip (title) -- detalhe por clique fica na versão de estoque.html,
+  // que já tem o estoque_lotes completo carregado pra isso.
+  var visaoAtualPosicoes = 'lista';
+  function renderMapaVisual() {
+    document.getElementById('mapaVisualContainer-end').innerHTML =
+      '<div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>' +
+      mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  }
+  function trocarVisaoPosicoes(visao) {
+    visaoAtualPosicoes = visao;
+    document.getElementById('tabelaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
+    document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
+    if (visao === 'mapa') renderMapaVisual();
   }
 
   function refreshFiltroRuaSelect() {
@@ -3431,6 +3473,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('filterRua-end').addEventListener('change', renderPosicoesTable);
     document.getElementById('filterArea-end').addEventListener('change', renderPosicoesTable);
     document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTable);
+    document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
+    document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
 
     dbOnValue(db.ref('config/areasEndereco'), function(snap) {
       areasEnderecoAtivas = (snap.val() || []).filter(function(a) { return a.ativo !== false; });
