@@ -1288,10 +1288,18 @@ function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, a
   if (!itemCodigo || !loteKey || !qtd || qtd <= 0) return Promise.resolve();
   var itemKey = sanitizeKey(itemCodigo);
   var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  // abatidoReal -- capturado de DENTRO da transaction, não é `qtd` (o
+  // pedido). Bug real achado em auditoria cruzada: o log gravava `qtd`
+  // (pedida) mesmo quando o clamp abaixo abatia menos (saldoLote menor que
+  // o pedido) -- trilha de auditoria ficava incorreta, sobrestimando a
+  // saída. A transaction pode rodar mais de uma vez em disputa de
+  // concorrência, mas só a execução que de fato COMMITA é a que sobra
+  // atribuída aqui antes do .then() ler o resultado.
+  var abatidoReal = 0;
   return loteRef.transaction(function(atual) {
     if (!atual) return atual; // lote já não existe mais -- aborta sem gravar nada
-    var abatido = Math.min(qtd, atual.saldoLote || 0);
-    atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatido) * 1000) / 1000;
+    abatidoReal = Math.min(qtd, atual.saldoLote || 0);
+    atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatidoReal) * 1000) / 1000;
     atual.atualizadoEm = new Date().toISOString();
     return atual;
   }).then(function(resultado) {
@@ -1299,7 +1307,10 @@ function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, a
     if (!lote) return resultado;
     return dbRef.ref('movimentos_estoque/' + itemKey).push({
       tipo: 'saida_manual', motivo: motivo || 'REMESSA',
-      qtd: -qtd, saldoApos: null, ref: null, loteKey: loteKey, enderecoKey: lote.enderecoKey || null,
+      // qtd/saldoApos usam o valor REAL pós-transaction (mesmo padrão de
+      // ajustarEstoque acima), não o pedido -- outro bug do mesmo achado
+      // era saldoApos sempre null, mesmo já tendo o snapshot em mãos.
+      qtd: -abatidoReal, saldoApos: lote.saldoLote, ref: null, loteKey: loteKey, enderecoKey: lote.enderecoKey || null,
       itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
       itemNome: lote.itemNome || null, unidade: lote.unidade || null,
       autor: autor || null, em: new Date().toISOString()
