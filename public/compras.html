@@ -114,7 +114,10 @@
     <h1>Compras</h1>
     <div class="header-sub">Solicitações, consolidação por fornecedor e cotação — alimentado pelo cadastro de Materiais</div>
   </div>
-  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a class="btn btn-ghost btn-sm" href="estoque.html">📦 Ver Estoque / WMS →</a>
+    <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+  </div>
 </div>
 
 <div class="main" style="padding-top:6px">
@@ -128,7 +131,6 @@
   <button class="tab" data-tab="precos">📊 Histórico de Preços</button>
   <button class="tab" data-tab="fornecedores-analise">📈 Análise de Fornecedores</button>
   <button class="tab" data-tab="busca-fornecedor">🔎 Busca Avançada: Fornecedores × Material</button>
-  <button class="tab" data-tab="estoque">📦 Estoque</button>
 </div>
 
 <div class="main">
@@ -272,58 +274,11 @@
     <div id="bfResultados"><div class="card"><div class="no-data">Escolha um tipo, ou busque um material específico.</div></div></div>
   </div>
 
-  <!-- ═══════════ ESTOQUE ═══════════ -->
-  <div class="tab-panel" id="tab-estoque">
-    <div class="kt-toolbar">
-      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="esSearch" placeholder="Buscar por código ou nome do material..."></div>
-      <button class="btn btn-ghost" id="btnAjustarEstoque">⚖️ Ajustar Saldo</button>
-    </div>
-    <div class="section-note">Saldo Atual sobe a cada recebimento em Logística e desce a cada apontamento real de produção (consumo) ou perda com material específico. Empenhado é quanto desse saldo já está reservado por OPs emitidas ainda não totalmente apontadas; Disponível (= Atual − Empenhado) é o que sobra pra novos compromissos. Use Ajustar Saldo pra corrigir o Atual depois de uma contagem física.</div>
-    <div class="card">
-      <div class="card-title" id="esCount">Estoque</div>
-      <div class="table-wrap">
-        <table>
-          <thead id="esThead"><tr>
-            <th data-sort="materialCodigo">Material</th>
-            <th data-sort="saldoAtual" style="text-align:right">Saldo Atual</th>
-            <th data-sort="saldoEmpenhado" style="text-align:right">Empenhado</th>
-            <th data-sort="saldoDisponivel" style="text-align:right">Disponível</th>
-            <th data-sort="ultimaAtualizacao">Última Atualização</th>
-            <th style="min-width:90px">Ações</th>
-          </tr></thead>
-          <tbody id="esBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+  <!-- Aba "📦 Estoque" retirada nesta rodada (WMS Fase 1) -- migrada pra
+       estoque.html, página dedicada (decisão do usuário: "Estoque merece
+       uma página própria, assim como é cadastros"). Link no cabeçalho
+       ("📦 Ver Estoque / WMS →") leva pra lá. -->
 
-</div>
-
-<!-- MODAL: Ajustar Saldo de Estoque -->
-<div class="modal-bg" id="modalAjusteEstoque">
-  <div class="modal">
-    <div class="modal-header"><h2>⚖️ Ajustar Saldo de Estoque</h2><button class="modal-close" id="modalAjusteEstoqueClose" title="Fechar" aria-label="Fechar">×</button></div>
-    <div class="modal-body">
-      <div class="form-group full">
-        <label>Material *</label>
-        <input type="text" id="aeMaterial" placeholder="Digite pra buscar..." autocomplete="off">
-        <input type="hidden" id="aeMaterialKey">
-      </div>
-      <div class="field-hint" id="aeSaldoAtualHint" style="margin:8px 0"></div>
-      <div class="form-group full">
-        <label>Novo saldo (quantidade real, contada agora) *</label>
-        <input type="number" id="aeNovoSaldo" min="0" step="any">
-      </div>
-      <div class="form-group full">
-        <label>Justificativa *</label>
-        <textarea id="aeJustificativa" rows="2" placeholder="Ex: contagem física de 15/09, divergência por avaria..."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" id="modalAjusteEstoqueCancel">Cancelar</button>
-      <button class="btn btn-green" id="modalAjusteEstoqueSave">Salvar Ajuste</button>
-    </div>
-  </div>
 </div>
 
 <!-- MODAL: Nova Solicitação -->
@@ -1176,109 +1131,10 @@ function renderBuscaFornecedor() {
     }).join('') + '</tbody></table></div></div>';
 }
 
-/* ══════════════ Estoque (Fase 4a) ══════════════ */
-var allEstoque = {};
-var esSortable = makeSortableTable(document.getElementById('esThead'), 'materialCodigo', 'asc');
-function renderEstoque() {
-  var search = norm(document.getElementById('esSearch').value);
-  var rows = Object.entries(allEstoque).filter(function(e) {
-    if (!search) return true;
-    return (norm(e[1].materialCodigo) + ' ' + norm(e[1].materialNome)).indexOf(search) !== -1;
-  });
-  rows = esSortable.applySort(rows, function(entry, field) {
-    if (field === 'saldoDisponivel') return (entry[1].saldoAtual || 0) - (entry[1].saldoEmpenhado || 0);
-    return entry[1][field];
-  });
-
-  document.getElementById('esCount').textContent = 'Estoque (' + rows.length + ' material(is) com movimento)';
-  var tbody = document.getElementById('esBody');
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
-    return;
-  }
-  tbody.innerHTML = rows.map(function(entry) {
-    var key = entry[0], e = entry[1];
-    var empenhado = e.saldoEmpenhado || 0;
-    var disponivel = (e.saldoAtual || 0) - empenhado;
-    return '<tr>' +
-      '<td>' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') + '</td>' +
-      '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
-      '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
-      '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
-      '<td style="font-size:12px">' + fmtData(e.ultimaAtualizacao) + '</td>' +
-      '<td><button class="btn btn-ghost btn-sm es-ajustar" data-key="' + escapeAttr(key) + '">⚖️ Ajustar</button></td>' +
-    '</tr>';
-  }).join('');
-  document.querySelectorAll('.es-ajustar').forEach(function(btn) {
-    btn.addEventListener('click', function() { abrirModalAjusteEstoque(btn.getAttribute('data-key')); });
-  });
-}
-
-var aeItems = []; // opções pro autocomplete -- todo material cadastrado, mesmo sem estoque ainda (primeiro ajuste pode ser a entrada inicial)
-function refreshAeItems() {
-  aeItems = Object.values(allMateriais).filter(function(m) { return m.ativo !== false; })
-    .sort(function(a, b) { return norm(a.mpNome).localeCompare(norm(b.mpNome)); })
-    .map(function(m) {
-      var label = m.mpCodigo + ' — ' + m.mpNome;
-      return { key: sanitizeKey(m.mpCodigo), value: label, label: label };
-    });
-}
-function abrirModalAjusteEstoque(estoqueKey) {
-  refreshAeItems();
-  document.getElementById('aeJustificativa').value = '';
-  if (estoqueKey) {
-    var e = allEstoque[estoqueKey] || {};
-    document.getElementById('aeMaterial').value = (e.materialCodigo || estoqueKey) + ' — ' + (e.materialNome || '');
-    document.getElementById('aeMaterialKey').value = estoqueKey;
-    document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e.saldoAtual || 0) + ' ' + (e.unidade || '');
-    document.getElementById('aeNovoSaldo').value = e.saldoAtual != null ? e.saldoAtual : '';
-  } else {
-    document.getElementById('aeMaterial').value = '';
-    document.getElementById('aeMaterialKey').value = '';
-    document.getElementById('aeSaldoAtualHint').textContent = '';
-    document.getElementById('aeNovoSaldo').value = '';
-  }
-  document.getElementById('modalAjusteEstoque').classList.add('open');
-}
-function fecharModalAjusteEstoque() { document.getElementById('modalAjusteEstoque').classList.remove('open'); }
-function salvarAjusteEstoque() {
-  var key = document.getElementById('aeMaterialKey').value;
-  if (!key) { showAlert('Digite e selecione um material da lista.', 'danger'); return; }
-  var novoSaldoStr = document.getElementById('aeNovoSaldo').value;
-  if (novoSaldoStr === '') { showAlert('Informe o novo saldo.', 'danger'); return; }
-  var novoSaldo = parseFloat(novoSaldoStr);
-  if (isNaN(novoSaldo) || novoSaldo < 0) { showAlert('Saldo inválido.', 'danger'); return; }
-  var justificativa = document.getElementById('aeJustificativa').value.trim();
-  if (!justificativa) { showAlert('Justificativa é obrigatória pra ajuste manual de estoque.', 'danger'); return; }
-
-  var mat = allMateriais[key];
-  document.getElementById('modalAjusteEstoqueSave').disabled = true;
-
-  db.ref('estoque/' + key).transaction(function(atual) {
-    var saldoAnterior = (atual && atual.saldoAtual) || 0;
-    atual = atual || {};
-    atual.saldoAtual = novoSaldo;
-    atual.materialCodigo = mat ? mat.mpCodigo : (atual.materialCodigo || key);
-    atual.materialNome = mat ? mat.mpNome : (atual.materialNome || '');
-    atual.unidade = mat ? mat.unidade : (atual.unidade || '');
-    atual.ultimaAtualizacao = new Date().toISOString();
-    atual.ultimaMovimentacao = { tipo: 'ajuste_manual', qtd: novoSaldo - saldoAnterior, ref: justificativa, em: new Date().toISOString() };
-    return atual;
-  }).then(function(result) {
-    if (!result.committed) { showAlert('Não foi possível salvar o ajuste. Tente de novo.', 'danger'); return; }
-    // Log do ajuste em separado (push, fora da transaction -- não precisa
-    // de proteção de corrida, é só um registro histórico de auditoria).
-    var saldoAnterior = (result.snapshot.val().saldoAtual || 0) - (result.snapshot.val().ultimaMovimentacao.qtd || 0);
-    return db.ref('estoque/' + key + '/ajustes').push({
-      saldoAnterior: saldoAnterior, saldoNovo: novoSaldo, justificativa: justificativa,
-      ajustadoPor: currentUserNome(), ajustadoEm: new Date().toISOString()
-    }).then(function() {
-      showAlert('Ajuste de estoque salvo!', 'success');
-      fecharModalAjusteEstoque();
-    });
-  }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
-    .finally(function() { document.getElementById('modalAjusteEstoqueSave').disabled = false; });
-}
+/* ══════════════ Estoque -- aba retirada nesta rodada (WMS Fase 1) ══════════
+   Migrada pra estoque.html (renderEstoqueAgregado/abrirModalAjusteEstoque/
+   salvarAjusteEstoque de lá, mesma lógica). Link no cabeçalho leva pra lá.
+   ═══════════════════════════════════════════════════════════════════════ */
 
 function refreshPcFornecedorFilter() {
   var sel = document.getElementById('pcFilterFornecedor');
@@ -1822,27 +1678,6 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('bfSearch').addEventListener('input', function() { clearTimeout(_tbf); _tbf = setTimeout(renderBuscaFornecedor, 200); });
   renderBfFacetas();
 
-  esSortable.wireHeaders(renderEstoque);
-  var _tes = null;
-  document.getElementById('esSearch').addEventListener('input', function() { clearTimeout(_tes); _tes = setTimeout(renderEstoque, 200); });
-  document.getElementById('btnAjustarEstoque').addEventListener('click', function() { abrirModalAjusteEstoque(null); });
-  document.getElementById('modalAjusteEstoqueClose').addEventListener('click', fecharModalAjusteEstoque);
-  document.getElementById('modalAjusteEstoqueCancel').addEventListener('click', fecharModalAjusteEstoque);
-  document.getElementById('modalAjusteEstoqueSave').addEventListener('click', salvarAjusteEstoque);
-  document.getElementById('modalAjusteEstoque').addEventListener('click', function(e) { if (e.target === this) fecharModalAjusteEstoque(); });
-  attachAutocomplete(document.getElementById('aeMaterial'), function() { return aeItems; }, {
-    onSelect: function(it) {
-      document.getElementById('aeMaterialKey').value = it.key;
-      var e = allEstoque[it.key];
-      document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e ? (e.saldoAtual || 0) : 0) + ' ' + (e ? (e.unidade || '') : '');
-      document.getElementById('aeNovoSaldo').value = e && e.saldoAtual != null ? e.saldoAtual : 0;
-    }
-  });
-  document.getElementById('aeMaterial').addEventListener('input', function() {
-    document.getElementById('aeMaterialKey').value = '';
-    document.getElementById('aeSaldoAtualHint').textContent = '';
-  });
-
   try {
     db.ref('.info/connected').on('value', function(snap) {
       setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
@@ -1856,11 +1691,6 @@ document.addEventListener('DOMContentLoaded', function() {
       // tipo (dispara renderBfFacetas de novo); troca aceitável por não
       // perder o filtro ativo.
       renderBuscaFornecedor();
-      refreshAeItems();
-    });
-    dbOnValue(db.ref('estoque'), function(snap) {
-      allEstoque = snap.val() || {};
-      renderEstoque();
     });
     // Fornecedores agora é gerenciado só em cadastros.html -- compras.html
     // mantém este listener de LEITURA (popula os selects de pedido/cotação

@@ -145,6 +145,37 @@
     .soma-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin:10px 0;font-size:14px;font-weight:700}
     .soma-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .soma-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    /* WMS Fase 1 -- Mapa Visual do armazém (mapaVisualRuasHtml, shared/utils.js) */
+    .mapa-rua{margin-bottom:22px}
+    .mapa-rua-titulo{font-weight:700;font-size:13px;margin-bottom:8px}
+    .mapa-grid-scroll{overflow-x:auto;padding-bottom:6px}
+    .mapa-grid-rows{display:flex;flex-direction:column;gap:3px;width:max-content}
+    .mapa-nivel-row{display:flex;align-items:center;gap:3px}
+    .mapa-nivel-label{width:26px;font-size:10px;color:var(--muted);text-align:right;padding-right:4px;flex-shrink:0}
+    .mapa-cell{width:28px;height:28px;border-radius:4px;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--border);flex-shrink:0}
+    .mapa-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .mapa-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .mapa-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
+    /* WMS Fase 1 -- Planta Baixa (plantaBaixaRuasHtml, shared/utils.js) --
+       visão de cima do galpão, só visual aqui (arrastar é em estoque.html). */
+    .planta-baixa-scroll{overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);max-height:65vh}
+    .planta-baixa-canvas{position:relative;min-width:100%;min-height:420px}
+    .planta-bloco{position:absolute;border-radius:6px;border:2px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:pointer;user-select:none}
+    .planta-bloco:hover{box-shadow:0 0 0 2px var(--primary)}
+    .planta-bloco-pct{font-size:9px;font-weight:600;opacity:.8}
+    .planta-bloco-vazio{background:var(--tint-gray-bg);color:var(--muted);border-style:dashed}
+    .planta-bloco-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-bloco-parcial{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-bloco-cheio{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    /* Visão por nível -- o bloco da rua se abre nas posições de palete */
+    .planta-bloco-nivel{background:var(--card);color:var(--text);justify-content:flex-start;padding:2px;gap:1px}
+    .planta-bloco-semnivel{background:var(--tint-gray-bg);color:var(--muted);opacity:.35;border-style:dotted}
+    .planta-bloco-label{font-size:8px;line-height:1;color:var(--muted);font-weight:600;align-self:flex-start;padding-left:2px}
+    .planta-bloco-cells{display:flex;flex:1;gap:1px;width:100%;min-height:0}
+    .planta-cell{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:2px;font-size:9px;font-weight:600;border:1px solid var(--border)}
+    .planta-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -166,6 +197,7 @@
   <button class="main-tab" data-maintab="produtos">Produtos</button>
   <button class="main-tab" data-maintab="formulas">Fórmulas / BOM / Especificações</button>
   <button class="main-tab" data-maintab="categorias">Categorias</button>
+  <button class="main-tab" data-maintab="enderecos">Endereços</button>
   <button class="main-tab" data-maintab="clientes">Clientes</button>
   <button class="main-tab" data-maintab="fornecedores">Fornecedores</button>
 </div>
@@ -892,7 +924,124 @@
         <button class="btn btn-ghost btn-sm" id="btnAddTipoEnsaio-cat">+ Adicionar</button>
       </div>
     </div>
+    <div class="card" style="padding:16px;margin-top:14px">
+      <div class="card-title">Área de Endereço (Estoque / WMS)</div>
+      <div class="section-note">Lista usada na Estrutura de Ruas (aba Endereços) pra marcar a qual área cada rua pertence -- fechada, pra manter relatório e filtro consistentes. Clique numa área pra ativar/desativar.</div>
+      <div class="tag-area" id="tAreasEndereco-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar área fora da lista</div>
+      <div class="tag-add">
+        <input type="text" id="iAreaEnderecoNome-cat" class="uc" placeholder="Ex: PRODUTO ACABADO" style="flex:2">
+        <button class="btn btn-ghost btn-sm" id="btnAddAreaEndereco-cat">+ Adicionar</button>
+      </div>
+    </div>
+    <div class="card" style="padding:16px;margin-top:14px">
+      <div class="card-title">Motivo de Movimento de Estoque</div>
+      <div class="section-note">Lista usada no histórico de movimentações do Estoque/WMS (recebimento, transferência entre endereços, saída manual, etc.) -- fechada, pra manter relatório por motivo confiável em vez de texto livre divergente. Clique num motivo pra ativar/desativar.</div>
+      <div class="tag-area" id="tMotivosMovEstoque-cat"></div>
+      <div class="section-label" style="margin-top:18px">Adicionar motivo fora da lista</div>
+      <div class="tag-add">
+        <input type="text" id="iMotivoMovEstoqueNome-cat" class="uc" placeholder="Ex: INVENTÁRIO ROTATIVO" style="flex:2">
+        <button class="btn btn-ghost btn-sm" id="btnAddMotivoMovEstoque-cat">+ Adicionar</button>
+      </div>
+    </div>
   </div>
+  <div class="main-tab-panel" id="maintab-enderecos">
+    <div class="tabs" id="enderecosInnerTabs">
+      <button class="tab active" data-tab="end-estrutura">Estrutura de Ruas</button>
+      <button class="tab" data-tab="end-posicoes">Posições</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-end-estrutura">
+      <div class="section-note">Cada rua gera suas posições automaticamente a partir desta configuração (níveis × prédios) -- pedido do usuário: a estrutura física está mudando, então redimensionar é editar aqui e clicar "Salvar e Gerar Posições" de novo, sem cadastrar posição por posição. Formato do endereço: <b>Rua.Nível.Prédio</b> (ex: 1.2.5) -- o número do Prédio já indica o lado: <b>ímpar = esquerdo, par = direito</b>. Gerar de novo nunca apaga nem move um endereço que já tem algo guardado -- só cria os que faltam, e só atualiza a área de posições ainda vazias.</div>
+      <div class="kt-toolbar">
+        <button class="btn btn-primary" id="btnNovaRua-end">+ Nova Rua</button>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:80px">Rua</th>
+          <th>Área</th>
+          <th style="width:90px">Níveis</th>
+          <th style="width:130px">Prédios (posições)</th>
+          <th style="width:130px">Posições geradas</th>
+          <th style="width:140px"></th>
+        </tr></thead>
+        <tbody id="ruasBody-end"></tbody>
+      </table>
+    </div>
+
+    <div class="tab-panel" id="tab-end-posicoes">
+      <div class="kt-toolbar">
+        <div class="kt-search">
+          <span class="icon">🔍</span>
+          <input type="text" id="searchInput-end" placeholder="Buscar por código de endereço...">
+        </div>
+        <select class="kt-select" id="filterRua-end"><option value="">Todas as ruas</option></select>
+        <select class="kt-select" id="filterArea-end"><option value="">Todas as áreas</option></select>
+        <select class="kt-select" id="filterOcupacao-end">
+          <option value="">Ocupadas e livres</option>
+          <option value="ocupadas">Só ocupadas</option>
+          <option value="livres">Só livres</option>
+        </select>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa por rua</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerPlanta-end">🏭 Planta baixa</button>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="stat-val" id="statTotalPos-end">—</div><div class="stat-lbl">Total de posições</div></div>
+        <div class="stat"><div class="stat-val" id="statOcupadasPos-end" style="color:var(--primary)">—</div><div class="stat-lbl">Ocupadas</div></div>
+        <div class="stat"><div class="stat-val" id="statLivresPos-end" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Livres</div></div>
+      </div>
+      <table id="tabelaPosicoes-end">
+        <thead><tr><th>Código</th><th>Área</th><th>Ocupantes</th></tr></thead>
+        <tbody id="posicoesBody-end"></tbody>
+      </table>
+      <div id="mapaVisualContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>
+      </div>
+      <div id="plantaBaixaContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos. Em "Todos os níveis" a cor é a % de ocupação da rua inteira; escolhendo um nível, o bloco se abre nas posições de palete daquele nível (verde = livre, laranja = ocupada, cinza = não gerada). Clique numa rua pra ver a elevação dela. Arrastar os blocos pra ajustar a planta é feito em Estoque / WMS, não aqui.</div>
+        <div style="margin-bottom:10px">
+          <select class="kt-select" id="plantaNivel-end" style="max-width:230px"><option value="0">Todos os níveis (ocupação da rua)</option></select>
+        </div>
+        <div class="planta-baixa-scroll">
+          <div id="plantaBaixaCanvas-end" class="planta-baixa-canvas"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="modalRuaBg">
+    <div class="modal">
+      <div class="modal-header"><h2 id="modalRuaTitle">Nova Rua</h2><button class="modal-close" id="modalRuaClose" title="Fechar" aria-label="Fechar">×</button></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Rua (número)</label>
+          <input type="number" id="rCodigoRua-end" min="1" step="1">
+          <div class="field-hint" id="rCodigoRuaHint-end"></div>
+        </div>
+        <div class="form-group">
+          <label>Área</label>
+          <select id="rArea-end"></select>
+        </div>
+        <div class="form-group">
+          <label>Níveis</label>
+          <input type="number" id="rNiveis-end" min="1" step="1" value="1">
+        </div>
+        <div class="form-group">
+          <label>Prédios (posições por nível -- já contando os 2 lados)</label>
+          <input type="number" id="rPredios-end" min="1" step="1" value="1">
+          <div class="field-hint">Prédio 1 = esquerdo, 2 = direito, 3 = esquerdo, 4 = direito... Se cada nível tem 13 vagas de cada lado, isto é 26.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelarRua-end">Cancelar</button>
+        <button class="btn btn-primary" id="btnSalvarRua-end">Salvar e Gerar Posições</button>
+      </div>
+    </div>
+  </div>
+
   <div class="main-tab-panel" id="maintab-clientes">
     <div class="kt-toolbar">
       <div class="kt-search">
@@ -1313,7 +1462,7 @@ try {
 }
 
 // ── Abas de nível página + roteamento por ?tab= ────────────────────────
-var MAINTAB_ALIASES = { produtos: 'produtos', materiais: 'materiais', formulas: 'formulas', categorias: 'categorias', clientes: 'clientes', fornecedores: 'fornecedores' };
+var MAINTAB_ALIASES = { produtos: 'produtos', materiais: 'materiais', formulas: 'formulas', categorias: 'categorias', enderecos: 'enderecos', clientes: 'clientes', fornecedores: 'fornecedores' };
 function activateMainTab(name, pushUrl) {
   if (!MAINTAB_ALIASES[name]) return;
   document.querySelectorAll('.main-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-maintab') === name); });
@@ -2964,6 +3113,476 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       tiposEnsaio = val;
       renderTiposEnsaio();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CATEGORIAS -- ÁREA DE ENDEREÇO (Estoque / WMS). Mesmo padrão
+// exato de Tipos de Ensaio acima (lista fechada em config/, seed
+// inicial, ativa/desativa, "adicionar fora da lista") -- pedido do
+// usuário: as 5 áreas confirmadas (Galpão/Fábrica/Rótulos/Matéria
+// Prima/Material de Uso e Consumo), mas editável, não travada nessas 5
+// pra sempre (ex: se um dia precisar separar "Produto Acabado" da
+// "Fábrica", basta adicionar aqui).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var areasEndereco = [];
+
+  var AREAS_ENDERECO_SEED = [
+    { nome: 'GALPÃO' }, { nome: 'FÁBRICA' }, { nome: 'RÓTULOS' },
+    { nome: 'MATÉRIA PRIMA' }, { nome: 'MATERIAL DE USO E CONSUMO' }
+  ];
+
+  function renderAreasEndereco() {
+    var el = document.getElementById('tAreasEndereco-cat');
+    if (!areasEndereco.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>'; return; }
+    el.innerHTML = '';
+    areasEndereco.forEach(function(a, i) {
+      var ativo = a.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativo ? '' : 'opacity:.5');
+      span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = a.nome;
+      span.appendChild(nm);
+      span.addEventListener('click', function() {
+        areasEndereco[i] = Object.assign({}, a, { ativo: !ativo });
+        db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+          showAlert('Área ' + (!ativo ? 'ativada' : 'desativada') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      if (!a.padrao) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover esta área?')) return;
+          areasEndereco.splice(i, 1);
+          db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+            showAlert('Área removida.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+      el.appendChild(span);
+    });
+  }
+
+  function addAreaEndereco() {
+    var input = document.getElementById('iAreaEnderecoNome-cat');
+    var nome = input.value.trim().toUpperCase();
+    if (!nome) { showAlert('Informe um nome pra área.', 'danger'); return; }
+    if (areasEndereco.some(function(a) { return a.nome === nome; })) {
+      showAlert('Já existe uma área com esse nome.', 'danger');
+      return;
+    }
+    areasEndereco.push({ nome: nome, ativo: true, padrao: false });
+    db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+      input.value = '';
+      showAlert('Área adicionada.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddAreaEndereco-cat').addEventListener('click', addAreaEndereco);
+    document.getElementById('iAreaEnderecoNome-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addAreaEndereco(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/areasEndereco'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        var seed = AREAS_ENDERECO_SEED.map(function(a) { return Object.assign({ ativo: true, padrao: true }, a); });
+        db.ref('config/areasEndereco').set(seed);
+        return;
+      }
+      areasEndereco = val;
+      renderAreasEndereco();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: CATEGORIAS -- MOTIVO DE MOVIMENTO DE ESTOQUE (Estoque / WMS).
+// Mesmo padrão exato das duas listas acima. Pedido do usuário: "Lista
+// fechada, gerenciável em Cadastros" pro motivo de cada movimentação
+// (recebimento/transferência/devolução/etc.) -- mesmo raciocínio de
+// Tipos de Ensaio (evita grafia divergente tipo "Transferência" x
+// "Transferencia" cadastrados como 2 motivos diferentes).
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var motivosMovEstoque = [];
+
+  var MOTIVOS_MOV_ESTOQUE_SEED = [
+    { nome: 'RECEBIMENTO' }, { nome: 'CONSUMO DE PRODUÇÃO' }, { nome: 'PERDA' },
+    { nome: 'AJUSTE DE INVENTÁRIO' }, { nome: 'TRANSFERÊNCIA ENTRE ENDEREÇOS' },
+    { nome: 'ENTRADA DE PRODUÇÃO' }, // putaway de produto acabado na conclusão de OP
+    { nome: 'DEVOLUÇÃO' }, { nome: 'REMESSA' }, { nome: 'OUTRO' }
+  ];
+
+  function renderMotivosMovEstoque() {
+    var el = document.getElementById('tMotivosMovEstoque-cat');
+    if (!motivosMovEstoque.length) { el.innerHTML = '<span style="color:var(--muted);font-size:13px">Carregando...</span>'; return; }
+    el.innerHTML = '';
+    motivosMovEstoque.forEach(function(m, i) {
+      var ativo = m.ativo !== false;
+      var span = document.createElement('span');
+      span.className = 'tag linha';
+      span.style.cssText = 'cursor:pointer;' + (ativo ? '' : 'opacity:.5');
+      span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
+      var nm = document.createElement('span');
+      nm.className = 'tag-text';
+      nm.textContent = m.nome;
+      span.appendChild(nm);
+      span.addEventListener('click', function() {
+        motivosMovEstoque[i] = Object.assign({}, m, { ativo: !ativo });
+        db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+          showAlert('Motivo ' + (!ativo ? 'ativado' : 'desativado') + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      if (!m.padrao) {
+        var del = document.createElement('button');
+        del.className = 'tag-btn';
+        del.textContent = '×';
+        del.title = 'Remover';
+        del.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (!confirm('Remover este motivo?')) return;
+          motivosMovEstoque.splice(i, 1);
+          db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+            showAlert('Motivo removido.', 'success');
+          }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+        });
+        span.appendChild(del);
+      }
+      el.appendChild(span);
+    });
+  }
+
+  function addMotivoMovEstoque() {
+    var input = document.getElementById('iMotivoMovEstoqueNome-cat');
+    var nome = input.value.trim().toUpperCase();
+    if (!nome) { showAlert('Informe um nome pro motivo.', 'danger'); return; }
+    if (motivosMovEstoque.some(function(m) { return m.nome === nome; })) {
+      showAlert('Já existe um motivo com esse nome.', 'danger');
+      return;
+    }
+    motivosMovEstoque.push({ nome: nome, ativo: true, padrao: false });
+    db.ref('config/motivosMovimentoEstoque').set(motivosMovEstoque).then(function() {
+      input.value = '';
+      showAlert('Motivo adicionado.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('btnAddMotivoMovEstoque-cat').addEventListener('click', addMotivoMovEstoque);
+    document.getElementById('iMotivoMovEstoqueNome-cat').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { addMotivoMovEstoque(); e.preventDefault(); }
+    });
+    dbOnValue(db.ref('config/motivosMovimentoEstoque'), function(snap) {
+      var val = snap.val();
+      if (!val || !val.length) {
+        var seed = MOTIVOS_MOV_ESTOQUE_SEED.map(function(m) { return Object.assign({ ativo: true, padrao: true }, m); });
+        db.ref('config/motivosMovimentoEstoque').set(seed);
+        return;
+      }
+      motivosMovEstoque = val;
+      renderMotivosMovEstoque();
+    });
+  });
+})();
+
+// ════════════════════════════════════════════════════════════════════
+// ABA: ENDEREÇOS (Estoque / WMS) -- Fase 1 do plano de WMS/Estoque.
+// Estrutura de Ruas gera enderecos_estoque automaticamente (rua × nível
+// × prédio -- prédio ímpar=esquerdo, par=direito) -- pedido do usuário:
+// a estrutura física está mudando agora, precisa ser reconfigurável sem
+// cadastro manual posição a posição. Regerar NUNCA apaga/move um
+// endereço que já tem item associado -- só cria os que faltam, e só
+// reatualiza a área de posições ainda vazias. Posições mostra o
+// resultado, com contagem de ocupantes lida de estoque_lotes -- uma
+// posição PODE ter mistura de múltiplos itens (confirmado pelo
+// usuário), então a contagem nunca assume 1 item por posição.
+// ════════════════════════════════════════════════════════════════════
+(function() {
+  var estruturaRuas = {};
+  var enderecosEstoque = {};
+  var areasEnderecoAtivas = [];
+  var ocupantesPorEndereco = {}; // enderecoKey -> quantos itens (estoque_lotes com saldoLote>0) apontam pra lá
+  var editandoCodigoRua = null;  // null = nova rua; senão, número da rua sendo editada
+
+  // Cada seção desta página é seu próprio IIFE -- cópia local, mesmo
+  // princípio já documentado nas outras abas deste arquivo.
+  function currentUserNome() {
+    return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+  }
+
+  function opcoesAreaSelect(valorAtual) {
+    var opts = '<option value="">Selecione...</option>';
+    areasEnderecoAtivas.forEach(function(a) {
+      opts += '<option value="' + escapeAttr(a.nome) + '"' + (a.nome === valorAtual ? ' selected' : '') + '>' + escapeHtml(a.nome) + '</option>';
+    });
+    // Não esconde um valor já salvo mesmo que tenha sido desativado depois
+    // -- mesmo princípio de opcoesTiposEnsaio (Fórmulas/Especificações).
+    if (valorAtual && !areasEnderecoAtivas.some(function(a) { return a.nome === valorAtual; })) {
+      opts += '<option value="' + escapeAttr(valorAtual) + '" selected>' + escapeHtml(valorAtual) + ' (fora da lista)</option>';
+    }
+    return opts;
+  }
+
+  function renderRuasTable() {
+    var tbody = document.getElementById('ruasBody-end');
+    var entries = Object.values(estruturaRuas).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma rua cadastrada ainda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(function(r) {
+      var totalPosicoes = (r.niveis || 0) * (r.predios || 0);
+      var geradas = Object.values(enderecosEstoque).filter(function(e) { return e.rua === r.codigoRua; }).length;
+      return '<tr>' +
+        '<td>' + escapeHtml(String(r.codigoRua)) + '</td>' +
+        '<td>' + escapeHtml(r.area || '') + '</td>' +
+        '<td>' + escapeHtml(String(r.niveis || 0)) + '</td>' +
+        '<td>' + escapeHtml(String(r.predios || 0)) + '</td>' +
+        '<td>' + geradas + ' de ' + totalPosicoes + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm r-editar" data-rua="' + escapeAttr(r.codigoRua) + '">Editar</button></td>' +
+      '</tr>';
+    }).join('');
+    tbody.querySelectorAll('.r-editar').forEach(function(btn) {
+      btn.addEventListener('click', function() { abrirModalRua(parseInt(btn.getAttribute('data-rua'), 10)); });
+    });
+  }
+
+  function abrirModalRua(codigoRua) {
+    editandoCodigoRua = codigoRua != null ? codigoRua : null;
+    var r = codigoRua != null ? estruturaRuas[codigoRua] : null;
+    document.getElementById('modalRuaTitle').textContent = r ? ('Editar Rua ' + r.codigoRua) : 'Nova Rua';
+    document.getElementById('rCodigoRua-end').value = r ? r.codigoRua : '';
+    document.getElementById('rCodigoRua-end').disabled = !!r; // identidade da rua não muda depois de criada
+    document.getElementById('rCodigoRuaHint-end').textContent = r ? 'O número da rua não pode ser alterado depois de criada -- crie uma nova rua se precisar de outro número.' : '';
+    document.getElementById('rArea-end').innerHTML = opcoesAreaSelect(r ? r.area : '');
+    document.getElementById('rNiveis-end').value = r ? r.niveis : 1;
+    document.getElementById('rPredios-end').value = r ? r.predios : 1;
+    document.getElementById('modalRuaBg').classList.add('open');
+  }
+  function fecharModalRua() {
+    document.getElementById('modalRuaBg').classList.remove('open');
+    document.getElementById('rCodigoRua-end').disabled = false;
+    editandoCodigoRua = null;
+  }
+
+  function salvarRuaEGerar() {
+    var codigoRua = parseInt(document.getElementById('rCodigoRua-end').value, 10);
+    var area = document.getElementById('rArea-end').value;
+    var niveis = parseInt(document.getElementById('rNiveis-end').value, 10);
+    var predios = parseInt(document.getElementById('rPredios-end').value, 10);
+    if (!codigoRua || codigoRua < 1) { showAlert('Informe um número de rua válido.', 'danger'); return; }
+    if (!area) { showAlert('Selecione a área da rua.', 'danger'); return; }
+    if (!niveis || niveis < 1 || !predios || predios < 1) { showAlert('Níveis e prédios precisam ser pelo menos 1.', 'danger'); return; }
+    if (editandoCodigoRua == null && estruturaRuas[codigoRua]) {
+      showAlert('Já existe uma rua com esse número.', 'danger');
+      return;
+    }
+
+    // gerarUpdatesPosicoesRua (shared/utils.js) -- mesma função usada em
+    // estoque.html, pra nunca divergir se a regra de geração mudar um dia.
+    var updates = gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosEstoque, ocupantesPorEndereco, currentUserNome());
+    updates['estrutura_ruas/' + codigoRua] = {
+      codigoRua: codigoRua, area: area, niveis: niveis, predios: predios,
+      atualizadoEm: new Date().toISOString(), atualizadoPor: currentUserNome()
+    };
+
+    db.ref().update(updates).then(function() {
+      fecharModalRua();
+      showAlert('Rua salva -- ' + (niveis * predios) + ' posições geradas/atualizadas.', 'success');
+    }).catch(function(err) { showAlert('Erro ao salvar rua: ' + err.message, 'danger'); });
+  }
+
+  function renderPosicoesTable() {
+    var tbody = document.getElementById('posicoesBody-end');
+    var q = normalizeSearch(document.getElementById('searchInput-end').value);
+    var filtroRua = document.getElementById('filterRua-end').value;
+    var filtroArea = document.getElementById('filterArea-end').value;
+    var filtroOcupacao = document.getElementById('filterOcupacao-end').value;
+
+    var entries = Object.entries(enderecosEstoque).filter(function(entry) {
+      var e = entry[1];
+      if (q && normalizeSearch(e.codigo).indexOf(q) === -1) return false;
+      if (filtroRua && String(e.rua) !== filtroRua) return false;
+      if (filtroArea && e.area !== filtroArea) return false;
+      var ocupantes = ocupantesPorEndereco[entry[0]] || 0;
+      if (filtroOcupacao === 'ocupadas' && ocupantes === 0) return false;
+      if (filtroOcupacao === 'livres' && ocupantes > 0) return false;
+      return true;
+    }).sort(function(a, b) {
+      var ea = a[1], eb = b[1];
+      return (ea.rua - eb.rua) || (ea.nivel - eb.nivel) || (ea.predio - eb.predio);
+    });
+
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhuma posição encontrada -- gere posições em "Estrutura de Ruas".</td></tr>';
+    } else {
+      tbody.innerHTML = entries.map(function(entry) {
+        var key = entry[0], e = entry[1];
+        var ocupantes = ocupantesPorEndereco[key] || 0;
+        return '<tr>' +
+          '<td>' + escapeHtml(e.codigo) + '</td>' +
+          '<td>' + escapeHtml(e.area || '') + '</td>' +
+          '<td>' + (ocupantes > 0 ? '<span class="badge badge-orange">' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '') + '</span>' : '<span class="badge badge-green">Livre</span>') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    var total = Object.keys(enderecosEstoque).length;
+    var ocupadasCount = Object.keys(enderecosEstoque).filter(function(k) { return (ocupantesPorEndereco[k] || 0) > 0; }).length;
+    document.getElementById('statTotalPos-end').textContent = fmtNum(total);
+    document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
+    document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
+    // Mapa só é montado quando visível (evita custo à toa) -- mas se já
+    // estiver aberto, atualiza junto com a lista, senão ficaria desatualizado
+    // enquanto o usuário olha pra ele.
+    if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
+    if (visaoAtualPosicoes === 'planta') renderPlantaBaixa();
+  }
+
+  // Pedido do usuário: "conseguimos criar um mapa visual do wms... pra
+  // informar no sistema a alocação de itens dentro do galpão?" --
+  // mapaVisualRuasHtml (shared/utils.js) monta o grid inteiro; aqui só
+  // injeta e alterna com a lista (visaoAtualPosicoes). Nesta tela (Cadastros
+  // é mais sobre ESTRUTURA que operação do dia a dia) o mapa é só visual +
+  // tooltip (title) -- detalhe por clique fica na versão de estoque.html,
+  // que já tem o estoque_lotes completo carregado pra isso.
+  var visaoAtualPosicoes = 'lista';
+  function renderMapaVisual() {
+    document.getElementById('mapaVisualContainer-end').innerHTML =
+      '<div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>' +
+      mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  }
+  function trocarVisaoPosicoes(visao) {
+    visaoAtualPosicoes = visao;
+    document.getElementById('tabelaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
+    document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
+    document.getElementById('plantaBaixaContainer-end').style.display = visao === 'planta' ? 'block' : 'none';
+    if (visao === 'mapa') renderMapaVisual();
+    if (visao === 'planta') renderPlantaBaixa();
+  }
+
+  // Planta baixa -- visão de CIMA do galpão, pedida pelo usuário depois de
+  // ver o Mapa por rua ("tem como ficar com algo mais visual, como se fosse
+  // uma planta baixa?"). Aqui em Cadastros fica só visual + clique pra
+  // pular pro Mapa por rua daquela rua (reaproveita o drill-down que já
+  // existe) -- arrastar os blocos pra ajustar a posição real no chão é uma
+  // ação OPERACIONAL, fica só em estoque.html (mesmo raciocínio de "detalhe
+  // por clique fica na versão de estoque.html" já usado no Mapa por rua).
+  // nivelPlantaSelecionado: 0 = agregado (% da rua), N = abre as posições
+  // de palete daquele nível vistas de cima -- pedido do usuário depois de
+  // ver a planta agregada ("visualizar as posições de palete também na
+  // planta baixa, talvez visualizando algo em nivel?"). Aqui as posições
+  // são só visuais (tooltip); clicar pra ver o conteúdo é em estoque.html.
+  var nivelPlantaSelecionado = 0;
+  function renderPlantaBaixa() {
+    document.getElementById('plantaBaixaCanvas-end').innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelPlantaSelecionado);
+    document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
+      bloco.addEventListener('click', function() {
+        var codigoRua = bloco.getAttribute('data-codigo-rua');
+        trocarVisaoPosicoes('mapa');
+        var alvo = document.getElementById('mapa-rua-' + codigoRua);
+        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+  function refreshPlantaNivelSelect() {
+    var sel = document.getElementById('plantaNivel-end');
+    var maxNiveis = Object.values(estruturaRuas).reduce(function(max, r) { return Math.max(max, r.niveis || 0); }, 0);
+    var atual = sel.value;
+    var opcoes = ['<option value="0">Todos os níveis (ocupação da rua)</option>'];
+    for (var n = 1; n <= maxNiveis; n++) opcoes.push('<option value="' + n + '">Nível ' + n + ' (posições de palete)</option>');
+    sel.innerHTML = opcoes.join('');
+    // Cai pra '0' no primeiro carregamento (atual === '') e quando o nível
+    // escolhido deixou de existir -- senão o select ficaria em branco.
+    var escolhido = (Number(atual) >= 1 && Number(atual) <= maxNiveis) ? String(Number(atual)) : '0';
+    sel.value = escolhido;
+    nivelPlantaSelecionado = Number(escolhido) || 0;
+  }
+
+  function refreshFiltroRuaSelect() {
+    var sel = document.getElementById('filterRua-end');
+    var atual = sel.value;
+    var ruas = Object.keys(estruturaRuas).map(Number).sort(function(a, b) { return a - b; });
+    sel.innerHTML = '<option value="">Todas as ruas</option>' + ruas.map(function(r) {
+      return '<option value="' + r + '"' + (String(r) === atual ? ' selected' : '') + '>Rua ' + r + '</option>';
+    }).join('');
+  }
+  function refreshFiltroAreaSelect() {
+    var sel = document.getElementById('filterArea-end');
+    var atual = sel.value;
+    sel.innerHTML = '<option value="">Todas as áreas</option>' + areasEnderecoAtivas.map(function(a) {
+      return '<option value="' + escapeAttr(a.nome) + '"' + (a.nome === atual ? ' selected' : '') + '>' + escapeHtml(a.nome) + '</option>';
+    }).join('');
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#maintab-enderecos .tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = tab.getAttribute('data-tab');
+        document.querySelectorAll('#maintab-enderecos .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+        document.querySelectorAll('#maintab-enderecos .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+      });
+    });
+
+    document.getElementById('btnNovaRua-end').addEventListener('click', function() { abrirModalRua(null); });
+    document.getElementById('modalRuaClose').addEventListener('click', fecharModalRua);
+    document.getElementById('btnCancelarRua-end').addEventListener('click', fecharModalRua);
+    document.getElementById('btnSalvarRua-end').addEventListener('click', salvarRuaEGerar);
+
+    document.getElementById('searchInput-end').addEventListener('input', renderPosicoesTable);
+    document.getElementById('filterRua-end').addEventListener('change', renderPosicoesTable);
+    document.getElementById('filterArea-end').addEventListener('change', renderPosicoesTable);
+    document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTable);
+    document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
+    document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
+    document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
+    document.getElementById('plantaNivel-end').addEventListener('change', function() {
+      nivelPlantaSelecionado = Number(this.value) || 0;
+      renderPlantaBaixa();
+    });
+
+    dbOnValue(db.ref('config/areasEndereco'), function(snap) {
+      areasEnderecoAtivas = (snap.val() || []).filter(function(a) { return a.ativo !== false; });
+      refreshFiltroAreaSelect();
+    });
+    dbOnValue(db.ref('estrutura_ruas'), function(snap) {
+      estruturaRuas = snap.val() || {};
+      renderRuasTable();
+      refreshFiltroRuaSelect();
+      refreshPlantaNivelSelect(); // quantidade de níveis pode ter mudado ao editar/gerar uma rua
+      if (visaoAtualPosicoes === 'planta') renderPlantaBaixa();
+    });
+    dbOnValue(db.ref('enderecos_estoque'), function(snap) {
+      enderecosEstoque = snap.val() || {};
+      renderRuasTable();
+      renderPosicoesTable();
+    });
+    dbOnValue(db.ref('estoque_lotes'), function(snap) {
+      // estoque_lotes é keyed por itemKey (material ou produto), cada um
+      // com vários pushKeys de lote -- precisa varrer os 2 níveis. Conta
+      // POR ENDEREÇO, nunca assume 1 item por posição (posição pode ter
+      // mistura, confirmado pelo usuário).
+      var val = snap.val() || {};
+      var contagem = {};
+      Object.values(val).forEach(function(lotesDoItem) {
+        Object.values(lotesDoItem || {}).forEach(function(lote) {
+          if (!lote || !lote.enderecoKey || !(lote.saldoLote > 0)) return;
+          contagem[lote.enderecoKey] = (contagem[lote.enderecoKey] || 0) + 1;
+        });
+      });
+      ocupantesPorEndereco = contagem;
+      renderPosicoesTable();
     });
   });
 })();

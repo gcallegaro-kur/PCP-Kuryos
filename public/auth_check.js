@@ -74,6 +74,7 @@ const pageAccessRules = {
   'emitir_op.html': ['admin', 'pcp'],
   'compras.html': ['admin', 'pcp'],
   'logistica.html': ['admin', 'pcp'],
+  'estoque.html': ['admin', 'pcp'],
   // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
   // (decisão do usuário: sem múltiplos papéis por pessoa). 'admin' entra
   // aqui também (pedido do usuário: ADM vê tudo, sem exceção) -- 'pcp'
@@ -364,7 +365,10 @@ const ktIcons = {
   people: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c.6-3.4 3-5.5 6.2-5.5s5.6 2.1 6.2 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M15.3 14.7c2.3.3 4 2 4.5 4.8"/>',
   chart: '<path d="M4 19V5M4 19h16"/><path d="M8 15l3-4 3 2 4-6"/>',
   cart: '<circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M3 4h2.2L8 15h9l2.5-7.5H6.3"/>',
-  truck: '<rect x="1.5" y="7" width="13" height="9" rx="1.5"/><path d="M14.5 10h4l3 3.5V16h-7z"/><circle cx="6" cy="18.5" r="1.7"/><circle cx="17" cy="18.5" r="1.7"/>'
+  truck: '<rect x="1.5" y="7" width="13" height="9" rx="1.5"/><path d="M14.5 10h4l3 3.5V16h-7z"/><circle cx="6" cy="18.5" r="1.7"/><circle cx="17" cy="18.5" r="1.7"/>',
+  // Estoque/WMS -- galpão com telhado e portão, distinto de "box" (já usado
+  // por Matriz de Insumos) e de "truck".
+  warehouse: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9 20v-6.5h6V20"/>'
 };
 function ktIcon(name) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ktIcons[name] + '</svg>';
@@ -439,6 +443,7 @@ function renderUnifiedNavbar(user) {
     (isPcpAdmin ? ktLink('cadastros.html', 'tag', 'Cadastros', activePage) : '') +
     (isPcpAdmin ? ktLink('compras.html', 'cart', 'Compras', activePage) : '') +
     (isPcpAdmin ? ktLink('logistica.html', 'truck', 'Logística', activePage) : '') +
+    (isPcpAdmin ? ktLink('estoque.html', 'warehouse', 'Estoque / WMS', activePage) : '') +
     (isPcpAdmin ? ktLink('insumos.html', 'box', 'Matriz de Insumos', activePage) : '') +
     (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajuste de Metas / Config.', activePage) : '') +
     '</div>';

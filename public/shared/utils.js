@@ -904,6 +904,23 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
 // positivo (entrada) ou negativo (saída); `dbRef` é a instância `db` de
 // quem chama (mesmo padrão de nextSequential). Sempre .transaction() --
 // dois ajustes concorrentes no mesmo material nunca se perdem um no outro.
+//
+// WMS Fase 1: mapa tipo (código técnico, o que sempre existiu em
+// ultimaMovimentacao.tipo) -> motivo (nome humano da lista fechada
+// gerenciada em Cadastros > Categorias, config/motivosMovimentoEstoque).
+// Cobre só os tipos AUTOMÁTICOS que já passam por ajustarEstoque hoje --
+// ações manuais (transferência entre endereços, saída manual) deixam o
+// usuário escolher o motivo na tela, não usam este mapa.
+var MOTIVO_POR_TIPO_MOVIMENTACAO = {
+  recebimento_pc: 'RECEBIMENTO',
+  consumo_producao: 'CONSUMO DE PRODUÇÃO',
+  perda: 'PERDA',
+  ajuste_manual: 'AJUSTE DE INVENTÁRIO'
+};
+function motivoPadraoPorTipoMovimentacao(tipo) {
+  return MOTIVO_POR_TIPO_MOVIMENTACAO[tipo] || 'OUTRO';
+}
+
 function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, extras) {
   if (!materialCodigo || !delta) return Promise.resolve();
   extras = extras || {};
@@ -917,6 +934,25 @@ function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, ext
     atual.ultimaAtualizacao = new Date().toISOString();
     atual.ultimaMovimentacao = { tipo: tipoMovimentacao, qtd: delta, ref: ref || null, em: new Date().toISOString() };
     return atual;
+  }).then(function(resultado) {
+    // WMS Fase 1: ultimaMovimentacao acima só guarda a ÚLTIMA movimentação
+    // (sobrescrita a cada chamada) -- sem histórico nenhum de tudo que já
+    // aconteceu antes. movimentos_estoque é um log append-only (push),
+    // alimentado automaticamente por QUALQUER chamada a ajustarEstoque --
+    // os 3 pontos de chamada existentes (logistica.html, form.html x2)
+    // ganham log completo sem precisar editar nenhum deles. Best-effort:
+    // se o push falhar, não desfaz o ajuste de saldo (que já é a fonte de
+    // verdade) -- o log é um reflexo dele, não pré-requisito.
+    var novoSaldo = (resultado && resultado.committed && resultado.snapshot && resultado.snapshot.val()) ? resultado.snapshot.val().saldoAtual : null;
+    dbRef.ref('movimentos_estoque/' + key).push({
+      tipo: tipoMovimentacao || null,
+      motivo: motivoPadraoPorTipoMovimentacao(tipoMovimentacao),
+      qtd: delta, saldoApos: novoSaldo, ref: ref || null,
+      itemTipo: 'material', itemCodigo: materialCodigo,
+      itemNome: extras.materialNome || null, unidade: extras.unidade || null,
+      autor: extras.autor || null, em: new Date().toISOString()
+    }).catch(function(err) { console.error('Falha ao gravar log de movimentação de estoque:', err); });
+    return resultado;
   });
 }
 
@@ -1003,6 +1039,309 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
       return atual;
     });
   }));
+}
+
+// Gera/atualiza os enderecos_estoque de UMA rua a partir da Estrutura de
+// Ruas (rua × nível × prédio -- prédio ímpar=esquerdo, par=direito) --
+// usado tanto em cadastros.html (aba Endereços) quanto em estoque.html
+// (mesmo botão "Salvar e Gerar Posições" nos dois lugares, pedido do
+// usuário: "vale ter na aba cadastro e na aba... onde precisamos
+// executar" -- uma lógica só, chamada dos dois pontos, pra nunca divergir
+// se um dia precisar mudar a regra de geração). Só MONTA o objeto de
+// updates (não escreve nada sozinho) -- quem chama decide o `estrutura_
+// ruas/{codigoRua}` e faz o `db.ref().update(updates)`. Nunca apaga/move
+// uma posição já ocupada (ocupantesPorEndereco vem de fora -- quem chama
+// já tem os dados carregados, evita esta função ter que ler
+// estoque_lotes sozinha) -- cria as que faltam, reatualiza a área das que
+// ainda estão vazias, e REMOVE as que ficaram de fora quando a estrutura
+// encolhe (níveis/prédios reduzidos), desde que estejam vazias -- senão
+// "Posições geradas" ficava contando pra sempre sobra de uma configuração
+// antiga.
+function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExistentes, ocupantesPorEndereco, autor) {
+  var updates = {};
+  var agora = new Date().toISOString();
+  for (var nivel = 1; nivel <= niveis; nivel++) {
+    for (var predio = 1; predio <= predios; predio++) {
+      var codigo = codigoRua + '.' + nivel + '.' + predio;
+      var key = sanitizeKey(codigo);
+      var existente = enderecosExistentes[key];
+      var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
+      if (!existente) {
+        updates['enderecos_estoque/' + key] = {
+          codigo: codigo, rua: codigoRua, nivel: nivel, predio: predio, area: area,
+          ativo: true, geradoDe: codigoRua, criadoEm: agora, criadoPor: autor
+        };
+      } else if (!ocupada && existente.area !== area) {
+        updates['enderecos_estoque/' + key + '/area'] = area;
+      }
+    }
+  }
+  // Estrutura ENCOLHEU (menos níveis/prédios que antes de editar a rua) --
+  // as posições que ficaram de fora do novo tamanho não existem mais
+  // fisicamente. Sem isto, "Posições geradas" ficava contando pra sempre
+  // as sobras da configuração antiga (bug real reportado pelo usuário:
+  // "esta aparecendo posicoes geradas 72 de 36" -- rua tinha 6 níveis x 12
+  // prédios = 72 antes, editada pra 3 níveis = 36, e as 36 do nível 4/5/6
+  // continuavam contando pra sempre). Só remove as que estão VAZIAS --
+  // nunca apaga uma posição ocupada (item real parado lá precisa ser
+  // transferido por alguém antes de a posição deixar de existir).
+  Object.keys(enderecosExistentes).forEach(function(key) {
+    var e = enderecosExistentes[key];
+    if (!e || e.rua !== codigoRua) return;
+    var foraDoNovoTamanho = e.nivel > niveis || e.predio > predios;
+    if (!foraDoNovoTamanho) return;
+    var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
+    if (!ocupada) updates['enderecos_estoque/' + key] = null;
+  });
+  return updates;
+}
+
+// Mapa visual do armazém -- um grid por rua (nível como linha, do mais alto
+// pro mais baixo, igual se lê uma estante de verdade; prédio como coluna),
+// pedido do usuário: "conseguimos criar um mapa visual do wms, como no
+// excel que passei... ou até melhor construído". Reaproveitada em
+// cadastros.html e estoque.html (mesmo princípio de gerarUpdatesPosicoesRua
+// -- uma função só, nunca duas implementações divergindo). Só MONTA o HTML
+// (string) -- não tem clique nenhum embutido aqui; cada página wireia o
+// clique via delegação, lendo data-endereco-key/data-codigo pra abrir o
+// detalhe com os dados que ela já tem carregados (estoque_lotes).
+function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco) {
+  var ruas = Object.values(estruturaRuas || {}).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+  if (!ruas.length) return '<div class="empty-hint">Nenhuma rua cadastrada ainda -- gere posições em "Estrutura de Ruas" primeiro.</div>';
+  return ruas.map(function(r) {
+    var niveis = r.niveis || 0, predios = r.predios || 0;
+    var linhasHtml = '';
+    // Nível mais alto primeiro (topo da tela) -- é como se lê uma estante de
+    // verdade, olhando de baixo pra cima fica invertido do que a pessoa vê.
+    for (var nivel = niveis; nivel >= 1; nivel--) {
+      var celulas = '';
+      for (var predio = 1; predio <= predios; predio++) {
+        var codigo = r.codigoRua + '.' + nivel + '.' + predio;
+        var key = sanitizeKey(codigo);
+        var end = enderecosEstoque[key];
+        var ocupantes = ocupantesPorEndereco[key] || 0;
+        var classe = !end ? 'mapa-cell-naogerada' : (ocupantes > 0 ? 'mapa-cell-ocupada' : 'mapa-cell-livre');
+        var tituloAttr = !end ? (codigo + ' -- não gerada ainda') : (codigo + (ocupantes > 0 ? (' -- ' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '')) : ' -- livre'));
+        celulas += '<div class="mapa-cell ' + classe + '" data-endereco-key="' + escapeAttr(key) + '" data-codigo="' + escapeAttr(codigo) + '" title="' + escapeAttr(tituloAttr) + '">' + predio + '</div>';
+      }
+      linhasHtml += '<div class="mapa-nivel-row"><div class="mapa-nivel-label">N' + nivel + '</div>' + celulas + '</div>';
+    }
+    return '<div class="mapa-rua" id="mapa-rua-' + escapeAttr(String(r.codigoRua)) + '"><div class="mapa-rua-titulo">Rua ' + escapeHtml(String(r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
+  }).join('');
+}
+
+// Planta baixa -- visão de CIMA do galpão (diferente do mapa por rua acima,
+// que é uma ELEVAÇÃO -- de frente pra estante, níveis empilhados). Pedido
+// do usuário depois de ver o mapa por rua: "tem como ficar com algo mais
+// visual, como se fosse uma planta baixa?" -- ele já tinha mandado uma foto
+// do galpão real antes, com módulos numerados espalhados de forma
+// irregular pelo chão, não em fileira reta -- por isso cada rua tem
+// posição (layoutX/layoutY) ARRASTÁVEL, gravada em estrutura_ruas, em vez
+// de um layout automático de fileira única (não reflete um galpão real
+// nenhum). Sem posição salva ainda, cai num layout automático em fileira
+// (utilizável de imediato, sem exigir configuração antes de ver algo).
+//
+// Cada rua vira um bloco -- largura proporcional ao Nº de módulos (cada
+// módulo = 2 prédios, confirmado pelo usuário), cor pela % de ocupação
+// agregada da rua inteira. Só MONTA o HTML (string) -- arrastar e o clique
+// pra abrir a elevação daquela rua são wireados por quem chama, igual o
+// mapa por rua acima.
+//
+// nivelSelecionado (opcional): pedido do usuário depois de ver a planta
+// agregada -- "não da pra colocar algo que de pra visualizar as posições
+// de palete também na planta baixa, talvez visualizando algo em nivel?".
+// Ausente/0 = visão agregada (% de ocupação da rua inteira, responde
+// "qual rua está cheia"). Com um nível escolhido, o bloco se ABRE nas
+// posições individuais daquele nível, olhadas de cima -- responde "qual
+// palete está livre, e onde ele fica no galpão". A geometria do bloco
+// (posição/tamanho) é IDÊNTICA nos dois modos, senão trocar de nível
+// embaralharia a planta que a pessoa arrumou arrastando.
+function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelSelecionado) {
+  var ruas = Object.values(estruturaRuas || {}).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+  if (!ruas.length) return '<div class="empty-hint">Nenhuma rua cadastrada ainda -- gere posições em "Estrutura de Ruas" primeiro.</div>';
+  var UNIDADE = 60; // px por módulo (2 prédios) de largura -- também usado como grid de encaixe ao arrastar
+  var GAP_AUTO = 20; // espaço entre blocos no layout automático (sem posição salva)
+  var nivelFoco = Number(nivelSelecionado) || 0; // 0 = visão agregada
+  var proximoXAuto = 0;
+  return ruas.map(function(r) {
+    var niveis = r.niveis || 0, predios = r.predios || 0;
+    var modulos = Math.max(1, Math.ceil(predios / 2));
+    var largura = modulos * UNIDADE;
+    var altura = UNIDADE; // profundidade fixa -- planta baixa não empilha nível, isso é a elevação
+    var temPosicaoSalva = typeof r.layoutX === 'number' && typeof r.layoutY === 'number';
+    var x = temPosicaoSalva ? r.layoutX : proximoXAuto;
+    var y = temPosicaoSalva ? r.layoutY : 0;
+    if (!temPosicaoSalva) proximoXAuto += largura + GAP_AUTO;
+    var estiloAttr = 'left:' + x + 'px;top:' + y + 'px;width:' + largura + 'px;height:' + altura + 'px';
+    var idAttr = 'planta-rua-' + escapeAttr(String(r.codigoRua));
+    var ruaAttr = escapeAttr(String(r.codigoRua));
+
+    // ── Visão POR NÍVEL: abre o bloco nas posições de palete daquele nível ──
+    if (nivelFoco > 0) {
+      // Rua mais baixa que o nível escolhido (ex: posições de chão, 1 nível
+      // só, quando se olha o nível 3): fica apagada mas NO LUGAR -- sumir
+      // faria a pessoa perder a referência de onde está no galpão.
+      if (nivelFoco > niveis) {
+        return '<div class="planta-bloco planta-bloco-semnivel" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" style="' + estiloAttr + '" ' +
+          'title="' + escapeAttr('Rua ' + r.codigoRua + ' — não tem nível ' + nivelFoco + ' (vai só até o ' + niveis + ')') + '">' +
+          '<div class="planta-bloco-numero">' + escapeHtml(String(r.codigoRua)) + '</div></div>';
+      }
+      var celulas = '';
+      for (var p = 1; p <= predios; p++) {
+        var codigoPos = r.codigoRua + '.' + nivelFoco + '.' + p;
+        var keyPos = sanitizeKey(codigoPos);
+        var endPos = enderecosEstoque[keyPos];
+        var ocupPos = ocupantesPorEndereco[keyPos] || 0;
+        var classeCel = !endPos ? 'planta-cell-naogerada' : (ocupPos > 0 ? 'planta-cell-ocupada' : 'planta-cell-livre');
+        var tituloCel = !endPos ? (codigoPos + ' -- não gerada ainda') : (codigoPos + (ocupPos > 0 ? (' -- ' + ocupPos + ' item' + (ocupPos > 1 ? 's' : '')) : ' -- livre'));
+        celulas += '<div class="planta-cell ' + classeCel + '" data-endereco-key="' + escapeAttr(keyPos) + '" data-codigo="' + escapeAttr(codigoPos) + '" title="' + escapeAttr(tituloCel) + '">' + p + '</div>';
+      }
+      return '<div class="planta-bloco planta-bloco-nivel" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" style="' + estiloAttr + '" ' +
+        'title="' + escapeAttr('Rua ' + r.codigoRua + ' — ' + (r.area || '') + ' — nível ' + nivelFoco) + '">' +
+        '<div class="planta-bloco-label">R' + escapeHtml(String(r.codigoRua)) + '</div>' +
+        '<div class="planta-bloco-cells">' + celulas + '</div>' +
+      '</div>';
+    }
+
+    var totalPosicoes = 0, ocupadas = 0;
+    for (var nivel = 1; nivel <= niveis; nivel++) {
+      for (var predio = 1; predio <= predios; predio++) {
+        var key = sanitizeKey(r.codigoRua + '.' + nivel + '.' + predio);
+        if (!enderecosEstoque[key]) continue; // não gerada ainda -- não conta nem como vaga nem ocupada
+        totalPosicoes++;
+        if (ocupantesPorEndereco[key] > 0) ocupadas++;
+      }
+    }
+    var pct = totalPosicoes ? Math.round((ocupadas / totalPosicoes) * 100) : 0;
+    var classePct = totalPosicoes === 0 ? 'planta-bloco-vazio' : (pct === 0 ? 'planta-bloco-livre' : (pct >= 90 ? 'planta-bloco-cheio' : 'planta-bloco-parcial'));
+    var tituloAttr = 'Rua ' + r.codigoRua + ' — ' + (r.area || '') + (totalPosicoes ? (' — ' + ocupadas + '/' + totalPosicoes + ' posições ocupadas (' + pct + '%)') : ' — nenhuma posição gerada ainda');
+
+    return '<div class="planta-bloco ' + classePct + '" id="' + idAttr + '" data-codigo-rua="' + ruaAttr + '" ' +
+      'style="' + estiloAttr + '" title="' + escapeAttr(tituloAttr) + '">' +
+      '<div class="planta-bloco-numero">' + escapeHtml(String(r.codigoRua)) + '</div>' +
+      '<div class="planta-bloco-pct">' + (totalPosicoes ? (pct + '%') : '—') + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// ── WMS Fase 1: lote/endereço granular (estoque_lotes/enderecos_estoque) ──
+// Nós IRMÃOS de estoque/{materialKey}, não aninhados dentro dele -- o
+// agregado (saldoAtual/saldoEmpenhado) continua sendo a fonte de verdade
+// do saldo físico total de MP/embalagem, inalterado; estes dois nós novos
+// só adicionam RASTREABILIDADE de entrada (de qual lote, validade, onde
+// foi guardado), sem mudar nada de como o agregado funciona.
+//
+// itemTipo distingue de onde vem o item: 'material' (materiais/, entra
+// pelo recebimento em logistica.html) ou 'produto' (produtos/, SKU --
+// entra pela conclusão de OP em ops.html, ver seção Produto Acabado do
+// plano). itemKey = sanitizeKey(materialCodigo) ou sanitizeKey(sku),
+// mesma função já usada em todo o resto do app.
+
+// Chamado no recebimento (logistica.html, item com lote/validade/endereço
+// preenchidos) e na conclusão de OP com endereço de destino (ops.html,
+// produto acabado). Só cria (push simples, sem .transaction() -- cada
+// chamada gera uma chave nova, não existe corrida a proteger aqui, mesmo
+// raciocínio já usado em pedidos_compra/.../recebimentos.push()). Nunca
+// toca em estoque/{materialKey} -- quem chama isto continua chamando
+// ajustarEstoque/incrementarEstoque separadamente pro saldo agregado.
+function putawayEstoqueLote(dbRef, itemTipo, itemCodigo, dadosLote) {
+  if (!itemTipo || !itemCodigo || !dadosLote || !dadosLote.enderecoKey) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var agora = new Date().toISOString();
+  var registro = Object.assign({
+    itemTipo: itemTipo, itemCodigo: itemCodigo,
+    status: 'LIBERADO', criadoEm: agora, atualizadoEm: agora
+  }, dadosLote);
+  return dbRef.ref('estoque_lotes/' + itemKey).push(registro).then(function(ref) {
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: itemTipo === 'produto' ? 'producao_op' : 'recebimento_pc',
+      motivo: itemTipo === 'produto' ? 'ENTRADA DE PRODUÇÃO' : 'RECEBIMENTO',
+      qtd: dadosLote.saldoLote || dadosLote.qtdOriginal || 0, saldoApos: null,
+      ref: dadosLote.origemRef || null, loteKey: ref.key, enderecoKey: dadosLote.enderecoKey,
+      itemTipo: itemTipo, itemCodigo: itemCodigo,
+      itemNome: dadosLote.itemNome || null, unidade: dadosLote.unidade || null,
+      autor: dadosLote.criadoPor || null, em: agora
+    }).then(function() { return ref; });
+  }).catch(function(err) { console.error('Falha ao registrar putaway de estoque:', err); throw err; });
+}
+
+// Move um lote já registrado de um endereço pra outro (não muda saldo
+// nenhum, só a localização) -- usado pela ação "Transferir" em
+// estoque.html. `motivo` vem de config/motivosMovimentoEstoque (lista
+// fechada), escolhido pelo usuário na tela -- pedido do usuário: "Lista
+// fechada, gerenciável em Cadastros" pro motivo de cada movimentação.
+function transferirLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, novoEnderecoKey, motivo, autor) {
+  if (!itemCodigo || !loteKey || !novoEnderecoKey) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  return Promise.all([
+    loteRef.once('value'),
+    dbRef.ref('enderecos_estoque/' + novoEnderecoKey).once('value')
+  ]).then(function(snaps) {
+    var lote = snaps[0].val();
+    if (!lote) return Promise.resolve(); // lote já não existe mais (removido/consumido) -- nada a transferir
+    // enderecoCodigo é denormalizado (mesmo princípio do putaway) -- sem
+    // resolver de novo aqui, a exibição do lote ficaria mostrando o código
+    // do endereço ANTIGO pra sempre depois de uma transferência.
+    var novoEndereco = snaps[1].val();
+    var enderecoAnterior = lote.enderecoKey;
+    return loteRef.update({
+      enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
+      atualizadoEm: new Date().toISOString()
+    }).then(function() {
+      return dbRef.ref('movimentos_estoque/' + itemKey).push({
+        tipo: 'transferencia', motivo: motivo || 'TRANSFERÊNCIA ENTRE ENDEREÇOS',
+        qtd: 0, saldoApos: null, ref: enderecoAnterior + ' -> ' + novoEnderecoKey,
+        loteKey: loteKey, enderecoKey: novoEnderecoKey,
+        itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+        itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+        autor: autor || null, em: new Date().toISOString()
+      });
+    });
+  });
+}
+
+// Baixa manual de um lote específico -- usado pela ação "Registrar Saída"
+// em estoque.html (ex: saída de produto acabado por expedição manual, já
+// que não existe hoje um fluxo de expedição automatizado pra ligar nisso;
+// ou correção pontual do saldo de um lote específico de MP). Nunca muda
+// estoque/{materialKey} (o agregado) -- só o saldoLote granular desse
+// lote. `motivo` vem da lista fechada (config/motivosMovimentoEstoque),
+// escolhido pelo usuário na tela. Nunca deixa saldoLote negativo (mesmo
+// princípio de baixarEmpenho -- abate o mínimo entre o pedido e o que
+// realmente sobra).
+function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, autor) {
+  if (!itemCodigo || !loteKey || !qtd || qtd <= 0) return Promise.resolve();
+  var itemKey = sanitizeKey(itemCodigo);
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  // abatidoReal -- capturado de DENTRO da transaction, não é `qtd` (o
+  // pedido). Bug real achado em auditoria cruzada: o log gravava `qtd`
+  // (pedida) mesmo quando o clamp abaixo abatia menos (saldoLote menor que
+  // o pedido) -- trilha de auditoria ficava incorreta, sobrestimando a
+  // saída. A transaction pode rodar mais de uma vez em disputa de
+  // concorrência, mas só a execução que de fato COMMITA é a que sobra
+  // atribuída aqui antes do .then() ler o resultado.
+  var abatidoReal = 0;
+  return loteRef.transaction(function(atual) {
+    if (!atual) return atual; // lote já não existe mais -- aborta sem gravar nada
+    abatidoReal = Math.min(qtd, atual.saldoLote || 0);
+    atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatidoReal) * 1000) / 1000;
+    atual.atualizadoEm = new Date().toISOString();
+    return atual;
+  }).then(function(resultado) {
+    var lote = (resultado && resultado.committed && resultado.snapshot) ? resultado.snapshot.val() : null;
+    if (!lote) return resultado;
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: 'saida_manual', motivo: motivo || 'REMESSA',
+      // qtd/saldoApos usam o valor REAL pós-transaction (mesmo padrão de
+      // ajustarEstoque acima), não o pedido -- outro bug do mesmo achado
+      // era saldoApos sempre null, mesmo já tendo o snapshot em mãos.
+      qtd: -abatidoReal, saldoApos: lote.saldoLote, ref: null, loteKey: loteKey, enderecoKey: lote.enderecoKey || null,
+      itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+      itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+      autor: autor || null, em: new Date().toISOString()
+    }).then(function() { return resultado; });
+  });
 }
 
 // ── Tipos de fornecedor (multi) ─────────────────────────────────────────
