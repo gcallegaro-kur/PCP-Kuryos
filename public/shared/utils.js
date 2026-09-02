@@ -1026,8 +1026,11 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
 // ruas/{codigoRua}` e faz o `db.ref().update(updates)`. Nunca apaga/move
 // uma posição já ocupada (ocupantesPorEndereco vem de fora -- quem chama
 // já tem os dados carregados, evita esta função ter que ler
-// estoque_lotes sozinha) -- só cria as que faltam e reatualiza a área
-// das que ainda estão vazias.
+// estoque_lotes sozinha) -- cria as que faltam, reatualiza a área das que
+// ainda estão vazias, e REMOVE as que ficaram de fora quando a estrutura
+// encolhe (níveis/prédios reduzidos), desde que estejam vazias -- senão
+// "Posições geradas" ficava contando pra sempre sobra de uma configuração
+// antiga.
 function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExistentes, ocupantesPorEndereco, autor) {
   var updates = {};
   var agora = new Date().toISOString();
@@ -1047,6 +1050,23 @@ function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExis
       }
     }
   }
+  // Estrutura ENCOLHEU (menos níveis/prédios que antes de editar a rua) --
+  // as posições que ficaram de fora do novo tamanho não existem mais
+  // fisicamente. Sem isto, "Posições geradas" ficava contando pra sempre
+  // as sobras da configuração antiga (bug real reportado pelo usuário:
+  // "esta aparecendo posicoes geradas 72 de 36" -- rua tinha 6 níveis x 12
+  // prédios = 72 antes, editada pra 3 níveis = 36, e as 36 do nível 4/5/6
+  // continuavam contando pra sempre). Só remove as que estão VAZIAS --
+  // nunca apaga uma posição ocupada (item real parado lá precisa ser
+  // transferido por alguém antes de a posição deixar de existir).
+  Object.keys(enderecosExistentes).forEach(function(key) {
+    var e = enderecosExistentes[key];
+    if (!e || e.rua !== codigoRua) return;
+    var foraDoNovoTamanho = e.nivel > niveis || e.predio > predios;
+    if (!foraDoNovoTamanho) return;
+    var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
+    if (!ocupada) updates['enderecos_estoque/' + key] = null;
+  });
   return updates;
 }
 
