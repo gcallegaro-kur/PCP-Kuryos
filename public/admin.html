@@ -508,9 +508,13 @@ function renderTags(tipo) {
 // Categorias de produto ({nome, codigo}) tinha seu próprio render/add/edit
 // aqui -- removido na Fase 6.4, agora é editado só em cadastros.html (que
 // escreve com db.ref('config/categoriasProduto').set(...), escopado).
-// configData.categoriasProduto continua sendo CARREGADO (ver loadConfig)
-// e preservado em memória, pra saveConfig() -- que faz um SET do node
-// `config` inteiro -- nunca apagar essa chave ao salvar outra seção aqui.
+// configData.categoriasProduto continua sendo CARREGADO (ver loadConfig).
+// NOTA: saveConfig() usava um SET do node `config` inteiro, o que exigia que
+// TODA chave escrita por outra página estivesse na allowlist do loadConfig --
+// e as chaves novas nunca entravam (auditoria achou 4 sendo apagadas:
+// contadores, tiposEnsaio, areasEndereco, motivosMovimentoEstoque). Agora usa
+// UPDATE escopado, então chave que esta tela não conhece simplesmente não é
+// tocada -- a classe de bug inteira deixa de existir.
 
 function removeItem(tipo, idx) {
   if (!confirm('Remover este item?')) return;
@@ -530,7 +534,10 @@ function saveConfig() {
   if (!db) return Promise.reject(new Error('Sem conexão com banco de dados'));
   var dataToSave = JSON.parse(JSON.stringify(configData));
   dataToSave.postos = configData.postosTrabalho; // Mantém compatibilidade com a chave legada
-  return db.ref('config').set(dataToSave);
+  // UPDATE (não SET) -- ver nota acima. Cada chave de configData é substituída
+  // por inteiro (é assim que remoção de item de lista continua funcionando),
+  // mas chaves de `config` que esta tela não gerencia ficam intactas.
+  return db.ref('config').update(dataToSave);
 }
 
 // ── Horários dos turnos + checkpoints de apontamento ────────────────

@@ -571,9 +571,18 @@ window.updateOpStatusAutomatically = function(pedidoId, callback, preloadedProgr
         const dayData = programacao[date] || {};
         Object.keys(dayData).forEach(hour => {
           const hourData = dayData[hour] || {};
-          for (let l = 1; l <= 4; l++) {
+          // 10 slots, não 4: todo o resto do sistema varre 1..10 (grade,
+          // Andon, replanejamento, form.html). Com a 5ª linha cadastrada, todo
+          // pedido programado só nela ficava eternamente "Não Iniciado".
+          // E normaliza a chave dos dois lados -- '0022__SKU' vs '22__SKU' é o
+          // caso real que motivou _kuryosNormalizePedidoKey (hoisted, def. abaixo).
+          for (let l = 1; l <= 10; l++) {
             const slot = hourData['env' + l];
-            if (slot && (slot.pedidoKey === pedidoId || slot.pedidoId === pedidoId)) {
+            if (!slot) continue;
+            const alvo = _kuryosNormalizePedidoKey(pedidoId);
+            if (!alvo) continue; // nunca casar undefined com undefined
+            if (_kuryosNormalizePedidoKey(slot.pedidoKey) === alvo
+                || _kuryosNormalizePedidoKey(slot.pedidoId) === alvo) {
               isScheduled = true;
             }
           }
@@ -895,7 +904,12 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
       // cascade usar); um planejador pode romper essa proteção por slot via
       // "🔓 Liberar para replanejamento" na Grade Semanal (grava
       // congelamentoLiberado no próprio slot -- ver planejamento.html).
-      var diasFixos = (results[4].val() && results[4].val().diasFixos) || 7;
+      // `|| 7` engolia o 0: desligar a zona fixa gravando diasFixos:0 não
+      // tinha efeito nenhum aqui (0 é falsy -> caía pro default 7), enquanto
+      // planejamento.html e admin.html já liam com `!= null` e mostravam a
+      // grade destravada. UI e motor discordavam em silêncio.
+      var _cong = results[4].val() || {};
+      var diasFixos = _cong.diasFixos != null ? _cong.diasFixos : 7;
       var limiteZonaFixaStr = _kuryosDateStr(new Date(Date.now() + diasFixos * 24 * 60 * 60 * 1000));
       // Slots com OP real emitida (alocação 'vinculado') viram fixos -- a
       // automação de reajuste nunca mais mexe neles, é o compromisso real

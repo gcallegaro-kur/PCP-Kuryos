@@ -525,7 +525,13 @@
   // Wait for user authentication to determine role permissions
   firebase.auth().onAuthStateChanged(user => {
     if (user) {
-      database.ref('usuarios/' + user.uid).once('value', snap => {
+      // readUsuarioProfileWithRetry (auth_check.js) em vez de once() cru:
+      // listenToActiveOps() é o ÚNICO ponto que anexa todos os listeners desta
+      // página. Na corrida entre onAuthStateChanged e a propagação do token na
+      // conexão nova do RTDB, o once() podia voltar null/permission_denied --
+      // e a tela ficava em branco pra sempre, sem erro e sem spinner, só F5
+      // resolvia. É exatamente a corrida que esse helper existe pra cobrir.
+      readUsuarioProfileWithRetry(database, user.uid, snap => {
         const profile = snap.val();
         if (profile) {
           currentRole = profile.role || 'production';

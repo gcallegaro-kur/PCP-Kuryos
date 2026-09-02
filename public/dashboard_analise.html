@@ -608,7 +608,13 @@ function loadFirebaseAndRun() {
             let h = 1.0;
             let dt = date + 'T' + hStr + ':00';
             let dtFim = date + 'T' + hStr.split(':')[0] + ':59:00';
-            if (r.tipo === 'apontamento_total' && r.horasTrabalhadas > 0) {
+            // Antes exigia tipo==='apontamento_total', mas o Turno Retroativo
+            // grava horasTrabalhadas/periodoInicio/periodoFim SEM campo `tipo`
+            // (grava fonte:'retroativo') -- o gate falhava e caía no fallback de
+            // 1h fixa, reportando um turno de 19h como se fosse 1h (un/h inflado
+            // em até 19x). Mesmo critério que fmtRegistroRange já usa: confia no
+            // dado presente, não no tipo.
+            if (r.horasTrabalhadas > 0) {
               h = r.horasTrabalhadas;
               if (r.periodoInicio) dt = r.periodoInicio;
               if (r.periodoFim) dtFim = r.periodoFim;
@@ -771,7 +777,11 @@ function granLabel(key, gran) {
     return d + '/' + MES_ABBR[parseInt(m)-1] + '/' + y.slice(2);
   }
   if (gran === 'week') {
-    const dt = new Date(key); const e = new Date(dt); e.setDate(e.getDate()+6);
+    // 'T12:00:00' -- new Date('YYYY-MM-DD') é parseado como UTC e, em Brasília
+    // (UTC-3), voltava pro dia ANTERIOR: a semana de 07/set aparecia como
+    // "06–12/Set", e semana começando dia 1º caía no mês anterior. Meio-dia
+    // local é o mesmo padrão já usado em admin/dashboard/emitir_op.
+    const dt = new Date(key + 'T12:00:00'); const e = new Date(dt); e.setDate(e.getDate()+6);
     const dd = x => String(x.getDate()).padStart(2,'0');
     return dd(dt) + '–' + dd(e) + '/' + MES_ABBR[dt.getMonth()];
   }

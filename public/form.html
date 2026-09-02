@@ -1177,7 +1177,11 @@ function resumeLine(linha, state) {
 
   var p1 = db.ref('paradas_historico').push(stopRecord);
 
-  var p2 = db.ref('estado_linhas/' + lineKey).set({
+  // update() e não set(): set() apagava o filho `opAtual` (a OP lembrada da
+  // linha, gravada em estado_linhas/{linha}/opAtual). Sem ela, o campo de OP
+  // do apontamento volta a ser texto livre e o próximo lançamento pode ir sem
+  // `lote` -- e sem lote NADA propaga pra ops/.
+  var p2 = db.ref('estado_linhas/' + lineKey).update({
     status: 'ativa',
     inicioParada: null,
     motivoParada: null
@@ -1326,7 +1330,9 @@ document.getElementById('andonStopForm').addEventListener('submit', function(e) 
   var pedidoId = (pedKeyResolvido && pedidosCache[pedKeyResolvido]) ? (pedidosCache[pedKeyResolvido].id || '') : '';
   var lineKey = sanitizeKey(linha);
 
-  db.ref('estado_linhas/' + lineKey).set({
+  // update() -- preserva estado_linhas/{linha}/opAtual (ver comentário em
+  // "Retomar Produção"): parar a linha não pode fazer a linha esquecer a OP.
+  db.ref('estado_linhas/' + lineKey).update({
     status: 'parada',
     inicioParada: new Date().toISOString(),
     motivoParada: motivo,
@@ -1911,8 +1917,18 @@ function bloquearSeOpCancelada(op, acao) {
 // que efetivamente SOMAM produção nova (apontamento tempo real/retroativo);
 // outras ações sobre uma OP concluída (reabrir/corrigir) continuam livres.
 function bloquearSeOpConcluida(op, acao) {
-  if (op && op.status === 'Concluído') {
-    alert('Esta OP já está marcada como Concluída (produção já lançada) e não pode ' + (acao || 'receber novo apontamento') + ' -- lançar de novo contaria a mesma produção duas vezes. Se for uma correção, ajuste o apontamento já existente em vez de criar um novo.');
+  // Checava só 'Concluído', mas desde a Fase 7 NENHUM fluxo de operador grava
+  // esse status -- grava 'Aguardando Confirmação' (ver computeOpStatus e os
+  // dois pontos de fechamento em form.html). A guarda ficou para trás e a
+  // janela entre o operador fechar e o PCP confirmar (que dura dias) voltou a
+  // aceitar apontamento duplicado. opEstaAtiva() já trata os três estados
+  // finais (Concluído / Cancelado / Aguardando Confirmação) num balde só, e
+  // acompanha estados futuros sozinha.
+  if (op && !opEstaAtiva(op)) {
+    var _rotulo = op.status === 'Aguardando Confirmação'
+      ? 'já foi fechada pelo operador e está aguardando confirmação do PCP'
+      : 'já está marcada como ' + (op.status || 'encerrada');
+    alert('Esta OP ' + _rotulo + ' (produção já lançada) e não pode ' + (acao || 'receber novo apontamento') + ' -- lançar de novo contaria a mesma produção duas vezes. Se for uma correção, ajuste o apontamento já existente em vez de criar um novo.');
     return true;
   }
   return false;
@@ -2634,6 +2650,8 @@ function queueOfflineWrite(item) {
 }
 
 var isSyncing = false;
+var _syncRetryCount = 0;          // backoff da fila offline (ver .catch de syncNextItem)
+var _SYNC_MAX_RETRIES = 5;
 function triggerSync() {
   if (isSyncing || !isOnline) return;
   var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
@@ -2755,7 +2773,13 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       // baixarEmpenho ao longo da produção. Idempotente: sem sobra (ou sem
       // empenho pra esse lote, ex. OP emitida antes desta função existir),
       // não faz nada.
-      if (opAtual.status === 'Concluído' && opAtual.materiaisConsumo) {
+      // Desde a Fase 7 computeOpStatus NUNCA retorna 'Concluído' ao bater os
+      // ~95% -- retorna 'Aguardando Confirmação' (ver a transaction logo acima).
+      // Então este if jamais era verdadeiro NO apontamento que conclui a OP, e
+      // a sobra empenhada nunca voltava pro disponível: estoque disponível
+      // subestimado de forma acumulativa. opEstaAtiva() cobre os três estados
+      // finais de uma vez. Continua idempotente (sem sobra, não faz nada).
+      if (!opEstaAtiva(opAtual) && opAtual.materiaisConsumo) {
         var codigosEmpenho = Object.values(opAtual.materiaisConsumo).map(function(i) { return i.mpCodigo; });
         liberarEmpenhoLote(db, lote, codigosEmpenho).catch(function(err) {
           console.error('Falha ao liberar empenho remanescente da OP ' + lote + ':', err);
@@ -2814,8 +2838,19 @@ function syncNextItem() {
   var item = pending[0];
   var promise;
 
+  // Rede de segurança: item vindo de uma versão antiga do app (ou de
+  // localStorage corrompido) pode não ter `id`. Sem ele o set() abaixo
+  // gravaria em 'registros/{data}/undefined'. Gera uma chave na hora --
+  // perde a idempotência só nesse caso raro, mas nunca corrompe o nó.
+  if (!item.id) item.id = db.ref('registros/' + item.data).push().key;
+
   if (item.type === 'registro') {
-    promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
+    // set() na chave idempotente (item.id, gerada por push().key ANTES de
+    // enfileirar) em vez de push() novo: se a promise encadeada falhar
+    // depois do registro gravar, o item fica na fila e é reprocessado no
+    // próximo apontamento -- com push() isso gravava a MESMA produção
+    // duas vezes em registros/. Com set() o retry sobrescreve o mesmo nó.
+    promise = db.ref('registros/' + item.data + '/' + item.id).set(item.registro).then(function() {
       // Achado CRÍTICO do agente de auditoria (3ª rodada): esta chamada
       // rodava fire-and-forget (sem `return`, sem entrar em `saves`) --
       // mesma classe de bug já corrigida em apontamento_total/fechamento_op,
@@ -2882,7 +2917,12 @@ function syncNextItem() {
     // em ops/{lote}.mediaPorHora e pedidos/{pedKey}.mediaPorHora -- os dois
     // únicos lugares do app onde esse campo é recalculado a partir de
     // produção real, em vez de só copiado de um valor estático.
-    promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
+    // set() na chave idempotente (item.id, gerada por push().key ANTES de
+    // enfileirar) em vez de push() novo: se a promise encadeada falhar
+    // depois do registro gravar, o item fica na fila e é reprocessado no
+    // próximo apontamento -- com push() isso gravava a MESMA produção
+    // duas vezes em registros/. Com set() o retry sobrescreve o mesmo nó.
+    promise = db.ref('registros/' + item.data + '/' + item.id).set(item.registro).then(function() {
       // Achado CRÍTICO do agente de auditoria: esta chamada não tinha
       // `return` -- rodava fire-and-forget, e o passo seguinte (pedidos/
       // {pedKey}.produzido) usava item.qtd direto, sem esperar o delta real
@@ -2926,7 +2966,12 @@ function syncNextItem() {
       });
     });
   } else if (item.type === 'fechamento_op') {
-    promise = db.ref('registros/' + item.data).push(item.registro).then(function() {
+    // set() na chave idempotente (item.id, gerada por push().key ANTES de
+    // enfileirar) em vez de push() novo: se a promise encadeada falhar
+    // depois do registro gravar, o item fica na fila e é reprocessado no
+    // próximo apontamento -- com push() isso gravava a MESMA produção
+    // duas vezes em registros/. Com set() o retry sobrescreve o mesmo nó.
+    promise = db.ref('registros/' + item.data + '/' + item.id).set(item.registro).then(function() {
       var saves = [];
       // Achado CRÍTICO do agente de auditoria: mesmo padrão do apontamento_total
       // -- item.qtdFinal era calculado fora da transaction (contra opsCache,
@@ -2995,10 +3040,17 @@ function syncNextItem() {
       }));
       if (item.perdas && item.perdas.length && item.lote) {
         var loteSafe = sanitizeKey(item.lote);
-        saves.push(db.ref('perdas/' + loteSafe).push({
+        // Guarda a chave desta perda DENTRO do registro: perdas/{lote} é um nó
+        // com vários push() (retroativo, fechamento, Painel de Turno). Sem essa
+        // referência, excluir um registro no Histórico só sabia apagar o nó
+        // INTEIRO -- levando junto as perdas lançadas por outro turno na mesma
+        // OP. Ver deleteRegistro em historico.html.
+        var _perdaKey = db.ref('perdas/' + loteSafe).push().key;
+        saves.push(db.ref('perdas/' + loteSafe + '/' + _perdaKey).set({
           data: item.data, lote: item.lote, produto: item.produto, linha: item.registro.linha,
           pedidoId: item.pedidoId, perdas: item.perdas, timestamp: new Date().toISOString()
         }));
+        saves.push(db.ref('registros/' + item.data + '/' + item.id + '/perdaKey').set(_perdaKey));
         saves.push(baixarEstoquePerdas(item.perdas, item.lote));
       }
       return Promise.all(saves);
@@ -3010,11 +3062,21 @@ function syncNextItem() {
     currentPending = currentPending.filter(function(x) { return x.id !== item.id; });
     localStorage.setItem('kuryos_pending_sync', JSON.stringify(currentPending));
     updatePendingBadge();
+    _syncRetryCount = 0;
     setTimeout(syncNextItem, 100);
   }).catch(function(err) {
     console.error('Erro ao sincronizar registro offline:', err);
     isSyncing = false;
     updatePendingBadge();
+    // Sem reagendamento, o item ficava parado na fila até o operador fazer
+    // OUTRO apontamento (único gatilho de triggerSync além da reconexão) --
+    // podendo demorar horas, e escondendo a falha atrás do badge "1 pendente".
+    // Backoff simples, limitado, e só enquanto estiver online.
+    _syncRetryCount++;
+    if (_syncRetryCount <= _SYNC_MAX_RETRIES) {
+      var _delay = Math.min(30000, 2000 * Math.pow(2, _syncRetryCount - 1));
+      setTimeout(function() { if (isOnline) triggerSync(); }, _delay);
+    }
   });
 }
 
@@ -4898,7 +4960,9 @@ function confirmarFechamentoTurno(itens, opts) {
           estadoAtual.motivoParada !== 'Fim de turno' && estadoAtual.motivoParada !== 'Intervalo';
         if (!jaTemParadaReal) {
           p = p.then(function(res) {
-            return db.ref('estado_linhas/' + lineKey).set({
+            // update() -- este roda pra TODAS as linhas todo fim de turno; com
+            // set() ele zerava a OP lembrada de todas elas, todo dia.
+            return db.ref('estado_linhas/' + lineKey).update({
               status: 'parada',
               inicioParada: new Date().toISOString(),
               motivoParada: isIntervalo ? 'Intervalo' : 'Fim de turno',
