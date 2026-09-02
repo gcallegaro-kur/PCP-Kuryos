@@ -156,6 +156,17 @@
     .mapa-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .mapa-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .mapa-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
+    /* WMS Fase 1 -- Planta Baixa (plantaBaixaRuasHtml, shared/utils.js) --
+       visão de cima do galpão, só visual aqui (arrastar é em estoque.html). */
+    .planta-baixa-scroll{overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);max-height:65vh}
+    .planta-baixa-canvas{position:relative;min-width:100%;min-height:420px}
+    .planta-bloco{position:absolute;border-radius:6px;border:2px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:pointer;user-select:none}
+    .planta-bloco:hover{box-shadow:0 0 0 2px var(--primary)}
+    .planta-bloco-pct{font-size:9px;font-weight:600;opacity:.8}
+    .planta-bloco-vazio{background:var(--tint-gray-bg);color:var(--muted);border-style:dashed}
+    .planta-bloco-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-bloco-parcial{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-bloco-cheio{background:var(--tint-red-bg);color:var(--tint-red-fg)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -964,7 +975,8 @@
         </select>
         <div style="display:flex;gap:4px;margin-left:auto">
           <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
-          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa por rua</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerPlanta-end">🏭 Planta baixa</button>
         </div>
       </div>
       <div class="stats">
@@ -978,6 +990,12 @@
       </table>
       <div id="mapaVisualContainer-end" style="display:none">
         <div class="field-hint" style="margin-bottom:10px">Cada quadrado é uma posição (o número é o prédio) -- cinza = ainda não gerada, verde = livre, laranja = ocupada. Passe o mouse pra ver o detalhe.</div>
+      </div>
+      <div id="plantaBaixaContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos, cor pela % de ocupação. Clique numa rua pra ver o detalhe posição a posição. Arrastar os blocos pra ajustar a planta é feito em Estoque / WMS, não aqui.</div>
+        <div class="planta-baixa-scroll">
+          <div id="plantaBaixaCanvas-end" class="planta-baixa-canvas"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -3417,6 +3435,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // estiver aberto, atualiza junto com a lista, senão ficaria desatualizado
     // enquanto o usuário olha pra ele.
     if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
+    if (visaoAtualPosicoes === 'planta') renderPlantaBaixa();
   }
 
   // Pedido do usuário: "conseguimos criar um mapa visual do wms... pra
@@ -3436,7 +3455,28 @@ document.addEventListener('DOMContentLoaded', function() {
     visaoAtualPosicoes = visao;
     document.getElementById('tabelaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
     document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
+    document.getElementById('plantaBaixaContainer-end').style.display = visao === 'planta' ? 'block' : 'none';
     if (visao === 'mapa') renderMapaVisual();
+    if (visao === 'planta') renderPlantaBaixa();
+  }
+
+  // Planta baixa -- visão de CIMA do galpão, pedida pelo usuário depois de
+  // ver o Mapa por rua ("tem como ficar com algo mais visual, como se fosse
+  // uma planta baixa?"). Aqui em Cadastros fica só visual + clique pra
+  // pular pro Mapa por rua daquela rua (reaproveita o drill-down que já
+  // existe) -- arrastar os blocos pra ajustar a posição real no chão é uma
+  // ação OPERACIONAL, fica só em estoque.html (mesmo raciocínio de "detalhe
+  // por clique fica na versão de estoque.html" já usado no Mapa por rua).
+  function renderPlantaBaixa() {
+    document.getElementById('plantaBaixaCanvas-end').innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+    document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
+      bloco.addEventListener('click', function() {
+        var codigoRua = bloco.getAttribute('data-codigo-rua');
+        trocarVisaoPosicoes('mapa');
+        var alvo = document.getElementById('mapa-rua-' + codigoRua);
+        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   }
 
   function refreshFiltroRuaSelect() {
@@ -3475,6 +3515,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTable);
     document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
     document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
+    document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
 
     dbOnValue(db.ref('config/areasEndereco'), function(snap) {
       areasEnderecoAtivas = (snap.val() || []).filter(function(a) { return a.ativo !== false; });

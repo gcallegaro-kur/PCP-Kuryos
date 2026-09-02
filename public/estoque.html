@@ -98,6 +98,19 @@
     .mapa-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .mapa-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55;cursor:default}
     .mapa-cell-selecionada{outline:2px solid var(--primary);outline-offset:1px}
+    /* WMS Fase 1 -- Planta Baixa (plantaBaixaRuasHtml, shared/utils.js) --
+       visão de cima do galpão, blocos arrastáveis por rua. */
+    .planta-baixa-scroll{overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);max-height:65vh}
+    .planta-baixa-canvas{position:relative;min-width:100%;min-height:420px}
+    .planta-bloco{position:absolute;border-radius:6px;border:2px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:pointer;user-select:none}
+    .planta-bloco:hover{box-shadow:0 0 0 2px var(--primary)}
+    .planta-bloco-pct{font-size:9px;font-weight:600;opacity:.8}
+    .planta-bloco-vazio{background:var(--tint-gray-bg);color:var(--muted);border-style:dashed}
+    .planta-bloco-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .planta-bloco-parcial{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .planta-bloco-cheio{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .planta-bloco-arrastavel{cursor:grab}
+    .planta-bloco-arrastando{cursor:grabbing;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:10}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -262,7 +275,8 @@
         </select>
         <div style="display:flex;gap:4px;margin-left:auto">
           <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
-          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerMapa-end">🗺️ Mapa por rua</button>
+          <button class="btn btn-ghost btn-sm" id="btnVerPlanta-end">🏭 Planta baixa</button>
         </div>
       </div>
       <div class="stats">
@@ -289,6 +303,17 @@
               <tbody id="mapaDetalheBody-end"></tbody>
             </table>
           </div>
+        </div>
+      </div>
+      <div id="plantaBaixaContainer-end" style="display:none">
+        <div class="field-hint" style="margin-bottom:10px">Visão de cima do galpão -- cada bloco é uma rua, largura proporcional ao número de módulos, cor pela % de ocupação. Clique numa rua pra ver o detalhe posição a posição. "Editar layout" libera arrastar os blocos pra deixar a planta parecida com o galpão de verdade.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn btn-ghost btn-sm" id="btnEditarPlanta-end">✏️ Editar layout</button>
+          <button class="btn btn-primary btn-sm" id="btnSalvarPlanta-end" style="display:none">💾 Salvar posições</button>
+          <button class="btn btn-ghost btn-sm" id="btnCancelarPlanta-end" style="display:none">Cancelar</button>
+        </div>
+        <div class="planta-baixa-scroll">
+          <div id="plantaBaixaCanvas-end" class="planta-baixa-canvas"></div>
         </div>
       </div>
     </div>
@@ -948,6 +973,7 @@ function renderPosicoesTableEnd() {
   document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
   document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
   if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
+  if (visaoAtualPosicoes === 'planta' && !editandoPlanta) renderPlantaBaixa(); // não re-renderiza em cima de um arrasto em andamento
 }
 
 // Pedido do usuário: "conseguimos criar um mapa visual do wms... pra
@@ -971,7 +997,101 @@ function trocarVisaoPosicoes(visao) {
   visaoAtualPosicoes = visao;
   document.getElementById('cardListaPosicoes-end').style.display = visao === 'lista' ? '' : 'none';
   document.getElementById('mapaVisualContainer-end').style.display = visao === 'mapa' ? 'block' : 'none';
+  document.getElementById('plantaBaixaContainer-end').style.display = visao === 'planta' ? 'block' : 'none';
   if (visao === 'mapa') renderMapaVisual();
+  if (visao === 'planta') renderPlantaBaixa();
+}
+
+// Planta baixa -- visão de CIMA do galpão (diferente do Mapa por rua acima,
+// que é uma ELEVAÇÃO -- de frente pra estante). Pedido do usuário depois de
+// ver o Mapa por rua: "tem como ficar com algo mais visual, como se fosse
+// uma planta baixa?". plantaBaixaRuasHtml (shared/utils.js) monta os
+// blocos; aqui liga: fora do modo edição, clicar numa rua leva direto pro
+// Mapa por rua já filtrado nela (reaproveita o drill-down que já existe,
+// em vez de duplicar detalhe de posição de novo); em modo edição, arrastar
+// o bloco (com "encaixe" de 20px, pra ficar alinhado como um galpão de
+// verdade) grava a posição só quando "Salvar posições" é clicado.
+var editandoPlanta = false;
+var posicoesPlantaPendentes = {}; // codigoRua -> {x,y}, só das ruas movidas nesta edição
+
+function renderPlantaBaixa() {
+  var canvas = document.getElementById('plantaBaixaCanvas-end');
+  canvas.innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
+    if (editandoPlanta) {
+      bloco.classList.add('planta-bloco-arrastavel');
+      wireArrastarBlocoPlanta(bloco);
+    } else {
+      bloco.addEventListener('click', function() {
+        var codigoRua = bloco.getAttribute('data-codigo-rua');
+        trocarVisaoPosicoes('mapa');
+        var alvo = document.getElementById('mapa-rua-' + codigoRua);
+        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  });
+}
+
+function wireArrastarBlocoPlanta(bloco) {
+  var GRADE = 20; // px de encaixe -- blocos ficam alinhados, não soltos em qualquer pixel
+  bloco.addEventListener('mousedown', function(ev) {
+    ev.preventDefault();
+    var canvas = document.getElementById('plantaBaixaCanvas-end');
+    var canvasRect = canvas.getBoundingClientRect();
+    var offsetX = ev.clientX - bloco.offsetLeft - canvasRect.left + canvas.scrollLeft;
+    var offsetY = ev.clientY - bloco.offsetTop - canvasRect.top + canvas.scrollTop;
+    bloco.classList.add('planta-bloco-arrastando');
+    function onMove(ev2) {
+      var novoX = Math.max(0, Math.round((ev2.clientX - canvasRect.left + canvas.scrollLeft - offsetX) / GRADE) * GRADE);
+      var novoY = Math.max(0, Math.round((ev2.clientY - canvasRect.top + canvas.scrollTop - offsetY) / GRADE) * GRADE);
+      bloco.style.left = novoX + 'px';
+      bloco.style.top = novoY + 'px';
+      posicoesPlantaPendentes[bloco.getAttribute('data-codigo-rua')] = { x: novoX, y: novoY };
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      bloco.classList.remove('planta-bloco-arrastando');
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+function ativarEdicaoPlanta() {
+  editandoPlanta = true;
+  posicoesPlantaPendentes = {};
+  document.getElementById('btnEditarPlanta-end').style.display = 'none';
+  document.getElementById('btnSalvarPlanta-end').style.display = '';
+  document.getElementById('btnCancelarPlanta-end').style.display = '';
+  renderPlantaBaixa();
+}
+function cancelarEdicaoPlanta() {
+  editandoPlanta = false;
+  posicoesPlantaPendentes = {};
+  document.getElementById('btnEditarPlanta-end').style.display = '';
+  document.getElementById('btnSalvarPlanta-end').style.display = 'none';
+  document.getElementById('btnCancelarPlanta-end').style.display = 'none';
+  renderPlantaBaixa();
+}
+function salvarPosicoesPlanta() {
+  var codigos = Object.keys(posicoesPlantaPendentes);
+  if (!codigos.length) { cancelarEdicaoPlanta(); return; }
+  var updates = {};
+  var agora = new Date().toISOString();
+  codigos.forEach(function(codigoRua) {
+    var pos = posicoesPlantaPendentes[codigoRua];
+    updates['estrutura_ruas/' + codigoRua + '/layoutX'] = pos.x;
+    updates['estrutura_ruas/' + codigoRua + '/layoutY'] = pos.y;
+    updates['estrutura_ruas/' + codigoRua + '/atualizadoEm'] = agora;
+    updates['estrutura_ruas/' + codigoRua + '/atualizadoPor'] = currentUserNome();
+  });
+  db.ref().update(updates).then(function() {
+    showAlert('Posições da planta salvas.', 'success');
+    cancelarEdicaoPlanta();
+  }).catch(function(err) {
+    showAlert('Erro ao salvar posições da planta: ' + err.message, 'danger');
+  });
 }
 // Detalhe de uma posição -- varre estoque_lotes procurando quem tem esse
 // enderecoKey (mesma lógica de contagem já usada em ocupantesPorEndereco,
@@ -1077,6 +1197,10 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTableEnd);
   document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
   document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
+  document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
+  document.getElementById('btnEditarPlanta-end').addEventListener('click', ativarEdicaoPlanta);
+  document.getElementById('btnSalvarPlanta-end').addEventListener('click', salvarPosicoesPlanta);
+  document.getElementById('btnCancelarPlanta-end').addEventListener('click', cancelarEdicaoPlanta);
 
   try {
     db.ref('.info/connected').on('value', function(snap) {

@@ -1080,7 +1080,60 @@ function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEnderec
       }
       linhasHtml += '<div class="mapa-nivel-row"><div class="mapa-nivel-label">N' + nivel + '</div>' + celulas + '</div>';
     }
-    return '<div class="mapa-rua"><div class="mapa-rua-titulo">Rua ' + escapeHtml(String(r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
+    return '<div class="mapa-rua" id="mapa-rua-' + escapeAttr(String(r.codigoRua)) + '"><div class="mapa-rua-titulo">Rua ' + escapeHtml(String(r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
+  }).join('');
+}
+
+// Planta baixa -- visão de CIMA do galpão (diferente do mapa por rua acima,
+// que é uma ELEVAÇÃO -- de frente pra estante, níveis empilhados). Pedido
+// do usuário depois de ver o mapa por rua: "tem como ficar com algo mais
+// visual, como se fosse uma planta baixa?" -- ele já tinha mandado uma foto
+// do galpão real antes, com módulos numerados espalhados de forma
+// irregular pelo chão, não em fileira reta -- por isso cada rua tem
+// posição (layoutX/layoutY) ARRASTÁVEL, gravada em estrutura_ruas, em vez
+// de um layout automático de fileira única (não reflete um galpão real
+// nenhum). Sem posição salva ainda, cai num layout automático em fileira
+// (utilizável de imediato, sem exigir configuração antes de ver algo).
+//
+// Cada rua vira um bloco -- largura proporcional ao Nº de módulos (cada
+// módulo = 2 prédios, confirmado pelo usuário), cor pela % de ocupação
+// agregada da rua inteira. Só MONTA o HTML (string) -- arrastar e o clique
+// pra abrir a elevação daquela rua são wireados por quem chama, igual o
+// mapa por rua acima.
+function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco) {
+  var ruas = Object.values(estruturaRuas || {}).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+  if (!ruas.length) return '<div class="empty-hint">Nenhuma rua cadastrada ainda -- gere posições em "Estrutura de Ruas" primeiro.</div>';
+  var UNIDADE = 60; // px por módulo (2 prédios) de largura -- também usado como grid de encaixe ao arrastar
+  var GAP_AUTO = 20; // espaço entre blocos no layout automático (sem posição salva)
+  var proximoXAuto = 0;
+  return ruas.map(function(r) {
+    var niveis = r.niveis || 0, predios = r.predios || 0;
+    var modulos = Math.max(1, Math.ceil(predios / 2));
+    var largura = modulos * UNIDADE;
+    var altura = UNIDADE; // profundidade fixa -- planta baixa não empilha nível, isso é a elevação
+    var temPosicaoSalva = typeof r.layoutX === 'number' && typeof r.layoutY === 'number';
+    var x = temPosicaoSalva ? r.layoutX : proximoXAuto;
+    var y = temPosicaoSalva ? r.layoutY : 0;
+    if (!temPosicaoSalva) proximoXAuto += largura + GAP_AUTO;
+
+    var totalPosicoes = 0, ocupadas = 0;
+    for (var nivel = 1; nivel <= niveis; nivel++) {
+      for (var predio = 1; predio <= predios; predio++) {
+        var key = sanitizeKey(r.codigoRua + '.' + nivel + '.' + predio);
+        if (!enderecosEstoque[key]) continue; // não gerada ainda -- não conta nem como vaga nem ocupada
+        totalPosicoes++;
+        if (ocupantesPorEndereco[key] > 0) ocupadas++;
+      }
+    }
+    var pct = totalPosicoes ? Math.round((ocupadas / totalPosicoes) * 100) : 0;
+    var classePct = totalPosicoes === 0 ? 'planta-bloco-vazio' : (pct === 0 ? 'planta-bloco-livre' : (pct >= 90 ? 'planta-bloco-cheio' : 'planta-bloco-parcial'));
+    var tituloAttr = 'Rua ' + r.codigoRua + ' — ' + (r.area || '') + (totalPosicoes ? (' — ' + ocupadas + '/' + totalPosicoes + ' posições ocupadas (' + pct + '%)') : ' — nenhuma posição gerada ainda');
+
+    return '<div class="planta-bloco ' + classePct + '" id="planta-rua-' + escapeAttr(String(r.codigoRua)) + '" data-codigo-rua="' + escapeAttr(String(r.codigoRua)) + '" ' +
+      'style="left:' + x + 'px;top:' + y + 'px;width:' + largura + 'px;height:' + altura + 'px" title="' + escapeAttr(tituloAttr) + '">' +
+      '<div class="planta-bloco-numero">' + escapeHtml(String(r.codigoRua)) + '</div>' +
+      '<div class="planta-bloco-pct">' + (totalPosicoes ? (pct + '%') : '—') + '</div>' +
+      '</div>';
   }).join('');
 }
 
