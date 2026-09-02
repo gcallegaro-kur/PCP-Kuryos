@@ -1346,10 +1346,25 @@ function formulaItensParaFichas(op, formulaRegistro) {
 
 // Ponto de entrada único das 5 fichas -- usado tanto por emitir_op.html
 // (emissão fresca) quanto por ops.html (reimpressão de OP já emitida).
-function montarFichasOP(op, formulaItens, especs, msAnvisa) {
+//
+// fichasSelecionadas (opcional) -- pedido do usuário: "preciso poder
+// selecionar quais fichas serão emitidas, temos itens que não são
+// rotulados por exemplo". Objeto {op1,of,envase,rotulagem,relatorioPA} ->
+// boolean; ausente (quem chama sem o 5º argumento, como ops.html na
+// reimpressão) ou com uma chave ausente = inclui a ficha (`!== false`,
+// nunca `=== true`) -- assim nenhum call site antigo muda de
+// comportamento sem passar o parâmetro novo.
+function montarFichasOP(op, formulaItens, especs, msAnvisa, fichasSelecionadas) {
   if (!op) return '';
+  var sel = fichasSelecionadas || {};
   var itensTodos = Object.values(op.materiaisConsumo || {});
-  return paginaOP1(op) + paginaOF(op, formulaItens, especs) + paginaOrdemEnvase(op, itensTodos, msAnvisa) + paginaRotulagem(op, itensTodos) + paginaRelatorioPA(op, especs);
+  var html = '';
+  if (sel.op1 !== false) html += paginaOP1(op);
+  if (sel.of !== false) html += paginaOF(op, formulaItens, especs);
+  if (sel.envase !== false) html += paginaOrdemEnvase(op, itensTodos, msAnvisa);
+  if (sel.rotulagem !== false) html += paginaRotulagem(op, itensTodos);
+  if (sel.relatorioPA !== false) html += paginaRelatorioPA(op, especs);
+  return html;
 }
 
 /* ── Etiqueta de caixa de embarque ──

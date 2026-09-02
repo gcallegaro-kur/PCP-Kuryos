@@ -252,6 +252,20 @@
   <div id="cardSucesso" class="card" style="display:none;text-align:center">
     <div style="font-size:32px">✅</div>
     <div style="font-size:18px;font-weight:700;margin:8px 0">OP <span id="loteEmitido"></span> emitida com sucesso</div>
+    <!-- Pedido do usuário: "preciso poder selecionar quais fichas serão
+         emitidas, temos itens que não são rotulados por exemplo" -- todas
+         marcadas por padrão (comportamento de sempre, preservado), some
+         só a que a pessoa desmarcar pra ESTA impressão. -->
+    <div style="text-align:left;max-width:420px;margin:14px auto 0">
+      <div class="field-hint" style="font-weight:700;margin-bottom:6px">Fichas a imprimir</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="ficha-check" value="op1" checked> OP 1 (Separação)</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="ficha-check" value="of" checked> OF (Ordem de Fabricação)</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="ficha-check" value="envase" checked> Ordem de Envase</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="ficha-check" value="rotulagem" checked> Rotulagem</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="ficha-check" value="relatorioPA" checked> Relatório de Produto Acabado</label>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnImprimir">🖨 Abrir documento pra impressão</button>
       <button class="btn btn-primary" id="btnImprimirEtiquetas">🏷️ Imprimir etiquetas de caixa</button>
@@ -1306,11 +1320,20 @@ function emitirOP() {
    (montarFichasOP/formulaItensParaFichas/etc.) pra dar pra reusar em
    ops.html também, reimprimindo uma OP já emitida antes sem precisar de
    nenhum estado em memória -- só o que já está gravado em ops/{lote}. */
+// Lê as caixas "Fichas a imprimir" -- pedido do usuário. Todas marcadas =
+// comportamento de sempre (as 5 fichas); desmarcar uma tira ela SÓ desta
+// impressão (não grava nada na OP, não afeta reimpressão feita depois em
+// ops.html).
+function fichasSelecionadasAtuais() {
+  var sel = {};
+  document.querySelectorAll('.ficha-check').forEach(function(cb) { sel[cb.value] = cb.checked; });
+  return sel;
+}
 function montarDocumentoImpressao() {
   if (!opJaEmitida) return '';
   var formulaItens = formulaItensParaFichas(opJaEmitida, formulaEscolhida);
   var especs = (allEspecificacoes[chaveVersao(produtoSelecionado.key, opJaEmitida.formulaVersao)] || {}).itens || {};
-  return montarFichasOP(opJaEmitida, formulaItens, especs, produtoSelecionado.msAnvisa);
+  return montarFichasOP(opJaEmitida, formulaItens, especs, produtoSelecionado.msAnvisa, fichasSelecionadasAtuais());
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1334,6 +1357,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.getElementById('btnEmitir').addEventListener('click', emitirOP);
   document.getElementById('btnImprimir').addEventListener('click', function() {
+    var sel = fichasSelecionadasAtuais();
+    if (!Object.values(sel).some(Boolean)) { showAlert('Marque pelo menos uma ficha pra imprimir.', 'danger'); return; }
     document.getElementById('printArea').innerHTML = montarDocumentoImpressao();
     window.print();
   });
