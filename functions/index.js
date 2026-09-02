@@ -587,7 +587,12 @@ async function checkLinhasParadas(config, destinatarios) {
     // avisar sobre elas é ruído. Os dois já têm seu próprio e-mail de resumo
     // (onTurnoEncerrado / onIntervaloApontado).
     if (info.motivoParada === "Fim de turno" || info.motivoParada === "Intervalo") continue;
-    const inicio = new Date(info.inicioParada.replace("Z", ""));
+    // inicioParada é sempre gravado com toISOString() (UTC, com "Z").
+    // Tirar o "Z" fazia a string ser lida como hora LOCAL do processo --
+    // inofensivo só porque o runtime roda em UTC. Qualquer mudança de TZ
+    // deslocaria minutosParada em 3h. Todos os outros pontos do repo já
+    // parseiam direto.
+    const inicio = new Date(info.inicioParada);
     const minutosParada = (Date.now() - inicio.getTime()) / 60000;
     if (minutosParada < limiteMin) continue;
 
@@ -758,8 +763,19 @@ async function checkOpsEmitidas(destinatarios) {
       `Sistema PCP Kuryos — alerta automático.`;
     // Emissão de OP não precisa de cooldown (cada uma é um evento único) --
     // só consome a fila.
-    await sendMailViaGraph(destinatarios, assunto, corpo);
-    await db.ref("alertas_pendentes/" + alertId).remove();
+    // Só consome a fila se o envio realmente aconteceu. sendMailViaGraph
+    // retorna false SEM lançar quando não há destinatários configurados --
+    // antes, isso apagava o alerta assim mesmo e a emissão de OP desaparecia
+    // sem ninguém nunca saber que existiu. (Os outros dois checks já faziam
+    // esse if; só este ficou de fora.) O try/catch evita que um erro do Graph
+    // num alerta trave a fila inteira em loop.
+    try {
+      if (await sendMailViaGraph(destinatarios, assunto, corpo)) {
+        await db.ref("alertas_pendentes/" + alertId).remove();
+      }
+    } catch (e) {
+      console.error("Falha ao enviar alerta de OP emitida " + alertId + ":", e);
+    }
   }
 }
 
@@ -835,6 +851,12 @@ function dentroDoHorarioDeOperacao(config) {
   const idxUltimo = turnosOrdenados.length - 1;
   const ultimoFim = hmToMinutes(resolverFimTurno(turnosOrdenados[idxUltimo][0], turnosOrdenados, idxUltimo, config, isSexta));
 
+  // Turno que atravessa a meia-noite (ex: 22:00 -> 06:00) deixa ultimoFim
+  // MENOR que primeiroInicio -- com a comparação simples a condição nunca era
+  // verdadeira e os alertas ficavam permanentemente silenciados.
+  if (ultimoFim <= primeiroInicio) {
+    return nowMin >= primeiroInicio || nowMin < ultimoFim;
+  }
   return nowMin >= primeiroInicio && nowMin < ultimoFim;
 }
 
@@ -907,7 +929,9 @@ function fmtNumBr(n) {
 function classificarLinha(nome, config) {
   var linhas = config.linhas || [];
   var rotulagem = config.rotulagem || [];
-  var postos = config.postos || [];
+  // Último leitor da chave legada `postos`, mantida viva só por uma linha de
+  // compatibilidade em admin.html. Lê a canônica primeiro, com fallback.
+  var postos = config.postosTrabalho || config.postos || [];
   if (linhas.indexOf(nome) !== -1) return "linha";
   if (rotulagem.indexOf(nome) !== -1) return "rotulagem";
   if (postos.indexOf(nome) !== -1) return "posto";
@@ -974,7 +998,10 @@ function performancePct(regs, ritmoRefMap) {
   let refSum = 0;
   regs.forEach((r) => {
     const ref = ritmoRefMap[normTxt(r.produto)];
-    if (ref) { realSum += (r.quantidade || 0); refSum += ref; }
+    // ref é un/HORA: somar 1x por registro só valia no modelo antigo de
+    // 1 registro = 1 hora. Com período real, um registro de 8h somava a
+    // referência de 1h -> performance inflada em até 8x nos e-mails.
+    if (ref) { realSum += (r.quantidade || 0); refSum += ref * (r.horasTrabalhadas > 0 ? r.horasTrabalhadas : 1); }
   });
   if (!refSum) return null;
   return Math.round((realSum / refSum) * 100);

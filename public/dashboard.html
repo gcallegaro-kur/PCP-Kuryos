@@ -908,9 +908,12 @@ function renderParadas(regs) {
     return '<div class="parada-item">' +
       '<div class="parada-icon">⏸️</div>' +
       '<div>' +
-        '<div class="parada-hora">' + horaTxt + (p.linha ? ' · ' + p.linha : '') + '</div>' +
-        '<div class="parada-desc">' + p.motivo + '</div>' +
-        (p.sub ? '<div class="parada-meta">' + p.sub + '</div>' : '') +
+        // escapeHtml: p.sub carrega produto e "OP {lote}", e lote é texto livre
+        // digitado pelo operador -- um "<" quebrava a renderização do painel
+        // inteiro. O resto do arquivo já escapava; só aqui tinha ficado de fora.
+        '<div class="parada-hora">' + horaTxt + (p.linha ? ' · ' + escapeHtml(p.linha) : '') + '</div>' +
+        '<div class="parada-desc">' + escapeHtml(p.motivo) + '</div>' +
+        (p.sub ? '<div class="parada-meta">' + escapeHtml(p.sub) + '</div>' : '') +
         (p.duracao ? '<div class="parada-meta">' + p.duracao + ' min</div>' : '') +
       '</div>' +
     '</div>';
@@ -1219,7 +1222,11 @@ function renderFeed(regs) {
 function renderOpsEncerradasHoje(regs) {
   var c = document.getElementById('opsEncerradasList');
   var itens = regs.filter(function(r) {
-    return r.tipo === 'apontamento_total' || r.tipo === 'fechamento_op' || r.tipo === 'registro';
+    // fonte==='retroativo' entra também: o Turno Retroativo é um fechamento
+    // real de período (tem periodoInicio/periodoFim), só não grava `tipo` --
+    // sem isso, todo lançamento retroativo sumia deste card.
+    return r.tipo === 'apontamento_total' || r.tipo === 'fechamento_op' || r.tipo === 'registro'
+      || r.fonte === 'retroativo' || (r.periodoInicio && r.periodoFim);
   });
   if (!itens.length) { c.innerHTML = '<div class="no-data">Nenhum lançamento de OP/posto hoje ainda.</div>'; return; }
 

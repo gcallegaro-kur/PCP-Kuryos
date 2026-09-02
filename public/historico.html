@@ -1702,25 +1702,44 @@
 
         var tasks = [];
         if (editingDate !== newDate) {
-          // Date changed: delete old + push new
-          tasks.push(db.ref('registros/' + editingDate + '/' + editingKey).remove());
-          tasks.push(db.ref('registros/' + newDate).push(data));
+          // Mudança de data: remoção do nó antigo + gravação do novo num ÚNICO
+          // update() multi-path -- atômico por definição no RTDB. Antes eram
+          // duas operações soltas em paralelo: se o remove() commitasse e o
+          // push() falhasse (conexão caindo no meio), o registro de produção
+          // era APAGADO permanentemente, sem cópia em lugar nenhum.
+          var _novaKey = db.ref('registros/' + newDate).push().key;
+          var _mov = {};
+          _mov['registros/' + editingDate + '/' + editingKey] = null;
+          _mov['registros/' + newDate + '/' + _novaKey] = data;
+          tasks.push(db.ref().update(_mov));
         } else {
           tasks.push(db.ref('registros/' + editingDate + '/' + editingKey).update(data));
         }
         
         // Sync orders balance
+        // Só ENVASE entra em pedidos/{key}.produzido -- é o mesmo filtro que a
+        // GRAVAÇÃO já aplica (isSetorEnvase em form.html): apontamento de
+        // Rotulagem/Posto nunca soma no pedido. Sem esse gate aqui, editar ou
+        // excluir um registro de rotulagem SUBTRAÍA do pedido algo que nunca
+        // tinha sido somado -- o pedido reabria e o replanejamento reprogramava
+        // slots já produzidos.
+        var _envaseOld = orig ? isLinhaEnvase(orig.linha) : true;
+        var _envaseNew = isLinhaEnvase(data.linha);
+        var _qtyOldEf = _envaseOld ? qtyOld : 0;
+        var _qtyNewEf = _envaseNew ? qtyNew : 0;
         var syncPromise = Promise.resolve();
-        if (pedIdOld === pedIdNew && prodOld === prodNew) {
-          var diff = qtyNew - qtyOld;
-          syncPromise = adjustPedidoProduzido(pedIdNew, prodNew, diff);
+        if (!_envaseOld && !_envaseNew) {
+          syncPromise = Promise.resolve(); // registro não-envase dos dois lados: pedido não muda
+        } else if (pedIdOld === pedIdNew && prodOld === prodNew) {
+          var diff = _qtyNewEf - _qtyOldEf;
+          syncPromise = diff ? adjustPedidoProduzido(pedIdNew, prodNew, diff) : Promise.resolve();
         } else {
           // Troca de pedido/produto: se o segundo passo falhar, desfaz o
           // primeiro (devolve a qtyOld pro pedido antigo) em vez de deixar a
           // quantidade "sumir" dos dois contadores até alguém reconciliar manualmente.
-          syncPromise = adjustPedidoProduzido(pedIdOld, prodOld, -qtyOld).then(function() {
-            return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew).catch(function(err) {
-              return adjustPedidoProduzido(pedIdOld, prodOld, qtyOld).then(function() {
+          syncPromise = adjustPedidoProduzido(pedIdOld, prodOld, -_qtyOldEf).then(function() {
+            return adjustPedidoProduzido(pedIdNew, prodNew, _qtyNewEf).catch(function(err) {
+              return adjustPedidoProduzido(pedIdOld, prodOld, _qtyOldEf).then(function() {
                 throw err; // reverte, mas ainda propaga o erro original pro usuário
               });
             });
@@ -1774,8 +1793,11 @@
     var pedId = r ? (r.pedidoId || '') : '';
     var prod = r ? (r.produto || '') : '';
     
+    // Só devolve saldo ao pedido se o registro era de ENVASE -- ver comentário
+    // no caminho de edição (rotulagem/posto nunca somou, não pode subtrair).
+    var _qtyEf = (r && isLinhaEnvase(r.linha)) ? qty : 0;
     db.ref('registros/' + editingDate + '/' + editingKey).remove().then(function() {
-      return adjustPedidoProduzido(pedId, prod, -qty);
+      return _qtyEf ? adjustPedidoProduzido(pedId, prod, -_qtyEf) : Promise.resolve();
     }).then(function() {
       closeEditModal();
       showAlert('Registro excluído.', 'success');
@@ -1803,11 +1825,19 @@
       .then(function() {
         if (hasPerdas && r.lote) {
           var loteSafe = sanitizeKey(r.lote);
-          return db.ref('perdas/' + loteSafe).remove();
+          // Só a perda DESTE registro (perdas/{lote} acumula lançamentos de
+          // vários turnos). Registro antigo, gravado antes de perdaKey existir,
+          // não tem como ser identificado -- nesse caso deixa as perdas
+          // intactas de propósito: perda órfã é muito menos grave que apagar
+          // silenciosamente a perda lançada por outro turno na mesma OP.
+          if (r.perdaKey) return db.ref('perdas/' + loteSafe + '/' + r.perdaKey).remove();
+          return Promise.resolve();
         }
       })
       .then(function() {
-        return adjustPedidoProduzido(pedId, prod, -qty);
+        // mesmo gate de envase da outra exclusão
+        var _qtyEf2 = (r && isLinhaEnvase(r.linha)) ? qty : 0;
+        return _qtyEf2 ? adjustPedidoProduzido(pedId, prod, -_qtyEf2) : Promise.resolve();
       })
       .then(function() {
         showAlert('Registro excluído.', 'success');
