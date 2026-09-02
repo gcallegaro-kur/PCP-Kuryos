@@ -68,6 +68,17 @@
     .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13px}
     .empty-state{text-align:center;padding:50px 20px;color:var(--muted)}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    /* attachAutocomplete (shared/utils.js) -- pedido do usuário: "ter a
+       opção de pesquisar o item pelo nome, fornecedor, codigo, ao invés de
+       só selecionar" (Fórmula/BOM). Mesmo CSS já usado em cadastros.html/
+       form.html pro mesmo componente -- sem isto a lista de sugestões
+       aparece sem estilo nenhum (o componente só cria a div, quem inclui
+       precisa trazer o visual). */
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -177,6 +188,7 @@ var db = firebase.database();
 
 var allProdutos = {};
 var allMateriais = {};
+var allFornecedores = {}; // pedido do usuário: mostrar fornecedor ao lado do nome no Fórmula/BOM
 var allFormulas = {};      // key completa -> {codProduto, versao, status, itens, ...}
 var allBom = {};
 var allEspecificacoes = {};
@@ -431,25 +443,66 @@ function renderFormulaTab(key, f) {
   document.getElementById('btnAddFormulaItem').style.display = editavel ? 'inline-flex' : 'none';
   wireFormulaRowEvents(key, editavel);
 }
-function materiaisOptions(tipo, selecionado) {
-  var opts = '<option value="">Selecione...</option>';
-  Object.values(allMateriais).filter(function(m) { return !tipo || m.tipo === tipo; })
+// Pedido do usuário: "ter a opção de pesquisar o item pelo nome,
+// fornecedor, codigo, ao invés de só selecionar (ganhar tempo)" -- select
+// gigante com 900+ materiais virou campo de busca (attachAutocomplete,
+// mesmo componente já usado em compras.html/emitir_op.html/etc.). O
+// filtro é por substring dentro do label inteiro, então colocar
+// código+nome+fornecedor no label já cobre os 3 sem lógica extra. `key`
+// (não sanitizeKey) é o mpCodigo cru -- é isso que salvarItemFormula/
+// salvarItemBom sempre esperaram no campo escondido.
+function materiaisAutocompleteItems(tipo) {
+  return Object.values(allMateriais).filter(function(m) { return (!tipo || m.tipo === tipo) && m.ativo !== false; })
     .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
-    .forEach(function(m) {
-      opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
+    .map(function(m) {
+      var label = materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null);
+      return { key: m.mpCodigo, value: label, label: label };
     });
-  return opts;
+}
+// Rótulo pra mostrar no campo de busca a partir do código já salvo --
+// resolve o material de novo (pode ter mudado de nome/fornecedor desde a
+// última vez que a fórmula foi salva) em vez de confiar só no mpNome
+// denormalizado dentro do próprio item da fórmula.
+function labelDoMaterial(codigo) {
+  var m = findMaterialByCodigo(codigo);
+  return m ? materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null) : (codigo || '');
+}
+// Liga o campo de busca (Fórmula .f-mp-busca OU BOM .b-mat-busca) ao seu
+// campo escondido irmão -- selecionar um item na lista grava o código no
+// escondido e chama onSalvar (que persiste no Firebase, cada tela com sua
+// própria função). Sair do campo sem escolher nada da lista (digitou e
+// clicou fora) reverte o texto pro material que já estava salvo, nunca
+// deixa o campo mostrando um texto solto que não bate com o dado real.
+function wireMaterialBusca(containerSel, buscaClass, hiddenClass, tipo, onSalvar) {
+  document.querySelectorAll(containerSel + ' .' + buscaClass).forEach(function(input) {
+    var itemKey = input.getAttribute('data-item');
+    var hidden = document.querySelector(containerSel + ' input.' + hiddenClass + '[data-item="' + CSS.escape(itemKey) + '"]');
+    if (!hidden) return;
+    attachAutocomplete(input, function() { return materiaisAutocompleteItems(tipo); }, {
+      onSelect: function(it) {
+        hidden.value = it.key;
+        onSalvar(itemKey);
+      }
+    });
+    input.addEventListener('blur', function() { input.value = labelDoMaterial(hidden.value); });
+  });
 }
 function linhaFormula(formKey, itemKey, it, editavel) {
+  // Pedido do usuário: "indicar ao lado do nome, o fornecedor" -- também
+  // na linha somente-leitura (fórmula aprovada, não editável).
+  var mAtual = findMaterialByCodigo(it.mpCodigo);
+  // Bruto (não escapado) -- escapeHtml roda uma vez só, no ponto de uso.
+  var labelExibicao = mAtual ? materialBuscaLabel(mAtual, mAtual.fornecedorKey ? allFornecedores[mAtual.fornecedorKey] : null) : ((it.mpCodigo || '') + ' — ' + (it.mpNome || ''));
   if (!editavel) {
     return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-      '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + '</td>' +
+      '<td>' + escapeHtml(labelExibicao) + '</td>' +
       '<td>' + escapeHtml(it.fase || '') + '</td>' +
       '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
       '<td>' + fmtNum(it.percentualMM || 0) + '%</td><td></td></tr>';
   }
   return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-    '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions('MP', it.mpCodigo) + '</select></td>' +
+    '<td><input type="text" class="f-mp-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelDoMaterial(it.mpCodigo)) + '" autocomplete="off">' +
+      '<input type="hidden" class="f-mp" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.mpCodigo || '') + '"></td>' +
     '<td><select class="f-fase" data-item="' + escapeAttr(itemKey) + '">' +
       ['A', 'B', 'C'].map(function(f) { return '<option value="' + f + '"' + (it.fase === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') +
     '</select></td>' +
@@ -459,9 +512,10 @@ function linhaFormula(formKey, itemKey, it, editavel) {
 }
 function wireFormulaRowEvents(formKey, editavel) {
   if (!editavel) return;
-  document.querySelectorAll('#formulaBody .f-mp, #formulaBody .f-fase, #formulaBody .f-ordem, #formulaBody .f-pct').forEach(function(el) {
+  document.querySelectorAll('#formulaBody .f-fase, #formulaBody .f-ordem, #formulaBody .f-pct').forEach(function(el) {
     el.addEventListener('change', function() { salvarItemFormula(formKey, el.getAttribute('data-item')); });
   });
+  wireMaterialBusca('#formulaBody', 'f-mp-busca', 'f-mp', 'MP', function(itemKey) { salvarItemFormula(formKey, itemKey); });
   document.querySelectorAll('#formulaBody .f-remove').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var itemKey = btn.getAttribute('data-item');
@@ -520,20 +574,27 @@ function renderBomTab(key) {
   } else {
     tbody.innerHTML = entries.map(function(entry) {
       var itemKey = entry[0], it = entry[1];
+      // Mesmo princípio de linhaFormula: mostra o fornecedor ao lado do
+      // nome (pedido do usuário), resolvendo o material de novo em vez de
+      // confiar só no materialNome denormalizado dentro do item do BOM.
+      var matAtual = findMaterialByCodigo(it.materialCodigo);
+      var labelBom = matAtual ? materialBuscaLabel(matAtual, matAtual.fornecedorKey ? allFornecedores[matAtual.fornecedorKey] : null) : ((it.materialCodigo || '') + ' — ' + (it.materialNome || ''));
       if (!editavel) {
-        return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
+        return '<tr><td>' + escapeHtml(labelBom) + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
       }
       return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-        '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions('EMBALAGEM', it.materialCodigo) + '</select></td>' +
+        '<td><input type="text" class="b-mat-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelBom) + '" autocomplete="off">' +
+          '<input type="hidden" class="b-mat" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.materialCodigo || '') + '"></td>' +
         '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
         '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
     }).join('');
   }
   document.getElementById('btnAddBomItem').style.display = editavel ? 'inline-flex' : 'none';
   if (!editavel) return;
-  document.querySelectorAll('#bomBody .b-mat, #bomBody .b-qtd').forEach(function(el) {
+  document.querySelectorAll('#bomBody .b-qtd').forEach(function(el) {
     el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
   });
+  wireMaterialBusca('#bomBody', 'b-mat-busca', 'b-mat', 'EMBALAGEM', function(itemKey) { salvarItemBom(key, itemKey); });
   document.querySelectorAll('#bomBody .b-remove').forEach(function(btn) {
     btn.addEventListener('click', function() { db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove(); });
   });
@@ -646,6 +707,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
     dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('fornecedores'), function(snap) { allFornecedores = snap.val() || {}; });
     dbOnValue(db.ref('formulas'), function(snap) {
       allFormulas = snap.val() || {};
       if (produtoSelecionadoKey) { renderVersoes(); if (versaoAtual) selecionarVersao(versaoAtual); }

@@ -129,12 +129,13 @@
             <th style="min-width:90px">Tipo</th>
             <th style="min-width:60px">Un.</th>
             <th style="min-width:110px">Proprietário</th>
+            <th style="min-width:130px">Fornecedor</th>
             <th style="min-width:90px">Controlado</th>
             <th style="min-width:80px">Status</th>
             <th style="min-width:50px"></th>
           </tr>
         </thead>
-        <tbody id="tableBody"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
+        <tbody id="tableBody"><tr><td colspan="9" class="no-data">Carregando...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -267,7 +268,7 @@ function refreshProprietarioOptions() {
 
 // Cadastro de Fornecedores agora existe (Compras) -- o campo deixou de ser
 // texto livre. Mesmo padrão de chave estável que proprietarioMaterialKey
-// (não o nome, que muda).
+// (não o nome, que muda). fornecedorNome() é compartilhada (shared/utils.js).
 function refreshFornecedorOptions() {
   var sel = document.getElementById('fFornecedor');
   var cur = sel.value;
@@ -276,7 +277,7 @@ function refreshFornecedorOptions() {
     .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
     .forEach(function(entry) {
       var o = document.createElement('option');
-      o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
+      o.value = entry[0]; o.textContent = fornecedorNome(entry[1]);
       sel.appendChild(o);
     });
   if (cur) sel.value = cur;
@@ -309,7 +310,7 @@ function renderTable() {
   var tbody = document.getElementById('tableBody');
   if (!rows.length) {
     var semNenhumCadastrado = !total;
-    tbody.innerHTML = '<tr><td colspan="8" class="no-data">' + (semNenhumCadastrado
+    tbody.innerHTML = '<tr><td colspan="9" class="no-data">' + (semNenhumCadastrado
       ? 'Nenhum material cadastrado ainda. Clique em "+ Novo Material" pra começar.'
       : 'Nenhum material encontrado com esse filtro/busca.') + '</td></tr>';
     return;
@@ -326,12 +327,20 @@ function renderTable() {
     var propNomeVivo = m.proprietarioMaterialKey === PROPRIETARIO_KURYOS || !m.proprietarioMaterialKey
       ? (m.proprietarioMaterial || 'Kuryos')
       : ((allClientes[m.proprietarioMaterialKey] || {}).nome || m.proprietarioMaterial || 'Kuryos');
+    // Mesmo princípio do proprietário acima -- resolve o nome do fornecedor
+    // AO VIVO pela chave estável (fornecedorKey), com o denormalizado
+    // (m.fornecedor) só como fallback pra material sem chave (legado) ou
+    // fornecedor removido/renomeado nunca ter ficado gravado de novo aqui.
+    var fornecedorVivo = m.fornecedorKey
+      ? (fornecedorNome(allFornecedores[m.fornecedorKey]) || m.fornecedor || '—')
+      : (m.fornecedor || '—');
     return '<tr>' +
       '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
       '<td>' + escapeHtml(m.mpNome || '—') + '</td>' +
       '<td>' + tipoBadge + '</td>' +
       '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
       '<td style="font-size:12px">' + escapeHtml(propNomeVivo) + '</td>' +
+      '<td style="font-size:12px">' + escapeHtml(fornecedorVivo) + '</td>' +
       '<td>' + (m.controlado ? '<span class="badge badge-orange">Sim</span>' : '<span class="badge badge-gray">Não</span>') + '</td>' +
       '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
       '<td><button class="btn btn-ghost btn-sm btn-edit" data-key="' + key + '" title="Editar material" aria-label="Editar material">✏</button></td>' +

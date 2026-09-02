@@ -523,6 +523,32 @@ function normalizeSearch(str) {
     .trim();
 }
 
+// Nome de exibi\u00e7\u00e3o de um fornecedor (fornecedores/{key}) -- nomeFantasia
+// tem prioridade, cai pra razaoSocial quando n\u00e3o preenchido. Extra\u00edda pra
+// c\u00e1 (era duplicada em materiais.html) porque agora tamb\u00e9m \u00e9 usada em
+// formulas.html (F\u00f3rmula/BOM), pedido do usu\u00e1rio: "indicar ao lado do
+// nome, o fornecedor" -- uma fun\u00e7\u00e3o s\u00f3, pra nunca divergir entre as duas
+// telas se o crit\u00e9rio de exibi\u00e7\u00e3o mudar (ex: incluir CNPJ) um dia.
+function fornecedorNome(f) {
+  return f ? (f.nomeFantasia || f.razaoSocial || '') : '';
+}
+
+// Rótulo de um material pro campo de busca (Fórmula/BOM) -- "CODIGO —
+// NOME" + fornecedor quando há um vinculado. Pedido do usuário: "indicar
+// ao lado do nome, o fornecedor" + "ter a opção de pesquisar o item pelo
+// nome, fornecedor, codigo, ao invés de só selecionar" -- como o
+// attachAutocomplete filtra por substring dentro do label inteiro, colocar
+// o fornecedor no label já faz a busca por fornecedor funcionar de graça,
+// sem precisar de lógica de filtro separada. `fornecedor` já resolvido
+// (objeto de fornecedores/{key} ou null/undefined) -- função não faz
+// lookup sozinha, quem chama já tem os dados carregados.
+function materialBuscaLabel(m, fornecedor) {
+  if (!m) return '';
+  var base = (m.mpCodigo || '') + ' — ' + (m.mpNome || '');
+  var forn = fornecedorNome(fornecedor);
+  return forn ? (base + ' · Fornecedor: ' + forn) : base;
+}
+
 function cleanFutureSlots(pedidoId, dbRef) {
   if (!pedidoId) return Promise.resolve(0);
   var today = todayLocal();
