@@ -1414,7 +1414,7 @@ try {
 }
 
 // ── Abas de nível página + roteamento por ?tab= ────────────────────────
-var MAINTAB_ALIASES = { produtos: 'produtos', materiais: 'materiais', formulas: 'formulas', categorias: 'categorias', clientes: 'clientes', fornecedores: 'fornecedores' };
+var MAINTAB_ALIASES = { produtos: 'produtos', materiais: 'materiais', formulas: 'formulas', categorias: 'categorias', enderecos: 'enderecos', clientes: 'clientes', fornecedores: 'fornecedores' };
 function activateMainTab(name, pushUrl) {
   if (!MAINTAB_ALIASES[name]) return;
   document.querySelectorAll('.main-tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-maintab') === name); });
@@ -3341,31 +3341,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    var updates = {};
+    // gerarUpdatesPosicoesRua (shared/utils.js) -- mesma função usada em
+    // estoque.html, pra nunca divergir se a regra de geração mudar um dia.
+    var updates = gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosEstoque, ocupantesPorEndereco, currentUserNome());
     updates['estrutura_ruas/' + codigoRua] = {
       codigoRua: codigoRua, area: area, niveis: niveis, predios: predios,
       atualizadoEm: new Date().toISOString(), atualizadoPor: currentUserNome()
     };
-
-    // Gera as posições que faltam -- nunca apaga/move as que já existem
-    // com item associado (checa ocupantesPorEndereco), só cria as que
-    // faltam e reatualiza a área das que ainda estão vazias.
-    for (var nivel = 1; nivel <= niveis; nivel++) {
-      for (var predio = 1; predio <= predios; predio++) {
-        var codigo = codigoRua + '.' + nivel + '.' + predio;
-        var key = sanitizeKey(codigo);
-        var existente = enderecosEstoque[key];
-        var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
-        if (!existente) {
-          updates['enderecos_estoque/' + key] = {
-            codigo: codigo, rua: codigoRua, nivel: nivel, predio: predio, area: area,
-            ativo: true, geradoDe: codigoRua, criadoEm: new Date().toISOString(), criadoPor: currentUserNome()
-          };
-        } else if (!ocupada && existente.area !== area) {
-          updates['enderecos_estoque/' + key + '/area'] = area;
-        }
-      }
-    }
 
     db.ref().update(updates).then(function() {
       fecharModalRua();

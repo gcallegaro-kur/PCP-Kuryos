@@ -1015,6 +1015,41 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
   }));
 }
 
+// Gera/atualiza os enderecos_estoque de UMA rua a partir da Estrutura de
+// Ruas (rua × nível × prédio -- prédio ímpar=esquerdo, par=direito) --
+// usado tanto em cadastros.html (aba Endereços) quanto em estoque.html
+// (mesmo botão "Salvar e Gerar Posições" nos dois lugares, pedido do
+// usuário: "vale ter na aba cadastro e na aba... onde precisamos
+// executar" -- uma lógica só, chamada dos dois pontos, pra nunca divergir
+// se um dia precisar mudar a regra de geração). Só MONTA o objeto de
+// updates (não escreve nada sozinho) -- quem chama decide o `estrutura_
+// ruas/{codigoRua}` e faz o `db.ref().update(updates)`. Nunca apaga/move
+// uma posição já ocupada (ocupantesPorEndereco vem de fora -- quem chama
+// já tem os dados carregados, evita esta função ter que ler
+// estoque_lotes sozinha) -- só cria as que faltam e reatualiza a área
+// das que ainda estão vazias.
+function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExistentes, ocupantesPorEndereco, autor) {
+  var updates = {};
+  var agora = new Date().toISOString();
+  for (var nivel = 1; nivel <= niveis; nivel++) {
+    for (var predio = 1; predio <= predios; predio++) {
+      var codigo = codigoRua + '.' + nivel + '.' + predio;
+      var key = sanitizeKey(codigo);
+      var existente = enderecosExistentes[key];
+      var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
+      if (!existente) {
+        updates['enderecos_estoque/' + key] = {
+          codigo: codigo, rua: codigoRua, nivel: nivel, predio: predio, area: area,
+          ativo: true, geradoDe: codigoRua, criadoEm: agora, criadoPor: autor
+        };
+      } else if (!ocupada && existente.area !== area) {
+        updates['enderecos_estoque/' + key + '/area'] = area;
+      }
+    }
+  }
+  return updates;
+}
+
 // ── WMS Fase 1: lote/endereço granular (estoque_lotes/enderecos_estoque) ──
 // Nós IRMÃOS de estoque/{materialKey}, não aninhados dentro dele -- o
 // agregado (saldoAtual/saldoEmpenhado) continua sendo a fonte de verdade
