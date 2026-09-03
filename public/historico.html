@@ -500,6 +500,23 @@
     document.getElementById('fDataIni').value = toISO(ago);
   })();
 
+  // Deep-link (ops.html, botão 📝 na fila "Aguardando Confirmação"): abre
+  // já filtrado num lote específico, pro PCP corrigir um apontamento sem
+  // ter que procurar a OP de novo aqui. ?desde= (se vier mais cedo que o
+  // padrão de 30 dias) evita que uma OP mais antiga que o recorte padrão
+  // pareça "sem apontamento nenhum" só por estar fora do período carregado.
+  (function() {
+    var params = new URLSearchParams(window.location.search);
+    var lote = params.get('lote');
+    var desde = params.get('desde');
+    if (!lote) return;
+    document.getElementById('fSearch').value = lote;
+    if (desde && desde < document.getElementById('fDataIni').value) {
+      document.getElementById('fDataIni').value = desde;
+    }
+    loadRegistros();
+  })();
+
   function toISO(d) {
     return toLocalISODate(d); // shared/utils.js — evita deslocar 1 dia por causa de UTC a noite
   }
