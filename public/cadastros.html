@@ -223,7 +223,26 @@
         <option value="ativo">Ativos</option>
         <option value="inativo">Inativos</option>
       </select>
+      <select class="kt-select" id="filterUnidade-mat">
+        <option value="">Todas as unidades</option>
+      </select>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnFacetasToggle-mat">🔧 Filtros por medida/característica <span id="facetasCountBadge-mat"></span></button>
       <button class="btn btn-primary" id="btnNovo-mat">+ Novo Material</button>
+    </div>
+
+    <!-- Pedido do usuário: filtrar por praticamente todos os campos de
+         cadastro (medida, material/resina, gargalo/rosca, cor, textura...),
+         não só código/nome/tipo. Reaproveita o mesmo desenho já validado em
+         "Busca Avançada: Fornecedores × Material" (compras.html,
+         BF_FACET_CONFIG) -- escolhe o Tipo acima e os campos DAQUELE tipo
+         viram filtro aqui, porque cada tipo tem um conjunto de campos
+         técnicos diferente (gargalo/rosca só existe em Embalagem Primária,
+         por exemplo). Ampliado aqui com gargaloRosca/formato, que a versão
+         de compras.html tinha deixado de fora. -->
+    <div class="card" id="matFacetasCard" style="display:none;margin-bottom:14px">
+      <div class="card-title">Filtros por característica <span style="font-weight:400;color:var(--muted);font-size:12px">— escolha um Tipo acima pra ver os campos daquele tipo</span></div>
+      <div class="form-grid" id="matFacetas"></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnFacetasLimpar-mat" style="margin-top:8px">Limpar filtros por característica</button>
     </div>
 
     <div class="stats">
@@ -1640,17 +1659,154 @@ document.addEventListener('DOMContentLoaded', function() {
     renderFornecedoresHomologados();
   }
 
+  /* ── Filtros por característica (busca facetada estilo e-commerce) ──
+     Pedido do usuário: filtrar por praticamente todos os campos do
+     cadastro (medida, material/resina, gargalo/rosca, cor, textura...),
+     não só código/nome/tipo/ativo. Mesmo desenho já usado em compras.html
+     ("Busca Avançada: Fornecedores × Material", BF_FACET_CONFIG) --
+     escolhe o Tipo (select #filterTipo, já existia) e os campos DAQUELE
+     tipo viram filtro aqui, porque cada tipo tem um conjunto de campos
+     técnicos diferente (gargalo/rosca só existe em Embalagem Primária,
+     por exemplo). Campos com lista fechada (textura/fixação) usam as
+     mesmas opções do cadastro; os demais (materialResina/cor/gargaloRosca/
+     formato/aparência/função na fórmula/casa de fragrância) descobrem as
+     opções a partir do que já foi cadastrado (distinctValuesMat). */
+  var FACET_CONFIG_MAT = {
+    EP: [
+      { field: 'formato', label: 'Formato', type: 'select' },
+      { field: 'gargaloRosca', label: 'Gargalo / rosca', type: 'select' },
+      { field: 'materialResina', label: 'Material', type: 'select' },
+      { field: 'cor', label: 'Cor', type: 'select' },
+      { field: 'textura', label: 'Textura', type: 'select', opts: [['LISA', 'Lisa'], ['ESTRIADA', 'Estriada'], ['FOSCA', 'Fosca'], ['BRILHANTE', 'Brilhante'], ['OUTRA', 'Outra']] },
+      { field: 'fixacao', label: 'Fixação', type: 'select', opts: [['ROSCA', 'Rosca'], ['RECRAVE', 'Recrave'], ['EASY_LOCK', 'Easy Lock'], ['OUTRA', 'Outra']] },
+      { field: 'volumeNominal', label: 'Volume nominal (ml)', type: 'range' },
+      { field: 'volumeInternoTotal', label: 'Volume interno (ml)', type: 'range' },
+      { field: 'alturaMm', label: 'Altura (mm)', type: 'range' },
+      { field: 'diametroMm', label: 'Diâmetro (mm)', type: 'range' },
+      { field: 'pesoUnitario', label: 'Peso unitário (g)', type: 'range' }
+    ],
+    ES: [
+      { field: 'materialResina', label: 'Material', type: 'select' },
+      { field: 'cor', label: 'Cor', type: 'select' },
+      { field: 'comprimentoMm', label: 'Comprimento (mm)', type: 'range' },
+      { field: 'larguraMm', label: 'Largura (mm)', type: 'range' },
+      { field: 'alturaMm', label: 'Altura (mm)', type: 'range' },
+      { field: 'pesoUnitario', label: 'Peso unitário (g)', type: 'range' }
+    ],
+    MPGR: [
+      { field: 'cor', label: 'Cor', type: 'select' },
+      { field: 'aparencia', label: 'Aparência', type: 'select' },
+      { field: 'funcaoFormula', label: 'Função na fórmula', type: 'select' },
+      { field: 'densidade', label: 'Densidade (g/ml)', type: 'range' }
+    ],
+    MPES: [
+      { field: 'casaFragrancia', label: 'Casa de fragrância', type: 'select' },
+      { field: 'custoTargetUsd', label: 'Custo target (USD/kg)', type: 'range' }
+    ]
+  };
+  FACET_CONFIG_MAT.ET = FACET_CONFIG_MAT.ES;
+
+  function distinctValuesMat(tipo, field) {
+    var vals = {};
+    Object.values(allMateriais).forEach(function(m) {
+      if (m.tipo !== tipo) return;
+      if (m[field]) vals[m[field]] = true;
+    });
+    return Object.keys(vals).sort();
+  }
+
+  function renderMatFacetas() {
+    var tipo = document.getElementById('filterTipo').value;
+    var box = document.getElementById('matFacetas');
+    var config = FACET_CONFIG_MAT[tipo];
+    if (!config) {
+      box.innerHTML = '<div class="field-hint">Escolha um Tipo no filtro acima pra ver os filtros específicos dele (gargalo/rosca, material, dimensões...).</div>';
+      atualizarFacetasBadge();
+      return;
+    }
+    box.innerHTML = config.map(function(f) {
+      if (f.type === 'select') {
+        var opts = f.opts || distinctValuesMat(tipo, f.field).map(function(v) { return [v, v]; });
+        return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
+          '<select class="kt-select mat-facet" data-field="' + f.field + '" data-type="select" style="width:100%">' +
+          '<option value="">Todos</option>' +
+          opts.map(function(o) { return '<option value="' + escapeAttr(o[0]) + '">' + escapeHtml(o[1]) + '</option>'; }).join('') +
+          '</select></div>';
+      }
+      return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="number" class="mat-facet" data-field="' + f.field + '" data-type="range" data-bound="min" placeholder="mín" style="width:50%">' +
+        '<span style="color:var(--muted)">–</span>' +
+        '<input type="number" class="mat-facet" data-field="' + f.field + '" data-type="range" data-bound="max" placeholder="máx" style="width:50%">' +
+        '</div></div>';
+    }).join('');
+    document.querySelectorAll('.mat-facet').forEach(function(el) {
+      if (el.tagName === 'SELECT') { el.addEventListener('change', function() { renderTable(); atualizarFacetasBadge(); }); return; }
+      el.addEventListener('input', function() {
+        clearTimeout(_tMatFaceta);
+        _tMatFaceta = setTimeout(function() { renderTable(); atualizarFacetasBadge(); }, 250);
+      });
+    });
+    atualizarFacetasBadge();
+  }
+  var _tMatFaceta = null;
+
+  function atualizarFacetasBadge() {
+    var n = 0;
+    document.querySelectorAll('.mat-facet').forEach(function(el) {
+      if (el.getAttribute('data-type') === 'select') { if (el.value) n++; }
+      else if (el.value !== '') n++;
+    });
+    document.getElementById('facetasCountBadge-mat').textContent = n ? '(' + n + ')' : '';
+  }
+
+  function limparFacetasMat() {
+    document.querySelectorAll('.mat-facet').forEach(function(el) { el.value = ''; });
+    renderTable();
+    atualizarFacetasBadge();
+  }
+
+  function refreshFilterUnidadeOptions() {
+    var sel = document.getElementById('filterUnidade-mat');
+    var cur = sel.value;
+    var unidades = {};
+    Object.values(allMateriais).forEach(function(m) { if (m.unidade) unidades[m.unidade] = true; });
+    sel.innerHTML = '<option value="">Todas as unidades</option>' +
+      Object.keys(unidades).sort().map(function(u) { return '<option value="' + escapeAttr(u) + '">' + escapeHtml(u) + '</option>'; }).join('');
+    sel.value = unidades[cur] ? cur : '';
+  }
+
   function renderTable() {
     var search = norm(document.getElementById('searchInput-mat').value);
     var filtTipo = document.getElementById('filterTipo').value;
     var filtAtivo = document.getElementById('filterAtivo-mat').value;
+    var filtUnidade = document.getElementById('filterUnidade-mat').value;
+
+    var facetSelects = {}, facetRanges = {};
+    document.querySelectorAll('.mat-facet').forEach(function(el) {
+      var field = el.getAttribute('data-field');
+      if (el.getAttribute('data-type') === 'select') {
+        if (el.value) facetSelects[field] = el.value;
+      } else if (el.value !== '') {
+        facetRanges[field] = facetRanges[field] || {};
+        facetRanges[field][el.getAttribute('data-bound')] = parseFloat(el.value);
+      }
+    });
 
     var rows = Object.entries(allMateriais).filter(function(entry) {
       var m = entry[1];
       var ativo = m.ativo === false ? 'inativo' : 'ativo';
       if (filtTipo && m.tipo !== filtTipo) return false;
       if (filtAtivo && ativo !== filtAtivo) return false;
+      if (filtUnidade && (m.unidade || '') !== filtUnidade) return false;
       if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome) + ' ' + norm(m.inci)).indexOf(search) === -1) return false;
+      for (var campoSel in facetSelects) { if ((m[campoSel] || '') !== facetSelects[campoSel]) return false; }
+      for (var campoRange in facetRanges) {
+        var v = m[campoRange], r = facetRanges[campoRange];
+        if (v == null) return false;
+        if (r.min != null && v < r.min) return false;
+        if (r.max != null && v > r.max) return false;
+      }
       return true;
     });
     rows = matSortable.applySort(rows, function(entry, field) {
@@ -2120,12 +2276,24 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('searchInput-mat').addEventListener('input', function() {
       clearTimeout(_t); _t = setTimeout(renderTable, 200);
     });
-    document.getElementById('filterTipo').addEventListener('change', renderTable);
+    document.getElementById('filterTipo').addEventListener('change', function() {
+      renderMatFacetas(); // campos técnicos são por tipo -- troca a lista inteira
+      renderTable();
+    });
     document.getElementById('filterAtivo-mat').addEventListener('change', renderTable);
+    document.getElementById('filterUnidade-mat').addEventListener('change', renderTable);
+    document.getElementById('btnFacetasToggle-mat').addEventListener('click', function() {
+      var card = document.getElementById('matFacetasCard');
+      var abrindo = card.style.display === 'none';
+      card.style.display = abrindo ? '' : 'none';
+      if (abrindo) renderMatFacetas();
+    });
+    document.getElementById('btnFacetasLimpar-mat').addEventListener('click', limparFacetasMat);
     matSortable.wireHeaders(renderTable);
 
     dbOnValue(db.ref('materiais'), function(snap) {
       allMateriais = snap.val() || {};
+      refreshFilterUnidadeOptions();
       renderTable();
     });
     dbOnValue(db.ref('fornecedores'), function(snap) {
