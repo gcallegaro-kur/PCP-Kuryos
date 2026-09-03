@@ -88,8 +88,8 @@
     .section-note a:hover{text-decoration:underline}
     .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
     .section-label:first-child{margin-top:0}
-    .item-row{display:grid;grid-template-columns:2fr 1fr .7fr 1.5fr auto;gap:8px;align-items:center;margin-bottom:8px}
-    .item-row-head{display:grid;grid-template-columns:2fr 1fr .7fr 1.5fr auto;gap:8px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+    .item-row{display:grid;grid-template-columns:1.8fr 1.3fr .8fr .6fr 1.2fr auto;gap:8px;align-items:center;margin-bottom:8px}
+    .item-row-head{display:grid;grid-template-columns:1.8fr 1.3fr .8fr .6fr 1.2fr auto;gap:8px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
     .chk-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--tint-gray-bg)}
     .chk-row input{width:auto;margin-top:3px}
     .chk-row-body{flex:1;font-size:12.5px}
@@ -287,7 +287,7 @@
     <div class="modal-header"><h2>Nova Solicitação de Compra</h2><button class="modal-close" id="modalScClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div class="section-label">Itens solicitados</div>
-      <div class="item-row-head"><div>Material</div><div>Quantidade</div><div>Un.</div><div>Observação</div><div></div></div>
+      <div class="item-row-head"><div>Material</div><div>Fornecedores homologados</div><div>Quantidade</div><div>Un.</div><div>Observação</div><div></div></div>
       <div id="scItensBuilder"></div>
       <button class="btn btn-ghost btn-sm" id="btnAddScItem">+ Item</button>
 
@@ -500,15 +500,21 @@ function alternativasMesmoItem(materialCodigo) {
     return m.mpCodigo !== mat.mpCodigo && m.ativo !== false && m.tipo === mat.tipo && norm(m.mpNome) === nomeNorm;
   });
 }
-function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
+// opts.ocultarFornecedores: usado pelo builder da Nova Solicitação, que
+// agora tem sua própria coluna "Fornecedores" (candidatosCotacaoParaMaterial)
+// -- evita repetir a mesma lista duas vezes na mesma linha.
+function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco, opts) {
+  opts = opts || {};
   var homologados = homologadosDoMaterial(materialCodigo);
   var ultimoPreco = ultimoPrecoDoMaterial(materialCodigo);
   var partes = [];
-  if (homologados.length) {
-    var nomes = homologados.map(function(h) { return h.nome; }).join(', ');
-    partes.push('🔧 Homologados: ' + escapeHtml(nomes));
-  } else {
-    partes.push('<span style="color:var(--warning)">⚠ nenhum fornecedor homologado pra este material</span>');
+  if (!opts.ocultarFornecedores) {
+    if (homologados.length) {
+      var nomes = homologados.map(function(h) { return h.nome; }).join(', ');
+      partes.push('🔧 Homologados: ' + escapeHtml(nomes));
+    } else {
+      partes.push('<span style="color:var(--warning)">⚠ nenhum fornecedor homologado pra este material</span>');
+    }
   }
   if (ultimoPreco) {
     partes.push('💰 Último preço: ' + fmtNum(ultimoPreco.precoUnit) + ' (' + escapeHtml(ultimoPreco.fornecedorNome) + ', ' + fmtData(ultimoPreco.data) + ')');
@@ -521,7 +527,7 @@ function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
   }
   var html = '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + partes.join(' · ') + '</div>';
 
-  var variantes = alternativasMesmoItem(materialCodigo);
+  var variantes = opts.ocultarFornecedores ? [] : alternativasMesmoItem(materialCodigo);
   if (variantes.length) {
     html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">🔀 Mesmo item, outro(s) fornecedor(es): ' +
       variantes.map(function(v) {
@@ -652,6 +658,22 @@ function rejeitarSolicitacao(key) {
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
 }
 
+// Pedido do usuário: coluna própria (não só o texto abaixo da linha)
+// mostrando quem serão os fornecedores homologados quando essa
+// solicitação virar cotação -- reaproveita candidatosCotacaoParaMaterial
+// (definida mais abaixo, seção Processo de Cotação -- mesma lista que já
+// alimenta o "Iniciar Processo de Cotação"), que já soma o(s) fornecedor(es)
+// direto(s) do cadastro com o(s) de outro cadastro do mesmo item (🔗).
+function fornecedoresColunaHtml(materialCodigo) {
+  var candidatos = candidatosCotacaoParaMaterial(materialCodigo);
+  if (!candidatos.length) {
+    return '<div style="font-size:12px;color:var(--warning)">⚠ nenhum homologado</div>';
+  }
+  return '<div style="font-size:12px;line-height:1.5">' + candidatos.map(function(c) {
+    return escapeHtml(c.nome) + (c.viaVariante ? ' <span title="Fornecedor de outro cadastro do mesmo item (código diferente)" style="color:var(--muted)">🔗</span>' : '');
+  }).join('<br>') + '</div>';
+}
+
 /* ── Modal Nova Solicitação ── */
 function renderScItensBuilder() {
   var box = document.getElementById('scItensBuilder');
@@ -662,7 +684,8 @@ function renderScItensBuilder() {
   box.innerHTML = scItensBuilder.map(function(it, idx) {
     var mat = findMaterialByCodigo(it.materialCodigo);
     var unidade = mat ? mat.unidade : '';
-    var referencia = it.materialCodigo ? referenciaMaterialHtml(it.materialCodigo) : '';
+    var referencia = it.materialCodigo ? referenciaMaterialHtml(it.materialCodigo, null, {ocultarFornecedores: true}) : '';
+    var fornecedoresCel = it.materialCodigo ? fornecedoresColunaHtml(it.materialCodigo) : '<span style="color:var(--muted);font-size:12px">—</span>';
     var labelAtual = mat ? (mat.mpCodigo + ' — ' + mat.mpNome) : '';
     return '<div>' +
       '<div class="item-row" data-idx="' + idx + '">' +
@@ -670,6 +693,7 @@ function renderScItensBuilder() {
           '<input type="text" class="sci-mat" data-idx="' + idx + '" value="' + escapeAttr(labelAtual) + '" placeholder="Código, nome ou fornecedor..." autocomplete="off">' +
           '<input type="hidden" class="sci-mat-key" data-idx="' + idx + '" value="' + escapeAttr(it.materialCodigo || '') + '">' +
         '</span>' +
+        fornecedoresCel +
         '<input type="number" class="sci-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
         '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
         '<input type="text" class="sci-obs" data-idx="' + idx + '" value="' + escapeAttr(it.obs || '') + '" placeholder="Opcional">' +
