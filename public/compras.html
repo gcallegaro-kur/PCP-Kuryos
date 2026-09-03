@@ -426,7 +426,10 @@ function getProdutoBySkuCompras(sku) {
   return (atual && allProdutosCompras[atual]) || null;
 }
 
-function norm(s) { return String(s || '').toLowerCase().trim(); }
+// stripAccents vem de shared/utils.js -- mesma correção aplicada em
+// cadastros.html (achado do usuário: "CILÍNDRICO"/"CILINDRICO" etc.
+// tratados como valores diferentes por toda busca/comparação da página).
+function norm(s) { return stripAccents(String(s || '')).toLowerCase().trim(); }
 function showAlert(msg, type) {
   var box = document.getElementById('alertBox');
   box.className = 'alert alert-' + (type || 'success') + ' show';
@@ -444,15 +447,6 @@ function currentUserNome() {
 function fmtData(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return '—'; }
-}
-function materiaisOptionsSimple(selecionado) {
-  var opts = '<option value="">Selecione...</option>';
-  Object.values(allMateriais).filter(function(m) { return m.ativo !== false; })
-    .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
-    .forEach(function(m) {
-      opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
-    });
-  return opts;
 }
 function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
@@ -485,13 +479,26 @@ function ultimoPrecoDoMaterial(materialCodigo) {
 }
 // Texto de referência curto, reutilizado nos 3 pontos de decisão (builder
 // de solicitação, preview de consolidação, cotação).
-// Materiais fisicamente diferentes mas que a Qualidade aceita como
-// substituíveis nesta compra (ex: dois frascos de fornecedores distintos) --
-// vínculo gravado nos dois sentidos no cadastro de Materiais (cadastros.html).
-function variantesEquivalentesDoMaterial(materialCodigo) {
+// Pedido do usuário: "direcionar mais a possibilidade de optar abrir
+// cotação com o fornecedor X ou Y" -- pra Embalagem (EP/ES/ET/MPES), 1
+// cadastro = 1 fornecedor (o mesmo item físico, comprado de fornecedores
+// diferentes, vira um cadastro por fornecedor -- decisão de negócio
+// confirmada pelo usuário: "com embalagem é muito comum mudar, ainda que
+// coisa pouca, mas que gera impacto"). Achar essas alternativas antes
+// dependia de um vínculo manual (variantesEquivalentes, cadastro de
+// Materiais) que o usuário pediu pra remover por não ter ficado bom --
+// esta versão acha ao vivo, comparando NOME EXATO (mesmo tipo, depois de
+// normalizar acento/maiúscula) contra outros materiais ativos. Exato de
+// propósito, não aproximado -- o próprio usuário frisou que uma pequena
+// diferença de especificação já importa, então uma correspondência
+// "parecida" arriscaria sugerir um item que não é realmente o mesmo.
+function alternativasMesmoItem(materialCodigo) {
   var mat = findMaterialByCodigo(materialCodigo);
-  if (!mat || !mat.variantesEquivalentes) return [];
-  return Object.keys(mat.variantesEquivalentes).map(function(vKey) { return allMateriais[vKey]; }).filter(Boolean);
+  if (!mat || !mat.mpNome) return [];
+  var nomeNorm = norm(mat.mpNome);
+  return Object.values(allMateriais).filter(function(m) {
+    return m.mpCodigo !== mat.mpCodigo && m.ativo !== false && m.tipo === mat.tipo && norm(m.mpNome) === nomeNorm;
+  });
 }
 function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
   var homologados = homologadosDoMaterial(materialCodigo);
@@ -514,9 +521,9 @@ function referenciaMaterialHtml(materialCodigo, fornecedorKeyEmFoco) {
   }
   var html = '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + partes.join(' · ') + '</div>';
 
-  var variantes = variantesEquivalentesDoMaterial(materialCodigo);
+  var variantes = alternativasMesmoItem(materialCodigo);
   if (variantes.length) {
-    html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">🔀 Alternativa(s) equivalente(s): ' +
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">🔀 Mesmo item, outro(s) fornecedor(es): ' +
       variantes.map(function(v) {
         var h = homologadosDoMaterial(v.mpCodigo);
         var p = ultimoPrecoDoMaterial(v.mpCodigo);
@@ -656,9 +663,13 @@ function renderScItensBuilder() {
     var mat = findMaterialByCodigo(it.materialCodigo);
     var unidade = mat ? mat.unidade : '';
     var referencia = it.materialCodigo ? referenciaMaterialHtml(it.materialCodigo) : '';
+    var labelAtual = mat ? (mat.mpCodigo + ' — ' + mat.mpNome) : '';
     return '<div>' +
       '<div class="item-row" data-idx="' + idx + '">' +
-        '<select class="sci-mat" data-idx="' + idx + '">' + materiaisOptionsSimple(it.materialCodigo) + '</select>' +
+        '<span style="position:relative">' +
+          '<input type="text" class="sci-mat" data-idx="' + idx + '" value="' + escapeAttr(labelAtual) + '" placeholder="Código, nome ou fornecedor..." autocomplete="off">' +
+          '<input type="hidden" class="sci-mat-key" data-idx="' + idx + '" value="' + escapeAttr(it.materialCodigo || '') + '">' +
+        '</span>' +
         '<input type="number" class="sci-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
         '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
         '<input type="text" class="sci-obs" data-idx="' + idx + '" value="' + escapeAttr(it.obs || '') + '" placeholder="Opcional">' +
@@ -667,8 +678,42 @@ function renderScItensBuilder() {
       referencia +
     '</div>';
   }).join('');
+  // Busca por código, nome OU fornecedor (pedido do usuário) -- reaproveita
+  // homologadosDoMaterial (já cobre o único-fornecedor-por-cadastro de
+  // Embalagem e o vários-homologados de MP Geral igual). Cada resultado já
+  // mostra o fornecedor na própria linha da lista -- é o que deixa visível
+  // "o mesmo tipo de item, fornecedor X ou Y" direto na busca, sem precisar
+  // abrir mais nada pra comparar.
+  function materiaisAutocompleteItems() {
+    return Object.entries(allMateriais).filter(function(e) { return e[1].ativo !== false; })
+      .map(function(e) {
+        var m = e[1];
+        var forns = homologadosDoMaterial(m.mpCodigo).map(function(h) { return h.nome; }).join(', ');
+        var label = m.mpCodigo + ' — ' + m.mpNome + (forns ? ' · ' + forns : ' · sem fornecedor cadastrado');
+        return { value: m.mpCodigo + ' — ' + m.mpNome, label: label, key: m.mpCodigo };
+      })
+      .sort(function(a, b) { return norm(a.label).localeCompare(norm(b.label)); });
+  }
   document.querySelectorAll('.sci-mat').forEach(function(el) {
-    el.addEventListener('change', function() { scItensBuilder[+el.getAttribute('data-idx')].materialCodigo = el.value; renderScItensBuilder(); });
+    var idx = el.getAttribute('data-idx');
+    var hidden = document.querySelector('.sci-mat-key[data-idx="' + idx + '"]');
+    attachAutocomplete(el, materiaisAutocompleteItems, {
+      onSelect: function(item) {
+        hidden.value = item.key;
+        scItensBuilder[+idx].materialCodigo = item.key;
+        renderScItensBuilder();
+      }
+    });
+    // Digitar sem escolher da lista não conta como seleção válida -- mesmo
+    // padrão já usado em cadastros.html (fhFornecedor-mat etc.): todo
+    // 'input' limpa o vínculo; se for de fato uma seleção da lista,
+    // onSelect (chamado logo em seguida, no mesmo clique) grava de novo o
+    // código certo -- nunca fica um código velho salvo enquanto o campo já
+    // mostra outro texto.
+    el.addEventListener('input', function() {
+      hidden.value = '';
+      scItensBuilder[+idx].materialCodigo = '';
+    });
   });
   document.querySelectorAll('.sci-qtd').forEach(function(el) {
     el.addEventListener('input', function() { scItensBuilder[+el.getAttribute('data-idx')].qtd = parseFloat(el.value) || 0; });
@@ -1236,15 +1281,17 @@ function solicitacoesAprovadasDisponiveis() {
 
 /* ══════════════ PROCESSO DE COTAÇÃO ══════════════ */
 // Candidatos pra cotar um item: fornecedor(es) do próprio material +
-// fornecedor de cada variante equivalente. MP Geral/Uso e Consumo já vêm
-// com vários homologados no próprio cadastro; Embalagem/Fragrância são
-// 1-fornecedor-por-cadastro (decisão desta sessão), então pra elas a
-// variante equivalente é o que dá mais de uma opção pra convidar a cotar.
+// fornecedor de cada material que é o mesmo item (ver alternativasMesmoItem).
+// MP Geral/Uso e Consumo já vêm com vários homologados no próprio cadastro;
+// Embalagem/Fragrância são 1-fornecedor-por-cadastro (decisão do usuário --
+// pequena diferença de fornecedor pode gerar impacto real na peça), então
+// pra elas é a comparação por nome que dá mais de uma opção pra convidar a
+// cotar (fornecedor X ou Y do "mesmo" item).
 function candidatosCotacaoParaMaterial(materialCodigo) {
   var diretos = homologadosDoMaterial(materialCodigo).map(function(h) {
     return Object.assign({}, h, {origemMaterial: materialCodigo, viaVariante: false});
   });
-  var deVariantes = variantesEquivalentesDoMaterial(materialCodigo).reduce(function(acc, v) {
+  var deVariantes = alternativasMesmoItem(materialCodigo).reduce(function(acc, v) {
     return acc.concat(homologadosDoMaterial(v.mpCodigo).map(function(h) {
       return Object.assign({}, h, {origemMaterial: v.mpCodigo, viaVariante: true});
     }));
