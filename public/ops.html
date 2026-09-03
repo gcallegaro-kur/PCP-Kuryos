@@ -142,7 +142,11 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
+
+    th.th-sortable { cursor: pointer; user-select: none; }
+    th.th-sortable:hover { color: var(--primary); }
+    th.th-sort-active { color: var(--primary); }
+
     tr:hover {
       background: #f8fafc;
     }
@@ -399,19 +403,39 @@
   </div>
 
   <div id="tabPanelAtivas">
+    <!-- Achado do usuário (OP 26244/01, cancelada por engano e invisível em
+         qualquer lugar da tela): o modo padrão (opEstaAtiva) SEMPRE escondeu
+         Cancelado/Concluído de propósito -- correto pro dia a dia, mas sem
+         nenhuma forma de enxergar essas OPs quando precisa investigar um
+         caso assim. Filtro de status + busca abrem essa porta sem mudar o
+         comportamento padrão (ativas continua sendo o que abre a tela). -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <input type="text" id="opsBusca" placeholder="🔎 Buscar por OP, lote, produto, SKU ou cliente..." style="flex:1;min-width:240px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)">
+      <select id="opsFiltroStatus" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)">
+        <option value="ativas">Ativas (padrão)</option>
+        <option value="todos">Todos os status</option>
+        <option value="Não Iniciado">Não Iniciado</option>
+        <option value="Programado">Programado</option>
+        <option value="Em Produção">Em Produção</option>
+        <option value="Produção Parcial">Produção Parcial</option>
+        <option value="Aguardando Confirmação">Aguardando Confirmação</option>
+        <option value="Concluído">Concluído</option>
+        <option value="Cancelado">Cancelado</option>
+      </select>
+    </div>
     <div class="card">
       <div class="table-container">
         <table>
-          <thead>
+          <thead id="opsThead">
             <tr>
-              <th style="width: 110px;">OP / Lote</th>
-              <th>Cliente</th>
-              <th>Produto / Descrição</th>
-              <th style="width: 120px;">Linha</th>
+              <th style="width: 110px;" data-sort="lote">OP / Lote</th>
+              <th data-sort="cliente">Cliente</th>
+              <th data-sort="produto">Produto / Descrição</th>
+              <th style="width: 120px;" data-sort="linha">Linha</th>
               <th style="width: 170px;">Programação</th>
               <th style="width: 150px;">Pedido Comercial</th>
               <th style="width: 180px;">Progresso Realizado</th>
-              <th style="width: 160px;">Status da OP</th>
+              <th style="width: 160px;" data-sort="status">Status da OP</th>
               <th style="width: 60px; text-align: center;">Ações</th>
             </tr>
           </thead>
@@ -687,7 +711,51 @@
     return html;
   }
 
+  // Filtro de status + busca (achado do usuário: OP cancelada por engano
+  // ficava invisível em TODA a tela, sem forma de investigar). "Ativas"
+  // sem busca é o modo padrão -- comportamento 100% igual ao de sempre,
+  // grupos por status. Qualquer outra combinação (status específico,
+  // "Todos", ou texto digitado) cai numa lista única, ordenável, que
+  // enxerga inclusive Cancelado/Concluído.
+  const opsFiltroState = { busca: '', status: 'ativas' };
+  const opsSortable = makeSortableTable(document.getElementById('opsThead'), 'lote', 'asc');
+  opsSortable.wireHeaders(renderOpsPanel);
+
+  function opsFiltroEstaNoModoPadrao() {
+    return opsFiltroState.status === 'ativas' && !opsFiltroState.busca.trim();
+  }
+
+  function renderOpsListaFiltrada() {
+    const tbody = document.getElementById('ops-tbody');
+    const buscaNorm = opsFiltroState.busca.trim().toLowerCase();
+    let todasOps = Object.keys(opsGlobal).map(k => ({ key: k, ...opsGlobal[k] }));
+
+    if (opsFiltroState.status === 'ativas') {
+      todasOps = todasOps.filter(o => opEstaAtiva(o));
+    } else if (opsFiltroState.status !== 'todos') {
+      todasOps = todasOps.filter(o => o.status === opsFiltroState.status);
+    }
+    if (buscaNorm) {
+      todasOps = todasOps.filter(o => {
+        const alvo = [o.lote, o.key, o.produto, o.sku, o.cliente].filter(Boolean).join(' ').toLowerCase();
+        return alvo.indexOf(buscaNorm) !== -1;
+      });
+    }
+
+    todasOps = opsSortable.applySort(todasOps, function(o, field) { return o[field]; });
+
+    if (!todasOps.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma OP encontrada com esse filtro.</td></tr>';
+      return;
+    }
+    const plural = todasOps.length === 1 ? '' : 's';
+    tbody.innerHTML =
+      '<tr class="group-header"><td colspan="8">🔎 ' + todasOps.length + ' OP' + plural + ' encontrada' + plural + '</td></tr>' +
+      todasOps.map(renderOpRow).join('');
+  }
+
   function renderOpsPanel() {
+    if (!opsFiltroEstaNoModoPadrao()) { renderOpsListaFiltrada(); return; }
     const tbody = document.getElementById('ops-tbody');
 
     const activeOps = Object.keys(opsGlobal)
@@ -1149,6 +1217,15 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  document.getElementById('opsBusca').addEventListener('input', (e) => {
+    opsFiltroState.busca = e.target.value;
+    renderOpsPanel();
+  });
+  document.getElementById('opsFiltroStatus').addEventListener('change', (e) => {
+    opsFiltroState.status = e.target.value;
+    renderOpsPanel();
+  });
 
   ['clBusca', 'clFiltroEtapa'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => { clPage = 1; renderChecklist(); });
