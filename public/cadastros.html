@@ -1414,7 +1414,10 @@ var db = firebase.database();
 // seção portada teve sua própria cópia removida ao entrar (fica só o
 // `editingKey`/`renderTable`/`openModal`/etc. de cada seção, presos no
 // IIFE dela -- ver comentário na seção de cada aba).
-function norm(s) { return String(s || '').toLowerCase().trim(); }
+// Achado do usuário: buscas/filtros/comparações nesta página tratavam
+// "CILÍNDRICO" e "CILINDRICO" como valores diferentes -- só tirava
+// maiúscula, nunca acento. stripAccents vem de shared/utils.js.
+function norm(s) { return stripAccents(String(s || '')).toLowerCase().trim(); }
 
 // ── Detecção de cadastro duplicado (matriz/filial, fornecedor×cliente) ──
 // Pedido do usuário: cadastros repetidos da mesma empresa (filial com CNPJ
@@ -1454,22 +1457,31 @@ function possivelDuplicata(nomeDigitado, colecao, campoNome, excludeKey) {
   return achado;
 }
 
-// ── Maiúsculas forçadas em campo de cadastro (pedido do usuário: nome/
-// endereço/etc. digitados em caixa mista causavam problema de correspondência
-// -- ex: o mesmo bug já corrigido em historico.html, onde "BODY SPLASH
-// LUNAR 120ml" vs "Body Splash Lunar 120 ml" nunca batiam no reconcile).
-// Todo campo que deve ficar em maiúsculo leva `class="uc"` no HTML (estático
-// ou nas linhas geradas dinamicamente, ex: itens de Especificações) -- um
-// único listener delegado no documento cobre os dois casos, sem precisar
-// religar a cada linha nova renderizada. E-mail e site/URL NUNCA levam essa
-// classe (ficam como digitados).
+// ── Maiúsculas SEM ACENTO forçadas em campo de cadastro (pedido do
+// usuário: nome/endereço/etc. digitados em caixa mista causavam problema
+// de correspondência -- ex: o mesmo bug já corrigido em historico.html,
+// onde "BODY SPLASH LUNAR 120ml" vs "Body Splash Lunar 120 ml" nunca
+// batiam no reconcile). Todo campo que deve ficar em maiúsculo leva
+// `class="uc"` no HTML (estático ou nas linhas geradas dinamicamente, ex:
+// itens de Especificações) -- um único listener delegado no documento
+// cobre os dois casos, sem precisar religar a cada linha nova renderizada.
+// E-mail e site/URL NUNCA levam essa classe (ficam como digitados).
+//
+// Achado do usuário (Busca Avançada de Materiais, campo Formato): esta
+// função sempre tirou só a caixa (maiúscula/minúscula), nunca o acento --
+// "CILÍNDRICO" e "CILINDRICO" nunca bateram um com o outro em nenhum
+// filtro exato, mesmo digitados do jeito "certo" pelas regras daqui.
+// stripAccents (agora em shared/utils.js, reaproveitável) fecha essa
+// lacuna -- backfill dos 124 valores já cadastrados com essa divergência
+// (formato/cor/aparência/função na fórmula de Materiais) feito à parte,
+// com backup antes (ver backups/normalizacao-acentos-materiais-*.json).
 document.addEventListener('input', function(e) {
   var el = e.target;
   if (!el || !el.classList || !el.classList.contains('uc')) return;
   var pos = el.selectionStart;
-  var upper = el.value.toUpperCase();
-  if (upper === el.value) return; // evita mexer no cursor à toa quando não muda nada
-  el.value = upper;
+  var normalizado = stripAccents(el.value).toUpperCase();
+  if (normalizado === el.value) return; // evita mexer no cursor à toa quando não muda nada
+  el.value = normalizado;
   if (pos != null && el.setSelectionRange) {
     try { el.setSelectionRange(pos, pos); } catch (e2) { /* alguns tipos de input não suportam -- ignora */ }
   }

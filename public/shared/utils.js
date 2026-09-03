@@ -83,6 +83,18 @@ function dbOnValue(ref, onData, opts) {
   attach();
 }
 
+// Remove acentos/diacríticos mantendo a letra base (á->a, ç->c, ã->a...).
+// Achado do usuário (Busca Avançada de Materiais, campo Formato):
+// "CILÍNDRICO" e "CILINDRICO" eram tratados como valores diferentes em
+// toda busca/filtro/comparação -- nenhuma página do app tirava acento,
+// só maiúscula (ver `.uc`, cadastros.html). Cada página ainda mantém sua
+// própria função `norm()` local (não centralizada aqui ainda -- ver nota
+// em cadastros.html); esta função é o bloco de construção reaproveitável
+// pra ir fechando essa lacuna página por página.
+function stripAccents(s) {
+  return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function sanitizeKey(str) {
   if (!str) return '';
   var s = String(str).trim()
