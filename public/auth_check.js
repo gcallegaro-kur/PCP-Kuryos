@@ -505,7 +505,7 @@ function renderUnifiedNavbar(user) {
   const logisticaGroup = !isPcpAdmin ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Logística</div>' +
     ktLink('logistica.html', 'truck', 'Agendamentos', activePage) +
-    ktLink('estoque.html?tab=enderecos', 'warehouse', 'WMS', activePage) +
+    ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage) +
     ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) +
     '</div>';
 

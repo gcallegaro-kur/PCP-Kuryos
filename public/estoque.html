@@ -154,7 +154,8 @@
   <button class="tab" data-tab="lotes">Saldo por Lote/Endereço</button>
   <button class="tab" data-tab="vencendo">Lotes Vencendo</button>
   <button class="tab" data-tab="historico">Histórico de Movimentações</button>
-  <button class="tab" data-tab="enderecos">Endereços</button>
+  <button class="tab" data-tab="estrutura">🛣️ Estrutura de Ruas</button>
+  <button class="tab" data-tab="posicoes">🗺️ Posições</button>
   <button class="tab" data-tab="enderecamento">📍 Endereçamento</button>
 </div>
 
@@ -259,35 +260,33 @@
     </div>
   </div>
 
-  <!-- ═══ Aba: Endereços -- mesma Estrutura de Ruas/Posições de Cadastros
-       (pedido do usuário: "vale ter na aba cadastro e na aba... onde
-       precisamos executar" -- os dois lugares chamam gerarUpdatesPosicoesRua,
-       a MESMA função de shared/utils.js, nunca duas lógicas divergindo). ═══ -->
-  <div class="tab-panel" id="tab-enderecos">
-    <div class="tabs" id="enderecosInnerTabs" style="margin:0 0 14px">
-      <button class="tab active" data-tab="end-estrutura">Estrutura de Ruas</button>
-      <button class="tab" data-tab="end-posicoes">Posições</button>
+  <!-- ═══ Aba: Estrutura de Ruas -- pedido do usuário: 3 telas paralelas
+       de WMS (Endereçamento / Posições / Estrutura de Ruas), não mais uma
+       aba "Endereços" com 2 sub-abas dentro. Mesma tabela/lógica de
+       sempre, só sem o wrapper de sub-aba. Também aparece em cadastros.html
+       (mesmo gerarUpdatesPosicoesRua, shared/utils.js -- nunca duas
+       lógicas divergindo), mas de lá agora é só um link pra cá, não uma
+       segunda implementação. ═══ -->
+  <div class="tab-panel" id="tab-estrutura">
+    <div class="section-note">Cada rua gera suas posições automaticamente a partir desta configuração (níveis × prédios). Formato do endereço: <b>Rua.Nível.Prédio</b> (ex: 1.2.5) -- o número do Prédio já indica o lado: <b>ímpar = esquerdo, par = direito</b>. Gerar de novo nunca apaga nem move um endereço que já tem algo guardado -- só cria os que faltam, e só atualiza a área de posições ainda vazias.</div>
+    <div class="kt-toolbar">
+      <button class="btn btn-primary" id="btnNovaRua-end">+ Nova Rua</button>
     </div>
-
-    <div class="tab-panel active" id="tab-end-estrutura">
-      <div class="section-note">Cada rua gera suas posições automaticamente a partir desta configuração (níveis × prédios). Formato do endereço: <b>Rua.Nível.Prédio</b> (ex: 1.2.5) -- o número do Prédio já indica o lado: <b>ímpar = esquerdo, par = direito</b>. Gerar de novo nunca apaga nem move um endereço que já tem algo guardado -- só cria os que faltam, e só atualiza a área de posições ainda vazias.</div>
-      <div class="kt-toolbar">
-        <button class="btn btn-primary" id="btnNovaRua-end">+ Nova Rua</button>
-      </div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead><tr>
-              <th style="width:80px">Rua</th><th>Área</th><th style="width:90px">Níveis</th>
-              <th style="width:130px">Prédios (posições)</th><th style="width:130px">Posições geradas</th><th style="width:140px"></th>
-            </tr></thead>
-            <tbody id="ruasBody-end"></tbody>
-          </table>
-        </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:80px">Rua</th><th>Área</th><th style="width:90px">Níveis</th>
+            <th style="width:130px">Prédios (posições)</th><th style="width:130px">Posições geradas</th><th style="width:140px"></th>
+          </tr></thead>
+          <tbody id="ruasBody-end"></tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <div class="tab-panel" id="tab-end-posicoes">
+  <!-- ═══ Aba: Posições -- visualização (Lista/Mapa por rua/Planta Baixa) ═══ -->
+  <div class="tab-panel" id="tab-posicoes">
       <div class="kt-toolbar">
         <div class="kt-search"><span class="icon">🔍</span><input type="text" id="searchInput-end" placeholder="Buscar por código de endereço..."></div>
         <select class="kt-select" id="filterRua-end"><option value="">Todas as ruas</option></select>
@@ -346,7 +345,6 @@
         </div>
       </div>
     </div>
-  </div>
 
   <!-- ═══ Aba: Endereçamento -- pedido do usuário: "WMS é complementar ao
        estoque... acho não produtivo nascer com algo vinculado diretamente,
@@ -546,7 +544,7 @@ function fmtDataHora(iso) {
 // enderecos) -- mesmo padrão de ?tab= já usado em cadastros.html
 // (MAINTAB_ALIASES/activateMainTab), só que pras abas de nível página
 // aqui em vez das main-tabs de lá.
-var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, enderecos: 1, enderecamento: 1 };
+var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1 };
 function ativarAbaEstoque(target, pushUrl) {
   if (!ABAS_ESTOQUE_VALIDAS[target]) return;
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
@@ -1421,15 +1419,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnBuscarHistorico').addEventListener('click', buscarHistorico);
   document.getElementById('hmCodigo').addEventListener('keydown', function(e) { if (e.key === 'Enter') buscarHistorico(); });
 
-  // Sub-abas internas da aba Endereços -- escopadas a #tab-enderecos, mesmo
-  // motivo do escopo em #mainTabsEstoque acima (não interferir uma na outra).
-  document.querySelectorAll('#tab-enderecos .tab').forEach(function(tab) {
-    tab.addEventListener('click', function() {
-      var target = tab.getAttribute('data-tab');
-      document.querySelectorAll('#tab-enderecos .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
-      document.querySelectorAll('#tab-enderecos .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
-    });
-  });
+  // Estrutura de Ruas e Posições viraram abas de NÍVEL PÁGINA (irmãs de
+  // Saldo Agregado etc.), não mais sub-abas dentro de uma aba "Endereços"
+  // -- pedido do usuário: 3 telas paralelas de WMS. O antigo wiring de
+  // sub-aba (#tab-enderecos .tab) some, já é coberto pelo handler único
+  // de #mainTabsEstoque acima.
   document.getElementById('btnNovaRua-end').addEventListener('click', function() { abrirModalRua(null); });
   document.getElementById('modalRuaClose').addEventListener('click', fecharModalRua);
   document.getElementById('btnCancelarRua-end').addEventListener('click', fecharModalRua);
