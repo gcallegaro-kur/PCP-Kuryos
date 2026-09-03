@@ -539,12 +539,31 @@ function fmtDataHora(iso) {
 // nível página (mesmo bug-classe já visto nesta sessão, corrigido antes de
 // virar um problema real -- ver #maintab-formulas/#maintab-enderecos em
 // cadastros.html, mesmo princípio).
+//
+// Roteamento por ?tab= -- pedido do usuário na reorganização do menu:
+// "Estoque" (Geral) e "WMS" (Logística) viraram 2 links de menu pra esta
+// MESMA página, cada um pousando numa aba diferente (agregado vs
+// enderecos) -- mesmo padrão de ?tab= já usado em cadastros.html
+// (MAINTAB_ALIASES/activateMainTab), só que pras abas de nível página
+// aqui em vez das main-tabs de lá.
+var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, enderecos: 1, enderecamento: 1 };
+function ativarAbaEstoque(target, pushUrl) {
+  if (!ABAS_ESTOQUE_VALIDAS[target]) return;
+  document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+  document.querySelectorAll('#mainPanelsEstoque > .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  if (pushUrl) {
+    var url = new URL(location.href);
+    url.searchParams.set('tab', target);
+    history.replaceState(null, '', url);
+  }
+}
 document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(tab) {
-  tab.addEventListener('click', function() {
-    var target = tab.getAttribute('data-tab');
-    document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
-    document.querySelectorAll('#mainPanelsEstoque > .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
-  });
+  tab.addEventListener('click', function() { ativarAbaEstoque(tab.getAttribute('data-tab'), true); });
+});
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(location.search);
+  var tab = params.get('tab');
+  if (tab && ABAS_ESTOQUE_VALIDAS[tab]) ativarAbaEstoque(tab, false);
 });
 
 var allEstoque = {};

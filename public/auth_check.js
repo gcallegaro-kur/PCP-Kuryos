@@ -378,7 +378,13 @@ function ktIcon(name) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ktIcons[name] + '</svg>';
 }
 function ktLink(href, icon, label, activePage) {
-  var cls = 'kt-nav-link' + (activePage === href ? ' active' : '');
+  // Compara só o nome do arquivo, ignorando ?query -- necessário desde que
+  // uma mesma página passou a ter mais de um link de menu apontando pra
+  // abas diferentes dela (ex: "Estoque" e "WMS" -> estoque.html?tab=X) --
+  // sem isso, NENHUM dos dois nunca ficava marcado como ativo, porque
+  // activePage (só o nome do arquivo) nunca batia com href+query.
+  var hrefPage = href.split('?')[0];
+  var cls = 'kt-nav-link' + (activePage === hrefPage ? ' active' : '');
   return '<a class="' + cls + '" href="' + href + '">' + ktIcon(icon) + '<span>' + label + '</span></a>';
 }
 
@@ -425,12 +431,44 @@ function renderUnifiedNavbar(user) {
   const isPcpAdmin = user.role === 'admin' || user.role === 'pcp';
   const initials = (user.nome || '?').trim().split(/\s+/).slice(0, 2).map(function(s) { return s[0]; }).join('').toUpperCase();
 
+  // Reorganização de menu pedida pelo usuário (blocos: Analytics/Geral/
+  // Compras/PCP/Logística/Produção/RH/ADM) -- por decisão explícita dele,
+  // isto muda só ROTULAGEM e AGRUPAMENTO visual, NUNCA quem vê o quê --
+  // "depois vou delinear os acessos, qual perfil vê o que e faz o que" é
+  // uma etapa futura separada. Cada link mantido com o MESMO gate
+  // (isPcpAdmin) que já tinha antes, só reagrupado em blocos novos.
+
   // Perfil Rotulagem só tem acesso a form.html -- sidebar minimalista, sem
   // links pra páginas que dariam "Acesso Negado" se clicadas.
   const analisesGroup = (isRotulagem || isRH) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Análises</div>' +
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Analytics</div>' +
     ktLink('dashboard.html', 'dashboard', 'Dashboard Diário', activePage) +
-    ktLink('dashboard_analise.html', 'history', 'Histórico Pedidos/Vendas', activePage) +
+    ktLink('dashboard_analise.html', 'history', 'Dashboard Geral', activePage) +
+    '</div>';
+
+  // "Geral" -- pedido do usuário: Cadastros e Estoque (a visão de
+  // QUANTIDADE, "de fato os estoques") saem do bloco PCP e ganham um
+  // bloco próprio, mais genérico. Estoque aponta pra estoque.html?tab=
+  // agregado -- mesma página de sempre, só landing direto na aba de saldo
+  // (WMS, abaixo, landing na aba de posições/endereçamento -- são a MESMA
+  // ferramenta, dois pontos de entrada, não duas páginas -- ver ktLink
+  // acima pro fix de "ativo" que isso exigiu).
+  // Geral/Compras têm SÓ links isPcpAdmin-gated (diferente de PCP, que
+  // tem "Planejamento"/"Controle de OPs" abertos pra 'production'
+  // também) -- gate no GRUPO INTEIRO por isPcpAdmin, não só nos links de
+  // dentro, senão sobra uma legenda "Geral"/"Compras" flutuando sem link
+  // nenhum embaixo pra quem não é admin/pcp (achado ao testar com o
+  // papel 'production'). isPcpAdmin já implica !isRotulagem && !isRH
+  // (papéis são mutuamente exclusivos), então um gate só basta.
+  const geralGroup = !isPcpAdmin ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Geral</div>' +
+    ktLink('cadastros.html', 'tag', 'Cadastros', activePage) +
+    ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage) +
+    '</div>';
+
+  const comprasGroup = !isPcpAdmin ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Compras</div>' +
+    ktLink('compras.html', 'cart', 'Compras', activePage) +
     '</div>';
 
   const pcpGroup = (isRotulagem || isRH) ? '' :
@@ -444,23 +482,41 @@ function renderUnifiedNavbar(user) {
     ktLink('ops.html', 'gear', 'Controle de OPs', activePage) +
     (isPcpAdmin ? ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage) : '') +
     (isPcpAdmin ? ktLink('pedidos.html', 'list', 'Pedidos', activePage) : '') +
-    (isPcpAdmin ? ktLink('cadastros.html', 'tag', 'Cadastros', activePage) : '') +
-    (isPcpAdmin ? ktLink('compras.html', 'cart', 'Compras', activePage) : '') +
-    (isPcpAdmin ? ktLink('logistica.html', 'truck', 'Logística', activePage) : '') +
-    (isPcpAdmin ? ktLink('estoque.html', 'warehouse', 'Estoque / WMS', activePage) : '') +
-    (isPcpAdmin ? ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) : '') +
-    (isPcpAdmin ? ktLink('insumos.html', 'box', 'Matriz de Insumos', activePage) : '') +
-    (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajuste de Metas / Config.', activePage) : '') +
+    // "Matriz de Insumos > MRP" -- por ora só o rótulo muda (confirmado
+    // pelo usuário: "a princípio só renomear"); uma funcionalidade de MRP
+    // de verdade fica pra quando o Estoque/Compras (Agendamentos) já
+    // estiverem rodando -- registrado em MELHORIAS_FUTURAS.md.
+    (isPcpAdmin ? ktLink('insumos.html', 'box', 'Matriz de Insumos (MRP)', activePage) : '') +
+    (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajustes / Config', activePage) : '') +
+    // Histórico de Apontamentos aparece TAMBÉM aqui, além de Produção
+    // (confirmado pelo usuário: "aparece nos 2 blocos mesmo") -- PCP e
+    // Produção são times diferentes que precisam do mesmo histórico.
+    (isPcpAdmin ? ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage) : '') +
+    '</div>';
+
+  // "Logística" -- pedido do usuário: separa do bloco PCP, ganha 3 itens.
+  // "Logística" (a página) vira "Agendamentos" no menu -- rótulo só,
+  // logistica.html continua sendo a mesma página/funcionalidade. "WMS"
+  // aponta pra estoque.html?tab=enderecos (posições/endereçamento --
+  // "organização do estoque", palavras do usuário), landing diferente de
+  // "Estoque" acima, mesma página.
+  // Mesmo motivo do gate em Geral/Compras acima -- os 3 links daqui são
+  // isPcpAdmin-only, gate no grupo inteiro.
+  const logisticaGroup = !isPcpAdmin ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Logística</div>' +
+    ktLink('logistica.html', 'truck', 'Agendamentos', activePage) +
+    ktLink('estoque.html?tab=enderecos', 'warehouse', 'WMS', activePage) +
+    ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) +
     '</div>';
 
   const producaoGroup = isRH ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Produção</div>' +
     ktLink('form.html', 'pencil', 'Apontamento Diário', activePage) +
-    (isRotulagem ? '' : ktLink('historico.html', 'history', 'Histórico Apontamentos', activePage)) +
+    (isRotulagem ? '' : ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)) +
     '</div>';
 
   const usersGroup = isPcpAdmin
-    ? '<div class="kt-nav-group">' + ktLink('usuarios.html', 'people', 'Usuários', activePage) + '</div>'
+    ? '<div class="kt-nav-group"><div class="kt-nav-cap">ADM</div>' + ktLink('usuarios.html', 'people', 'Usuários', activePage) + '</div>'
     : '';
 
   // RH (Fase 1-3b): Colaboradores/Cargos, Avaliação, Férias -- Documentos
@@ -468,8 +524,8 @@ function renderUnifiedNavbar(user) {
   // grupo TAMBÉM (showRhGroup), além do grupo PCP inteiro acima -- os
   // dois não são mais mutuamente exclusivos só pra esse papel.
   const rhGroup = !showRhGroup ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Recursos Humanos</div>' +
-    ((user.role === 'rh' || user.role === 'admin') ? ktLink('rh_dashboard.html', 'dashboard', 'Dashboard', activePage) : '') +
+    '<div class="kt-nav-group"><div class="kt-nav-cap">RH</div>' +
+    ((user.role === 'rh' || user.role === 'admin') ? ktLink('rh_dashboard.html', 'dashboard', 'Dash', activePage) : '') +
     ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
     ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage) +
     ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
@@ -481,7 +537,7 @@ function renderUnifiedNavbar(user) {
   var rhHome = user.role === 'rh' ? 'rh_dashboard.html' : 'rh_avaliacao.html';
   sidebar.innerHTML =
     '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? rhHome : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + pcpGroup + producaoGroup + usersGroup + rhGroup +
+    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + producaoGroup + usersGroup + rhGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +
