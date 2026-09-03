@@ -159,7 +159,7 @@
             <th>Número</th>
             <th>Data</th>
             <th>Solicitante</th>
-            <th style="min-width:260px">Itens</th>
+            <th style="min-width:280px">Itens / Fornecedores homologados</th>
             <th>Justificativa</th>
             <th>Status</th>
             <th style="min-width:150px">Ações</th>
@@ -578,7 +578,18 @@ function renderSolicitacoes() {
     tbody.innerHTML = rows.map(function(entry) {
       var key = entry[0], s = entry[1];
       var itens = Object.values(s.itens || {});
-      var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+      // Pedido do usuário: na tela-resumo (lista de Solicitações), indicar
+      // pra cada item quem já são os fornecedores homologados -- do próprio
+      // material E de possíveis similares (🔗 candidatosCotacaoParaMaterial,
+      // mesma função que já monta a coluna do builder de Nova Solicitação).
+      var itensResumo = itens.map(function(i) {
+        var candidatos = candidatosCotacaoParaMaterial(i.materialCodigo);
+        var fornHtml = candidatos.length
+          ? candidatos.map(function(c) { return escapeHtml(c.nome) + (c.viaVariante ? ' <span title="Fornecedor de outro cadastro do mesmo item (código diferente)">🔗</span>' : ''); }).join(', ')
+          : '<span style="color:var(--warning)">⚠ sem homologado</span>';
+        return '<div style="margin-bottom:4px"><b>' + escapeHtml(i.materialCodigo) + '</b> (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')' +
+          '<div style="font-size:11px;color:var(--muted)">' + fornHtml + '</div></div>';
+      }).join('');
       var statusBadge = {
         PENDENTE: '<span class="badge badge-orange">Pendente</span>',
         APROVADA: '<span class="badge badge-green">Aprovada</span>',
