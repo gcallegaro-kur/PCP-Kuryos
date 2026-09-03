@@ -176,6 +176,18 @@
     .planta-cell-livre{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .planta-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .planta-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55}
+
+    /* Busca avançada de Materiais -- facetada, estilo loja (Centauro):
+       sidebar de filtros em checkbox com contagem ao lado, resultado no
+       painel principal atualiza ao vivo conforme marca. */
+    .adv-search-sidebar{width:290px;flex-shrink:0;padding:20px;border-right:1px solid var(--border);overflow-y:auto}
+    .adv-facet-group{margin-bottom:18px}
+    .adv-facet-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px}
+    .adv-facet-opt{display:flex;align-items:center;gap:7px;font-size:13.5px;padding:4px 2px;cursor:pointer;border-radius:6px}
+    .adv-facet-opt:hover{background:var(--surface-2)}
+    .adv-facet-opt input{flex-shrink:0}
+    .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
+    .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -223,26 +235,44 @@
         <option value="ativo">Ativos</option>
         <option value="inativo">Inativos</option>
       </select>
-      <select class="kt-select" id="filterUnidade-mat">
-        <option value="">Todas as unidades</option>
-      </select>
-      <button type="button" class="btn btn-ghost btn-sm" id="btnFacetasToggle-mat">🔧 Filtros por medida/característica <span id="facetasCountBadge-mat"></span></button>
+      <button type="button" class="btn btn-ghost" id="btnAdvSearch-mat">🔍 Busca avançada</button>
       <button class="btn btn-primary" id="btnNovo-mat">+ Novo Material</button>
     </div>
 
-    <!-- Pedido do usuário: filtrar por praticamente todos os campos de
-         cadastro (medida, material/resina, gargalo/rosca, cor, textura...),
-         não só código/nome/tipo. Reaproveita o mesmo desenho já validado em
-         "Busca Avançada: Fornecedores × Material" (compras.html,
-         BF_FACET_CONFIG) -- escolhe o Tipo acima e os campos DAQUELE tipo
-         viram filtro aqui, porque cada tipo tem um conjunto de campos
-         técnicos diferente (gargalo/rosca só existe em Embalagem Primária,
-         por exemplo). Ampliado aqui com gargaloRosca/formato, que a versão
-         de compras.html tinha deixado de fora. -->
-    <div class="card" id="matFacetasCard" style="display:none;margin-bottom:14px">
-      <div class="card-title">Filtros por característica <span style="font-weight:400;color:var(--muted);font-size:12px">— escolha um Tipo acima pra ver os campos daquele tipo</span></div>
-      <div class="form-grid" id="matFacetas"></div>
-      <button type="button" class="btn btn-ghost btn-sm" id="btnFacetasLimpar-mat" style="margin-top:8px">Limpar filtros por característica</button>
+    <!-- Busca avançada de Materiais -- pedido do usuário: tela dedicada
+         estilo loja (ex: Centauro), filtros em checkbox com contagem ao
+         lado na sidebar, resultado no painel principal atualiza ao vivo
+         conforme marca. Tipo vira um dos grupos de filtro (não mais um
+         dropdown fixo) porque cada tipo tem um conjunto de campos técnicos
+         diferente -- os grupos técnicos (gargalo/rosca, material, cor,
+         textura, dimensões...) só aparecem depois de marcar pelo menos um
+         Tipo. Ver ADV_FACET_CONFIG no script. -->
+    <div id="advSearchOverlay-mat" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:5000;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:1">
+        <div>
+          <div style="font-size:19px;font-weight:700">🔍 Busca avançada de Materiais</div>
+          <div style="font-size:12px;color:var(--muted)" id="advSearchCount-mat">—</div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="btnAdvSearchClose-mat">✕ Fechar</button>
+      </div>
+      <div style="display:flex;max-width:1400px;margin:0 auto">
+        <div class="adv-search-sidebar">
+          <div class="kt-search" style="margin-bottom:12px">
+            <span class="icon">🔍</span>
+            <input type="text" id="advSearchInput-mat" placeholder="Código, nome ou INCI...">
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="advSearchClearBtn-mat" style="width:100%;margin-bottom:18px">Limpar todos os filtros</button>
+          <div id="advSearchFacets-mat"></div>
+        </div>
+        <div style="flex:1;min-width:0;padding:20px">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Unidade</th></tr></thead>
+              <tbody id="advSearchResults-mat"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="stats">
@@ -1659,19 +1689,22 @@ document.addEventListener('DOMContentLoaded', function() {
     renderFornecedoresHomologados();
   }
 
-  /* ── Filtros por característica (busca facetada estilo e-commerce) ──
-     Pedido do usuário: filtrar por praticamente todos os campos do
-     cadastro (medida, material/resina, gargalo/rosca, cor, textura...),
-     não só código/nome/tipo/ativo. Mesmo desenho já usado em compras.html
-     ("Busca Avançada: Fornecedores × Material", BF_FACET_CONFIG) --
-     escolhe o Tipo (select #filterTipo, já existia) e os campos DAQUELE
-     tipo viram filtro aqui, porque cada tipo tem um conjunto de campos
-     técnicos diferente (gargalo/rosca só existe em Embalagem Primária,
-     por exemplo). Campos com lista fechada (textura/fixação) usam as
-     mesmas opções do cadastro; os demais (materialResina/cor/gargaloRosca/
-     formato/aparência/função na fórmula/casa de fragrância) descobrem as
-     opções a partir do que já foi cadastrado (distinctValuesMat). */
-  var FACET_CONFIG_MAT = {
+  /* ── Busca avançada (facetada, estilo loja -- ex: Centauro) ───────────
+     Pedido do usuário: tela dedicada, filtros em CHECKBOX (multi-seleção
+     dentro do mesmo grupo) com a CONTAGEM de resultados ao lado de cada
+     opção, marcando vai estreitando o resultado ao vivo -- não dropdowns
+     escondidos atrás de um botão dentro da listagem normal (tentativa
+     anterior). Tipo virou um grupo de filtro igual aos outros (não mais
+     só o dropdown fixo #filterTipo, que continua existindo só pro filtro
+     rápido da listagem normal) -- os grupos técnicos (gargalo/rosca,
+     material, cor, textura, dimensões...) só aparecem depois de marcar
+     pelo menos 1 Tipo aqui dentro, porque cada tipo tem um conjunto de
+     campos diferente (Densidade não existe em Embalagem, por exemplo).
+     Contagem de cada opção é calculada IGNORANDO a seleção do próprio
+     grupo dela (mas respeitando todos os outros filtros ativos) -- é o
+     que permite marcar mais de uma opção no mesmo grupo com contagem que
+     ainda faz sentido, igual site de loja de verdade. */
+  var ADV_FACET_CONFIG = {
     EP: [
       { field: 'formato', label: 'Formato', type: 'select' },
       { field: 'gargaloRosca', label: 'Gargalo / rosca', type: 'select' },
@@ -1704,109 +1737,182 @@ document.addEventListener('DOMContentLoaded', function() {
       { field: 'custoTargetUsd', label: 'Custo target (USD/kg)', type: 'range' }
     ]
   };
-  FACET_CONFIG_MAT.ET = FACET_CONFIG_MAT.ES;
+  ADV_FACET_CONFIG.ET = ADV_FACET_CONFIG.ES;
 
-  function distinctValuesMat(tipo, field) {
+  var advState = { tipos: {}, unidades: {}, selects: {}, ranges: {} };
+  var _tAdv = null;
+
+  // ignorarGrupo: 'tipo' | 'unidade' | nome do campo de select -- não
+  // aplica o filtro DESSE grupo (usado pra contar quantos bateriam se
+  // essa opção fosse somada à seleção atual dele). Ranges nunca são
+  // ignorados -- não fazem sentido como contagem por opção (como preço
+  // num site de loja, é faixa contínua, não item de lista).
+  function advMaterialPassa(m, ignorarGrupo) {
+    if (ignorarGrupo !== 'tipo' && Object.keys(advState.tipos).length && !advState.tipos[m.tipo]) return false;
+    if (ignorarGrupo !== 'unidade' && Object.keys(advState.unidades).length && !advState.unidades[m.unidade]) return false;
+    for (var campo in advState.selects) {
+      if (ignorarGrupo === campo) continue;
+      var valoresMarcados = advState.selects[campo];
+      if (Object.keys(valoresMarcados).length && !valoresMarcados[m[campo]]) return false;
+    }
+    for (var campoR in advState.ranges) {
+      var r = advState.ranges[campoR], v = m[campoR];
+      if (v == null) return false;
+      if (r.min != null && v < r.min) return false;
+      if (r.max != null && v > r.max) return false;
+    }
+    var buscaTxt = norm(document.getElementById('advSearchInput-mat').value);
+    if (buscaTxt && (norm(m.mpCodigo) + ' ' + norm(m.mpNome) + ' ' + norm(m.inci)).indexOf(buscaTxt) === -1) return false;
+    return true;
+  }
+
+  function advContar(grupo, valor) {
+    var campo = grupo === 'tipo' ? 'tipo' : (grupo === 'unidade' ? 'unidade' : grupo);
+    var n = 0;
+    Object.values(allMateriais).forEach(function(m) {
+      if (m[campo] === valor && advMaterialPassa(m, grupo)) n++;
+    });
+    return n;
+  }
+
+  function advDistinctValues(tipos, field) {
     var vals = {};
     Object.values(allMateriais).forEach(function(m) {
-      if (m.tipo !== tipo) return;
+      if (tipos.indexOf(m.tipo) === -1) return;
       if (m[field]) vals[m[field]] = true;
     });
     return Object.keys(vals).sort();
   }
 
-  function renderMatFacetas() {
-    var tipo = document.getElementById('filterTipo').value;
-    var box = document.getElementById('matFacetas');
-    var config = FACET_CONFIG_MAT[tipo];
-    if (!config) {
-      box.innerHTML = '<div class="field-hint">Escolha um Tipo no filtro acima pra ver os filtros específicos dele (gargalo/rosca, material, dimensões...).</div>';
-      atualizarFacetasBadge();
-      return;
+  function advRenderGrupoCheckbox(label, grupo, opcoes, selecionados) {
+    var linhas = opcoes.map(function(o) {
+      var valor = o[0], rotulo = o[1];
+      var n = advContar(grupo, valor);
+      if (!n && !selecionados[valor]) return ''; // sem nenhum resultado possível -- some da lista, a menos que já esteja marcada
+      var checked = selecionados[valor] ? 'checked' : '';
+      return '<label class="adv-facet-opt"><input type="checkbox" class="adv-facet-chk" data-grupo="' + escapeAttr(grupo) + '" data-valor="' + escapeAttr(valor) + '" ' + checked + '> ' +
+        escapeHtml(rotulo) + '<span class="adv-facet-count">(' + n + ')</span></label>';
+    }).filter(Boolean).join('');
+    if (!linhas) return '';
+    return '<div class="adv-facet-group"><div class="adv-facet-title">' + escapeHtml(label) + '</div>' + linhas + '</div>';
+  }
+
+  function advRenderGrupoRange(label, field) {
+    var r = advState.ranges[field] || {};
+    return '<div class="adv-facet-group"><div class="adv-facet-title">' + escapeHtml(label) + '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+      '<input type="number" class="adv-facet-range" data-field="' + field + '" data-bound="min" placeholder="mín" value="' + (r.min != null ? r.min : '') + '" style="width:50%">' +
+      '<span style="color:var(--muted)">–</span>' +
+      '<input type="number" class="adv-facet-range" data-field="' + field + '" data-bound="max" placeholder="máx" value="' + (r.max != null ? r.max : '') + '" style="width:50%">' +
+      '</div></div>';
+  }
+
+  function renderAdvFacetas() {
+    var box = document.getElementById('advSearchFacets-mat');
+    var html = advRenderGrupoCheckbox('Tipo', 'tipo', Object.keys(TIPO_LABELS).map(function(t) { return [t, TIPO_LABELS[t]]; }), advState.tipos);
+
+    var unidadesDisponiveis = advDistinctValues(Object.keys(TIPO_LABELS), 'unidade');
+    html += advRenderGrupoCheckbox('Unidade', 'unidade', unidadesDisponiveis.map(function(u) { return [u, u]; }), advState.unidades);
+
+    var tiposMarcados = Object.keys(advState.tipos);
+    if (!tiposMarcados.length) {
+      html += '<div class="field-hint" style="margin-top:6px">Marque um Tipo acima pra ver filtros técnicos (gargalo/rosca, material, cor, textura, dimensões...).</div>';
+    } else {
+      var camposJaMostrados = {};
+      tiposMarcados.forEach(function(tipo) {
+        (ADV_FACET_CONFIG[tipo] || []).forEach(function(f) {
+          if (camposJaMostrados[f.field]) return; // 2 tipos marcados podem compartilhar campo (ex: materialResina em EP e ES) -- não duplica o grupo
+          camposJaMostrados[f.field] = true;
+          if (f.type === 'select') {
+            var opts = f.opts || advDistinctValues(tiposMarcados, f.field).map(function(v) { return [v, v]; });
+            html += advRenderGrupoCheckbox(f.label, f.field, opts, advState.selects[f.field] || {});
+          } else {
+            html += advRenderGrupoRange(f.label, f.field);
+          }
+        });
+      });
     }
-    box.innerHTML = config.map(function(f) {
-      if (f.type === 'select') {
-        var opts = f.opts || distinctValuesMat(tipo, f.field).map(function(v) { return [v, v]; });
-        return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
-          '<select class="kt-select mat-facet" data-field="' + f.field + '" data-type="select" style="width:100%">' +
-          '<option value="">Todos</option>' +
-          opts.map(function(o) { return '<option value="' + escapeAttr(o[0]) + '">' + escapeHtml(o[1]) + '</option>'; }).join('') +
-          '</select></div>';
-      }
-      return '<div class="form-group"><label>' + escapeHtml(f.label) + '</label>' +
-        '<div style="display:flex;gap:6px;align-items:center">' +
-        '<input type="number" class="mat-facet" data-field="' + f.field + '" data-type="range" data-bound="min" placeholder="mín" style="width:50%">' +
-        '<span style="color:var(--muted)">–</span>' +
-        '<input type="number" class="mat-facet" data-field="' + f.field + '" data-type="range" data-bound="max" placeholder="máx" style="width:50%">' +
-        '</div></div>';
-    }).join('');
-    document.querySelectorAll('.mat-facet').forEach(function(el) {
-      if (el.tagName === 'SELECT') { el.addEventListener('change', function() { renderTable(); atualizarFacetasBadge(); }); return; }
-      el.addEventListener('input', function() {
-        clearTimeout(_tMatFaceta);
-        _tMatFaceta = setTimeout(function() { renderTable(); atualizarFacetasBadge(); }, 250);
+
+    box.innerHTML = html;
+    document.querySelectorAll('.adv-facet-chk').forEach(function(el) {
+      el.addEventListener('change', function() {
+        var grupo = el.getAttribute('data-grupo'), valor = el.getAttribute('data-valor');
+        var alvo = grupo === 'tipo' ? advState.tipos : grupo === 'unidade' ? advState.unidades : (advState.selects[grupo] = advState.selects[grupo] || {});
+        if (el.checked) alvo[valor] = true; else delete alvo[valor];
+        renderAdvFacetas(); // reconstrói -- contagens mudam, e marcar/desmarcar Tipo muda quais grupos técnicos aparecem
+        renderAdvResultados();
       });
     });
-    atualizarFacetasBadge();
-  }
-  var _tMatFaceta = null;
-
-  function atualizarFacetasBadge() {
-    var n = 0;
-    document.querySelectorAll('.mat-facet').forEach(function(el) {
-      if (el.getAttribute('data-type') === 'select') { if (el.value) n++; }
-      else if (el.value !== '') n++;
+    document.querySelectorAll('.adv-facet-range').forEach(function(el) {
+      el.addEventListener('input', function() {
+        clearTimeout(_tAdv);
+        _tAdv = setTimeout(function() {
+          var field = el.getAttribute('data-field'), bound = el.getAttribute('data-bound');
+          var v = el.value === '' ? null : parseFloat(el.value);
+          advState.ranges[field] = advState.ranges[field] || {};
+          if (v == null) delete advState.ranges[field][bound]; else advState.ranges[field][bound] = v;
+          if (!Object.keys(advState.ranges[field]).length) delete advState.ranges[field];
+          renderAdvResultados();
+        }, 250);
+      });
     });
-    document.getElementById('facetasCountBadge-mat').textContent = n ? '(' + n + ')' : '';
   }
 
-  function limparFacetasMat() {
-    document.querySelectorAll('.mat-facet').forEach(function(el) { el.value = ''; });
-    renderTable();
-    atualizarFacetasBadge();
+  function renderAdvResultados() {
+    var resultados = Object.entries(allMateriais).filter(function(e) { return advMaterialPassa(e[1], null); });
+    resultados.sort(function(a, b) { return norm(a[1].mpCodigo).localeCompare(norm(b[1].mpCodigo)); });
+    var n = resultados.length;
+    document.getElementById('advSearchCount-mat').textContent = n + ' material' + (n === 1 ? '' : 'is') + ' encontrado' + (n === 1 ? '' : 's');
+    var tbody = document.getElementById('advSearchResults-mat');
+    if (!n) {
+      tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum material bate com esse filtro.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = resultados.map(function(entry) {
+      var key = entry[0], m = entry[1];
+      var tipoLabel = TIPO_LABELS[m.tipo] || m.tipo || '—';
+      return '<tr class="adv-result-row" data-key="' + escapeAttr(key) + '">' +
+        '<td class="code-cell">' + escapeHtml(m.mpCodigo || '—') + '</td>' +
+        '<td>' + escapeHtml(m.mpNome || '—') + '</td>' +
+        '<td><span class="badge ' + (TIPO_BADGE_CLASS[m.tipo] || 'badge-gray') + '">' + escapeHtml(tipoLabel) + '</span></td>' +
+        '<td>' + escapeHtml(m.unidade || '—') + '</td>' +
+      '</tr>';
+    }).join('');
+    document.querySelectorAll('.adv-result-row').forEach(function(tr) {
+      tr.addEventListener('click', function() {
+        fecharAdvSearch();
+        openModal(tr.getAttribute('data-key'));
+      });
+    });
   }
 
-  function refreshFilterUnidadeOptions() {
-    var sel = document.getElementById('filterUnidade-mat');
-    var cur = sel.value;
-    var unidades = {};
-    Object.values(allMateriais).forEach(function(m) { if (m.unidade) unidades[m.unidade] = true; });
-    sel.innerHTML = '<option value="">Todas as unidades</option>' +
-      Object.keys(unidades).sort().map(function(u) { return '<option value="' + escapeAttr(u) + '">' + escapeHtml(u) + '</option>'; }).join('');
-    sel.value = unidades[cur] ? cur : '';
+  function abrirAdvSearch() {
+    document.getElementById('advSearchOverlay-mat').style.display = 'block';
+    document.getElementById('advSearchInput-mat').value = document.getElementById('searchInput-mat').value;
+    renderAdvFacetas();
+    renderAdvResultados();
+  }
+  function fecharAdvSearch() {
+    document.getElementById('advSearchOverlay-mat').style.display = 'none';
+  }
+  function limparAdvFiltros() {
+    advState = { tipos: {}, unidades: {}, selects: {}, ranges: {} };
+    document.getElementById('advSearchInput-mat').value = '';
+    renderAdvFacetas();
+    renderAdvResultados();
   }
 
   function renderTable() {
     var search = norm(document.getElementById('searchInput-mat').value);
     var filtTipo = document.getElementById('filterTipo').value;
     var filtAtivo = document.getElementById('filterAtivo-mat').value;
-    var filtUnidade = document.getElementById('filterUnidade-mat').value;
-
-    var facetSelects = {}, facetRanges = {};
-    document.querySelectorAll('.mat-facet').forEach(function(el) {
-      var field = el.getAttribute('data-field');
-      if (el.getAttribute('data-type') === 'select') {
-        if (el.value) facetSelects[field] = el.value;
-      } else if (el.value !== '') {
-        facetRanges[field] = facetRanges[field] || {};
-        facetRanges[field][el.getAttribute('data-bound')] = parseFloat(el.value);
-      }
-    });
 
     var rows = Object.entries(allMateriais).filter(function(entry) {
       var m = entry[1];
       var ativo = m.ativo === false ? 'inativo' : 'ativo';
       if (filtTipo && m.tipo !== filtTipo) return false;
       if (filtAtivo && ativo !== filtAtivo) return false;
-      if (filtUnidade && (m.unidade || '') !== filtUnidade) return false;
       if (search && (norm(m.mpCodigo) + ' ' + norm(m.mpNome) + ' ' + norm(m.inci)).indexOf(search) === -1) return false;
-      for (var campoSel in facetSelects) { if ((m[campoSel] || '') !== facetSelects[campoSel]) return false; }
-      for (var campoRange in facetRanges) {
-        var v = m[campoRange], r = facetRanges[campoRange];
-        if (v == null) return false;
-        if (r.min != null && v < r.min) return false;
-        if (r.max != null && v > r.max) return false;
-      }
       return true;
     });
     rows = matSortable.applySort(rows, function(entry, field) {
@@ -2276,24 +2382,21 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('searchInput-mat').addEventListener('input', function() {
       clearTimeout(_t); _t = setTimeout(renderTable, 200);
     });
-    document.getElementById('filterTipo').addEventListener('change', function() {
-      renderMatFacetas(); // campos técnicos são por tipo -- troca a lista inteira
-      renderTable();
-    });
+    document.getElementById('filterTipo').addEventListener('change', renderTable);
     document.getElementById('filterAtivo-mat').addEventListener('change', renderTable);
-    document.getElementById('filterUnidade-mat').addEventListener('change', renderTable);
-    document.getElementById('btnFacetasToggle-mat').addEventListener('click', function() {
-      var card = document.getElementById('matFacetasCard');
-      var abrindo = card.style.display === 'none';
-      card.style.display = abrindo ? '' : 'none';
-      if (abrindo) renderMatFacetas();
-    });
-    document.getElementById('btnFacetasLimpar-mat').addEventListener('click', limparFacetasMat);
     matSortable.wireHeaders(renderTable);
+
+    document.getElementById('btnAdvSearch-mat').addEventListener('click', abrirAdvSearch);
+    document.getElementById('btnAdvSearchClose-mat').addEventListener('click', fecharAdvSearch);
+    document.getElementById('advSearchClearBtn-mat').addEventListener('click', limparAdvFiltros);
+    var _tAdvSearch = null;
+    document.getElementById('advSearchInput-mat').addEventListener('input', function() {
+      clearTimeout(_tAdvSearch);
+      _tAdvSearch = setTimeout(function() { renderAdvFacetas(); renderAdvResultados(); }, 200);
+    });
 
     dbOnValue(db.ref('materiais'), function(snap) {
       allMateriais = snap.val() || {};
-      refreshFilterUnidadeOptions();
       renderTable();
     });
     dbOnValue(db.ref('fornecedores'), function(snap) {
