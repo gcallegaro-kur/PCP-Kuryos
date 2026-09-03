@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Separação de Materiais</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .kt-search{display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;flex:1;min-width:220px}
+    .kt-search input{border:none;outline:none;flex:1;font-size:13px;background:transparent;color:var(--text)}
+    .kt-select{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border)}
+    .section-note{font-size:12px;color:var(--muted);max-width:96%;margin:0 auto 12px;line-height:1.5}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .table-wrap{overflow-x:auto;padding:0 16px 14px}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .form-group{margin-bottom:14px}
+    .form-group:last-child{margin-bottom:0}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],select{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .row-clicavel{cursor:pointer}
+    .row-clicavel:hover td{background:var(--surface-2)}
+    .sep-material-header td{background:var(--surface-2);font-weight:700;padding-top:12px}
+    .sep-qtd{max-width:120px}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Separação de Materiais</h1>
+    <div class="header-sub">OPs → Separação de Materiais · separação guiada de embalagem (Galpão → Fábrica), sugerida por FEFO</div>
+  </div>
+  <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="kt-toolbar">
+  <div class="kt-search"><span class="icon">🔍</span><input type="text" id="opSearch" placeholder="Buscar por lote, SKU ou produto..."></div>
+  <select class="kt-select" id="opFiltro">
+    <option value="pendentes">Pendentes de separação</option>
+    <option value="separadas">Já separadas</option>
+    <option value="todas">Todas as OPs</option>
+  </select>
+</div>
+
+<div class="main">
+  <div id="alertBox" class="alert alert-success"></div>
+
+  <div class="card">
+    <div class="card-title" id="opCount">OPs</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Lote</th><th>Produto</th><th>Cliente</th><th>Status separação</th><th style="width:60px"></th></tr></thead>
+        <tbody id="opBody"><tr><td colspan="5" class="no-data">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Painel de separação -- só aparece com uma OP selecionada. Pedido do
+       usuário: "separação será guiada, e não preenchida" -- a sugestão de
+       ORIGEM vem pronta (FEFO, sugerirAlocacaoFefo); o DESTINO é sempre
+       uma escolha manual, nunca um palpite automático. -->
+  <div class="card" id="painelSeparacao" style="display:none">
+    <div class="card-title">Separação — OP <span id="sepOpLote"></span></div>
+    <div class="section-note" style="padding:0 16px;margin-top:12px" id="sepResumoAnterior"></div>
+    <div class="form-group" style="max-width:320px;padding:0 16px">
+      <label>Destino *</label>
+      <select id="sepDestino"><option value="">Selecione o endereço de destino...</option></select>
+      <div class="field-hint">Sempre escolhido manualmente -- o sistema nunca decide sozinho pra onde o material vai.</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Material / Origem sugerida (FEFO)</th><th>Validade</th><th style="width:140px">Qtd a separar</th></tr></thead>
+        <tbody id="sepMateriaisBody"></tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;gap:10px">
+      <button class="btn btn-green" id="btnConfirmarSeparacao">✅ Confirmar Separação</button>
+      <button class="btn btn-ghost" id="btnFecharPainel">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var opsGlobal = {};
+var allEstoqueLotes = {};
+var allEnderecosEstoque = {};
+var sepOpAtual = null; // { opKey, op }
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function fmtNum(n) { return Number(n || 0).toLocaleString('pt-BR'); }
+function fmtData(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso + (iso.length <= 10 ? 'T00:00:00' : ''));
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+}
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR');
+}
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  box.textContent = msg;
+  setTimeout(function() { box.classList.remove('show'); }, 5000);
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+
+// ── Lista de OPs elegíveis pra separação ────────────────────────────────
+// Mesmo gate já usado pros botões de ação em ops.html: precisa ter
+// materiaisConsumo (OPs do gerador antigo/Excel não têm) e não estar
+// cancelada.
+function opsElegiveis() {
+  return Object.entries(opsGlobal).filter(function(entry) {
+    var op = entry[1];
+    return op && op.materiaisConsumo && op.status !== 'Cancelado';
+  });
+}
+function opTemItensEmbalagem(op) {
+  return Object.values(op.materiaisConsumo || {}).some(function(i) { return i.origem === 'bom'; });
+}
+function renderListaOps() {
+  var filtro = document.getElementById('opFiltro').value;
+  var busca = norm(document.getElementById('opSearch').value);
+  var rows = opsElegiveis().filter(function(entry) {
+    var op = entry[1];
+    if (!opTemItensEmbalagem(op)) return false; // nada de embalagem nesta OP -- não há o que separar aqui
+    var pendente = !op.separacaoConcluida;
+    if (filtro === 'pendentes' && !pendente) return false;
+    if (filtro === 'separadas' && pendente) return false;
+    if (busca && (norm(op.lote) + ' ' + norm(op.sku) + ' ' + norm(op.produto)).indexOf(busca) === -1) return false;
+    return true;
+  }).sort(function(a, b) {
+    var pa = !a[1].separacaoConcluida, pb = !b[1].separacaoConcluida;
+    if (pa !== pb) return pa ? -1 : 1; // pendentes primeiro -- resolve "ficar pedindo o que falta separar"
+    return norm(a[1].lote).localeCompare(norm(b[1].lote));
+  });
+
+  document.getElementById('opCount').textContent = 'OPs (' + rows.length + ' exibidas)';
+  var tbody = document.getElementById('opBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma OP encontrada com esse filtro/busca.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(entry) {
+    var opKey = entry[0], op = entry[1];
+    var statusBadge = op.separacaoConcluida
+      ? '<span class="badge badge-green">✅ Separada em ' + fmtData((op.separacaoConcluida.em || '').slice(0, 10)) + '</span>'
+      : '<span class="badge badge-orange">⏳ Pendente</span>';
+    return '<tr class="row-clicavel" data-op-key="' + escapeAttr(opKey) + '">' +
+      '<td><b>' + escapeHtml(op.lote || opKey) + '</b></td>' +
+      '<td>' + escapeHtml(op.produto || op.sku || '—') + '</td>' +
+      '<td>' + escapeHtml(op.cliente || '—') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td><button class="btn btn-primary btn-sm">📦 Separar</button></td>' +
+    '</tr>';
+  }).join('');
+  document.querySelectorAll('#opBody tr[data-op-key]').forEach(function(tr) {
+    tr.addEventListener('click', function() { abrirPainelSeparacao(tr.getAttribute('data-op-key')); });
+  });
+}
+
+// ── Painel de separação de uma OP ───────────────────────────────────────
+function abrirPainelSeparacao(opKey) {
+  var op = opsGlobal[opKey];
+  if (!op) return;
+  sepOpAtual = { opKey: opKey, op: op };
+  document.getElementById('sepOpLote').textContent = op.lote || opKey;
+  document.getElementById('sepDestino').innerHTML = '<option value="">Selecione o endereço de destino...</option>' + opcoesEnderecoSelect();
+
+  var resumoDiv = document.getElementById('sepResumoAnterior');
+  if (op.separacaoConcluida) {
+    resumoDiv.innerHTML = 'Já separada em ' + escapeHtml(fmtDataHora(op.separacaoConcluida.em)) + ' por ' + escapeHtml(op.separacaoConcluida.por || '—') +
+      '. Confirmar de novo abaixo registra uma separação ADICIONAL (não desfaz a anterior) -- útil se sobrou material pra separar ou algo foi ajustado.';
+  } else {
+    resumoDiv.innerHTML = '';
+  }
+
+  renderPainelSeparacaoMateriais(op);
+  document.getElementById('painelSeparacao').style.display = 'block';
+  document.getElementById('painelSeparacao').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function fecharPainelSeparacao() {
+  sepOpAtual = null;
+  document.getElementById('painelSeparacao').style.display = 'none';
+}
+function opcoesEnderecoSelect() {
+  return Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); })
+    .map(function(e) { return '<option value="' + escapeAttr(e[0]) + '">' + escapeHtml(e[1].codigo) + ' (' + escapeHtml(e[1].area || '') + ')</option>'; }).join('');
+}
+
+// Monta a tabela de sugestão -- pra cada material de embalagem
+// (origem:'bom') da OP, chama sugerirAlocacaoFefo (shared/utils.js) com os
+// lotes REAIS já endereçados daquele item. Cada linha de alocação carrega
+// data-mp-codigo/data-lote-key no <tr>, lidos na hora de confirmar.
+function renderPainelSeparacaoMateriais(op) {
+  var materiaisBom = Object.entries(op.materiaisConsumo || {}).filter(function(entry) { return entry[1].origem === 'bom'; });
+  var html = materiaisBom.map(function(entry) {
+    var it = entry[1];
+    var itemKey = sanitizeKey(it.mpCodigo);
+    var lotesDoItem = allEstoqueLotes[itemKey] || {};
+    var sugestao = sugerirAlocacaoFefo(it.mpCodigo, it.quantidade, lotesDoItem);
+    var cabecalho = '<tr class="sep-material-header"><td colspan="3">' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome) +
+      ' <span style="font-weight:400;color:var(--muted)">· necessário: ' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade || '') + '</span>' +
+      (sugestao.faltante > 0 ? '<div class="field-hint" style="color:var(--danger)">Faltam ' + fmtNum(sugestao.faltante) + ' ' + escapeHtml(it.unidade || '') + ' -- só ' + fmtNum(sugestao.qtdTotal) + ' disponíveis em endereços liberados.</div>' : '') +
+      '</td></tr>';
+    if (!sugestao.alocacoes.length) {
+      return cabecalho + '<tr><td colspan="3" class="no-data" style="padding:8px">Nenhum lote liberado endereçado pra este material ainda.</td></tr>';
+    }
+    var linhas = sugestao.alocacoes.map(function(a) {
+      var loteReal = lotesDoItem[a.loteKey] || {};
+      return '<tr data-mp-codigo="' + escapeAttr(it.mpCodigo) + '" data-lote-key="' + escapeAttr(a.loteKey) + '">' +
+        '<td>📍 ' + escapeHtml(a.enderecoCodigo || '—') + '</td>' +
+        '<td>' + fmtData(a.dataValidade) + '</td>' +
+        '<td><input type="number" class="sep-qtd" min="0" step="any" max="' + (loteReal.saldoLote || a.qtdSugerida) + '" value="' + a.qtdSugerida + '"></td>' +
+      '</tr>';
+    }).join('');
+    return cabecalho + linhas;
+  }).join('');
+  document.getElementById('sepMateriaisBody').innerHTML = html || '<tr><td colspan="3" class="no-data">Esta OP não tem itens de embalagem no BOM.</td></tr>';
+}
+
+function confirmarSeparacao() {
+  if (!sepOpAtual) return;
+  var destino = document.getElementById('sepDestino').value;
+  if (!destino) { showAlert('Selecione o endereço de destino -- é sempre uma escolha manual.', 'danger'); return; }
+
+  var linhas = Array.prototype.slice.call(document.querySelectorAll('#sepMateriaisBody tr[data-lote-key]'));
+  var operacoes = [];
+  linhas.forEach(function(tr) {
+    var input = tr.querySelector('.sep-qtd');
+    var qtd = parseFloat(input.value);
+    if (!qtd || qtd <= 0) return; // linha zerada -- pula, não é erro (separador pode não ter pego daquele lote)
+    operacoes.push({ mpCodigo: tr.getAttribute('data-mp-codigo'), loteKey: tr.getAttribute('data-lote-key'), qtd: qtd });
+  });
+  if (!operacoes.length) { showAlert('Nenhuma quantidade informada pra separar.', 'danger'); return; }
+
+  var opLote = sepOpAtual.op.lote || sepOpAtual.opKey;
+  var opKeyAtual = sepOpAtual.opKey;
+  var autor = currentUserNome();
+  document.getElementById('btnConfirmarSeparacao').disabled = true;
+  Promise.all(operacoes.map(function(item) {
+    return separarParcialLoteEndereco(db, 'material', item.mpCodigo, item.loteKey, item.qtd, destino, 'TRANSFERÊNCIA ENTRE ENDEREÇOS', autor, opLote)
+      .then(function(resultado) { return { mpCodigo: item.mpCodigo, qtd: resultado.abatidoReal }; });
+  })).then(function(resultados) {
+    var itensResumo = {};
+    resultados.forEach(function(r) { itensResumo[r.mpCodigo] = Math.round(((itensResumo[r.mpCodigo] || 0) + r.qtd) * 1000) / 1000; });
+    return db.ref('ops/' + opKeyAtual + '/separacaoConcluida').set({ em: new Date().toISOString(), por: autor, itens: itensResumo });
+  }).then(function() {
+    showAlert('Separação confirmada!', 'success');
+    fecharPainelSeparacao();
+  }).catch(function(err) {
+    showAlert('Erro ao confirmar separação: ' + err.message, 'danger');
+  }).finally(function() {
+    document.getElementById('btnConfirmarSeparacao').disabled = false;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('opSearch').addEventListener('input', renderListaOps);
+  document.getElementById('opFiltro').addEventListener('change', renderListaOps);
+  document.getElementById('btnConfirmarSeparacao').addEventListener('click', confirmarSeparacao);
+  document.getElementById('btnFecharPainel').addEventListener('click', fecharPainelSeparacao);
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) {
+      setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
+    });
+    dbOnValue(db.ref('ops'), function(snap) {
+      opsGlobal = snap.val() || {};
+      renderListaOps();
+      if (sepOpAtual && opsGlobal[sepOpAtual.opKey]) {
+        sepOpAtual.op = opsGlobal[sepOpAtual.opKey];
+        renderPainelSeparacaoMateriais(sepOpAtual.op);
+      }
+    });
+    dbOnValue(db.ref('estoque_lotes'), function(snap) {
+      allEstoqueLotes = snap.val() || {};
+      if (sepOpAtual) renderPainelSeparacaoMateriais(sepOpAtual.op);
+    });
+    dbOnValue(db.ref('enderecos_estoque'), function(snap) {
+      allEnderecosEstoque = snap.val() || {};
+      if (sepOpAtual) document.getElementById('sepDestino').innerHTML = '<option value="">Selecione o endereço de destino...</option>' + opcoesEnderecoSelect();
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

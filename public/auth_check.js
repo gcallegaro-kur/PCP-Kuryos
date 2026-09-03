@@ -75,6 +75,7 @@ const pageAccessRules = {
   'compras.html': ['admin', 'pcp'],
   'logistica.html': ['admin', 'pcp'],
   'estoque.html': ['admin', 'pcp'],
+  'separacao_materiais.html': ['admin', 'pcp'],
   // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
   // (decisão do usuário: sem múltiplos papéis por pessoa). 'admin' entra
   // aqui também (pedido do usuário: ADM vê tudo, sem exceção) -- 'pcp'
@@ -368,7 +369,10 @@ const ktIcons = {
   truck: '<rect x="1.5" y="7" width="13" height="9" rx="1.5"/><path d="M14.5 10h4l3 3.5V16h-7z"/><circle cx="6" cy="18.5" r="1.7"/><circle cx="17" cy="18.5" r="1.7"/>',
   // Estoque/WMS -- galpão com telhado e portão, distinto de "box" (já usado
   // por Matriz de Insumos) e de "truck".
-  warehouse: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9 20v-6.5h6V20"/>'
+  warehouse: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9 20v-6.5h6V20"/>',
+  // Separação de Materiais (WMS Fase 2) -- prancheta com check, distinto de
+  // "warehouse" (o hub de estoque em si) e "box" (Matriz de Insumos).
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12l2 2 4-4"/>'
 };
 function ktIcon(name) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ktIcons[name] + '</svg>';
@@ -444,6 +448,7 @@ function renderUnifiedNavbar(user) {
     (isPcpAdmin ? ktLink('compras.html', 'cart', 'Compras', activePage) : '') +
     (isPcpAdmin ? ktLink('logistica.html', 'truck', 'Logística', activePage) : '') +
     (isPcpAdmin ? ktLink('estoque.html', 'warehouse', 'Estoque / WMS', activePage) : '') +
+    (isPcpAdmin ? ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) : '') +
     (isPcpAdmin ? ktLink('insumos.html', 'box', 'Matriz de Insumos', activePage) : '') +
     (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajuste de Metas / Config.', activePage) : '') +
     '</div>';

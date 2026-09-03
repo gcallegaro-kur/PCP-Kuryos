@@ -1344,6 +1344,117 @@ function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, a
   });
 }
 
+// ── WMS Fase 2: separação guiada por OP ─────────────────────────────────
+// Pedido do usuário: "OP emitida -> Ordem de Separação -> Logística separa
+// no galpão... material transferido pro espaço dedicado na fábrica" --
+// "separação será guiada, e não preenchida" (o sistema sugere de onde
+// tirar, a pessoa confirma/ajusta e escolhe SEMPRE manualmente pra onde
+// vai). Escopo desta fase: só embalagem (origem 'bom' em
+// materiaisConsumo) -- matéria-prima/Ordem de Fabricação fica pra depois.
+
+// Um lote real quase sempre tem mais peças do que uma OP específica
+// precisa -- transferirLoteEndereco (acima) move o LOTE INTEIRO, não
+// serve pra separação parcial. Esta função é IRMÃ, não substitui aquela:
+// separa só `qtd` do lote de origem (clamp de segurança, mesmo princípio
+// de darBaixaLoteManual -- nunca deixa saldoLote negativo) e cria um
+// registro NOVO no endereço de destino, sempre -- mesmo se `qtd` cobrir o
+// lote de origem inteiro (fica simples e uniforme, sem branch especial
+// "é tudo ou é parte"). A origem nunca é apagada, mesmo zerada (mesmo
+// princípio de auditoria já usado em darBaixaLoteManual).
+function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, novoEnderecoKey, motivo, autor, origemRefNovo) {
+  if (!itemCodigo || !loteKey || !qtd || qtd <= 0 || !novoEnderecoKey) return Promise.resolve({ abatidoReal: 0, novoLoteKey: null });
+  var itemKey = sanitizeKey(itemCodigo);
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  var abatidoReal = 0;
+  return Promise.all([
+    loteRef.transaction(function(atual) {
+      if (!atual) return atual; // lote já não existe mais -- aborta sem gravar nada
+      abatidoReal = Math.min(qtd, atual.saldoLote || 0);
+      atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatidoReal) * 1000) / 1000;
+      atual.atualizadoEm = new Date().toISOString();
+      return atual;
+    }),
+    dbRef.ref('enderecos_estoque/' + novoEnderecoKey).once('value')
+  ]).then(function(results) {
+    var resultado = results[0], novoEnderecoSnap = results[1];
+    var lote = (resultado && resultado.committed && resultado.snapshot) ? resultado.snapshot.val() : null;
+    if (!lote || abatidoReal <= 0) return { abatidoReal: 0, novoLoteKey: null };
+    var novoEndereco = novoEnderecoSnap.val();
+    var agora = new Date().toISOString();
+    return dbRef.ref('estoque_lotes/' + itemKey).push({
+      itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+      itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+      loteOrigem: lote.loteOrigem || null, dataValidade: lote.dataValidade || null,
+      status: lote.status || 'LIBERADO',
+      enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
+      saldoLote: abatidoReal, qtdOriginal: abatidoReal,
+      origemTipo: 'separacao_op', origemRef: origemRefNovo || null,
+      criadoEm: agora, atualizadoEm: agora, criadoPor: autor || null
+    }).then(function(novoRef) {
+      // Diferente de transferirLoteEndereco (que loga qtd=0 -- é a MESMA
+      // posição só mudando de endereço), aqui a quantidade real separada
+      // é informação de auditoria que se perderia com 0, já que o lote
+      // está sendo FRACIONADO (parte fica na origem, parte nasce no
+      // destino).
+      return dbRef.ref('movimentos_estoque/' + itemKey).push({
+        tipo: 'transferencia', motivo: motivo || 'TRANSFERÊNCIA ENTRE ENDEREÇOS',
+        qtd: abatidoReal, saldoApos: null,
+        ref: (lote.enderecoKey || '—') + ' -> ' + novoEnderecoKey,
+        loteKey: novoRef.key, enderecoKey: novoEnderecoKey,
+        itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
+        itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+        autor: autor || null, em: agora
+      }).then(function() { return { abatidoReal: abatidoReal, novoLoteKey: novoRef.key }; });
+    });
+  });
+}
+
+// Função PURA (sem dbRef, sem I/O) -- o "cérebro" da separação guiada, só
+// sugere DE ONDE tirar (FEFO -- mais próximo de vencer sai primeiro,
+// pedido explícito do usuário: "importante a visão de FIFO, ou até melhor
+// seria a visão de mais perto de vencer"). NUNCA sugere destino -- isso é
+// sempre escolha manual de quem confirma a separação ("não deixaria
+// automático, gostaria de ir sempre direcionando, conferindo"). Testável
+// isolada, sem mock de Firebase. `lotesDoItem` = Object.values já
+// carregado client-side (mesmo padrão de ocupantesPorEndereco). Nunca
+// lança erro -- `faltante > 0` é um resultado válido, não uma falha.
+function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem) {
+  var candidatos = Object.entries(lotesDoItem || {})
+    .filter(function(entry) {
+      var lote = entry[1];
+      return lote && lote.itemCodigo === itemCodigo && lote.status === 'LIBERADO' && (lote.saldoLote || 0) > 0;
+    })
+    .map(function(entry) { return { loteKey: entry[0], lote: entry[1] }; })
+    .sort(function(a, b) {
+      var va = a.lote.dataValidade || null, vb = b.lote.dataValidade || null;
+      if (va && vb && va !== vb) return va < vb ? -1 : 1; // mais próximo de vencer primeiro
+      if (va && !vb) return -1; // tem validade conhecida vem antes de quem não tem
+      if (!va && vb) return 1;
+      var ra = a.lote.dataRecebimento || '', rb = b.lote.dataRecebimento || '';
+      if (ra !== rb) return ra < rb ? -1 : 1; // empate de validade -- o mais antigo recebido primeiro
+      var ca = a.lote.enderecoCodigo || '', cb = b.lote.enderecoCodigo || '';
+      return ca < cb ? -1 : (ca > cb ? 1 : 0); // empate final -- determinístico
+    });
+
+  var restante = qtdNecessaria || 0;
+  var alocacoes = [];
+  candidatos.forEach(function(c) {
+    if (restante <= 0) return;
+    var qtdAlocada = Math.min(c.lote.saldoLote || 0, restante);
+    if (qtdAlocada <= 0) return;
+    alocacoes.push({
+      loteKey: c.loteKey, enderecoKey: c.lote.enderecoKey || null, enderecoCodigo: c.lote.enderecoCodigo || null,
+      qtdSugerida: Math.round(qtdAlocada * 1000) / 1000, dataValidade: c.lote.dataValidade || null
+    });
+    restante = Math.round((restante - qtdAlocada) * 1000) / 1000;
+  });
+  var qtdTotal = Math.round(alocacoes.reduce(function(s, a) { return s + a.qtdSugerida; }, 0) * 1000) / 1000;
+  return {
+    alocacoes: alocacoes, qtdTotal: qtdTotal,
+    faltante: Math.max(0, Math.round(((qtdNecessaria || 0) - qtdTotal) * 1000) / 1000)
+  };
+}
+
 // ── Tipos de fornecedor (multi) ─────────────────────────────────────────
 // Achado do usuário: um fornecedor real (ex: uma matriz com 3 CNPJs)
 // costuma vender em mais de uma categoria ao mesmo tempo -- embalagem,

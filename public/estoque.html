@@ -121,6 +121,19 @@
     .planta-cell-ocupada{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .planta-cell-naogerada{background:var(--tint-gray-bg);color:var(--muted);opacity:.55;cursor:default}
     .planta-cell-selecionada{outline:2px solid var(--primary);outline-offset:1px}
+    /* attachAutocomplete (shared/utils.js) -- usado no campo Material de
+       "Ajustar Saldo" (aeMaterial) e agora também no item da aba
+       Endereçamento (edItem). Mesmo CSS já usado em cadastros.html/
+       form.html/formulas.html/compras.html pro mesmo componente -- sem
+       isto a lista de sugestões aparece sem estilo nenhum (achado ao
+       revisar esta página pra Fase 2, mesma lacuna já corrigida noutras
+       telas -- o componente só cria a div, quem inclui precisa trazer o
+       visual). */
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -142,6 +155,7 @@
   <button class="tab" data-tab="vencendo">Lotes Vencendo</button>
   <button class="tab" data-tab="historico">Histórico de Movimentações</button>
   <button class="tab" data-tab="enderecos">Endereços</button>
+  <button class="tab" data-tab="enderecamento">📍 Endereçamento</button>
 </div>
 
 <div class="main" id="mainPanelsEstoque">
@@ -334,6 +348,47 @@
     </div>
   </div>
 
+  <!-- ═══ Aba: Endereçamento -- pedido do usuário: "WMS é complementar ao
+       estoque... acho não produtivo nascer com algo vinculado diretamente,
+       um ao outro, já de largada" -- ferramenta PRÓPRIA, separada de
+       "Ajustar Saldo" (aba Saldo Agregado): NUNCA escreve em
+       estoque/{key}, só distribui espacialmente o que já é conhecido. A
+       quantidade "conhecida" aparece só como referência de apoio, nunca
+       editável aqui. Pensada tanto pra uso incremental (poucos itens,
+       ajuste/teste) quanto pro "Dia D" (inventário físico completo,
+       alguém percorrendo o galpão em sequência, item após item). ═══ -->
+  <div class="tab-panel" id="tab-enderecamento">
+    <div class="section-note">Distribui espacialmente o que já está no estoque -- nunca corrige quantidade (isso continua em "Ajustar Saldo", na aba Saldo Agregado). Busque um item, veja quanto já está endereçado, e registre as posições onde ele está guardado.</div>
+    <div class="form-group" style="max-width:420px">
+      <label>Item (material ou produto) *</label>
+      <input type="text" id="edItem" placeholder="Buscar por código ou nome..." autocomplete="off">
+      <input type="hidden" id="edItemKey">
+      <input type="hidden" id="edItemTipo">
+    </div>
+    <div class="field-hint" id="edResumoHint" style="margin:8px 0 16px"></div>
+
+    <div class="card" id="edCardForm" style="display:none">
+      <div class="card-title">Adicionar posição</div>
+      <div class="form-grid" style="padding:16px">
+        <div class="form-group"><label>Endereço *</label><select id="edEndereco"></select></div>
+        <div class="form-group"><label>Quantidade *</label><input type="number" id="edQtd" min="0" step="any"></div>
+        <div class="form-group"><label>Lote (opcional)</label><input type="text" id="edLote" placeholder="Lote do fornecedor, se souber..."></div>
+        <div class="form-group"><label>Validade (opcional)</label><input type="date" id="edValidade"></div>
+      </div>
+      <div style="padding:0 16px 16px"><button class="btn btn-green" id="btnEdAddPosicao">+ Endereçar esta posição</button></div>
+    </div>
+
+    <div class="card" id="edCardHistorico" style="display:none;margin-top:14px">
+      <div class="card-title">Posições endereçadas nesta sessão</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Endereço</th><th style="text-align:right">Quantidade</th><th>Lote</th><th>Validade</th></tr></thead>
+          <tbody id="edHistoricoBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="modal-bg" id="modalRuaBg">
@@ -494,6 +549,7 @@ document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(tab) {
 
 var allEstoque = {};
 var allMateriais = {};
+var allProdutos = {}; // WMS Fase 2 -- endereçamento cobre material E produto acabado
 var allEstoqueLotes = {};   // itemKey -> {loteKey: lote}
 var allEnderecosEstoque = {};
 var motivosMovEstoqueAtivos = [];
@@ -852,6 +908,115 @@ function renderHistorico(movimentos) {
       '<td>' + escapeHtml(m.autor || '—') + '</td>' +
     '</tr>';
   }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Aba: Endereçamento -- WMS Fase 2. Pedido do usuário: "WMS é
+   complementar ao estoque... não produtivo nascer com algo vinculado
+   diretamente, um ao outro, já de largada" -- ferramenta PRÓPRIA,
+   separada de "Ajustar Saldo": NUNCA escreve em estoque/{key}, só
+   distribui espacialmente o que já é conhecido (putawayEstoqueLote,
+   shared/utils.js). A quantidade "conhecida" é só referência de apoio.
+   ═══════════════════════════════════════════════════════════════════ */
+var edItemAtual = null; // { key, tipo, codigo, nome, unidade }
+
+function edItemsAutocomplete() {
+  var itensMateriais = Object.values(allMateriais).filter(function(m) { return m.ativo !== false; }).map(function(m) {
+    var label = m.mpCodigo + ' — ' + m.mpNome + ' (Material)';
+    return { key: sanitizeKey(m.mpCodigo), value: label, label: label, tipo: 'material', codigo: m.mpCodigo, nome: m.mpNome, unidade: m.unidade };
+  });
+  var itensProdutos = Object.values(allProdutos).filter(function(p) { return p.ativo !== false; }).map(function(p) {
+    var label = p.sku + ' — ' + p.descricao + ' (Produto)';
+    return { key: sanitizeKey(p.sku), value: label, label: label, tipo: 'produto', codigo: p.sku, nome: p.descricao, unidade: 'un' };
+  });
+  return itensMateriais.concat(itensProdutos).sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
+}
+
+function edSomaEnderecada(itemKey) {
+  return Object.values(allEstoqueLotes[itemKey] || {}).reduce(function(s, l) { return s + (l && l.saldoLote || 0); }, 0);
+}
+
+function renderResumoEnderecamento() {
+  var hint = document.getElementById('edResumoHint');
+  if (!edItemAtual) { hint.textContent = ''; return; }
+  var jaEnderecado = edSomaEnderecada(edItemAtual.key);
+  if (edItemAtual.tipo === 'material') {
+    // Produto acabado não tem hoje um saldo agregado separado (mesma
+    // limitação já registrada na Fase 1) -- só material tem "conhecido".
+    var conhecido = (allEstoque[edItemAtual.key] && allEstoque[edItemAtual.key].saldoAtual) || 0;
+    var semEndereco = Math.max(0, Math.round((conhecido - jaEnderecado) * 1000) / 1000);
+    hint.innerHTML = 'Conhecido: <b>' + fmtNum(conhecido) + '</b> ' + escapeHtml(edItemAtual.unidade || '') +
+      ' · Já endereçado: <b>' + fmtNum(jaEnderecado) + '</b> · Sem endereço ainda: <b' + (semEndereco > 0 ? ' style="color:var(--warning)"' : '') + '>' + fmtNum(semEndereco) + '</b>';
+  } else {
+    hint.innerHTML = 'Já endereçado: <b>' + fmtNum(jaEnderecado) + '</b> ' + escapeHtml(edItemAtual.unidade || '') +
+      ' · Produto acabado não tem saldo agregado separado nesta fase -- só o que já foi endereçado (aqui ou na conclusão de OP) é rastreado.';
+  }
+}
+
+function renderHistoricoSessaoEnderecamento() {
+  var tbody = document.getElementById('edHistoricoBody');
+  var card = document.getElementById('edCardHistorico');
+  if (!edSessaoEnderecamento.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  tbody.innerHTML = edSessaoEnderecamento.slice().reverse().map(function(r) {
+    return '<tr>' +
+      '<td>' + escapeHtml(r.enderecoCodigo) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(r.qtd) + ' ' + escapeHtml(edItemAtual ? (edItemAtual.unidade || '') : '') + '</td>' +
+      '<td>' + escapeHtml(r.lote || '—') + '</td>' +
+      '<td>' + fmtData(r.validade || null) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+var edSessaoEnderecamento = []; // só desta sessão de tela, pra feedback visual imediato -- a fonte de verdade é estoque_lotes
+
+function edSelecionarItem(it) {
+  edItemAtual = { key: it.key, tipo: it.tipo, codigo: it.codigo, nome: it.nome, unidade: it.unidade };
+  document.getElementById('edItemKey').value = it.key;
+  document.getElementById('edItemTipo').value = it.tipo;
+  document.getElementById('edCardForm').style.display = 'block';
+  document.getElementById('edEndereco').innerHTML = opcoesEnderecoModalSelect();
+  document.getElementById('edQtd').value = '';
+  document.getElementById('edLote').value = '';
+  document.getElementById('edValidade').value = '';
+  edSessaoEnderecamento = [];
+  renderResumoEnderecamento();
+  renderHistoricoSessaoEnderecamento();
+}
+
+function edAdicionarPosicao() {
+  if (!edItemAtual) { showAlert('Busque e selecione um item primeiro.', 'danger'); return; }
+  var enderecoKey = document.getElementById('edEndereco').value;
+  var qtd = parseFloat(document.getElementById('edQtd').value);
+  if (!enderecoKey) { showAlert('Selecione o endereço.', 'danger'); return; } // destino sempre manual, nunca automático
+  if (isNaN(qtd) || qtd <= 0) { showAlert('Informe uma quantidade válida.', 'danger'); return; }
+  var loteTexto = document.getElementById('edLote').value.trim();
+  var validade = document.getElementById('edValidade').value || null;
+  var enderecoInfo = allEnderecosEstoque[enderecoKey];
+
+  document.getElementById('btnEdAddPosicao').disabled = true;
+  putawayEstoqueLote(db, edItemAtual.tipo, edItemAtual.codigo, {
+    itemNome: edItemAtual.nome, unidade: edItemAtual.unidade,
+    loteOrigem: loteTexto || null, dataValidade: validade,
+    dataRecebimento: new Date().toISOString().slice(0, 10),
+    saldoLote: qtd, qtdOriginal: qtd,
+    enderecoKey: enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
+    origemTipo: 'endereco_inicial', origemRef: null,
+    criadoPor: currentUserNome()
+  }).then(function() {
+    edSessaoEnderecamento.push({ enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || enderecoKey, qtd: qtd, lote: loteTexto, validade: validade });
+    showAlert('Posição endereçada!', 'success');
+    document.getElementById('edQtd').value = '';
+    document.getElementById('edLote').value = '';
+    document.getElementById('edValidade').value = '';
+    document.getElementById('edEndereco').focus();
+    renderHistoricoSessaoEnderecamento();
+    // renderResumoEnderecamento roda de novo sozinho quando o listener de
+    // estoque_lotes disparar com o novo lote -- não precisa chamar aqui.
+  }).catch(function(err) {
+    showAlert('Erro ao endereçar: ' + err.message, 'danger');
+  }).finally(function() {
+    document.getElementById('btnEdAddPosicao').disabled = false;
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1266,6 +1431,23 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnSalvarPlanta-end').addEventListener('click', salvarPosicoesPlanta);
   document.getElementById('btnCancelarPlanta-end').addEventListener('click', cancelarEdicaoPlanta);
 
+  // Aba Endereçamento (WMS Fase 2)
+  attachAutocomplete(document.getElementById('edItem'), edItemsAutocomplete, { onSelect: edSelecionarItem });
+  document.getElementById('edItem').addEventListener('input', function() {
+    // Digitar sem escolher da lista invalida a seleção -- evita separar
+    // pro item errado por engano se a pessoa editar o texto e não
+    // reselecionar (mesmo cuidado já usado no aeMaterial de Ajustar Saldo).
+    if (edItemAtual) {
+      edItemAtual = null;
+      document.getElementById('edItemKey').value = '';
+      document.getElementById('edItemTipo').value = '';
+      document.getElementById('edCardForm').style.display = 'none';
+      document.getElementById('edCardHistorico').style.display = 'none';
+      document.getElementById('edResumoHint').textContent = '';
+    }
+  });
+  document.getElementById('btnEdAddPosicao').addEventListener('click', edAdicionarPosicao);
+
   try {
     db.ref('.info/connected').on('value', function(snap) {
       setStatus(snap.val(), snap.val() ? 'Conectado' : 'Reconectando...');
@@ -1278,11 +1460,15 @@ document.addEventListener('DOMContentLoaded', function() {
       allMateriais = snap.val() || {};
       refreshAeItems();
     });
+    dbOnValue(db.ref('produtos'), function(snap) {
+      allProdutos = snap.val() || {};
+    });
     dbOnValue(db.ref('estoque_lotes'), function(snap) {
       allEstoqueLotes = snap.val() || {};
       renderEstoqueAgregado();
       renderSaldoLotes();
       renderLotesVencendo();
+      renderResumoEnderecamento();
       // Aba Endereços: mesmo cálculo de ocupantes-por-endereço já usado em
       // cadastros.html -- estoque_lotes é keyed por itemKey, cada um com
       // vários pushKeys de lote; conta POR ENDEREÇO, nunca assume 1 item
