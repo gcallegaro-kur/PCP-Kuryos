@@ -2808,10 +2808,36 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   if (!produto) return Promise.resolve();
   var calc = explodirMateriaisNecessarios(produto, qtdReal, formula, bom, allMateriaisForm);
   if (!calc.ok || !calc.itens.length) return Promise.resolve();
+  var autorConsumo = (window.currentUser && window.currentUser.nome) || null;
   return Promise.all(calc.itens.map(function(it) {
     return Promise.all([
       ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade }),
-      baixarEmpenho(db, ref, it.mpCodigo, it.quantidade)
+      baixarEmpenho(db, ref, it.mpCodigo, it.quantidade),
+      // Baixa também do estoque ENDEREÇADO (WMS), em ordem FEFO -- fecha o
+      // ciclo que estava aberto: o recebimento já criava o lote no endereço,
+      // mas nada nunca o consumia, então o saldo endereçado só subia e o
+      // FEFO da Separação Guiada ia acabar mandando buscar em lote já
+      // consumido (achado da auditoria geral, 2026-09-05).
+      //
+      // .catch() NUNCA removível: apontamento de produção é o fluxo mais
+      // crítico do sistema, usado ao vivo no chão de fábrica. Escrituração
+      // de WMS não pode travar o registro do que foi produzido -- se falhar,
+      // loga e segue. A baixa do agregado (acima) é a que conta pro
+      // controle de estoque e continua independente desta.
+      baixarLotesFefo(db, 'material', it.mpCodigo, it.quantidade, 'CONSUMO DE PRODUÇÃO', autorConsumo, ref)
+        .then(function(r) {
+          if (r && r.faltante > 0) {
+            // Normal enquanto o WMS não estiver populado (antes do "Dia D"):
+            // não há lote endereçado pra abater. Vira sinal útil depois disso.
+            console.warn('WMS: consumo de ' + it.mpCodigo + ' (OP ' + ref + ') abateu ' + r.baixado +
+              ' do estoque endereçado, faltaram ' + r.faltante + '. Saldo agregado foi baixado normalmente.');
+          }
+          return r;
+        })
+        .catch(function(err) {
+          console.error('WMS: falha ao baixar lote endereçado de ' + it.mpCodigo + ' (OP ' + ref + '):', err);
+          return null;
+        })
     ]);
   }));
 }
@@ -3789,7 +3815,16 @@ function collectPerdas(containerId) {
 function baixarEstoquePerdas(perdas, ref) {
   var comMaterial = (perdas || []).filter(function(p) { return p.materialCodigo && p.quantidade > 0; });
   if (!comMaterial.length) return Promise.resolve();
+  var autorPerda = (window.currentUser && window.currentUser.nome) || null;
   return Promise.all(comMaterial.map(function(p) {
+    // Perda também sai do estoque endereçado (mesmo motivo do consumo: o
+    // material saiu fisicamente do endereço, o WMS precisa refletir).
+    // Mesmo .catch() defensivo -- lançar perda nunca pode falhar por causa
+    // de escrituração de WMS.
+    baixarLotesFefo(db, 'material', p.materialCodigo, p.quantidade, 'PERDA DE PRODUÇÃO', autorPerda, ref)
+      .catch(function(err) {
+        console.error('WMS: falha ao baixar lote endereçado da perda de ' + p.materialCodigo + ' (OP ' + ref + '):', err);
+      });
     return ajustarEstoque(db, p.materialCodigo, -p.quantidade, 'perda', ref, { materialNome: p.materialNome });
   })).catch(function(err) { console.error('Falha ao dar baixa de estoque por perda:', err); });
 }

@@ -1445,6 +1445,94 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
   });
 }
 
+// Baixa o consumo REAL de produção do estoque endereçado, em ordem FEFO.
+//
+// Achado da auditoria geral (2026-09-05): o ciclo do WMS era ASSIMÉTRICO --
+// o recebimento (logistica.html) gravava nos dois lugares (putawayEstoqueLote
+// criando o lote no endereço + ajustarEstoque somando no agregado), mas o
+// apontamento (form.html), único ponto onde o consumo real acontece, só
+// descontava o agregado: `estoque_lotes` não aparecia UMA vez sequer naquele
+// arquivo. Resultado: o saldo endereçado só subia, nunca descia. A cada OP
+// produzida o WMS se afastava mais da realidade física, e o FEFO da Separação
+// Guiada -- que lê exatamente esse dado -- passaria a mandar o separador
+// buscar em lotes já consumidos.
+//
+// Três decisões de projeto aqui, todas deliberadas:
+//
+// 1. NÃO exclui posição bloqueada (diferente da SUGESTÃO de separação, que
+//    exclui). Bloqueio serve pra não ROTEAR gente pra uma posição
+//    interditada; esta função é o oposto -- é escrituração do que JÁ saiu
+//    fisicamente. Ignorar o lote bloqueado aqui deixaria saldo fantasma pra
+//    sempre justamente na posição com problema.
+// 2. NUNCA rejeita. Se faltar saldo endereçado, baixa o que dá e devolve
+//    `faltante` -- quem chama decide o que fazer. Apontamento de produção é
+//    o fluxo mais crítico do sistema e roda no chão de fábrica: escrituração
+//    de WMS não pode, em hipótese nenhuma, travar o registro do que foi
+//    produzido. A realidade física vence o livro.
+// 3. Lê só os lotes DAQUELE item, sob demanda (`estoque_lotes/{itemKey}`),
+//    em vez de manter um listener do nó inteiro em form.html -- o
+//    apontamento é a página mais usada do app e fecha poucas vezes por
+//    turno, então uma leitura pontual por material sai muito mais barata
+//    que carregar todo o estoque endereçado o tempo todo.
+//
+// Reaproveita sugerirAlocacaoFefo pra ORDENAR: a regra de FEFO fica num
+// lugar só, então separação e consumo nunca discordam sobre qual lote sai
+// primeiro.
+function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origemRef) {
+  if (!itemCodigo || !qtd || qtd <= 0) return Promise.resolve({ baixado: 0, faltante: 0, lotes: [] });
+  var itemKey = sanitizeKey(itemCodigo);
+  return dbRef.ref('estoque_lotes/' + itemKey).once('value').then(function(snap) {
+    var lotesDoItem = snap.val() || {};
+    // 4º parâmetro omitido de propósito -- consumo não filtra bloqueado (ver nota 1)
+    var plano = sugerirAlocacaoFefo(itemCodigo, qtd, lotesDoItem);
+    if (!plano.alocacoes.length) {
+      return { baixado: 0, faltante: qtd, lotes: [] };
+    }
+    var agora = new Date().toISOString();
+    var baixadoReal = 0;
+    var lotesTocados = [];
+    return Promise.all(plano.alocacoes.map(function(a) {
+      var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + a.loteKey);
+      var abatidoNesteLote = 0;
+      return loteRef.transaction(function(atual) {
+        if (!atual) return atual;
+        // Clamp contra o saldo do MOMENTO da transaction, não contra o que o
+        // plano viu: entre montar o plano e gravar, outra sessão pode ter
+        // mexido no mesmo lote. Mesmo padrão de darBaixaLoteManual.
+        abatidoNesteLote = Math.min(a.qtdSugerida, atual.saldoLote || 0);
+        atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatidoNesteLote) * 1000) / 1000;
+        atual.atualizadoEm = agora;
+        return atual;
+      }).then(function(res) {
+        if (!res || !res.committed || abatidoNesteLote <= 0) return null;
+        baixadoReal += abatidoNesteLote;
+        lotesTocados.push({ loteKey: a.loteKey, enderecoKey: a.enderecoKey, qtd: abatidoNesteLote });
+        return dbRef.ref('movimentos_estoque/' + itemKey).push({
+          tipo: 'consumo',
+          motivo: motivo || 'CONSUMO DE PRODUÇÃO',
+          qtd: abatidoNesteLote,
+          saldoApos: (res.snapshot.val() || {}).saldoLote != null ? res.snapshot.val().saldoLote : null,
+          ref: origemRef || null,
+          loteKey: a.loteKey,
+          enderecoKey: a.enderecoKey || null,
+          enderecoCodigo: a.enderecoCodigo || null,
+          itemTipo: itemTipo || 'material',
+          itemCodigo: itemCodigo,
+          autor: autor || null,
+          em: agora
+        });
+      });
+    })).then(function() {
+      baixadoReal = Math.round(baixadoReal * 1000) / 1000;
+      return {
+        baixado: baixadoReal,
+        faltante: Math.max(0, Math.round((qtd - baixadoReal) * 1000) / 1000),
+        lotes: lotesTocados
+      };
+    });
+  });
+}
+
 // Função PURA (sem dbRef, sem I/O) -- o "cérebro" da separação guiada, só
 // sugere DE ONDE tirar (FEFO -- mais próximo de vencer sai primeiro,
 // pedido explícito do usuário: "importante a visão de FIFO, ou até melhor
