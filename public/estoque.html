@@ -295,6 +295,7 @@
           <option value="">Ocupadas e livres</option>
           <option value="ocupadas">Só ocupadas</option>
           <option value="livres">Só livres</option>
+          <option value="bloqueadas">Só bloqueadas</option>
         </select>
         <div style="display:flex;gap:4px;margin-left:auto">
           <button class="btn btn-ghost btn-sm" id="btnVerLista-end">📋 Lista</button>
@@ -306,11 +307,12 @@
         <div class="stat"><div class="stat-val" id="statTotalPos-end">—</div><div class="stat-lbl">Total de posições</div></div>
         <div class="stat"><div class="stat-val" id="statOcupadasPos-end" style="color:var(--primary)">—</div><div class="stat-lbl">Ocupadas</div></div>
         <div class="stat"><div class="stat-val" id="statLivresPos-end" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Livres</div></div>
+        <div class="stat"><div class="stat-val" id="statBloqueadasPos-end" style="color:var(--tint-red-fg)">—</div><div class="stat-lbl">Bloqueadas</div></div>
       </div>
       <div class="card" id="cardListaPosicoes-end">
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Código</th><th>Área</th><th>Ocupantes</th></tr></thead>
+            <thead><tr><th>Código</th><th>Área</th><th>Ocupantes</th><th style="width:120px"></th></tr></thead>
             <tbody id="posicoesBody-end"></tbody>
           </table>
         </div>
@@ -1151,6 +1153,7 @@ function renderPosicoesTableEnd() {
     var ocupantes = ocupantesPorEndereco[entry[0]] || 0;
     if (filtroOcupacao === 'ocupadas' && ocupantes === 0) return false;
     if (filtroOcupacao === 'livres' && ocupantes > 0) return false;
+    if (filtroOcupacao === 'bloqueadas' && e.ativo !== false) return false;
     return true;
   }).sort(function(a, b) {
     var ea = a[1], eb = b[1];
@@ -1158,26 +1161,76 @@ function renderPosicoesTableEnd() {
   });
 
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="no-data">Nenhuma posição encontrada -- gere posições em "Estrutura de Ruas".</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhuma posição encontrada -- gere posições em "Estrutura de Ruas".</td></tr>';
   } else {
     tbody.innerHTML = entries.map(function(entry) {
       var key = entry[0], e = entry[1];
       var ocupantes = ocupantesPorEndereco[key] || 0;
+      var bloqueado = e.ativo === false;
+      var ocupacaoCell = bloqueado
+        ? '<span class="badge badge-red" title="' + escapeAttr(e.motivoBloqueio || 'Bloqueado') + '">🚫 Bloqueado</span>' +
+          (ocupantes > 0 ? ' <span class="badge badge-orange">' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '') + '</span>' : '')
+        : (ocupantes > 0 ? '<span class="badge badge-orange">' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '') + '</span>' : '<span class="badge badge-green">Livre</span>');
       return '<tr>' +
         '<td>' + escapeHtml(e.codigo) + '</td>' +
         '<td>' + escapeHtml(e.area || '') + '</td>' +
-        '<td>' + (ocupantes > 0 ? '<span class="badge badge-orange">' + ocupantes + ' item' + (ocupantes > 1 ? 's' : '') + '</span>' : '<span class="badge badge-green">Livre</span>') + '</td>' +
+        '<td>' + ocupacaoCell + '</td>' +
+        '<td style="text-align:right">' +
+          '<button class="btn btn-ghost btn-sm" data-toggle-bloqueio="' + escapeAttr(key) + '">' +
+            (bloqueado ? '🔓 Liberar' : '🚫 Bloquear') +
+          '</button>' +
+        '</td>' +
       '</tr>';
     }).join('');
+    tbody.querySelectorAll('[data-toggle-bloqueio]').forEach(function(btn) {
+      btn.addEventListener('click', function() { toggleBloqueioEndereco(btn.getAttribute('data-toggle-bloqueio')); });
+    });
   }
 
   var total = Object.keys(enderecosEstoque).length;
   var ocupadasCount = Object.keys(enderecosEstoque).filter(function(k) { return (ocupantesPorEndereco[k] || 0) > 0; }).length;
+  var bloqueadasCount = Object.keys(enderecosEstoque).filter(function(k) { return enderecosEstoque[k].ativo === false; }).length;
   document.getElementById('statTotalPos-end').textContent = fmtNum(total);
   document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
   document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
+  document.getElementById('statBloqueadasPos-end').textContent = fmtNum(bloqueadasCount);
   if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
   if (visaoAtualPosicoes === 'planta' && !editandoPlanta) renderPlantaBaixa(); // não re-renderiza em cima de um arrasto em andamento
+}
+
+// Bloqueio de posição -- achado da auditoria geral: enderecos_estoque.ativo
+// JÁ era respeitado em 3 telas (o <select> de destino aqui, o de Separação
+// e o de Recebimento em Logística todos filtram `ativo !== false`), mas
+// NENHUMA tela do sistema conseguia gravar `false`. O campo nascia true e
+// não tinha como mudar -- metade do mecanismo pronta, sem a ponta que
+// escreve. Bloqueio de posição é função básica de WMS de mercado
+// (posição danificada, interditada, em contagem, reservada).
+// Bloquear NÃO mexe em nada do que já está guardado lá: o saldo continua
+// existindo e aparecendo no Saldo por Lote/Endereço -- só para de ser
+// OFERECIDA como destino e some das sugestões de FEFO. Por isso é seguro
+// bloquear posição ocupada (justamente o caso "essa posição está com
+// problema, não mande mais nada pra cá").
+function toggleBloqueioEndereco(key) {
+  var e = enderecosEstoque[key];
+  if (!e) return;
+  var bloqueandoAgora = e.ativo !== false;
+  var motivo = null;
+  if (bloqueandoAgora) {
+    motivo = prompt('Motivo do bloqueio da posição ' + e.codigo + ' (obrigatório):', '');
+    if (motivo === null) return;              // cancelou
+    motivo = String(motivo).trim();
+    if (!motivo) { showAlert('Informe o motivo do bloqueio.', 'danger'); return; }
+  }
+  var updates = {};
+  updates['enderecos_estoque/' + key + '/ativo'] = bloqueandoAgora ? false : true;
+  updates['enderecos_estoque/' + key + '/motivoBloqueio'] = bloqueandoAgora ? motivo : null;
+  updates['enderecos_estoque/' + key + '/bloqueadoEm'] = bloqueandoAgora ? new Date().toISOString() : null;
+  updates['enderecos_estoque/' + key + '/bloqueadoPor'] = bloqueandoAgora ? currentUserNome() : null;
+  db.ref().update(updates).then(function() {
+    showAlert('Posição ' + e.codigo + (bloqueandoAgora ? ' bloqueada.' : ' liberada.'), 'success');
+  }).catch(function(err) {
+    showAlert('Erro ao ' + (bloqueandoAgora ? 'bloquear' : 'liberar') + ' a posição: ' + err.message, 'danger');
+  });
 }
 
 // Pedido do usuário: "conseguimos criar um mapa visual do wms... pra

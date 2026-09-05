@@ -246,6 +246,18 @@ function fecharPainelSeparacao() {
   sepOpAtual = null;
   document.getElementById('painelSeparacao').style.display = 'none';
 }
+// Posições bloqueadas (enderecos_estoque.ativo === false, gravado em
+// Estoque > Posições) -- o FEFO não manda ninguém buscar numa posição
+// interditada/danificada/em contagem. Mesmo critério que este arquivo já
+// usava pra esconder a posição do <select> de destino, agora aplicado
+// também à ORIGEM sugerida.
+function enderecosBloqueadosMap() {
+  var out = {};
+  Object.keys(allEnderecosEstoque || {}).forEach(function(k) {
+    if (allEnderecosEstoque[k] && allEnderecosEstoque[k].ativo === false) out[k] = true;
+  });
+  return out;
+}
 function opcoesEnderecoSelect() {
   return Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
     .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); })
@@ -262,7 +274,7 @@ function renderPainelSeparacaoMateriais(op) {
     var it = entry[1];
     var itemKey = sanitizeKey(it.mpCodigo);
     var lotesDoItem = allEstoqueLotes[itemKey] || {};
-    var sugestao = sugerirAlocacaoFefo(it.mpCodigo, it.quantidade, lotesDoItem);
+    var sugestao = sugerirAlocacaoFefo(it.mpCodigo, it.quantidade, lotesDoItem, enderecosBloqueadosMap());
     var cabecalho = '<tr class="sep-material-header"><td colspan="3">' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome) +
       ' <span style="font-weight:400;color:var(--muted)">· necessário: ' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade || '') + '</span>' +
       (sugestao.faltante > 0 ? '<div class="field-hint" style="color:var(--danger)">Faltam ' + fmtNum(sugestao.faltante) + ' ' + escapeHtml(it.unidade || '') + ' -- só ' + fmtNum(sugestao.qtdTotal) + ' disponíveis em endereços liberados.</div>' : '') +

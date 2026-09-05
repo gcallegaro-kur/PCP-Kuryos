@@ -1454,11 +1454,22 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
 // isolada, sem mock de Firebase. `lotesDoItem` = Object.values já
 // carregado client-side (mesmo padrão de ocupantesPorEndereco). Nunca
 // lança erro -- `faltante > 0` é um resultado válido, não uma falha.
-function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem) {
+// `enderecosBloqueados` (opcional, {enderecoKey: true}) tira da sugestão os
+// lotes que estão numa posição bloqueada -- posição interditada/danificada/
+// em contagem não deve mandar ninguém buscar lá. Parâmetro OPCIONAL de
+// propósito: omitir mantém o comportamento antigo (nada bloqueado),
+// preservando as chamadas que já existiam antes do bloqueio de posição.
+// Se isso deixar faltando quantidade, o `faltante` já existente avisa na
+// tela -- é melhor avisar do que rotear o separador pra uma posição
+// interditada.
+function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBloqueados) {
+  var bloqueados = enderecosBloqueados || {};
   var candidatos = Object.entries(lotesDoItem || {})
     .filter(function(entry) {
       var lote = entry[1];
-      return lote && lote.itemCodigo === itemCodigo && lote.status === 'LIBERADO' && (lote.saldoLote || 0) > 0;
+      if (!lote || lote.itemCodigo !== itemCodigo || lote.status !== 'LIBERADO' || (lote.saldoLote || 0) <= 0) return false;
+      if (lote.enderecoKey && bloqueados[lote.enderecoKey]) return false;
+      return true;
     })
     .map(function(entry) { return { loteKey: entry[0], lote: entry[1] }; })
     .sort(function(a, b) {
