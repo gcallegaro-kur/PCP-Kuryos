@@ -3827,14 +3827,40 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   var hora = pad(new Date().getHours()) + ':00';
   var turno = guessShift();
 
+  // Achado da auditoria: este era o único fechamento que ainda não gravava
+  // período real -- ficava preso ao formato antigo de grade horária no
+  // Histórico. Diferente de "Apontamento por Total" (que rastreia
+  // op.abertaDesde), esta aba não guarda um instante de abertura próprio;
+  // a melhor aproximação real é o apontamento HORÁRIO mais antigo já feito
+  // hoje pra essa OP nesta linha (é dele que qtdFinal está descontando,
+  // via "apontado"/qtdFinal acima) até agora, que é quando o encerramento
+  // realmente acontece.
+  var agora = new Date().toISOString();
+  var regsDestaOp = opTodayRegs.filter(function(r) {
+    return r.linha === linha && (lote ? r.lote === lote : true) && r.tipo !== 'fechamento_op';
+  });
+  var periodoInicioCalc = null;
+  if (regsDestaOp.length) {
+    var maisAntigo = regsDestaOp.reduce(function(a, b) {
+      return (regTimestampIso(a, 'periodoInicio') < regTimestampIso(b, 'periodoInicio')) ? a : b;
+    });
+    periodoInicioCalc = regTimestampIso(maisAntigo, 'periodoInicio');
+  }
+
   var registro = {
     data: today(), hora: hora, linha: linha, produto: produto,
     quantidade: qtdFinal, turno: turno,
     tipo: 'fechamento_op',
     qtdTotalOP: qtdTotal,
     qtdEsperadaOP: qtdEsperada,
-    timestamp: new Date().toISOString()
+    timestamp: agora
   };
+  if (periodoInicioCalc && periodoInicioCalc < agora) {
+    registro.periodoInicio = periodoInicioCalc;
+    registro.periodoFim = agora;
+    var horasCalc = (new Date(agora).getTime() - new Date(periodoInicioCalc).getTime()) / 3600000;
+    if (horasCalc > 0) registro.horasTrabalhadas = Math.round(horasCalc * 100) / 100;
+  }
   if (hasDeviation && justificativa) {
     registro.justificativaDivergencia = justificativa;
   }
