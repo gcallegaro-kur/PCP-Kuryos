@@ -184,7 +184,10 @@
   <!-- ═══════════ PEDIDOS DE COMPRA ═══════════ -->
   <div class="tab-panel" id="tab-pedidos">
     <div class="kt-toolbar">
-      <select class="kt-select" id="pcFilterFornecedor"><option value="">Todos os fornecedores</option></select>
+      <span style="position:relative">
+        <input type="text" class="kt-select" id="pcFilterFornecedorBusca" placeholder="Todos os fornecedores" autocomplete="off" style="min-width:220px;cursor:text">
+        <input type="hidden" id="pcFilterFornecedor">
+      </span>
       <select class="kt-select" id="pcSort">
         <option value="recente">Mais recentes primeiro</option>
         <option value="antigo">Mais antigos primeiro</option>
@@ -588,7 +591,10 @@ function renderSolicitacoes() {
         var fornHtml = candidatos.length
           ? candidatos.map(function(c) { return escapeHtml(c.nome) + (c.viaVariante ? ' <span title="Fornecedor de outro cadastro do mesmo item (código diferente)">🔗</span>' : ''); }).join(', ')
           : '<span style="color:var(--warning)">⚠ sem homologado</span>';
-        return '<div style="margin-bottom:4px"><b>' + escapeHtml(i.materialCodigo) + '</b> (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')' +
+        // Pedido do usuário: "além do código do item, deixe visível também
+        // a descrição" -- essa lista só mostrava o código, obrigando a abrir
+        // a solicitação (ou lembrar de cor) pra saber que material é MP001.
+        return '<div style="margin-bottom:4px"><b>' + escapeHtml(i.materialCodigo) + '</b>' + (i.materialNome ? ' — ' + escapeHtml(i.materialNome) : '') + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')' +
           '<div style="font-size:11px;color:var(--muted)">' + fornHtml + '</div></div>';
       }).join('');
       var statusBadge = {
@@ -1289,18 +1295,27 @@ function renderBuscaFornecedor() {
    salvarAjusteEstoque de lá, mesma lógica). Link no cabeçalho leva pra lá.
    ═══════════════════════════════════════════════════════════════════════ */
 
+// Pedido do usuário: "onde aparecer lista suspensa, usar busca" -- este
+// filtro tinha 392 fornecedores num <select> só, sem busca. Vira busca +
+// campo escondido com a fornecedorKey real (mesmo contrato que renderPedidos
+// já lia em pcFilterFornecedor.value -- só o id que segue no hidden, não
+// muda nada em quem consome).
+var pcFornecedorItems = [];
 function refreshPcFornecedorFilter() {
-  var sel = document.getElementById('pcFilterFornecedor');
-  var cur = sel.value;
-  sel.innerHTML = '<option value="">Todos os fornecedores</option>';
-  Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
-    .sort(function(a, b) { return norm(a[1].razaoSocial).localeCompare(norm(b[1].razaoSocial)); })
-    .forEach(function(entry) {
-      var o = document.createElement('option');
-      o.value = entry[0]; o.textContent = entry[1].nomeFantasia || entry[1].razaoSocial;
-      sel.appendChild(o);
+  pcFornecedorItems = Object.entries(allFornecedores).filter(function(e) { return e[1].ativo !== false; })
+    .sort(function(a, b) { return norm(fornecedorNome(a[1])).localeCompare(norm(fornecedorNome(b[1]))); })
+    .map(function(entry) {
+      var label = fornecedorNome(entry[1]);
+      return { key: entry[0], value: label, label: label };
     });
-  if (cur) sel.value = cur;
+  // Se o fornecedor selecionado ainda existe na lista atualizada, mantém o
+  // texto exibido coerente com o filtro ativo (ex: primeira carga de
+  // allFornecedores chegando depois do filtro já estar setado).
+  var curKey = document.getElementById('pcFilterFornecedor').value;
+  if (curKey) {
+    var achado = pcFornecedorItems.find(function(it) { return it.key === curKey; });
+    document.getElementById('pcFilterFornecedorBusca').value = achado ? achado.label : '';
+  }
 }
 function renderPedidos() {
   var filtFornecedor = document.getElementById('pcFilterFornecedor').value;
@@ -1326,7 +1341,8 @@ function renderPedidos() {
   tbody.innerHTML = rows.map(function(entry) {
     var key = entry[0], p = entry[1];
     var itens = Object.values(p.itens || {});
-    var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
+    // Pedido do usuário: mostrar a descrição do item, não só o código.
+    var itensResumo = itens.map(function(i) { return escapeHtml(i.materialCodigo) + (i.materialNome ? ' — ' + escapeHtml(i.materialNome) : '') + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
     var statusBadge = {
       ABERTO: '<span class="badge badge-orange">Aberto</span>',
       ENVIADO: '<span class="badge badge-blue">Enviado</span>',
@@ -1615,7 +1631,7 @@ function cotacaoCardHtml(entry) {
         '<input type="number" class="cot-resp-prazo" min="0" step="1" placeholder="Prazo (dias)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '" style="width:90px">' +
       '</td>';
     }).join('');
-    return '<tr><td style="font-size:12px">' + escapeHtml(it.materialCodigo) + '<br><span style="color:var(--muted);font-size:11px">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</span></td>' + cells + '</tr>';
+    return '<tr><td style="font-size:12px"><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') + '<br><span style="color:var(--muted);font-size:11px">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</span></td>' + cells + '</tr>';
   }).join('');
 
   var vencedorOpts = '<option value="">Escolha o vencedor...</option>' + convidadosArr.map(function(cEntry) {
@@ -1821,7 +1837,22 @@ document.addEventListener('DOMContentLoaded', function() {
   var _t = null;
   document.getElementById('scSearch').addEventListener('input', function() { clearTimeout(_t); _t = setTimeout(renderSolicitacoes, 200); });
   document.getElementById('scFilterStatus').addEventListener('change', renderSolicitacoes);
-  document.getElementById('pcFilterFornecedor').addEventListener('change', renderPedidos);
+  attachAutocomplete(document.getElementById('pcFilterFornecedorBusca'), function() { return pcFornecedorItems; }, {
+    onSelect: function(it) { document.getElementById('pcFilterFornecedor').value = it.key; renderPedidos(); }
+  });
+  document.getElementById('pcFilterFornecedorBusca').addEventListener('input', function() {
+    // Campo apagado à mão (sem selecionar da lista) = volta a "Todos os
+    // fornecedores", igual a escolher a opção vazia no <select> antigo.
+    if (!this.value.trim()) { document.getElementById('pcFilterFornecedor').value = ''; renderPedidos(); }
+  });
+  document.getElementById('pcFilterFornecedorBusca').addEventListener('blur', function() {
+    // Digitou e saiu sem escolher da lista (mas sem apagar tudo) -- reverte
+    // pro fornecedor que já estava filtrado, nunca deixa texto solto que
+    // não corresponde ao filtro de verdade.
+    var curKey = document.getElementById('pcFilterFornecedor').value;
+    var achado = pcFornecedorItems.find(function(it) { return it.key === curKey; });
+    this.value = achado ? achado.label : '';
+  });
   document.getElementById('pcSort').addEventListener('change', renderPedidos);
 
   var _tph = null;

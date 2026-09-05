@@ -281,10 +281,28 @@
       cursor: pointer;
       outline: none;
     }
-    
+
     .pedido-selector select:focus {
       border-color: var(--primary);
     }
+    /* Campo de busca (attachAutocomplete) que substituiu o <select> acima --
+       o wrapper (span) recebe o flex/min-width que antes era do próprio
+       campo, o input só preenche 100% dele. Cursor de digitação, não de
+       seleção. */
+    .pedido-selector-wrap { flex: 1; min-width: 240px; }
+    .pedido-selector-busca {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--card);
+      cursor: text;
+      outline: none;
+    }
+    .pedido-selector-busca:focus { border-color: var(--primary); }
     
     .ped-info {
       background:var(--card);
@@ -793,6 +811,15 @@
       .top-tabs { width: 100%; display: flex; }
       .top-tab { flex: 1; text-align: center; padding: 10px 5px; }
     }
+    /* attachAutocomplete (shared/utils.js) -- campo Pedido virou busca por
+       ID ou produto em vez de <select>. Mesmo CSS já usado em
+       cadastros.html/estoque.html/compras.html/pedidos.html pro mesmo
+       componente -- sem isto a lista de sugestões aparece sem estilo nenhum. */
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -840,9 +867,10 @@
     <!-- Pedido selector -->
     <div class="pedido-selector">
       <label>Pedido</label>
-      <select id="selPedido">
-        <option value="">— Selecione um pedido —</option>
-      </select>
+      <span class="pedido-selector-wrap" style="position:relative">
+        <input type="text" class="pedido-selector-busca" id="selPedidoBusca" placeholder="Buscar por ID ou produto..." autocomplete="off">
+        <input type="hidden" id="selPedido">
+      </span>
       <button class="btn btn-success btn-sm" id="btnNovoInsumo" disabled>+ Novo Insumo</button>
     </div>
 
@@ -1019,26 +1047,41 @@
     programacaoCache = snap.val() || {};
   });
 
+  // Pedido do usuário: "onde aparecer lista suspensa, usar busca" -- este
+  // <select> listava TODOS os pedidos (sem limite por "em andamento" só),
+  // podendo crescer bastante com o tempo. Vira busca por ID ou produto,
+  // mesmo padrão attachAutocomplete (shared/utils.js) já usado noutras
+  // telas. `selPedido` (hidden) segue guardando a key real -- onPedidoChange
+  // e o resto do arquivo continuam lendo/escrevendo esse mesmo campo sem
+  // mudança de contrato; só o campo visível (selPedidoBusca) é novo.
+  var selPedidoItems = [];
+  // Renomeada (era isConcluido, mesmo nome do helper global de
+  // shared/utils.js que espera o pedido inteiro, não só a string de
+  // status) -- essa aqui só olha o texto do status em si, statusManual já
+  // é checado à parte no `st` abaixo.
+  function statusTextEhConcluido(status) {
+    if (!status) return false;
+    var s = String(status).toLowerCase().trim();
+    return s.indexOf('conclu') === 0;
+  }
+  function selPedidoLabel(item) {
+    var icon = item.st==='andamento'?'⚙':item.st==='concluido'?'✓':'⬛';
+    return icon + ' #' + (item.p.id||'?') + ' · ' + (item.p.produto||'—') + ' (' + item.pc + '%)';
+  }
+  // Resolve o texto de exibição a partir da key já salva em `selPedido` --
+  // usado tanto pra reverter o campo de busca (saiu sem escolher da lista)
+  // quanto pra manter coerente com uma seleção programática (openSkuDetails,
+  // hash da URL).
+  function labelDoPedidoSelecionado(key) {
+    var item = selPedidoItems.find(function(it) { return it.key === key; });
+    return item ? item.label : '';
+  }
+
   // Listen to pedidos
   dbOnValue(db.ref('pedidos'), function(snap) {
     pedidosCache = snap.val() || {};
-    
-    // Update Details select dropdown
-    var sel = document.getElementById('selPedido');
-    var cur = sel.value;
-    sel.innerHTML = '<option value="">— Selecione um pedido —</option>';
 
-    // Renomeada (era isConcluido, mesmo nome do helper global de
-    // shared/utils.js que espera o pedido inteiro, não só a string de
-    // status) -- essa aqui só olha o texto do status em si, statusManual já
-    // é checado à parte no `st` abaixo. Escopo local a este callback, nunca
-    // vazava pro isConcluido(pedido) global usado no resto do arquivo, mas
-    // o nome igual convidava a confusão.
-    function statusTextEhConcluido(status) {
-      if (!status) return false;
-      var s = String(status).toLowerCase().trim();
-      return s.indexOf('conclu') === 0;
-    }
+    var cur = document.getElementById('selPedido').value;
 
     var list = Object.entries(pedidosCache).map(function(e) {
       var k = e[0], p = e[1];
@@ -1050,27 +1093,25 @@
       return order[a.st]-order[b.st] || b.pc-a.pc;
     });
 
-    list.forEach(function(item) {
-      var opt = document.createElement('option');
-      opt.value = item.key;
-      var icon = item.st==='andamento'?'⚙':item.st==='concluido'?'✓':'⬛';
-      opt.textContent = icon + ' #' + (item.p.id||'?') + ' · ' + (item.p.produto||'—') + ' (' + item.pc + '%)';
-      sel.appendChild(opt);
+    selPedidoItems = list.map(function(item) {
+      var label = selPedidoLabel(item);
+      return { key: item.key, value: label, label: label };
     });
 
-    if (cur) { sel.value = cur; }
+    if (cur) { document.getElementById('selPedidoBusca').value = labelDoPedidoSelecionado(cur); }
 
     // If there's a hash in URL, auto-select and switch tab
     var hash = location.hash.replace('#','');
-    if (hash && !cur) { 
+    if (hash && !cur) {
       switchTab('detalhes');
-      sel.value = hash; 
-      onPedidoChange(); 
+      document.getElementById('selPedido').value = hash;
+      document.getElementById('selPedidoBusca').value = labelDoPedidoSelecionado(hash);
+      onPedidoChange();
     }
 
     // Refresh info card if pedido already selected in details tab
     if (currentPedKey && pedidosCache[currentPedKey]) renderPedidoInfo();
-    
+
     // Render Checklist Matrix
     renderMatriz();
   });
@@ -1310,11 +1351,32 @@
   function openSkuDetails(key) {
     switchTab('detalhes');
     document.getElementById('selPedido').value = key;
+    document.getElementById('selPedidoBusca').value = labelDoPedidoSelecionado(key);
     onPedidoChange();
   }
 
   // ── Detalhes do Pedido Page Logic ─────────────────────────────────
-  document.getElementById('selPedido').addEventListener('change', onPedidoChange);
+  // Busca de pedido (attachAutocomplete, shared/utils.js) -- selecionar da
+  // lista grava a key real no campo escondido e dispara onPedidoChange;
+  // sair sem selecionar reverte o texto pro pedido que já estava
+  // confirmado (mesmo cuidado já usado em Cadastros/BOM e Pedidos).
+  attachAutocomplete(document.getElementById('selPedidoBusca'), function() { return selPedidoItems; }, {
+    onSelect: function(it) {
+      document.getElementById('selPedido').value = it.key;
+      onPedidoChange();
+    }
+  });
+  document.getElementById('selPedidoBusca').addEventListener('blur', function() {
+    this.value = labelDoPedidoSelecionado(document.getElementById('selPedido').value);
+  });
+  document.getElementById('selPedidoBusca').addEventListener('input', function() {
+    // Campo apagado à mão (sem selecionar da lista) = volta a "nenhum
+    // pedido selecionado", igual a escolher a opção vazia no <select> antigo.
+    if (!this.value.trim() && document.getElementById('selPedido').value) {
+      document.getElementById('selPedido').value = '';
+      onPedidoChange();
+    }
+  });
 
   function onPedidoChange() {
     var key = document.getElementById('selPedido').value;

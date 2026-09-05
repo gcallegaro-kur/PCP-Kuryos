@@ -3777,6 +3777,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var allFormulas = {};
   var allBom = {};
   var allEspecificacoes = {};
+  var allFornecedores = {}; // pedido do usuário: mostrar/buscar por fornecedor também na Fórmula/BOM
   var tiposEnsaioCad = []; // config/tiposEnsaio -- lista fechada gerenciada na aba Categorias
 
   var produtoSelecionadoKey = null;
@@ -4223,16 +4224,50 @@ document.addEventListener('DOMContentLoaded', function() {
     candidatos.sort(function(a, b) { return (b[1].percentualMM || 0) - (a[1].percentualMM || 0); });
     return candidatos[0];
   }
-  // tipos: array de tipos aceitos (ver enum atual em Materiais -- MPGR/MPES
-  // pra matéria-prima, EP/ES/ET pra embalagem), ou null/vazio pra não filtrar.
-  function materiaisOptions(tipos, selecionado) {
-    var opts = '<option value="">Selecione...</option>';
-    Object.values(allMateriais).filter(function(m) { return !tipos || !tipos.length || tipos.indexOf(m.tipo) !== -1; })
+  // Pedido do usuário: "no BOM não é possível pesquisar, apenas selecionar"
+  // -- esta aba (portada de formulas.html na Fase 6.1) ficou presa a um
+  // <select> nativo de 900+ materiais, sem busca nenhuma (o componente de
+  // busca por código/nome/fornecedor só tinha ido pro formulas.html
+  // original, nunca migrado pra cá quando a Fórmula/BOM virou aba do hub de
+  // Cadastros). Mesmo padrão já usado em Materiais/Compras: attachAutocomplete
+  // (shared/utils.js) + materialBuscaLabel (código — nome · Fornecedor: X).
+  // tipos: array de tipos aceitos (MPGR/MPES pra Fórmula, EP/ES/ET pro BOM),
+  // ou null/vazio pra não filtrar.
+  function materiaisAutocompleteItemsForm(tipos) {
+    return Object.values(allMateriais).filter(function(m) { return (!tipos || !tipos.length || tipos.indexOf(m.tipo) !== -1) && m.ativo !== false; })
       .sort(function(a, b) { return norm(a.mpCodigo).localeCompare(norm(b.mpCodigo)); })
-      .forEach(function(m) {
-        opts += '<option value="' + escapeAttr(m.mpCodigo) + '"' + (m.mpCodigo === selecionado ? ' selected' : '') + '>' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) + '</option>';
+      .map(function(m) {
+        var label = materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null);
+        return { key: m.mpCodigo, value: label, label: label };
       });
-    return opts;
+  }
+  // Rótulo pra mostrar no campo de busca a partir do código já salvo --
+  // resolve o material de novo (pode ter mudado de nome/fornecedor desde a
+  // última vez que a fórmula/BOM foi salva) em vez de confiar só no
+  // mpNome/materialNome denormalizado dentro do próprio item.
+  function labelDoMaterialForm(codigo) {
+    var m = findMaterialByCodigo(codigo);
+    return m ? materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null) : (codigo || '');
+  }
+  // Liga o campo de busca (Fórmula .f-mp-busca OU BOM .b-mat-busca) ao seu
+  // campo escondido irmão -- selecionar um item na lista grava o código no
+  // escondido e chama onSalvar (que persiste no Firebase, cada aba com sua
+  // própria função). Sair do campo sem escolher nada da lista (digitou e
+  // clicou fora) reverte o texto pro material que já estava salvo, nunca
+  // deixa o campo mostrando um texto solto que não bate com o dado real.
+  function wireMaterialBuscaForm(containerSel, buscaClass, hiddenClass, tipos, onSalvar) {
+    document.querySelectorAll(containerSel + ' .' + buscaClass).forEach(function(input) {
+      var itemKey = input.getAttribute('data-item');
+      var hidden = document.querySelector(containerSel + ' input.' + hiddenClass + '[data-item="' + CSS.escape(itemKey) + '"]');
+      if (!hidden) return;
+      attachAutocomplete(input, function() { return materiaisAutocompleteItemsForm(tipos); }, {
+        onSelect: function(it) {
+          hidden.value = it.key;
+          onSalvar(itemKey);
+        }
+      });
+      input.addEventListener('blur', function() { input.value = labelDoMaterialForm(hidden.value); });
+    });
   }
   // Item importado do Gerador de OPs sem material identificado (pendente:true)
   // mostra o texto original da planilha + uma sugestão por similaridade de
@@ -4259,7 +4294,8 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td></td></tr>';
     }
     return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-      '<td><select class="f-mp" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['MPGR', 'MPES'], it.mpCodigo) + '</select>' +
+      '<td><input type="text" class="f-mp-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelDoMaterialForm(it.mpCodigo)) + '" autocomplete="off">' +
+        '<input type="hidden" class="f-mp" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.mpCodigo || '') + '">' +
         linhaPendenciaHtml(it, 'f-usar-sugestao', 'data-item="' + escapeAttr(itemKey) + '"') + '</td>' +
       '<td><select class="f-fase" data-item="' + escapeAttr(itemKey) + '">' +
         ['A', 'B', 'C'].map(function(f) { return '<option value="' + f + '"' + (it.fase === f ? ' selected' : '') + '>' + f + '</option>'; }).join('') +
@@ -4271,9 +4307,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function wireFormulaRowEvents(formKey, editavel) {
     if (!editavel) return;
-    document.querySelectorAll('#formulaBody-form .f-mp, #formulaBody-form .f-fase, #formulaBody-form .f-ordem, #formulaBody-form .f-pct').forEach(function(el) {
+    document.querySelectorAll('#formulaBody-form .f-fase, #formulaBody-form .f-ordem, #formulaBody-form .f-pct').forEach(function(el) {
       el.addEventListener('change', function() { salvarItemFormula(formKey, el.getAttribute('data-item')); });
     });
+    wireMaterialBuscaForm('#formulaBody-form', 'f-mp-busca', 'f-mp', ['MPGR', 'MPES'], function(itemKey) { salvarItemFormula(formKey, itemKey); });
     document.querySelectorAll('#formulaBody-form .f-ajuste').forEach(function(el) {
       el.addEventListener('change', function() {
         db.ref('formulas/' + formKey + '/itemAjusteKey').set(el.getAttribute('data-item'))
@@ -4305,7 +4342,9 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function() {
         var itemKey = btn.getAttribute('data-item');
         var row = document.querySelector('#formulaBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
-        row.querySelector('.f-mp').value = btn.getAttribute('data-sugestao');
+        var codigo = btn.getAttribute('data-sugestao');
+        row.querySelector('.f-mp').value = codigo;
+        row.querySelector('.f-mp-busca').value = labelDoMaterialForm(codigo);
         salvarItemFormula(formKey, itemKey);
       });
     });
@@ -4380,7 +4419,8 @@ document.addEventListener('DOMContentLoaded', function() {
           return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-          '<td><select class="b-mat" data-item="' + escapeAttr(itemKey) + '">' + materiaisOptions(['EP', 'ES', 'ET'], it.materialCodigo) + '</select>' +
+          '<td><input type="text" class="b-mat-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelDoMaterialForm(it.materialCodigo)) + '" autocomplete="off">' +
+            '<input type="hidden" class="b-mat" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.materialCodigo || '') + '">' +
             linhaPendenciaHtml(it, 'b-usar-sugestao', 'data-item="' + escapeAttr(itemKey) + '"') + '</td>' +
           '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
           '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
@@ -4388,9 +4428,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.getElementById('btnAddBomItem-form').style.display = editavel ? 'inline-flex' : 'none';
     if (!editavel) return;
-    document.querySelectorAll('#bomBody-form .b-mat, #bomBody-form .b-qtd').forEach(function(el) {
+    document.querySelectorAll('#bomBody-form .b-qtd').forEach(function(el) {
       el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
     });
+    wireMaterialBuscaForm('#bomBody-form', 'b-mat-busca', 'b-mat', ['EP', 'ES', 'ET'], function(itemKey) { salvarItemBom(key, itemKey); });
     document.querySelectorAll('#bomBody-form .b-remove').forEach(function(btn) {
       btn.addEventListener('click', function() {
         db.ref('bom/' + key + '/itens/' + btn.getAttribute('data-item')).remove()
@@ -4401,7 +4442,9 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.addEventListener('click', function() {
         var itemKey = btn.getAttribute('data-item');
         var row = document.querySelector('#bomBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
-        row.querySelector('.b-mat').value = btn.getAttribute('data-sugestao');
+        var codigo = btn.getAttribute('data-sugestao');
+        row.querySelector('.b-mat').value = codigo;
+        row.querySelector('.b-mat-busca').value = labelDoMaterialForm(codigo);
         salvarItemBom(key, itemKey);
       });
     });
@@ -4546,6 +4589,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
     dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('fornecedores'), function(snap) { allFornecedores = snap.val() || {}; });
     // Semeado/gerenciado na aba Categorias (mesma config/tiposEnsaio) --
     // aqui só lê, pra montar o <select> de Ensaio nas Especificações.
     dbOnValue(db.ref('config/tiposEnsaio'), function(snap) {
