@@ -972,6 +972,7 @@ function loadPedidos(){
     document.getElementById('sumPeds').textContent=ativos.length;
     populateAgdClientFilter();
     renderAgendaTab();
+    dispararReajusteLinhasComSaldo();
     if(firstLoad){
       firstLoad=false;
       loadWeek();
@@ -979,6 +980,31 @@ function loadPedidos(){
       renderGrid();
       updateSummary();
     }
+  });
+}
+
+// Cobre o caso que motivou o reajuste ficar "esquecido": o motor
+// (window.autoAjustarPlanejamento, auth_check.js) só é chamado hoje a
+// partir de form.html, no fechamento de um apontamento -- então uma
+// linha que parou de produzir (a própria razão de ela ficar pra trás)
+// nunca mais dispara o próprio reajuste sozinha. Aqui, toda vez que a
+// lista de pedidos é (re)carregada -- ao abrir a página e a cada mudança
+// em tempo real -- dispara o motor pra CADA linha que ainda tem algum
+// pedido ativo com saldo (_falta>0), usando um pedido qualquer daquela
+// linha como gatilho (a função resolve a fila inteira da linha por
+// conta própria). O cooldown de 3min por linha já existente em
+// window._autoAjusteCooldown protege contra leitura redundante -- pode
+// chamar liberalmente aqui sem se preocupar em duplicar trabalho.
+function dispararReajusteLinhasComSaldo(){
+  if(typeof window.autoAjustarPlanejamento!=='function')return;
+  var gatilhoPorLinha={};
+  Object.keys(pedidos).forEach(function(key){
+    var p=pedidos[key];
+    if(!p||p._isDone||!(p._falta>0)||!p.linha)return;
+    if(!gatilhoPorLinha[p.linha])gatilhoPorLinha[p.linha]=key;
+  });
+  Object.values(gatilhoPorLinha).forEach(function(key){
+    window.autoAjustarPlanejamento(key);
   });
 }
 

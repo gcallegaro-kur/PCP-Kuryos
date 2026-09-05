@@ -948,6 +948,29 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
     var pedidoOrigem = pedSnap.val();
     if (!pedidoOrigem) return;
 
+    // A linha vem direto do cadastro do pedido (pedidos.html grava
+    // pedidos/{key}.linha a partir do mesmo <select> que alimenta
+    // configLinhas -- mesmíssimos valores comparados against filaLinha
+    // logo abaixo, x.p.linha===linha). Achado real (2026-09-04): antes a
+    // linha era descoberta procurando um slot FUTURO já ocupado por ESTE
+    // pedido em programacao -- se o pedido tivesse caído inteiro pro
+    // passado (nenhuma hora futura própria agendada ainda, o cenário
+    // exato de "ficou pra trás"), a busca voltava null e a função
+    // desistia sem reajustar nada, mesmo com saldo real (qtdTotal-
+    // produzido) ainda em aberto. O pedido ficava órfão do motor de
+    // reajuste até, por acaso, outro pedido da MESMA linha disparar a
+    // função primeiro. Ler direto do cadastro elimina essa dependência.
+    var linha = pedidoOrigem.linha || null;
+    if (!linha) return; // pedido sem linha definida, nada a reajustar
+
+    // Cooldown por linha — evita recalcular a cada apontamento isolado.
+    // Checado ANTES das leituras pesadas abaixo (não precisamos mais
+    // varrer toda a programacao futura só pra descobrir a linha).
+    var now = Date.now();
+    var lastRun = window._autoAjusteCooldown[linha] || 0;
+    if (now - lastRun < 3 * 60 * 1000) return;
+    window._autoAjusteCooldown[linha] = now;
+
     var todayStr = _kuryosTodayStr();
     Promise.all([
       // Só datas de hoje em diante importam aqui (tudo antes de todayStr é
@@ -995,41 +1018,8 @@ window.autoAjustarPlanejamento = function(pedidoKey) {
       });
       var nowHour = new Date().getHours();
 
-      // 1. Descobre em qual linha essa OP tem slot futuro agendado
-      // Achado do Auditor: comparação direta de pedidoKey já causou bug
-      // antes (ver _kuryosNormalizePedidoKey acima) -- ops/{lote}.skuPedidoKey
-      // e o pedidoKey gravado no slot de programacao podem divergir por um
-      // zero à esquerda perdido na emissão. Normaliza os dois lados antes
-      // de comparar, mesma correção já aplicada em
-      // _kuryosBuildScheduledPedidoKeySet.
-      var pedidoKeyNorm = _kuryosNormalizePedidoKey(pedidoKey);
-      var linha = null;
-      Object.keys(programacao).sort().some(function(date) {
-        if (date < todayStr) return false;
-        var dayData = programacao[date] || {};
-        return Object.keys(dayData).some(function(hourKey) {
-          if (date === todayStr) {
-            var h = parseInt(hourKey.replace('_', ':').split(':')[0]);
-            if (isNaN(h) || h <= nowHour) return false;
-          }
-          var hourData = dayData[hourKey] || {};
-          for (var i = 1; i <= 10; i++) {
-            var slot = hourData['env' + i];
-            if (slot && slot.pedidoKey && _kuryosNormalizePedidoKey(slot.pedidoKey) === pedidoKeyNorm) {
-              linha = hourData['linha' + i] || ('Linha ' + i);
-              return true;
-            }
-          }
-          return false;
-        });
-      });
-      if (!linha) return; // sem slot futuro pra essa OP, nada a reajustar
-
-      // Cooldown por linha — evita recalcular a cada apontamento isolado
-      var now = Date.now();
-      var lastRun = window._autoAjusteCooldown[linha] || 0;
-      if (now - lastRun < 3 * 60 * 1000) return;
-      window._autoAjusteCooldown[linha] = now;
+      // linha já foi resolvida acima, direto de pedidoOrigem.linha (mesmo
+      // valor comparado contra x.p.linha logo abaixo).
 
       // 2. Fila de OPs ativas dessa linha, por prioridade
       var filaLinha = Object.keys(todosPedidos)
