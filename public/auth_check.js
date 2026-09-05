@@ -372,7 +372,9 @@ const ktIcons = {
   warehouse: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9 20v-6.5h6V20"/>',
   // Separação de Materiais (WMS Fase 2) -- prancheta com check, distinto de
   // "warehouse" (o hub de estoque em si) e "box" (Matriz de Insumos).
-  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12l2 2 4-4"/>'
+  clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12l2 2 4-4"/>',
+  // Manuais -- livro aberto, distinto de "clipboard" (Separação) e "list".
+  book: '<path d="M12 6.5S10 4.5 3.5 4.5v13C10 17.5 12 19.5 12 19.5s2-2 8.5-2v-13C14 4.5 12 6.5 12 6.5Z"/><path d="M12 6.5v13"/>'
 };
 function ktIcon(name) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ktIcons[name] + '</svg>';
@@ -446,24 +448,22 @@ function renderUnifiedNavbar(user) {
     ktLink('dashboard_analise.html', 'history', 'Dashboard Geral', activePage) +
     '</div>';
 
-  // "Geral" -- pedido do usuário: Cadastros e Estoque (a visão de
-  // QUANTIDADE, "de fato os estoques") saem do bloco PCP e ganham um
-  // bloco próprio, mais genérico. Estoque aponta pra estoque.html?tab=
-  // agregado -- mesma página de sempre, só landing direto na aba de saldo
-  // (WMS, abaixo, landing na aba de posições/endereçamento -- são a MESMA
-  // ferramenta, dois pontos de entrada, não duas páginas -- ver ktLink
-  // acima pro fix de "ativo" que isso exigiu).
-  // Geral/Compras têm SÓ links isPcpAdmin-gated (diferente de PCP, que
-  // tem "Planejamento"/"Controle de OPs" abertos pra 'production'
-  // também) -- gate no GRUPO INTEIRO por isPcpAdmin, não só nos links de
-  // dentro, senão sobra uma legenda "Geral"/"Compras" flutuando sem link
-  // nenhum embaixo pra quem não é admin/pcp (achado ao testar com o
-  // papel 'production'). isPcpAdmin já implica !isRotulagem && !isRH
-  // (papéis são mutuamente exclusivos), então um gate só basta.
+  // "Cadastros" -- bloco de DADO MESTRE puro (o que as coisas são:
+  // material, produto, cliente, fornecedor, fórmula/BOM). Antes se chamava
+  // "Geral" e tinha Estoque junto; Estoque é dado TRANSACIONAL (saldo,
+  // movimento, posição) e desceu pro bloco Logística, ao lado do WMS --
+  // que, aliás, é literalmente a mesma página (estoque.html), só com
+  // landing em aba diferente. Separar mestre de transacional é a divisão
+  // que todo ERP faz (TOTVS/SAP) e deixa explícito onde se cria dado
+  // mestre -- que é onde os problemas de cadastro precisam ser atacados.
+  // Gate no GRUPO INTEIRO por isPcpAdmin, não só nos links de dentro,
+  // senão sobra uma legenda flutuando sem link nenhum embaixo pra quem
+  // não é admin/pcp (achado ao testar com o papel 'production').
+  // isPcpAdmin já implica !isRotulagem && !isRH (papéis mutuamente
+  // exclusivos), então um gate só basta.
   const geralGroup = !isPcpAdmin ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Geral</div>' +
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Cadastros</div>' +
     ktLink('cadastros.html', 'tag', 'Cadastros', activePage) +
-    ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage) +
     '</div>';
 
   const comprasGroup = !isPcpAdmin ? '' :
@@ -494,17 +494,21 @@ function renderUnifiedNavbar(user) {
     (isPcpAdmin ? ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage) : '') +
     '</div>';
 
-  // "Logística" -- pedido do usuário: separa do bloco PCP, ganha 3 itens.
-  // "Logística" (a página) vira "Agendamentos" no menu -- rótulo só,
-  // logistica.html continua sendo a mesma página/funcionalidade. "WMS"
-  // aponta pra estoque.html?tab=enderecos (posições/endereçamento --
-  // "organização do estoque", palavras do usuário), landing diferente de
-  // "Estoque" acima, mesma página.
-  // Mesmo motivo do gate em Geral/Compras acima -- os 3 links daqui são
-  // isPcpAdmin-only, gate no grupo inteiro.
+  // "Logística" -- pedido do usuário: separa do bloco PCP. "Logística" (a
+  // página) vira "Agendamentos" no menu -- rótulo só, logistica.html
+  // continua sendo a mesma página/funcionalidade.
+  // "Estoque" e "WMS" são a MESMA página (estoque.html), dois pontos de
+  // entrada: Estoque pousa na aba de saldo agregado ("de fato os
+  // estoques", palavras do usuário), WMS pousa em posições/endereçamento
+  // ("organização do estoque"). Estoque estava no bloco "Geral" e desceu
+  // pra cá -- os dois links que apontam pro mesmo arquivo agora ficam
+  // lado a lado, e "Cadastros" fica só com dado mestre (ver acima).
+  // Mesmo motivo do gate em Cadastros/Compras -- links isPcpAdmin-only,
+  // gate no grupo inteiro.
   const logisticaGroup = !isPcpAdmin ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Logística</div>' +
     ktLink('logistica.html', 'truck', 'Agendamentos', activePage) +
+    ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage) +
     ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage) +
     ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) +
     '</div>';
@@ -531,13 +535,27 @@ function renderUnifiedNavbar(user) {
     ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
     '</div>';
 
+  // "Ajuda" -- os 3 manuais existiam publicados e funcionando desde sempre,
+  // mas NENHUMA página do sistema linkava pra eles: só chegava quem soubesse
+  // a URL de cor (achado da auditoria geral). Não têm regra em
+  // pageAccessRules de propósito -- material de treinamento é liberado pra
+  // qualquer papel autenticado; o que muda por papel aqui é só QUAL manual
+  // faz sentido oferecer primeiro, pra não empilhar 3 links iguais pra todo
+  // mundo. RH não entra: os manuais são de PCP/produção, não do módulo dele.
+  const manuaisGroup = isRH ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Ajuda</div>' +
+    ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage) +
+    (isPcpAdmin ? ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage) : '') +
+    (isRotulagem ? '' : ktLink('manual.html', 'book', 'Manual de Operação', activePage)) +
+    '</div>';
+
   // RH Central pousa no Dashboard (é a "tela inicial" dele, por decisão da
   // especificação); Gestor não acessa o Dashboard nesta fase -- pousa na
   // Avaliação, sua ferramenta principal.
   var rhHome = user.role === 'rh' ? 'rh_dashboard.html' : 'rh_avaliacao.html';
   sidebar.innerHTML =
     '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? rhHome : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + producaoGroup + usersGroup + rhGroup +
+    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +
