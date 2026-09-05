@@ -522,6 +522,30 @@ function escapeAttr(str) {
     .replace(/`/g, '&#96;');
 }
 
+// Copia texto pra área de transferência com fallback pra navegador/webview
+// sem Clipboard API -- promovido de horizonte.html (copyCodigo/
+// fallbackCopyCodigo) pra cá, reaproveitado agora também em compras.html
+// (texto padrão de solicitação de cotação). onSuccess roda depois que a
+// cópia (real ou fallback) terminou, pra quem chamou dar o feedback visual.
+function copyTextToClipboard(text, onSuccess) {
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (onSuccess) onSuccess();
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
 function fmtNum(n) {
   return Number(n || 0).toLocaleString('pt-BR');
 }

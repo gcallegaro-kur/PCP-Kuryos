@@ -53,7 +53,9 @@
     },
     "solicitacoes_compra": {
       ".read": "auth != null",
-      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')"
+      "$key": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || (root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' && newData.exists()))"
+      }
     },
     "pedidos_compra": {
       ".read": "auth != null",

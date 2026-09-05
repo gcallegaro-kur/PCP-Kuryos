@@ -147,6 +147,7 @@
         <option value="CONSOLIDADA">Consolidada em PC</option>
       </select>
       <button class="btn btn-purple btn-sm" id="btnIniciarCotacao" disabled>🤝 Iniciar Cotação (0)</button>
+      <button class="btn btn-ghost btn-sm" id="btnCopiarTextoCotacao" disabled title="Marque solicitações aprovadas pra gerar o texto">📋 Copiar Texto de Cotação</button>
       <button class="btn btn-ghost" id="btnGerarDePedido">📦 Gerar de Pedido</button>
       <button class="btn btn-primary" id="btnNovaSolicitacao">+ Nova Solicitação</button>
     </div>
@@ -607,6 +608,16 @@ function renderSolicitacoes() {
       } else if (s.status === 'REJEITADA' && s.rejeicao) {
         acoes = '<span class="field-hint">Motivo: ' + escapeHtml(s.rejeicao.motivo || '—') + '</span>';
       }
+      // Pedido do usuário: admin poder apagar solicitação feita/aprovada por
+      // engano. CONSOLIDADA já virou cotação/pedido de compra de verdade --
+      // apagar daqui deixaria processos_cotacao/pedidos_compra órfãos, então
+      // fica de fora (mesmo princípio de "nunca corrompe o dado" já usado em
+      // historico.html: bloqueia com mensagem em vez de agir sem entender a
+      // consequência). Espelha a regra em database.rules.json (só admin
+      // pode remover $key de solicitacoes_compra, pcp só cria/atualiza).
+      if (window.currentUser && window.currentUser.role === 'admin' && s.status !== 'CONSOLIDADA') {
+        acoes += (acoes ? ' ' : '') + '<button class="btn btn-danger-ghost btn-sm sc-excluir" data-key="' + escapeAttr(key) + '" title="Excluir solicitação (admin)">🗑️ Excluir</button>';
+      }
       return '<tr>' +
         '<td>' + checkbox + '</td>' +
         '<td class="code-cell">' + escapeHtml(s.numeroFormatado || '—') + '</td>' +
@@ -632,12 +643,16 @@ function renderSolicitacoes() {
   document.querySelectorAll('.sc-rejeitar').forEach(function(btn) {
     btn.addEventListener('click', function() { rejeitarSolicitacao(btn.getAttribute('data-key')); });
   });
+  document.querySelectorAll('.sc-excluir').forEach(function(btn) {
+    btn.addEventListener('click', function() { excluirSolicitacao(btn.getAttribute('data-key')); });
+  });
 }
 function updateBtnCotacao() {
   var n = Object.keys(cotacaoSelecionadas).length;
   var btn = document.getElementById('btnIniciarCotacao');
   btn.textContent = '🤝 Iniciar Cotação (' + n + ')';
   btn.disabled = n === 0;
+  document.getElementById('btnCopiarTextoCotacao').disabled = n === 0;
 }
 // Achado do Auditor: um `.update()` direto no status não protege contra dois
 // admins agindo quase ao mesmo tempo na mesma solicitação (ex: um Aprova
@@ -667,6 +682,64 @@ function rejeitarSolicitacao(key) {
     return db.ref('solicitacoes_compra/' + key + '/rejeicao').set({rejeitadoPor: currentUserNome(), rejeitadoEm: new Date().toISOString(), motivo: motivo.trim()})
       .then(function() { showAlert('Solicitação rejeitada.', 'success'); });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+// Pedido do usuário: admin poder apagar solicitação feita/aprovada por
+// engano. Botão já só aparece pra admin e nunca pra CONSOLIDADA (ver
+// renderScTable) -- ainda assim confirma de novo aqui, defesa em
+// profundidade (mesmo princípio já usado em bloquearSeOpConcluida/
+// opEstaAtiva no form.html). database.rules.json também exige role admin
+// pra este delete especificamente, então mesmo um pcp chamando isto na mão
+// pelo console seria rejeitado pelo servidor.
+function excluirSolicitacao(key) {
+  var s = allSolicitacoes[key];
+  if (!s) return;
+  if (s.status === 'CONSOLIDADA') {
+    showAlert('Essa solicitação já virou uma cotação/pedido de compra -- não pode ser excluída daqui.', 'danger');
+    return;
+  }
+  if (!confirm('Excluir definitivamente a solicitação ' + (s.numeroFormatado || key) + '? Essa ação não pode ser desfeita.')) return;
+  db.ref('solicitacoes_compra/' + key).remove()
+    .then(function() {
+      delete cotacaoSelecionadas[key];
+      updateBtnCotacao();
+      showAlert('Solicitação excluída.', 'success');
+    })
+    .catch(function(err) { showAlert('Erro ao excluir: ' + err.message, 'danger'); });
+}
+
+// Pedido do usuário: texto padrão pra copiar e colar no WhatsApp/e-mail
+// pedindo cotação -- mais rápido que o fluxo formal de "Iniciar Cotação"
+// (que exige escolher convidados e cria rascunho via Outlook, ruim pra
+// WhatsApp). Reaproveita a mesma seleção de checkboxes (cotacaoSelecionadas)
+// já usada por "Iniciar Cotação", consolidando por material como
+// abrirModalIniciarCotacao já faz, pra não pedir a mesma peça em duas
+// solicitações separadas como itens repetidos.
+function gerarTextoCotacao() {
+  var scKeys = Object.keys(cotacaoSelecionadas);
+  var porMaterial = {};
+  var ordem = [];
+  scKeys.forEach(function(scKey) {
+    var s = allSolicitacoes[scKey];
+    if (!s) return;
+    Object.values(s.itens || {}).forEach(function(i) {
+      var cod = i.materialCodigo || '';
+      if (!porMaterial[cod]) { porMaterial[cod] = { nome: i.materialNome || '', unidade: i.unidade || '', qtd: 0 }; ordem.push(cod); }
+      porMaterial[cod].qtd += (parseFloat(i.qtd) || 0);
+    });
+  });
+  if (!ordem.length) return '';
+  var linhas = ordem.map(function(cod) {
+    var it = porMaterial[cod];
+    return '• ' + cod + (it.nome ? ' — ' + it.nome : '') + ': ' + fmtNum(it.qtd) + ' ' + it.unidade;
+  });
+  return 'Olá! Somos da Kuryos e gostaríamos de solicitar uma cotação para os itens abaixo:\n\n' +
+    linhas.join('\n') +
+    '\n\nPor favor, nos informe preço unitário, prazo de entrega e condição de pagamento.\nFico no aguardo, obrigado(a)!';
+}
+function copiarTextoCotacao() {
+  var texto = gerarTextoCotacao();
+  if (!texto) { showAlert('Marque ao menos uma solicitação aprovada antes de copiar o texto.', 'danger'); return; }
+  copyTextToClipboard(texto, function() { showAlert('Texto de cotação copiado! Cole no WhatsApp ou e-mail do fornecedor.', 'success'); });
 }
 
 // Pedido do usuário: coluna própria (não só o texto abaixo da linha)
@@ -1733,6 +1806,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('gpSearch').addEventListener('input', function() { clearTimeout(_tgp); _tgp = setTimeout(renderGpPedidosList, 200); });
 
   document.getElementById('btnIniciarCotacao').addEventListener('click', abrirModalIniciarCotacao);
+  document.getElementById('btnCopiarTextoCotacao').addEventListener('click', copiarTextoCotacao);
   document.getElementById('modalIniciarCotacaoClose').addEventListener('click', fecharModalIniciarCotacao);
   document.getElementById('modalIniciarCotacaoCancel').addEventListener('click', fecharModalIniciarCotacao);
   document.getElementById('modalIniciarCotacaoSave').addEventListener('click', salvarIniciarCotacao);
@@ -1787,6 +1861,24 @@ document.addEventListener('DOMContentLoaded', function() {
       renderSolicitacoes();
       updateBtnCotacao();
     });
+    // Achado ao testar o botão Excluir (admin): esta tabela quase sempre
+    // renderiza ANTES de auth_check.js terminar de resolver
+    // window.currentUser -- a leitura de usuarios/{uid} que auth_check.js
+    // faz é assíncrona (db.ref(...).once('value', callback)), então nem
+    // registrar onAuthStateChanged depois do dele ajuda (os listeners são
+    // chamados na ordem de registro, mas cada um dispara sua própria
+    // leitura assíncrona sem esperar a do anterior terminar). Sem isto, o
+    // botão só-admin não aparecia até algum outro evento forçar um novo
+    // render. Poll curto e limitado (~5s) até currentUser existir, mesmo
+    // espírito de "retentativa silenciosa" já usado em
+    // readUsuarioProfileWithRetry (auth_check.js) -- só que aqui é uma
+    // questão de exibição de botão, não de segurança (isso já é garantido
+    // por database.rules.json independente do que a UI mostra).
+    (function pollCurrentUserParaRender(triesLeft) {
+      if (window.currentUser) { renderSolicitacoes(); return; }
+      if (triesLeft <= 0) return;
+      setTimeout(function() { pollCurrentUserParaRender(triesLeft - 1); }, 200);
+    })(25);
     dbOnValue(db.ref('pedidos_compra'), function(snap) {
       allPedidosCompra = snap.val() || {};
       renderPedidos();

@@ -155,6 +155,16 @@
       .preview-header{grid-template-columns:1fr 1fr}
       .preview-inputs{grid-template-columns:1fr}
     }
+    /* attachAutocomplete (shared/utils.js) -- campo Produto virou busca por
+       SKU/descrição/cliente em vez de <select> com 375+ produtos agrupados
+       por cliente (pedido do usuário: buscar em vez de só selecionar).
+       Mesmo CSS já usado em estoque.html/cadastros.html/formulas.html/
+       compras.html pro mesmo componente. */
+    .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+    .kt-ac-list.open{display:block}
+    .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
+    .kt-ac-item:last-child{border-bottom:none}
+    .kt-ac-item:hover,.kt-ac-item.active{background:color-mix(in srgb, var(--primary) 12%, transparent)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -335,9 +345,8 @@
         </div>
         <div class="form-group full">
           <label>Produto *</label>
-          <select id="fProduto">
-            <option value="">— Selecione o produto —</option>
-          </select>
+          <input type="text" id="fProdutoBusca" placeholder="Buscar por SKU, descrição ou cliente..." autocomplete="off">
+          <input type="hidden" id="fProduto">
         </div>
       </div>
 
@@ -734,7 +743,6 @@
   // ── Load produtos for select ─────────────────────────────────────
   dbOnValue(db.ref('produtos'), function(snap) {
     produtosCache = snap.val() || {};
-    fillProdutoSelect();
   });
 
   // ── Load linhas (config.linhas) for select ────────────────────────
@@ -759,30 +767,31 @@
     if (current) sel.value = current;
   }
 
-  function fillProdutoSelect() {
-    var sel = document.getElementById('fProduto');
-    var current = sel.value;
-    // clear existing optgroups/options except first
-    while (sel.options.length > 1) sel.remove(1);
-    var groups = {};
-    Object.values(produtosCache).forEach(function(p) {
-      if (p.ativo !== 'Ativo') return;
-      var g = p.cliente || 'Sem Cliente';
-      if (!groups[g]) groups[g] = [];
-      groups[g].push(p);
-    });
-    Object.keys(groups).sort().forEach(function(g) {
-      var og = document.createElement('optgroup');
-      og.label = g;
-      groups[g].sort(function(a,b){ return a.descricao.localeCompare(b.descricao); }).forEach(function(p) {
-        var opt = document.createElement('option');
-        opt.value = p.descricao;
-        opt.textContent = (p.sku ? '[' + p.sku + '] ' : '') + p.descricao + (p.volume ? ' ' + p.volume + (p.unidadeVolume||'') : '');
-        og.appendChild(opt);
-      });
-      sel.appendChild(og);
-    });
-    if (current) sel.value = current;
+  // Pedido do usuário: buscar o produto por SKU, descrição ou cliente em
+  // vez de garimpar um <select> de 375+ produtos agrupado por cliente --
+  // mesma solução já aplicada em Cadastros/BOM (materialBuscaLabel) e
+  // Compras. `fProduto` (hidden) segue guardando exatamente p.descricao,
+  // igual ao value do <option> antigo -- todo o resto do arquivo (salvar,
+  // openEdit, resetForm) continua lendo/escrevendo esse mesmo campo sem
+  // mudança de contrato; só o campo visível (fProdutoBusca) é novo.
+  function produtoBuscaLabel(p) {
+    if (!p) return '';
+    return (p.cliente || 'Sem Cliente') + ' · ' + (p.sku ? '[' + p.sku + '] ' : '') + p.descricao + (p.volume ? ' ' + p.volume + (p.unidadeVolume || '') : '');
+  }
+  function produtoAutocompleteItems() {
+    return Object.values(produtosCache).filter(function(p) { return p.ativo === 'Ativo'; })
+      .sort(function(a, b) {
+        return (a.cliente || 'Sem Cliente').localeCompare(b.cliente || 'Sem Cliente') || a.descricao.localeCompare(b.descricao);
+      })
+      .map(function(p) { var label = produtoBuscaLabel(p); return { key: p.descricao, value: label, label: label }; });
+  }
+  // Resolve o texto de exibição a partir do valor real já salvo em
+  // `fProduto` (descrição) -- usado tanto ao reverter o campo de busca (sai
+  // sem escolher da lista) quanto ao pré-preencher a edição.
+  function labelDoProdutoPorDescricao(desc) {
+    if (!desc) return '';
+    var p = Object.values(produtosCache).find(function(x) { return x.descricao === desc; });
+    return p ? produtoBuscaLabel(p) : desc;
   }
 
   // ── Load pedidos (realtime) ──────────────────────────────────────
@@ -1132,6 +1141,7 @@
     resetForm();
     document.getElementById('fId').value = p.id || '';
     document.getElementById('fProduto').value = p.produto || '';
+    document.getElementById('fProdutoBusca').value = labelDoProdutoPorDescricao(p.produto);
     document.getElementById('fPriority').value = p.priority || '';
     document.getElementById('fLinha').value = p.linha || '';
     document.getElementById('fQtdTotal').value = p.qtdTotal || '';
@@ -1150,6 +1160,7 @@
   function resetForm() {
     document.getElementById('fId').value = '';
     document.getElementById('fProduto').value = '';
+    document.getElementById('fProdutoBusca').value = '';
     document.getElementById('fPriority').value = '';
     document.getElementById('fLinha').value = '';
     document.getElementById('fQtdTotal').value = '';
@@ -1168,6 +1179,18 @@
   document.getElementById('btnCancelar').addEventListener('click', closeModal);
   document.getElementById('modalBg').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
+  });
+
+  // Busca de produto (attachAutocomplete, shared/utils.js) -- selecionar da
+  // lista grava a descrição real no campo escondido; sair sem selecionar
+  // reverte o texto pro que já estava confirmado (mesmo cuidado de
+  // wireMaterialBusca em Cadastros/BOM, nunca deixa o campo com texto solto
+  // que não bate com nenhum produto real).
+  attachAutocomplete(document.getElementById('fProdutoBusca'), produtoAutocompleteItems, {
+    onSelect: function(it) { document.getElementById('fProduto').value = it.key; }
+  });
+  document.getElementById('fProdutoBusca').addEventListener('blur', function() {
+    this.value = labelDoProdutoPorDescricao(document.getElementById('fProduto').value);
   });
 
   // ── Save ─────────────────────────────────────────────────────────

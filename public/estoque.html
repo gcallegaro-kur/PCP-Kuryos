@@ -359,7 +359,7 @@
     <div class="section-note">Distribui espacialmente o que já está no estoque -- nunca corrige quantidade (isso continua em "Ajustar Saldo", na aba Saldo Agregado). Busque um item, veja quanto já está endereçado, e registre as posições onde ele está guardado.</div>
     <div class="form-group" style="max-width:420px">
       <label>Item (material ou produto) *</label>
-      <input type="text" id="edItem" placeholder="Buscar por código ou nome..." autocomplete="off">
+      <input type="text" id="edItem" placeholder="Buscar por código, nome ou fornecedor..." autocomplete="off">
       <input type="hidden" id="edItemKey">
       <input type="hidden" id="edItemTipo">
     </div>
@@ -426,7 +426,7 @@
     <div class="modal-body">
       <div class="form-group">
         <label>Material *</label>
-        <input type="text" id="aeMaterial" placeholder="Digite pra buscar..." autocomplete="off">
+        <input type="text" id="aeMaterial" placeholder="Buscar por código, nome ou fornecedor..." autocomplete="off">
         <input type="hidden" id="aeMaterialKey">
       </div>
       <div class="field-hint" id="aeSaldoAtualHint" style="margin:8px 0"></div>
@@ -567,6 +567,7 @@ document.addEventListener('DOMContentLoaded', function() {
 var allEstoque = {};
 var allMateriais = {};
 var allProdutos = {}; // WMS Fase 2 -- endereçamento cobre material E produto acabado
+var allFornecedores = {}; // pedido do usuário: buscar material por código, nome OU fornecedor (mesmo padrão de Cadastros/Compras) -- ver materialBuscaLabel
 var allEstoqueLotes = {};   // itemKey -> {loteKey: lote}
 var allEnderecosEstoque = {};
 var motivosMovEstoqueAtivos = [];
@@ -646,10 +647,14 @@ function statusBadge(status) {
 
 var aeItems = []; // opções pro autocomplete -- todo material cadastrado, mesmo sem estoque ainda (primeiro ajuste pode ser a entrada inicial)
 function refreshAeItems() {
+  // Pedido do usuário: buscar por código, nome OU fornecedor -- mesmo
+  // materialBuscaLabel (shared/utils.js) já usado em Cadastros/BOM e
+  // Compras. attachAutocomplete filtra por substring dentro do label
+  // inteiro, então basta o fornecedor entrar no label pra busca funcionar.
   aeItems = Object.values(allMateriais).filter(function(m) { return m.ativo !== false; })
     .sort(function(a, b) { return norm(a.mpNome).localeCompare(norm(b.mpNome)); })
     .map(function(m) {
-      var label = m.mpCodigo + ' — ' + m.mpNome;
+      var label = materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null);
       return { key: sanitizeKey(m.mpCodigo), value: label, label: label };
     });
 }
@@ -938,8 +943,10 @@ function renderHistorico(movimentos) {
 var edItemAtual = null; // { key, tipo, codigo, nome, unidade }
 
 function edItemsAutocomplete() {
+  // Mesma busca por código/nome/fornecedor de refreshAeItems() -- só
+  // acrescenta o marcador "(Material)" depois do label já resolvido.
   var itensMateriais = Object.values(allMateriais).filter(function(m) { return m.ativo !== false; }).map(function(m) {
-    var label = m.mpCodigo + ' — ' + m.mpNome + ' (Material)';
+    var label = materialBuscaLabel(m, m.fornecedorKey ? allFornecedores[m.fornecedorKey] : null) + ' (Material)';
     return { key: sanitizeKey(m.mpCodigo), value: label, label: label, tipo: 'material', codigo: m.mpCodigo, nome: m.mpNome, unidade: m.unidade };
   });
   var itensProdutos = Object.values(allProdutos).filter(function(p) { return p.ativo !== false; }).map(function(p) {
@@ -1475,6 +1482,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutos = snap.val() || {};
+    });
+    dbOnValue(db.ref('fornecedores'), function(snap) {
+      allFornecedores = snap.val() || {};
+      refreshAeItems(); // reconstrói os labels agora com fornecedor (pode ter chegado depois de materiais)
     });
     dbOnValue(db.ref('estoque_lotes'), function(snap) {
       allEstoqueLotes = snap.val() || {};

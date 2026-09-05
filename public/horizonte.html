@@ -685,28 +685,16 @@ function renderNecessidades(){
       '</div>';
   }).join('');
 }
+// copyTextToClipboard (shared/utils.js) -- promovido daqui pra lá quando
+// compras.html passou a precisar do mesmo copiar-com-fallback (texto padrão
+// de solicitação de cotação).
 function copyCodigo(codigo,btnEl){
   function feedback(){
     var orig=btnEl.textContent;
     btnEl.textContent='✓';
     setTimeout(function(){ btnEl.textContent=orig; },1200);
   }
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(codigo).then(feedback).catch(function(){ fallbackCopyCodigo(codigo,feedback); });
-  } else {
-    fallbackCopyCodigo(codigo,feedback);
-  }
-}
-function fallbackCopyCodigo(codigo,cb){
-  var ta=document.createElement('textarea');
-  ta.value=codigo;
-  ta.style.position='fixed';
-  ta.style.opacity='0';
-  document.body.appendChild(ta);
-  ta.select();
-  try{ document.execCommand('copy'); }catch(e){}
-  document.body.removeChild(ta);
-  if(cb) cb();
+  copyTextToClipboard(codigo, feedback);
 }
 
 function insumoDotHtml(pedido){
