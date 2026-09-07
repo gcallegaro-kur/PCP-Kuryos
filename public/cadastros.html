@@ -753,6 +753,7 @@
                 <label>Cliente</label>
                 <input type="text" id="fCliente-prod" class="uc" list="clientesList-prod" placeholder="Ex: MISS ROSE" autocomplete="off">
                 <datalist id="clientesList-prod"></datalist>
+                <div class="field-hint" id="clienteHint-prod"></div>
               </div>
               <div class="form-group">
                 <label>Viscosidade</label>
@@ -3309,10 +3310,71 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('calcCaixas-prod').textContent = (uc && lp) ? fmtNum(Math.ceil(lp / uc)) : '—';
   }
 
+  // Compara nome de cliente ignorando caixa, acento e espaço duplicado --
+  // "MISS RÔSE" e "MISS ROSE" são a mesma empresa, e os dois existiam no
+  // banco ao mesmo tempo (achado da auditoria).
+  function normNomeCliente(s) {
+    return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().trim().replace(/\s+/g, ' ');
+  }
+  // Acha a chave do cadastro de Clientes a partir do nome digitado no
+  // produto. Três tentativas, da mais estrita pra menos:
+  //   1. nome idêntico (normalizado)
+  //   2. o digitado é o começo do nome cadastrado -- cobre o caso mais comum
+  //      do banco real: "AMEERATI" digitado × "AMEERATI DO BRASIL COSMETICOS
+  //      LTDA" cadastrado (9 dos 18 nomes órfãos eram exatamente isso)
+  //   3. o cadastrado é o começo do digitado (o inverso, mais raro)
+  // Só aceita a aproximação quando ela é ÚNICA -- se dois clientes casarem
+  // com o mesmo prefixo, devolve null em vez de chutar o errado.
+  function resolverClienteKey(nomeDigitado) {
+    var alvo = normNomeCliente(nomeDigitado);
+    if (!alvo) return null;
+    var entradas = Object.entries(allClientesCad || {});
+    var exato = entradas.filter(function(e) { return normNomeCliente(e[1].nome) === alvo; });
+    if (exato.length === 1) return exato[0][0];
+    if (exato.length > 1) return null;
+    var prefixo = entradas.filter(function(e) {
+      var n = normNomeCliente(e[1].nome);
+      return n.indexOf(alvo + ' ') === 0 || alvo.indexOf(n + ' ') === 0;
+    });
+    return prefixo.length === 1 ? prefixo[0][0] : null;
+  }
+  // Avisa embaixo do campo quando o nome digitado não bate com nenhum
+  // cliente cadastrado -- é o que impede o próximo erro de digitação de
+  // virar um "cliente" novo em silêncio.
+  function atualizarHintCliente() {
+    var el = document.getElementById('clienteHint-prod');
+    if (!el) return;
+    var valor = document.getElementById('fCliente-prod').value.trim();
+    if (!valor) { el.textContent = ''; el.className = 'field-hint'; return; }
+    var key = resolverClienteKey(valor);
+    if (key) {
+      var c = allClientesCad[key];
+      el.textContent = '✓ vinculado a ' + (c.nome || key) + (c.cnpj ? ' · CNPJ ' + c.cnpj : '');
+      el.className = 'field-hint';
+      el.style.color = 'var(--tint-green-fg)';
+    } else {
+      el.textContent = '⚠ Não existe cliente com esse nome no cadastro. O produto será salvo, mas fica sem vínculo — cadastre em Cadastros › Clientes pra ligar CNPJ, condição de pagamento e detentor ANVISA.';
+      el.className = 'field-hint';
+      el.style.color = 'var(--warning)';
+    }
+  }
+
   function refreshDatalistsAndFilters() {
-    var clientes = {}, cats = {}, subs = {};
+    var clientes = {}, clientesUsados = {}, cats = {}, subs = {};
+    // A lista de SUGESTÃO de cliente passa a vir do cadastro REAL
+    // (clientes/), não mais dos nomes já digitados em outros produtos --
+    // essa era a origem do problema achado na auditoria: o primeiro erro de
+    // digitação virava sugestão oficial pra todo mundo depois, e 67% do
+    // catálogo acabou apontando pra um cliente que não existe no cadastro.
+    // Categoria/subcategoria seguem por ora vindo dos valores usados
+    // (config/categoriasProduto existe como cadastro, mas quem manda no
+    // rótulo gravado ainda é o texto livre -- item separado).
+    Object.values(allClientesCad || {}).forEach(function(c) {
+      if (c && c.nome && c.ativo !== false) clientes[c.nome] = 1;
+    });
     Object.values(allProdutos).forEach(function(p) {
-      if (p.cliente) clientes[p.cliente] = 1;
+      if (p.cliente) clientesUsados[p.cliente] = 1;
       if (p.categoria) cats[p.categoria] = 1;
       if (p.subcategoria) subs[p.subcategoria] = 1;
     });
@@ -3338,7 +3400,12 @@ document.addEventListener('DOMContentLoaded', function() {
     fillDatalist('categoriasList-prod', cats);
     fillDatalist('subcategoriasList-prod', subs);
     fillSelect('filterCategoria-prod', cats, 'Todas categorias');
-    fillSelect('filterCliente-prod', clientes, 'Todos clientes');
+    // O FILTRO continua vindo dos nomes REALMENTE usados nos produtos, não
+    // do cadastro: senão sumiria a opção de filtrar pelos clientes que ainda
+    // não têm cadastro (ex: MOUTIER, 40 produtos) e apareceriam 50 opções,
+    // várias sem produto nenhum. Datalist = o que você DEVE digitar (cadastro);
+    // filtro = o que EXISTE no catálogo. São perguntas diferentes.
+    fillSelect('filterCliente-prod', clientesUsados, 'Todos clientes');
   }
 
   function refreshAutoSkuSelects() {
@@ -3375,7 +3442,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var catObj = categoriasProdutoCad.filter(function(c) { return c.codigo === cat; })[0];
       var cliObj = allClientesCad[cli];
       if (catObj) document.getElementById('fCategoria-prod').value = catObj.nome;
-      if (cliObj) document.getElementById('fCliente-prod').value = cliObj.nome;
+      if (cliObj) { document.getElementById('fCliente-prod').value = cliObj.nome; atualizarHintCliente(); }
     } else {
       hint.textContent = 'Escolha categoria e cliente pra gerar o código -- ou digite manualmente abaixo.';
     }
@@ -3487,6 +3554,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateEanHint('fDum14-prod', 'dum14Hint-prod', 14);
 
     document.getElementById('fCliente-prod').value = p.cliente || '';
+    atualizarHintCliente(); // mostra na hora se este produto já tem vínculo com o cadastro
     document.getElementById('fViscosidade-prod').value = p.viscosidade || '';
     document.getElementById('fCategoria-prod').value = p.categoria || '';
     document.getElementById('fSubcategoria-prod').value = p.subcategoria || '';
@@ -3573,6 +3641,17 @@ document.addEventListener('DOMContentLoaded', function() {
       dum14: document.getElementById('fDum14-prod').value.trim(),
       prodHoraRef: parseInt(document.getElementById('fProdHoraRef-prod').value) || 0,
       cliente: document.getElementById('fCliente-prod').value.trim(),
+      // Vínculo REAL com o cadastro de Clientes (achado da auditoria geral:
+      // 67% do catálogo apontava pra um "cliente" que não existia em
+      // /clientes, porque este campo sempre foi texto livre com sugestão
+      // vinda dos nomes já digitados em OUTROS produtos -- o primeiro erro
+      // de digitação virava sugestão oficial pro próximo).
+      // O NOME continua sendo o que a equipe já conhece (decisão do
+      // usuário: "manter o nome curto") -- clienteKey é só a ponte, gravada
+      // ao lado, que torna CNPJ/condição de pagamento/detentor ANVISA
+      // alcançáveis a partir do produto. null quando não bate com ninguém
+      // (o hint abaixo do campo avisa na hora).
+      clienteKey: resolverClienteKey(document.getElementById('fCliente-prod').value),
       viscosidade: document.getElementById('fViscosidade-prod').value,
       categoria: document.getElementById('fCategoria-prod').value.trim(),
       subcategoria: document.getElementById('fSubcategoria-prod').value.trim(),
@@ -3754,7 +3833,17 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('clientes'), function(snap) {
       allClientesCad = snap.val() || {};
       refreshAutoSkuSelects();
+      // A sugestão do campo Cliente agora sai daqui (não mais dos nomes
+      // digitados em outros produtos) -- então precisa ser refeita quando o
+      // cadastro de clientes muda, senão um cliente recém-criado não
+      // apareceria como opção até recarregar a página.
+      refreshDatalistsAndFilters();
     });
+    // Avisa em tempo real se o nome digitado não existe no cadastro -- é o
+    // que impede o próximo erro de digitação de virar um "cliente" novo em
+    // silêncio, que foi como o catálogo chegou a 67% de órfãos.
+    document.getElementById('fCliente-prod').addEventListener('input', atualizarHintCliente);
+    document.getElementById('fCliente-prod').addEventListener('change', atualizarHintCliente);
     dbOnValue(db.ref('config/categoriasProduto'), function(snap) {
       categoriasProdutoCad = snap.val() || [];
       refreshAutoSkuSelects();
