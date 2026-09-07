@@ -1606,6 +1606,226 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
   return passe(qtd, 1);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// INVENTÁRIO ROTATIVO (contagem cíclica)
+//
+// O mecanismo que mantém um WMS honesto DEPOIS da carga inicial: conta-se um
+// pedaço do armazém por dia, em rodízio, sem parar a operação. Sem ele, a
+// única alternativa é parar tudo e recontar o galpão inteiro -- que foi
+// exatamente o que a auditoria apontou como faltando (zero código no app).
+//
+// Critério de prioridade escolhido pelo usuário: "há mais tempo sem contar +
+// posição ocupada". Posição vazia não entra (não há o que conferir), e nunca
+// contada vem antes de qualquer uma já contada -- é onde mora o risco.
+// ══════════════════════════════════════════════════════════════════════
+
+// Função PURA. Devolve as posições ordenadas por urgência de contagem.
+// `enderecos` = enderecos_estoque; `ocupantesPorEndereco` = {enderecoKey: n};
+// `hojeISO` injetável pra o teste não depender do relógio.
+function priorizarContagemInventario(enderecos, ocupantesPorEndereco, hojeISO) {
+  var hoje = new Date(hojeISO || new Date().toISOString());
+  var out = [];
+  Object.keys(enderecos || {}).forEach(function(key) {
+    var e = enderecos[key];
+    if (!e) return;
+    var ocupantes = (ocupantesPorEndereco || {})[key] || 0;
+    // Posição vazia não entra no rodízio: não há saldo pra conferir, e
+    // encher a fila de posição vazia é o defeito clássico do rodízio "por
+    // rua em ordem fixa".
+    if (ocupantes <= 0) return;
+    // Posição bloqueada TAMBÉM entra -- "em contagem" é justamente um dos
+    // motivos de bloqueio, e material parado numa posição interditada é
+    // exatamente o que mais precisa ser conferido.
+    var ultima = e.ultimaContagemEm || null;
+    var diasSemContar = ultima
+      ? Math.floor((hoje - new Date(ultima)) / 86400000)
+      : null; // null = NUNCA contada
+    out.push({
+      enderecoKey: key,
+      enderecoCodigo: e.codigo || key,
+      area: e.area || null,
+      rua: e.rua, nivel: e.nivel, predio: e.predio,
+      ocupantes: ocupantes,
+      bloqueada: e.ativo === false,
+      ultimaContagemEm: ultima,
+      diasSemContar: diasSemContar
+    });
+  });
+  out.sort(function(a, b) {
+    // nunca contada primeiro
+    if (a.diasSemContar === null && b.diasSemContar !== null) return -1;
+    if (b.diasSemContar === null && a.diasSemContar !== null) return 1;
+    if (a.diasSemContar !== b.diasSemContar) return (b.diasSemContar || 0) - (a.diasSemContar || 0);
+    // desempate determinístico por endereço físico, pra a fila não dançar
+    // entre recarregamentos e a pessoa conseguir percorrer o galpão em ordem
+    return (a.rua - b.rua) || (a.nivel - b.nivel) || (a.predio - b.predio);
+  });
+  return out;
+}
+
+// Função PURA. Congela o que o sistema ACHA que tem numa posição, no momento
+// em que a contagem começa. É esse retrato -- não o saldo do momento em que
+// a pessoa terminar de contar -- que a divergência compara, senão um consumo
+// que aconteça durante a contagem apareceria como erro de quem contou.
+function snapshotEsperadoPosicao(enderecoKey, estoqueLotes) {
+  var esperado = {};
+  Object.keys(estoqueLotes || {}).forEach(function(itemKey) {
+    var lotes = estoqueLotes[itemKey] || {};
+    Object.keys(lotes).forEach(function(loteKey) {
+      var l = lotes[loteKey];
+      if (!l || l.enderecoKey !== enderecoKey) return;
+      if ((l.saldoLote || 0) <= 0) return;
+      var cod = l.itemCodigo;
+      if (!esperado[cod]) {
+        esperado[cod] = { itemCodigo: cod, itemNome: l.itemNome || null, unidade: l.unidade || null, saldoEsperado: 0, lotes: {} };
+      }
+      esperado[cod].saldoEsperado = Math.round((esperado[cod].saldoEsperado + (l.saldoLote || 0)) * 1000) / 1000;
+      esperado[cod].lotes[loteKey] = {
+        saldoLote: l.saldoLote, loteOrigem: l.loteOrigem || null, dataValidade: l.dataValidade || null, itemKey: itemKey
+      };
+    });
+  });
+  return esperado;
+}
+
+// Função PURA. Compara o contado com o esperado congelado.
+// `contado` = {itemCodigo: qtd}. Itens contados que o sistema não esperava
+// naquela posição entram como sobra (esperado 0) -- é achado comum e
+// importante: material guardado no lugar errado.
+function calcularDivergenciaInventario(esperado, contado) {
+  var linhas = [];
+  var codigos = {};
+  Object.keys(esperado || {}).forEach(function(c) { codigos[c] = 1; });
+  Object.keys(contado || {}).forEach(function(c) { codigos[c] = 1; });
+  Object.keys(codigos).forEach(function(cod) {
+    var esp = (esperado && esperado[cod]) ? (esperado[cod].saldoEsperado || 0) : 0;
+    var con = (contado && contado[cod] != null) ? (Number(contado[cod]) || 0) : 0;
+    var dif = Math.round((con - esp) * 1000) / 1000;
+    linhas.push({
+      itemCodigo: cod,
+      itemNome: (esperado && esperado[cod] && esperado[cod].itemNome) || null,
+      unidade: (esperado && esperado[cod] && esperado[cod].unidade) || null,
+      saldoEsperado: esp,
+      qtdContada: con,
+      diferenca: dif,
+      // 'sobra' = achou material que o sistema não sabia que estava ali
+      // (inclui item inteiro inesperado); 'falta' = contou menos do que devia
+      tipo: dif === 0 ? 'ok' : (dif > 0 ? 'sobra' : 'falta'),
+      inesperado: esp === 0 && con > 0
+    });
+  });
+  linhas.sort(function(a, b) { return Math.abs(b.diferenca) - Math.abs(a.diferenca); });
+  var comDivergencia = linhas.filter(function(l) { return l.tipo !== 'ok'; });
+  return {
+    linhas: linhas,
+    divergentes: comDivergencia,
+    confere: comDivergencia.length === 0,
+    // acurácia da posição: quantos itens bateram sobre o total conferido --
+    // é o indicador que se acompanha ao longo do tempo pra saber se o WMS
+    // está melhorando ou piorando
+    acuraciaPct: linhas.length ? Math.round((linhas.length - comDivergencia.length) / linhas.length * 100) : 100
+  };
+}
+
+// Aplica o resultado de uma contagem de inventário no estoque endereçado.
+// É a ÚNICA função do módulo de inventário que escreve.
+//
+// Regras, todas deliberadas:
+//  - Só mexe em `estoque_lotes` (o WMS). NÃO toca `estoque/{key}.saldoAtual`,
+//    mantendo o desacoplamento estoque × WMS que o usuário definiu. Se a
+//    contagem física também deve corrigir o agregado, isso é um segundo
+//    passo consciente, feito em "Ajustar Estoque" -- não um efeito colateral
+//    escondido de uma contagem de posição.
+//  - FALTA é rateada entre os lotes daquela posição em ordem FEFO (o que
+//    vence primeiro é o que some primeiro, por consumo não apontado). SOBRA
+//    vai toda pro lote de validade mais distante -- não dá pra inventar
+//    validade pra material achado sobrando, e jogar no mais distante é a
+//    escolha conservadora (evita criar saldo "quase vencendo" fictício).
+//  - Item INESPERADO (não havia lote nenhum dele na posição) NÃO é criado
+//    automaticamente: exige endereçamento explícito, senão a contagem viraria
+//    uma porta lateral pra criar estoque sem rastreabilidade de origem.
+//    Volta em `naoAplicados` pra a tela avisar.
+//  - Grava um movimento por lote tocado, tipo 'inventario'.
+function aplicarAjusteInventario(dbRef, contagem, autor) {
+  var divergentes = (contagem && contagem.divergentes) || [];
+  if (!divergentes.length) return Promise.resolve({ aplicados: 0, naoAplicados: [] });
+  var agora = new Date().toISOString();
+  var esperado = contagem.esperado || {};
+  var naoAplicados = [];
+  var aplicados = 0;
+
+  return Promise.all(divergentes.map(function(d) {
+    var esp = esperado[d.itemCodigo];
+    if (!esp || !esp.lotes || !Object.keys(esp.lotes).length) {
+      naoAplicados.push({ itemCodigo: d.itemCodigo, motivo: 'item não estava endereçado nesta posição -- use Endereçamento pra registrar a entrada' });
+      return Promise.resolve();
+    }
+    // ordena os lotes da posição em FEFO pra ratear a falta
+    var lotes = Object.keys(esp.lotes).map(function(loteKey) {
+      return { loteKey: loteKey, info: esp.lotes[loteKey] };
+    }).sort(function(a, b) {
+      var va = a.info.dataValidade || '', vb = b.info.dataValidade || '';
+      if (va && vb && va !== vb) return va < vb ? -1 : 1;
+      if (va && !vb) return -1;
+      if (!va && vb) return 1;
+      return 0;
+    });
+
+    var restante = d.diferenca; // negativo = falta, positivo = sobra
+    var alvos = restante > 0 ? [lotes[lotes.length - 1]] : lotes; // sobra vai pro de validade mais distante
+    // SEQUENCIAL, não Promise.all: `restante` precisa ser decrementado por um
+    // lote antes de o próximo decidir quanto tirar. Em paralelo, todos os
+    // lotes enxergavam o restante original e cada um tirava o máximo que
+    // podia -- uma falta de 700 zerava um lote de 600 E um de 400
+    // (abatimento de 1000). Achado pelo próprio teste desta função.
+    return alvos.reduce(function(cadeia, alvo) {
+      return cadeia.then(function() {
+      if (restante === 0) return null;
+      var itemKey = alvo.info.itemKey;
+      var delta = 0;
+      return dbRef.ref('estoque_lotes/' + itemKey + '/' + alvo.loteKey).transaction(function(atual) {
+        if (!atual) return atual;
+        var saldo = atual.saldoLote || 0;
+        // falta: nunca tira mais do que o lote tem (o resto escorre pro
+        // próximo lote em FEFO). sobra: soma tudo no alvo escolhido.
+        delta = restante < 0 ? -Math.min(-restante, saldo) : restante;
+        atual.saldoLote = Math.round((saldo + delta) * 1000) / 1000;
+        atual.atualizadoEm = agora;
+        return atual;
+      }).then(function(res) {
+        if (!res || !res.committed || delta === 0) return null;
+        restante = Math.round((restante - delta) * 1000) / 1000;
+        aplicados++;
+        return dbRef.ref('movimentos_estoque/' + itemKey).push({
+          tipo: 'inventario',
+          motivo: 'AJUSTE DE INVENTÁRIO (' + (delta < 0 ? 'falta' : 'sobra') + ')',
+          qtd: delta,
+          saldoApos: (res.snapshot.val() || {}).saldoLote,
+          ref: 'contagem ' + (contagem.enderecoCodigo || contagem.enderecoKey || ''),
+          loteKey: alvo.loteKey,
+          enderecoKey: contagem.enderecoKey || null,
+          enderecoCodigo: contagem.enderecoCodigo || null,
+          itemTipo: 'material',
+          itemCodigo: d.itemCodigo,
+          itemNome: d.itemNome || null,
+          unidade: d.unidade || null,
+          autor: autor || null,
+          em: agora
+        });
+      });
+      });
+    }, Promise.resolve()).then(function() {
+      // sobrou falta que nenhum lote da posição cobriu -- o saldo endereçado
+      // era menor que a falta apurada; registra pra a tela mostrar
+      if (restante < 0) {
+        naoAplicados.push({ itemCodigo: d.itemCodigo, motivo: 'faltavam ' + Math.abs(restante) + ' além do saldo endereçado nesta posição' });
+      }
+    });
+  })).then(function() {
+    return { aplicados: aplicados, naoAplicados: naoAplicados };
+  });
+}
+
 // Função PURA (sem dbRef, sem I/O) -- o "cérebro" da separação guiada, só
 // sugere DE ONDE tirar (FEFO -- mais próximo de vencer sai primeiro,
 // pedido explícito do usuário: "importante a visão de FIFO, ou até melhor

@@ -157,6 +157,7 @@
   <button class="tab" data-tab="estrutura">🛣️ Estrutura de Ruas</button>
   <button class="tab" data-tab="posicoes">🗺️ Posições</button>
   <button class="tab" data-tab="enderecamento">📍 Endereçamento</button>
+  <button class="tab" data-tab="inventario">📋 Inventário Rotativo</button>
 </div>
 
 <div class="main" id="mainPanelsEstoque">
@@ -389,6 +390,108 @@
     </div>
   </div>
 
+  <!-- ════════ INVENTÁRIO ROTATIVO (contagem cíclica) ════════ -->
+  <div class="tab-panel" id="tab-inventario">
+    <div class="section-note">
+      Conferência de estoque em rodízio, sem parar a operação: o sistema indica quais posições
+      estão há mais tempo sem contar e você confere algumas por dia. É o que mantém o WMS
+      confiável depois da carga inicial -- sem isso, a única alternativa é parar tudo e recontar
+      o galpão inteiro de novo. <b>A contagem é cega:</b> o saldo que o sistema espera só aparece
+      DEPOIS que você informa o que contou -- ver antes enviesa a conferência e é o erro clássico
+      de inventário.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="invStatFila">—</div><div class="stat-lbl">Posições a conferir</div></div>
+      <div class="stat"><div class="stat-val" id="invStatNunca" style="color:var(--danger)">—</div><div class="stat-lbl">Nunca contadas</div></div>
+      <div class="stat"><div class="stat-val" id="invStatHoje" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Conferidas hoje</div></div>
+      <div class="stat"><div class="stat-val" id="invStatAcuracia" style="color:var(--primary)">—</div><div class="stat-lbl">Acurácia (30 dias)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Fila de contagem</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:110px">Posição</th>
+            <th>Área</th>
+            <th style="width:100px;text-align:right">Itens</th>
+            <th style="width:160px">Última contagem</th>
+            <th style="width:130px"></th>
+          </tr></thead>
+          <tbody id="invFilaBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="invCardHistorico" style="margin-top:14px">
+      <div class="card-header"><h3>Contagens recentes</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:110px">Posição</th>
+            <th style="width:150px">Quando</th>
+            <th>Quem</th>
+            <th style="width:110px;text-align:right">Acurácia</th>
+            <th style="width:140px">Resultado</th>
+          </tr></thead>
+          <tbody id="invHistoricoBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: Contagem de posição (cega -> revela divergência) -->
+<div class="modal-bg" id="modalContagemBg">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h2 id="modalContagemTitle">Contar posição</h2><button class="modal-close" id="modalContagemClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="invEtapaContagem">
+        <div class="field-hint" style="margin-bottom:12px">
+          Informe <b>o que você contou fisicamente</b> nesta posição. O saldo esperado pelo
+          sistema aparece só depois de confirmar.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Material</th><th style="width:150px;text-align:right">Contado</th></tr></thead>
+            <tbody id="invContagemBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn btn-ghost btn-sm" id="invAddItemInesperado">+ Achei outro material aqui</button>
+        </div>
+      </div>
+
+      <div id="invEtapaResultado" style="display:none">
+        <div id="invResumoDivergencia" style="margin-bottom:12px"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Material</th>
+              <th style="width:110px;text-align:right">Esperado</th>
+              <th style="width:110px;text-align:right">Contado</th>
+              <th style="width:110px;text-align:right">Diferença</th>
+            </tr></thead>
+            <tbody id="invResultadoBody"></tbody>
+          </table>
+        </div>
+        <div class="field-hint" style="margin-top:12px">
+          Ajustar aplica a diferença no estoque <b>endereçado</b> (falta sai em ordem de validade,
+          sobra vai pro lote de validade mais distante). O saldo agregado em "Saldo Agregado"
+          <b>não</b> é alterado -- se ele também precisar de correção, faça em "Ajustar Saldo",
+          de forma consciente.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalContagemCancel">Cancelar</button>
+      <button class="btn btn-ghost" id="invBtnRecontar" style="display:none">↩ Recontar</button>
+      <button class="btn btn-primary" id="invBtnConfirmarContagem">Confirmar contagem</button>
+      <button class="btn btn-green" id="invBtnAplicarAjuste" style="display:none">Ajustar estoque</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-bg" id="modalRuaBg">
@@ -546,7 +649,7 @@ function fmtDataHora(iso) {
 // enderecos) -- mesmo padrão de ?tab= já usado em cadastros.html
 // (MAINTAB_ALIASES/activateMainTab), só que pras abas de nível página
 // aqui em vez das main-tabs de lá.
-var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1 };
+var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1, inventario: 1 };
 function ativarAbaEstoque(target, pushUrl) {
   if (!ABAS_ESTOQUE_VALIDAS[target]) return;
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
@@ -1206,6 +1309,250 @@ function renderPosicoesTableEnd() {
   if (visaoAtualPosicoes === 'planta' && !editandoPlanta) renderPlantaBaixa(); // não re-renderiza em cima de um arrasto em andamento
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// INVENTÁRIO ROTATIVO
+// A lógica pesada (priorização, snapshot, divergência, ajuste) mora em
+// shared/utils.js e é testada isolada. Aqui fica só a tela.
+// ══════════════════════════════════════════════════════════════════════
+var contagensCache = {};
+var contagemAtual = null; // { enderecoKey, enderecoCodigo, esperado, contado, resultado }
+
+dbOnValue(db.ref('contagens_inventario'), function(snap) {
+  contagensCache = snap.val() || {};
+  renderInventario();
+});
+
+function renderInventario() {
+  var fila = priorizarContagemInventario(enderecosEstoque, ocupantesPorEndereco, new Date().toISOString());
+  var tbody = document.getElementById('invFilaBody');
+  if (!tbody) return;
+
+  var nunca = fila.filter(function(f) { return f.diasSemContar === null; }).length;
+  var hojeStr = new Date().toISOString().slice(0, 10);
+  var contagens = Object.values(contagensCache);
+  var hoje = contagens.filter(function(c) { return c && c.contadoEm && c.contadoEm.slice(0, 10) === hojeStr; }).length;
+
+  // acurácia dos últimos 30 dias: média das acurácias das contagens do período
+  var corte = new Date(Date.now() - 30 * 86400000).toISOString();
+  var recentes = contagens.filter(function(c) { return c && c.contadoEm && c.contadoEm >= corte && typeof c.acuraciaPct === 'number'; });
+  var acuracia = recentes.length
+    ? Math.round(recentes.reduce(function(s, c) { return s + c.acuraciaPct; }, 0) / recentes.length)
+    : null;
+
+  document.getElementById('invStatFila').textContent = fmtNum(fila.length);
+  document.getElementById('invStatNunca').textContent = fmtNum(nunca);
+  document.getElementById('invStatHoje').textContent = fmtNum(hoje);
+  document.getElementById('invStatAcuracia').textContent = acuracia === null ? '—' : (acuracia + '%');
+
+  if (!fila.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma posição ocupada pra conferir. A fila só inclui posições com material endereçado.</td></tr>';
+  } else {
+    // mostra as 25 mais urgentes -- a fila inteira seria ruído; a pessoa
+    // confere algumas por dia, não o galpão todo
+    tbody.innerHTML = fila.slice(0, 25).map(function(f) {
+      var quando = f.diasSemContar === null
+        ? '<span class="badge badge-red">nunca contada</span>'
+        : (f.diasSemContar === 0 ? '<span class="badge badge-green">hoje</span>'
+           : '<span class="badge ' + (f.diasSemContar > 60 ? 'badge-orange' : 'badge-gray') + '">há ' + f.diasSemContar + ' dia' + (f.diasSemContar > 1 ? 's' : '') + '</span>');
+      return '<tr>' +
+        '<td><b>' + escapeHtml(f.enderecoCodigo) + '</b>' + (f.bloqueada ? ' <span class="badge badge-red" title="posição bloqueada">🚫</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(f.area || '') + '</td>' +
+        '<td style="text-align:right">' + f.ocupantes + '</td>' +
+        '<td>' + quando + '</td>' +
+        '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-contar="' + escapeAttr(f.enderecoKey) + '">📋 Contar</button></td>' +
+      '</tr>';
+    }).join('');
+    tbody.querySelectorAll('[data-contar]').forEach(function(btn) {
+      btn.addEventListener('click', function() { abrirContagem(btn.getAttribute('data-contar')); });
+    });
+  }
+
+  // histórico recente
+  var hb = document.getElementById('invHistoricoBody');
+  var ordenadas = contagens.filter(function(c) { return c && c.contadoEm; })
+    .sort(function(a, b) { return a.contadoEm < b.contadoEm ? 1 : -1; }).slice(0, 15);
+  hb.innerHTML = ordenadas.length
+    ? ordenadas.map(function(c) {
+        var res = c.confere
+          ? '<span class="badge badge-green">conferiu</span>'
+          : (c.ajusteAplicado ? '<span class="badge badge-orange">ajustada</span>' : '<span class="badge badge-red">divergente</span>');
+        return '<tr>' +
+          '<td><b>' + escapeHtml(c.enderecoCodigo || '') + '</b></td>' +
+          '<td>' + fmtDataHora(c.contadoEm) + '</td>' +
+          '<td>' + escapeHtml(c.contadoPor || '—') + '</td>' +
+          '<td style="text-align:right">' + (typeof c.acuraciaPct === 'number' ? c.acuraciaPct + '%' : '—') + '</td>' +
+          '<td>' + res + '</td>' +
+        '</tr>';
+      }).join('')
+    : '<tr><td colspan="5" class="no-data">Nenhuma contagem registrada ainda.</td></tr>';
+}
+
+// Abre a contagem CEGA: monta a lista de materiais que o sistema espera na
+// posição, mas com os campos ZERADOS e o esperado escondido. O snapshot do
+// esperado é congelado AGORA -- é contra ele que a divergência compara, e
+// não contra o saldo do momento em que a pessoa terminar de contar (um
+// consumo durante a contagem apareceria como erro de quem contou).
+function abrirContagem(enderecoKey) {
+  var e = enderecosEstoque[enderecoKey];
+  if (!e) return;
+  var esperado = snapshotEsperadoPosicao(enderecoKey, allEstoqueLotes);
+  contagemAtual = {
+    enderecoKey: enderecoKey,
+    enderecoCodigo: e.codigo || enderecoKey,
+    area: e.area || null,
+    esperado: esperado,
+    iniciadoEm: new Date().toISOString()
+  };
+  document.getElementById('modalContagemTitle').textContent = 'Contar posição ' + (e.codigo || enderecoKey);
+  document.getElementById('invEtapaContagem').style.display = '';
+  document.getElementById('invEtapaResultado').style.display = 'none';
+  document.getElementById('invBtnConfirmarContagem').style.display = '';
+  document.getElementById('invBtnAplicarAjuste').style.display = 'none';
+  document.getElementById('invBtnRecontar').style.display = 'none';
+
+  var codigos = Object.keys(esperado);
+  var body = document.getElementById('invContagemBody');
+  body.innerHTML = codigos.length
+    ? codigos.map(function(cod) {
+        var it = esperado[cod];
+        return '<tr>' +
+          '<td><b>' + escapeHtml(cod) + '</b>' + (it.itemNome ? '<br><span class="field-hint">' + escapeHtml(it.itemNome) + '</span>' : '') + '</td>' +
+          '<td style="text-align:right"><input type="number" class="inv-qtd" data-cod="' + escapeAttr(cod) + '" min="0" step="any" style="width:110px;text-align:right" placeholder="0"></td>' +
+        '</tr>';
+      }).join('')
+    : '<tr><td colspan="2" class="no-data">O sistema não tem nenhum material endereçado aqui. Se achou algo, use "+ Achei outro material aqui".</td></tr>';
+  document.getElementById('modalContagemBg').classList.add('open');
+}
+
+// Permite registrar material achado numa posição onde o sistema não o
+// esperava -- o achado mais comum de inventário (guardado no lugar errado).
+function addLinhaItemInesperado() {
+  var cod = prompt('Código do material encontrado nesta posição:', '');
+  if (cod === null) return;
+  cod = String(cod).trim().toUpperCase();
+  if (!cod) return;
+  var body = document.getElementById('invContagemBody');
+  if (body.querySelector('[data-cod="' + cod.replace(/"/g, '') + '"]')) {
+    showAlert('Esse material já está na lista.', 'danger');
+    return;
+  }
+  if (body.querySelector('.no-data')) body.innerHTML = '';
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><b>' + escapeHtml(cod) + '</b> <span class="badge badge-orange">inesperado</span></td>' +
+    '<td style="text-align:right"><input type="number" class="inv-qtd" data-cod="' + escapeAttr(cod) + '" min="0" step="any" style="width:110px;text-align:right" placeholder="0"></td>';
+  body.appendChild(tr);
+}
+
+function confirmarContagem() {
+  if (!contagemAtual) return;
+  var contado = {};
+  var algumPreenchido = false;
+  document.querySelectorAll('#invContagemBody .inv-qtd').forEach(function(inp) {
+    var v = inp.value.trim();
+    if (v !== '') algumPreenchido = true;
+    contado[inp.getAttribute('data-cod')] = parseFloat(v) || 0;
+  });
+  if (!algumPreenchido) {
+    showAlert('Informe pelo menos uma quantidade contada (use 0 se a posição estiver vazia).', 'danger');
+    return;
+  }
+  var resultado = calcularDivergenciaInventario(contagemAtual.esperado, contado);
+  contagemAtual.contado = contado;
+  contagemAtual.resultado = resultado;
+
+  // agora sim revela o esperado
+  document.getElementById('invEtapaContagem').style.display = 'none';
+  document.getElementById('invEtapaResultado').style.display = '';
+  document.getElementById('invBtnConfirmarContagem').style.display = 'none';
+  document.getElementById('invBtnRecontar').style.display = '';
+
+  var resumo = document.getElementById('invResumoDivergencia');
+  if (resultado.confere) {
+    resumo.innerHTML = '<div class="alert alert-success show">✓ Contagem confere com o sistema. Nada a ajustar.</div>';
+    document.getElementById('invBtnAplicarAjuste').style.display = 'none';
+  } else {
+    resumo.innerHTML = '<div class="alert alert-danger show">⚠ ' + resultado.divergentes.length +
+      ' divergência(s) — acurácia desta posição: ' + resultado.acuraciaPct + '%</div>';
+    document.getElementById('invBtnAplicarAjuste').style.display = '';
+  }
+
+  document.getElementById('invResultadoBody').innerHTML = resultado.linhas.map(function(l) {
+    var cor = l.tipo === 'ok' ? 'var(--tint-green-fg)' : (l.tipo === 'falta' ? 'var(--danger)' : 'var(--warning)');
+    var sinal = l.diferenca > 0 ? '+' : '';
+    return '<tr>' +
+      '<td><b>' + escapeHtml(l.itemCodigo) + '</b>' + (l.inesperado ? ' <span class="badge badge-orange">inesperado</span>' : '') +
+        (l.itemNome ? '<br><span class="field-hint">' + escapeHtml(l.itemNome) + '</span>' : '') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(l.saldoEsperado) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(l.qtdContada) + '</td>' +
+      '<td style="text-align:right;color:' + cor + ';font-weight:700">' + (l.diferenca === 0 ? '—' : sinal + fmtNum(l.diferenca)) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // Grava a contagem já aqui (mesmo sem ajustar): o registro de que a
+  // posição FOI conferida vale por si -- é o que alimenta o rodízio e a
+  // acurácia ao longo do tempo. O ajuste é um passo separado e opcional.
+  salvarContagem(false);
+}
+
+function salvarContagem(ajusteAplicado) {
+  if (!contagemAtual || !contagemAtual.resultado) return Promise.resolve();
+  var agora = new Date().toISOString();
+  var autor = currentUserNome();
+  if (!contagemAtual._key) contagemAtual._key = db.ref('contagens_inventario').push().key;
+  var updates = {};
+  updates['contagens_inventario/' + contagemAtual._key] = {
+    enderecoKey: contagemAtual.enderecoKey,
+    enderecoCodigo: contagemAtual.enderecoCodigo,
+    area: contagemAtual.area || null,
+    iniciadoEm: contagemAtual.iniciadoEm,
+    contadoEm: agora,
+    contadoPor: autor,
+    esperado: contagemAtual.esperado,
+    contado: contagemAtual.contado,
+    linhas: contagemAtual.resultado.linhas,
+    confere: contagemAtual.resultado.confere,
+    acuraciaPct: contagemAtual.resultado.acuraciaPct,
+    ajusteAplicado: !!ajusteAplicado
+  };
+  // marca a posição como conferida -- é isso que tira ela do topo do rodízio
+  updates['enderecos_estoque/' + contagemAtual.enderecoKey + '/ultimaContagemEm'] = agora;
+  return db.ref().update(updates).catch(function(err) {
+    showAlert('Erro ao registrar a contagem: ' + err.message, 'danger');
+  });
+}
+
+function aplicarAjusteDaContagem() {
+  if (!contagemAtual || !contagemAtual.resultado) return;
+  var btn = document.getElementById('invBtnAplicarAjuste');
+  btn.disabled = true; btn.textContent = 'Ajustando...';
+  var payload = {
+    enderecoKey: contagemAtual.enderecoKey,
+    enderecoCodigo: contagemAtual.enderecoCodigo,
+    esperado: contagemAtual.esperado,
+    divergentes: contagemAtual.resultado.divergentes
+  };
+  aplicarAjusteInventario(db, payload, currentUserNome()).then(function(r) {
+    return salvarContagem(true).then(function() { return r; });
+  }).then(function(r) {
+    btn.disabled = false; btn.textContent = 'Ajustar estoque';
+    fecharModalContagem();
+    var msg = r.aplicados + ' ajuste(s) aplicado(s) no estoque endereçado.';
+    if (r.naoAplicados.length) {
+      msg += ' ' + r.naoAplicados.length + ' item(ns) NÃO ajustados: ' +
+        r.naoAplicados.map(function(n) { return n.itemCodigo + ' (' + n.motivo + ')'; }).join('; ');
+    }
+    showAlert(msg, r.naoAplicados.length ? 'danger' : 'success');
+  }).catch(function(err) {
+    btn.disabled = false; btn.textContent = 'Ajustar estoque';
+    showAlert('Erro ao aplicar o ajuste: ' + err.message, 'danger');
+  });
+}
+
+function fecharModalContagem() {
+  document.getElementById('modalContagemBg').classList.remove('open');
+  contagemAtual = null;
+}
+
 // Bloqueio de posição -- achado da auditoria geral: enderecos_estoque.ativo
 // JÁ era respeitado em 3 telas (o <select> de destino aqui, o de Separação
 // e o de Recebimento em Logística todos filtram `ativo !== false`), mas
@@ -1503,6 +1850,20 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('slFiltroTipo').addEventListener('change', renderSaldoLotes);
   document.getElementById('slFiltroStatus').addEventListener('change', renderSaldoLotes);
   document.getElementById('modalTransferirClose').addEventListener('click', fecharModalTransferir);
+  // Inventário rotativo
+  document.getElementById('modalContagemClose').addEventListener('click', fecharModalContagem);
+  document.getElementById('modalContagemCancel').addEventListener('click', fecharModalContagem);
+  document.getElementById('invBtnConfirmarContagem').addEventListener('click', confirmarContagem);
+  document.getElementById('invBtnAplicarAjuste').addEventListener('click', aplicarAjusteDaContagem);
+  document.getElementById('invAddItemInesperado').addEventListener('click', addLinhaItemInesperado);
+  // Recontar volta pra etapa de digitação SEM mostrar o esperado de novo --
+  // se a pessoa já viu a divergência, recontar "sabendo a resposta" não é
+  // recontagem, é confirmação enviesada. Reabre a posição do zero.
+  document.getElementById('invBtnRecontar').addEventListener('click', function() {
+    var key = contagemAtual && contagemAtual.enderecoKey;
+    fecharModalContagem();
+    if (key) abrirContagem(key);
+  });
   document.getElementById('modalTransferirCancel').addEventListener('click', fecharModalTransferir);
   document.getElementById('modalTransferirSave').addEventListener('click', salvarTransferir);
   document.getElementById('modalTransferir').addEventListener('click', function(e) { if (e.target === this) fecharModalTransferir(); });
@@ -1596,6 +1957,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       ocupantesPorEndereco = contagem;
       renderPosicoesTableEnd();
+      renderInventario(); // a fila de contagem só inclui posição ocupada
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       allEnderecosEstoque = snap.val() || {};
@@ -1606,6 +1968,7 @@ document.addEventListener('DOMContentLoaded', function() {
       enderecosEstoque = snap.val() || {};
       renderRuasTable();
       renderPosicoesTableEnd();
+      renderInventario(); // ultimaContagemEm vive no endereço e define o rodízio
     });
     dbOnValue(db.ref('config/motivosMovimentoEstoque'), function(snap) {
       motivosMovEstoqueAtivos = (snap.val() || []).filter(function(m) { return m.ativo !== false; });
