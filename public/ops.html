@@ -959,9 +959,17 @@
         saldoLote: qtdProduzida, qtdOriginal: qtdProduzida,
         enderecoKey: enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
         origemTipo: 'producao_op', origemRef: op.lote || null,
+        // A produção DECLARA aqui; quem confirma é a Logística, que recebe o
+        // palete, arruma e confere (confirmado pelo usuário: são dois
+        // momentos). Até essa conferência o PA não está disponível pra
+        // expedição -- loteDisponivel() é falso pra AGUARDANDO_CONFERENCIA.
+        // A quantidade gravada é a DECLARADA; a conferência pode ajustar, e a
+        // diferença fica registrada em vez de sumir.
+        status: 'AGUARDANDO_CONFERENCIA',
+        qtdDeclarada: qtdProduzida,
         criadoPor: (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido'
       }).then(function() {
-        showToast('Entrada de produto acabado registrada em ' + (enderecoInfo ? enderecoInfo.codigo : enderecoKey) + '.');
+        showToast('Produto acabado declarado em ' + (enderecoInfo ? enderecoInfo.codigo : enderecoKey) + ' — aguardando conferência da Logística.');
         fechar();
       }).catch(function(err) {
         console.error('Falha ao registrar putaway de produto acabado:', err);

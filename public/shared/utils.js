@@ -1646,6 +1646,51 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// STATUS DE LOTE — vocabulário único
+//
+// Vem da especificação do Módulo CQ (seção 7.3, "Regras de Transição de
+// Status de Lote"). Antes existia espalhado: estoque.html tinha a lista num
+// <select> de filtro, outra no de edição e um mapa de cores -- três lugares
+// que precisavam concordar de cor.
+//
+// Um vocabulário só serve material e produto acabado, como na spec. A
+// diferença é o CAMINHO, não o dicionário:
+//   material: QUARENTENA -> LIBERADO | REPROVADO | APROVADO_CONCESSAO
+//   PA:       AGUARDANDO_CONFERENCIA -> QUARENTENA -> LIBERADO_EXPEDICAO
+//
+// AGUARDANDO_CONFERENCIA é a única adição ao vocabulário da spec, e é
+// justificada: é etapa da LOGÍSTICA (conferir o palete que a produção
+// declarou), anterior à Qualidade. O usuário confirmou que são dois
+// momentos -- "produção declara, logística confere".
+var STATUS_LOTE = {
+  AGUARDANDO_CONFERENCIA: { rotulo: 'Aguardando conferência', badge: 'badge-gray',   disponivel: false, aplicaA: 'produto'  },
+  QUARENTENA:             { rotulo: 'Quarentena',             badge: 'badge-orange', disponivel: false, aplicaA: 'ambos'    },
+  LIBERADO:               { rotulo: 'Aprovado',               badge: 'badge-green',  disponivel: true,  aplicaA: 'material' },
+  APROVADO_CONCESSAO:     { rotulo: 'Aprovado c/ concessão',  badge: 'badge-purple', disponivel: true,  aplicaA: 'ambos'    },
+  LIBERADO_EXPEDICAO:     { rotulo: 'Liberado p/ expedição',  badge: 'badge-green',  disponivel: true,  aplicaA: 'produto'  },
+  REPROVADO:              { rotulo: 'Reprovado',              badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
+  RETIDO:                 { rotulo: 'Retido',                 badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
+  VENCIDO:                { rotulo: 'Vencido',                badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    }
+};
+
+// "Está disponível pra uso?" numa função só. É a pergunta que a separação, o
+// consumo e a expedição fazem -- e que antes cada um respondia com o seu
+// próprio `status === 'LIBERADO'` literal, o que fez APROVADO_CONCESSAO
+// nascer invisível pra todos eles.
+function loteDisponivel(status) {
+  var s = STATUS_LOTE[status || 'LIBERADO'];
+  return !!(s && s.disponivel);
+}
+function rotuloStatusLote(status) {
+  var s = STATUS_LOTE[status];
+  return s ? s.rotulo : (status || '—');
+}
+function badgeStatusLote(status) {
+  var s = STATUS_LOTE[status];
+  return s ? s.badge : 'badge-gray';
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // LIBERAÇÃO DE QUALIDADE (estoque em inspeção)
 //
 // Material recebido entra em QUARENTENA e só a Qualidade libera. O
@@ -1668,8 +1713,18 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
   if (!itemCodigo || !loteKey || !laudo || !laudo.decisao) {
     return Promise.resolve({ ok: false, erro: 'Faltam dados do laudo.' });
   }
-  if (laudo.decisao !== 'LIBERADO' && laudo.decisao !== 'REPROVADO') {
+  // Decisões válidas (spec do CQ, 7.3). LIBERADO_EXPEDICAO é o equivalente
+  // de LIBERADO para produto acabado -- a liberação de palete do CK-7. Quem
+  // chama escolhe conforme o itemTipo do lote; a função aceita as duas
+  // porque a mecânica (transação, laudo, movimento) é idêntica.
+  var DECISOES = { LIBERADO: 1, LIBERADO_EXPEDICAO: 1, REPROVADO: 1, APROVADO_CONCESSAO: 1, RETIDO: 1 };
+  if (!DECISOES[laudo.decisao]) {
     return Promise.resolve({ ok: false, erro: 'Decisão inválida: ' + laudo.decisao });
+  }
+  // Concessão é autorização formal pra usar material fora de especificação --
+  // a spec exige autorização nominal (7.3). Sem quem autorizou, não grava.
+  if (laudo.decisao === 'APROVADO_CONCESSAO' && !laudo.autorizadoPor) {
+    return Promise.resolve({ ok: false, erro: 'Aprovação com concessão exige o nome de quem autorizou.' });
   }
   var itemKey = sanitizeKey(itemCodigo);
   var agora = new Date().toISOString();
@@ -1694,7 +1749,8 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       condicoesEmbalagem: laudo.condicoesEmbalagem != null ? laudo.condicoesEmbalagem : null,
       integridadeEmbalagem: laudo.integridadeEmbalagem || null,
       ausenciaVazamento: laudo.ausenciaVazamento || null,
-      observacao: laudo.observacao || null
+      observacao: laudo.observacao || null,
+      autorizadoPor: laudo.autorizadoPor || null
     };
     atual.atualizadoEm = agora;
     return atual;
@@ -1707,7 +1763,7 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
     // loga sem mexer em quantidade.
     return dbRef.ref('movimentos_estoque/' + itemKey).push({
       tipo: 'qualidade',
-      motivo: laudo.decisao === 'LIBERADO' ? 'LIBERADO PELA QUALIDADE' : 'REPROVADO PELA QUALIDADE',
+      motivo: 'QUALIDADE: ' + rotuloStatusLote(laudo.decisao).toUpperCase(),
       qtd: 0,
       saldoApos: saldoNoMomento,
       ref: laudo.observacao || null,
@@ -1724,6 +1780,87 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// PRODUTO ACABADO — conferência da Logística e liberação de palete (CK-7)
+// ══════════════════════════════════════════════════════════════════════
+
+// Conferência da Logística: a produção declarou X, a Logística conta o que
+// de fato chegou ao estoque. A DIFERENÇA é registrada, não escondida --
+// divergência entre declarado e recebido é justamente o que a planilha atual
+// não captura, e é sinal de perda, de erro de contagem ou de palete
+// incompleto.
+// Depois de conferido o palete vai pra QUARENTENA (aguardando o CQ), não
+// direto pra disponível: a spec do CQ trata liberação de palete como CK-7.
+function conferirPaletePA(dbRef, sku, loteKey, qtdConferida, autor, obs) {
+  if (!sku || !loteKey || qtdConferida == null || qtdConferida < 0) {
+    return Promise.resolve({ ok: false, erro: 'Informe a quantidade conferida.' });
+  }
+  var itemKey = sanitizeKey(sku);
+  var agora = new Date().toISOString();
+  var declarada = 0, divergencia = 0;
+  return dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status !== 'AGUARDANDO_CONFERENCIA') return; // aborta: já conferido
+    declarada = atual.qtdDeclarada != null ? atual.qtdDeclarada : (atual.saldoLote || 0);
+    divergencia = Math.round((qtdConferida - declarada) * 1000) / 1000;
+    atual.saldoLote = qtdConferida;
+    atual.status = 'QUARENTENA';
+    atual.conferencia = {
+      qtdDeclarada: declarada, qtdConferida: qtdConferida, divergencia: divergencia,
+      conferidoEm: agora, conferidoPor: autor || null, observacao: obs || null
+    };
+    atual.atualizadoEm = agora;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) {
+      return { ok: false, erro: 'Este palete não está mais aguardando conferência.' };
+    }
+    var lote = res.snapshot.val() || {};
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: 'conferencia_pa',
+      motivo: divergencia === 0 ? 'CONFERÊNCIA DE PALETE (sem divergência)'
+        : ('CONFERÊNCIA DE PALETE (' + (divergencia > 0 ? 'sobra ' : 'falta ') + Math.abs(divergencia) + ')'),
+      // a quantidade do movimento é a DIFERENÇA -- o que entrou já foi
+      // lançado na declaração; aqui só corrige
+      qtd: divergencia,
+      saldoApos: qtdConferida,
+      ref: lote.loteOrigem || null,
+      loteKey: loteKey,
+      enderecoKey: lote.enderecoKey || null, enderecoCodigo: lote.enderecoCodigo || null,
+      itemTipo: 'produto', itemCodigo: sku, itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+      autor: autor || null, em: agora
+    }).then(function() {
+      return { ok: true, declarada: declarada, conferida: qtdConferida, divergencia: divergencia };
+    });
+  });
+}
+
+// Função PURA: paletes que a produção declarou e a Logística ainda não
+// conferiu. Mais antigo primeiro -- é palete parado sem entrar no estoque.
+function paletesAguardandoConferencia(estoqueLotes) {
+  var out = [];
+  Object.keys(estoqueLotes || {}).forEach(function(itemKey) {
+    var lotes = estoqueLotes[itemKey] || {};
+    Object.keys(lotes).forEach(function(loteKey) {
+      var l = lotes[loteKey];
+      if (!l || l.status !== 'AGUARDANDO_CONFERENCIA') return;
+      out.push({
+        itemKey: itemKey, loteKey: loteKey,
+        sku: l.itemCodigo, itemNome: l.itemNome || null,
+        qtdDeclarada: l.qtdDeclarada != null ? l.qtdDeclarada : (l.saldoLote || 0),
+        loteOrigem: l.loteOrigem || null, dataValidade: l.dataValidade || null,
+        enderecoKey: l.enderecoKey || null, enderecoCodigo: l.enderecoCodigo || null,
+        criadoEm: l.criadoEm || null, dataRecebimento: l.dataRecebimento || null
+      });
+    });
+  });
+  out.sort(function(a, b) {
+    var da = a.criadoEm || '', db2 = b.criadoEm || '';
+    return da < db2 ? -1 : (da > db2 ? 1 : 0);
+  });
+  return out;
+}
+
 // Função PURA: lotes esperando laudo, mais antigos primeiro (é o que está
 // parado ocupando posição sem poder ser usado).
 function lotesAguardandoQualidade(estoqueLotes) {
@@ -1735,6 +1872,7 @@ function lotesAguardandoQualidade(estoqueLotes) {
       if (!l || l.status !== 'QUARENTENA') return;
       out.push({
         itemKey: itemKey, loteKey: loteKey,
+        itemTipo: l.itemTipo || 'material',
         itemCodigo: l.itemCodigo, itemNome: l.itemNome || null, unidade: l.unidade || null,
         saldoLote: l.saldoLote || 0,
         loteOrigem: l.loteOrigem || null, dataValidade: l.dataValidade || null,
@@ -1995,7 +2133,12 @@ function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBl
   var candidatos = Object.entries(lotesDoItem || {})
     .filter(function(entry) {
       var lote = entry[1];
-      if (!lote || lote.itemCodigo !== itemCodigo || lote.status !== 'LIBERADO' || (lote.saldoLote || 0) <= 0) return false;
+      // loteDisponivel (não `status === 'LIBERADO'` literal): com o
+      // vocabulário da spec do CQ, APROVADO_CONCESSAO também é material
+      // liberado pra uso -- é o "aprovado com concessão", autorizado
+      // formalmente apesar do desvio. Com a comparação literal ele nasceria
+      // invisível pra separação, consumo e expedição ao mesmo tempo.
+      if (!lote || lote.itemCodigo !== itemCodigo || !loteDisponivel(lote.status) || (lote.saldoLote || 0) <= 0) return false;
       if (lote.enderecoKey && bloqueados[lote.enderecoKey]) return false;
       return true;
     })
