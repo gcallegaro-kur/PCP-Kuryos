@@ -1403,6 +1403,13 @@
   function onPedidoChange() {
     var key = document.getElementById('selPedido').value;
     currentPedKey = key || null;
+    // Zera o cache do pedido ANTERIOR logo de cara, ANTES de qualquer
+    // return antecipado (há um logo abaixo, no caminho "nenhum pedido
+    // selecionado"). Sem isso, entre trocar de pedido e o snapshot novo
+    // chegar, insumosData ainda tem as chaves do pedido velho -- e uma
+    // geração nessa janela gravaria insumos/pedidoNOVO/<chaveDoANTIGO>,
+    // criando registro órfão sem nome e sem qtdRecebida.
+    insumosData = {};
     document.getElementById('btnNovoInsumo').disabled = !key;
     atualizarBotaoGerarBom(); // reavalia se dá pra gerar do BOM pro pedido escolhido
 
@@ -1496,7 +1503,13 @@
     if (!saldo) return { ok: false, erro: 'Este pedido não tem saldo em aberto (tudo já produzido).' };
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
     if (!calc.ok) return calc;
-    return { ok: true, itens: calc.itens, saldo: saldo, versao: formula.versao };
+    if (!calc.itens.length) return { ok: false, erro: 'A Fórmula/BOM deste produto não tem nenhum item cadastrado.' };
+    // temAprovada vem de melhorFormulaDoProduto: quando nenhuma versão está
+    // APROVADA ele cai na mais recente de qualquer status. compras.html já
+    // carimba um aviso nesse caso; sem propagar aqui, esta tela geraria
+    // necessidade de matéria-prima a partir de fórmula não aprovada em
+    // silêncio -- exatamente o que o fluxo de 3 aprovações existe pra evitar.
+    return { ok: true, itens: calc.itens, saldo: saldo, versao: formula.versao, temAprovada: achado.temAprovada };
   }
 
   // Habilita/desabilita o botão conforme dá ou não pra gerar, e explica no
@@ -1526,12 +1539,41 @@
     var existentesPorCodigo = {}, existentesPorNome = {};
     Object.entries(insumosData).forEach(function(e) {
       if (e[1].mpCodigo) existentesPorCodigo[e[1].mpCodigo] = e[0];
-      if (e[1].nome) existentesPorNome[normalizeSearch(e[1].nome)] = e[0];
+      // O casamento por NOME só vale pra linha LEGADA (sem mpCodigo). Antes
+      // valia pra todas, e aí um material B com nome igual ao de um material
+      // A já vinculado "roubava" a linha do A: o A sumia da lista de
+      // separação (almoxarifado não separa, linha para) e a quantidade já
+      // recebida do A passava a constar como sendo do B. O dado não era
+      // sobrescrito, era REALOCADO pro material errado -- pior.
+      if (!e[1].mpCodigo && e[1].nome) existentesPorNome[normalizeSearch(e[1].nome)] = e[0];
     });
+
+    // Consolida por mpCodigo ANTES de gravar. explodirMateriaisNecessarios
+    // devolve um item por LINHA de fórmula/BOM, e nada impede o mesmo
+    // material em duas linhas (rótulo frente + verso do mesmo código, ou um
+    // item que está na Fórmula E no BOM). Sem consolidar: a 1ª geração criava
+    // duas linhas pro mesmo material, e a regeração colapsava as duas no
+    // mesmo caminho de update (a última vencia), deixando a outra linha
+    // congelada e nunca mais atualizada por BOM nenhum.
+    var consolidados = [];
+    var porCodigo = {};
+    r.itens.forEach(function(it) {
+      // Item de fórmula/BOM ainda pendente de revisão (sem código de material
+      // resolvido) não vira insumo: sem mpCodigo ele nunca seria reencontrado
+      // na regeração e viraria uma linha-lixo nova a cada clique.
+      if (!it.mpCodigo) return;
+      if (porCodigo[it.mpCodigo]) {
+        porCodigo[it.mpCodigo].quantidade = Math.round((porCodigo[it.mpCodigo].quantidade + it.quantidade) * 1000) / 1000;
+        return;
+      }
+      porCodigo[it.mpCodigo] = { mpCodigo: it.mpCodigo, mpNome: it.mpNome, quantidade: it.quantidade, unidade: it.unidade, origem: it.origem };
+      consolidados.push(porCodigo[it.mpCodigo]);
+    });
+    var ignorados = r.itens.length - r.itens.filter(function(it) { return it.mpCodigo; }).length;
 
     var updates = {};
     var criados = 0, atualizados = 0;
-    r.itens.forEach(function(it) {
+    consolidados.forEach(function(it) {
       var keyExistente = existentesPorCodigo[it.mpCodigo] || existentesPorNome[normalizeSearch(it.mpNome || '')];
       var base = 'insumos/' + currentPedKey + '/';
       if (keyExistente) {
@@ -1556,14 +1598,21 @@
       }
     });
 
-    if (!Object.keys(updates).length) { showAlert('Nada a gerar.', 'danger'); return; }
+    if (!Object.keys(updates).length) {
+      showAlert(ignorados
+        ? ('Nada a gerar: ' + ignorados + ' item(ns) da Fórmula/BOM estão sem código de material resolvido. Resolva em Cadastros › Fórmulas/BOM antes de gerar.')
+        : 'Nada a gerar.', 'danger');
+      return;
+    }
     var btn = document.getElementById('btnGerarDoBom');
     btn.disabled = true; btn.textContent = 'Gerando...';
     db.ref().update(updates).then(function() {
       btn.textContent = '⚙ Gerar do BOM';
       atualizarBotaoGerarBom();
-      showAlert('Fórmula/BOM v' + r.versao + ' aplicada: ' + criados + ' insumo(s) criado(s), ' +
-        atualizados + ' atualizado(s). Quantidades recebidas não foram alteradas.', 'success');
+      showAlert('Fórmula/BOM v' + r.versao + (r.temAprovada ? '' : ' (⚠ SEM versão APROVADA -- confira com P&D/Qualidade)') +
+        ' aplicada: ' + criados + ' insumo(s) criado(s), ' + atualizados + ' atualizado(s).' +
+        (ignorados ? ' ' + ignorados + ' item(ns) da fórmula sem código de material ficaram de fora -- resolva em Cadastros › Fórmulas/BOM.' : '') +
+        ' Quantidades recebidas não foram alteradas.', r.temAprovada ? 'success' : 'danger');
     }).catch(function(e) {
       btn.disabled = false; btn.textContent = '⚙ Gerar do BOM';
       showAlert('Erro ao gerar insumos: ' + e.message, 'danger');
@@ -1634,7 +1683,11 @@
           ? 'sem registro de estoque'
           : ('disp. ' + fmtNum(disponivel) + (empenhado ? ' (empenhado ' + fmtNum(empenhado) + ')' : '') + (falta > 0 ? ' · faltam ' + fmtNum(falta) : ''));
         selo = '<span title="Material ' + escHtml(item.mpCodigo) + ' vinculado pelo BOM" ' +
-          'style="font-size:10px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:1px 5px;border-radius:3px;margin-left:6px">' +
+          // texto BRANCO sobre --primary-light: esse token aqui é um azul
+          // saturado (hover de botão), não um tint claro -- azul sobre azul
+          // dava 2,4:1 no tema claro e 1,7:1 no escuro, ilegível a 10px num
+          // tablet de chão de fábrica.
+          'style="font-size:10px;font-weight:700;color:#fff;background:var(--primary-light);padding:1px 5px;border-radius:3px;margin-left:6px">' +
           escHtml(item.mpCodigo) + '</span>' +
           '<span style="font-size:10px;color:' + corEstoque + ';margin-left:6px">' + escHtml(txtEstoque) + '</span>';
       }
@@ -1842,7 +1895,7 @@
     }
 
     // Guess corresponding checklist column to autocheck to True on 100%
-    var guessedCol = guessChecklistColumn(item.nome || "");
+    var guessedCol = guessChecklistColumn(item.nome || "", item.origemBom);
     if (guessedCol) {
       var is100 = progressPct >= 100;
       // If we hit 100%, check it! Otherwise if it was checked, should we uncheck?
@@ -1973,8 +2026,19 @@
     return new RegExp('(^|[^a-zà-ÿ])' + word + '([^a-zà-ÿ]|$)', 'i').test(text);
   }
 
-  function guessChecklistColumn(name) {
-    var n = name.toLowerCase();
+  // `origemBom` (2º parâmetro, opcional) é MUITO mais confiável que adivinhar
+  // pelo nome, e só existe nos insumos gerados a partir da Fórmula/BOM:
+  // origem 'formula' é matéria-prima por construção. Sem isso, nome químico
+  // real (AGUA DEIONIZADA, GLICERINA BIDESTILADA, COCAMIDOPROPIL BETAINA)
+  // nunca casaria com "matéria"/"mp"/"químico"/"ativo", a coluna `mp` do
+  // checklist deixaria de marcar sozinha, e como checkIfAllInsumosOk exige
+  // TODAS as colunas, o semáforo de insumos que planejamento.html e
+  // horizonte.html leem ficaria vermelho pra sempre.
+  // Para embalagem (origem 'bom') o nome continua sendo o melhor sinal --
+  // FRASCO/TAMPA/RÓTULO aparecem no nome do material cadastrado.
+  function guessChecklistColumn(name, origemBom) {
+    if (origemBom === 'formula') return 'mp';
+    var n = (name || '').toLowerCase();
     if (hasWord(n, 'rótulo') || hasWord(n, 'rotulo')) return 'rotulos';
     if (hasWord(n, 'frasco') || hasWord(n, 'pote') || hasWord(n, 'bisnaga')) return 'frascos';
     if (hasWord(n, 'tampa') || hasWord(n, 'batoque')) return 'tampas';

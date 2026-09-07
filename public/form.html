@@ -2798,6 +2798,42 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
 // resto do app já tem pra produto sem fórmula ainda migrada). Junto com
 // cada baixa física, reduz o empenhado do mesmo lote na mesma quantidade
 // (baixarEmpenho, Fase 4c) -- é o consumo real "confirmando" a reserva.
+// Invólucro OBRIGATÓRIO pra toda chamada de WMS feita a partir do
+// apontamento. Existe por causa de um defeito real achado em revisão: a
+// versão anterior confiava só num `.catch()` encadeado, que protege contra
+// REJEIÇÃO de promise mas NÃO contra erro SÍNCRONO. Se `baixarLotesFefo`
+// não existisse (janela de até 5min após um deploy em que o navegador
+// carrega o form.html novo com o shared/utils.js ainda em cache -- ver o
+// max-age de shared/** no firebase.json), a simples referência à função
+// lançava TypeError/ReferenceError ANTES de o `.catch()` sequer ser
+// anexado, derrubando a função inteira. Efeito medido: no consumo, só o
+// PRIMEIRO material baixava estoque; nas perdas, NENHUMA baixava; e o
+// throw ainda cascateava pra fila offline, que re-tentava um apontamento
+// não-idempotente e somava a produção de novo a cada retry.
+//
+// `Promise.resolve().then(...)` move a avaliação pra dentro de um callback
+// de promise, então QUALQUER erro -- inclusive o de função inexistente --
+// vira rejeição e é capturado pelo `.catch()` abaixo. Nunca rejeita, nunca
+// lança: no pior caso devolve null e loga.
+function baixaWmsSegura(itemTipo, codigo, qtd, motivo, autor, ref) {
+  return Promise.resolve()
+    .then(function() { return baixarLotesFefo(db, itemTipo, codigo, qtd, motivo, autor, ref); })
+    .then(function(r) {
+      if (r && r.faltante > 0) {
+        // Enquanto o WMS não estiver populado (antes do "Dia D") isso é o
+        // esperado -- não há lote endereçado pra abater. Depois disso vira
+        // sinal de divergência real entre o físico e o endereçado.
+        console.warn('WMS: ' + motivo + ' de ' + codigo + ' (OP ' + ref + ') abateu ' + r.baixado +
+          ' do estoque endereçado, faltaram ' + r.faltante + '. Saldo agregado foi baixado normalmente.');
+      }
+      return r;
+    })
+    .catch(function(err) {
+      console.error('WMS: falha ao baixar lote endereçado de ' + codigo + ' (OP ' + ref + '):', err);
+      return null;
+    });
+}
+
 function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   if (!op || !op.sku || !qtdReal) return Promise.resolve();
   var achado = melhorFormulaDoProduto(op.sku, allFormulasForm);
@@ -2813,31 +2849,11 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
     return Promise.all([
       ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade }),
       baixarEmpenho(db, ref, it.mpCodigo, it.quantidade),
-      // Baixa também do estoque ENDEREÇADO (WMS), em ordem FEFO -- fecha o
-      // ciclo que estava aberto: o recebimento já criava o lote no endereço,
-      // mas nada nunca o consumia, então o saldo endereçado só subia e o
-      // FEFO da Separação Guiada ia acabar mandando buscar em lote já
-      // consumido (achado da auditoria geral, 2026-09-05).
-      //
-      // .catch() NUNCA removível: apontamento de produção é o fluxo mais
-      // crítico do sistema, usado ao vivo no chão de fábrica. Escrituração
-      // de WMS não pode travar o registro do que foi produzido -- se falhar,
-      // loga e segue. A baixa do agregado (acima) é a que conta pro
-      // controle de estoque e continua independente desta.
-      baixarLotesFefo(db, 'material', it.mpCodigo, it.quantidade, 'CONSUMO DE PRODUÇÃO', autorConsumo, ref)
-        .then(function(r) {
-          if (r && r.faltante > 0) {
-            // Normal enquanto o WMS não estiver populado (antes do "Dia D"):
-            // não há lote endereçado pra abater. Vira sinal útil depois disso.
-            console.warn('WMS: consumo de ' + it.mpCodigo + ' (OP ' + ref + ') abateu ' + r.baixado +
-              ' do estoque endereçado, faltaram ' + r.faltante + '. Saldo agregado foi baixado normalmente.');
-          }
-          return r;
-        })
-        .catch(function(err) {
-          console.error('WMS: falha ao baixar lote endereçado de ' + it.mpCodigo + ' (OP ' + ref + '):', err);
-          return null;
-        })
+      // Baixa do estoque ENDEREÇADO (WMS) -- SEMPRE por último no array e
+      // SEMPRE via baixaWmsSegura (ver a função). Ordem e invólucro não são
+      // estilo: são o que garante que nada aqui possa afetar as duas baixas
+      // acima, que são as que realmente contam pro controle de estoque.
+      baixaWmsSegura('material', it.mpCodigo, it.quantidade, 'CONSUMO DE PRODUÇÃO', autorConsumo, ref)
     ]);
   }));
 }
@@ -3817,15 +3833,14 @@ function baixarEstoquePerdas(perdas, ref) {
   if (!comMaterial.length) return Promise.resolve();
   var autorPerda = (window.currentUser && window.currentUser.nome) || null;
   return Promise.all(comMaterial.map(function(p) {
-    // Perda também sai do estoque endereçado (mesmo motivo do consumo: o
-    // material saiu fisicamente do endereço, o WMS precisa refletir).
-    // Mesmo .catch() defensivo -- lançar perda nunca pode falhar por causa
-    // de escrituração de WMS.
-    baixarLotesFefo(db, 'material', p.materialCodigo, p.quantidade, 'PERDA DE PRODUÇÃO', autorPerda, ref)
-      .catch(function(err) {
-        console.error('WMS: falha ao baixar lote endereçado da perda de ' + p.materialCodigo + ' (OP ' + ref + '):', err);
-      });
-    return ajustarEstoque(db, p.materialCodigo, -p.quantidade, 'perda', ref, { materialNome: p.materialNome });
+    // A baixa do agregado vem PRIMEIRO e é o que conta. A do WMS vem depois,
+    // via baixaWmsSegura -- antes ela ficava acima deste return, então um
+    // erro síncrono nela impedia TODAS as perdas de descontarem estoque
+    // (medido em revisão: 0 de 2 chamadas).
+    return Promise.all([
+      ajustarEstoque(db, p.materialCodigo, -p.quantidade, 'perda', ref, { materialNome: p.materialNome }),
+      baixaWmsSegura('material', p.materialCodigo, p.quantidade, 'PERDA DE PRODUÇÃO', autorPerda, ref)
+    ]).then(function(rs) { return rs[0]; });
   })).catch(function(err) { console.error('Falha ao dar baixa de estoque por perda:', err); });
 }
 

@@ -1421,6 +1421,14 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
       itemTipo: itemTipo || lote.itemTipo, itemCodigo: itemCodigo,
       itemNome: lote.itemNome || null, unidade: lote.unidade || null,
       loteOrigem: lote.loteOrigem || null, dataValidade: lote.dataValidade || null,
+      // dataRecebimento tem que ser COPIADA: é o 2º critério de desempate do
+      // FEFO (sugerirAlocacaoFefo), depois da validade. Sem ela o lote
+      // separado ficava com '' e ordenava sempre ANTES do restante que
+      // continuou no armazém -- por acidente isso dava o resultado certo,
+      // mas invertia no dia em que alguém preenchesse o campo. Copiando,
+      // o fracionamento preserva a posição do lote na fila FEFO, que é o
+      // comportamento correto: os dois pedaços vieram do mesmo recebimento.
+      dataRecebimento: lote.dataRecebimento || null,
       status: lote.status || 'LIBERADO',
       enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
       saldoLote: abatidoReal, qtdOriginal: abatidoReal,
@@ -1459,11 +1467,19 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
 //
 // Três decisões de projeto aqui, todas deliberadas:
 //
-// 1. NÃO exclui posição bloqueada (diferente da SUGESTÃO de separação, que
-//    exclui). Bloqueio serve pra não ROTEAR gente pra uma posição
-//    interditada; esta função é o oposto -- é escrituração do que JÁ saiu
-//    fisicamente. Ignorar o lote bloqueado aqui deixaria saldo fantasma pra
-//    sempre justamente na posição com problema.
+// 1. EXCLUI posição bloqueada, igual à sugestão de separação. A primeira
+//    versão fazia o contrário, com o argumento de que isto é "escrituração
+//    do que JÁ saiu fisicamente" e ignorar deixaria saldo fantasma na
+//    posição com problema. Revisão derrubou o argumento, com razão: ninguém
+//    escaneou nada -- esta função não sabe de onde o material saiu, ela
+//    ADIVINHA por FEFO. Adivinhar numa posição de onde a Separação Guiada
+//    acabou de DESVIAR o separador produz divergência garantida (a separação
+//    mandou pegar no lote B, o consumo baixa o lote A), que é o inverso
+//    exato do objetivo. Pior no caso "posição em contagem": congelar a
+//    posição existe justamente pra o livro parar de se mexer enquanto se
+//    conta o físico. O saldo fantasma que sobrar numa posição bloqueada é
+//    problema de ajuste de inventário -- explícito e auditado --, não de
+//    drenagem silenciosa. (Lote em QUARENTENA já era tratado assim.)
 // 2. NUNCA rejeita. Se faltar saldo endereçado, baixa o que dá e devolve
 //    `faltante` -- quem chama decide o que fazer. Apontamento de produção é
 //    o fluxo mais crítico do sistema e roda no chão de fábrica: escrituração
@@ -1478,16 +1494,45 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
 // Reaproveita sugerirAlocacaoFefo pra ORDENAR: a regra de FEFO fica num
 // lugar só, então separação e consumo nunca discordam sobre qual lote sai
 // primeiro.
+//
+// REPLANEJA quando a corrida come parte do abatimento: entre montar o plano
+// e gravar, outra sessão pode drenar um lote. O clamp impede saldo negativo,
+// mas sozinho deixava o restante sem escorrer pro próximo lote mesmo havendo
+// saldo sobrando. Refaz o plano com dado fresco até zerar ou não sobrar
+// candidato, com teto de tentativas.
 function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origemRef) {
   if (!itemCodigo || !qtd || qtd <= 0) return Promise.resolve({ baixado: 0, faltante: 0, lotes: [] });
   var itemKey = sanitizeKey(itemCodigo);
-  return dbRef.ref('estoque_lotes/' + itemKey).once('value').then(function(snap) {
-    var lotesDoItem = snap.val() || {};
-    // 4º parâmetro omitido de propósito -- consumo não filtra bloqueado (ver nota 1)
-    var plano = sugerirAlocacaoFefo(itemCodigo, qtd, lotesDoItem);
-    if (!plano.alocacoes.length) {
-      return { baixado: 0, faltante: qtd, lotes: [] };
+  var TENTATIVAS_MAX = 3;
+  var acumuladoBaixado = 0;
+  var acumuladoLotes = [];
+
+  function passe(restante, tentativa) {
+    if (restante <= 0 || tentativa > TENTATIVAS_MAX) {
+      return Promise.resolve({
+        baixado: Math.round(acumuladoBaixado * 1000) / 1000,
+        faltante: Math.max(0, Math.round(restante * 1000) / 1000),
+        lotes: acumuladoLotes
+      });
     }
+    return Promise.all([
+      dbRef.ref('estoque_lotes/' + itemKey).once('value'),
+      dbRef.ref('enderecos_estoque').once('value')
+    ]).then(function(snaps) {
+      var lotesDoItem = snaps[0].val() || {};
+      var enderecos = snaps[1].val() || {};
+      var bloqueados = {};
+      Object.keys(enderecos).forEach(function(k) {
+        if (enderecos[k] && enderecos[k].ativo === false) bloqueados[k] = true;
+      });
+      var plano = sugerirAlocacaoFefo(itemCodigo, restante, lotesDoItem, bloqueados);
+      if (!plano.alocacoes.length) {
+        return {
+          baixado: Math.round(acumuladoBaixado * 1000) / 1000,
+          faltante: Math.max(0, Math.round(restante * 1000) / 1000),
+          lotes: acumuladoLotes
+        };
+      }
     var agora = new Date().toISOString();
     var baixadoReal = 0;
     var lotesTocados = [];
@@ -1499,7 +1544,12 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
         // Clamp contra o saldo do MOMENTO da transaction, não contra o que o
         // plano viu: entre montar o plano e gravar, outra sessão pode ter
         // mexido no mesmo lote. Mesmo padrão de darBaixaLoteManual.
-        abatidoNesteLote = Math.min(a.qtdSugerida, atual.saldoLote || 0);
+        // Math.max(0, ...) é essencial: com saldoLote já negativo (dado
+        // inconsistente), Math.min(600, -50) daria -50 e a subtração
+        // "corrigiria" o lote de -50 pra 0 sem gravar movimento nenhum --
+        // um ajuste de inventário invisível. Assim, saldo negativo não abate
+        // nada e o faltante denuncia.
+        abatidoNesteLote = Math.max(0, Math.min(a.qtdSugerida, atual.saldoLote || 0));
         atual.saldoLote = Math.round(((atual.saldoLote || 0) - abatidoNesteLote) * 1000) / 1000;
         atual.atualizadoEm = agora;
         return atual;
@@ -1510,7 +1560,13 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
         return dbRef.ref('movimentos_estoque/' + itemKey).push({
           tipo: 'consumo',
           motivo: motivo || 'CONSUMO DE PRODUÇÃO',
-          qtd: abatidoNesteLote,
+          // NEGATIVO: é saída. Toda a convenção do sistema grava saída com
+          // sinal negativo (ajustarEstoque usa o próprio delta,
+          // darBaixaLoteManual grava -abatidoReal), e estoque.html pinta
+          // qtd > 0 de verde com "+" na frente. Gravar positivo fazia um
+          // consumo de 600 aparecer no Histórico de Movimentações como
+          // "+600" verde -- uma ENTRADA -- ao lado do "-600" do agregado.
+          qtd: -abatidoNesteLote,
           saldoApos: (res.snapshot.val() || {}).saldoLote != null ? res.snapshot.val().saldoLote : null,
           ref: origemRef || null,
           loteKey: a.loteKey,
@@ -1518,19 +1574,36 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
           enderecoCodigo: a.enderecoCodigo || null,
           itemTipo: itemTipo || 'material',
           itemCodigo: itemCodigo,
+          // itemNome/unidade: todos os outros movimentos do sistema gravam
+          // (putaway, transferência, separação, baixa manual, ajustarEstoque)
+          // -- sem eles a quantidade aparece sem unidade no histórico.
+          itemNome: (lotesDoItem[a.loteKey] && lotesDoItem[a.loteKey].itemNome) || null,
+          unidade: (lotesDoItem[a.loteKey] && lotesDoItem[a.loteKey].unidade) || null,
           autor: autor || null,
           em: agora
         });
       });
     })).then(function() {
       baixadoReal = Math.round(baixadoReal * 1000) / 1000;
-      return {
-        baixado: baixadoReal,
-        faltante: Math.max(0, Math.round((qtd - baixadoReal) * 1000) / 1000),
-        lotes: lotesTocados
-      };
+      acumuladoBaixado += baixadoReal;
+      lotesTocados.forEach(function(l) { acumuladoLotes.push(l); });
+      var novoRestante = Math.round((restante - baixadoReal) * 1000) / 1000;
+      // Nada saiu neste passe (todos os lotes do plano foram drenados por
+      // outra sessão, ou só sobrou saldo negativo) -- insistir de novo com o
+      // mesmo resultado só gastaria leitura. Encerra com o faltante honesto.
+      if (baixadoReal <= 0) {
+        return {
+          baixado: Math.round(acumuladoBaixado * 1000) / 1000,
+          faltante: Math.max(0, novoRestante),
+          lotes: acumuladoLotes
+        };
+      }
+      return passe(novoRestante, tentativa + 1);
     });
-  });
+    });
+  }
+
+  return passe(qtd, 1);
 }
 
 // Função PURA (sem dbRef, sem I/O) -- o "cérebro" da separação guiada, só

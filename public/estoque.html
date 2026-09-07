@@ -1190,9 +1190,17 @@ function renderPosicoesTableEnd() {
   var total = Object.keys(enderecosEstoque).length;
   var ocupadasCount = Object.keys(enderecosEstoque).filter(function(k) { return (ocupantesPorEndereco[k] || 0) > 0; }).length;
   var bloqueadasCount = Object.keys(enderecosEstoque).filter(function(k) { return enderecosEstoque[k].ativo === false; }).length;
+  // "Livres" = vaga REALMENTE utilizável: nem ocupada, nem bloqueada. Antes
+  // era só (total - ocupadas), então uma posição bloqueada e vazia contava
+  // como livre -- os 4 números não fechavam e a capacidade do galpão
+  // aparecia superestimada em exatamente as posições que o bloqueio acabou
+  // de tirar de uso.
+  var livresCount = Object.keys(enderecosEstoque).filter(function(k) {
+    return (ocupantesPorEndereco[k] || 0) === 0 && enderecosEstoque[k].ativo !== false;
+  }).length;
   document.getElementById('statTotalPos-end').textContent = fmtNum(total);
   document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
-  document.getElementById('statLivresPos-end').textContent = fmtNum(total - ocupadasCount);
+  document.getElementById('statLivresPos-end').textContent = fmtNum(livresCount);
   document.getElementById('statBloqueadasPos-end').textContent = fmtNum(bloqueadasCount);
   if (visaoAtualPosicoes === 'mapa') renderMapaVisual();
   if (visaoAtualPosicoes === 'planta' && !editandoPlanta) renderPlantaBaixa(); // não re-renderiza em cima de um arrasto em andamento
@@ -1220,13 +1228,42 @@ function toggleBloqueioEndereco(key) {
     if (motivo === null) return;              // cancelou
     motivo = String(motivo).trim();
     if (!motivo) { showAlert('Informe o motivo do bloqueio.', 'danger'); return; }
+  } else {
+    // Liberar também confirma: um clique errado na coluna de botões
+    // reabriria uma posição interditada E apagaria o motivo no mesmo
+    // movimento, sem desfazer.
+    if (!confirm('Liberar a posição ' + e.codigo + '?' +
+        (e.motivoBloqueio ? '\n\nMotivo do bloqueio atual: ' + e.motivoBloqueio : '') +
+        '\n\nEla volta a ser oferecida como destino e a aparecer nas sugestões de separação.')) return;
   }
+  var agora = new Date().toISOString();
+  var autor = currentUserNome();
   var updates = {};
   updates['enderecos_estoque/' + key + '/ativo'] = bloqueandoAgora ? false : true;
   updates['enderecos_estoque/' + key + '/motivoBloqueio'] = bloqueandoAgora ? motivo : null;
-  updates['enderecos_estoque/' + key + '/bloqueadoEm'] = bloqueandoAgora ? new Date().toISOString() : null;
-  updates['enderecos_estoque/' + key + '/bloqueadoPor'] = bloqueandoAgora ? currentUserNome() : null;
+  updates['enderecos_estoque/' + key + '/bloqueadoEm'] = bloqueandoAgora ? agora : null;
+  updates['enderecos_estoque/' + key + '/bloqueadoPor'] = bloqueandoAgora ? autor : null;
   db.ref().update(updates).then(function() {
+    // Movimento auditado: toda outra ação de WMS deste sistema grava em
+    // movimentos_estoque (putaway, transferência, separação, baixa manual).
+    // Bloqueio não gravava -- e como LIBERAR apaga motivoBloqueio/
+    // bloqueadoPor/bloqueadoEm, depois de um desbloqueio não sobrava
+    // vestígio nenhum de que a posição esteve interditada nem por quê. Sem
+    // isso a "rastreabilidade" durava só enquanto o bloqueio existisse.
+    // Vai num nó próprio (_enderecos) porque não é movimento de um ITEM --
+    // não tem itemCodigo, e misturar com o histórico de um material
+    // poluiria a tela de movimentações dele.
+    return db.ref('movimentos_estoque/_enderecos').push({
+      tipo: bloqueandoAgora ? 'bloqueio_posicao' : 'liberacao_posicao',
+      motivo: bloqueandoAgora ? motivo : (e.motivoBloqueio || null),
+      enderecoKey: key,
+      enderecoCodigo: e.codigo || null,
+      area: e.area || null,
+      ocupantesNoMomento: ocupantesPorEndereco[key] || 0,
+      autor: autor || null,
+      em: agora
+    });
+  }).then(function() {
     showAlert('Posição ' + e.codigo + (bloqueandoAgora ? ' bloqueada.' : ' liberada.'), 'success');
   }).catch(function(err) {
     showAlert('Erro ao ' + (bloqueandoAgora ? 'bloquear' : 'liberar') + ' a posição: ' + err.message, 'danger');
