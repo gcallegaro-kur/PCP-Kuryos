@@ -1646,6 +1646,114 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// LIBERAÇÃO DE QUALIDADE (estoque em inspeção)
+//
+// Material recebido entra em QUARENTENA e só a Qualidade libera. O
+// mecanismo de status já existia em estoque_lotes (LIBERADO/QUARENTENA/
+// REPROVADO) e sugerirAlocacaoFefo já filtrava por LIBERADO -- o que
+// faltava era quem escrevesse a transição.
+//
+// Os campos de inspeção vieram do formulário real que a Logística preenche
+// hoje ("Formulário de entrada de materiais", 605 registros): certificado
+// do fornecedor, condições do veículo e da embalagem (escala 1-5),
+// integridade e vazamento (C/NC), quantidade amostrada e data de inspeção.
+// No formulário esses campos ficavam em 13% a 60% de preenchimento; aqui
+// laudo e responsável são obrigatórios porque são o que define se o
+// material pode ser usado.
+//
+// REPROVADO não zera o saldo: o material continua fisicamente lá, ocupando
+// a posição, até alguém devolver ao fornecedor ou descartar -- e essas são
+// saídas próprias, com movimento próprio, não efeito colateral de um laudo.
+function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
+  if (!itemCodigo || !loteKey || !laudo || !laudo.decisao) {
+    return Promise.resolve({ ok: false, erro: 'Faltam dados do laudo.' });
+  }
+  if (laudo.decisao !== 'LIBERADO' && laudo.decisao !== 'REPROVADO') {
+    return Promise.resolve({ ok: false, erro: 'Decisão inválida: ' + laudo.decisao });
+  }
+  var itemKey = sanitizeKey(itemCodigo);
+  var agora = new Date().toISOString();
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  var saldoNoMomento = 0;
+  return loteRef.transaction(function(atual) {
+    if (!atual) return atual;
+    // Só decide o que ainda está em quarentena -- reprocessar um lote já
+    // liberado/reprovado por dois cliques ou duas sessões não pode
+    // sobrescrever o laudo anterior em silêncio.
+    if (atual.status !== 'QUARENTENA') return; // aborta a transaction
+    saldoNoMomento = atual.saldoLote || 0;
+    atual.status = laudo.decisao;
+    atual.qualidade = {
+      decisao: laudo.decisao,
+      inspecionadoEm: agora,
+      inspecionadoPor: autor || null,
+      dataInspecao: laudo.dataInspecao || agora.slice(0, 10),
+      qtdAmostrada: laudo.qtdAmostrada != null ? laudo.qtdAmostrada : null,
+      certificadoFornecedor: !!laudo.certificadoFornecedor,
+      condicoesVeiculo: laudo.condicoesVeiculo != null ? laudo.condicoesVeiculo : null,
+      condicoesEmbalagem: laudo.condicoesEmbalagem != null ? laudo.condicoesEmbalagem : null,
+      integridadeEmbalagem: laudo.integridadeEmbalagem || null,
+      ausenciaVazamento: laudo.ausenciaVazamento || null,
+      observacao: laudo.observacao || null
+    };
+    atual.atualizadoEm = agora;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) {
+      return { ok: false, erro: 'Este lote não está mais em quarentena -- alguém já registrou o laudo.' };
+    }
+    // Movimento com qtd 0: nada entrou nem saiu fisicamente, mudou a
+    // DISPONIBILIDADE. Mesmo princípio de transferirLoteEndereco, que também
+    // loga sem mexer em quantidade.
+    return dbRef.ref('movimentos_estoque/' + itemKey).push({
+      tipo: 'qualidade',
+      motivo: laudo.decisao === 'LIBERADO' ? 'LIBERADO PELA QUALIDADE' : 'REPROVADO PELA QUALIDADE',
+      qtd: 0,
+      saldoApos: saldoNoMomento,
+      ref: laudo.observacao || null,
+      loteKey: loteKey,
+      enderecoKey: (res.snapshot.val() || {}).enderecoKey || null,
+      enderecoCodigo: (res.snapshot.val() || {}).enderecoCodigo || null,
+      itemTipo: 'material',
+      itemCodigo: itemCodigo,
+      itemNome: (res.snapshot.val() || {}).itemNome || null,
+      unidade: (res.snapshot.val() || {}).unidade || null,
+      autor: autor || null,
+      em: agora
+    }).then(function() { return { ok: true, decisao: laudo.decisao, saldo: saldoNoMomento }; });
+  });
+}
+
+// Função PURA: lotes esperando laudo, mais antigos primeiro (é o que está
+// parado ocupando posição sem poder ser usado).
+function lotesAguardandoQualidade(estoqueLotes) {
+  var out = [];
+  Object.keys(estoqueLotes || {}).forEach(function(itemKey) {
+    var lotes = estoqueLotes[itemKey] || {};
+    Object.keys(lotes).forEach(function(loteKey) {
+      var l = lotes[loteKey];
+      if (!l || l.status !== 'QUARENTENA') return;
+      out.push({
+        itemKey: itemKey, loteKey: loteKey,
+        itemCodigo: l.itemCodigo, itemNome: l.itemNome || null, unidade: l.unidade || null,
+        saldoLote: l.saldoLote || 0,
+        loteOrigem: l.loteOrigem || null, dataValidade: l.dataValidade || null,
+        dataRecebimento: l.dataRecebimento || null,
+        enderecoKey: l.enderecoKey || null, enderecoCodigo: l.enderecoCodigo || null,
+        criadoEm: l.criadoEm || null
+      });
+    });
+  });
+  out.sort(function(a, b) {
+    var da = a.dataRecebimento || (a.criadoEm || '').slice(0, 10);
+    var db2 = b.dataRecebimento || (b.criadoEm || '').slice(0, 10);
+    if (da !== db2) return da < db2 ? -1 : 1;
+    return (a.itemCodigo || '') < (b.itemCodigo || '') ? -1 : 1;
+  });
+  return out;
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // INVENTÁRIO ROTATIVO (contagem cíclica)
 //
 // O mecanismo que mantém um WMS honesto DEPOIS da carga inicial: conta-se um

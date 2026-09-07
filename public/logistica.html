@@ -646,6 +646,16 @@ function registrarPutawayRecebimento(itensRecebidos, dadosLotePorItem, recKey) {
       saldoLote: it.qtdRecebidaAgora, qtdOriginal: it.qtdRecebidaAgora,
       enderecoKey: dadosLote.enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
       origemTipo: 'recebimento_pc', origemRef: recebendoKey, recebimentoKey: recKey,
+      // Material recebido entra em QUARENTENA, não liberado -- decisão do
+      // usuário, e é o padrão da indústria cosmética (mesmo modelo de
+      // "estoque em inspeção" de SAP/TOTVS). O lote conta no estoque físico
+      // e aparece no endereço, mas sugerirAlocacaoFefo já filtra
+      // status === 'LIBERADO', então a Separação Guiada não o enxerga até a
+      // Qualidade liberar. O mecanismo já existia no sistema e nunca tinha
+      // sido usado; o formulário de entrada da Logística (planilha do CQ,
+      // 605 registros) mostra que a liberação é justamente o controle que
+      // hoje se perde -- Status estava preenchido em só 13% das entradas.
+      status: 'QUARENTENA',
       criadoPor: recebidoPor
     });
   }));

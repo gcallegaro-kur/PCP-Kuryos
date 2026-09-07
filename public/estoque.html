@@ -158,6 +158,7 @@
   <button class="tab" data-tab="posicoes">🗺️ Posições</button>
   <button class="tab" data-tab="enderecamento">📍 Endereçamento</button>
   <button class="tab" data-tab="inventario">📋 Inventário Rotativo</button>
+  <button class="tab" data-tab="qualidade">🔬 Liberação de Qualidade</button>
 </div>
 
 <div class="main" id="mainPanelsEstoque">
@@ -390,6 +391,41 @@
     </div>
   </div>
 
+  <!-- ════════ LIBERAÇÃO DE QUALIDADE (estoque em inspeção) ════════ -->
+  <div class="tab-panel" id="tab-qualidade">
+    <div class="section-note">
+      Material recebido entra em <b>quarentena</b>: conta no estoque e ocupa a posição, mas a
+      Separação de Materiais não o enxerga até a Qualidade liberar. Os campos abaixo são os
+      mesmos do formulário de entrada que a Logística preenche hoje. Reprovar <b>não</b> tira o
+      material do estoque — ele continua fisicamente lá até ser devolvido ou descartado, que são
+      saídas próprias.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="qStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">Lotes aguardando laudo</div></div>
+      <div class="stat"><div class="stat-val" id="qStatMaisAntigo">—</div><div class="stat-lbl">Espera mais longa (dias)</div></div>
+      <div class="stat"><div class="stat-val" id="qStatLiberados" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Liberados (30 dias)</div></div>
+      <div class="stat"><div class="stat-val" id="qStatReprovados" style="color:var(--danger)">—</div><div class="stat-lbl">Reprovados (30 dias)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Aguardando liberação</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Material</th>
+            <th style="width:120px">Lote fornec.</th>
+            <th style="width:110px">Posição</th>
+            <th style="width:110px;text-align:right">Saldo</th>
+            <th style="width:110px">Recebido em</th>
+            <th style="width:150px"></th>
+          </tr></thead>
+          <tbody id="qFilaBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ════════ INVENTÁRIO ROTATIVO (contagem cíclica) ════════ -->
   <div class="tab-panel" id="tab-inventario">
     <div class="section-note">
@@ -441,6 +477,90 @@
     </div>
   </div>
 
+</div>
+
+<!-- MODAL: Laudo de Qualidade ─────────────────────────────────────────
+     Campos espelhados do "Formulário de entrada de materiais" que a
+     Logística preenche hoje (605 registros analisados). Lá, Status ficava
+     preenchido em 13% e as condições em 37-60%; aqui a decisão é
+     obrigatória, porque é ela que libera ou não o material pro uso. -->
+<div class="modal-bg" id="modalLaudoBg">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header"><h2 id="modalLaudoTitle">Laudo de Qualidade</h2><button class="modal-close" id="modalLaudoClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="qLoteInfo" class="field-hint" style="margin-bottom:14px"></div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data da inspeção</label>
+          <input type="date" id="qDataInspecao">
+        </div>
+        <div class="form-group">
+          <label>Quantidade amostrada</label>
+          <input type="number" id="qQtdAmostrada" min="0" step="any" placeholder="0">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Condições do veículo</label>
+          <select id="qCondVeiculo">
+            <option value="">—</option>
+            <option value="5">5 — Ótimo</option>
+            <option value="4">4 — Bom</option>
+            <option value="3">3 — Regular</option>
+            <option value="2">2 — Ruim</option>
+            <option value="1">1 — Péssimo</option>
+          </select>
+          <div class="field-hint">Limpo, sem odores, sem evidência de pragas</div>
+        </div>
+        <div class="form-group">
+          <label>Condições da embalagem</label>
+          <select id="qCondEmbalagem">
+            <option value="">—</option>
+            <option value="5">5 — Ótimo</option>
+            <option value="4">4 — Bom</option>
+            <option value="3">3 — Regular</option>
+            <option value="2">2 — Ruim</option>
+            <option value="1">1 — Péssimo</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Integridade da embalagem</label>
+          <select id="qIntegridade">
+            <option value="">—</option>
+            <option value="C">C — Conforme</option>
+            <option value="NC">NC — Não conforme</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ausência de vazamento</label>
+          <select id="qVazamento">
+            <option value="">—</option>
+            <option value="C">C — Conforme</option>
+            <option value="NC">NC — Não conforme</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label><input type="checkbox" id="qCertificado" style="width:auto;margin-right:6px">Veio com Certificado de Qualidade do fornecedor</label>
+      </div>
+
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="qObservacao" rows="2" placeholder="Laudo, nº de análise, motivo da reprovação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalLaudoCancel">Cancelar</button>
+      <button class="btn btn-danger" id="qBtnReprovar">Reprovar</button>
+      <button class="btn btn-green" id="qBtnLiberar">Liberar para uso</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: Contagem de posição (cega -> revela divergência) -->
@@ -649,7 +769,7 @@ function fmtDataHora(iso) {
 // enderecos) -- mesmo padrão de ?tab= já usado em cadastros.html
 // (MAINTAB_ALIASES/activateMainTab), só que pras abas de nível página
 // aqui em vez das main-tabs de lá.
-var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1, inventario: 1 };
+var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1, inventario: 1, qualidade: 1 };
 function ativarAbaEstoque(target, pushUrl) {
   if (!ABAS_ESTOQUE_VALIDAS[target]) return;
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
@@ -1350,6 +1470,135 @@ function renderPosicoesTableEnd() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// LIBERAÇÃO DE QUALIDADE
+// A lógica (registrarLaudoQualidade, lotesAguardandoQualidade) mora em
+// shared/utils.js e é testada isolada. Aqui fica só a tela.
+// ══════════════════════════════════════════════════════════════════════
+var laudoAtual = null; // { itemCodigo, loteKey, lote }
+
+function renderQualidade() {
+  var tbody = document.getElementById('qFilaBody');
+  if (!tbody) return;
+  var fila = lotesAguardandoQualidade(allEstoqueLotes);
+
+  var hoje = new Date();
+  var esperaMax = 0;
+  fila.forEach(function(f) {
+    var d = f.dataRecebimento || (f.criadoEm || '').slice(0, 10);
+    if (!d) return;
+    var dias = Math.floor((hoje - new Date(d)) / 86400000);
+    if (dias > esperaMax) esperaMax = dias;
+  });
+
+  // liberados/reprovados nos últimos 30 dias, lendo o bloco de qualidade
+  var corte = new Date(Date.now() - 30 * 86400000).toISOString();
+  var lib = 0, rep = 0;
+  Object.values(allEstoqueLotes || {}).forEach(function(lotesDoItem) {
+    Object.values(lotesDoItem || {}).forEach(function(l) {
+      if (!l || !l.qualidade || !l.qualidade.inspecionadoEm) return;
+      if (l.qualidade.inspecionadoEm < corte) return;
+      if (l.qualidade.decisao === 'LIBERADO') lib++;
+      else if (l.qualidade.decisao === 'REPROVADO') rep++;
+    });
+  });
+
+  document.getElementById('qStatFila').textContent = fmtNum(fila.length);
+  document.getElementById('qStatMaisAntigo').textContent = fila.length ? fmtNum(esperaMax) : '—';
+  document.getElementById('qStatLiberados').textContent = fmtNum(lib);
+  document.getElementById('qStatReprovados').textContent = fmtNum(rep);
+
+  if (!fila.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum lote aguardando liberação. Material recebido aparece aqui automaticamente.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = fila.map(function(f) {
+    var d = f.dataRecebimento || (f.criadoEm || '').slice(0, 10);
+    var dias = d ? Math.floor((hoje - new Date(d)) / 86400000) : null;
+    // Espera longa é o sinal que importa: material parado ocupando posição
+    // sem poder ser usado, e possivelmente já com OP esperando por ele.
+    var badgeDias = dias === null ? '—'
+      : '<span class="badge ' + (dias > 7 ? 'badge-red' : dias > 3 ? 'badge-orange' : 'badge-gray') + '">' +
+        (dias === 0 ? 'hoje' : 'há ' + dias + 'd') + '</span>';
+    return '<tr>' +
+      '<td><b>' + escapeHtml(f.itemCodigo) + '</b>' + (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
+      '<td>' + escapeHtml(f.loteOrigem || '—') + '</td>' +
+      '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(f.saldoLote) + ' ' + escapeHtml(f.unidade || '') + '</td>' +
+      '<td>' + (d ? fmtData(d) : '—') + ' ' + badgeDias + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(f.itemCodigo) + '" data-laudo-lote="' + escapeAttr(f.loteKey) + '">🔬 Laudar</button></td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('[data-laudo-lote]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      abrirLaudo(btn.getAttribute('data-laudo-item'), btn.getAttribute('data-laudo-lote'));
+    });
+  });
+}
+
+function abrirLaudo(itemCodigo, loteKey) {
+  var itemKey = sanitizeKey(itemCodigo);
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
+  if (!lote) return;
+  laudoAtual = { itemCodigo: itemCodigo, loteKey: loteKey, lote: lote };
+  document.getElementById('modalLaudoTitle').textContent = 'Laudo — ' + itemCodigo;
+  document.getElementById('qLoteInfo').innerHTML =
+    '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b><br>' +
+    'Lote do fornecedor: ' + escapeHtml(lote.loteOrigem || '—') +
+    ' · Posição: ' + escapeHtml(lote.enderecoCodigo || '—') +
+    ' · Saldo: ' + fmtNum(lote.saldoLote || 0) + ' ' + escapeHtml(lote.unidade || '') +
+    (lote.dataValidade ? ' · Validade: ' + fmtData(lote.dataValidade) : '');
+  document.getElementById('qDataInspecao').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('qQtdAmostrada').value = '';
+  document.getElementById('qCondVeiculo').value = '';
+  document.getElementById('qCondEmbalagem').value = '';
+  document.getElementById('qIntegridade').value = '';
+  document.getElementById('qVazamento').value = '';
+  document.getElementById('qCertificado').checked = false;
+  document.getElementById('qObservacao').value = '';
+  document.getElementById('modalLaudoBg').classList.add('open');
+}
+function fecharModalLaudo() {
+  document.getElementById('modalLaudoBg').classList.remove('open');
+  laudoAtual = null;
+}
+
+function salvarLaudo(decisao) {
+  if (!laudoAtual) return;
+  var obs = document.getElementById('qObservacao').value.trim();
+  // Reprovar exige justificativa: é uma decisão que tira material do uso e
+  // vai gerar devolução ou descarte -- alguém vai precisar saber por quê.
+  if (decisao === 'REPROVADO' && !obs) {
+    showAlert('Descreva o motivo da reprovação na observação.', 'danger');
+    return;
+  }
+  var btnL = document.getElementById('qBtnLiberar'), btnR = document.getElementById('qBtnReprovar');
+  btnL.disabled = true; btnR.disabled = true;
+  var num = function(id) { var v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  registrarLaudoQualidade(db, laudoAtual.itemCodigo, laudoAtual.loteKey, {
+    decisao: decisao,
+    dataInspecao: document.getElementById('qDataInspecao').value || null,
+    qtdAmostrada: num('qQtdAmostrada'),
+    certificadoFornecedor: document.getElementById('qCertificado').checked,
+    condicoesVeiculo: num('qCondVeiculo'),
+    condicoesEmbalagem: num('qCondEmbalagem'),
+    integridadeEmbalagem: document.getElementById('qIntegridade').value || null,
+    ausenciaVazamento: document.getElementById('qVazamento').value || null,
+    observacao: obs || null
+  }, currentUserNome()).then(function(r) {
+    btnL.disabled = false; btnR.disabled = false;
+    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+    fecharModalLaudo();
+    showAlert(r.decisao === 'LIBERADO'
+      ? 'Lote liberado — já disponível para a Separação de Materiais.'
+      : 'Lote reprovado. O material continua no estoque até ser devolvido ou descartado.',
+      r.decisao === 'LIBERADO' ? 'success' : 'danger');
+  }).catch(function(err) {
+    btnL.disabled = false; btnR.disabled = false;
+    showAlert('Erro ao registrar o laudo: ' + err.message, 'danger');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // INVENTÁRIO ROTATIVO
 // A lógica pesada (priorização, snapshot, divergência, ajuste) mora em
 // shared/utils.js e é testada isolada. Aqui fica só a tela.
@@ -1901,6 +2150,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('slFiltroTipo').addEventListener('change', renderSaldoLotes);
   document.getElementById('slFiltroStatus').addEventListener('change', renderSaldoLotes);
   document.getElementById('modalTransferirClose').addEventListener('click', fecharModalTransferir);
+  // Liberação de qualidade
+  document.getElementById('modalLaudoClose').addEventListener('click', fecharModalLaudo);
+  document.getElementById('modalLaudoCancel').addEventListener('click', fecharModalLaudo);
+  document.getElementById('qBtnLiberar').addEventListener('click', function() { salvarLaudo('LIBERADO'); });
+  document.getElementById('qBtnReprovar').addEventListener('click', function() { salvarLaudo('REPROVADO'); });
   // Inventário rotativo
   document.getElementById('modalContagemClose').addEventListener('click', fecharModalContagem);
   document.getElementById('modalContagemCancel').addEventListener('click', fecharModalContagem);
@@ -2009,6 +2263,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ocupantesPorEndereco = contagem;
       renderPosicoesTableEnd();
       renderInventario(); // a fila de contagem só inclui posição ocupada
+      renderQualidade(); // a fila de laudo vive nos próprios lotes
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       allEnderecosEstoque = snap.val() || {};
