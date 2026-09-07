@@ -193,8 +193,9 @@
         <option value="antigo">Mais antigos primeiro</option>
       </select>
       <button class="btn btn-ghost" id="btnVerPadraoEtiqueta">🏷️ Padrão de Etiqueta</button>
+      <button class="btn btn-primary" id="btnPcDireto" style="margin-left:auto">⚡ PC Direto</button>
     </div>
-    <div class="section-note">Todo Pedido de Compra nasce de uma cotação decidida → aba 🤝 Cotações. Gerenciar fornecedores (cadastro, contato, condição de pagamento) → <a href="cadastros.html?tab=fornecedores">Cadastros</a>.</div>
+    <div class="section-note">O caminho normal de um Pedido de Compra é nascer de uma cotação decidida → aba 🤝 Cotações. Para material que <b>já chegou</b> sem PC lançado, use <b>⚡ PC Direto</b>: ele cria o pedido já liberado pro recebimento e fica marcado como direto, pra dar pra medir depois quanto está entrando fora do processo. Gerenciar fornecedores → <a href="cadastros.html?tab=fornecedores">Cadastros</a>.</div>
     <div class="card">
       <div class="card-title" id="pcCount">Pedidos de Compra</div>
       <div class="table-wrap">
@@ -303,6 +304,56 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalScCancel">Cancelar</button>
       <button class="btn btn-green" id="modalScSave">Enviar Solicitação</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Pedido de Compra Direto ─────────────────────────────────────
+     Caminho CURTO pra material que chega sem PC no sistema. Não é um
+     bypass: gera um Pedido de Compra de verdade, marcado como direto, que
+     entra no mesmo fluxo de recebimento. O que ele pula é a cadeia de
+     solicitação → cotação → decisão, que não faz sentido reconstruir pra
+     entrega que já está na doca. -->
+<div class="modal-bg" id="modalPcDireto">
+  <div class="modal">
+    <div class="modal-header"><h2>Pedido de Compra Direto</h2><button class="modal-close" id="modalPcdClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="section-note">
+        Use para material que <b>já chegou ou está chegando</b> sem Pedido de Compra no sistema.
+        Ele nasce já como <b>ENVIADO</b>, então aparece na hora em Logística → Recebimento.
+        Fica marcado como direto no histórico — é assim que dá pra enxergar depois quanto
+        da entrada está passando fora do processo de cotação.
+      </div>
+
+      <div class="section-label">Fornecedor</div>
+      <div class="form-group full" style="position:relative">
+        <input type="text" id="pcdFornecedor" placeholder="Buscar fornecedor por nome..." autocomplete="off">
+        <input type="hidden" id="pcdFornecedorKey">
+      </div>
+
+      <div class="section-label">Itens recebidos</div>
+      <div class="item-row-head"><div>Material</div><div>Fornecedores homologados</div><div>Quantidade</div><div>Un.</div><div>Preço unit. (opcional)</div><div></div></div>
+      <div id="pcdItensBuilder"></div>
+      <button class="btn btn-ghost btn-sm" id="btnAddPcdItem">+ Item</button>
+
+      <div class="section-label">Por que entrou direto *</div>
+      <div class="form-group full">
+        <select id="pcdMotivo">
+          <option value="">Selecione...</option>
+          <option value="ENTREGA_EM_CIMA_DA_HORA">Entrega chegou antes de o PC ser lançado</option>
+          <option value="PERIODO_ADAPTACAO">Período de adaptação — compra anterior ao sistema</option>
+          <option value="COMPRA_DIRETA">Compra direta / emergencial, sem cotação</option>
+          <option value="AMOSTRA_BONIFICACAO">Amostra ou bonificação do fornecedor</option>
+          <option value="OUTRO">Outro</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <textarea id="pcdObs" rows="2" placeholder="Detalhe (nº da nota fiscal, quem autorizou, etc.) — opcional, mas ajuda a reconstruir depois"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalPcdCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalPcdSave">Criar e liberar pra recebimento</button>
     </div>
   </div>
 </div>
@@ -754,6 +805,27 @@ function copiarTextoCotacao() {
 // (definida mais abaixo, seção Processo de Cotação -- mesma lista que já
 // alimenta o "Iniciar Processo de Cotação"), que já soma o(s) fornecedor(es)
 // direto(s) do cadastro com o(s) de outro cadastro do mesmo item (🔗).
+// Busca por código, nome OU fornecedor (pedido do usuário) -- reaproveita
+// homologadosDoMaterial (já cobre o único-fornecedor-por-cadastro de
+// Embalagem e o vários-homologados de MP Geral igual). Cada resultado já
+// mostra o fornecedor na própria linha da lista -- é o que deixa visível
+// "o mesmo tipo de item, fornecedor X ou Y" direto na busca, sem precisar
+// abrir mais nada pra comparar.
+// Estava DENTRO de renderScItensBuilder; foi promovida ao escopo do arquivo
+// quando o PC Direto passou a precisar da mesma busca -- duas telas usando
+// a mesma lista de materiais não podem depender de uma função privada de uma
+// delas.
+function materiaisAutocompleteItems() {
+  return Object.entries(allMateriais).filter(function(e) { return e[1].ativo !== false; })
+    .map(function(e) {
+      var m = e[1];
+      var forns = homologadosDoMaterial(m.mpCodigo).map(function(h) { return h.nome; }).join(', ');
+      var label = m.mpCodigo + ' — ' + m.mpNome + (forns ? ' · ' + forns : ' · sem fornecedor cadastrado');
+      return { value: m.mpCodigo + ' — ' + m.mpNome, label: label, key: m.mpCodigo };
+    })
+    .sort(function(a, b) { return norm(a.label).localeCompare(norm(b.label)); });
+}
+
 function fornecedoresColunaHtml(materialCodigo) {
   var candidatos = candidatosCotacaoParaMaterial(materialCodigo);
   if (!candidatos.length) {
@@ -792,22 +864,6 @@ function renderScItensBuilder() {
       referencia +
     '</div>';
   }).join('');
-  // Busca por código, nome OU fornecedor (pedido do usuário) -- reaproveita
-  // homologadosDoMaterial (já cobre o único-fornecedor-por-cadastro de
-  // Embalagem e o vários-homologados de MP Geral igual). Cada resultado já
-  // mostra o fornecedor na própria linha da lista -- é o que deixa visível
-  // "o mesmo tipo de item, fornecedor X ou Y" direto na busca, sem precisar
-  // abrir mais nada pra comparar.
-  function materiaisAutocompleteItems() {
-    return Object.entries(allMateriais).filter(function(e) { return e[1].ativo !== false; })
-      .map(function(e) {
-        var m = e[1];
-        var forns = homologadosDoMaterial(m.mpCodigo).map(function(h) { return h.nome; }).join(', ');
-        var label = m.mpCodigo + ' — ' + m.mpNome + (forns ? ' · ' + forns : ' · sem fornecedor cadastrado');
-        return { value: m.mpCodigo + ' — ' + m.mpNome, label: label, key: m.mpCodigo };
-      })
-      .sort(function(a, b) { return norm(a.label).localeCompare(norm(b.label)); });
-  }
   document.querySelectorAll('.sci-mat').forEach(function(el) {
     var idx = el.getAttribute('data-idx');
     var hidden = document.querySelector('.sci-mat-key[data-idx="' + idx + '"]');
@@ -1353,8 +1409,16 @@ function renderPedidos() {
     var acoes = (p.status === 'ABERTO'
       ? '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button> '
       : '') + '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>';
+    // Selo de PC criado por fora da cotação. Visível na lista de propósito:
+    // é o que deixa perceptível, no dia a dia, se o caminho curto virou o
+    // caminho padrão. O title carrega o motivo declarado.
+    var seloDireto = p.origemDireta
+      ? ' <span class="badge badge-orange" title="Criado direto, sem cotação — motivo: ' +
+        escapeAttr((p.motivoDireto || '').replace(/_/g, ' ').toLowerCase()) +
+        (p.obsDireta ? ' · ' + escapeAttr(p.obsDireta) : '') + '">⚡ direto</span>'
+      : '';
     return '<tr>' +
-      '<td class="code-cell">' + escapeHtml(p.numeroFormatado || '—') + '</td>' +
+      '<td class="code-cell">' + escapeHtml(p.numeroFormatado || '—') + seloDireto + '</td>' +
       '<td>' + escapeHtml(p.fornecedorNome || '—') + '</td>' +
       '<td style="font-size:12px">' + fmtData(p.dataCriacao) + '</td>' +
       '<td style="font-size:12.5px">' + (itensResumo || '—') + '</td>' +
@@ -1794,9 +1858,165 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
 }
 
+/* ══════════════ Pedido de Compra DIRETO ══════════════
+   Um PC só nascia no fim da cadeia solicitação → cotação → decisão. Isso é
+   o processo certo pra compra planejada, mas trava a entrada de material que
+   chega sem PC lançado -- e enquanto a entrada não acontece, o saldo de
+   estoque fica sem base (em produção havia 9 materiais com saldo NEGATIVO
+   porque o apontamento desconta consumo de um estoque em que nunca se deu
+   entrada).
+   Este caminho gera um PC de verdade, já ENVIADO (o recebimento só enxerga
+   ENVIADO ou RECEBIDO_PARCIAL), marcado com origemDireta + motivo. A marca é
+   o que permite responder depois "quanto da nossa entrada está passando fora
+   da cotação?" -- sem ela, o atalho vira o caminho padrão sem ninguém notar.
+   ═══════════════════════════════════════════════════════ */
+var pcdItensBuilder = [];
+
+function renderPcdItensBuilder() {
+  var box = document.getElementById('pcdItensBuilder');
+  if (!pcdItensBuilder.length) {
+    box.innerHTML = '<div class="empty-hint">Nenhum item ainda -- clique em "+ Item".</div>';
+    return;
+  }
+  box.innerHTML = pcdItensBuilder.map(function(it, idx) {
+    var mat = findMaterialByCodigo(it.materialCodigo);
+    var unidade = mat ? mat.unidade : '';
+    var fornecedoresCel = it.materialCodigo ? fornecedoresColunaHtml(it.materialCodigo) : '<span style="color:var(--muted);font-size:12px">—</span>';
+    var labelAtual = mat ? (mat.mpCodigo + ' — ' + mat.mpNome) : '';
+    return '<div class="item-row" data-idx="' + idx + '">' +
+      '<span style="position:relative">' +
+        '<input type="text" class="pcdi-mat" data-idx="' + idx + '" value="' + escapeAttr(labelAtual) + '" placeholder="Código, nome ou fornecedor..." autocomplete="off">' +
+        '<input type="hidden" class="pcdi-mat-key" data-idx="' + idx + '" value="' + escapeAttr(it.materialCodigo || '') + '">' +
+      '</span>' +
+      fornecedoresCel +
+      '<input type="number" class="pcdi-qtd" data-idx="' + idx + '" min="0" step="any" value="' + (it.qtd != null ? it.qtd : '') + '">' +
+      '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(unidade || '—') + '</div>' +
+      '<input type="number" class="pcdi-preco" data-idx="' + idx + '" min="0" step="any" value="' + (it.precoUnit != null ? it.precoUnit : '') + '" placeholder="—">' +
+      '<button class="btn btn-danger-ghost btn-sm pcdi-remove" data-idx="' + idx + '" title="Remover item" aria-label="Remover item">×</button>' +
+    '</div>';
+  }).join('');
+
+  // Mesmo padrão de vínculo da Solicitação: digitar sem escolher da lista
+  // NÃO conta como seleção -- todo 'input' limpa o código, e onSelect grava
+  // de novo. Impede salvar um código velho enquanto o campo mostra outro.
+  document.querySelectorAll('.pcdi-mat').forEach(function(el) {
+    var idx = el.getAttribute('data-idx');
+    var hidden = document.querySelector('.pcdi-mat-key[data-idx="' + idx + '"]');
+    attachAutocomplete(el, materiaisAutocompleteItems, {
+      onSelect: function(item) {
+        hidden.value = item.key;
+        pcdItensBuilder[+idx].materialCodigo = item.key;
+        renderPcdItensBuilder();
+      }
+    });
+    el.addEventListener('input', function() {
+      hidden.value = '';
+      pcdItensBuilder[+idx].materialCodigo = '';
+    });
+  });
+  document.querySelectorAll('.pcdi-qtd').forEach(function(el) {
+    el.addEventListener('input', function() { pcdItensBuilder[+el.getAttribute('data-idx')].qtd = parseFloat(el.value) || 0; });
+  });
+  document.querySelectorAll('.pcdi-preco').forEach(function(el) {
+    el.addEventListener('input', function() {
+      var v = el.value.trim();
+      pcdItensBuilder[+el.getAttribute('data-idx')].precoUnit = v === '' ? null : (parseFloat(v) || 0);
+    });
+  });
+  document.querySelectorAll('.pcdi-remove').forEach(function(el) {
+    el.addEventListener('click', function() { pcdItensBuilder.splice(+el.getAttribute('data-idx'), 1); renderPcdItensBuilder(); });
+  });
+}
+
+function openModalPcDireto() {
+  pcdItensBuilder = [{ materialCodigo: '', qtd: null, precoUnit: null }];
+  document.getElementById('pcdFornecedor').value = '';
+  document.getElementById('pcdFornecedorKey').value = '';
+  document.getElementById('pcdMotivo').value = '';
+  document.getElementById('pcdObs').value = '';
+  renderPcdItensBuilder();
+  document.getElementById('modalPcDireto').classList.add('open');
+}
+function closeModalPcDireto() { document.getElementById('modalPcDireto').classList.remove('open'); }
+
+function salvarPcDireto() {
+  var fornecedorKey = document.getElementById('pcdFornecedorKey').value;
+  if (!fornecedorKey) { showAlert('Escolha o fornecedor na lista de sugestões.', 'danger'); return; }
+  var motivo = document.getElementById('pcdMotivo').value;
+  if (!motivo) { showAlert('Informe por que este material entrou sem passar por cotação.', 'danger'); return; }
+
+  var itensValidos = pcdItensBuilder.filter(function(it) { return it.materialCodigo && it.qtd > 0; });
+  if (!itensValidos.length) { showAlert('Adicione ao menos um item com material e quantidade válidos.', 'danger'); return; }
+
+  var btn = document.getElementById('modalPcdSave');
+  btn.disabled = true; btn.textContent = 'Criando...';
+
+  var fornecedor = allFornecedores[fornecedorKey];
+  var itensObj = {};
+  itensValidos.forEach(function(it) {
+    var mat = findMaterialByCodigo(it.materialCodigo);
+    var itemKey = db.ref('pedidos_compra').push().key;
+    itensObj[itemKey] = {
+      materialCodigo: it.materialCodigo,
+      materialNome: mat ? mat.mpNome : '',
+      qtd: it.qtd,
+      unidade: mat ? (mat.unidade || '') : '',
+      precoUnit: it.precoUnit != null ? it.precoUnit : null,
+      obs: '',
+      qtdRecebida: 0,
+      // sem solicitação de origem, por definição -- é o que diferencia do
+      // PC nascido de cotação
+      origemSolicitacaoKey: null
+    };
+  });
+
+  nextSequential(db, 'config/contadores/pedidoCompra', 'PC', 4).then(function(seq) {
+    var pcKey = db.ref('pedidos_compra').push().key;
+    var agora = new Date().toISOString();
+    return db.ref('pedidos_compra/' + pcKey).set({
+      numero: seq.numero, numeroFormatado: seq.formatado,
+      // Nasce ENVIADO de propósito: o material já está chegando, então o
+      // pedido obviamente já foi feito ao fornecedor. É também o único
+      // status que o recebimento (logistica.html) enxerga.
+      status: 'ENVIADO',
+      fornecedorKey: fornecedorKey,
+      fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '',
+      dataCriacao: agora, dataEmissao: agora,
+      itens: itensObj,
+      condicaoPagamento: (fornecedor && fornecedor.condicaoPagamento) || '',
+      // ── marca de auditoria ──
+      origemDireta: true,
+      motivoDireto: motivo,
+      obsDireta: document.getElementById('pcdObs').value.trim() || null,
+      criadoPor: currentUserNome(), criadoEm: agora
+    });
+  }).then(function() {
+    btn.disabled = false; btn.textContent = 'Criar e liberar pra recebimento';
+    closeModalPcDireto();
+    showAlert('Pedido de Compra direto criado e já disponível em Logística → Recebimento.', 'success');
+  }).catch(function(err) {
+    btn.disabled = false; btn.textContent = 'Criar e liberar pra recebimento';
+    showAlert('Erro ao criar o pedido: ' + err.message, 'danger');
+  });
+}
+
 /* ══════════════ Boot ══════════════ */
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnNovaSolicitacao').addEventListener('click', openModalSolicitacao);
+  document.getElementById('btnPcDireto').addEventListener('click', openModalPcDireto);
+  document.getElementById('modalPcdClose').addEventListener('click', closeModalPcDireto);
+  document.getElementById('modalPcdCancel').addEventListener('click', closeModalPcDireto);
+  document.getElementById('modalPcdSave').addEventListener('click', salvarPcDireto);
+  document.getElementById('btnAddPcdItem').addEventListener('click', function() {
+    pcdItensBuilder.push({ materialCodigo: '', qtd: null, precoUnit: null });
+    renderPcdItensBuilder();
+  });
+  attachAutocomplete(document.getElementById('pcdFornecedor'), function() { return pcFornecedorItems; }, {
+    onSelect: function(item) { document.getElementById('pcdFornecedorKey').value = item.key; }
+  });
+  document.getElementById('pcdFornecedor').addEventListener('input', function() {
+    document.getElementById('pcdFornecedorKey').value = '';
+  });
   document.getElementById('modalScClose').addEventListener('click', closeModalSolicitacao);
   document.getElementById('modalScCancel').addEventListener('click', closeModalSolicitacao);
   document.getElementById('modalScSave').addEventListener('click', saveSolicitacao);
