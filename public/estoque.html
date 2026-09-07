@@ -158,6 +158,7 @@
   <button class="tab" data-tab="posicoes">🗺️ Posições</button>
   <button class="tab" data-tab="enderecamento">📍 Endereçamento</button>
   <button class="tab" data-tab="inventario">📋 Inventário Rotativo</button>
+  <button class="tab" data-tab="conferenciapa">📦 Conferência de PA</button>
   <button class="tab" data-tab="qualidade">🔬 Liberação de Qualidade</button>
 </div>
 
@@ -386,6 +387,39 @@
         <table>
           <thead><tr><th>Endereço</th><th style="text-align:right">Quantidade</th><th>Lote</th><th>Validade</th></tr></thead>
           <tbody id="edHistoricoBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ CONFERÊNCIA DE PRODUTO ACABADO ════════ -->
+  <div class="tab-panel" id="tab-conferenciapa">
+    <div class="section-note">
+      Quando a produção conclui uma OP, o palete é <b>declarado</b> aqui — mas ainda não conta
+      como disponível. A Logística recebe, arruma e <b>confere</b> a quantidade real de caixas.
+      Se o conferido diferir do declarado, a diferença fica registrada (é sinal de perda, erro de
+      contagem ou palete incompleto). Depois de conferido, o palete segue para a liberação do CQ.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="cpaStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">Paletes a conferir</div></div>
+      <div class="stat"><div class="stat-val" id="cpaStatDeclarado">—</div><div class="stat-lbl">Unidades declaradas</div></div>
+      <div class="stat"><div class="stat-val" id="cpaStatDivergencias" style="color:var(--danger)">—</div><div class="stat-lbl">Com divergência (30 dias)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Paletes aguardando conferência</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Produto</th>
+            <th style="width:120px">Lote / OP</th>
+            <th style="width:110px">Posição</th>
+            <th style="width:110px;text-align:right">Declarado</th>
+            <th style="width:150px;text-align:right">Conferido</th>
+            <th style="width:120px"></th>
+          </tr></thead>
+          <tbody id="cpaFilaBody"></tbody>
         </table>
       </div>
     </div>
@@ -769,7 +803,7 @@ function fmtDataHora(iso) {
 // enderecos) -- mesmo padrão de ?tab= já usado em cadastros.html
 // (MAINTAB_ALIASES/activateMainTab), só que pras abas de nível página
 // aqui em vez das main-tabs de lá.
-var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1, inventario: 1, qualidade: 1 };
+var ABAS_ESTOQUE_VALIDAS = { agregado: 1, lotes: 1, vencendo: 1, historico: 1, estrutura: 1, posicoes: 1, enderecamento: 1, inventario: 1, qualidade: 1, conferenciapa: 1 };
 function ativarAbaEstoque(target, pushUrl) {
   if (!ABAS_ESTOQUE_VALIDAS[target]) return;
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
@@ -1470,6 +1504,95 @@ function renderPosicoesTableEnd() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// CONFERÊNCIA DE PRODUTO ACABADO (Logística)
+// A quantidade conferida é digitada direto na linha -- é uma tela de
+// trabalho repetitivo (vários paletes por dia), abrir modal pra cada um
+// seria atrito sem ganho.
+// ══════════════════════════════════════════════════════════════════════
+function renderConferenciaPA() {
+  var tbody = document.getElementById('cpaFilaBody');
+  if (!tbody) return;
+  var fila = paletesAguardandoConferencia(allEstoqueLotes);
+
+  var totalDeclarado = fila.reduce(function(s, f) { return s + (f.qtdDeclarada || 0); }, 0);
+  var corte = new Date(Date.now() - 30 * 86400000).toISOString();
+  var comDiv = 0;
+  Object.values(allEstoqueLotes || {}).forEach(function(lotesDoItem) {
+    Object.values(lotesDoItem || {}).forEach(function(l) {
+      if (!l || !l.conferencia || !l.conferencia.conferidoEm) return;
+      if (l.conferencia.conferidoEm < corte) return;
+      if (l.conferencia.divergencia !== 0) comDiv++;
+    });
+  });
+  document.getElementById('cpaStatFila').textContent = fmtNum(fila.length);
+  document.getElementById('cpaStatDeclarado').textContent = fmtNum(totalDeclarado);
+  document.getElementById('cpaStatDivergencias').textContent = fmtNum(comDiv);
+
+  if (!fila.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum palete aguardando conferência. Eles aparecem aqui quando a produção conclui uma OP e registra o endereço.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = fila.map(function(f) {
+    return '<tr>' +
+      '<td><b>' + escapeHtml(f.sku || '') + '</b>' + (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
+      '<td>' + escapeHtml(f.loteOrigem || '—') + '</td>' +
+      '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(f.qtdDeclarada) + '</td>' +
+      '<td style="text-align:right">' +
+        '<input type="number" class="cpa-qtd" min="0" step="any" style="width:120px;text-align:right" ' +
+        'placeholder="' + escapeAttr(String(f.qtdDeclarada)) + '" ' +
+        'data-sku="' + escapeAttr(f.sku) + '" data-lote="' + escapeAttr(f.loteKey) + '">' +
+      '</td>' +
+      '<td style="text-align:right"><button class="btn btn-green btn-sm" data-conferir-sku="' + escapeAttr(f.sku) + '" data-conferir-lote="' + escapeAttr(f.loteKey) + '">✓ Conferir</button></td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('[data-conferir-lote]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      confirmarConferenciaPA(btn.getAttribute('data-conferir-sku'), btn.getAttribute('data-conferir-lote'));
+    });
+  });
+}
+
+function confirmarConferenciaPA(sku, loteKey) {
+  var input = document.querySelector('.cpa-qtd[data-lote="' + loteKey + '"]');
+  if (!input) return;
+  var v = input.value.trim();
+  if (v === '') {
+    showAlert('Informe a quantidade conferida. Se bate com o declarado, digite o mesmo número — confirmar sem contar não é conferência.', 'danger');
+    return;
+  }
+  var qtd = parseFloat(v);
+  if (isNaN(qtd) || qtd < 0) { showAlert('Quantidade inválida.', 'danger'); return; }
+
+  var itemKey = sanitizeKey(sku);
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey] || {};
+  var declarada = lote.qtdDeclarada != null ? lote.qtdDeclarada : (lote.saldoLote || 0);
+  var dif = Math.round((qtd - declarada) * 1000) / 1000;
+  var obs = null;
+  if (dif !== 0) {
+    // Divergência exige explicação na hora: depois ninguém lembra por que
+    // faltaram 50 unidades, e é justamente esse "por quê" que transforma o
+    // número num dado útil.
+    obs = prompt('Divergência de ' + (dif > 0 ? '+' : '') + dif + ' unidade(s) em relação ao declarado (' +
+      declarada + ').\n\nO que explica a diferença? (obrigatório)', '');
+    if (obs === null) return;
+    obs = String(obs).trim();
+    if (!obs) { showAlert('Explique a divergência para registrar a conferência.', 'danger'); return; }
+  }
+
+  conferirPaletePA(db, sku, loteKey, qtd, currentUserNome(), obs).then(function(r) {
+    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+    showAlert(r.divergencia === 0
+      ? ('Palete conferido (' + fmtNum(r.conferida) + ') — segue para liberação do CQ.')
+      : ('Palete conferido com divergência de ' + (r.divergencia > 0 ? '+' : '') + fmtNum(r.divergencia) +
+         '. Saldo ajustado para ' + fmtNum(r.conferida) + ' e segue para o CQ.'),
+      r.divergencia === 0 ? 'success' : 'danger');
+  }).catch(function(err) {
+    showAlert('Erro ao registrar a conferência: ' + err.message, 'danger');
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // LIBERAÇÃO DE QUALIDADE
 // A lógica (registrarLaudoQualidade, lotesAguardandoQualidade) mora em
 // shared/utils.js e é testada isolada. Aqui fica só a tela.
@@ -1520,7 +1643,8 @@ function renderQualidade() {
       : '<span class="badge ' + (dias > 7 ? 'badge-red' : dias > 3 ? 'badge-orange' : 'badge-gray') + '">' +
         (dias === 0 ? 'hoje' : 'há ' + dias + 'd') + '</span>';
     return '<tr>' +
-      '<td><b>' + escapeHtml(f.itemCodigo) + '</b>' + (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
+      '<td>' + (f.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') +
+        '<b>' + escapeHtml(f.itemCodigo) + '</b>' + (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
       '<td>' + escapeHtml(f.loteOrigem || '—') + '</td>' +
       '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
       '<td style="text-align:right">' + fmtNum(f.saldoLote) + ' ' + escapeHtml(f.unidade || '') + '</td>' +
@@ -1539,8 +1663,9 @@ function abrirLaudo(itemCodigo, loteKey) {
   var itemKey = sanitizeKey(itemCodigo);
   var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
   if (!lote) return;
-  laudoAtual = { itemCodigo: itemCodigo, loteKey: loteKey, lote: lote };
-  document.getElementById('modalLaudoTitle').textContent = 'Laudo — ' + itemCodigo;
+  laudoAtual = { itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, itemTipo: lote.itemTipo || 'material' };
+  document.getElementById('modalLaudoTitle').textContent = (lote.itemTipo === 'produto' ? 'Liberação de palete — ' : 'Laudo — ') + itemCodigo;
+  document.getElementById('qBtnLiberar').textContent = lote.itemTipo === 'produto' ? 'Liberar para expedição' : 'Liberar para uso';
   document.getElementById('qLoteInfo').innerHTML =
     '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b><br>' +
     'Lote do fornecedor: ' + escapeHtml(lote.loteOrigem || '—') +
@@ -2153,7 +2278,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // Liberação de qualidade
   document.getElementById('modalLaudoClose').addEventListener('click', fecharModalLaudo);
   document.getElementById('modalLaudoCancel').addEventListener('click', fecharModalLaudo);
-  document.getElementById('qBtnLiberar').addEventListener('click', function() { salvarLaudo('LIBERADO'); });
+  // Produto acabado libera pra EXPEDIÇÃO (CK-7 da spec do CQ); material
+  // libera pra USO na produção. Mesma tela, decisão diferente pelo tipo.
+  document.getElementById('qBtnLiberar').addEventListener('click', function() {
+    salvarLaudo(laudoAtual && laudoAtual.itemTipo === 'produto' ? 'LIBERADO_EXPEDICAO' : 'LIBERADO');
+  });
   document.getElementById('qBtnReprovar').addEventListener('click', function() { salvarLaudo('REPROVADO'); });
   // Inventário rotativo
   document.getElementById('modalContagemClose').addEventListener('click', fecharModalContagem);
@@ -2264,6 +2393,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderPosicoesTableEnd();
       renderInventario(); // a fila de contagem só inclui posição ocupada
       renderQualidade(); // a fila de laudo vive nos próprios lotes
+      renderConferenciaPA(); // paletes declarados pela produção, ainda não conferidos
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       allEnderecosEstoque = snap.val() || {};
