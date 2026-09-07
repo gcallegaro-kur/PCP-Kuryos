@@ -439,6 +439,92 @@ nenhuma decisão já tomada na conversa:
   replanejamento automático não produz efeito visível hoje), virou Fase 1
   de trabalho ativo em `PLANO_PLANEJAMENTO_PCP.md`.
 
+## WMS — lacunas vs. TOTVS/SAP (auditoria geral de 2026-09-05)
+
+Varredura completa do app cruzando código com o banco de produção. Os 3
+achados críticos dessa auditoria **já foram corrigidos** (ciclo de baixa do
+WMS, vínculo Produto↔Cliente, Matriz de Insumos derivando do BOM — commits
+`7d75182`, `8c2166f`, `d643589`). O que segue é o que foi mapeado e
+**deliberadamente não construído** nessa rodada, em ordem aproximada de
+valor. A Fase 1+2 entregaram a espinha certa (endereçamento rua×nível×prédio,
+lote com validade, FEFO, movimentação auditada); isto abaixo é o que mantém
+um WMS *confiável ao longo do tempo*, que é onde os sistemas de mercado
+realmente ganham.
+
+- **Inventário rotativo (contagem cíclica) — não existe nada.** Zero código
+  no app; só um comentário em `estoque.html` citando o "Dia D" futuro. É o
+  mecanismo que mantém a acurácia depois da carga inicial: conta-se um
+  pedaço do armazém por dia, em rodízio, sem parar a operação. Sem ele, a
+  única opção é parar tudo e recontar o galpão inteiro de novo. **Agora é o
+  próximo passo lógico** — o pré-requisito (o saldo endereçado baixar
+  sozinho no consumo) foi resolvido em `7d75182`.
+- **Leitura de código de barras / coletor** — endereçamento e separação são
+  100% digitados, a maior fonte de erro em WMS manual. O app **já gera
+  EAN13 e Code39** (`ean13Svg`, `shared/utils.js`) e já traz
+  `shared/qrcode-lib.js` — etiqueta de endereço + leitura pela câmera do
+  celular é um passo curto a partir do que existe.
+- **Endereço sem atributos** — o schema é `codigo, rua, nivel, predio, area,
+  ativo` (+ os campos de bloqueio adicionados em `a8f5fc0`). Falta
+  capacidade (peso/volume/paletes), tipo (picking × pulmão) e unidade de
+  armazenagem. Sem capacidade não há como o sistema avisar que a posição não
+  comporta — hoje só se descobre no chão.
+- **Reabastecimento (pulmão → picking)** — depende do tipo de endereço
+  acima. É o que evita o separador subir no porta-palete pra buscar item de
+  giro alto.
+- **Onda de separação (wave picking)** — a Separação hoje é uma OP por vez.
+  TOTVS/SAP agrupam N ordens numa onda e ordenam por percurso no armazém.
+  Com o galpão a 800m da fábrica, agrupar as OPs do dia numa viagem só é
+  ganho direto e mensurável.
+- **Conferência / duplo-check na separação** — quem separa confirma o
+  próprio trabalho. O padrão de mercado separa separador e conferente, e é
+  justamente o modelo que o usuário já descreveu pra manipulação (pesagem →
+  conferente). Vale nascer igual aqui.
+- **Quarentena com endereço físico** — o lote já tem `status: QUARENTENA` e o
+  FEFO corretamente o ignora. Falta o outro lado: um endereço bloqueado de
+  verdade onde esse material fica, pra que a separação física também não o
+  alcance (o bloqueio de posição de `a8f5fc0` já dá a primitiva).
+- **`opcoesEnderecoSelect` triplicado** — a mesma função de montar o
+  `<select>` de endereços existe em `estoque.html:798`,
+  `separacao_materiais.html:249` e `logistica.html:487`, e **já divergiram**
+  (a de Logística tem "Sem endereço", as outras não). Qualquer regra nova de
+  endereço vai precisar ser lembrada em 3 lugares. Candidato direto a subir
+  pra `shared/utils.js`.
+
+## MRP — o que falta pra ser MRP de verdade
+
+`insumos.html` deixou de ser uma lista digitada à mão (commit `d643589`:
+deriva do BOM, grava `mpCodigo`, mostra saldo disponível por item). Falta:
+
+- **Necessidade líquida completa** = bruta − disponível − em trânsito +
+  estoque de segurança. Hoje a tela já mostra o disponível
+  (`saldoAtual − saldoEmpenhado`) como referência visual, mas o número que
+  ela grava como necessidade continua sendo o **bruto** do BOM. O passo
+  seguinte é gravar o líquido, ou pelo menos oferecer os dois.
+- **"Em trânsito" não existe como conceito** — pedido de compra já colocado
+  mas não recebido não entra em conta nenhuma.
+- **Estoque de segurança não existe** por material.
+- **`saldoEmpenhado` não influencia decisão de compra** — o empenho funciona
+  (emissão de OP reserva, apontamento baixa) e é exibido em `estoque.html` e
+  agora em `insumos.html`, mas nenhum cálculo de compra usa o disponível
+  real. O dado está pronto e não é consumido.
+
+## Organização / navegação (auditoria geral de 2026-09-05)
+
+- **`horizonte.html` está no limbo** — foi tirado do menu por decisão do
+  usuário ("não é usado"), mas segue publicado, com regra de acesso válida
+  em `pageAccessRules`, e continua gravando em `alocacoes_planejamento` —
+  nó que `autoAjustarPlanejamento` lê pra decidir o que **não** pode
+  remanejar. Alguém que abra por URL pode congelar capacidade no
+  planejamento sem que isso apareça em menu nenhum. Decidir: aposentar de
+  vez, ou trazer de volta com propósito claro. Deixar no limbo é o pior dos
+  três.
+- **Categoria/subcategoria de produto repetem o padrão que Cliente tinha** —
+  `config/categoriasProduto` existe como cadastro real (e o gerador de SKU
+  usa), mas o campo gravado no produto continua sendo texto livre com
+  datalist montado dos valores já usados. Mesma mecânica que gerou 67% de
+  clientes órfãos, em escala menor. A correção é a mesma já aplicada em
+  Cliente (`8c2166f`): resolver uma chave e avisar quando não casar.
+
 ## Qualidade (módulo futuro, fora de escopo até agora)
 
 - **Etiqueta interna de liberação de Qualidade** — uma 2ª etiqueta,
