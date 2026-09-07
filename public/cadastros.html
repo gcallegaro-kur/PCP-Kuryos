@@ -3315,7 +3315,15 @@ document.addEventListener('DOMContentLoaded', function() {
   // banco ao mesmo tempo (achado da auditoria).
   function normNomeCliente(s) {
     return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase().trim().replace(/\s+/g, ' ');
+      .toUpperCase()
+      // Pontua\u00e7\u00e3o de raz\u00e3o social fora: sem isso, digitar o nome COMPLETO e
+      // CORRETO podia n\u00e3o casar, enquanto o apelido curto casava. Dois
+      // clientes reais terminam em "LTDA." com ponto -- copiar o nome do
+      // pr\u00f3prio cadastro trazia o ponto junto e o v\u00ednculo dava null.
+      // Barra tamb\u00e9m (S/A) e h\u00edfen viram espa\u00e7o, e o colapso de espa\u00e7os
+      // abaixo cuida do resto.
+      .replace(/[.,]/g, '').replace(/[\/\-]/g, ' ')
+      .trim().replace(/\s+/g, ' ');
   }
   // Acha a chave do cadastro de Clientes a partir do nome digitado no
   // produto. Três tentativas, da mais estrita pra menos:
@@ -3329,7 +3337,13 @@ document.addEventListener('DOMContentLoaded', function() {
   function resolverClienteKey(nomeDigitado) {
     var alvo = normNomeCliente(nomeDigitado);
     if (!alvo) return null;
-    var entradas = Object.entries(allClientesCad || {});
+    // Só clientes ATIVOS entram -- o datalist e o gerador de SKU já filtram
+    // `ativo !== false`; sem o mesmo filtro aqui, um cliente inativo sumia
+    // da sugestão mas ainda casava e era gravado como vínculo.
+    // `e[1] && e[1].nome` protege contra registro nulo/escalar em /clientes,
+    // que derrubaria o save inteiro com TypeError.
+    var entradas = Object.entries(allClientesCad || {})
+      .filter(function(e) { return e[1] && e[1].nome && e[1].ativo !== false; });
     var exato = entradas.filter(function(e) { return normNomeCliente(e[1].nome) === alvo; });
     if (exato.length === 1) return exato[0][0];
     if (exato.length > 1) return null;
@@ -3338,6 +3352,21 @@ document.addEventListener('DOMContentLoaded', function() {
       return n.indexOf(alvo + ' ') === 0 || alvo.indexOf(n + ' ') === 0;
     });
     return prefixo.length === 1 ? prefixo[0][0] : null;
+  }
+
+  // O que efetivamente vai pro banco no save. Separada de
+  // resolverClienteKey porque tem duas responsabilidades que a resolução
+  // pura não deve ter:
+  //  1. NUNCA devolver null -- `update({clienteKey: null})` APAGA o campo no
+  //     RTDB. Devolve '' pra limpar o vínculo sem remover o campo.
+  //  2. Não limpar um vínculo bom por corrida de carregamento: allClientesCad
+  //     começa {} e só é preenchido no callback de /clientes. Se alguém
+  //     salvar antes disso, a resolução daria null pra TUDO e apagaria FK
+  //     válida. Nesse caso, preserva o que o produto já tinha.
+  function clienteKeyParaSalvar(editandoKey) {
+    var anterior = (editandoKey && allProdutos[editandoKey] && allProdutos[editandoKey].clienteKey) || '';
+    if (!Object.keys(allClientesCad || {}).length) return anterior; // cadastro ainda não carregou
+    return resolverClienteKey(document.getElementById('fCliente-prod').value) || '';
   }
   // Avisa embaixo do campo quando o nome digitado não bate com nenhum
   // cliente cadastrado -- é o que impede o próximo erro de digitação de
@@ -3651,7 +3680,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // ao lado, que torna CNPJ/condição de pagamento/detentor ANVISA
       // alcançáveis a partir do produto. null quando não bate com ninguém
       // (o hint abaixo do campo avisa na hora).
-      clienteKey: resolverClienteKey(document.getElementById('fCliente-prod').value),
+      clienteKey: clienteKeyParaSalvar(editingKey),
       viscosidade: document.getElementById('fViscosidade-prod').value,
       categoria: document.getElementById('fCategoria-prod').value.trim(),
       subcategoria: document.getElementById('fSubcategoria-prod').value.trim(),
@@ -3665,8 +3694,19 @@ document.addEventListener('DOMContentLoaded', function() {
       overfillPct: parseFloat(document.getElementById('fOverfillPct-prod').value) || 0,
       perdaProcessoPct: parseFloat(document.getElementById('fPerdaProcessoPct-prod').value) || 0,
       perdaLinhaPct: parseFloat(document.getElementById('fPerdaLinhaPct-prod').value) || 0,
-      categoriaCodigo: autoCategoriaSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].categoriaCodigo || '' : ''),
-      clienteKey: autoClienteSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].clienteKey || '' : '')
+      categoriaCodigo: autoCategoriaSel || (editingKey && allProdutos[editingKey] ? allProdutos[editingKey].categoriaCodigo || '' : '')
+      // clienteKey NÃO entra aqui embaixo -- ver logo acima. Antes existia
+      // uma segunda propriedade `clienteKey` NESTE ponto do mesmo objeto,
+      // guardando o CÓDIGO escolhido no gerador de SKU (fAutoCliente-prod
+      // tem c.codigo como value). Como chave duplicada em objeto literal
+      // não é erro em JS (a última simplesmente vence), ela anulava
+      // silenciosamente a resolução de vínculo acima -- a funcionalidade
+      // inteira ficou morta no save, e os 16 testes não pegaram porque
+      // exercitavam resolverClienteKey isolada, nunca o objeto gravado.
+      // Removida: código ≠ chave em 3 dos 59 clientes (ARTPA/ARTP,
+      // FEIT/FGFA, SEUNO/SEUN), então guardar o código produzia FK
+      // quebrada nesses casos. O contador de SKU não depende deste campo
+      // (usa autoCliente direto, ver acima), então remover é seguro.
     };
 
     var promise;
@@ -3838,6 +3878,11 @@ document.addEventListener('DOMContentLoaded', function() {
       // cadastro de clientes muda, senão um cliente recém-criado não
       // apareceria como opção até recarregar a página.
       refreshDatalistsAndFilters();
+      // E o hint precisa ser reavaliado: se o modal já estava aberto quando
+      // este snapshot chegou, ele ficou exibindo "⚠ não existe cliente com
+      // esse nome" pra um produto perfeitamente vinculado -- allClientesCad
+      // ainda estava vazio na hora em que openModal chamou o hint.
+      atualizarHintCliente();
     });
     // Avisa em tempo real se o nome digitado não existe no cadastro -- é o
     // que impede o próximo erro de digitação de virar um "cliente" novo em
