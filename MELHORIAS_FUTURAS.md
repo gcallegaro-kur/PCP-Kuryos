@@ -451,26 +451,53 @@ lote com validade, FEFO, movimentação auditada); isto abaixo é o que mantém
 um WMS *confiável ao longo do tempo*, que é onde os sistemas de mercado
 realmente ganham.
 
-- **Inventário rotativo (contagem cíclica) — não existe nada.** Zero código
-  no app; só um comentário em `estoque.html` citando o "Dia D" futuro. É o
-  mecanismo que mantém a acurácia depois da carga inicial: conta-se um
-  pedaço do armazém por dia, em rodízio, sem parar a operação. Sem ele, a
-  única opção é parar tudo e recontar o galpão inteiro de novo. **Agora é o
-  próximo passo lógico** — o pré-requisito (o saldo endereçado baixar
-  sozinho no consumo) foi resolvido em `7d75182`.
-- **Leitura de código de barras / coletor** — endereçamento e separação são
-  100% digitados, a maior fonte de erro em WMS manual. O app **já gera
-  EAN13 e Code39** (`ean13Svg`, `shared/utils.js`) e já traz
+- ~~**Inventário rotativo (contagem cíclica)**~~ — **FEITO** (`d33fced`).
+  Aba "📋 Inventário Rotativo" em `estoque.html`, com contagem CEGA (o
+  esperado só aparece depois de informar o contado), rodízio por "há mais
+  tempo sem contar + posição ocupada", e ajuste que rateia falta em ordem de
+  validade sem tocar o saldo agregado.
+- **Numeração de rua é GLOBAL, não escopada por área** ⚠ **bloqueia povoar as
+  outras áreas** — `estrutura_ruas/{codigoRua}` e o código do endereço é
+  `rua.nivel.predio`, sem prefixo de área. Hoje as 236 posições estão todas
+  em GALPÃO; as outras 4 áreas configuradas (FÁBRICA, RÓTULOS, MATÉRIA PRIMA,
+  MATERIAL DE USO E CONSUMO) não têm nenhuma. Quando forem cadastradas, a
+  "Rua 1 da fábrica" vai colidir com a "Rua 1 do galpão" (`estoque.html`
+  recusa com "Já existe uma rua com esse número") e será preciso numerar a
+  fábrica como 7, 8, 9… — confuso pra quem está no chão chamando de "rua 1".
+  **Este é o momento mais barato de decidir**: `estoque_lotes` está vazio e
+  nenhuma etiqueta de endereço foi impressa ainda. Opções: (a) prefixar o
+  código com a área (`GAL-1.2.3`, `FAB-1.2.3`), (b) escopar a chave por área
+  (`estrutura_ruas/{area}/{rua}`), ou (c) aceitar numeração contínua e
+  documentar. Depois de imprimir etiqueta e endereçar material, mudar isso
+  custa recadastrar tudo.
+- **Leitura de código de barras / coletor** — endereçamento, separação e
+  contagem são 100% digitados, a maior fonte de erro em WMS manual. O app
+  **já gera EAN13 e Code39** (`ean13Svg`, `shared/utils.js`) e já traz
   `shared/qrcode-lib.js` — etiqueta de endereço + leitura pela câmera do
-  celular é um passo curto a partir do que existe.
-- **Endereço sem atributos** — o schema é `codigo, rua, nivel, predio, area,
-  ativo` (+ os campos de bloqueio adicionados em `a8f5fc0`). Falta
-  capacidade (peso/volume/paletes), tipo (picking × pulmão) e unidade de
-  armazenagem. Sem capacidade não há como o sistema avisar que a posição não
-  comporta — hoje só se descobre no chão.
+  celular é um passo curto a partir do que existe. Adiado explicitamente pelo
+  usuário nesta rodada ("só o coletor que eu colocaria no repo de melhorias").
+- **Tipo de posição (picking × pulmão)** — adiado explicitamente pelo usuário:
+  *"não separar por ora, quero primeiro começar a operação, depois
+  aperfeiçoar"*. Quando retomar, o dado real já favorece derivar do nível em
+  vez de configurar 236 posições: o galpão tem 88 posições no nível 1 (chão,
+  picking natural) e 148 nos níveis 2 e 3 (porta-palete, pulmão). É
+  pré-requisito de reabastecimento e de otimização de percurso.
+- **Capacidade da posição** — adiado explicitamente pelo usuário ("deixar pra
+  depois"). Sem capacidade não há como o sistema avisar que a posição não
+  comporta — hoje só se descobre no chão. Se/quando entrar, o desenho de
+  menor atrito é **por rua** (6 números a preencher, herdados pelas
+  posições), não por posição. Cuidado com a lição do campo `ativo`: campo que
+  ninguém preenche é campo morto.
 - **Reabastecimento (pulmão → picking)** — depende do tipo de endereço
   acima. É o que evita o separador subir no porta-palete pra buscar item de
   giro alto.
+- **Contagem por papel de armazém** — a aba de Inventário mora em
+  `estoque.html`, que é admin/pcp. Quem conta fisicamente no galpão tende a
+  ser `production`. Abrir a contagem pra esse papel exige mexer em três
+  coisas juntas, senão vira permissão pela metade: `pageAccessRules` de
+  `estoque.html`, e o `.write` de `contagens_inventario` **e** de
+  `enderecos_estoque` (a contagem grava `ultimaContagemEm` na posição, no
+  mesmo update atômico). Faz par natural com o coletor.
 - **Onda de separação (wave picking)** — a Separação hoje é uma OP por vez.
   TOTVS/SAP agrupam N ordens numa onda e ordenam por percurso no armazém.
   Com o galpão a 800m da fábrica, agrupar as OPs do dia numa viagem só é
