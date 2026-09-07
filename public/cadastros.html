@@ -3111,8 +3111,36 @@ document.addEventListener('DOMContentLoaded', function() {
       span.title = (ativo ? 'Ativo' : 'Inativo') + ' -- clique pra ' + (ativo ? 'desativar' : 'ativar');
       var nm = document.createElement('span');
       nm.className = 'tag-text';
-      nm.textContent = a.nome;
+      // A SIGLA prefixa o código de toda posição desta área (GAL-1.2.3) e a
+      // chave da rua (GAL-1) -- é o que permite cada área ter a sua "rua 1"
+      // e o que faz uma etiqueta dizer em que prédio ela está. Área sem
+      // sigla não consegue gerar posições (estoque.html recusa), então
+      // mostrar isso aqui é o aviso de que falta configurar.
+      nm.textContent = a.nome + (a.sigla ? ' [' + a.sigla + ']' : ' [sem sigla]');
+      if (!a.sigla) nm.style.color = 'var(--danger)';
       span.appendChild(nm);
+      // Botão pra definir/alterar a sigla, separado do toggle de ativo
+      var btnSigla = document.createElement('button');
+      btnSigla.className = 'tag-btn';
+      btnSigla.textContent = '🏷';
+      btnSigla.title = 'Definir a sigla usada no código das posições';
+      btnSigla.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var atual = a.sigla || '';
+        var nova = prompt('Sigla da área "' + a.nome + '" (2 a 5 letras/números).\n\n' +
+          'Ela prefixa o código de todas as posições desta área -- ex: ' + (atual || 'GAL') + '-1.2.3.\n' +
+          'Vai para a etiqueta impressa, então mudar depois exige reimprimir.', atual);
+        if (nova === null) return;
+        nova = String(nova).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (nova.length < 2 || nova.length > 5) { showAlert('A sigla precisa ter de 2 a 5 letras/números.', 'danger'); return; }
+        var duplicada = areasEndereco.some(function(x, j) { return j !== i && x.sigla === nova; });
+        if (duplicada) { showAlert('Já existe outra área com a sigla ' + nova + '.', 'danger'); return; }
+        areasEndereco[i] = Object.assign({}, a, { sigla: nova });
+        db.ref('config/areasEndereco').set(areasEndereco).then(function() {
+          showAlert('Sigla da área ' + a.nome + ' definida como ' + nova + '.', 'success');
+        }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+      });
+      span.appendChild(btnSigla);
       span.addEventListener('click', function() {
         areasEndereco[i] = Object.assign({}, a, { ativo: !ativo });
         db.ref('config/areasEndereco').set(areasEndereco).then(function() {
@@ -3149,7 +3177,7 @@ document.addEventListener('DOMContentLoaded', function() {
     areasEndereco.push({ nome: nome, ativo: true, padrao: false });
     db.ref('config/areasEndereco').set(areasEndereco).then(function() {
       input.value = '';
-      showAlert('Área adicionada.', 'success');
+      showAlert('Área adicionada. Defina a SIGLA dela (botão 🏷) antes de criar ruas -- é ela que prefixa o código das posições.', 'success');
     }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
   }
 

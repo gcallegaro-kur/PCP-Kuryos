@@ -1176,36 +1176,55 @@ function opcoesAreaSelect(valorAtual) {
 
 function renderRuasTable() {
   var tbody = document.getElementById('ruasBody-end');
-  var entries = Object.values(estruturaRuas).sort(function(a, b) { return (a.codigoRua || 0) - (b.codigoRua || 0); });
+  // Agrupa por área e depois por número -- com várias áreas, ordenar só pelo
+  // número misturaria "rua 1 do galpão" com "rua 1 da fábrica" na tabela.
+  var entries = Object.keys(estruturaRuas).map(function(k) {
+    return { chave: k, r: estruturaRuas[k] };
+  }).filter(function(x) { return !!x.r; }).sort(function(a, b) {
+    var aa = a.r.area || '', ba = b.r.area || '';
+    if (aa !== ba) return aa < ba ? -1 : 1;
+    return (a.r.codigoRua || 0) - (b.r.codigoRua || 0);
+  });
   if (!entries.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma rua cadastrada ainda.</td></tr>';
     return;
   }
-  tbody.innerHTML = entries.map(function(r) {
+  tbody.innerHTML = entries.map(function(x) {
+    var r = x.r;
     var totalPosicoes = (r.niveis || 0) * (r.predios || 0);
-    var geradas = Object.values(enderecosEstoque).filter(function(e) { return e.rua === r.codigoRua; }).length;
+    // conta as posições DESTA rua nesta área -- só o número da rua não basta
+    // mais, agora que cada área tem a sua
+    var geradas = Object.values(enderecosEstoque).filter(function(e) {
+      return e.rua === r.codigoRua && (e.sigla || null) === (r.sigla || null);
+    }).length;
     return '<tr>' +
-      '<td>' + escapeHtml(String(r.codigoRua)) + '</td>' +
+      '<td><b>' + escapeHtml(x.chave) + '</b></td>' +
       '<td>' + escapeHtml(r.area || '') + '</td>' +
       '<td>' + escapeHtml(String(r.niveis || 0)) + '</td>' +
       '<td>' + escapeHtml(String(r.predios || 0)) + '</td>' +
       '<td>' + geradas + ' de ' + totalPosicoes + '</td>' +
-      '<td><button class="btn btn-ghost btn-sm r-editar" data-rua="' + escapeAttr(r.codigoRua) + '">Editar</button></td>' +
+      '<td><button class="btn btn-ghost btn-sm r-editar" data-rua="' + escapeAttr(x.chave) + '">Editar</button></td>' +
     '</tr>';
   }).join('');
   tbody.querySelectorAll('.r-editar').forEach(function(btn) {
-    btn.addEventListener('click', function() { abrirModalRua(parseInt(btn.getAttribute('data-rua'), 10)); });
+    btn.addEventListener('click', function() { abrirModalRua(btn.getAttribute('data-rua')); });
   });
 }
 
-function abrirModalRua(codigoRua) {
-  editandoCodigoRua = codigoRua != null ? codigoRua : null;
-  var r = codigoRua != null ? estruturaRuas[codigoRua] : null;
-  document.getElementById('modalRuaTitle').textContent = r ? ('Editar Rua ' + r.codigoRua) : 'Nova Rua';
+// `chave` é a chave composta (ex: 'GAL-1'), ou null pra rua nova.
+function abrirModalRua(chave) {
+  editandoCodigoRua = chave != null ? chave : null;
+  var r = chave != null ? estruturaRuas[chave] : null;
+  document.getElementById('modalRuaTitle').textContent = r ? ('Editar Rua ' + chave) : 'Nova Rua';
   document.getElementById('rCodigoRua-end').value = r ? r.codigoRua : '';
   document.getElementById('rCodigoRua-end').disabled = !!r;
-  document.getElementById('rCodigoRuaHint-end').textContent = r ? 'O número da rua não pode ser alterado depois de criada -- crie uma nova rua se precisar de outro número.' : '';
+  document.getElementById('rCodigoRuaHint-end').textContent = r
+    ? 'Número e área não podem ser alterados depois de criada -- o código das posições depende dos dois. Crie outra rua se precisar.'
+    : 'O número é único DENTRO da área: cada área pode ter a sua rua 1.';
   document.getElementById('rArea-end').innerHTML = opcoesAreaSelect(r ? r.area : '');
+  // Área também trava na edição: mudar a área mudaria a sigla e, com ela, o
+  // código de todas as posições já geradas -- na prática seria recriar a rua.
+  document.getElementById('rArea-end').disabled = !!r;
   document.getElementById('rNiveis-end').value = r ? r.niveis : 1;
   document.getElementById('rPredios-end').value = r ? r.predios : 1;
   document.getElementById('modalRuaBg').classList.add('open');
@@ -1213,7 +1232,16 @@ function abrirModalRua(codigoRua) {
 function fecharModalRua() {
   document.getElementById('modalRuaBg').classList.remove('open');
   document.getElementById('rCodigoRua-end').disabled = false;
+  document.getElementById('rArea-end').disabled = false;
   editandoCodigoRua = null;
+}
+
+// Sigla da área, de config/areasEndereco. É ela que prefixa o código da
+// posição (GAL-1.2.3) e a chave da rua (GAL-1) -- sem sigla cadastrada, a
+// área não pode gerar posições, senão nasceriam endereços ambíguos.
+function siglaDaArea(nomeArea) {
+  var a = (areasEnderecoAtivas || []).filter(function(x) { return x.nome === nomeArea; })[0];
+  return (a && a.sigla) || null;
 }
 
 function salvarRuaEGerar() {
@@ -1224,20 +1252,29 @@ function salvarRuaEGerar() {
   if (!codigoRua || codigoRua < 1) { showAlert('Informe um número de rua válido.', 'danger'); return; }
   if (!area) { showAlert('Selecione a área da rua.', 'danger'); return; }
   if (!niveis || niveis < 1 || !predios || predios < 1) { showAlert('Níveis e prédios precisam ser pelo menos 1.', 'danger'); return; }
-  if (editandoCodigoRua == null && estruturaRuas[codigoRua]) {
-    showAlert('Já existe uma rua com esse número.', 'danger');
+  var sigla = siglaDaArea(area);
+  if (!sigla) {
+    showAlert('A área "' + area + '" não tem sigla cadastrada. Defina a sigla em Cadastros › Áreas de Endereço antes de criar ruas nela -- é ela que prefixa o código da posição.', 'danger');
+    return;
+  }
+  // Unicidade agora é POR ÁREA: cada área tem sua própria "Rua 1". Antes o
+  // número era global e a fábrica não conseguiria ter uma rua 1 porque o
+  // galpão já tinha.
+  var chave = chaveRua(sigla, codigoRua);
+  if (editandoCodigoRua == null && estruturaRuas[chave]) {
+    showAlert('Já existe uma rua ' + codigoRua + ' na área ' + area + '.', 'danger');
     return;
   }
 
-  var updates = gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosEstoque, ocupantesPorEndereco, currentUserNome());
-  updates['estrutura_ruas/' + codigoRua] = {
-    codigoRua: codigoRua, area: area, niveis: niveis, predios: predios,
+  var updates = gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosEstoque, ocupantesPorEndereco, currentUserNome(), sigla);
+  updates['estrutura_ruas/' + chave] = {
+    codigoRua: codigoRua, area: area, sigla: sigla, niveis: niveis, predios: predios,
     atualizadoEm: new Date().toISOString(), atualizadoPor: currentUserNome()
   };
 
   db.ref().update(updates).then(function() {
     fecharModalRua();
-    showAlert('Rua salva -- ' + (niveis * predios) + ' posições geradas/atualizadas.', 'success');
+    showAlert('Rua ' + chave + ' salva -- ' + (niveis * predios) + ' posições geradas/atualizadas.', 'success');
   }).catch(function(err) { showAlert('Erro ao salvar rua: ' + err.message, 'danger'); });
 }
 
@@ -1251,7 +1288,10 @@ function renderPosicoesTableEnd() {
   var entries = Object.entries(enderecosEstoque).filter(function(entry) {
     var e = entry[1];
     if (q && normalizeSearch(e.codigo).indexOf(q) === -1) return false;
-    if (filtroRua && String(e.rua) !== filtroRua) return false;
+    // filtroRua é a chave composta (GAL-1) -- compara contra a chave da rua
+    // desta posição, não só o número, senão "Rua 1" traria as posições de
+    // todas as áreas que têm uma rua 1.
+    if (filtroRua && chaveRua(e.sigla, e.rua) !== filtroRua) return false;
     if (filtroArea && e.area !== filtroArea) return false;
     var ocupantes = ocupantesPorEndereco[entry[0]] || 0;
     if (filtroOcupacao === 'ocupadas' && ocupantes === 0) return false;
@@ -1809,9 +1849,20 @@ function mostrarDetalheEndereco(enderecoKey, codigo) {
 function refreshFiltroRuaSelect() {
   var sel = document.getElementById('filterRua-end');
   var atual = sel.value;
-  var ruas = Object.keys(estruturaRuas).map(Number).sort(function(a, b) { return a - b; });
-  sel.innerHTML = '<option value="">Todas as ruas</option>' + ruas.map(function(r) {
-    return '<option value="' + r + '"' + (String(r) === atual ? ' selected' : '') + '>Rua ' + r + '</option>';
+  // Lista pela CHAVE COMPOSTA (GAL-1, FAB-1): com o número puro, escolher
+  // "Rua 1" no filtro traria posições de todas as áreas que têm uma rua 1.
+  // O value continua sendo o número porque é por ele que renderPosicoesTableEnd
+  // filtra (e.rua), mas o rótulo mostra a área -- e a opção carrega a sigla
+  // pra o filtro conseguir distinguir.
+  var chaves = Object.keys(estruturaRuas).filter(function(k) { return !!estruturaRuas[k]; })
+    .sort(function(a, b) {
+      var ra = estruturaRuas[a], rb = estruturaRuas[b];
+      var aa = ra.area || '', ba = rb.area || '';
+      if (aa !== ba) return aa < ba ? -1 : 1;
+      return (ra.codigoRua || 0) - (rb.codigoRua || 0);
+    });
+  sel.innerHTML = '<option value="">Todas as ruas</option>' + chaves.map(function(k) {
+    return '<option value="' + escapeAttr(k) + '"' + (k === atual ? ' selected' : '') + '>Rua ' + escapeHtml(k) + '</option>';
   }).join('');
 }
 function refreshFiltroAreaSelect() {

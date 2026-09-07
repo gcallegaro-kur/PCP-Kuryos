@@ -1093,19 +1093,46 @@ function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
 // encolhe (níveis/prédios reduzidos), desde que estejam vazias -- senão
 // "Posições geradas" ficava contando pra sempre sobra de uma configuração
 // antiga.
-function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExistentes, ocupantesPorEndereco, autor) {
+// Monta o código de uma posição a partir da sigla da área + rua/nível/prédio.
+// Fica numa função só porque 4 lugares diferentes montavam essa string à mão
+// (geração de posições, mapa por rua, planta baixa em 2 pontos) -- e um
+// divergir dos outros significaria a tela desenhar posições que não existem.
+//
+// A sigla entrou porque o número da rua era GLOBAL: com as 236 posições todas
+// no galpão isso não incomodava, mas ao cadastrar as outras áreas a "Rua 1 da
+// fábrica" colidiria com a "Rua 1 do galpão". O prefixo resolve os dois
+// problemas de uma vez -- a colisão de chave (a chave deriva do código) e o
+// problema humano de uma etiqueta "1.2.3" não dizer em que prédio está.
+//
+// Sem sigla, devolve o formato antigo (`1.2.3`) -- mantém compatível
+// enquanto a migração não rodou e com qualquer dado legado.
+function montarCodigoEndereco(sigla, codigoRua, nivel, predio) {
+  return (sigla ? sigla + '-' : '') + codigoRua + '.' + nivel + '.' + predio;
+}
+
+// Chave de uma rua em estrutura_ruas. Antes era só o número (global, colidia
+// entre áreas); agora é sigla+número, então cada área tem sua própria "Rua 1".
+function chaveRua(sigla, codigoRua) {
+  return (sigla ? sigla + '-' : '') + codigoRua;
+}
+
+function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExistentes, ocupantesPorEndereco, autor, sigla) {
   var updates = {};
   var agora = new Date().toISOString();
   for (var nivel = 1; nivel <= niveis; nivel++) {
     for (var predio = 1; predio <= predios; predio++) {
-      var codigo = codigoRua + '.' + nivel + '.' + predio;
+      var codigo = montarCodigoEndereco(sigla, codigoRua, nivel, predio);
       var key = sanitizeKey(codigo);
       var existente = enderecosExistentes[key];
       var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
       if (!existente) {
         updates['enderecos_estoque/' + key] = {
           codigo: codigo, rua: codigoRua, nivel: nivel, predio: predio, area: area,
-          ativo: true, geradoDe: codigoRua, criadoEm: agora, criadoPor: autor
+          // sigla guardada na própria posição: quem lê um endereço solto
+          // (movimento, lote, contagem) sabe a que área pertence sem ter que
+          // voltar em estrutura_ruas
+          sigla: sigla || null,
+          ativo: true, geradoDe: chaveRua(sigla, codigoRua), criadoEm: agora, criadoPor: autor
         };
       } else if (!ocupada && existente.area !== area) {
         updates['enderecos_estoque/' + key + '/area'] = area;
@@ -1124,6 +1151,12 @@ function gerarUpdatesPosicoesRua(codigoRua, area, niveis, predios, enderecosExis
   Object.keys(enderecosExistentes).forEach(function(key) {
     var e = enderecosExistentes[key];
     if (!e || e.rua !== codigoRua) return;
+    // Compara TAMBÉM a sigla: desde que o número da rua passou a ser por
+    // área, "rua 1" existe em mais de um lugar. Sem isto, encolher a rua 1
+    // do galpão apagaria as posições fora de tamanho da rua 1 da fábrica.
+    // `|| null` dos dois lados pra '' e undefined caírem no mesmo caso
+    // (dado legado, antes da migração de siglas).
+    if ((e.sigla || null) !== (sigla || null)) return;
     var foraDoNovoTamanho = e.nivel > niveis || e.predio > predios;
     if (!foraDoNovoTamanho) return;
     var ocupada = (ocupantesPorEndereco[key] || 0) > 0;
@@ -1152,7 +1185,7 @@ function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEnderec
     for (var nivel = niveis; nivel >= 1; nivel--) {
       var celulas = '';
       for (var predio = 1; predio <= predios; predio++) {
-        var codigo = r.codigoRua + '.' + nivel + '.' + predio;
+        var codigo = montarCodigoEndereco(r.sigla, r.codigoRua, nivel, predio);
         var key = sanitizeKey(codigo);
         var end = enderecosEstoque[key];
         var ocupantes = ocupantesPorEndereco[key] || 0;
@@ -1162,7 +1195,9 @@ function mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEnderec
       }
       linhasHtml += '<div class="mapa-nivel-row"><div class="mapa-nivel-label">N' + nivel + '</div>' + celulas + '</div>';
     }
-    return '<div class="mapa-rua" id="mapa-rua-' + escapeAttr(String(r.codigoRua)) + '"><div class="mapa-rua-titulo">Rua ' + escapeHtml(String(r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
+    // âncora pela CHAVE COMPOSTA -- é o que a planta baixa usa pra pular pra
+    // elevação da rua certa; com o número puro, duas áreas gerariam o mesmo id
+    return '<div class="mapa-rua" id="mapa-rua-' + escapeAttr(chaveRua(r.sigla, r.codigoRua)) + '"><div class="mapa-rua-titulo">Rua ' + escapeHtml(chaveRua(r.sigla, r.codigoRua)) + ' — ' + escapeHtml(r.area || '') + '</div><div class="mapa-grid-scroll"><div class="mapa-grid-rows">' + linhasHtml + '</div></div></div>';
   }).join('');
 }
 
@@ -1209,8 +1244,12 @@ function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndere
     var y = temPosicaoSalva ? r.layoutY : 0;
     if (!temPosicaoSalva) proximoXAuto += largura + GAP_AUTO;
     var estiloAttr = 'left:' + x + 'px;top:' + y + 'px;width:' + largura + 'px;height:' + altura + 'px';
-    var idAttr = 'planta-rua-' + escapeAttr(String(r.codigoRua));
-    var ruaAttr = escapeAttr(String(r.codigoRua));
+    // CHAVE COMPOSTA (sigla-rua), não só o número: é ela que a planta baixa
+    // usa pra gravar layoutX/layoutY em estrutura_ruas. Com o número puro,
+    // arrastar a rua 1 do galpão gravaria a posição na rua 1 da fábrica.
+    var chaveDaRua = chaveRua(r.sigla, r.codigoRua);
+    var idAttr = 'planta-rua-' + escapeAttr(chaveDaRua);
+    var ruaAttr = escapeAttr(chaveDaRua);
 
     // ── Visão POR NÍVEL: abre o bloco nas posições de palete daquele nível ──
     if (nivelFoco > 0) {
@@ -1224,7 +1263,7 @@ function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndere
       }
       var celulas = '';
       for (var p = 1; p <= predios; p++) {
-        var codigoPos = r.codigoRua + '.' + nivelFoco + '.' + p;
+        var codigoPos = montarCodigoEndereco(r.sigla, r.codigoRua, nivelFoco, p);
         var keyPos = sanitizeKey(codigoPos);
         var endPos = enderecosEstoque[keyPos];
         var ocupPos = ocupantesPorEndereco[keyPos] || 0;
@@ -1242,7 +1281,7 @@ function plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndere
     var totalPosicoes = 0, ocupadas = 0;
     for (var nivel = 1; nivel <= niveis; nivel++) {
       for (var predio = 1; predio <= predios; predio++) {
-        var key = sanitizeKey(r.codigoRua + '.' + nivel + '.' + predio);
+        var key = sanitizeKey(montarCodigoEndereco(r.sigla, r.codigoRua, nivel, predio));
         if (!enderecosEstoque[key]) continue; // não gerada ainda -- não conta nem como vaga nem ocupada
         totalPosicoes++;
         if (ocupantesPorEndereco[key] > 0) ocupadas++;
