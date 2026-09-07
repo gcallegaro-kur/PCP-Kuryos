@@ -871,6 +871,7 @@
         <input type="text" class="pedido-selector-busca" id="selPedidoBusca" placeholder="Buscar por ID ou produto..." autocomplete="off">
         <input type="hidden" id="selPedido">
       </span>
+      <button class="btn btn-primary btn-sm" id="btnGerarDoBom" disabled title="Selecione um pedido primeiro.">⚙ Gerar do BOM</button>
       <button class="btn btn-success btn-sm" id="btnNovoInsumo" disabled>+ Novo Insumo</button>
     </div>
 
@@ -1076,6 +1077,27 @@
     var item = selPedidoItems.find(function(it) { return it.key === key; });
     return item ? item.label : '';
   }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Dados de Fórmula/BOM -- achado da auditoria geral (2026-09-05): esta
+  // página, chamada "Matriz de Insumos", era a ÚNICA do sistema que não
+  // lia o BOM. Ela só abria programacao/pedidos/insumos, e pedia o nome do
+  // insumo digitado à mão ("Ex: Frascos 200ml, Rótulos frente...") junto
+  // com a quantidade -- enquanto o sistema JÁ sabe exatamente quais
+  // materiais cada SKU consome e em que quantidade, via
+  // explodirMateriaisNecessarios (shared/utils.js), que compras.html e
+  // form.html já usavam. Era redigitação pura de dado que já existia, e
+  // todo erro de digitação virava falta ou sobra de material.
+  // ═══════════════════════════════════════════════════════════════════
+  var allProdutosIns = {}, allFormulasIns = {}, allBomIns = {}, allMateriaisIns = {}, allEstoqueIns = {};
+  dbOnValue(db.ref('produtos'), function(snap) { allProdutosIns = snap.val() || {}; atualizarBotaoGerarBom(); });
+  dbOnValue(db.ref('formulas'), function(snap) { allFormulasIns = snap.val() || {}; atualizarBotaoGerarBom(); });
+  dbOnValue(db.ref('bom'), function(snap) { allBomIns = snap.val() || {}; atualizarBotaoGerarBom(); });
+  dbOnValue(db.ref('materiais'), function(snap) { allMateriaisIns = snap.val() || {}; });
+  // Estoque entra só como REFERÊNCIA visual (quanto já existe do material),
+  // sem nenhuma escrita -- é o primeiro passo pra necessidade líquida
+  // (bruta menos disponível), que é o que separa isto de um MRP de verdade.
+  dbOnValue(db.ref('estoque'), function(snap) { allEstoqueIns = snap.val() || {}; });
 
   // Listen to pedidos
   dbOnValue(db.ref('pedidos'), function(snap) {
@@ -1382,6 +1404,7 @@
     var key = document.getElementById('selPedido').value;
     currentPedKey = key || null;
     document.getElementById('btnNovoInsumo').disabled = !key;
+    atualizarBotaoGerarBom(); // reavalia se dá pra gerar do BOM pro pedido escolhido
 
     if (!key) {
       document.getElementById('pedidoInfo').className = 'ped-info';
@@ -1439,6 +1462,114 @@
     return { cls:'ins-pendente', label:'⏳ Pendente' };
   }
 
+  // Calcula o que o BOM/Fórmula do pedido selecionado exige, sem gravar
+  // nada. Devolve {ok, erro, itens[]} no mesmo formato de
+  // explodirMateriaisNecessarios. Usa o SALDO (total - produzido), não o
+  // total: insumo já consumido pelo que foi produzido não precisa ser
+  // comprado/separado de novo -- mesmo critério que compras.html usa.
+  // Resolve o produto pelo SKU atual OU por um SKU antigo (sku_historico),
+  // mesmo padrão que planejamento.html/horizonte.html já usam -- um produto
+  // renomeado não pode fazer a Matriz de Insumos parar de achar a Fórmula.
+  // Cada página tem a sua cópia dessa função hoje (não existe em
+  // shared/utils.js); aqui vai a versão mínima, sem duplicar mais lógica
+  // do que o necessário.
+  var skuHistoricoIns = {};
+  dbOnValue(db.ref('sku_historico'), function(snap) { skuHistoricoIns = snap.val() || {}; });
+  function produtoPorSkuIns(sku) {
+    if (!sku) return null;
+    if (allProdutosIns[sku]) return allProdutosIns[sku];
+    var atual = skuHistoricoIns[sku];
+    return atual && allProdutosIns[atual] ? allProdutosIns[atual] : null;
+  }
+
+  function calcularInsumosDoBom() {
+    var p = pedidosCache[currentPedKey];
+    if (!p) return { ok: false, erro: 'Selecione um pedido.' };
+    if (!p.sku) return { ok: false, erro: 'Este pedido não tem SKU definido -- sem SKU não dá pra achar a Fórmula/BOM.' };
+    var produto = produtoPorSkuIns(p.sku);
+    if (!produto) return { ok: false, erro: 'Produto "' + p.sku + '" não encontrado no cadastro de Produtos.' };
+    var achado = melhorFormulaDoProduto(p.sku, allFormulasIns);
+    if (!achado) return { ok: false, erro: 'Esse produto não tem Fórmula/BOM cadastrada -- cadastre em Cadastros › Fórmulas/BOM antes de gerar.' };
+    var formula = achado.registro;
+    var bom = allBomIns[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var saldo = Math.max((p.qtdTotal || 0) - (p.produzido || 0), 0);
+    if (!saldo) return { ok: false, erro: 'Este pedido não tem saldo em aberto (tudo já produzido).' };
+    var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
+    if (!calc.ok) return calc;
+    return { ok: true, itens: calc.itens, saldo: saldo, versao: formula.versao };
+  }
+
+  // Habilita/desabilita o botão conforme dá ou não pra gerar, e explica no
+  // title por que não dá -- botão desabilitado sem explicação é pior que
+  // botão que erra.
+  function atualizarBotaoGerarBom() {
+    var btn = document.getElementById('btnGerarDoBom');
+    if (!btn) return;
+    if (!currentPedKey) { btn.disabled = true; btn.title = 'Selecione um pedido primeiro.'; return; }
+    var r = calcularInsumosDoBom();
+    btn.disabled = !r.ok;
+    btn.title = r.ok
+      ? ('Gera ' + r.itens.length + ' insumo(s) a partir da Fórmula/BOM versão ' + r.versao + ' para o saldo de ' + fmtNum(r.saldo) + ' un.')
+      : r.erro;
+  }
+
+  // Gera/atualiza os insumos a partir do BOM.
+  // NUNCA apaga nem sobrescreve trabalho manual:
+  //  - casa com o que já existe por mpCodigo (ou, pra linhas antigas sem
+  //    código, pelo nome) e só ATUALIZA a quantidade necessária;
+  //  - qtdRecebida NUNCA é tocada -- é dado operacional de recebimento;
+  //  - insumo manual que não está no BOM continua na lista, intacto.
+  function gerarInsumosDoBom() {
+    var r = calcularInsumosDoBom();
+    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+
+    var existentesPorCodigo = {}, existentesPorNome = {};
+    Object.entries(insumosData).forEach(function(e) {
+      if (e[1].mpCodigo) existentesPorCodigo[e[1].mpCodigo] = e[0];
+      if (e[1].nome) existentesPorNome[normalizeSearch(e[1].nome)] = e[0];
+    });
+
+    var updates = {};
+    var criados = 0, atualizados = 0;
+    r.itens.forEach(function(it) {
+      var keyExistente = existentesPorCodigo[it.mpCodigo] || existentesPorNome[normalizeSearch(it.mpNome || '')];
+      var base = 'insumos/' + currentPedKey + '/';
+      if (keyExistente) {
+        // só a necessidade e a identificação -- qtdRecebida fica como está
+        updates[base + keyExistente + '/qtdNecessaria'] = it.quantidade;
+        updates[base + keyExistente + '/mpCodigo'] = it.mpCodigo;
+        updates[base + keyExistente + '/unidade'] = it.unidade || null;
+        updates[base + keyExistente + '/origemBom'] = it.origem || null;
+        atualizados++;
+      } else {
+        var novaKey = db.ref('insumos/' + currentPedKey).push().key;
+        updates[base + novaKey] = {
+          nome: it.mpNome || it.mpCodigo,
+          mpCodigo: it.mpCodigo,
+          qtdNecessaria: it.quantidade,
+          qtdRecebida: 0,
+          unidade: it.unidade || null,
+          origemBom: it.origem || null,
+          geradoEm: new Date().toISOString()
+        };
+        criados++;
+      }
+    });
+
+    if (!Object.keys(updates).length) { showAlert('Nada a gerar.', 'danger'); return; }
+    var btn = document.getElementById('btnGerarDoBom');
+    btn.disabled = true; btn.textContent = 'Gerando...';
+    db.ref().update(updates).then(function() {
+      btn.textContent = '⚙ Gerar do BOM';
+      atualizarBotaoGerarBom();
+      showAlert('Fórmula/BOM v' + r.versao + ' aplicada: ' + criados + ' insumo(s) criado(s), ' +
+        atualizados + ' atualizado(s). Quantidades recebidas não foram alteradas.', 'success');
+    }).catch(function(e) {
+      btn.disabled = false; btn.textContent = '⚙ Gerar do BOM';
+      showAlert('Erro ao gerar insumos: ' + e.message, 'danger');
+    });
+  }
+
   function renderInsumos() {
     var items = Object.entries(insumosData);
     var total=0, recebidos=0, parciais=0, pendentes=0;
@@ -1488,10 +1619,30 @@
 
       var iconChar = st==='recebido' ? '🟢' : st==='parcial' ? '⚡' : '🔴';
 
+      // Selo do material vinculado + saldo em estoque. Só aparece pra insumo
+      // vindo do BOM (tem mpCodigo) -- insumo digitado à mão continua exibido
+      // exatamente como antes, sem selo nenhum.
+      var selo = '';
+      if (item.mpCodigo) {
+        var estItem = allEstoqueIns[sanitizeKey(item.mpCodigo)];
+        var saldoEst = estItem ? (estItem.saldoAtual || 0) : null;
+        var empenhado = estItem ? (estItem.saldoEmpenhado || 0) : 0;
+        var disponivel = saldoEst != null ? saldoEst - empenhado : null;
+        var falta = (item.qtdNecessaria || 0) - (disponivel || 0);
+        var corEstoque = disponivel == null ? 'var(--muted)' : (falta > 0 ? 'var(--danger)' : 'var(--success)');
+        var txtEstoque = disponivel == null
+          ? 'sem registro de estoque'
+          : ('disp. ' + fmtNum(disponivel) + (empenhado ? ' (empenhado ' + fmtNum(empenhado) + ')' : '') + (falta > 0 ? ' · faltam ' + fmtNum(falta) : ''));
+        selo = '<span title="Material ' + escHtml(item.mpCodigo) + ' vinculado pelo BOM" ' +
+          'style="font-size:10px;font-weight:700;color:var(--primary);background:var(--primary-light);padding:1px 5px;border-radius:3px;margin-left:6px">' +
+          escHtml(item.mpCodigo) + '</span>' +
+          '<span style="font-size:10px;color:' + corEstoque + ';margin-left:6px">' + escHtml(txtEstoque) + '</span>';
+      }
+
       return '<div class="insumo-item" id="ins-' + key + '">' +
         '<div class="insumo-row">' +
           '<span style="font-size:16px">' + iconChar + '</span>' +
-          '<span class="ins-nome">' + escHtml(item.nome||'—') + '</span>' +
+          '<span class="ins-nome">' + escHtml(item.nome||'—') + selo + '</span>' +
           '<div class="ins-qtd-block">' +
             '<span class="ins-qtd-rec">' + fmtNum(item.qtdRecebida||0) + '</span>' +
             '<span class="ins-qtd-sep">/</span>' +
@@ -1564,6 +1715,7 @@
 
   // ── Modal: Novo / Editar Insumo ──────────────────────────────────
   document.getElementById('btnNovoInsumo').addEventListener('click', openNewInsumoModal);
+  document.getElementById('btnGerarDoBom').addEventListener('click', gerarInsumosDoBom);
   function openNewInsumoModal() { openEditInsumoModal(null); }
 
   function openEditInsumoModal(key) {
