@@ -1230,6 +1230,29 @@ function emitirOP() {
     showAlert('Este produto não tem "Prazo de Validade" cadastrado -- a OP não pode ser emitida sem data de validade. Corrija em Cadastros > Produtos > Parâmetros de Lote antes de emitir.', 'danger');
     return;
   }
+  // Unidades por caixa e peso por caixa: obrigatórios pra emitir (decisão do
+  // usuário). Não é burocracia -- são os dois números que a expedição usa
+  // pra calcular a quantidade e a carga que vão pra NOTA FISCAL.
+  // Motivo concreto: no histórico de expedição, 32 SKUs tinham o múltiplo de
+  // caixa da planilha divergindo do cadastro (WKBM0001: 48 na planilha x 72
+  // no cadastro, em 438 expedições), e o peso por caixa não existia no
+  // cadastro -- variando até 7 valores diferentes pro mesmo SKU na planilha.
+  // Travar aqui é o que impede a OP nascer sem os dados que a expedição vai
+  // precisar depois, quando já for tarde pra perguntar.
+  // AVISO, ainda não trava -- de propósito, e é temporário.
+  // Hoje 375 de 375 produtos ficariam bloqueados (o campo de peso acabou de
+  // ser criado e 138 produtos também não têm Un./Caixa), então travar agora
+  // pararia a emissão de OP da fábrica inteira. A trava entra quando o
+  // cadastro estiver preenchido -- é só transformar este confirm num return.
+  var faltando = [];
+  if (!(parseInt(produtoSelecionado.unCx) > 0)) faltando.push('Unidades por Caixa');
+  if (!(parseFloat(produtoSelecionado.kgCaixa) > 0)) faltando.push('Peso por Caixa (kg)');
+  if (faltando.length) {
+    if (!confirm('⚠ Este produto está sem ' + faltando.join(' e ') + ' no cadastro.\n\n' +
+        'Esses números geram a quantidade e a carga da nota fiscal na expedição. ' +
+        'Em breve eles passam a ser obrigatórios pra emitir OP.\n\n' +
+        'Corrija em Cadastros › Produtos › Embalagem.\n\nEmitir mesmo assim?')) return;
+  }
   var erroMateriais = validarMateriaisConsumo();
   if (erroMateriais) { showAlert(erroMateriais, 'danger'); return; }
   // Achado do usuário: emitir sem vincular tem que ser exceção de

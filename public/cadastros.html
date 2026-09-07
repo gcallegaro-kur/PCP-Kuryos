@@ -781,10 +781,22 @@
           </div>
 
           <div class="tab-panel" id="tab-prod-embal">
+            <div class="section-note">
+              <b>Un./Caixa</b> e <b>Peso por Caixa</b> são obrigatórios para emitir OP deste
+              produto. São os dois números que a expedição usa para calcular a quantidade e a
+              carga que vão para a nota fiscal — hoje eles são digitados à mão na planilha, e é
+              de onde vêm os erros de emissão.
+            </div>
             <div class="form-grid">
               <div class="form-group">
-                <label>Un. / Caixa</label>
+                <label>Un. / Caixa *</label>
                 <input type="number" id="fUnCx-prod" min="1" step="1" placeholder="Ex: 12">
+                <div class="field-hint" id="unCxHint-prod"></div>
+              </div>
+              <div class="form-group">
+                <label>Peso por Caixa (kg) *</label>
+                <input type="number" id="fKgCaixa-prod" min="0" step="any" placeholder="Ex: 8.4">
+                <div class="field-hint">Caixa cheia, como vai no caminhão. Multiplica pelo nº de caixas para dar a carga.</div>
               </div>
               <div class="form-group">
                 <label>Qtd. Lote Padrão (unidades)</label>
@@ -3617,6 +3629,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fSubcategoria-prod').value = p.subcategoria || '';
 
     document.getElementById('fUnCx-prod').value = p.unCx || '';
+    document.getElementById('fKgCaixa-prod').value = p.kgCaixa || '';
     document.getElementById('fLotePadrao-prod').value = p.lotePadrao || '';
     updateCalcCaixas();
 
@@ -3713,6 +3726,10 @@ document.addEventListener('DOMContentLoaded', function() {
       categoria: document.getElementById('fCategoria-prod').value.trim(),
       subcategoria: document.getElementById('fSubcategoria-prod').value.trim(),
       unCx: parseInt(document.getElementById('fUnCx-prod').value) || 0,
+      // Peso da caixa cheia. Junto com unCx, é o que a expedição usa pra
+      // calcular quantidade e carga da nota fiscal -- os dois são exigidos
+      // na emissão da OP (emitir_op.html).
+      kgCaixa: parseFloat(document.getElementById('fKgCaixa-prod').value) || 0,
       lotePadrao: parseInt(document.getElementById('fLotePadrao-prod').value) || 0,
       msAnvisa: document.getElementById('fMsAnvisa-prod').value.trim(),
       lp: parseFloat(document.getElementById('fLp-prod').value) || 0,

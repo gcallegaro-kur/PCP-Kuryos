@@ -1714,7 +1714,7 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
     return Promise.resolve({ ok: false, erro: 'Faltam dados do laudo.' });
   }
   // Decisões válidas (spec do CQ, 7.3). LIBERADO_EXPEDICAO é o equivalente
-  // de LIBERADO para produto acabado -- a liberação de palete do CK-7. Quem
+  // de LIBERADO para produto acabado -- o formulário "Liberação de Palete". Quem
   // chama escolhe conforme o itemTipo do lote; a função aceita as duas
   // porque a mecânica (transação, laudo, movimento) é idêntica.
   var DECISOES = { LIBERADO: 1, LIBERADO_EXPEDICAO: 1, REPROVADO: 1, APROVADO_CONCESSAO: 1, RETIDO: 1 };
@@ -1781,7 +1781,7 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// PRODUTO ACABADO — conferência da Logística e liberação de palete (CK-7)
+// PRODUTO ACABADO — conferência da Logística e "Liberação de Palete"
 // ══════════════════════════════════════════════════════════════════════
 
 // Conferência da Logística: a produção declarou X, a Logística conta o que
@@ -1790,7 +1790,8 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
 // não captura, e é sinal de perda, de erro de contagem ou de palete
 // incompleto.
 // Depois de conferido o palete vai pra QUARENTENA (aguardando o CQ), não
-// direto pra disponível: a spec do CQ trata liberação de palete como CK-7.
+// direto pra disponível: quem libera palete é o formulário "Liberação de
+// Palete", da Qualidade.
 function conferirPaletePA(dbRef, sku, loteKey, qtdConferida, autor, obs) {
   if (!sku || !loteKey || qtdConferida == null || qtdConferida < 0) {
     return Promise.resolve({ ok: false, erro: 'Informe a quantidade conferida.' });
