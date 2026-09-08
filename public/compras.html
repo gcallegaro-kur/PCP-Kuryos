@@ -461,6 +461,25 @@
     <div class="modal-body">
       <div id="fiscalContexto" class="section-note" style="margin-bottom:14px"></div>
 
+      <!-- Preço e quantidade também AQUI, não só na grade. Eles estavam só
+           como texto no contexto, o que obrigava a fechar o modal, editar na
+           grade e reabrir pra ajustar os dois campos mais importantes do
+           orçamento (achado do usuário). Os dois lugares gravam no mesmo
+           registro e ficam em sincronia. -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Preço unitário *</label>
+          <input type="number" id="fiscalPreco" min="0" step="any" placeholder="R$ por unidade">
+        </div>
+        <div class="form-group">
+          <label>Quantidade cotada * <span id="fiscalQtdUnidade" style="font-weight:400;text-transform:none"></span></label>
+          <input type="number" id="fiscalQtd" min="0" step="any">
+          <div class="field-hint" id="fiscalQtdPedida"></div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin:4px 0 14px"></div>
+
       <div class="form-grid">
         <div class="form-group">
           <label>% faturado em NF</label>
@@ -1838,10 +1857,13 @@ function dataEntregaHtml(prazoDias) {
 
 /* ── Modal de impostos do item ── */
 var fiscalAlvo = null; // { procKey, cKey, itemKey }
+// Percentuais: validados em 0-100.
 var FISCAL_CAMPOS = [
   ['fiscalPctNf', 'pctNf'], ['fiscalDesconto', 'descontoPct'], ['fiscalIpi', 'pctIpi'],
   ['fiscalIcmsSt', 'pctIcmsSt'], ['fiscalIcms', 'pctIcms'], ['fiscalIss', 'pctIss']
 ];
+// Valores absolutos: só não podem ser negativos.
+var FISCAL_CAMPOS_VALOR = [['fiscalPreco', 'precoUnit'], ['fiscalQtd', 'qtdCotada']];
 
 function abrirModalFiscal(procKey, cKey, itemKey) {
   var p = allProcessosCotacao[procKey];
@@ -1854,13 +1876,17 @@ function abrirModalFiscal(procKey, cKey, itemKey) {
   var nomeForn = c.fornecedorKey
     ? ((allFornecedores[c.fornecedorKey] && (allFornecedores[c.fornecedorKey].nomeFantasia || allFornecedores[c.fornecedorKey].razaoSocial)) || c.fornecedorKey)
     : (c.nomeAvulso || cKey);
+  var un = it.unidade || '';
   document.getElementById('fiscalContexto').innerHTML =
     '<b>' + escapeHtml(it.materialCodigo || '') + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
-    '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>' +
-    ' · Preço: ' + (resp.precoUnit != null ? fmtBRL(resp.precoUnit) : '—') +
-    ' · Qtd cotada: ' + (resp.qtdCotada != null ? fmtNum(resp.qtdCotada) : '—');
+    '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>';
+  // Unidade ao lado da quantidade: sem ela, "10.000" não diz se são
+  // unidades, quilos ou litros -- e é o número que multiplica o preço.
+  document.getElementById('fiscalQtdUnidade').textContent = un ? '(' + un + ')' : '';
+  document.getElementById('fiscalQtdPedida').textContent =
+    it.qtd != null ? 'Pedido: ' + fmtNum(it.qtd) + (un ? ' ' + un : '') : '';
 
-  FISCAL_CAMPOS.forEach(function(par) {
+  FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).forEach(function(par) {
     document.getElementById(par[0]).value = resp[par[1]] != null ? resp[par[1]] : '';
   });
   atualizarMemoriaFiscal();
@@ -1875,11 +1901,13 @@ function atualizarMemoriaFiscal() {
   var p = allProcessosCotacao[fiscalAlvo.procKey] || {};
   var c = (p.fornecedoresConvidados || {})[fiscalAlvo.cKey] || {};
   var resp = Object.assign({}, (c.respostaItens || {})[fiscalAlvo.itemKey] || {});
-  FISCAL_CAMPOS.forEach(function(par) {
+  FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).forEach(function(par) {
     var v = document.getElementById(par[0]).value;
     resp[par[1]] = v === '' ? null : parseFloat(v);
   });
   var calc = calcularCustoItemCotacao(resp, 0);
+  var itAtual = ((allProcessosCotacao[fiscalAlvo.procKey] || {}).itens || {})[fiscalAlvo.itemKey] || {};
+  var unAtual = itAtual.unidade || '';
   var avisos = cotacaoItemInconsistencias(resp);
   var linha = function(rot, val, sinal) {
     return '<div style="display:flex;justify-content:space-between;gap:12px"><span>' + rot + '</span><span style="font-variant-numeric:tabular-nums">' + (sinal || '') + fmtBRL(val) + '</span></div>';
@@ -1888,6 +1916,9 @@ function atualizarMemoriaFiscal() {
     ? '<div class="field-hint" style="margin-top:6px">O frete FOB de ' + fmtBRL(c.frete.valor) + ' é rateado entre os itens deste fornecedor e entra no custo da grade — não aparece aqui.</div>'
     : (c.frete && c.frete.tipo === 'CIF' ? '<div class="field-hint" style="margin-top:6px">Frete CIF: já está no preço do fornecedor, não soma.</div>' : '');
   document.getElementById('fiscalMemoriaCorpo').innerHTML =
+    '<div class="field-hint" style="margin:0 0 5px">' +
+      (calc.qtd > 0 ? fmtNum(calc.qtd) + (unAtual ? ' ' + escapeHtml(unAtual) : '') + ' × ' + fmtBRL(calc.preco) : 'Informe preço e quantidade') +
+    '</div>' +
     linha('Bruto (preço × qtd)', calc.bruto) +
     (calc.desconto ? linha('Desconto', calc.desconto, '− ') : '') +
     linha('<b>Líquido</b>', calc.liquido) +
@@ -1899,7 +1930,9 @@ function atualizarMemoriaFiscal() {
     (calc.creditoIcms ? linha('Crédito de ICMS', calc.creditoIcms, '− ') : '') +
     '<div style="border-top:1px solid var(--border);margin:6px 0"></div>' +
     linha('<b>Custo total (sem frete)</b>', calc.custoTotal) +
-    (calc.custoUnitario != null ? linha('<b>Custo unitário</b>', calc.custoUnitario) : '<div class="field-hint">Custo unitário: informe preço e quantidade.</div>') +
+    (calc.custoUnitario != null
+      ? linha('<b>Custo por ' + escapeHtml(unAtual || 'unidade') + '</b>', calc.custoUnitario)
+      : '<div class="field-hint">Custo unitário: informe preço e quantidade.</div>') +
     freteAviso +
     (avisos.length ? '<div class="field-hint" style="color:var(--warning);margin-top:6px">⚠ ' + escapeHtml(avisos.join('; ')) + '</div>' : '');
 }
@@ -1912,15 +1945,25 @@ function fecharModalFiscal() {
 function salvarFiscal() {
   if (!fiscalAlvo) return;
   var updates = {};
-  var invalido = null;
+  var base = 'processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey +
+             '/respostaItens/' + fiscalAlvo.itemKey + '/';
+  var invalido = null, invalidoValor = null;
   FISCAL_CAMPOS.forEach(function(par) {
     var v = document.getElementById(par[0]).value;
     var num = v === '' ? null : parseFloat(v);
     if (num != null && (isNaN(num) || num < 0 || num > 100)) invalido = par[1];
-    updates['processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey +
-            '/respostaItens/' + fiscalAlvo.itemKey + '/' + par[1]] = num;
+    updates[base + par[1]] = num;
+  });
+  // Preço e quantidade são valores absolutos, não percentuais: o teto de
+  // 100 não se aplica (uma cotação de 10.000 unidades é normal).
+  FISCAL_CAMPOS_VALOR.forEach(function(par) {
+    var v = document.getElementById(par[0]).value;
+    var num = v === '' ? null : parseFloat(v);
+    if (num != null && (isNaN(num) || num < 0)) invalidoValor = par[1];
+    updates[base + par[1]] = num;
   });
   if (invalido) { showAlert('Percentual inválido em ' + invalido + ' — use um valor entre 0 e 100.', 'danger'); return; }
+  if (invalidoValor) { showAlert('Valor inválido em ' + (invalidoValor === 'precoUnit' ? 'preço unitário' : 'quantidade cotada') + ' — não pode ser negativo.', 'danger'); return; }
   updates['processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey + '/status'] = 'RESPONDIDO';
   db.ref().update(updates).then(function() {
     fecharModalFiscal();
@@ -1932,7 +1975,7 @@ document.getElementById('modalFiscalClose').addEventListener('click', fecharModa
 document.getElementById('modalFiscalCancel').addEventListener('click', fecharModalFiscal);
 document.getElementById('modalFiscalSave').addEventListener('click', salvarFiscal);
 document.getElementById('modalFiscalCot').addEventListener('click', function(ev) { if (ev.target === this) fecharModalFiscal(); });
-FISCAL_CAMPOS.forEach(function(par) {
+FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).forEach(function(par) {
   document.getElementById(par[0]).addEventListener('input', atualizarMemoriaFiscal);
 });
 
@@ -2009,14 +2052,16 @@ function cotacaoCardHtml(entry) {
       var qtdDiverge = calc.qtd > 0 && it.qtd > 0 && Math.abs(calc.qtd - it.qtd) > 0.001;
       var custoHtml = calc.custoUnitario != null
         ? '<div style="font-size:12px;margin-top:3px" title="Preço + IPI + ST + frete rateado − crédito de ICMS, dividido pela quantidade">' +
-            'Custo un.: <b>' + fmtBRL(calc.custoUnitario) + '</b>' + (isMenor ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>'
+            'Custo/' + escapeHtml(it.unidade || 'un') + ': <b>' + fmtBRL(calc.custoUnitario) + '</b>' + (isMenor ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>'
         : '<div class="field-hint" style="margin-top:3px">custo: falta preço/qtd</div>';
       var avisosHtml = (calc.avisos && calc.avisos.length && (calc.preco > 0 || calc.qtd > 0))
         ? '<div class="field-hint" style="color:var(--warning);margin-top:2px">⚠ ' + escapeHtml(calc.avisos.join('; ')) + '</div>' : '';
       return '<td style="vertical-align:top;' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
         '<div class="cot-linha">' +
-          campoCot('Preço unit.', '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
-          campoCot('Qtd cotada', '<input type="number" class="cot-resp-qtd" min="0" step="any" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ')"' : '') + '>') +
+          // Unidade no próprio rótulo: sem ela "10.000" não diz se são
+          // unidades, quilos ou litros -- e é o número que multiplica o preço.
+          campoCot('Preço por ' + (it.unidade || 'un'), '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
+          campoCot('Qtd cotada' + (it.unidade ? ' (' + it.unidade + ')' : ''), '<input type="number" class="cot-resp-qtd" min="0" step="any" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ' ' + escapeAttr(it.unidade || '') + ')"' : '') + '>') +
         '</div>' +
         '<div class="cot-linha" style="align-items:flex-end">' +
           campoCot('Entrega (dias úteis)', '<input type="number" class="cot-resp-prazo" min="0" step="1" title="Prazo em DIAS ÚTEIS — o sistema converte na data de coleta/entrega usando o calendário do PCP" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '">') +
