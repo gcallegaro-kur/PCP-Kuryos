@@ -1989,7 +1989,19 @@ function salvarIniciarCotacao() {
   var itensObj = {};
   itensConsolidados.forEach(function(r) {
     var itemKey = db.ref('processos_cotacao').push().key;
-    itensObj[itemKey] = { materialCodigo: r.it.materialCodigo, materialNome: r.it.materialNome || '', qtd: r.it.qtd, unidade: r.it.unidade || '', origemSolicitacaoKey: r.scKey };
+    // Unidade de compra e fator vêm do CADASTRO do material. Os dois campos
+    // já existiam em Cadastros › Materiais e nada os lia -- a pessoa
+    // preenchia "1 rolo = 11,67 kg" lá e a cotação continuava tratando tudo
+    // em rolo. Copiados pro item pra o orçamento não depender de alguém
+    // redigitar o que o sistema já sabe.
+    var matCad = findMaterialByCodigo(r.it.materialCodigo) || {};
+    itensObj[itemKey] = {
+      materialCodigo: r.it.materialCodigo, materialNome: r.it.materialNome || '',
+      qtd: r.it.qtd, unidade: r.it.unidade || '',
+      unidadeCompra: matCad.unidadeCompra || null,
+      fatorConversao: matCad.fatorConversao != null ? matCad.fatorConversao : null,
+      origemSolicitacaoKey: r.scKey
+    };
   });
   var solicitacoesOrigem = {};
   scKeys.forEach(function(scKey) {
@@ -2157,15 +2169,23 @@ function abrirModalFiscal(procKey, cKey, itemKey) {
     ? ((allFornecedores[c.fornecedorKey] && (allFornecedores[c.fornecedorKey].nomeFantasia || allFornecedores[c.fornecedorKey].razaoSocial)) || c.fornecedorKey)
     : (c.nomeAvulso || cKey);
   var un = it.unidade || '';
+  var unCompraCad = it.unidadeCompra || '';
   document.getElementById('fiscalContexto').innerHTML =
     '<b>' + escapeHtml(it.materialCodigo || '') + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
     '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>' +
-    (un ? ' · Cadastrado em <b>' + escapeHtml(un) + '</b>' : '');
+    (un ? ' · Estoque em <b>' + escapeHtml(un) + '</b>' : '') +
+    (unCompraCad && unCompraCad.toLowerCase() !== un.toLowerCase()
+      ? ' · Compra em <b>' + escapeHtml(unCompraCad) + '</b>' +
+        (it.fatorConversao ? ' (1 ' + escapeHtml(un) + ' = ' + fmtNum(it.fatorConversao) + ' ' + escapeHtml(unCompraCad) + ')' : '')
+      : '');
   document.getElementById('fiscalQtdPedida').textContent =
     it.qtd != null ? 'Pedido: ' + fmtNum(it.qtd) + (un ? ' ' + un : '') : '';
+  // O padrão vem do cadastro (unidadeCompra), não da unidade de estoque --
+  // é a unidade em que este material costuma ser orçado.
+  var unPadrao = unCompraCad || un;
   document.getElementById('fiscalUnidadeHint').textContent =
-    un ? 'Deixe vazio se o fornecedor cotou em ' + un + '.' : '';
-  document.getElementById('fiscalUnidadeCotada').placeholder = un || 'kg, rolo, un, L...';
+    unPadrao ? 'Vazio = ' + unPadrao + ' (do cadastro do material).' : '';
+  document.getElementById('fiscalUnidadeCotada').placeholder = unPadrao || 'kg, rolo, un, L...';
 
   FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).concat(FISCAL_CAMPOS_TEXTO).forEach(function(par) {
     document.getElementById(par[0]).value = resp[par[1]] != null ? resp[par[1]] : '';
@@ -2184,13 +2204,22 @@ function atualizarConversaoFiscal() {
   var p = allProcessosCotacao[fiscalAlvo.procKey] || {};
   var it = (p.itens || {})[fiscalAlvo.itemKey] || {};
   var unCad = String(it.unidade || '').trim();
-  var unCot = String(document.getElementById('fiscalUnidadeCotada').value || '').trim();
+  var unCot = String(document.getElementById('fiscalUnidadeCotada').value || '').trim() ||
+              String(it.unidadeCompra || '').trim();
   var box = document.getElementById('fiscalConversaoBox');
   var precisa = unCad && unCot && unCot.toLowerCase() !== unCad.toLowerCase();
   box.style.display = precisa ? '' : 'none';
   if (!precisa) return;
   document.getElementById('fiscalConversaoLabel').textContent = '1 ' + unCad + ' equivale a quantos ' + unCot + '? *';
-  var fator = parseFloat(document.getElementById('fiscalFator').value);
+  var campoFator = document.getElementById('fiscalFator');
+  // Padrão do cadastro só quando a unidade cotada é a unidadeCompra que o
+  // fator descreve -- e como placeholder, não valor: o campo vazio continua
+  // significando "usa o do cadastro", e digitar sobrescreve só ali.
+  var fatorCad = (String(it.unidadeCompra || '').trim().toLowerCase() === unCot.toLowerCase())
+    ? parseFloat(it.fatorConversao) : NaN;
+  campoFator.placeholder = fatorCad > 0 ? String(fatorCad) + ' (do cadastro)' : '';
+  var fator = parseFloat(campoFator.value);
+  if (!(fator > 0) && fatorCad > 0) fator = fatorCad;
   var qtd = parseFloat(document.getElementById('fiscalQtd').value);
   document.getElementById('fiscalConversaoHint').innerHTML = fator > 0
     ? (qtd > 0 ? '<span style="color:var(--tint-green-fg)">' + fmtNum(qtd) + ' ' + escapeHtml(unCot) +
@@ -2217,7 +2246,7 @@ function atualizarMemoriaFiscal() {
   });
   var itAtual = ((allProcessosCotacao[fiscalAlvo.procKey] || {}).itens || {})[fiscalAlvo.itemKey] || {};
   var unAtual = itAtual.unidade || '';
-  var calc = calcularCustoItemCotacao(resp, 0, unAtual);
+  var calc = calcularCustoItemCotacao(resp, 0, itAtual);
   // A memória fala na unidade COTADA (a que o fornecedor usou); a conversão
   // pra unidade do cadastro aparece no fim, que é o número da comparação.
   var unCot = calc.unidadeCotada || unAtual;
@@ -2661,6 +2690,15 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
         // Quantidade que o fornecedor de fato cotou (lote mínimo pode diferir
         // da pedida) -- é ela que vale pro valor do pedido.
         qtdCotada: resp.qtdCotada != null ? parseFloat(resp.qtdCotada) : null,
+        // A UNIDADE da quantidade cotada tem que viajar junto. Sem ela o
+        // pedido saía "35 rolo" quando o orçamento foi de 35 kg -- o número
+        // certo com a unidade errada, que é pior que número errado porque
+        // ninguém desconfia. (Caso ES-00319, relatado pelo usuário.)
+        unidadeCotada: calc.unidadeCotada || it.unidadeCompra || it.unidade || null,
+        fatorConversao: calc.fatorConversao != null ? calc.fatorConversao : null,
+        // Equivalente na unidade de estoque, pra o recebimento e o WMS
+        // saberem quantos ROLOS entram quando chegarem os 35 kg.
+        qtdEmUnidadeEstoque: calc.qtdCadastro != null ? Math.round(calc.qtdCadastro * 10000) / 10000 : null,
         prazoEntregaDias: resp.prazoEntregaDias != null ? parseFloat(resp.prazoEntregaDias) : null,
         pctNf: resp.pctNf != null ? resp.pctNf : null,
         pctIpi: resp.pctIpi != null ? resp.pctIpi : null,

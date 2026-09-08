@@ -2812,6 +2812,15 @@ function paginaPedidoCompra(pc, fornecedor) {
 
   var linhaItem = function(i) {
     var q = i.qtdCotada != null ? i.qtdCotada : i.qtd;
+    // A unidade do documento é a que foi COTADA, não a de estoque. Um pedido
+    // de 35 kg impresso como "35 rolo" faz o fornecedor entregar 35 rolos --
+    // o número certo com a unidade errada é pior que número errado, porque
+    // ninguém desconfia dele.
+    var un = i.unidadeCotada || i.unidade || '';
+    var unEstoque = i.unidade || '';
+    var equivale = (i.qtdEmUnidadeEstoque != null && unEstoque &&
+                    un.toLowerCase() !== unEstoque.toLowerCase())
+      ? '<div class="pcdoc-imposto">≈ ' + fmtNum(i.qtdEmUnidadeEstoque) + ' ' + escapeHtml(unEstoque) + '</div>' : '';
     var preco = parseFloat(i.precoUnit) || 0;
     var impostos = [
       i.pctIpi ? 'IPI ' + i.pctIpi + '%' : '',
@@ -2825,8 +2834,8 @@ function paginaPedidoCompra(pc, fornecedor) {
       '<td class="pcdoc-cod">' + escapeHtml(i.materialCodigo || '') + '</td>' +
       '<td>' + escapeHtml(i.materialNome || '') +
         (impostos ? '<div class="pcdoc-imposto">' + escapeHtml(impostos) + '</div>' : '') + '</td>' +
-      '<td class="num">' + fmtNum(q) + (i.unidade ? ' ' + escapeHtml(i.unidade) : '') + '</td>' +
-      '<td class="num">' + (preco ? fmtBRLDoc(preco) : '—') + '</td>' +
+      '<td class="num">' + fmtNum(q) + (un ? ' ' + escapeHtml(un) : '') + equivale + '</td>' +
+      '<td class="num">' + (preco ? fmtBRLDoc(preco) + (un ? '<div class="pcdoc-imposto">por ' + escapeHtml(un) + '</div>' : '') : '—') + '</td>' +
       '<td class="num">' + (preco && q ? fmtBRLDoc(preco * q) : '—') + '</td>' +
     '</tr>';
   };
@@ -2943,7 +2952,7 @@ function paginaEtiquetaFornecedor(pc, item) {
     codigoMaterial: i.materialCodigo || '',
     descricao: i.materialNome || '',
     quantidadeUnidade: (i.qtdCotada != null ? fmtNum(i.qtdCotada) : (i.qtd != null ? fmtNum(i.qtd) : '')) +
-      (i.unidade ? ' ' + i.unidade : ''),
+      (i.unidadeCotada || i.unidade ? ' ' + (i.unidadeCotada || i.unidade) : ''),
     fornecedor: p.fornecedorNome || '',
     referenciaPC: p.numeroFormatado || ''
   };
@@ -3480,8 +3489,19 @@ function ratearFreteCotacao(linhas, valorFrete) {
 // CADASTRO (ex: 25, se 1 rolo tem 25 kg). Mesma unidade nos dois lados = 1.
 //
 // Nunca lança: campo vazio vira 0, e o resultado diz o que faltou.
-function calcularCustoItemCotacao(resp, freteRateado, unidadeCadastro) {
+// `itemCadastro` aceita a UNIDADE como string (uso antigo) ou o item
+// completo { unidade, unidadeCompra, fatorConversao } -- e nesse caso a
+// unidade de compra e o fator do CADASTRO valem como padrão quando a
+// resposta do fornecedor não os informa.
+//
+// Isso importa porque o cadastro de material JÁ TEM esses dois campos
+// (ES-00319: unidade "rolo", unidadeCompra "kg", fator 11,6666667) e até
+// aqui nada os lia -- a pessoa preenchia no cadastro e o orçamento ignorava.
+function calcularCustoItemCotacao(resp, freteRateado, itemCadastro) {
   var r = resp || {};
+  var cad = (typeof itemCadastro === 'string' || itemCadastro == null)
+    ? { unidade: itemCadastro || '' } : itemCadastro;
+  var unidadeCadastro = cad.unidade;
   var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
   var preco = num(r.precoUnit);
   var qtd = num(r.qtdCotada);
@@ -3505,11 +3525,26 @@ function calcularCustoItemCotacao(resp, freteRateado, unidadeCadastro) {
   var custoTotal = totalNota + frete - creditoIcms;
 
   // ── Conversão de unidade ──
+  // Ordem de precedência: o que o fornecedor de fato cotou vence; sem isso,
+  // a unidade de compra do cadastro; sem isso, a unidade de estoque.
   var unCad = String(unidadeCadastro || '').trim();
-  var unCot = String(r.unidadeCotada || '').trim() || unCad;
+  var unCot = String(r.unidadeCotada || '').trim() || String(cad.unidadeCompra || '').trim() || unCad;
   var mesmaUnidade = !unCad || !unCot || unCot.toLowerCase() === unCad.toLowerCase();
   var fator = parseFloat(r.fatorConversao);
-  if (mesmaUnidade && !(fator > 0)) fator = 1;
+  if (mesmaUnidade) {
+    // Cotado na própria unidade de estoque: a conversão é 1, SEMPRE. O
+    // fator do cadastro descreve kg↔rolo; aplicá-lo aqui converteria rolo
+    // em rolo e daria um custo 11,67x errado -- e o número sairia plausível.
+    fator = 1;
+  } else if (!(fator > 0)) {
+    // Fator do cadastro como padrão, mas SÓ quando a unidade cotada é de
+    // fato a unidadeCompra que ele descreve. Um fator kg/rolo não serve pra
+    // converter metro nem litro.
+    var unCompra = String(cad.unidadeCompra || '').trim();
+    if (unCompra && unCot.toLowerCase() === unCompra.toLowerCase()) {
+      fator = parseFloat(cad.fatorConversao);
+    }
+  }
   var fatorOk = fator > 0;
   var qtdCadastro = fatorOk && qtd > 0 ? qtd / fator : null;
 
@@ -3543,8 +3578,10 @@ function calcularCustoItemCotacao(resp, freteRateado, unidadeCadastro) {
 
 // Função PURA. Avisos de preenchimento, para a tela mostrar antes de
 // alguém decidir a cotação em cima de um número errado.
-function cotacaoItemInconsistencias(resp, unidadeCadastro) {
+function cotacaoItemInconsistencias(resp, itemCadastro) {
   var r = resp || {};
+  var cad = (typeof itemCadastro === 'string' || itemCadastro == null)
+    ? { unidade: itemCadastro || '' } : itemCadastro;
   var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
   var avisos = [];
   if (!(num(r.precoUnit) > 0)) avisos.push('sem preço');
@@ -3552,9 +3589,12 @@ function cotacaoItemInconsistencias(resp, unidadeCadastro) {
   // Unidade cotada diferente da do cadastro sem fator: não dá pra comparar
   // com os outros fornecedores, e é o aviso mais importante da lista --
   // sem ele o sistema elegeria um vencedor com número sem sentido.
-  var unCad = String(unidadeCadastro || '').trim();
-  var unCot = String(r.unidadeCotada || '').trim();
-  if (unCad && unCot && unCot.toLowerCase() !== unCad.toLowerCase() && !(num(r.fatorConversao) > 0)) {
+  // O fator do CADASTRO conta como preenchido: se o material já sabe que
+  // 1 rolo = 11,67 kg, não há o que perguntar.
+  var unCad = String(cad.unidade || '').trim();
+  var unCot = String(r.unidadeCotada || '').trim() || String(cad.unidadeCompra || '').trim();
+  var temFator = num(r.fatorConversao) > 0 || num(cad.fatorConversao) > 0;
+  if (unCad && unCot && unCot.toLowerCase() !== unCad.toLowerCase() && !temFator) {
     avisos.push('cotado em ' + unCot + ' mas o cadastro é em ' + unCad + ' — informe a conversão');
   }
   // ISS é imposto de serviço (municipal), ICMS é de mercadoria (estadual).
@@ -3583,16 +3623,15 @@ function compararCotacao(itens, convidados) {
     var valorFrete = freteCab.tipo === 'FOB' ? (parseFloat(freteCab.valor) || 0) : 0;
     var linhas = Object.keys(itens || {}).map(function(itemKey) {
       var resp = (c.respostaItens || {})[itemKey] || {};
-      var parcial = calcularCustoItemCotacao(resp, 0, (itens[itemKey] || {}).unidade);
+      var parcial = calcularCustoItemCotacao(resp, 0, itens[itemKey]);
       return { itemKey: itemKey, liquido: parcial.liquido };
     });
     var rateio = ratearFreteCotacao(linhas, valorFrete);
     var itensCalc = {};
     Object.keys(itens || {}).forEach(function(itemKey) {
       var resp = (c.respostaItens || {})[itemKey] || {};
-      var unCad = (itens[itemKey] || {}).unidade;
-      itensCalc[itemKey] = calcularCustoItemCotacao(resp, rateio[itemKey] || 0, unCad);
-      itensCalc[itemKey].avisos = cotacaoItemInconsistencias(resp, unCad);
+      itensCalc[itemKey] = calcularCustoItemCotacao(resp, rateio[itemKey] || 0, itens[itemKey]);
+      itensCalc[itemKey].avisos = cotacaoItemInconsistencias(resp, itens[itemKey]);
     });
     porFornecedor[cKey] = {
       itens: itensCalc,
