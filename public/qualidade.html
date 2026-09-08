@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qualidade</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--primary-light:#2456d6;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --purple:#a78bfa; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-purple-bg:rgba(167,139,250,.18); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success);animation:p 2s infinite}
+    @keyframes p{0%,100%{opacity:1}50%{opacity:.4}}
+    @media(prefers-reduced-motion:reduce){.dot.on{animation:none}}
+    .kt-toolbar{max-width:96%;margin:0 auto 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .kt-search{display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:7px 12px;flex:1;min-width:220px}
+    .kt-search input{border:none;outline:none;flex:1;font-size:13px;background:transparent;color:var(--text)}
+    .kt-select{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg);border:1px solid color-mix(in srgb, var(--tint-green-fg) 40%, transparent)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+    .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
+    .btn-danger{background:var(--danger);color:white}.btn-danger:hover{filter:brightness(.9)}
+    .btn-purple{background:var(--purple);color:white}.btn-purple:hover{filter:brightness(.9)}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--surface-2)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .tabs{display:flex;gap:2px;max-width:96%;margin:0 auto 14px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+    .tab{padding:10px 18px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;border-top:none;border-left:none;border-right:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .section-note{font-size:12px;color:var(--muted);max-width:96%;margin:0 auto 12px;line-height:1.5}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .stats{display:flex;gap:10px;max-width:96%;margin:0 auto 14px;flex-wrap:wrap}
+    .stat{background:var(--card);border-radius:12px;padding:10px 16px;box-shadow:var(--shadow);min-width:120px}
+    .stat-val{font-size:20px;font-weight:700}
+    .stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);user-select:none}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .table-wrap{overflow-x:auto;padding:0 16px 14px}
+    .no-data{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:14px;width:100%;max-width:560px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+    .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+    .modal-header.red{background:linear-gradient(135deg,#7f1d1d,var(--danger))}
+    .modal-header h2{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
+    .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2);flex-wrap:wrap}
+    .form-group{margin-bottom:14px}
+    .form-group:last-child{margin-bottom:0}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:640px){.form-grid{grid-template-columns:1fr}}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    /* Plano de inspeção -- a especificação cadastrada virando formulário */
+    .plano-wrap{border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+    .plano-head{background:var(--surface-2);padding:9px 12px;font-size:11.5px;font-weight:700;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    /* No celular a tabela de ensaios não cabe nos 375px: sem este scroll
+       próprio, a coluna do resultado (✓/✕) ficava CORTADA pelo overflow
+       hidden do .plano-wrap (que existe pros cantos arredondados) e não
+       havia como alcançá-la. O tablet/celular é justamente o aparelho de
+       quem inspeciona no chão de fábrica. */
+    .plano-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .plano-tabela{width:100%;min-width:330px;font-size:12px;margin:0}
+    .plano-tabela td{padding:6px 8px;border-bottom:1px solid var(--tint-gray-bg)}
+    .plano-tabela tr:last-child td{border-bottom:none}
+    .plano-ensaio{font-weight:600}
+    .plano-espec{font-size:11px;color:var(--muted)}
+    .plano-val{width:92px;padding:5px 7px;font-size:12px}
+    .plano-cnc{width:74px;padding:5px 4px;font-size:12px}
+    .plano-res{width:26px;text-align:center;font-size:15px}
+    .row-nc{background:var(--tint-red-bg)}
+    .rnc-det{background:var(--surface-2)}
+    .rnc-det td{padding:0}
+    .rnc-det-inner{padding:10px 18px 14px 34px;font-size:12px;line-height:1.6}
+    .rnc-campo{margin-bottom:4px}
+    .rnc-campo b{color:var(--muted);font-weight:600}
+    .barra{height:8px;border-radius:4px;background:var(--tint-gray-bg);overflow:hidden;min-width:70px}
+    .barra-fill{height:100%;border-radius:4px}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Qualidade</h1>
+    <div class="header-sub">Liberação de lotes, não conformidades e desempenho de fornecedor</div>
+  </div>
+  <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="tabs" id="mainTabsQualidade">
+  <button class="tab active" data-tab="fila">🔬 Fila de Inspeção</button>
+  <button class="tab" data-tab="rnc">⚠️ Não Conformidades</button>
+  <button class="tab" data-tab="fornecedores">🏭 Desempenho de Fornecedor</button>
+  <button class="tab" data-tab="especificacoes">📋 Especificações</button>
+</div>
+
+<div class="main">
+  <div class="alert" id="alertBox"></div>
+</div>
+
+<div class="main" id="mainPanelsQualidade">
+
+  <!-- ════════════════ FILA DE INSPEÇÃO ════════════════ -->
+  <div class="tab-panel active" id="tab-fila">
+    <div class="section-note">
+      Tudo que está em <b>quarentena</b> esperando decisão da Qualidade: material recebido pela
+      Logística e palete de produto acabado já conferido. O lote conta no estoque e ocupa a
+      posição, mas a Separação de Materiais e a Expedição não o enxergam até ser liberado.
+      Reprovar <b>não</b> tira o material do estoque — ele continua fisicamente lá até ser
+      devolvido ou descartado, e essa decisão é registrada na não conformidade.
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="qStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">Aguardando laudo</div></div>
+      <div class="stat"><div class="stat-val" id="qStatMaisAntigo">—</div><div class="stat-lbl">Espera mais longa (dias)</div></div>
+      <div class="stat"><div class="stat-val" id="qStatLiberados" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Liberados (30 dias)</div></div>
+      <div class="stat"><div class="stat-val" id="qStatReprovados" style="color:var(--danger)">—</div><div class="stat-lbl">Reprovados (30 dias)</div></div>
+      <div class="stat"><div class="stat-val" id="qStatRncAbertas" style="color:var(--danger)">—</div><div class="stat-lbl">RNCs abertas</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3 id="qFilaTitulo">Aguardando liberação</h3>
+        <select class="kt-select" id="qFiltroTipo">
+          <option value="">Material e produto acabado</option>
+          <option value="material">Só material</option>
+          <option value="produto">Só produto acabado</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Item</th>
+            <th style="width:130px">Lote</th>
+            <th style="width:150px">Fornecedor / origem</th>
+            <th style="width:100px">Posição</th>
+            <th style="width:110px;text-align:right">Saldo</th>
+            <th style="width:130px">Recebido em</th>
+            <th style="width:110px"></th>
+          </tr></thead>
+          <tbody id="qFilaBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Laudos recentes</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Item</th>
+            <th style="width:130px">Lote</th>
+            <th style="width:160px">Decisão</th>
+            <th style="width:150px">Quem / quando</th>
+            <th style="width:120px">RNC</th>
+          </tr></thead>
+          <tbody id="qHistBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ NÃO CONFORMIDADES ════════════════ -->
+  <div class="tab-panel" id="tab-rnc">
+    <div class="section-note">
+      Registro formal de tudo que saiu do padrão — recebimento, produção, expedição ou reclamação
+      de cliente. Reprovar um lote <b>abre uma RNC automaticamente</b>, já vinculada ao fornecedor
+      e ao pedido de compra que trouxe o material: ninguém redigita nada, e o histórico por
+      fornecedor vira critério de homologação. Encerrar exige causa raiz e ação corretiva —
+      uma RNC sem elas é só o registro de que algo deu errado, que é o que a planilha já fazia.
+    </div>
+
+    <div class="kt-toolbar">
+      <div class="kt-search"><span>🔎</span><input type="text" id="rncSearch" placeholder="Buscar por número, item, fornecedor ou descrição..."></div>
+      <select class="kt-select" id="rncFiltroStatus">
+        <option value="ABERTAS">Abertas e em análise</option>
+        <option value="">Todas</option>
+        <option value="ABERTA">Só abertas</option>
+        <option value="EM_ANALISE">Só em análise</option>
+        <option value="CONCLUIDA">Só concluídas</option>
+      </select>
+      <select class="kt-select" id="rncFiltroClasse">
+        <option value="">Toda classificação</option>
+        <option value="CRITICA">Crítica</option>
+        <option value="MAIOR">Maior</option>
+        <option value="MENOR">Menor</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovaRnc">+ Nova RNC</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="rncStatAbertas" style="color:var(--danger)">—</div><div class="stat-lbl">Abertas</div></div>
+      <div class="stat"><div class="stat-val" id="rncStatAnalise" style="color:var(--warning)">—</div><div class="stat-lbl">Em análise</div></div>
+      <div class="stat"><div class="stat-val" id="rncStatCriticas" style="color:var(--danger)">—</div><div class="stat-lbl">Críticas em aberto</div></div>
+      <div class="stat"><div class="stat-val" id="rncStatAno">—</div><div class="stat-lbl">Abertas no ano</div></div>
+      <div class="stat"><div class="stat-val" id="rncStatIdade">—</div><div class="stat-lbl">Mais antiga em aberto (dias)</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 id="rncCount">Não conformidades</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:130px">Número</th>
+            <th style="width:90px">Classe</th>
+            <th style="width:110px">Origem</th>
+            <th>Item / descrição</th>
+            <th style="width:150px">Fornecedor</th>
+            <th style="width:110px">Aberta em</th>
+            <th style="width:110px">Status</th>
+            <th style="width:150px"></th>
+          </tr></thead>
+          <tbody id="rncBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ DESEMPENHO DE FORNECEDOR ════════════════ -->
+  <div class="tab-panel" id="tab-fornecedores">
+    <div class="section-note">
+      Cada laudo vira histórico de quem entregou. A taxa de aprovação sai dos lotes já
+      inspecionados, cruzando <b>estoque_lotes</b> com o <b>pedido de compra</b> que originou cada
+      um. Aprovação com concessão não conta como aprovação: o material entrou fora de
+      especificação e alguém precisou autorizar — somá-la esconderia justamente o fornecedor que
+      dá mais trabalho. Pior primeiro.
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 id="fornCount">Fornecedores com lote inspecionado</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Fornecedor</th>
+            <th style="width:150px">Taxa de aprovação</th>
+            <th style="width:100px;text-align:right">Inspecionados</th>
+            <th style="width:90px;text-align:right">Liberados</th>
+            <th style="width:90px;text-align:right">Concessão</th>
+            <th style="width:90px;text-align:right">Reprovados</th>
+            <th style="width:100px;text-align:right">Em quarentena</th>
+            <th style="width:110px;text-align:right">RNCs (abertas)</th>
+          </tr></thead>
+          <tbody id="fornBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ ESPECIFICAÇÕES ════════════════ -->
+  <div class="tab-panel" id="tab-especificacoes">
+    <div class="section-note">
+      Os planos de inspeção que a Qualidade usa para laudar. São os mesmos registros mantidos em
+      <b>Cadastros › Fórmulas/BOM</b> — esta tela é de consulta, para não haver duas
+      especificações do mesmo produto em lugares diferentes. Ensaio com faixa numérica
+      (mínimo/máximo) é avaliado pelo sistema no laudo; ensaio descritivo ("aspecto: líquido")
+      continua sendo julgamento do analista, marcado como C/NC.
+    </div>
+
+    <div class="kt-toolbar">
+      <div class="kt-search"><span>🔎</span><input type="text" id="espSearch" placeholder="Buscar por código ou ensaio..."></div>
+      <select class="kt-select" id="espFiltro">
+        <option value="">Todas</option>
+        <option value="mensuravel">Com ensaio mensurável</option>
+        <option value="critico">Com ensaio crítico</option>
+        <option value="vazia">Sem nenhum ensaio</option>
+      </select>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="espStatTotal">—</div><div class="stat-lbl">Especificações</div></div>
+      <div class="stat"><div class="stat-val" id="espStatEnsaios">—</div><div class="stat-lbl">Ensaios cadastrados</div></div>
+      <div class="stat"><div class="stat-val" id="espStatMensuravel" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Ensaios com faixa numérica</div></div>
+      <div class="stat"><div class="stat-val" id="espStatCriticos" style="color:var(--danger)">—</div><div class="stat-lbl">Ensaios críticos</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 id="espCount">Planos de inspeção</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:180px">Código</th>
+            <th style="width:70px">Versão</th>
+            <th>Produto / item</th>
+            <th style="width:90px;text-align:right">Ensaios</th>
+            <th style="width:110px;text-align:right">Com faixa</th>
+            <th style="width:90px;text-align:right">Críticos</th>
+            <th style="width:100px"></th>
+          </tr></thead>
+          <tbody id="espBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════ MODAL: Laudo ══════════
+     Junta duas coisas que hoje moram em lugares diferentes: o checklist de
+     recebimento que a Logística preenche na planilha, e a especificação
+     técnica cadastrada em Fórmulas/BOM que até agora só era impressa na
+     ficha da OP e nunca usada pra decidir nada. -->
+<div class="modal-bg" id="modalLaudoBg">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header"><h2 id="modalLaudoTitle">Laudo de Qualidade</h2><button class="modal-close" id="modalLaudoClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="qLoteInfo" class="field-hint" style="margin-bottom:14px"></div>
+
+      <!-- Plano de inspeção: só aparece quando o item tem especificação -->
+      <div id="qPlanoBox" style="display:none">
+        <div class="plano-wrap">
+          <div class="plano-head">
+            <span id="qPlanoTitulo">Plano de inspeção</span>
+            <span id="qPlanoResumo"></span>
+          </div>
+          <div class="plano-scroll"><table class="plano-tabela"><tbody id="qPlanoBody"></tbody></table></div>
+        </div>
+      </div>
+      <div id="qSemPlano" class="field-hint" style="display:none;margin-bottom:14px;padding:10px;border:1px dashed var(--border);border-radius:8px">
+        Este item não tem especificação cadastrada — o laudo fica pelo checklist abaixo e pela
+        observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data da inspeção</label>
+          <input type="date" id="qDataInspecao">
+        </div>
+        <div class="form-group">
+          <label>Quantidade amostrada</label>
+          <input type="number" id="qQtdAmostrada" min="0" step="any" placeholder="0">
+        </div>
+      </div>
+
+      <!-- Checklist de recebimento: só faz sentido pra material que chegou
+           de fora. Palete de PA é nosso, veio da linha, não de um caminhão. -->
+      <div id="qChecklistRecebimento">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Condições do veículo</label>
+            <select id="qCondVeiculo">
+              <option value="">—</option>
+              <option value="5">5 — Ótimo</option>
+              <option value="4">4 — Bom</option>
+              <option value="3">3 — Regular</option>
+              <option value="2">2 — Ruim</option>
+              <option value="1">1 — Péssimo</option>
+            </select>
+            <div class="field-hint">Limpo, sem odores, sem evidência de pragas</div>
+          </div>
+          <div class="form-group">
+            <label>Condições da embalagem</label>
+            <select id="qCondEmbalagem">
+              <option value="">—</option>
+              <option value="5">5 — Ótimo</option>
+              <option value="4">4 — Bom</option>
+              <option value="3">3 — Regular</option>
+              <option value="2">2 — Ruim</option>
+              <option value="1">1 — Péssimo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Integridade da embalagem</label>
+            <select id="qIntegridade">
+              <option value="">—</option>
+              <option value="C">C — Conforme</option>
+              <option value="NC">NC — Não conforme</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Ausência de vazamento</label>
+            <select id="qVazamento">
+              <option value="">—</option>
+              <option value="C">C — Conforme</option>
+              <option value="NC">NC — Não conforme</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label><input type="checkbox" id="qCertificado" style="width:auto;margin-right:6px">Veio com Certificado de Qualidade do fornecedor</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="qObservacao" rows="2" placeholder="Laudo, nº de análise, motivo da reprovação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalLaudoCancel">Cancelar</button>
+      <button class="btn btn-ghost" id="qBtnReter" title="Segura o lote sem decidir ainda">⏸ Reter</button>
+      <button class="btn btn-danger" id="qBtnReprovar">Reprovar</button>
+      <button class="btn btn-purple" id="qBtnConcessao" title="Usar apesar do desvio, com autorização nominal">Aprovar c/ concessão</button>
+      <button class="btn btn-green" id="qBtnLiberar">Liberar para uso</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: Nova RNC / tratar RNC ══════════ -->
+<div class="modal-bg" id="modalRncBg">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header red"><h2 id="modalRncTitle">Nova não conformidade</h2><button class="modal-close" id="modalRncClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="rncContexto" class="field-hint" style="margin-bottom:14px;display:none"></div>
+
+      <!-- Abertura -->
+      <div id="rncCamposAbertura">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Classificação *</label>
+            <select id="rncClassificacao">
+              <option value="MENOR">Menor — desvio sem impacto no produto</option>
+              <option value="MAIOR" selected>Maior — afeta o lote / exige tratativa</option>
+              <option value="CRITICA">Crítica — risco ao produto ou ao consumidor</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Origem *</label>
+            <select id="rncOrigem">
+              <option value="RECEBIMENTO">Recebimento</option>
+              <option value="PRODUCAO">Produção</option>
+              <option value="EXPEDICAO">Expedição</option>
+              <option value="CLIENTE">Reclamação de cliente</option>
+              <option value="INTERNA">Interna</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Item (código)</label>
+            <input type="text" id="rncItemCodigo" placeholder="Ex: EP-00053 ou WKBS0001">
+            <div class="field-hint" id="rncItemHint"></div>
+          </div>
+          <div class="form-group">
+            <label>Fornecedor</label>
+            <select id="rncFornecedor"><option value="">— não se aplica —</option></select>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Quantidade envolvida</label>
+            <input type="number" id="rncQtd" min="0" step="any" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>OP relacionada</label>
+            <input type="text" id="rncOp" placeholder="Lote da OP, se houver">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Descrição da não conformidade *</label>
+          <textarea id="rncDescricao" rows="3" placeholder="O que foi encontrado, onde e em que quantidade..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Ação imediata</label>
+          <input type="text" id="rncAcaoImediata" placeholder="O que foi feito na hora (segregar, parar linha, bloquear lote...)">
+        </div>
+      </div>
+
+      <!-- Encerramento -->
+      <div id="rncCamposEncerramento" style="display:none">
+        <div class="form-group">
+          <label>Causa raiz *</label>
+          <textarea id="rncCausaRaiz" rows="2" placeholder="Por que aconteceu — não o que aconteceu"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Ação corretiva *</label>
+          <textarea id="rncAcaoCorretiva" rows="2" placeholder="O que muda para não repetir"></textarea>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Responsável pela ação</label>
+            <input type="text" id="rncResponsavel" placeholder="Quem executa">
+          </div>
+          <div class="form-group">
+            <label>Prazo</label>
+            <input type="date" id="rncPrazo">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Disposição do material *</label>
+          <select id="rncDisposicao">
+            <option value="">— escolha —</option>
+            <option value="DEVOLUCAO">Devolver ao fornecedor</option>
+            <option value="DESCARTE">Descartar</option>
+            <option value="RETRABALHO">Retrabalhar</option>
+            <option value="CONCESSAO">Usar com concessão</option>
+            <option value="ACEITE">Aceitar como está</option>
+          </select>
+          <div class="field-hint">
+            A disposição é decisão separada do laudo: reprovar diz que não serve, a disposição diz
+            o que se faz com o material. Registrá-la aqui não movimenta o estoque — a saída
+            (devolução ou descarte) continua sendo lançada em Estoque, com movimento próprio.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalRncCancel">Cancelar</button>
+      <button class="btn btn-danger" id="rncBtnSalvar">Abrir RNC</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: ver especificação ══════════ -->
+<div class="modal-bg" id="modalEspBg">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header"><h2 id="modalEspTitle">Especificação</h2><button class="modal-close" id="modalEspClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="table-wrap" style="padding:0">
+        <table>
+          <thead><tr><th>Ensaio</th><th style="width:190px">Especificação</th><th style="width:120px">Faixa</th><th style="width:100px">Método</th><th style="width:70px">Crítico</th></tr></thead>
+          <tbody id="espDetBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" id="modalEspCancel">Fechar</button></div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function norm(s) { return String(s || '').toLowerCase().trim(); }
+function setStatus(on, txt) {
+  document.getElementById('sDot').classList.toggle('on', !!on);
+  document.getElementById('sTxt').textContent = txt;
+}
+function showAlert(msg, type) {
+  var box = document.getElementById('alertBox');
+  box.textContent = msg;
+  box.className = 'alert alert-' + (type || 'success') + ' show';
+  setTimeout(function() { box.classList.remove('show'); }, 6000);
+}
+function currentUserNome() {
+  return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+function fmtData(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR');
+}
+function fmtDataHora(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function diasDesde(iso) {
+  if (!iso) return null;
+  var d = new Date(iso);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+/* ══════════════ Tabs ══════════════ */
+// Mesmo padrão de estoque.html: whitelist + ?tab= pra permitir link direto
+// de outra tela (a aba de Qualidade que saiu de estoque.html aponta pra cá).
+var ABAS_QUALIDADE = { fila: 1, rnc: 1, fornecedores: 1, especificacoes: 1 };
+function ativarAbaQualidade(target, pushUrl) {
+  if (!ABAS_QUALIDADE[target]) return;
+  document.querySelectorAll('#mainTabsQualidade .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+  document.querySelectorAll('#mainPanelsQualidade > .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  if (pushUrl) {
+    var url = new URL(location.href);
+    url.searchParams.set('tab', target);
+    history.replaceState(null, '', url);
+  }
+}
+document.querySelectorAll('#mainTabsQualidade .tab').forEach(function(tab) {
+  tab.addEventListener('click', function() { ativarAbaQualidade(tab.getAttribute('data-tab'), true); });
+});
+document.addEventListener('DOMContentLoaded', function() {
+  var tab = new URLSearchParams(location.search).get('tab');
+  if (tab && ABAS_QUALIDADE[tab]) ativarAbaQualidade(tab, false);
+});
+
+/* ══════════════ Dados ══════════════ */
+var allEstoqueLotes = {};
+var allRncs = {};
+var allPedidosCompra = {};
+var allEspecificacoes = {};
+var allProdutos = {};
+var allMateriais = {};
+var allFornecedores = {};
+
+dbOnValue(db.ref('estoque_lotes'), function(snap) {
+  allEstoqueLotes = snap.val() || {};
+  setStatus(true, 'Conectado');
+  renderFila(); renderFornecedores();
+}, { onError: function(e) { setStatus(false, 'Erro de conexão'); showAlert('Não foi possível ler os lotes: ' + e.message, 'danger'); } });
+
+dbOnValue(db.ref('nao_conformidades'), function(snap) {
+  allRncs = snap.val() || {};
+  renderRncs(); renderFila(); renderFornecedores();
+}, { onError: function(e) { showAlert('Não foi possível ler as não conformidades: ' + e.message, 'danger'); } });
+
+dbOnValue(db.ref('pedidos_compra'), function(snap) {
+  allPedidosCompra = snap.val() || {};
+  renderFila(); renderFornecedores();
+});
+dbOnValue(db.ref('especificacoes'), function(snap) {
+  allEspecificacoes = snap.val() || {};
+  renderEspecificacoes();
+});
+dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; renderEspecificacoes(); });
+dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; renderEspecificacoes(); });
+dbOnValue(db.ref('fornecedores'), function(snap) {
+  allFornecedores = snap.val() || {};
+  var sel = document.getElementById('rncFornecedor');
+  var atual = sel.value;
+  sel.innerHTML = '<option value="">— não se aplica —</option>' +
+    Object.keys(allFornecedores).sort(function(a, b) {
+      return norm((allFornecedores[a] || {}).nome) < norm((allFornecedores[b] || {}).nome) ? -1 : 1;
+    }).map(function(k) {
+      return '<option value="' + escapeAttr(k) + '">' + escapeHtml((allFornecedores[k] || {}).nome || k) + '</option>';
+    }).join('');
+  sel.value = atual;
+});
+
+// Nome legível de um item, venha ele de produtos ou de materiais.
+function nomeItem(codigo) {
+  var k = sanitizeKey(codigo);
+  var p = allProdutos[k];
+  if (p) return p.descricao || p.nome || codigo;
+  var m = allMateriais[k];
+  if (m) return m.mpNome || m.nome || codigo;
+  return codigo;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ABA 1 — FILA DE INSPEÇÃO
+   ══════════════════════════════════════════════════════════════════════ */
+var laudoAtual = null; // { itemCodigo, loteKey, lote, itemTipo, plano, resultados }
+
+function renderFila() {
+  var tbody = document.getElementById('qFilaBody');
+  if (!tbody) return;
+  var filtroTipo = document.getElementById('qFiltroTipo').value;
+  var fila = lotesAguardandoQualidade(allEstoqueLotes).filter(function(f) {
+    return !filtroTipo || (f.itemTipo || 'material') === filtroTipo;
+  });
+
+  var esperaMax = 0;
+  fila.forEach(function(f) {
+    var dias = diasDesde(f.dataRecebimento || f.criadoEm);
+    if (dias != null && dias > esperaMax) esperaMax = dias;
+  });
+
+  var corte = new Date(Date.now() - 30 * 86400000).toISOString();
+  var lib = 0, rep = 0, recentes = [];
+  Object.keys(allEstoqueLotes || {}).forEach(function(itemKey) {
+    Object.keys(allEstoqueLotes[itemKey] || {}).forEach(function(lk) {
+      var l = (allEstoqueLotes[itemKey] || {})[lk];
+      if (!l || !l.qualidade || !l.qualidade.inspecionadoEm) return;
+      recentes.push({ lote: l, loteKey: lk });
+      if (l.qualidade.inspecionadoEm < corte) return;
+      if (l.qualidade.decisao === 'LIBERADO' || l.qualidade.decisao === 'LIBERADO_EXPEDICAO') lib++;
+      else if (l.qualidade.decisao === 'REPROVADO') rep++;
+    });
+  });
+
+  var rncAbertas = Object.keys(allRncs).filter(function(k) {
+    return (RNC_STATUS[(allRncs[k] || {}).status] || {}).aberta;
+  }).length;
+
+  document.getElementById('qStatFila').textContent = fmtNum(fila.length);
+  document.getElementById('qStatMaisAntigo').textContent = fila.length ? fmtNum(esperaMax) : '—';
+  document.getElementById('qStatLiberados').textContent = fmtNum(lib);
+  document.getElementById('qStatReprovados').textContent = fmtNum(rep);
+  document.getElementById('qStatRncAbertas').textContent = fmtNum(rncAbertas);
+  document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação (' + fila.length + ')';
+
+  if (!fila.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
+  } else {
+    tbody.innerHTML = fila.map(function(f) {
+      var dias = diasDesde(f.dataRecebimento || f.criadoEm);
+      // Espera longa é o sinal que importa: material parado ocupando posição
+      // sem poder ser usado, possivelmente com OP esperando por ele.
+      var badgeDias = dias === null ? ''
+        : ' <span class="badge ' + (dias > 7 ? 'badge-red' : dias > 3 ? 'badge-orange' : 'badge-gray') + '">' +
+          (dias === 0 ? 'hoje' : 'há ' + dias + 'd') + '</span>';
+      var lote = (allEstoqueLotes[f.itemKey] || {})[f.loteKey] || {};
+      var forn = fornecedorDoLote(lote, allPedidosCompra);
+      var origem = forn ? escapeHtml(forn.fornecedorNome || '—') +
+          (forn.pedidoNumero ? '<br><span class="field-hint">' + escapeHtml(forn.pedidoNumero) + '</span>' : '')
+        : (f.itemTipo === 'produto' ? '<span class="field-hint">Produção interna</span>' : '<span class="field-hint">—</span>');
+      var espec = especificacaoVigente(allEspecificacoes, f.itemCodigo);
+      return '<tr>' +
+        '<td>' + (f.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') +
+          '<b>' + escapeHtml(f.itemCodigo) + '</b>' +
+          (espec ? ' <span class="badge badge-blue" title="Tem plano de inspeção cadastrado">📋</span>' : '') +
+          (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(f.loteOrigem || '—') +
+          (f.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(f.dataValidade) + '</span>' : '') + '</td>' +
+        '<td>' + origem + '</td>' +
+        '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
+        '<td style="text-align:right">' + fmtNum(f.saldoLote) + ' ' + escapeHtml(f.unidade || '') + '</td>' +
+        '<td>' + fmtData(f.dataRecebimento || f.criadoEm) + badgeDias + '</td>' +
+        '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(f.itemCodigo) + '" data-laudo-lote="' + escapeAttr(f.loteKey) + '">🔬 Laudar</button></td>' +
+      '</tr>';
+    }).join('');
+    tbody.querySelectorAll('[data-laudo-lote]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        abrirLaudo(btn.getAttribute('data-laudo-item'), btn.getAttribute('data-laudo-lote'));
+      });
+    });
+  }
+
+  // Laudos recentes -- mais novos primeiro, 25 últimos
+  recentes.sort(function(a, b) {
+    return (b.lote.qualidade.inspecionadoEm || '') < (a.lote.qualidade.inspecionadoEm || '') ? -1 : 1;
+  });
+  var hb = document.getElementById('qHistBody');
+  if (!recentes.length) {
+    hb.innerHTML = '<tr><td colspan="5" class="no-data">Nenhum laudo registrado ainda.</td></tr>';
+  } else {
+    // A RNC automática não guarda ponteiro de volta no lote; achar por
+    // loteKey mantém o vínculo visível sem duplicar dado nos dois lados.
+    var rncPorLote = {};
+    Object.keys(allRncs).forEach(function(n) {
+      var r = allRncs[n];
+      if (r && r.loteKey) rncPorLote[r.loteKey] = n;
+    });
+    hb.innerHTML = recentes.slice(0, 25).map(function(x) {
+      var l = x.lote, q = l.qualidade;
+      var rnc = rncPorLote[x.loteKey];
+      return '<tr>' +
+        '<td>' + (l.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') + escapeHtml(l.itemCodigo || '—') +
+          (l.itemNome ? '<br><span class="field-hint">' + escapeHtml(l.itemNome) + '</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+        '<td><span class="badge ' + badgeStatusLote(q.decisao) + '">' + escapeHtml(rotuloStatusLote(q.decisao)) + '</span>' +
+          (q.autorizadoPor ? '<br><span class="field-hint">aut. ' + escapeHtml(q.autorizadoPor) + '</span>' : '') +
+          (q.resumoPlano ? '<br><span class="field-hint">' + escapeHtml(q.resumoPlano) + '</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(q.inspecionadoPor || '—') + '<br><span class="field-hint">' + fmtDataHora(q.inspecionadoEm) + '</span></td>' +
+        '<td>' + (rnc ? '<a href="#" class="ir-rnc" data-rnc="' + escapeAttr(rnc) + '">' + escapeHtml(rnc) + '</a>' : '<span class="field-hint">—</span>') + '</td>' +
+      '</tr>';
+    }).join('');
+    hb.querySelectorAll('.ir-rnc').forEach(function(a) {
+      a.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        document.getElementById('rncSearch').value = a.getAttribute('data-rnc');
+        document.getElementById('rncFiltroStatus').value = '';
+        renderRncs();
+        ativarAbaQualidade('rnc', true);
+      });
+    });
+  }
+}
+document.getElementById('qFiltroTipo').addEventListener('change', renderFila);
+
+/* ─────────── Laudo ─────────── */
+function abrirLaudo(itemCodigo, loteKey) {
+  var itemKey = sanitizeKey(itemCodigo);
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
+  if (!lote) { showAlert('Este lote não está mais disponível.', 'danger'); return; }
+  var itemTipo = lote.itemTipo || 'material';
+  var espec = especificacaoVigente(allEspecificacoes, itemCodigo);
+  var forn = fornecedorDoLote(lote, allPedidosCompra);
+
+  laudoAtual = {
+    itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, itemTipo: itemTipo,
+    espec: espec, resultados: {}, fornecedor: forn
+  };
+
+  document.getElementById('modalLaudoTitle').textContent =
+    (itemTipo === 'produto' ? 'Liberação de palete — ' : 'Laudo — ') + itemCodigo;
+  document.getElementById('qBtnLiberar').textContent =
+    itemTipo === 'produto' ? 'Liberar para expedição' : 'Liberar para uso';
+  document.getElementById('qLoteInfo').innerHTML =
+    '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b><br>' +
+    'Lote: ' + escapeHtml(lote.loteOrigem || '—') +
+    ' · Posição: ' + escapeHtml(lote.enderecoCodigo || '—') +
+    ' · Saldo: ' + fmtNum(lote.saldoLote || 0) + ' ' + escapeHtml(lote.unidade || '') +
+    (lote.dataValidade ? ' · Validade: ' + fmtData(lote.dataValidade) : '') +
+    (forn ? '<br>Fornecedor: <b>' + escapeHtml(forn.fornecedorNome || '—') + '</b>' +
+      (forn.pedidoNumero ? ' · ' + escapeHtml(forn.pedidoNumero) : '') : '');
+
+  // Checklist de recebimento só pra material vindo de fora -- palete de PA
+  // saiu da nossa linha, não de um caminhão.
+  document.getElementById('qChecklistRecebimento').style.display = itemTipo === 'produto' ? 'none' : '';
+
+  document.getElementById('qDataInspecao').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('qQtdAmostrada').value = '';
+  document.getElementById('qCondVeiculo').value = '';
+  document.getElementById('qCondEmbalagem').value = '';
+  document.getElementById('qIntegridade').value = '';
+  document.getElementById('qVazamento').value = '';
+  document.getElementById('qCertificado').checked = false;
+  document.getElementById('qObservacao').value = '';
+
+  renderPlanoInspecao();
+  document.getElementById('modalLaudoBg').classList.add('open');
+}
+
+function renderPlanoInspecao() {
+  var box = document.getElementById('qPlanoBox');
+  var vazio = document.getElementById('qSemPlano');
+  var itens = laudoAtual && laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
+  if (!itens || !Object.keys(itens).length) {
+    box.style.display = 'none';
+    vazio.style.display = '';
+    return;
+  }
+  box.style.display = '';
+  vazio.style.display = 'none';
+  document.getElementById('qPlanoTitulo').textContent =
+    'Plano de inspeção — ' + laudoAtual.espec.key.replace('__v', ' · versão ');
+
+  var aval = avaliarPlanoInspecao(itens, laudoAtual.resultados);
+  document.getElementById('qPlanoResumo').innerHTML =
+    '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
+    '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
+    '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>' +
+    (aval.bloqueia ? ' <span class="badge badge-red">⚠ ensaio crítico NC</span>' : '');
+
+  document.getElementById('qPlanoBody').innerHTML = aval.linhas.map(function(l) {
+    var icone = l.conforme === true ? '<span style="color:var(--success)">✓</span>'
+      : l.conforme === false ? '<span style="color:var(--danger)">✕</span>'
+      : '<span style="color:var(--muted)">·</span>';
+    return '<tr' + (l.conforme === false ? ' class="row-nc"' : '') + '>' +
+      '<td><span class="plano-ensaio">' + escapeHtml(l.ensaio || '—') + '</span>' +
+        (l.critico ? ' <span class="badge badge-red">crítico</span>' : '') +
+        '<div class="plano-espec">' + escapeHtml(l.especificacaoTexto || '') +
+        (l.metodo ? ' · ' + escapeHtml(l.metodo) : '') + '</div></td>' +
+      '<td style="white-space:nowrap">' + (l.faixa ? '<span class="field-hint">' + escapeHtml(l.faixa) + '</span>' : '<span class="field-hint">descritivo</span>') + '</td>' +
+      '<td><input type="number" step="any" class="plano-val" data-plano-valor="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '"' + (l.faixa ? '' : ' disabled title="Ensaio descritivo — use o C/NC"') + '></td>' +
+      '<td><select class="plano-cnc" data-plano-cnc="' + escapeAttr(l.itemKey) + '">' +
+        '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
+        '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
+        '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option>' +
+      '</select></td>' +
+      '<td class="plano-res" title="' + escapeAttr(l.motivo || '') + '">' + icone + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // Re-render a cada mudança pra a avaliação ser imediata: o analista vê o
+  // valor sair da faixa no momento em que digita, não depois de decidir.
+  document.getElementById('qPlanoBody').querySelectorAll('[data-plano-valor]').forEach(function(inp) {
+    inp.addEventListener('change', function() {
+      var k = inp.getAttribute('data-plano-valor');
+      laudoAtual.resultados[k] = laudoAtual.resultados[k] || {};
+      laudoAtual.resultados[k].valor = inp.value;
+      renderPlanoInspecao();
+    });
+  });
+  document.getElementById('qPlanoBody').querySelectorAll('[data-plano-cnc]').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var k = sel.getAttribute('data-plano-cnc');
+      laudoAtual.resultados[k] = laudoAtual.resultados[k] || {};
+      laudoAtual.resultados[k].cnc = sel.value;
+      renderPlanoInspecao();
+    });
+  });
+}
+
+function fecharModalLaudo() {
+  document.getElementById('modalLaudoBg').classList.remove('open');
+  laudoAtual = null;
+}
+document.getElementById('modalLaudoClose').addEventListener('click', fecharModalLaudo);
+document.getElementById('modalLaudoCancel').addEventListener('click', fecharModalLaudo);
+
+function botoesLaudo() {
+  return ['qBtnLiberar', 'qBtnReprovar', 'qBtnConcessao', 'qBtnReter'].map(function(id) { return document.getElementById(id); });
+}
+
+function salvarLaudo(decisao) {
+  if (!laudoAtual) return;
+  var obs = document.getElementById('qObservacao').value.trim();
+  // Reprovar e reter exigem justificativa: são decisões que tiram material
+  // do uso e vão gerar devolução, descarte ou nova análise -- alguém vai
+  // precisar saber por quê, e é o texto que vira a descrição da RNC.
+  if ((decisao === 'REPROVADO' || decisao === 'RETIDO') && !obs) {
+    showAlert('Descreva o motivo na observação — ele vira a descrição da não conformidade.', 'danger');
+    return;
+  }
+  var autorizadoPor = null;
+  if (decisao === 'APROVADO_CONCESSAO') {
+    autorizadoPor = prompt('Aprovação com concessão libera material fora de especificação.\n\nQuem autorizou? (nome completo)');
+    if (autorizadoPor === null) return;
+    autorizadoPor = autorizadoPor.trim();
+    if (!autorizadoPor) { showAlert('A concessão exige o nome de quem autorizou.', 'danger'); return; }
+  }
+
+  // Avaliação do plano vai junto do laudo -- é o registro de análise, o que
+  // um certificado precisaria ler depois.
+  var itens = laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
+  var ensaios = null, resumoPlano = null, aval = null;
+  if (itens && Object.keys(itens).length) {
+    aval = avaliarPlanoInspecao(itens, laudoAtual.resultados);
+    ensaios = {};
+    aval.linhas.forEach(function(l) {
+      ensaios[l.itemKey] = {
+        ensaio: l.ensaio, especificacaoTexto: l.especificacaoTexto || null, metodo: l.metodo || null,
+        critico: l.critico, faixa: l.faixa || null,
+        valor: l.valor != null ? l.valor : null, cnc: l.cnc || null,
+        conforme: l.conforme
+      };
+    });
+    resumoPlano = aval.conformes + 'C / ' + aval.naoConformes + 'NC / ' + aval.pendentes + ' pend.';
+  }
+  // Aviso, não bloqueio: liberar apesar de ensaio crítico não conforme é
+  // uma decisão que existe (concessão), e travá-la no software só faria
+  // registrarem o laudo fora do sistema.
+  if (aval && aval.bloqueia && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO')) {
+    if (!confirm('⚠ Há ensaio CRÍTICO fora da especificação neste lote.\n\n' +
+        'Liberar assim mesmo? Se o desvio foi autorizado, o correto é "Aprovar c/ concessão", ' +
+        'que registra quem autorizou.')) return;
+  }
+
+  var btns = botoesLaudo();
+  btns.forEach(function(b) { b.disabled = true; });
+  var num = function(id) { var v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  var f = laudoAtual.fornecedor || {};
+
+  registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, {
+    decisao: decisao,
+    dataInspecao: document.getElementById('qDataInspecao').value || null,
+    qtdAmostrada: num('qQtdAmostrada'),
+    certificadoFornecedor: document.getElementById('qCertificado').checked,
+    condicoesVeiculo: num('qCondVeiculo'),
+    condicoesEmbalagem: num('qCondEmbalagem'),
+    integridadeEmbalagem: document.getElementById('qIntegridade').value || null,
+    ausenciaVazamento: document.getElementById('qVazamento').value || null,
+    observacao: obs || null,
+    autorizadoPor: autorizadoPor,
+    especificacaoKey: laudoAtual.espec ? laudoAtual.espec.key : null,
+    ensaios: ensaios,
+    resumoPlano: resumoPlano
+  }, currentUserNome(), {
+    itemTipo: laudoAtual.itemTipo,
+    itemNome: laudoAtual.lote.itemNome || null,
+    unidade: laudoAtual.lote.unidade || null,
+    loteOrigem: laudoAtual.lote.loteOrigem || null,
+    fornecedorKey: f.fornecedorKey || null, fornecedorNome: f.fornecedorNome || null,
+    pedidoKey: f.pedidoKey || null, pedidoNumero: f.pedidoNumero || null,
+    origem: laudoAtual.itemTipo === 'produto' ? 'PRODUCAO' : 'RECEBIMENTO'
+  }).then(function(r) {
+    btns.forEach(function(b) { b.disabled = false; });
+    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+    fecharModalLaudo();
+    var msg, tipo;
+    if (r.decisao === 'LIBERADO') { msg = 'Lote liberado — já disponível para a Separação de Materiais.'; tipo = 'success'; }
+    else if (r.decisao === 'LIBERADO_EXPEDICAO') { msg = 'Palete liberado — já disponível para a Expedição.'; tipo = 'success'; }
+    else if (r.decisao === 'APROVADO_CONCESSAO') { msg = 'Lote liberado com concessão, autorizado por ' + autorizadoPor + '.'; tipo = 'success'; }
+    else { msg = 'Lote ' + rotuloStatusLote(r.decisao).toLowerCase() + '. O material continua no estoque até ser devolvido ou descartado.'; tipo = 'danger'; }
+    if (r.rnc) msg += ' Não conformidade ' + r.rnc + ' aberta automaticamente.';
+    // O laudo vale mesmo se a RNC falhar -- mas quem laudou precisa saber
+    // que a cobrança do fornecedor não foi registrada.
+    if (r.rncErro) msg += ' ⚠ A RNC NÃO pôde ser aberta (' + r.rncErro + ') — registre manualmente.';
+    showAlert(msg, tipo);
+  }).catch(function(err) {
+    btns.forEach(function(b) { b.disabled = false; });
+    showAlert('Erro ao registrar o laudo: ' + err.message, 'danger');
+  });
+}
+document.getElementById('qBtnLiberar').addEventListener('click', function() {
+  salvarLaudo(laudoAtual && laudoAtual.itemTipo === 'produto' ? 'LIBERADO_EXPEDICAO' : 'LIBERADO');
+});
+document.getElementById('qBtnReprovar').addEventListener('click', function() { salvarLaudo('REPROVADO'); });
+document.getElementById('qBtnConcessao').addEventListener('click', function() { salvarLaudo('APROVADO_CONCESSAO'); });
+document.getElementById('qBtnReter').addEventListener('click', function() { salvarLaudo('RETIDO'); });
+
+/* ══════════════════════════════════════════════════════════════════════
+   ABA 2 — NÃO CONFORMIDADES
+   ══════════════════════════════════════════════════════════════════════ */
+var rncExpandida = null;
+var rncModo = 'ABRIR'; // ABRIR | ENCERRAR
+var rncAlvo = null;
+
+function renderRncs() {
+  var tbody = document.getElementById('rncBody');
+  if (!tbody) return;
+  var busca = norm(document.getElementById('rncSearch').value);
+  var fStatus = document.getElementById('rncFiltroStatus').value;
+  var fClasse = document.getElementById('rncFiltroClasse').value;
+  var anoAtual = String(new Date().getFullYear());
+
+  var todas = Object.keys(allRncs).map(function(n) {
+    var r = allRncs[n] || {};
+    return Object.assign({}, r, { _key: n, numero: r.numero || n });
+  });
+
+  var abertas = 0, analise = 0, criticas = 0, noAno = 0, idadeMax = 0;
+  todas.forEach(function(r) {
+    var estaAberta = (RNC_STATUS[r.status] || {}).aberta;
+    if (r.status === 'ABERTA') abertas++;
+    if (r.status === 'EM_ANALISE') analise++;
+    if (estaAberta && r.classificacao === 'CRITICA') criticas++;
+    if ((r.abertaEm || '').slice(0, 4) === anoAtual) noAno++;
+    if (estaAberta) {
+      var d = diasDesde(r.abertaEm);
+      if (d != null && d > idadeMax) idadeMax = d;
+    }
+  });
+  document.getElementById('rncStatAbertas').textContent = fmtNum(abertas);
+  document.getElementById('rncStatAnalise').textContent = fmtNum(analise);
+  document.getElementById('rncStatCriticas').textContent = fmtNum(criticas);
+  document.getElementById('rncStatAno').textContent = fmtNum(noAno);
+  document.getElementById('rncStatIdade').textContent = (abertas + analise) ? fmtNum(idadeMax) : '—';
+
+  var lista = todas.filter(function(r) {
+    if (fStatus === 'ABERTAS') { if (!(RNC_STATUS[r.status] || {}).aberta) return false; }
+    else if (fStatus && r.status !== fStatus) return false;
+    if (fClasse && r.classificacao !== fClasse) return false;
+    if (busca) {
+      var alvo = norm([r.numero, r.itemCodigo, r.itemNome, r.fornecedorNome, r.descricao, r.opLote].join(' '));
+      if (alvo.indexOf(busca) === -1) return false;
+    }
+    return true;
+  });
+  // Aberta antes de concluída; dentro disso, crítica antes; depois a mais
+  // antiga primeiro -- é a ordem de quem precisa ser tratado.
+  lista.sort(function(a, b) {
+    var aa = (RNC_STATUS[a.status] || {}).aberta ? 0 : 1;
+    var bb = (RNC_STATUS[b.status] || {}).aberta ? 0 : 1;
+    if (aa !== bb) return aa - bb;
+    var ca = (RNC_CLASSIFICACAO[a.classificacao] || {}).ordem || 9;
+    var cb = (RNC_CLASSIFICACAO[b.classificacao] || {}).ordem || 9;
+    if (aa === 0 && ca !== cb) return ca - cb;
+    return (a.abertaEm || '') < (b.abertaEm || '') ? (aa === 0 ? -1 : 1) : (aa === 0 ? 1 : -1);
+  });
+
+  document.getElementById('rncCount').textContent = 'Não conformidades (' + lista.length + ')';
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">' +
+      (todas.length ? 'Nenhuma RNC com esse filtro.' : 'Nenhuma não conformidade registrada. Reprovar um lote na Fila de Inspeção abre uma automaticamente.') +
+      '</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = lista.map(function(r) {
+    var cls = RNC_CLASSIFICACAO[r.classificacao] || { rotulo: r.classificacao || '—', badge: 'badge-gray' };
+    var st = RNC_STATUS[r.status] || { rotulo: r.status || '—', badge: 'badge-gray' };
+    var dias = diasDesde(r.abertaEm);
+    var acoes = '';
+    if (r.status === 'ABERTA') acoes += '<button class="btn btn-ghost btn-sm rnc-assumir" data-rnc="' + escapeAttr(r._key) + '">▶ Assumir</button> ';
+    if ((RNC_STATUS[r.status] || {}).aberta) acoes += '<button class="btn btn-primary btn-sm rnc-encerrar" data-rnc="' + escapeAttr(r._key) + '">✓ Encerrar</button>';
+    var linha = '<tr>' +
+      '<td><button class="btn btn-ghost btn-sm rnc-expandir" data-rnc="' + escapeAttr(r._key) + '">' + (rncExpandida === r._key ? '▾' : '▸') + '</button> <b>' + escapeHtml(r.numero) + '</b>' +
+        (r.automatica ? '<br><span class="field-hint">automática</span>' : '') + '</td>' +
+      '<td><span class="badge ' + cls.badge + '">' + escapeHtml(cls.rotulo) + '</span></td>' +
+      '<td>' + escapeHtml(RNC_ORIGEM[r.origem] || r.origem || '—') + '</td>' +
+      '<td>' + (r.itemCodigo ? '<b>' + escapeHtml(r.itemCodigo) + '</b> ' : '') +
+        '<span class="field-hint">' + escapeHtml(String(r.descricao || '').slice(0, 90)) + (String(r.descricao || '').length > 90 ? '…' : '') + '</span></td>' +
+      '<td>' + escapeHtml(r.fornecedorNome || '—') + '</td>' +
+      '<td>' + fmtData(r.abertaEm) + (dias != null && (RNC_STATUS[r.status] || {}).aberta ? '<br><span class="badge ' + (dias > 30 ? 'badge-red' : dias > 15 ? 'badge-orange' : 'badge-gray') + '">há ' + dias + 'd</span>' : '') + '</td>' +
+      '<td><span class="badge ' + st.badge + '">' + escapeHtml(st.rotulo) + '</span></td>' +
+      '<td style="text-align:right">' + (acoes || '<span class="field-hint">—</span>') + '</td>' +
+    '</tr>';
+    if (rncExpandida === r._key) linha += '<tr class="rnc-det"><td colspan="8"><div class="rnc-det-inner">' + detalheRncHtml(r) + '</div></td></tr>';
+    return linha;
+  }).join('');
+
+  tbody.querySelectorAll('.rnc-expandir').forEach(function(b) {
+    b.addEventListener('click', function() {
+      var k = b.getAttribute('data-rnc');
+      rncExpandida = rncExpandida === k ? null : k;
+      renderRncs();
+    });
+  });
+  tbody.querySelectorAll('.rnc-assumir').forEach(function(b) {
+    b.addEventListener('click', function() {
+      b.disabled = true;
+      assumirRnc(db, b.getAttribute('data-rnc'), currentUserNome()).then(function(r) {
+        b.disabled = false;
+        if (!r.ok) showAlert(r.erro, 'danger');
+      }).catch(function(e) { b.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+    });
+  });
+  tbody.querySelectorAll('.rnc-encerrar').forEach(function(b) {
+    b.addEventListener('click', function() { abrirModalEncerrarRnc(b.getAttribute('data-rnc')); });
+  });
+}
+
+function campo(rotulo, valor) {
+  if (!valor) return '';
+  return '<div class="rnc-campo"><b>' + escapeHtml(rotulo) + ':</b> ' + escapeHtml(String(valor)) + '</div>';
+}
+function detalheRncHtml(r) {
+  return campo('Descrição', r.descricao) +
+    campo('Ação imediata', r.acaoImediata) +
+    campo('Item', [r.itemCodigo, r.itemNome].filter(Boolean).join(' — ')) +
+    campo('Quantidade envolvida', r.qtdEnvolvida != null ? fmtNum(r.qtdEnvolvida) + ' ' + (r.unidade || '') : '') +
+    campo('Lote', r.loteOrigem) +
+    campo('Pedido de compra', r.pedidoNumero) +
+    campo('OP', r.opLote) +
+    campo('Aberta por', (r.abertaPor || '') + ' em ' + fmtDataHora(r.abertaEm)) +
+    (r.emAnalisePor ? campo('Assumida por', r.emAnalisePor + ' em ' + fmtDataHora(r.emAnaliseEm)) : '') +
+    campo('Causa raiz', r.causaRaiz) +
+    campo('Ação corretiva', r.acaoCorretiva) +
+    campo('Responsável pela ação', r.responsavelAcao) +
+    campo('Prazo', r.prazoAcao ? fmtData(r.prazoAcao) : '') +
+    campo('Disposição', RNC_DISPOSICAO[r.disposicao] || r.disposicao) +
+    (r.encerradaPor ? campo('Encerrada por', r.encerradaPor + ' em ' + fmtDataHora(r.encerradaEm)) : '');
+}
+
+['rncSearch', 'rncFiltroStatus', 'rncFiltroClasse'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', renderRncs);
+  document.getElementById(id).addEventListener('change', renderRncs);
+});
+
+/* ─────────── Modal RNC ─────────── */
+function abrirModalNovaRnc() {
+  rncModo = 'ABRIR'; rncAlvo = null;
+  document.getElementById('modalRncTitle').textContent = 'Nova não conformidade';
+  document.getElementById('rncContexto').style.display = 'none';
+  document.getElementById('rncCamposAbertura').style.display = '';
+  document.getElementById('rncCamposEncerramento').style.display = 'none';
+  document.getElementById('rncBtnSalvar').textContent = 'Abrir RNC';
+  document.getElementById('rncClassificacao').value = 'MAIOR';
+  document.getElementById('rncOrigem').value = 'RECEBIMENTO';
+  ['rncItemCodigo', 'rncQtd', 'rncOp', 'rncDescricao', 'rncAcaoImediata'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('rncFornecedor').value = '';
+  document.getElementById('rncItemHint').textContent = '';
+  document.getElementById('modalRncBg').classList.add('open');
+}
+function abrirModalEncerrarRnc(numero) {
+  var r = allRncs[numero];
+  if (!r) return;
+  rncModo = 'ENCERRAR'; rncAlvo = numero;
+  document.getElementById('modalRncTitle').textContent = 'Encerrar ' + (r.numero || numero);
+  var ctx = document.getElementById('rncContexto');
+  ctx.style.display = '';
+  ctx.innerHTML = '<b>' + escapeHtml(r.numero || numero) + '</b> · ' +
+    escapeHtml((RNC_CLASSIFICACAO[r.classificacao] || {}).rotulo || '') + ' · ' +
+    escapeHtml(r.itemCodigo || '') + (r.fornecedorNome ? ' · ' + escapeHtml(r.fornecedorNome) : '') +
+    '<br>' + escapeHtml(r.descricao || '');
+  document.getElementById('rncCamposAbertura').style.display = 'none';
+  document.getElementById('rncCamposEncerramento').style.display = '';
+  document.getElementById('rncBtnSalvar').textContent = 'Encerrar RNC';
+  ['rncCausaRaiz', 'rncAcaoCorretiva', 'rncResponsavel', 'rncPrazo'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('rncDisposicao').value = '';
+  document.getElementById('modalRncBg').classList.add('open');
+}
+function fecharModalRnc() { document.getElementById('modalRncBg').classList.remove('open'); }
+document.getElementById('btnNovaRnc').addEventListener('click', abrirModalNovaRnc);
+document.getElementById('modalRncClose').addEventListener('click', fecharModalRnc);
+document.getElementById('modalRncCancel').addEventListener('click', fecharModalRnc);
+
+// Confere o código digitado contra o cadastro -- mesma regra do resto do
+// sistema: o dado mestre já existe, ninguém redigita o nome do item.
+document.getElementById('rncItemCodigo').addEventListener('input', function() {
+  var cod = this.value.trim();
+  var hint = document.getElementById('rncItemHint');
+  if (!cod) { hint.textContent = ''; return; }
+  var k = sanitizeKey(cod);
+  if (allProdutos[k]) hint.textContent = '✓ Produto: ' + nomeItem(cod);
+  else if (allMateriais[k]) hint.textContent = '✓ Material: ' + nomeItem(cod);
+  else hint.textContent = '⚠ Não encontrado no cadastro — a RNC será aberta com o código como digitado.';
+});
+
+document.getElementById('rncBtnSalvar').addEventListener('click', function() {
+  var btn = this;
+  btn.disabled = true;
+  var terminar = function(r, msgOk) {
+    btn.disabled = false;
+    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+    fecharModalRnc();
+    showAlert(msgOk(r), 'success');
+  };
+  if (rncModo === 'ENCERRAR') {
+    encerrarRnc(db, rncAlvo, {
+      causaRaiz: document.getElementById('rncCausaRaiz').value,
+      acaoCorretiva: document.getElementById('rncAcaoCorretiva').value,
+      responsavelAcao: document.getElementById('rncResponsavel').value.trim() || null,
+      prazoAcao: document.getElementById('rncPrazo').value || null,
+      disposicao: document.getElementById('rncDisposicao').value
+    }, currentUserNome())
+      .then(function(r) { terminar(r, function() { return rncAlvo + ' encerrada.'; }); })
+      .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+    return;
+  }
+  var fornKey = document.getElementById('rncFornecedor').value;
+  var codigo = document.getElementById('rncItemCodigo').value.trim();
+  var qtd = document.getElementById('rncQtd').value;
+  abrirRnc(db, {
+    classificacao: document.getElementById('rncClassificacao').value,
+    origem: document.getElementById('rncOrigem').value,
+    descricao: document.getElementById('rncDescricao').value,
+    acaoImediata: document.getElementById('rncAcaoImediata').value.trim() || null,
+    itemCodigo: codigo || null,
+    itemNome: codigo ? nomeItem(codigo) : null,
+    qtdEnvolvida: qtd === '' ? null : Number(qtd),
+    opLote: document.getElementById('rncOp').value.trim() || null,
+    fornecedorKey: fornKey || null,
+    fornecedorNome: fornKey ? ((allFornecedores[fornKey] || {}).nome || null) : null
+  }, currentUserNome())
+    .then(function(r) { terminar(r, function(x) { return 'Não conformidade ' + x.numero + ' aberta.'; }); })
+    .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+   ABA 3 — DESEMPENHO DE FORNECEDOR
+   ══════════════════════════════════════════════════════════════════════ */
+function renderFornecedores() {
+  var tbody = document.getElementById('fornBody');
+  if (!tbody) return;
+  var lista = desempenhoQualidadeFornecedor(allEstoqueLotes, allPedidosCompra, allRncs);
+  document.getElementById('fornCount').textContent = 'Fornecedores com histórico de qualidade (' + lista.length + ')';
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nenhum lote de fornecedor inspecionado ainda. O painel se preenche sozinho a partir dos laudos.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(function(f) {
+    var t = f.taxaAprovacao;
+    var cor = t == null ? 'var(--border)' : t >= 95 ? 'var(--success)' : t >= 80 ? 'var(--warning)' : 'var(--danger)';
+    var barra = t == null ? '<span class="field-hint">sem laudo ainda</span>'
+      : '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div class="barra"><div class="barra-fill" style="width:' + t + '%;background:' + cor + '"></div></div>' +
+        '<b style="color:' + cor + '">' + t + '%</b></div>';
+    return '<tr>' +
+      '<td><b>' + escapeHtml(f.fornecedorNome || f.fornecedorKey) + '</b></td>' +
+      '<td>' + barra + '</td>' +
+      '<td style="text-align:right">' + fmtNum(f.inspecionados) + '</td>' +
+      '<td style="text-align:right;color:var(--tint-green-fg)">' + fmtNum(f.liberados) + '</td>' +
+      '<td style="text-align:right">' + (f.concessoes ? '<span class="badge badge-purple">' + f.concessoes + '</span>' : '—') + '</td>' +
+      '<td style="text-align:right">' + (f.reprovados ? '<span class="badge badge-red">' + f.reprovados + '</span>' : '—') + '</td>' +
+      '<td style="text-align:right">' + (f.emQuarentena ? '<span class="badge badge-orange">' + f.emQuarentena + '</span>' : '—') + '</td>' +
+      '<td style="text-align:right">' + (f.rncs ? f.rncs + (f.rncsAbertas ? ' <span class="badge badge-red">' + f.rncsAbertas + ' abertas</span>' : '') : '—') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ABA 4 — ESPECIFICAÇÕES (consulta)
+   ══════════════════════════════════════════════════════════════════════ */
+function renderEspecificacoes() {
+  var tbody = document.getElementById('espBody');
+  if (!tbody) return;
+  var busca = norm(document.getElementById('espSearch').value);
+  var filtro = document.getElementById('espFiltro').value;
+
+  var linhas = Object.keys(allEspecificacoes).map(function(k) {
+    var e = allEspecificacoes[k] || {};
+    var itens = Object.values(e.itens || {});
+    var partes = String(k).split('__v');
+    var codigo = e.codProduto || partes[0];
+    var comFaixa = itens.filter(function(i) {
+      return avaliarEnsaio(i, null).faixa !== null;
+    }).length;
+    var criticos = itens.filter(function(i) { return i.critico; }).length;
+    return {
+      key: k, codigo: codigo, versao: partes[1] || '1', nome: nomeItem(codigo),
+      total: itens.length, comFaixa: comFaixa, criticos: criticos,
+      textoBusca: norm(k + ' ' + codigo + ' ' + nomeItem(codigo) + ' ' + itens.map(function(i) { return i.ensaio; }).join(' '))
+    };
+  });
+
+  document.getElementById('espStatTotal').textContent = fmtNum(linhas.length);
+  document.getElementById('espStatEnsaios').textContent = fmtNum(linhas.reduce(function(a, l) { return a + l.total; }, 0));
+  document.getElementById('espStatMensuravel').textContent = fmtNum(linhas.reduce(function(a, l) { return a + l.comFaixa; }, 0));
+  document.getElementById('espStatCriticos').textContent = fmtNum(linhas.reduce(function(a, l) { return a + l.criticos; }, 0));
+
+  var lista = linhas.filter(function(l) {
+    if (busca && l.textoBusca.indexOf(busca) === -1) return false;
+    if (filtro === 'mensuravel' && !l.comFaixa) return false;
+    if (filtro === 'critico' && !l.criticos) return false;
+    if (filtro === 'vazia' && l.total) return false;
+    return true;
+  });
+  lista.sort(function(a, b) { return a.codigo < b.codigo ? -1 : a.codigo > b.codigo ? 1 : 0; });
+
+  document.getElementById('espCount').textContent = 'Planos de inspeção (' + lista.length + ')';
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhuma especificação com esse filtro.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(function(l) {
+    return '<tr>' +
+      '<td><b>' + escapeHtml(l.codigo) + '</b></td>' +
+      '<td>v' + escapeHtml(l.versao) + '</td>' +
+      '<td><span class="field-hint">' + escapeHtml(l.nome !== l.codigo ? l.nome : '—') + '</span></td>' +
+      '<td style="text-align:right">' + (l.total ? fmtNum(l.total) : '<span class="badge badge-orange">0</span>') + '</td>' +
+      '<td style="text-align:right">' + (l.comFaixa ? '<span class="badge badge-green">' + l.comFaixa + '</span>' : '<span class="field-hint">—</span>') + '</td>' +
+      '<td style="text-align:right">' + (l.criticos ? '<span class="badge badge-red">' + l.criticos + '</span>' : '<span class="field-hint">—</span>') + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-ghost btn-sm esp-ver" data-esp="' + escapeAttr(l.key) + '">Ver</button></td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('.esp-ver').forEach(function(b) {
+    b.addEventListener('click', function() { abrirEspecificacao(b.getAttribute('data-esp')); });
+  });
+}
+['espSearch', 'espFiltro'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', renderEspecificacoes);
+  document.getElementById(id).addEventListener('change', renderEspecificacoes);
+});
+
+function abrirEspecificacao(key) {
+  var e = allEspecificacoes[key];
+  if (!e) return;
+  document.getElementById('modalEspTitle').textContent = 'Especificação — ' + String(key).replace('__v', ' · versão ');
+  var itens = e.itens || {};
+  var chaves = Object.keys(itens);
+  var tb = document.getElementById('espDetBody');
+  if (!chaves.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="no-data">Esta especificação não tem nenhum ensaio cadastrado.</td></tr>';
+  } else {
+    tb.innerHTML = chaves.map(function(k) {
+      var i = itens[k] || {};
+      var faixa = avaliarEnsaio(i, null).faixa;
+      return '<tr>' +
+        '<td><b>' + escapeHtml(i.ensaio || '—') + '</b></td>' +
+        '<td>' + escapeHtml(i.especificacaoTexto || '—') + '</td>' +
+        '<td>' + (faixa ? escapeHtml(faixa) : '<span class="field-hint">descritivo</span>') + '</td>' +
+        '<td>' + escapeHtml(i.metodo || '—') + '</td>' +
+        '<td>' + (i.critico ? '<span class="badge badge-red">sim</span>' : '<span class="field-hint">—</span>') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+  document.getElementById('modalEspBg').classList.add('open');
+}
+document.getElementById('modalEspClose').addEventListener('click', function() { document.getElementById('modalEspBg').classList.remove('open'); });
+document.getElementById('modalEspCancel').addEventListener('click', function() { document.getElementById('modalEspBg').classList.remove('open'); });
+
+// Fechar modal clicando fora / com Esc -- mesmo comportamento das outras telas.
+['modalLaudoBg', 'modalRncBg', 'modalEspBg'].forEach(function(id) {
+  document.getElementById(id).addEventListener('click', function(ev) {
+    if (ev.target === this) this.classList.remove('open');
+  });
+});
+document.addEventListener('keydown', function(ev) {
+  if (ev.key !== 'Escape') return;
+  ['modalLaudoBg', 'modalRncBg', 'modalEspBg'].forEach(function(id) {
+    document.getElementById(id).classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>

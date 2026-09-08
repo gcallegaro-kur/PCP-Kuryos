@@ -1750,7 +1750,13 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       integridadeEmbalagem: laudo.integridadeEmbalagem || null,
       ausenciaVazamento: laudo.ausenciaVazamento || null,
       observacao: laudo.observacao || null,
-      autorizadoPor: laudo.autorizadoPor || null
+      autorizadoPor: laudo.autorizadoPor || null,
+      // Resultado ensaio a ensaio, quando o item tem especificação
+      // cadastrada. É o que transforma o laudo de "aprovado/reprovado" em
+      // registro de análise rastreável -- e o que um COA precisaria ler.
+      especificacaoKey: laudo.especificacaoKey || null,
+      ensaios: laudo.ensaios || null,
+      resumoPlano: laudo.resumoPlano || null
     };
     atual.atualizadoEm = agora;
     return atual;
@@ -1890,6 +1896,400 @@ function lotesAguardandoQualidade(estoqueLotes) {
     return (a.itemCodigo || '') < (b.itemCodigo || '') ? -1 : 1;
   });
   return out;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PLANO DE INSPEÇÃO — avaliação do laudo contra a especificação cadastrada
+//
+// A especificação já existe e está POVOADA: 181 registros em
+// `especificacoes/{codProduto}__v{versao}`, 1.323 ensaios com ensaio /
+// especificacaoTexto / metodo / minimo / maximo / critico. Até aqui nada no
+// sistema a usava para DECIDIR nada -- ops.html só a imprime na ficha da OP.
+//
+// Estas funções são o elo que faltava: dado o valor medido, a própria
+// especificação diz se está conforme. Onde há minimo/maximo numérico a
+// resposta é do sistema; onde a especificação é textual ("LÍQUIDO",
+// "CARACTERÍSTICO") ela é do analista -- e isso é uma distinção real, não
+// uma limitação: ninguém automatiza "odor característico".
+// ══════════════════════════════════════════════════════════════════════
+
+// Função PURA. Devolve { conforme: true|false|null, faixa, motivo }.
+// `conforme: null` = a especificação não é mensurável automaticamente (sem
+// min/max) OU não foi informado valor -- quem decide é o analista, no C/NC.
+function avaliarEnsaio(ensaio, valorMedido) {
+  var e = ensaio || {};
+  var temMin = e.minimo !== '' && e.minimo != null && !isNaN(parseFloat(e.minimo));
+  var temMax = e.maximo !== '' && e.maximo != null && !isNaN(parseFloat(e.maximo));
+  var min = temMin ? parseFloat(e.minimo) : null;
+  var max = temMax ? parseFloat(e.maximo) : null;
+  var faixa = temMin && temMax ? (min + ' – ' + max)
+    : temMin ? ('≥ ' + min)
+    : temMax ? ('≤ ' + max) : null;
+
+  if (!temMin && !temMax) {
+    return { conforme: null, faixa: null, motivo: 'Especificação descritiva — avaliação do analista.' };
+  }
+  if (valorMedido === '' || valorMedido == null || isNaN(parseFloat(valorMedido))) {
+    return { conforme: null, faixa: faixa, motivo: 'Sem valor medido.' };
+  }
+  var v = parseFloat(valorMedido);
+  if (temMin && v < min) return { conforme: false, faixa: faixa, motivo: 'Abaixo do mínimo (' + min + ').' };
+  if (temMax && v > max) return { conforme: false, faixa: faixa, motivo: 'Acima do máximo (' + max + ').' };
+  return { conforme: true, faixa: faixa, motivo: 'Dentro da faixa.' };
+}
+
+// Função PURA. Avalia o plano inteiro e devolve o veredito consolidado.
+// `itens` = especificacoes/{key}/itens (objeto); `resultados` = { itemKey:
+// { valor, cnc } } onde `cnc` é o C/NC manual do analista (para ensaio
+// descritivo). Devolve os ensaios avaliados + contagens + `bloqueia`, que é
+// true quando algum ensaio CRÍTICO reprovou.
+//
+// `bloqueia` NÃO trava a tela sozinho: informa. Quem decide é sempre o
+// analista -- inclusive porque APROVADO_CONCESSAO existe justamente para
+// liberar item fora de especificação com autorização nominal.
+function avaliarPlanoInspecao(itens, resultados) {
+  var res = resultados || {};
+  var linhas = [];
+  Object.keys(itens || {}).forEach(function(k) {
+    var e = itens[k] || {};
+    var r = res[k] || {};
+    var auto = avaliarEnsaio(e, r.valor);
+    // O C/NC manual do analista vence a avaliação automática quando existe:
+    // ele viu a amostra, o sistema só leu um número.
+    var conforme = r.cnc === 'C' ? true : r.cnc === 'NC' ? false : auto.conforme;
+    linhas.push({
+      itemKey: k,
+      ensaio: e.ensaio || '',
+      especificacaoTexto: e.especificacaoTexto || '',
+      metodo: e.metodo || '',
+      critico: !!e.critico,
+      faixa: auto.faixa,
+      valor: r.valor != null && r.valor !== '' ? r.valor : null,
+      cnc: r.cnc || null,
+      conforme: conforme,
+      motivo: r.cnc ? 'Avaliação do analista.' : auto.motivo,
+      automatico: auto.conforme !== null && !r.cnc
+    });
+  });
+  linhas.sort(function(a, b) {
+    if (a.critico !== b.critico) return a.critico ? -1 : 1; // crítico primeiro
+    return (a.ensaio || '') < (b.ensaio || '') ? -1 : 1;
+  });
+  var conformes = 0, naoConformes = 0, pendentes = 0, criticosNc = 0;
+  linhas.forEach(function(l) {
+    if (l.conforme === true) conformes++;
+    else if (l.conforme === false) { naoConformes++; if (l.critico) criticosNc++; }
+    else pendentes++;
+  });
+  return {
+    linhas: linhas, total: linhas.length,
+    conformes: conformes, naoConformes: naoConformes, pendentes: pendentes,
+    criticosNaoConformes: criticosNc,
+    bloqueia: criticosNc > 0
+  };
+}
+
+// Função PURA: acha a especificação vigente de um SKU. As chaves são
+// `{codProduto}__v{n}`; sem versão informada, pega a de maior número --
+// mesma convenção de chaveVersao() usada por cadastros/ops.
+function especificacaoVigente(especificacoes, codProduto, versao) {
+  if (!codProduto) return null;
+  var alvo = sanitizeKey(codProduto);
+  var melhor = null, melhorV = -1;
+  Object.keys(especificacoes || {}).forEach(function(k) {
+    var partes = String(k).split('__v');
+    if (partes.length < 2 || sanitizeKey(partes[0]) !== alvo) return;
+    var v = parseInt(partes[1], 10);
+    if (isNaN(v)) return;
+    if (versao != null && v !== parseInt(versao, 10)) return;
+    if (v > melhorV) { melhorV = v; melhor = { key: k, versao: v, registro: especificacoes[k] }; }
+  });
+  return melhor;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// NÃO CONFORMIDADE (RNC) — spec do Módulo CQ, seção 2.3
+//
+// É o elo que faz a Qualidade CONVERSAR com Compras: RNC de recebimento
+// nasce vinculada ao fornecedor, e o histórico por fornecedor é o insumo de
+// homologação que hoje não existe em lugar nenhum (a planilha do CQ registra
+// a entrada, mas nada acumula o desempenho de quem entregou).
+//
+// O vínculo com o fornecedor NÃO é digitado: o lote guarda `origemRef` = a
+// chave do pedido de compra, e o pedido guarda fornecedorKey/fornecedorNome.
+// Ou seja, quem já lançou o PC não redigita nada -- é a mesma regra de
+// "cadastro não se pede duas vezes" aplicada aqui.
+// ══════════════════════════════════════════════════════════════════════
+
+var RNC_CLASSIFICACAO = {
+  CRITICA: { rotulo: 'Crítica', badge: 'badge-red',    ordem: 1 },
+  MAIOR:   { rotulo: 'Maior',   badge: 'badge-orange', ordem: 2 },
+  MENOR:   { rotulo: 'Menor',   badge: 'badge-gray',   ordem: 3 }
+};
+var RNC_STATUS = {
+  ABERTA:     { rotulo: 'Aberta',      badge: 'badge-red',    aberta: true  },
+  EM_ANALISE: { rotulo: 'Em análise',  badge: 'badge-orange', aberta: true  },
+  CONCLUIDA:  { rotulo: 'Concluída',   badge: 'badge-green',  aberta: false }
+};
+// Destino do material da NC. É decisão separada do laudo: reprovar diz que
+// não serve; a disposição diz o que se FAZ com ele -- e é a que gera
+// devolução, descarte ou retrabalho lá na ponta.
+var RNC_DISPOSICAO = {
+  DEVOLUCAO:  'Devolver ao fornecedor',
+  DESCARTE:   'Descartar',
+  RETRABALHO: 'Retrabalhar',
+  CONCESSAO:  'Usar com concessão',
+  ACEITE:     'Aceitar como está'
+};
+var RNC_ORIGEM = {
+  RECEBIMENTO: 'Recebimento',
+  PRODUCAO:    'Produção',
+  EXPEDICAO:   'Expedição',
+  CLIENTE:     'Reclamação de cliente',
+  INTERNA:     'Interna'
+};
+
+// Função PURA: próximo número livre do ano, no formato RNC-{ano}-{seq}.
+// Numera por ANO, como a spec pede (2.3) -- e a sequência é derivada das
+// chaves existentes, não de um contador guardado à parte, porque contador
+// separado é mais uma coisa que pode dessincronizar do que ele conta.
+function proximoNumeroRnc(rncs, ano) {
+  var y = String(ano || new Date().getFullYear());
+  var prefixo = 'RNC-' + y + '-';
+  var maior = 0;
+  Object.keys(rncs || {}).forEach(function(k) {
+    if (k.indexOf(prefixo) !== 0) return;
+    var n = parseInt(k.slice(prefixo.length), 10);
+    if (!isNaN(n) && n > maior) maior = n;
+  });
+  return prefixo + String(maior + 1).padStart(3, '0');
+}
+
+// Função PURA: descobre o fornecedor de um lote sem ninguém digitar.
+// O caminho é lote.origemRef -> pedidos_compra/{key} -> fornecedor.
+function fornecedorDoLote(lote, pedidosCompra) {
+  var l = lote || {};
+  if (l.origemTipo !== 'recebimento_pc' || !l.origemRef) return null;
+  var pc = (pedidosCompra || {})[l.origemRef];
+  if (!pc) return null;
+  return {
+    fornecedorKey: pc.fornecedorKey || null,
+    fornecedorNome: pc.fornecedorNome || null,
+    pedidoKey: l.origemRef,
+    pedidoNumero: pc.numeroFormatado || null
+  };
+}
+
+// Abre uma RNC. A chave É o número (RNC-2026-001) -- legível no banco e
+// única por construção.
+//
+// A corrida por número é resolvida pela própria chave: a transaction no nó
+// do número escolhido ABORTA se ele já existe, e aí tentamos o seguinte.
+// Um contador em `config/` seria o caminho óbvio, mas config só aceita
+// escrita de admin/pcp -- o papel `qualidade`, que é justamente quem abre
+// RNC, não conseguiria incrementá-lo.
+function abrirRnc(dbRef, dados, autor) {
+  var d = dados || {};
+  if (!d.descricao || !String(d.descricao).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Descreva a não conformidade.' });
+  }
+  if (!RNC_CLASSIFICACAO[d.classificacao]) {
+    return Promise.resolve({ ok: false, erro: 'Classificação inválida: ' + d.classificacao });
+  }
+  var agora = new Date().toISOString();
+  var ano = new Date().getFullYear();
+
+  return dbRef.ref('nao_conformidades').once('value').then(function(snap) {
+    var existentes = snap.val() || {};
+
+    function tentar(tentativa) {
+      if (tentativa > 20) {
+        return { ok: false, erro: 'Não foi possível reservar um número de RNC. Tente de novo.' };
+      }
+      var numero = proximoNumeroRnc(existentes, ano);
+      var registro = {
+        numero: numero,
+        status: 'ABERTA',
+        classificacao: d.classificacao,
+        origem: RNC_ORIGEM[d.origem] ? d.origem : 'INTERNA',
+        descricao: String(d.descricao).trim(),
+        abertaEm: agora,
+        abertaPor: autor || null,
+        itemTipo: d.itemTipo || null,
+        itemCodigo: d.itemCodigo || null,
+        itemNome: d.itemNome || null,
+        unidade: d.unidade || null,
+        qtdEnvolvida: d.qtdEnvolvida != null ? d.qtdEnvolvida : null,
+        loteKey: d.loteKey || null,
+        loteOrigem: d.loteOrigem || null,
+        fornecedorKey: d.fornecedorKey || null,
+        fornecedorNome: d.fornecedorNome || null,
+        pedidoKey: d.pedidoKey || null,
+        pedidoNumero: d.pedidoNumero || null,
+        opLote: d.opLote || null,
+        acaoImediata: d.acaoImediata || null,
+        automatica: !!d.automatica
+      };
+      return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+        if (atual) return; // já existe -- aborta e tentamos o próximo número
+        return registro;
+      }).then(function(res) {
+        if (res && res.committed) return { ok: true, numero: numero, rnc: registro };
+        existentes[numero] = true; // marca como ocupado e tenta o seguinte
+        return tentar(tentativa + 1);
+      });
+    }
+    return tentar(1);
+  });
+}
+
+// Registra tratativa/encerramento. Encerrar exige causa raiz e ação
+// corretiva -- RNC sem os dois é só um registro de que algo deu errado, que
+// é exatamente o que a planilha já fazia.
+function encerrarRnc(dbRef, numero, dados, autor) {
+  var d = dados || {};
+  if (!numero) return Promise.resolve({ ok: false, erro: 'RNC não identificada.' });
+  if (!d.causaRaiz || !String(d.causaRaiz).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Informe a causa raiz.' });
+  }
+  if (!d.acaoCorretiva || !String(d.acaoCorretiva).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Informe a ação corretiva.' });
+  }
+  if (!RNC_DISPOSICAO[d.disposicao]) {
+    return Promise.resolve({ ok: false, erro: 'Escolha a disposição do material.' });
+  }
+  var agora = new Date().toISOString();
+  return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status === 'CONCLUIDA') return; // aborta: não reencerra
+    atual.status = 'CONCLUIDA';
+    atual.causaRaiz = String(d.causaRaiz).trim();
+    atual.acaoCorretiva = String(d.acaoCorretiva).trim();
+    atual.responsavelAcao = d.responsavelAcao || null;
+    atual.prazoAcao = d.prazoAcao || null;
+    atual.disposicao = d.disposicao;
+    atual.encerradaEm = agora;
+    atual.encerradaPor = autor || null;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) {
+      return { ok: false, erro: 'Esta RNC já foi concluída.' };
+    }
+    return { ok: true, numero: numero };
+  });
+}
+
+// Move a RNC para "em análise" (alguém pegou pra tratar). Mudança leve, sem
+// exigência de conteúdo -- o rigor está no encerramento.
+function assumirRnc(dbRef, numero, autor) {
+  if (!numero) return Promise.resolve({ ok: false, erro: 'RNC não identificada.' });
+  return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status !== 'ABERTA') return; // aborta
+    atual.status = 'EM_ANALISE';
+    atual.emAnaliseEm = new Date().toISOString();
+    atual.emAnalisePor = autor || null;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: 'Esta RNC já saiu do status Aberta.' };
+    return { ok: true };
+  });
+}
+
+// Laudo + RNC automática numa operação só.
+//
+// Reprovar é o gatilho da RNC pela spec (fluxo 3.1, passo 8b: "Sistema cria
+// RNC automaticamente vinculada ao RA e ao fornecedor"). Deixar isso a cargo
+// da tela abriria a porta pro caso ruim -- laudo gravado, RNC não -- que é
+// justamente o material reprovado sem ninguém cobrando o fornecedor.
+//
+// A RNC é consequência, nunca condição: se ela falhar, o laudo continua
+// valendo e a resposta diz o que faltou. Travar a liberação de material por
+// causa do registro administrativo seria trocar um problema de papel por um
+// problema de fábrica parada.
+function registrarLaudoComRnc(dbRef, itemCodigo, loteKey, laudo, autor, contexto) {
+  var ctx = contexto || {};
+  return registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor).then(function(r) {
+    if (!r.ok) return r;
+    var geraRnc = laudo.decisao === 'REPROVADO' || laudo.decisao === 'RETIDO';
+    if (!geraRnc) return r;
+    return abrirRnc(dbRef, {
+      classificacao: laudo.decisao === 'REPROVADO' ? 'MAIOR' : 'MENOR',
+      origem: ctx.origem || (ctx.itemTipo === 'produto' ? 'PRODUCAO' : 'RECEBIMENTO'),
+      descricao: laudo.observacao || ('Lote ' + (ctx.loteOrigem || loteKey) + ' de ' + itemCodigo + ' com laudo ' + rotuloStatusLote(laudo.decisao) + '.'),
+      itemTipo: ctx.itemTipo || 'material',
+      itemCodigo: itemCodigo, itemNome: ctx.itemNome || null, unidade: ctx.unidade || null,
+      qtdEnvolvida: r.saldo != null ? r.saldo : null,
+      loteKey: loteKey, loteOrigem: ctx.loteOrigem || null,
+      fornecedorKey: ctx.fornecedorKey || null, fornecedorNome: ctx.fornecedorNome || null,
+      pedidoKey: ctx.pedidoKey || null, pedidoNumero: ctx.pedidoNumero || null,
+      opLote: ctx.opLote || null,
+      acaoImediata: 'Lote bloqueado para uso.',
+      automatica: true
+    }, autor).then(function(rr) {
+      r.rnc = rr.ok ? rr.numero : null;
+      r.rncErro = rr.ok ? null : rr.erro;
+      return r;
+    }).catch(function(err) {
+      r.rnc = null;
+      r.rncErro = err.message;
+      return r;
+    });
+  });
+}
+
+// Função PURA: desempenho por fornecedor, que é o que transforma laudo
+// isolado em critério de homologação. Conta lotes inspecionados e o que
+// aconteceu com cada um, cruzando estoque_lotes com pedidos_compra.
+function desempenhoQualidadeFornecedor(estoqueLotes, pedidosCompra, rncs) {
+  var porFornecedor = {};
+  function bucket(key, nome) {
+    if (!porFornecedor[key]) {
+      porFornecedor[key] = {
+        fornecedorKey: key, fornecedorNome: nome || key,
+        inspecionados: 0, liberados: 0, reprovados: 0, concessoes: 0,
+        emQuarentena: 0, rncs: 0, rncsAbertas: 0
+      };
+    }
+    return porFornecedor[key];
+  }
+  Object.keys(estoqueLotes || {}).forEach(function(itemKey) {
+    var lotes = estoqueLotes[itemKey] || {};
+    Object.keys(lotes).forEach(function(lk) {
+      var l = lotes[lk];
+      if (!l) return;
+      var f = fornecedorDoLote(l, pedidosCompra);
+      if (!f || !f.fornecedorKey) return;
+      var b = bucket(f.fornecedorKey, f.fornecedorNome);
+      if (l.status === 'QUARENTENA') { b.emQuarentena++; return; }
+      if (!l.qualidade || !l.qualidade.decisao) return;
+      b.inspecionados++;
+      if (l.qualidade.decisao === 'LIBERADO') b.liberados++;
+      else if (l.qualidade.decisao === 'REPROVADO') b.reprovados++;
+      else if (l.qualidade.decisao === 'APROVADO_CONCESSAO') b.concessoes++;
+    });
+  });
+  Object.keys(rncs || {}).forEach(function(k) {
+    var r = rncs[k];
+    if (!r || !r.fornecedorKey) return;
+    var b = bucket(r.fornecedorKey, r.fornecedorNome);
+    b.rncs++;
+    if ((RNC_STATUS[r.status] || {}).aberta) b.rncsAbertas++;
+  });
+  var lista = Object.values(porFornecedor);
+  lista.forEach(function(b) {
+    // Concessão NÃO conta como aprovação limpa: o material entrou fora de
+    // especificação e alguém teve que autorizar. Somá-lo aos liberados
+    // esconderia exatamente o fornecedor que dá mais trabalho.
+    b.taxaAprovacao = b.inspecionados ? Math.round((b.liberados / b.inspecionados) * 1000) / 10 : null;
+  });
+  lista.sort(function(a, b) {
+    if (a.taxaAprovacao === null && b.taxaAprovacao === null) return b.inspecionados - a.inspecionados;
+    if (a.taxaAprovacao === null) return 1;
+    if (b.taxaAprovacao === null) return -1;
+    return a.taxaAprovacao - b.taxaAprovacao; // pior primeiro
+  });
+  return lista;
 }
 
 // ══════════════════════════════════════════════════════════════════════

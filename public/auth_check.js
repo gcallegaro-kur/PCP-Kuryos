@@ -76,6 +76,11 @@ const pageAccessRules = {
   'logistica.html': ['admin', 'pcp'],
   'estoque.html': ['admin', 'pcp'],
   'separacao_materiais.html': ['admin', 'pcp'],
+  // Módulo de Qualidade -- papel próprio 'qualidade' (Analista/Inspetora do
+  // CQ). É a ÚNICA página que esse papel enxerga: ele decide o que pode ser
+  // usado e o que não pode, mas não emite OP, não ajusta saldo e não mexe em
+  // cadastro. 'admin'/'pcp' entram junto pela regra de sempre.
+  'qualidade.html': ['admin', 'pcp', 'qualidade'],
   // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
   // (decisão do usuário: sem múltiplos papéis por pessoa). 'admin' entra
   // aqui também (pedido do usuário: ADM vê tudo, sem exceção) -- 'pcp'
@@ -374,7 +379,10 @@ const ktIcons = {
   // "warehouse" (o hub de estoque em si) e "box" (Matriz de Insumos).
   clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 12l2 2 4-4"/>',
   // Manuais -- livro aberto, distinto de "clipboard" (Separação) e "list".
-  book: '<path d="M12 6.5S10 4.5 3.5 4.5v13C10 17.5 12 19.5 12 19.5s2-2 8.5-2v-13C14 4.5 12 6.5 12 6.5Z"/><path d="M12 6.5v13"/>'
+  book: '<path d="M12 6.5S10 4.5 3.5 4.5v13C10 17.5 12 19.5 12 19.5s2-2 8.5-2v-13C14 4.5 12 6.5 12 6.5Z"/><path d="M12 6.5v13"/>',
+  // Qualidade -- erlenmeyer (fila de inspeção) e triângulo de atenção (RNC).
+  flask: '<path d="M9.5 3v6.2L4.2 18a2 2 0 0 0 1.7 3h12.2a2 2 0 0 0 1.7-3l-5.3-8.8V3"/><path d="M8 3h8"/><path d="M7.2 14h9.6"/>',
+  alert: '<path d="M10.3 3.9 2.5 17.4A2 2 0 0 0 4.2 20.5h15.6a2 2 0 0 0 1.7-3.1L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/>'
 };
 function ktIcon(name) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ktIcons[name] + '</svg>';
@@ -423,10 +431,14 @@ function renderUnifiedNavbar(user) {
   const isRH = user.role === 'rh' || user.role === 'gestor';
   const showRhGroup = isRH || user.role === 'admin';
   const isRotulagem = user.role === 'rotulagem';
+  // Módulo de Qualidade: papel próprio, com uma página só. Mesma lógica de
+  // 'rotulagem' -- menu enxuto, sem links que dariam "Acesso Negado".
+  const isQualidade = user.role === 'qualidade';
   const roleLabel = user.role === 'admin' ? 'Administrador'
     : user.role === 'pcp' ? 'PCP'
     : user.role === 'rh' ? 'RH Central'
     : user.role === 'gestor' ? 'Gestor de Linha'
+    : isQualidade ? 'Qualidade'
     : (isRotulagem ? 'Rotulagem' : 'Produção');
   // 'pcp' (novo papel, pedido do usuário: "vê tudo, menos o RH") tem
   // exatamente o mesmo alcance de página que 'admin' sempre teve no PCP.
@@ -442,7 +454,7 @@ function renderUnifiedNavbar(user) {
 
   // Perfil Rotulagem só tem acesso a form.html -- sidebar minimalista, sem
   // links pra páginas que dariam "Acesso Negado" se clicadas.
-  const analisesGroup = (isRotulagem || isRH) ? '' :
+  const analisesGroup = (isRotulagem || isRH || isQualidade) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Analytics</div>' +
     ktLink('dashboard.html', 'dashboard', 'Dashboard Diário', activePage) +
     ktLink('dashboard_analise.html', 'history', 'Dashboard Geral', activePage) +
@@ -471,7 +483,7 @@ function renderUnifiedNavbar(user) {
     ktLink('compras.html', 'cart', 'Compras', activePage) +
     '</div>';
 
-  const pcpGroup = (isRotulagem || isRH) ? '' :
+  const pcpGroup = (isRotulagem || isRH || isQualidade) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">PCP</div>' +
     ktLink('planejamento.html', 'calendar', 'Planejamento', activePage) +
     // horizonte.html tirado do menu a pedido do usuário -- "não é usado
@@ -513,7 +525,17 @@ function renderUnifiedNavbar(user) {
     ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) +
     '</div>';
 
-  const producaoGroup = isRH ? '' :
+  // "Qualidade" -- bloco próprio, não uma aba dentro de Estoque. A decisão
+  // de liberar ou não um lote é de outro time, com outro papel de acesso, e
+  // fica lado a lado com o estoque no fluxo mas separada dele na navegação.
+  // Único grupo que o papel 'qualidade' enxerga.
+  const qualidadeGroup = (!isPcpAdmin && !isQualidade) ? '' :
+    '<div class="kt-nav-group"><div class="kt-nav-cap">Qualidade</div>' +
+    ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage) +
+    ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage) +
+    '</div>';
+
+  const producaoGroup = (isRH || isQualidade) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Produção</div>' +
     ktLink('form.html', 'pencil', 'Apontamento Diário', activePage) +
     (isRotulagem ? '' : ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)) +
@@ -542,7 +564,7 @@ function renderUnifiedNavbar(user) {
   // qualquer papel autenticado; o que muda por papel aqui é só QUAL manual
   // faz sentido oferecer primeiro, pra não empilhar 3 links iguais pra todo
   // mundo. RH não entra: os manuais são de PCP/produção, não do módulo dele.
-  const manuaisGroup = isRH ? '' :
+  const manuaisGroup = (isRH || isQualidade) ? '' :
     '<div class="kt-nav-group"><div class="kt-nav-cap">Ajuda</div>' +
     ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage) +
     (isPcpAdmin ? ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage) : '') +
@@ -553,9 +575,12 @@ function renderUnifiedNavbar(user) {
   // especificação); Gestor não acessa o Dashboard nesta fase -- pousa na
   // Avaliação, sua ferramenta principal.
   var rhHome = user.role === 'rh' ? 'rh_dashboard.html' : 'rh_avaliacao.html';
+  // Qualidade pousa na própria fila de inspeção -- é a tela de trabalho
+  // dele, e o Dashboard de produção nem está no alcance desse papel.
+  var brandHome = isRH ? rhHome : isQualidade ? 'qualidade.html?tab=fila' : 'dashboard.html';
   sidebar.innerHTML =
-    '<div class="kt-brand" onclick="window.location.href=\'' + (isRH ? rhHome : 'dashboard.html') + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
+    '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
+    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +
