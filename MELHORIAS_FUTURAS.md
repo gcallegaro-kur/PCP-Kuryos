@@ -614,20 +614,92 @@ inspeção herdado da especificação cadastrada, RNC com vínculo automático a
 fornecedor e painel de desempenho por fornecedor. Cobre o recebimento e a
 liberação de palete — as Fases 1 e 2 da spec `ERP_Kuryos_Modulo_CQ_v1.1`.
 
-**As Fases 3–4 não estão registradas neste arquivo** (ronda de linha,
-assépsia, setup/first article, calibração, amostras de retenção, COA). Elas
-não foram construídas porque dependem de coisas que o sistema não tem —
-ver a lista de pré-requisitos abaixo antes de planejar qualquer uma:
+### Inventário contra a spec (levantado em 2026-09-08)
+
+A própria spec traz uma lista de desenvolvimento (seção 9) com **45 itens**.
+Conferido item a item contra o código: **5 prontos, 7 parciais, 33 não
+começados.** O que está pronto é a espinha — o fluxo de decisão (lote entra
+em quarentena, alguém julga, o status muda e a fábrica respeita). O que
+falta são os roteiros de inspeção estruturados.
+
+**Os 3 bloqueadores.** Nenhum é do módulo de Qualidade, e a maior parte do
+que falta depende deles. Ler antes de planejar qualquer fase nova:
 
 - **Ordem de Manipulação (OM) não existe como entidade** — CK-3 (assépsia de
-  tachos), análise de bulk e três dos hard stops da spec são "por OM". Sem a
+  tachos), análise de bulk e 3 dos hard stops da spec são "por OM". Sem a
   entidade não há onde pendurá-los.
 - **Tarefas Pendentes não existe** — as 14 tarefas CQ-01..CQ-14 com SLA, o
-  escalonamento da ronda e os alertas de vencimento pressupõem essa
-  arquitetura.
+  temporizador de ronda de 2h e o escalonamento em 30min pressupõem essa
+  arquitetura. Hoje só existe `alertas_pendentes`, que é fila de e-mail, não
+  tarefa com responsável e prazo.
 - **Anexo de arquivo não existe** — bloqueia foto em RNC, certificado de
   calibração e PDF do COA. Mesmo bloqueador do anexo de proposta em
   **Compras** (ver acima): resolver o Storage uma vez destrava os dois.
+
+**Os 8 checklists (spec 2.2):** 1 parcial de fato, 7 inexistentes.
+
+| | Checklist | Situação |
+|---|---|---|
+| CK-1 | Recebimento de Insumos | ⚠ Campos existem (veículo, embalagem, integridade, vazamento, certificado) mas **não é adaptativo por sub-tipo** — a spec pede seções diferentes para frasco, tampa, válvula, rótulo, cartucho, display, celofane |
+| CK-2 | Recebimento de MP/Fragrâncias | ⚠ Laudo com plano de inspeção existe, mas **sem pré-verificação documental** (NF × PO, COA do fornecedor, FISPQ) e **sem comparativo com a retenção anterior** |
+| CK-3 | Assépsia — Manipulação | ❌ depende de OM |
+| CK-4 | Assépsia — Linha de Envase | ❌ |
+| CK-5 | Setup de Linha / First Article | ❌ |
+| CK-6 | Ronda de Linha (2h) | ❌ depende de Tarefas Pendentes |
+| CK-7 | Liberação de Palete | ⚠ A **decisão** existe e funciona; o **roteiro de verificação** não |
+| CK-8 | Higiene, Ambiente e Calibração | ❌ |
+
+**Entidades (spec 2.x):** existem RNC e o plano de inspeção herdado da ficha
+técnica. Faltam 4:
+
+- **RA (Registro de Análise)** — hoje o laudo mora *dentro* do lote
+  (`estoque_lotes/{item}/{lote}/qualidade`), sem numeração própria
+  `RA-{AAAAMMDD}-{seq}`, sem tipo e sem NF de origem. **Todo o resto da spec
+  referencia o RA como chave** — é a entidade que mais custa não ter.
+- **RET (Amostra de Retenção)** — a planilha "Controle da Retenção" segue
+  fora do sistema. Prazo de guarda: MP/fragrância 6 meses do recebimento, PA
+  validade + 6 meses (a spec pede validar contra a ANVISA antes de
+  configurar, especialmente Grau 2 — protetor solar, repelente).
+- **Instrumentos de Calibração** — nada. Precisa de anexo (certificado PDF).
+- **Trilha de status de lote** — o status muda e o movimento é logado em
+  `movimentos_estoque`, mas não há o registro explícito "de X para Y, por
+  quem, quando" que a spec pede.
+
+**Automações (spec 9.3):** 1 de 10. Funciona a comparação automática do
+resultado contra a faixa da especificação. Não funcionam as outras nove.
+
+**Bloqueios obrigatórios (spec 7.1):** 1 de 8. Só "insumo em quarentena não
+é enxergado pela separação" está implementado (via `loteDisponivel()`). Os
+outros 7 dependem de OM, CK-3/4/5/8 ou do RA.
+
+**Documentos (spec 9.4):** 0 de 4. Nenhum COA, nenhum comunicado de RNC ao
+fornecedor, nenhuma etiqueta de status de lote ou de palete.
+
+**Integrações (spec 9.5):** 2 de 6 prontas — CQ→WMS (liberação governa
+separação, consumo e expedição) e CQ→Compras (histórico alimenta
+homologação). Faltam CQ→PCP/Produção, CQ→Retrabalho (módulo não existe),
+CQ→Comercial/COA, e a tarefa de análise no recebimento.
+
+### Sequência sugerida
+
+Não construir CK-3 a CK-6 agora: são "por OP/OM" e a produção ainda não
+aponta contra Ordem de Manipulação — o checklist ficaria sem âncora, que foi
+exatamente o que manteve o módulo inteiro decorativo até setembro/2026.
+
+Ordem que gera valor sem depender de nenhum bloqueador:
+
+1. **Preencher as faixas de pH e densidade** no cadastro (ver item abaixo) —
+   puro ganho, zero código.
+2. **Revisar quais ensaios são críticos** (ver item abaixo).
+3. **CK-1 adaptativo por sub-tipo** — é a inspeção que a Logística mais faz,
+   e não depende de OM nem de Tarefas Pendentes.
+4. **RET (retenção)** — substitui uma planilha real que existe hoje, e só
+   depende do que já temos.
+
+Ronda, assépsia, setup, calibração e COA ficam para depois da Ordem de
+Manipulação.
+
+### Itens avulsos
 
 - **Etiqueta interna de liberação de Qualidade** — uma 2ª etiqueta,
   distinta da etiqueta de identificação que o fornecedor cola nas
