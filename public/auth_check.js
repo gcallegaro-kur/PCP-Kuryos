@@ -634,7 +634,12 @@ function renderUnifiedNavbar(user) {
   const manuaisGroup = grupo('Ajuda', [
     temMod('apontamento') && ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage),
     temMod('cadastros') && ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage),
-    temMod('planejamento') && ktLink('manual.html', 'book', 'Manual de Operação', activePage)
+    temMod('planejamento') && ktLink('manual.html', 'book', 'Manual de Operação', activePage),
+    // Referência completa: única sem gate de módulo, porque é o documento
+    // que descreve o sistema INTEIRO -- inclusive as partes que a pessoa
+    // não acessa, que é justamente o que ela precisa ler pra saber o que
+    // pedir ao ADM. Os outros três são material de rotina por função.
+    ktLink('manual_referencia.html', 'book', 'Referência do Sistema', activePage)
   ]);
 
   // A home segue os módulos que a pessoa tem, na mesma ordem de preferência

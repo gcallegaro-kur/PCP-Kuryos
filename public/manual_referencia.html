@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de Referência — Kuryos</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --primary: #0a1c69;
+      --secondary: #1e3a8a;
+      --success: #059669;
+      --warning: #d97706;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --bg: #f9fafb;
+      --card: #ffffff;
+      --border: #e5e7eb;
+    }
+    /* Mesmo tratamento dos outros manuais: documento autônomo, sem
+       auth_check.js/theme.css, então o modo escuro é resolvido aqui e as
+       caixas semânticas usam color-mix pra acompanhar sozinhas. */
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; --primary:#5e83ea; --secondary:#93b4f5; --success:#34c98f; --warning:#fbbf5c; --text:#f5f5f7; --muted:#98989d; --bg:#000000; --card:#1c1c1e; --border:#38383a; }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5; padding: 40px 20px;
+    }
+    .container {
+      max-width: 860px; margin: 0 auto; background: var(--card); padding: 40px;
+      border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border);
+    }
+    .header { text-align: center; border-bottom: 3px solid var(--primary); padding-bottom: 20px; margin-bottom: 30px; }
+    .header img { height: 45px; margin-bottom: 10px; }
+    .header h1 { font-size: 26px; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .header p { font-size: 14px; color: var(--muted); margin-top: 5px; font-weight: 600; }
+    .intro-box {
+      background: color-mix(in srgb, #3b82f6 16%, var(--card)); border-left: 5px solid #3b82f6;
+      padding: 15px 20px; border-radius: 0 8px 8px 0; font-size: 14px;
+      color: color-mix(in srgb, #3b82f6 55%, var(--text)); margin-bottom: 30px; font-weight: 500;
+    }
+    .intro-box.warn { background: color-mix(in srgb, var(--warning) 16%, var(--card)); border-left-color: var(--warning); color: color-mix(in srgb, var(--warning) 60%, var(--text)); }
+    .section-title {
+      font-size: 18px; color: var(--primary); margin-top: 34px; margin-bottom: 15px;
+      display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--border); padding-bottom: 8px;
+    }
+    .section-title span.icon { font-size: 22px; }
+    .sub-title { font-size: 15px; color: var(--secondary); font-weight: 700; margin-top: 22px; margin-bottom: 8px; }
+    p.txt { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
+    .step-list { list-style: none; display: flex; flex-direction: column; gap: 13px; margin-top: 10px; }
+    .step-item { display: flex; gap: 15px; align-items: flex-start; }
+    .step-number {
+      background: var(--primary); color: white; width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .step-content strong { color: var(--primary); font-size: 14.5px; }
+    .step-content p { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+    .field-guide { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    .field-guide th, .field-guide td { border: 1px solid var(--border); padding: 9px 11px; text-align: left; vertical-align: top; }
+    .field-guide th { background: color-mix(in srgb, var(--text) 6%, var(--card)); color: var(--primary); font-weight: 700; }
+    .field-guide td strong { color: var(--text); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .badge-green { background: color-mix(in srgb, var(--success) 22%, var(--card)); color: var(--success); }
+    .badge-gray { background: color-mix(in srgb, var(--text) 10%, var(--card)); color: var(--muted); }
+    .badge-blue { background: color-mix(in srgb, #3b82f6 20%, var(--card)); color: color-mix(in srgb, #3b82f6 55%, var(--text)); }
+    .badge-red { background: color-mix(in srgb, #dc2626 18%, var(--card)); color: color-mix(in srgb, #dc2626 50%, var(--text)); }
+    .badge-orange { background: color-mix(in srgb, var(--warning) 20%, var(--card)); color: var(--warning); }
+    .note-card {
+      background: color-mix(in srgb, var(--warning) 14%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--card));
+      border-radius: 8px; padding: 14px; margin-top: 16px; font-size: 13px;
+      color: color-mix(in srgb, var(--warning) 65%, var(--text));
+    }
+    .note-card strong { color: var(--warning); }
+    .ok-card {
+      background: color-mix(in srgb, var(--success) 12%, var(--card));
+      border: 1px solid color-mix(in srgb, var(--success) 40%, var(--card));
+      border-radius: 8px; padding: 14px; margin-top: 16px; font-size: 13px;
+      color: color-mix(in srgb, var(--success) 62%, var(--text));
+    }
+    .ok-card strong { color: var(--success); }
+    /* Índice */
+    .toc { background: color-mix(in srgb, var(--text) 4%, var(--card)); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 8px; }
+    .toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--primary); margin-bottom: 10px; }
+    .toc ol { margin-left: 18px; font-size: 13.5px; column-count: 2; column-gap: 28px; }
+    @media (max-width: 620px) { .toc ol { column-count: 1; } }
+    .toc li { margin-bottom: 5px; break-inside: avoid; }
+    .toc a { color: var(--secondary); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .where { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .where code {
+      background: color-mix(in srgb, var(--text) 8%, var(--card)); padding: 2px 6px;
+      border-radius: 4px; font-size: 11.5px; font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+    .footer { text-align: center; margin-top: 44px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 15px; }
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+      .section-title { break-after: avoid; }
+      .step-number { background: #0a1c69 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .badge-green { background: #d1fae5 !important; -webkit-print-color-adjust: exact; }
+      .badge-gray { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
+      .badge-blue { background: #dbeafe !important; -webkit-print-color-adjust: exact; }
+      .badge-red { background: #fee2e2 !important; -webkit-print-color-adjust: exact; }
+      .badge-orange { background: #ffedd5 !important; -webkit-print-color-adjust: exact; }
+      .note-card { background: #fffbeb !important; border: 1px solid #fde68a !important; -webkit-print-color-adjust: exact; }
+      .ok-card { background: #ecfdf5 !important; border: 1px solid #a7f3d0 !important; -webkit-print-color-adjust: exact; }
+      .intro-box { background: #eff6ff !important; border-left: 5px solid #3b82f6 !important; -webkit-print-color-adjust: exact; }
+      .field-guide th { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
+      .toc { background: #f9fafb !important; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <img src="kuryos-logo.svg" alt="Kuryos Logo">
+    <h1>Manual de Referência do Sistema</h1>
+    <p>Todas as atividades, módulo a módulo — Kuryos PCP</p>
+  </div>
+
+  <div class="intro-box">
+    <strong>Pra que serve este documento.</strong> Os outros dois manuais ensinam a rotina de quem
+    aponta produção e a de quem toca o PCP. Este aqui é a <strong>referência completa</strong>: toda
+    tela, toda aba e toda ação do sistema, na ordem em que a operação acontece. Use o índice pra
+    achar o que precisa. Ele descreve <strong>a operação como ela é hoje</strong> — onde o sistema
+    oferece um caminho que a Kuryos não usa, isso está dito com todas as letras.
+  </div>
+
+  <div class="toc">
+    <h2>Índice</h2>
+    <ol>
+      <li><a href="#acesso">Acesso, perfis e módulos</a></li>
+      <li><a href="#producao">Produção — Apontamento</a></li>
+      <li><a href="#pcp">PCP — Planejamento e OPs</a></li>
+      <li><a href="#cadastros">Cadastros</a></li>
+      <li><a href="#compras">Compras</a></li>
+      <li><a href="#logistica">Logística — Agendamento e Recebimento</a></li>
+      <li><a href="#estoque">Estoque e WMS</a></li>
+      <li><a href="#separacao">Separação de Materiais</a></li>
+      <li><a href="#qualidade">Qualidade</a></li>
+      <li><a href="#analise">Dashboards e Histórico</a></li>
+      <li><a href="#adm">Administração</a></li>
+      <li><a href="#fluxo">O caminho completo de um pedido</a></li>
+    </ol>
+  </div>
+
+  <!-- ══════════════ 1. ACESSO ══════════════ -->
+  <h2 class="section-title" id="acesso"><span class="icon">🔑</span> 1. Acesso, perfis e módulos</h2>
+
+  <p class="txt">Cada pessoa entra com o próprio e-mail. O que ela enxerga é decidido por
+  <strong>módulos</strong>, marcados um a um pelo administrador.</p>
+
+  <div class="sub-title">Perfis</div>
+  <table class="field-guide">
+    <tr><th style="width:150px">Perfil</th><th>Alcance padrão</th></tr>
+    <tr><td><strong>Administrador</strong></td><td>Vê tudo, sem exceção, inclusive RH. É o único que gerencia usuários.</td></tr>
+    <tr><td><strong>PCP</strong></td><td>Tudo, menos RH.</td></tr>
+    <tr><td><strong>Produção</strong></td><td>Dashboards, Apontamento, Planejamento, Controle de OPs e Histórico.</td></tr>
+    <tr><td><strong>Rotulagem</strong></td><td>Só o Apontamento Diário.</td></tr>
+    <tr><td><strong>Qualidade</strong></td><td>Só o módulo de Qualidade.</td></tr>
+    <tr><td><strong>RH Central</strong> / <strong>Gestor de Linha</strong></td><td>Só o módulo de RH. Gestor enxerga apenas o próprio time.</td></tr>
+    <tr><td><strong>Pendente</strong></td><td>Cadastro feito, acesso ainda não liberado. Não entra em nada.</td></tr>
+  </table>
+
+  <div class="sub-title">Liberar ou tirar acesso a um módulo</div>
+  <p class="where">Onde: <code>ADM › Usuários</code> · Quem: <strong>somente Administrador</strong></p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Ache a pessoa na lista</strong>
+      <p>Quem está aguardando aprovação aparece primeiro, com o selo <span class="badge badge-gray">Pendente</span>.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Defina o perfil</strong>
+      <p>No menu suspenso da coluna "Alterar Função". Isso já dá o alcance padrão daquele perfil.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Ajuste os módulos, se precisar</strong>
+      <p>Clique no botão <strong>🔑</strong> da coluna "Módulos liberados" e marque só o que a pessoa deve acessar.
+      Serve pra casos como "aponta produção <em>e</em> mexe no estoque", sem precisar promovê-la a PCP.</p></div></li>
+  </ul>
+
+  <table class="field-guide">
+    <tr><th style="width:190px">Módulo</th><th>Libera</th></tr>
+    <tr><td>Dashboards</td><td>Dashboard Diário e Dashboard Geral</td></tr>
+    <tr><td>Apontamento Diário</td><td>Registro de produção</td></tr>
+    <tr><td>Planejamento e OPs</td><td>Programação, Controle de OPs e Histórico de Apontamentos</td></tr>
+    <tr><td>Emitir OP</td><td>Criar a ordem que a fábrica executa</td></tr>
+    <tr><td>Pedidos e MRP</td><td>Pedidos comerciais e Matriz de Insumos</td></tr>
+    <tr><td>Cadastros</td><td>Produtos, materiais, clientes, fórmulas e BOM</td></tr>
+    <tr><td>Compras</td><td>Solicitações, cotações e pedidos de compra</td></tr>
+    <tr><td>Logística e Estoque</td><td>Agendamentos, Estoque/WMS e Separação de Materiais</td></tr>
+    <tr><td>Qualidade</td><td>Liberação de lotes, não conformidades e fornecedores</td></tr>
+    <tr><td>Ajustes / Configuração</td><td>Metas, parâmetros e listas do sistema</td></tr>
+    <tr><td>Gestão de Usuários</td><td>Ver a lista de usuários</td></tr>
+    <tr><td>RH — Pessoas / RH — Dashboard</td><td>Colaboradores, avaliação, férias / indicadores</td></tr>
+  </table>
+
+  <div class="note-card">
+    <strong>Dois avisos.</strong> Marcar módulos <em>substitui</em> o perfil, não soma: o que ficar
+    desmarcado sai do alcance da pessoa mesmo que o perfil desse antes. E trocar o perfil de alguém
+    <strong>apaga</strong> a marcação individual — o sistema avisa antes. Pra devolver alguém ao
+    comportamento do perfil, use "Voltar ao padrão do perfil" dentro do painel.
+  </div>
+
+  <!-- ══════════════ 2. PRODUÇÃO ══════════════ -->
+  <h2 class="section-title" id="producao"><span class="icon">🏭</span> 2. Produção — Apontamento</h2>
+  <p class="where">Onde: <code>Produção › Apontamento Diário</code> · Quem: Apontador, Rotulagem, Produção, PCP, ADM</p>
+
+  <div class="intro-box">
+    <strong>Como a Kuryos aponta hoje:</strong> por <strong>abertura e fechamento de OP</strong>.
+    Abre-se a OP quando a linha começa a trabalhar nela e encerra-se quando para, informando o
+    total produzido. <strong>Não se aponta de hora em hora.</strong> O sistema calcula sozinho o
+    período trabalhado e o ritmo real (un./h).
+  </div>
+
+  <div class="sub-title">2.1 Abrir e encerrar o turno</div>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>▶️ Iniciar turno</strong>
+      <p>Primeira ação do dia. Sem turno aberto, o resto do formulário não trabalha.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>+ Abrir posto de trabalho</strong>
+      <p>Informe quais linhas e postos estão rodando e quem está em cada um.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>🏁 Encerrar turno</strong>
+      <p>Última ação. Fecha o turno e consolida o que foi apontado no dia.</p></div></li>
+  </ul>
+
+  <div class="sub-title">2.2 Apontar a produção de uma OP <span class="badge badge-green">rotina principal</span></div>
+  <p class="where">Aba: <strong>📦 Apontamento por Total</strong></p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>▶️ Abrir OP</strong>
+      <p>Quando a linha começa a trabalhar naquela OP. O sistema marca o horário sozinho — você não digita hora.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Encerrar OP</strong>
+      <p>Quando a linha para. Informe apenas <strong>a quantidade total produzida até ali</strong>.
+      O sistema calcula o período, quanto saiu desde o último apontamento e o ritmo real.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>+ Adicionar perda</strong>
+      <p>Escolha o tipo de perda na lista e o material. A perda desconta do estoque daquele material específico.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content">
+      <strong>+ Adicionar parada</strong>
+      <p>Registre paradas de linha com motivo e duração. É o que explica ritmo abaixo do esperado.</p></div></li>
+  </ul>
+
+  <div class="sub-title">2.3 Fechar o lote</div>
+  <p class="where">Aba: <strong>🏁 Fechar Lote (OP)</strong></p>
+  <p class="txt">Encerra a OP de vez e libera a linha. O formulário abre mostrando o total já
+  apontado. É aqui que se declaram as perdas finais do lote. Depois de fechado, o produto acabado
+  entra no fluxo de Logística e Qualidade (seções 7 e 9).</p>
+
+  <div class="sub-title">2.4 Outras ações da tela</div>
+  <table class="field-guide">
+    <tr><th style="width:210px">Ação</th><th>Quando usar</th></tr>
+    <tr><td><strong>Trocar OP desta linha</strong></td><td>A linha mudou de OP no meio do turno.</td></tr>
+    <tr><td><strong>📅 Lançar registro atrasado</strong></td><td>Turno retroativo. Exceção — para quando o apontamento não foi feito no dia.</td></tr>
+    <tr><td><strong>⏱️ Apontamento Horário</strong></td><td><span class="badge badge-gray">não usado hoje</span> Lançamento hora a hora. A aba existe e funciona, mas a Kuryos opera por abertura/fechamento de OP.</td></tr>
+  </table>
+
+  <div class="note-card">
+    <strong>Atenção ao abrir a tela.</strong> A aba que aparece selecionada por padrão é a
+    <em>Apontamento Horário</em>, que não é a que vocês usam. Antes de lançar, confira se está na
+    aba <strong>📦 Apontamento por Total</strong>.
+  </div>
+
+  <!-- ══════════════ 3. PCP ══════════════ -->
+  <h2 class="section-title" id="pcp"><span class="icon">📋</span> 3. PCP — Planejamento e OPs</h2>
+
+  <div class="sub-title">3.1 Pedidos</div>
+  <p class="where">Onde: <code>PCP › Pedidos</code></p>
+  <table class="field-guide">
+    <tr><th style="width:210px">Ação</th><th>O que faz</th></tr>
+    <tr><td><strong>+ Novo Pedido</strong></td><td>Cadastra o pedido do cliente com os SKUs e quantidades.</td></tr>
+    <tr><td><strong>📦 Pedidos Comerciais</strong></td><td>Visão dos pedidos vindos do comercial.</td></tr>
+    <tr><td><strong>⚙️ Pedidos — SKUs para Produção</strong></td><td>Quebra o pedido nos itens que a fábrica precisa produzir.</td></tr>
+    <tr><td><strong>🔀 Ordenar Prioridades</strong></td><td>Define a ordem de atendimento.</td></tr>
+    <tr><td><strong>⬛ Encerrar Pedido</strong></td><td>Fecha o pedido atendido.</td></tr>
+  </table>
+
+  <div class="sub-title">3.2 Planejamento</div>
+  <p class="where">Onde: <code>PCP › Planejamento</code></p>
+  <table class="field-guide">
+    <tr><th style="width:210px">Aba</th><th>O que faz</th></tr>
+    <tr><td><strong>📅 Planejamento de Quantidades</strong></td><td>Distribui o volume a produzir ao longo dos dias.</td></tr>
+    <tr><td><strong>📦 Planejamento de OPs</strong></td><td>Organiza quais OPs entram em cada linha e dia.</td></tr>
+    <tr><td><strong>📋 Agendamento</strong></td><td>Programa as OPs no calendário. Botões: <strong>📅 Programar</strong>, <strong>🗓 Agendar</strong>, <strong>🧹 Apagar Programação do Período</strong>.</td></tr>
+    <tr><td><strong>⚙️ Configurações</strong></td><td>Capacidade, calendário e <strong>✨ Sugerir e Importar Feriados Nacionais</strong>.</td></tr>
+  </table>
+  <div class="ok-card">
+    <strong>O que não foi executado é empurrado pra frente automaticamente.</strong> Se uma OP
+    programada não rodou, o sistema desloca a programação em vez de deixá-la para trás travando a
+    edição. Isso é automático — ninguém precisa remanejar à mão.
+  </div>
+
+  <div class="sub-title">3.3 Emitir OP</div>
+  <p class="where">Onde: <code>PCP › Emitir OP</code></p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Escolha o produto e a quantidade</strong>
+      <p>O sistema traz a fórmula e o BOM da versão vigente e calcula os materiais necessários.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Substituir material, se precisar</strong>
+      <p>Botões <strong>Substituir</strong> e <strong>Confirmar troca de material</strong> — para quando falta o item original.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Emitir OP</strong>
+      <p>Cria a ordem. A partir daqui ela aparece no Controle de OPs e na Separação de Materiais.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content">
+      <strong>🖨 Abrir documento pra impressão / 🏷️ Imprimir etiquetas de caixa</strong>
+      <p>Ficha da OP e etiquetas para o chão de fábrica.</p></div></li>
+  </ul>
+  <div class="note-card">
+    <strong>Aviso de cadastro incompleto.</strong> Se o produto estiver sem <em>Unidades por Caixa</em>
+    ou <em>Peso por Caixa</em>, o sistema avisa ao emitir. Hoje é só aviso e dá pra prosseguir —
+    esses dois campos alimentam a nota fiscal, então vale preencher no cadastro.
+  </div>
+
+  <div class="sub-title">3.4 Controle de OPs</div>
+  <p class="where">Onde: <code>PCP › Controle de OPs</code></p>
+  <table class="field-guide">
+    <tr><th style="width:210px">Ação</th><th>O que faz</th></tr>
+    <tr><td><strong>⚙️ OPs Ativas</strong></td><td>O que está rodando agora.</td></tr>
+    <tr><td><strong>✅ Checklist de Ordens</strong></td><td>Conferência das ordens.</td></tr>
+    <tr><td><strong>✅ Confirmar conclusão</strong></td><td>Fecha a OP e registra o produto acabado no endereço informado.</td></tr>
+    <tr><td><strong>Registrar entrada</strong></td><td>Dá entrada do produto acabado no estoque.</td></tr>
+    <tr><td><strong>Cancelar OP</strong></td><td>Cancela a ordem. O sistema alerta se houver apontamento vinculado.</td></tr>
+  </table>
+
+  <div class="sub-title">3.5 Matriz de Insumos (MRP)</div>
+  <p class="where">Onde: <code>PCP › Matriz de Insumos (MRP)</code></p>
+  <table class="field-guide">
+    <tr><th style="width:210px">Ação</th><th>O que faz</th></tr>
+    <tr><td><strong>+ Novo Insumo</strong></td><td>Inclui um insumo na matriz.</td></tr>
+    <tr><td><strong>⚙ Gerar do BOM</strong></td><td>Deriva os insumos do BOM cadastrado, em vez de redigitar tudo.</td></tr>
+    <tr><td><strong>✓ Confirmar Alocação</strong></td><td>Reserva o insumo para a demanda.</td></tr>
+    <tr><td><strong>📥 Recebimento em Lote</strong> / <strong>✓ Salvar Recebimento</strong></td><td>Lança o que chegou.</td></tr>
+    <tr><td><strong>Ver pedido →</strong></td><td>Vai para o pedido de compra correspondente.</td></tr>
+  </table>
+
+  <!-- ══════════════ 4. CADASTROS ══════════════ -->
+  <h2 class="section-title" id="cadastros"><span class="icon">🏷️</span> 4. Cadastros</h2>
+  <p class="where">Onde: <code>Cadastros › Cadastros</code> — dado mestre do sistema inteiro</p>
+
+  <p class="txt">Tudo o que o resto do sistema usa nasce aqui: <strong>+ Novo Produto</strong>,
+  <strong>+ Novo Material</strong>, <strong>+ Novo Cliente</strong>, <strong>+ Novo Fornecedor</strong>.
+  Cadastro errado aqui vira erro em toda a cadeia — é o lugar onde vale o dobro de atenção.</p>
+
+  <div class="sub-title">Abas do cadastro de produto</div>
+  <table class="field-guide">
+    <tr><th style="width:190px">Aba</th><th>O que guarda</th></tr>
+    <tr><td><strong>Identificação</strong></td><td>Código, descrição, cliente.</td></tr>
+    <tr><td><strong>Classificação</strong></td><td>Categoria e subcategoria.</td></tr>
+    <tr><td><strong>Embalagem</strong></td><td>Unidades por caixa e peso por caixa. <span class="badge badge-orange">alimenta a NF</span></td></tr>
+    <tr><td><strong>Regulatório</strong></td><td>Informações de registro do produto.</td></tr>
+    <tr><td><strong>Parâmetros de Lote</strong></td><td>Regras de lote e validade.</td></tr>
+    <tr><td><strong>Fórmula</strong></td><td>Composição do bulk. Versionada.</td></tr>
+    <tr><td><strong>BOM (Embalagem)</strong></td><td>Lista de materiais de embalagem. Versionada.</td></tr>
+    <tr><td><strong>Especificações</strong></td><td>Ensaios de qualidade: ensaio, método, faixa mínima/máxima e se é crítico. <strong>É o que a Qualidade usa pra laudar.</strong></td></tr>
+  </table>
+
+  <div class="sub-title">Versionamento e aprovação</div>
+  <p class="txt">Fórmula, BOM e Especificação têm versão. <strong>+ Nova Versão</strong> cria a
+  próxima; a aprovação é em duas vias — <strong>Aprovar (P&amp;D)</strong> e
+  <strong>Aprovar (Qualidade)</strong>. Só a versão aprovada vale para emitir OP.</p>
+
+  <div class="note-card">
+    <strong>Faixas numéricas nas Especificações.</strong> Quando o ensaio tem
+    <em>mínimo</em> e <em>máximo</em> preenchidos como número, o sistema julga sozinho se o lote
+    está dentro da faixa. Se a faixa estiver só escrita no texto, a avaliação fica por conta do
+    analista. Vale preencher mínimo/máximo em pH, densidade e afins.
+  </div>
+
+  <!-- ══════════════ 5. COMPRAS ══════════════ -->
+  <h2 class="section-title" id="compras"><span class="icon">🛒</span> 5. Compras</h2>
+  <p class="where">Onde: <code>Compras › Compras</code></p>
+
+  <div class="sub-title">Fluxo normal</div>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>+ Nova Solicitação</strong> → <strong>Enviar Solicitação</strong>
+      <p>Aba <em>Solicitações</em>. Quem precisa do material pede.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Aprovar</strong> ou <strong>Rejeitar</strong>
+      <p>A solicitação é avaliada antes de virar compra.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Iniciar Cotação e Criar Rascunhos</strong>
+      <p>Aba <em>🤝 Cotações</em>. Adicione fornecedores em <strong>+ Adicionar à lista de convidados</strong>,
+      registre <strong>Marcar Enviado</strong> e <strong>Declinou</strong> conforme as respostas.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content">
+      <strong>Gerar Pedido de Compra</strong>
+      <p>Fecha com o fornecedor escolhido. O PC passa a existir para a Logística receber.</p></div></li>
+  </ul>
+
+  <div class="sub-title">Atalho: Pedido de Compra Direto</div>
+  <p class="txt">Botão <strong>Criar e liberar pra recebimento</strong>. Serve para a entrega que
+  chega em cima da hora, sem tempo de passar por solicitação e cotação. Cria o PC já pronto para
+  o recebimento — <strong>a Logística nunca dá entrada sem um pedido de compra</strong>, e este é
+  o caminho rápido para não travar a operação.</p>
+
+  <div class="sub-title">Consultas</div>
+  <table class="field-guide">
+    <tr><th style="width:230px">Aba</th><th>Para quê</th></tr>
+    <tr><td><strong>📊 Histórico de Preços</strong></td><td>O que já se pagou por aquele material.</td></tr>
+    <tr><td><strong>📈 Análise de Fornecedores</strong></td><td>Desempenho comercial do fornecedor.</td></tr>
+    <tr><td><strong>🔎 Busca Fornecedores × Materiais</strong></td><td>Quem fornece o quê.</td></tr>
+  </table>
+
+  <!-- ══════════════ 6. LOGÍSTICA ══════════════ -->
+  <h2 class="section-title" id="logistica"><span class="icon">🚚</span> 6. Logística — Agendamento e Recebimento</h2>
+  <p class="where">Onde: <code>Logística › Agendamentos</code></p>
+
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>📅 Agendar Entrega</strong> → <strong>Salvar Agendamento</strong>
+      <p>Aba <em>A Receber</em>. Marca quando o fornecedor entrega.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>🏷️ Checklist de Etiqueta</strong> → <strong>Salvar Checklist</strong>
+      <p>Confere se a etiqueta de identificação do fornecedor está no padrão.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>📦 Registrar Recebimento</strong> → <strong>Confirmar Recebimento</strong>
+      <p>Informe o que chegou de cada item. Lote do fornecedor, validade e endereço de destino são
+      opcionais por item — preenchendo, o saldo fica rastreável por lote e posição.</p></div></li>
+  </ul>
+
+  <div class="intro-box warn">
+    <strong>Material recebido entra em quarentena.</strong> Ele conta no estoque e ocupa a posição,
+    mas a Separação de Materiais <em>não o enxerga</em> até a Qualidade liberar. Isso é
+    deliberado — é o controle que hoje se perde no papel.
+  </div>
+
+  <!-- ══════════════ 7. ESTOQUE ══════════════ -->
+  <h2 class="section-title" id="estoque"><span class="icon">📦</span> 7. Estoque e WMS</h2>
+  <p class="where">Onde: <code>Logística › Estoque</code> e <code>Logística › WMS</code> — mesma tela, entradas diferentes</p>
+
+  <table class="field-guide">
+    <tr><th style="width:200px">Aba</th><th>O que faz</th></tr>
+    <tr><td><strong>Saldo Agregado</strong></td><td>Saldo total por material. Botão <strong>⚖️ Ajustar</strong> corrige quantidade.</td></tr>
+    <tr><td><strong>Saldo por Lote/Endereço</strong></td><td>Onde cada lote está, com status. Permite <strong>Transferir</strong> de posição.</td></tr>
+    <tr><td><strong>Lotes Vencendo</strong></td><td>O que está perto do vencimento.</td></tr>
+    <tr><td><strong>Histórico de Movimentações</strong></td><td>Toda entrada, saída e transferência.</td></tr>
+    <tr><td><strong>🛣️ Estrutura de Ruas</strong></td><td>Cadastro das ruas do armazém por área.</td></tr>
+    <tr><td><strong>🗺️ Posições</strong></td><td>Mapa das posições. Dá pra bloquear posição.</td></tr>
+    <tr><td><strong>📍 Endereçamento</strong></td><td>Distribui no espaço o saldo já conhecido. <strong>Nunca altera quantidade</strong> — só diz onde está.</td></tr>
+    <tr><td><strong>📋 Inventário Rotativo</strong></td><td>Contagem cíclica, algumas posições por dia. A contagem é <strong>cega</strong>: o saldo esperado só aparece depois que você informa o contado.</td></tr>
+    <tr><td><strong>📦 Conferência de PA</strong></td><td>A produção declara o palete, a Logística confere e a diferença fica registrada.</td></tr>
+    <tr><td><strong>🔬 Liberação de Qualidade</strong></td><td>Ponte para o módulo de Qualidade (seção 9).</td></tr>
+  </table>
+
+  <div class="sub-title">Endereço</div>
+  <p class="txt">O código do endereço é <strong>ÁREA-RUA.NÍVEL.PRÉDIO</strong> — por exemplo
+  <code>GAL-1.2.3</code> é o Galpão, rua 1, nível 2, prédio 3. O prefixo de área permite ter rua 1
+  no galpão e rua 1 na fábrica sem confundir uma com a outra.</p>
+
+  <div class="sub-title">Status de lote</div>
+  <table class="field-guide">
+    <tr><th style="width:230px">Status</th><th>Pode usar?</th></tr>
+    <tr><td><span class="badge badge-gray">Aguardando conferência</span></td><td>Não — palete declarado pela produção, ainda não conferido.</td></tr>
+    <tr><td><span class="badge badge-orange">Quarentena</span></td><td>Não — esperando laudo da Qualidade.</td></tr>
+    <tr><td><span class="badge badge-green">Aprovado</span></td><td>Sim.</td></tr>
+    <tr><td><span class="badge badge-blue">Aprovado c/ concessão</span></td><td>Sim — fora de especificação, mas autorizado nominalmente.</td></tr>
+    <tr><td><span class="badge badge-green">Liberado p/ expedição</span></td><td>Sim — produto acabado liberado.</td></tr>
+    <tr><td><span class="badge badge-red">Reprovado / Retido / Vencido</span></td><td>Não.</td></tr>
+  </table>
+
+  <!-- ══════════════ 8. SEPARAÇÃO ══════════════ -->
+  <h2 class="section-title" id="separacao"><span class="icon">📋</span> 8. Separação de Materiais</h2>
+  <p class="where">Onde: <code>Logística › Separação de Materiais</code></p>
+
+  <p class="txt">Resolve a pergunta "o que precisa subir do galpão para a fábrica?" — que antes era
+  feita de boca em boca.</p>
+
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Escolha a OP na lista de pendentes</strong>
+      <p>Aparecem primeiro as OPs que ainda não tiveram separação.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Confira a sugestão de origem</strong>
+      <p>O sistema sugere de qual lote tirar seguindo <strong>FEFO</strong> — o que vence antes sai
+      antes, para evitar vencimento. A quantidade vem preenchida e pode ser corrigida linha a linha.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Escolha o destino</strong>
+      <p>Obrigatório e sempre manual — o sistema nunca adivinha para onde o material vai.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content">
+      <strong>✅ Confirmar Separação</strong>
+      <p>Move os lotes. Se faltar saldo endereçado, o aviso aparece mas não impede separar o que há.</p></div></li>
+  </ul>
+
+  <!-- ══════════════ 9. QUALIDADE ══════════════ -->
+  <h2 class="section-title" id="qualidade"><span class="icon">🔬</span> 9. Qualidade</h2>
+  <p class="where">Onde: <code>Qualidade › Fila de Inspeção</code> e <code>Qualidade › Não Conformidades</code></p>
+
+  <div class="sub-title">9.1 Laudar um lote</div>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Abra a fila</strong>
+      <p>Tudo em quarentena aparece ali sozinho: material recebido e palete de produto acabado já
+      conferido. A espera longa é destacada — material parado ocupa posição sem poder ser usado.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>🔬 Laudar</strong>
+      <p>Se o item tem especificação cadastrada, os ensaios aparecem como formulário. Onde há faixa
+      numérica, digite o valor e o sistema diz na hora se está dentro. Onde a especificação é
+      descritiva ("aspecto: líquido"), marque <strong>C</strong> ou <strong>NC</strong>.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Decida</strong>
+      <p><strong>Liberar</strong> · <strong>Aprovar c/ concessão</strong> (pede o nome de quem
+      autorizou) · <strong>Reprovar</strong> · <strong>⏸ Reter</strong>. Reprovar e reter exigem o
+      motivo escrito — ele vira a descrição da não conformidade.</p></div></li>
+  </ul>
+
+  <div class="ok-card">
+    <strong>Reprovar abre a RNC sozinho</strong>, já vinculada ao fornecedor e ao pedido de compra
+    que trouxe o material — ninguém redigita nada. E <strong>reprovar não tira o material do
+    estoque</strong>: ele continua fisicamente lá até ser devolvido ou descartado, que são saídas
+    próprias, lançadas no Estoque.
+  </div>
+
+  <div class="sub-title">9.2 Tratar uma não conformidade</div>
+  <table class="field-guide">
+    <tr><th style="width:180px">Ação</th><th>O que faz</th></tr>
+    <tr><td><strong>+ Nova RNC</strong></td><td>Abre à mão, para o que não veio de um laudo (produção, expedição, reclamação de cliente).</td></tr>
+    <tr><td><strong>▶ Assumir</strong></td><td>Move para "Em análise". Só uma pessoa assume.</td></tr>
+    <tr><td><strong>✓ Encerrar</strong></td><td>Exige <strong>causa raiz</strong>, <strong>ação corretiva</strong> e <strong>disposição do material</strong> (devolver, descartar, retrabalhar, usar com concessão ou aceitar).</td></tr>
+  </table>
+  <p class="txt">A ordem da lista é a ordem de tratar: abertas primeiro, crítica antes de maior,
+  mais antiga antes. O indicador "mais antiga em aberto" denuncia tratativa parada.</p>
+
+  <div class="sub-title">9.3 Consultas</div>
+  <table class="field-guide">
+    <tr><th style="width:230px">Aba</th><th>Para quê</th></tr>
+    <tr><td><strong>🏭 Desempenho de Fornecedor</strong></td><td>Taxa de aprovação por fornecedor, pior primeiro. Aprovação com concessão <em>não</em> conta como aprovação.</td></tr>
+    <tr><td><strong>📋 Especificações</strong></td><td>Consulta dos planos de inspeção. A edição é em Cadastros — aqui só se lê.</td></tr>
+  </table>
+
+  <!-- ══════════════ 10. ANÁLISE ══════════════ -->
+  <h2 class="section-title" id="analise"><span class="icon">📊</span> 10. Dashboards e Histórico</h2>
+  <table class="field-guide">
+    <tr><th style="width:210px">Tela</th><th>Para quê</th></tr>
+    <tr><td><strong>Dashboard Diário</strong></td><td>O dia de hoje: o que está rodando e como está o ritmo. É a tela de TV do chão de fábrica.</td></tr>
+    <tr><td><strong>Dashboard Geral</strong></td><td>Visão Geral, Produção, Pedidos, Insumos, Logística, OPs e Indicadores de PCP.</td></tr>
+    <tr><td><strong>Histórico de Apontamentos</strong></td><td>Consulta e correção do que foi apontado. Permite <strong>Editar</strong>, <strong>Excluir</strong>, <strong>⬇ Exportar CSV</strong> e <strong>⚙ Reconciliar Pedidos</strong>.</td></tr>
+  </table>
+
+  <!-- ══════════════ 11. ADM ══════════════ -->
+  <h2 class="section-title" id="adm"><span class="icon">⚙️</span> 11. Administração</h2>
+  <table class="field-guide">
+    <tr><th style="width:210px">Tela</th><th>O que faz</th></tr>
+    <tr><td><strong>Ajustes / Config</strong></td><td><strong>Salvar Metas</strong>, <strong>Recarregar Metas Padrão no Calendário</strong>, <strong>Salvar Período</strong>, <strong>Salvar Setup Padrão</strong> e as listas fechadas do sistema (motivos de movimentação, áreas de endereço, tipos de perda).</td></tr>
+    <tr><td><strong>Usuários</strong></td><td>Aprovar cadastro, definir perfil e marcar módulos. Ver seção 1.</td></tr>
+  </table>
+
+  <!-- ══════════════ 12. FLUXO ══════════════ -->
+  <h2 class="section-title" id="fluxo"><span class="icon">🔄</span> 12. O caminho completo de um pedido</h2>
+  <p class="txt">Como as peças se encaixam, do pedido do cliente até a expedição:</p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content"><strong>Comercial</strong><p>Pedido cadastrado em <em>PCP › Pedidos</em>.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content"><strong>PCP</strong><p>Planejamento distribui no calendário e emite a OP.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content"><strong>Compras</strong><p>O que falta vira solicitação, cotação e pedido de compra.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content"><strong>Logística</strong><p>Agenda, recebe e endereça. O material entra em <span class="badge badge-orange">quarentena</span>.</p></div></li>
+    <li class="step-item"><div class="step-number">5</div><div class="step-content"><strong>Qualidade</strong><p>Lauda e libera. Só então o material fica visível para a produção.</p></div></li>
+    <li class="step-item"><div class="step-number">6</div><div class="step-content"><strong>Logística</strong><p>Separa por FEFO e leva do galpão para a fábrica.</p></div></li>
+    <li class="step-item"><div class="step-number">7</div><div class="step-content"><strong>Produção</strong><p>Abre a OP, produz, aponta o total e fecha o lote.</p></div></li>
+    <li class="step-item"><div class="step-number">8</div><div class="step-content"><strong>Logística</strong><p>Confere o palete declarado e registra qualquer divergência.</p></div></li>
+    <li class="step-item"><div class="step-number">9</div><div class="step-content"><strong>Qualidade</strong><p>Libera o palete para expedição.</p></div></li>
+  </ul>
+
+  <div class="note-card">
+    <strong>Onde o sistema ainda não chega.</strong> A tela de <em>Expedição</em> (programar
+    faturamento e coleta) ainda é feita em planilha. O módulo de Qualidade cobre recebimento e
+    liberação de palete; ronda de linha, assépsia, setup, calibração e amostras de retenção ainda
+    não estão no sistema.
+  </div>
+
+  <div class="footer">
+    Kuryos — Sistema Contagem Prod &copy; 2026. Todos os direitos reservados.
+  </div>
+</div>
+
+</body>
+</html>
