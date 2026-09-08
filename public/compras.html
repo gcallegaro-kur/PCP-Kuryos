@@ -83,6 +83,29 @@
     input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
     input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    /* ── Campos rotulados da cotação ──
+       Antes o nome do campo vivia só no `placeholder`, que some no instante
+       em que a pessoa digita: a grade preenchida virava uma parede de
+       números sem dizer qual era preço, qual era quantidade e qual era
+       prazo. Rótulo ACIMA (e não à esquerda) porque a coluna do fornecedor
+       tem ~216px -- rótulo lateral comeria metade da largura útil do campo. */
+    .cot-campo{display:flex;flex-direction:column;gap:2px;min-width:0}
+    /* :first-child de propósito -- o rótulo é o primeiro span; a dica que
+       vem DEPOIS do campo (ex: "3x: 14/21/28 dias") também é um span e
+       estava herdando o maiúsculo-negrito de rótulo. */
+    .cot-campo > span:first-child{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;line-height:1.2}
+    .cot-campo > input,.cot-campo > select{width:100%;font-size:12px;padding:4px 6px}
+    /* A dica herda font-weight:600 do <label> que a envolve -- devolve ao
+       peso normal pra não competir visualmente com o rótulo. */
+    .cot-campo .field-hint{font-weight:400}
+    .cot-linha{display:flex;gap:5px;margin-bottom:5px}
+    .cot-linha > .cot-campo{flex:1}
+    /* Bloco de condições do fornecedor, no cabeçalho da coluna */
+    .cot-cab{font-weight:400;text-transform:none;letter-spacing:normal;margin-top:6px;display:flex;flex-direction:column;gap:5px}
+    .cot-cab-sep{border-top:1px solid var(--border);margin:1px 0 0}
+    /* Resultado calculado: separado dos campos de digitação por uma linha,
+       pra ninguém tentar editar o que o sistema calcula. */
+    .cot-resultado{margin-top:6px;padding-top:5px;border-top:1px dashed var(--border);font-size:12px}
     .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
     .section-note a{color:var(--primary);font-weight:600;text-decoration:none}
     .section-note a:hover{text-decoration:underline}
@@ -511,6 +534,9 @@ try {
 } catch (err) { console.warn('Firebase Functions indisponível:', err); }
 
 var allFornecedores = {};
+// Calendário do PCP (diasSemana + feriados). Usado pra converter o prazo de
+// entrega, que o fornecedor dá em DIAS ÚTEIS, na data real de coleta/entrega.
+var allConfig = {};
 var allSolicitacoes = {};
 var allPedidosCompra = {};
 var allProcessosCotacao = {};
@@ -1733,6 +1759,68 @@ function salvarIniciarCotacao() {
     .finally(function() { btn.disabled = false; btn.textContent = 'Iniciar Cotação e Criar Rascunhos'; });
 }
 
+/* ── Campo rotulado da cotação ──
+   O nome do campo ficava só no `placeholder`, que some no instante em que a
+   pessoa digita -- a grade preenchida virava uma parede de números sem
+   dizer qual era preço, qual era quantidade e qual era prazo (achado do
+   usuário). Rótulo sempre visível, acima do campo. */
+function campoCot(rotulo, inputHtml, hintHtml) {
+  return '<label class="cot-campo"><span>' + escapeHtml(rotulo) + '</span>' + inputHtml + (hintHtml || '') + '</label>';
+}
+// Já tem algum imposto preenchido? Muda o rótulo do botão entre "Definir" e
+// "Editar", pra dar pra ver de fora quais itens já foram tratados.
+function temFiscal(resp) {
+  var r = resp || {};
+  return ['pctNf', 'pctIpi', 'pctIcms', 'pctIcmsSt', 'pctIss', 'descontoPct']
+    .some(function(c) { return r[c] != null && r[c] !== ''; });
+}
+// Calendário útil do PCP, reusado pro prazo de entrega (ver somarDiasUteis).
+function calendarioUtil() {
+  var plan = (allConfig && allConfig.planejamento) || {};
+  return { feriados: plan.feriados || {}, diasSemana: plan.diasSemana || [1, 2, 3, 4, 5] };
+}
+// Converte o prazo em dias úteis na data real, contada de hoje. É essa data
+// que a Logística usa pra agendar coleta (FOB) ou esperar a entrega (CIF).
+// Bloco de coleta: SÓ aparece quando o frete é FOB, porque só aí a coleta é
+// nossa. Em CIF quem coordena é o fornecedor e pedir esses dados seria
+// trabalho inútil.
+//
+// A Logística precisa de endereço, peso e um contato pra fechar a coleta com
+// transportadora/motorista/app. Contato vem do cadastro do fornecedor
+// (contatoNome/contatoTelefone existem nos 393); o endereço NÃO existe no
+// cadastro — só cidade e UF —, por isso é campo próprio aqui.
+function blocoColetaHtml(procKey, cKey, c) {
+  if (!c.frete || c.frete.tipo !== 'FOB') return '';
+  var col = c.coleta || {};
+  var f = (c.fornecedorKey && allFornecedores[c.fornecedorKey]) || {};
+  var pend = coletaFobPendencias(c, f);
+  var attrs = function(cls, val, extra) {
+    return ' class="' + cls + '" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(val == null ? '' : val) + '"' + (extra || '');
+  };
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:7px 8px;margin-top:2px;display:flex;flex-direction:column;gap:5px">' +
+    '<div style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">🚚 Coleta por nossa conta' +
+      (pend.pronto ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>' +
+    campoCot('Endereço de coleta', '<input type="text"' + attrs('cot-coleta-endereco', col.endereco, ' placeholder="rua, nº, cidade/UF"') + '>') +
+    '<div class="cot-linha" style="margin:0">' +
+      campoCot('Contato no local', '<input type="text"' + attrs('cot-coleta-contato', col.contatoNome != null ? col.contatoNome : (f.contatoNome || ''), ' placeholder="nome"') + '>') +
+      campoCot('Telefone', '<input type="text"' + attrs('cot-coleta-fone', col.contatoTelefone != null ? col.contatoTelefone : (f.contatoTelefone || '')) + '>') +
+    '</div>' +
+    campoCot('Peso total (kg)', '<input type="number" min="0" step="any"' + attrs('cot-coleta-peso', col.pesoTotalKg) + '>') +
+    (pend.pronto
+      ? '<div class="field-hint" style="margin:0;color:var(--tint-green-fg)">Pronto pra agendar a coleta.</div>'
+      : '<div class="field-hint" style="margin:0;color:var(--warning)">Falta pra Logística agendar: ' + escapeHtml(pend.faltando.join(', ')) + '</div>') +
+  '</div>';
+}
+
+function dataEntregaHtml(prazoDias) {
+  if (prazoDias == null || prazoDias === '') return '';
+  var cal = calendarioUtil();
+  var data = somarDiasUteis(new Date().toISOString().slice(0, 10), prazoDias, cal.feriados, cal.diasSemana);
+  if (!data) return '';
+  return '<div class="cot-resultado" style="border-top-style:solid" title="Contado de hoje, em dias úteis, pelo calendário do PCP (pula fim de semana e feriado)">' +
+    '📅 Chega em <b>' + fmtDataCurta(data) + '</b></div>';
+}
+
 /* ── Modal de impostos do item ── */
 var fiscalAlvo = null; // { procKey, cKey, itemKey }
 var FISCAL_CAMPOS = [
@@ -1869,26 +1957,27 @@ function cotacaoCardHtml(entry) {
     return '<th style="min-width:216px;vertical-align:top">' +
       escapeHtml(nomeConvidado(c, cKey)) + '<br>' + statusBadge + link +
       (venceGeral ? ' <span class="badge badge-green" title="Menor custo total entre quem cotou TODOS os itens">🏆 melhor custo</span>' : '') +
-      '<div style="font-weight:400;text-transform:none;letter-spacing:normal;margin-top:5px;display:flex;flex-direction:column;gap:3px">' +
-        '<div style="display:flex;gap:3px">' +
-          '<select class="cot-frete-tipo" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="width:74px;font-size:11px;padding:3px 4px">' +
-            '<option value=""' + (!frete.tipo ? ' selected' : '') + '>Frete…</option>' +
+      '<div class="cot-cab">' +
+        '<div class="cot-cab-sep"></div>' +
+        '<div class="cot-linha" style="margin:0">' +
+          campoCot('Frete', '<select class="cot-frete-tipo" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '">' +
+            '<option value=""' + (!frete.tipo ? ' selected' : '') + '>—</option>' +
             '<option value="FOB"' + (frete.tipo === 'FOB' ? ' selected' : '') + '>FOB</option>' +
             '<option value="CIF"' + (frete.tipo === 'CIF' ? ' selected' : '') + '>CIF</option>' +
-          '</select>' +
-          '<input type="number" min="0" step="any" class="cot-frete-valor" placeholder="R$ frete" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + (frete.valor != null ? escapeAttr(frete.valor) : '') + '" style="width:88px;font-size:11px;padding:3px 5px"' + (frete.tipo === 'CIF' ? ' disabled title="CIF: o frete já está no preço do fornecedor"' : '') + '>' +
+          '</select>') +
+          campoCot('Valor do frete', '<input type="number" min="0" step="any" class="cot-frete-valor" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + (frete.valor != null ? escapeAttr(frete.valor) : '') + '"' + (frete.tipo === 'CIF' ? ' disabled title="CIF: o frete já está no preço do fornecedor"' : ' placeholder="R$"') + '>') +
         '</div>' +
-        '<input type="text" class="cot-resp-condpgto" placeholder="Prazo pgto (ex: 14/21/28 DDL)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.condicaoPagamento || '') + '" style="width:100%;font-size:11px;padding:3px 5px">' +
-        prazoHint +
-        '<div style="display:flex;gap:3px">' +
-          '<input type="date" class="cot-validade" title="Validade da proposta" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.validadeProposta || '') + '" style="width:112px;font-size:11px;padding:3px 4px">' +
-          '<select class="cot-local-entrega" title="Local de entrega" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="width:96px;font-size:11px;padding:3px 4px">' +
-            '<option value=""' + (!c.localEntrega ? ' selected' : '') + '>Entrega…</option>' +
+        campoCot('Prazo de pagamento', '<input type="text" class="cot-resp-condpgto" placeholder="ex: 14/21/28 DDL" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.condicaoPagamento || '') + '">', prazoHint) +
+        '<div class="cot-linha" style="margin:0">' +
+          campoCot('Validade da proposta', '<input type="date" class="cot-validade" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.validadeProposta || '') + '">') +
+          campoCot('Entregar em', '<select class="cot-local-entrega" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '">' +
+            '<option value=""' + (!c.localEntrega ? ' selected' : '') + '>—</option>' +
             '<option value="GALPAO"' + (c.localEntrega === 'GALPAO' ? ' selected' : '') + '>Galpão</option>' +
             '<option value="FABRICA"' + (c.localEntrega === 'FABRICA' ? ' selected' : '') + '>Fábrica</option>' +
-          '</select>' +
+          '</select>') +
         '</div>' +
-        (totalForn > 0 ? '<div style="font-size:11.5px;margin-top:2px">Custo total: <b>' + fmtBRL(totalForn) + '</b></div>' : '') +
+        blocoColetaHtml(key, cKey, c) +
+        (totalForn > 0 ? '<div class="cot-resultado">Custo total: <b>' + fmtBRL(totalForn) + '</b></div>' : '') +
         '<button type="button" class="btn btn-ghost btn-sm cot-declinar" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="padding:2px 6px;font-size:10px;align-self:flex-start">Declinou</button>' +
       '</div></th>';
   }).join('');
@@ -1910,14 +1999,15 @@ function cotacaoCardHtml(entry) {
       var avisosHtml = (calc.avisos && calc.avisos.length && (calc.preco > 0 || calc.qtd > 0))
         ? '<div class="field-hint" style="color:var(--warning);margin-top:2px">⚠ ' + escapeHtml(calc.avisos.join('; ')) + '</div>' : '';
       return '<td style="vertical-align:top;' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
-        '<div style="display:flex;gap:3px;margin-bottom:3px">' +
-          '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="Preço un." data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '" style="width:88px">' +
-          '<input type="number" class="cot-resp-qtd" min="0" step="any" placeholder="Qtd cotada" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '" style="width:88px' + (qtdDiverge ? ';border-color:var(--warning)' : '') + '"' + (qtdDiverge ? ' title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ')"' : '') + '>' +
+        '<div class="cot-linha">' +
+          campoCot('Preço unit.', '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
+          campoCot('Qtd cotada', '<input type="number" class="cot-resp-qtd" min="0" step="any" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ')"' : '') + '>') +
         '</div>' +
-        '<div style="display:flex;gap:3px;align-items:center">' +
-          '<input type="number" class="cot-resp-prazo" min="0" step="1" placeholder="Entrega (dias)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '" style="width:88px">' +
-          '<button type="button" class="btn btn-ghost btn-sm cot-fiscal" title="Impostos e desconto deste item" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" style="padding:3px 7px;font-size:11px">🧾</button>' +
+        '<div class="cot-linha" style="align-items:flex-end">' +
+          campoCot('Entrega (dias úteis)', '<input type="number" class="cot-resp-prazo" min="0" step="1" title="Prazo em DIAS ÚTEIS — o sistema converte na data de coleta/entrega usando o calendário do PCP" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '">') +
+          campoCot('Impostos', '<button type="button" class="btn btn-ghost cot-fiscal" title="Impostos e desconto deste item" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" style="padding:4px 6px;font-size:11px;width:100%">🧾 ' + (temFiscal(resp) ? 'Editar' : 'Definir') + '</button>') +
         '</div>' +
+        dataEntregaHtml(resp.prazoEntregaDias) +
         custoHtml + avisosHtml +
       '</td>';
     }).join('');
@@ -2049,6 +2139,25 @@ function wireCotacoesAndamento() {
         .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
     });
   });
+  // Dados de coleta (só existem quando o frete é FOB)
+  var CAMPOS_COLETA = { 'cot-coleta-endereco': 'endereco', 'cot-coleta-contato': 'contatoNome',
+                        'cot-coleta-fone': 'contatoTelefone', 'cot-coleta-peso': 'pesoTotalKg' };
+  document.querySelectorAll('.cot-coleta-endereco, .cot-coleta-contato, .cot-coleta-fone, .cot-coleta-peso').forEach(function(el) {
+    el.addEventListener('change', function() {
+      var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey');
+      var campo = null;
+      Object.keys(CAMPOS_COLETA).forEach(function(cls) { if (el.classList.contains(cls)) campo = CAMPOS_COLETA[cls]; });
+      if (!campo) return;
+      var val = el.value.trim();
+      if (campo === 'pesoTotalKg') {
+        var n = val === '' ? null : parseFloat(val);
+        if (n != null && (isNaN(n) || n < 0)) { showAlert('Peso inválido.', 'danger'); el.value = ''; return; }
+        val = n;
+      }
+      db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados/' + cKey + '/coleta/' + campo).set(val === '' ? null : val)
+        .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+    });
+  });
   document.querySelectorAll('.cot-fiscal').forEach(function(btn) {
     btn.addEventListener('click', function() {
       abrirModalFiscal(btn.getAttribute('data-key'), btn.getAttribute('data-ckey'), btn.getAttribute('data-item'));
@@ -2148,6 +2257,18 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
     });
     var prazoVencedor = parsePrazoPagamento(convidado.condicaoPagamento || '');
     var totalPedido = Object.keys(calcVenc).reduce(function(s, k) { return s + (calcVenc[k].custoTotal || 0); }, 0);
+    // O pedido só está completo quando o ÚLTIMO item chega -- usar o menor
+    // prazo faria a Logística agendar uma coleta pra material que ainda não
+    // está pronto.
+    var prazoEntregaMaior = null;
+    Object.values(convidado.respostaItens || {}).forEach(function(r) {
+      var d = parseFloat(r && r.prazoEntregaDias);
+      if (!isNaN(d) && (prazoEntregaMaior == null || d > prazoEntregaMaior)) prazoEntregaMaior = d;
+    });
+    var calPC = calendarioUtil();
+    var dataPrevista = prazoEntregaMaior != null
+      ? somarDiasUteis(new Date().toISOString().slice(0, 10), prazoEntregaMaior, calPC.feriados, calPC.diasSemana)
+      : null;
     var solicitacoesOrigem = {};
     scKeys.forEach(function(scKey) {
       var s = allSolicitacoes[scKey];
@@ -2167,6 +2288,15 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
         // na confirmação de recebimento, sem reinterpretar a string.
         prazoPagamentoParcelas: prazoVencedor.valido ? prazoVencedor.parcelas : null,
         frete: convidado.frete || null,
+        // Coleta FOB: é a Logística que vai fechar com transportadora,
+        // motorista ou app, e precisa de endereço, peso e contato. Em CIF
+        // fica null -- quem coordena é o fornecedor.
+        coleta: (convidado.frete && convidado.frete.tipo === 'FOB') ? (convidado.coleta || {}) : null,
+        // Data prevista, já convertida de dias úteis pelo calendário do PCP.
+        // Congelada aqui porque conta a partir da decisão da compra, não de
+        // quando alguém abrir a tela depois.
+        prazoEntregaDiasUteis: prazoEntregaMaior,
+        dataPrevistaEntrega: dataPrevista,
         validadePropostaNaDecisao: convidado.validadeProposta || null,
         localEntrega: convidado.localEntrega || null,
         valorTotalEstimado: Math.round(totalPedido * 100) / 100,
@@ -2425,6 +2555,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fornecedores agora é gerenciado só em cadastros.html -- compras.html
     // mantém este listener de LEITURA (popula os selects de pedido/cotação
     // e denormaliza nome/e-mail), sem CRUD próprio.
+    dbOnValue(db.ref('config'), function(snap) {
+      allConfig = snap.val() || {};
+      renderCotacoesAndamento(); // a data de entrega depende do calendário útil
+    });
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allFornecedores = snap.val() || {};
       refreshPcFornecedorFilter();

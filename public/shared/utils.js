@@ -3307,6 +3307,80 @@ function compararCotacao(itens, convidados) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// PRAZO DE ENTREGA EM DIAS ÚTEIS → data de coleta/entrega
+//
+// O prazo que o fornecedor dá é em DIAS ÚTEIS ("entrega em 15 dias"), não
+// em dias corridos. Contar corrido erra em ~2 dias por semana de prazo, e é
+// justamente essa data que a Logística usa pra agendar a coleta.
+//
+// Usa o MESMO calendário do PCP (`config/planejamento`: diasSemana +
+// feriados). Não é reaproveitamento por preguiça: entrega num dia em que a
+// fábrica está fechada não serve pra nada, então o calendário útil da
+// compra é o mesmo calendário útil da operação.
+// ══════════════════════════════════════════════════════════════════════
+
+// Função PURA. `diasSemana` = [1..7] com 1=segunda e 7=domingo (mesma
+// convenção de config/planejamento). `feriados` = { 'YYYY-MM-DD': ... }.
+function ehDiaUtil(dataISO, feriados, diasSemana) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dataISO || ''));
+  if (!m) return false;
+  var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  var dw = d.getUTCDay();            // 0=domingo
+  var dwConfig = dw === 0 ? 7 : dw;  // 7=domingo, como no config
+  var ativos = (diasSemana && diasSemana.length) ? diasSemana : [1, 2, 3, 4, 5];
+  if (ativos.indexOf(dwConfig) === -1) return false;
+  return !(feriados || {})[dataISO.slice(0, 10)];
+}
+
+// Função PURA. Sempre em UTC, pelo mesmo motivo de
+// calcularParcelasPagamento: misturar data local com toISOString() erra um
+// dia em fusos positivos.
+// `dias = 0` devolve o PRÓXIMO dia útil (ou o próprio, se já for útil) --
+// "entrega hoje" num domingo não é hoje.
+function somarDiasUteis(dataBase, dias, feriados, diasSemana) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dataBase || ''));
+  var base;
+  if (m) base = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  else {
+    var hoje = new Date();
+    base = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  }
+  var n = parseInt(dias, 10);
+  if (isNaN(n) || n < 0) return null;
+  var cursor = base;
+  var iso = function(ms) { return new Date(ms).toISOString().slice(0, 10); };
+  var restantes = n;
+  var guarda = 0;
+  // Teto de segurança: um calendário mal configurado (diasSemana vazio, ou
+  // feriado em todo dia útil) faria isto rodar pra sempre.
+  while (guarda++ < 3000) {
+    if (restantes === 0 && ehDiaUtil(iso(cursor), feriados, diasSemana)) return iso(cursor);
+    cursor += 86400000;
+    if (restantes > 0 && ehDiaUtil(iso(cursor), feriados, diasSemana)) restantes--;
+  }
+  return null;
+}
+
+// Função PURA: o que a Logística precisa ter em mãos pra fechar a coleta.
+// Só se aplica a FOB -- em CIF quem coordena é o fornecedor.
+// Devolve { aplica, pronto, faltando: [...] } pra a tela poder cobrar o
+// preenchimento ANTES de o pedido virar responsabilidade nossa.
+function coletaFobPendencias(convidado, fornecedor) {
+  var c = convidado || {};
+  if (!c.frete || c.frete.tipo !== 'FOB') return { aplica: false, pronto: true, faltando: [] };
+  var col = c.coleta || {};
+  var f = fornecedor || {};
+  var faltando = [];
+  // Endereço de coleta: o cadastro de fornecedor só tem cidade/UF, não o
+  // logradouro -- por isso o campo existe aqui. Ver MELHORIAS_FUTURAS.
+  if (!String(col.endereco || '').trim()) faltando.push('endereço de coleta');
+  if (!String(col.contatoNome || f.contatoNome || '').trim()) faltando.push('contato no local');
+  if (!String(col.contatoTelefone || f.contatoTelefone || '').trim()) faltando.push('telefone do contato');
+  if (!(parseFloat(col.pesoTotalKg) > 0)) faltando.push('peso total');
+  return { aplica: true, pronto: faltando.length === 0, faltando: faltando };
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // PRAZO DE PAGAMENTO — "14/21/28 DDL" vira parcelas com data
 //
 // O texto livre que a Kuryos já usa ("14/21/28 DDL", "30/60/90") é a forma
