@@ -428,6 +428,66 @@
   </div>
 </div>
 
+<!-- MODAL: impostos e desconto de UM item de UM fornecedor ───────────────
+     Os impostos variam por item (NCM diferente = IPI diferente), então não
+     cabem no cabeçalho do fornecedor. E não cabem na célula sem destruir a
+     legibilidade da grade de comparação, que é a razão de ela existir. -->
+<div class="modal-bg" id="modalFiscalCot">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header purple"><h2>🧾 Impostos do item</h2><button class="modal-close" id="modalFiscalClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="fiscalContexto" class="section-note" style="margin-bottom:14px"></div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>% faturado em NF</label>
+          <input type="number" id="fiscalPctNf" min="0" max="100" step="any" placeholder="100">
+          <div class="field-hint">Quanto do valor sai em nota. Vazio = 100%. Imposto e crédito só incidem sobre essa parte.</div>
+        </div>
+        <div class="form-group">
+          <label>% desconto comercial</label>
+          <input type="number" id="fiscalDesconto" min="0" max="100" step="any" placeholder="0">
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>% IPI</label>
+          <input type="number" id="fiscalIpi" min="0" max="100" step="any" placeholder="0">
+          <div class="field-hint">Por fora — soma ao valor.</div>
+        </div>
+        <div class="form-group">
+          <label>% ICMS-ST</label>
+          <input type="number" id="fiscalIcmsSt" min="0" max="100" step="any" placeholder="0">
+          <div class="field-hint">Substituição tributária. Por fora, como o IPI.</div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>% ICMS</label>
+          <input type="number" id="fiscalIcms" min="0" max="100" step="any" placeholder="0">
+          <div class="field-hint">Por dentro — já está no preço. Entra como <b>crédito</b>, reduzindo o custo.</div>
+        </div>
+        <div class="form-group">
+          <label>% ISS</label>
+          <input type="number" id="fiscalIss" min="0" max="100" step="any" placeholder="0">
+          <div class="field-hint">Só para <b>serviço</b> (ex: rotulagem terceirizada). Não convive com ICMS.</div>
+        </div>
+      </div>
+
+      <div id="fiscalMemoria" style="margin-top:16px;border:1.5px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="background:var(--surface-2);padding:8px 12px;font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Memória de cálculo</div>
+        <div id="fiscalMemoriaCorpo" style="padding:10px 12px;font-size:12.5px"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalFiscalCancel">Cancelar</button>
+      <button class="btn btn-green" id="modalFiscalSave">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var firebaseConfig = {
   apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
@@ -502,6 +562,22 @@ function currentUserNome() {
 function fmtData(iso) {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleString('pt-BR'); } catch (e) { return '—'; }
+}
+// Dinheiro no orçamento de cotação. Sempre 2 casas: arredondar pra menos
+// casas esconderia diferença de centavos entre fornecedores, que em item de
+// centavo × milhares de unidades é justamente onde a decisão vira.
+function fmtBRL(n) {
+  var v = Number(n);
+  if (isNaN(v)) return '—';
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Data SEM hora e SEM conversão de fuso. `new Date('2026-10-07')` é
+// meia-noite UTC, que no Brasil (UTC-3) exibe 06/10 21:00 -- ou seja, o
+// vencimento apareceria um dia ANTES do que é. Para data pura, formatar a
+// string direto é o único jeito que não erra.
+function fmtDataCurta(iso) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : '—';
 }
 function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
@@ -1600,11 +1676,16 @@ function salvarIniciarCotacao() {
   var fornecedoresConvidados = {};
   convidadosCadastrados.forEach(function(fKey) {
     var cKey = db.ref('processos_cotacao').push().key;
-    fornecedoresConvidados[cKey] = { fornecedorKey: fKey, nomeAvulso: null, emailAvulso: null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', convidadoEm: new Date().toISOString(), respondidoEm: null };
+    // Condição de pagamento já vem do cadastro do fornecedor (os 393 têm o
+    // campo preenchido) -- é ponto de partida, não obrigação: o que a pessoa
+    // digitar na cotação sobrescreve. Redigitar o que o sistema já sabe é o
+    // atrito que faz o campo ficar vazio.
+    var padraoPgto = (allFornecedores[fKey] && allFornecedores[fKey].condicaoPagamento) || '';
+    fornecedoresConvidados[cKey] = { fornecedorKey: fKey, nomeAvulso: null, emailAvulso: null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: padraoPgto, prazoPagamentoParcelas: parsePrazoPagamento(padraoPgto).parcelas || null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null };
   });
   cotAvulsosBuffer.forEach(function(av) {
     var cKey = db.ref('processos_cotacao').push().key;
-    fornecedoresConvidados[cKey] = { fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', convidadoEm: new Date().toISOString(), respondidoEm: null };
+    fornecedoresConvidados[cKey] = { fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', prazoPagamentoParcelas: null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null };
   });
 
   nextSequential(db, 'config/contadores/processoCotacao', 'COT', 4).then(function(seq) {
@@ -1652,23 +1733,119 @@ function salvarIniciarCotacao() {
     .finally(function() { btn.disabled = false; btn.textContent = 'Iniciar Cotação e Criar Rascunhos'; });
 }
 
+/* ── Modal de impostos do item ── */
+var fiscalAlvo = null; // { procKey, cKey, itemKey }
+var FISCAL_CAMPOS = [
+  ['fiscalPctNf', 'pctNf'], ['fiscalDesconto', 'descontoPct'], ['fiscalIpi', 'pctIpi'],
+  ['fiscalIcmsSt', 'pctIcmsSt'], ['fiscalIcms', 'pctIcms'], ['fiscalIss', 'pctIss']
+];
+
+function abrirModalFiscal(procKey, cKey, itemKey) {
+  var p = allProcessosCotacao[procKey];
+  if (!p) return;
+  var c = (p.fornecedoresConvidados || {})[cKey] || {};
+  var it = (p.itens || {})[itemKey] || {};
+  var resp = (c.respostaItens || {})[itemKey] || {};
+  fiscalAlvo = { procKey: procKey, cKey: cKey, itemKey: itemKey };
+
+  var nomeForn = c.fornecedorKey
+    ? ((allFornecedores[c.fornecedorKey] && (allFornecedores[c.fornecedorKey].nomeFantasia || allFornecedores[c.fornecedorKey].razaoSocial)) || c.fornecedorKey)
+    : (c.nomeAvulso || cKey);
+  document.getElementById('fiscalContexto').innerHTML =
+    '<b>' + escapeHtml(it.materialCodigo || '') + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
+    '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>' +
+    ' · Preço: ' + (resp.precoUnit != null ? fmtBRL(resp.precoUnit) : '—') +
+    ' · Qtd cotada: ' + (resp.qtdCotada != null ? fmtNum(resp.qtdCotada) : '—');
+
+  FISCAL_CAMPOS.forEach(function(par) {
+    document.getElementById(par[0]).value = resp[par[1]] != null ? resp[par[1]] : '';
+  });
+  atualizarMemoriaFiscal();
+  document.getElementById('modalFiscalCot').classList.add('open');
+}
+
+// Mostra a conta aberta enquanto a pessoa digita. Sem isso, o custo final
+// vira um número que ninguém sabe de onde veio -- e ninguém confia num
+// número que não sabe conferir.
+function atualizarMemoriaFiscal() {
+  if (!fiscalAlvo) return;
+  var p = allProcessosCotacao[fiscalAlvo.procKey] || {};
+  var c = (p.fornecedoresConvidados || {})[fiscalAlvo.cKey] || {};
+  var resp = Object.assign({}, (c.respostaItens || {})[fiscalAlvo.itemKey] || {});
+  FISCAL_CAMPOS.forEach(function(par) {
+    var v = document.getElementById(par[0]).value;
+    resp[par[1]] = v === '' ? null : parseFloat(v);
+  });
+  var calc = calcularCustoItemCotacao(resp, 0);
+  var avisos = cotacaoItemInconsistencias(resp);
+  var linha = function(rot, val, sinal) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px"><span>' + rot + '</span><span style="font-variant-numeric:tabular-nums">' + (sinal || '') + fmtBRL(val) + '</span></div>';
+  };
+  var freteAviso = (c.frete && c.frete.tipo === 'FOB' && c.frete.valor > 0)
+    ? '<div class="field-hint" style="margin-top:6px">O frete FOB de ' + fmtBRL(c.frete.valor) + ' é rateado entre os itens deste fornecedor e entra no custo da grade — não aparece aqui.</div>'
+    : (c.frete && c.frete.tipo === 'CIF' ? '<div class="field-hint" style="margin-top:6px">Frete CIF: já está no preço do fornecedor, não soma.</div>' : '');
+  document.getElementById('fiscalMemoriaCorpo').innerHTML =
+    linha('Bruto (preço × qtd)', calc.bruto) +
+    (calc.desconto ? linha('Desconto', calc.desconto, '− ') : '') +
+    linha('<b>Líquido</b>', calc.liquido) +
+    '<div style="border-top:1px solid var(--border);margin:6px 0"></div>' +
+    '<div class="field-hint" style="margin:0 0 4px">Base de imposto (' + calc.pctNf + '% faturado): ' + fmtBRL(calc.baseNf) + '</div>' +
+    (calc.ipi ? linha('IPI', calc.ipi, '+ ') : '') +
+    (calc.st ? linha('ICMS-ST', calc.st, '+ ') : '') +
+    (calc.iss ? linha('ISS', calc.iss, '+ ') : '') +
+    (calc.creditoIcms ? linha('Crédito de ICMS', calc.creditoIcms, '− ') : '') +
+    '<div style="border-top:1px solid var(--border);margin:6px 0"></div>' +
+    linha('<b>Custo total (sem frete)</b>', calc.custoTotal) +
+    (calc.custoUnitario != null ? linha('<b>Custo unitário</b>', calc.custoUnitario) : '<div class="field-hint">Custo unitário: informe preço e quantidade.</div>') +
+    freteAviso +
+    (avisos.length ? '<div class="field-hint" style="color:var(--warning);margin-top:6px">⚠ ' + escapeHtml(avisos.join('; ')) + '</div>' : '');
+}
+
+function fecharModalFiscal() {
+  document.getElementById('modalFiscalCot').classList.remove('open');
+  fiscalAlvo = null;
+}
+
+function salvarFiscal() {
+  if (!fiscalAlvo) return;
+  var updates = {};
+  var invalido = null;
+  FISCAL_CAMPOS.forEach(function(par) {
+    var v = document.getElementById(par[0]).value;
+    var num = v === '' ? null : parseFloat(v);
+    if (num != null && (isNaN(num) || num < 0 || num > 100)) invalido = par[1];
+    updates['processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey +
+            '/respostaItens/' + fiscalAlvo.itemKey + '/' + par[1]] = num;
+  });
+  if (invalido) { showAlert('Percentual inválido em ' + invalido + ' — use um valor entre 0 e 100.', 'danger'); return; }
+  updates['processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey + '/status'] = 'RESPONDIDO';
+  db.ref().update(updates).then(function() {
+    fecharModalFiscal();
+    showAlert('Impostos salvos.', 'success');
+  }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+}
+
+document.getElementById('modalFiscalClose').addEventListener('click', fecharModalFiscal);
+document.getElementById('modalFiscalCancel').addEventListener('click', fecharModalFiscal);
+document.getElementById('modalFiscalSave').addEventListener('click', salvarFiscal);
+document.getElementById('modalFiscalCot').addEventListener('click', function(ev) { if (ev.target === this) fecharModalFiscal(); });
+FISCAL_CAMPOS.forEach(function(par) {
+  document.getElementById(par[0]).addEventListener('input', atualizarMemoriaFiscal);
+});
+
 /* ── Cotações em andamento (aba própria) ── */
 function cotacaoCardHtml(entry) {
   var key = entry[0], p = entry[1];
   var itensArr = Object.entries(p.itens || {});
   var convidadosArr = Object.entries(p.fornecedoresConvidados || {});
 
-  var menores = {}; // itemKey -> {cKey, preco}
-  itensArr.forEach(function(itEntry) {
-    var itemKey = itEntry[0];
-    convidadosArr.forEach(function(cEntry) {
-      var cKey = cEntry[0], c = cEntry[1];
-      var resp = (c.respostaItens || {})[itemKey];
-      if (!resp || resp.precoUnit == null || resp.precoUnit === '') return;
-      var preco = parseFloat(resp.precoUnit);
-      if (!menores[itemKey] || preco < menores[itemKey].preco) menores[itemKey] = {cKey: cKey, preco: preco};
-    });
-  });
+  // A comparação passou a ser por CUSTO UNITÁRIO FINAL (com IPI, ICMS-ST,
+  // frete rateado e crédito de ICMS), não por preço unitário. A lógica mora
+  // em shared/utils.js e é testada isolada -- aqui fica só a tela.
+  //
+  // O destaque anterior era o menor PREÇO, o que apontava o fornecedor
+  // errado sempre que impostos ou frete diferiam entre eles.
+  var cmp = compararCotacao(p.itens || {}, p.fornecedoresConvidados || {});
 
   function nomeConvidado(c, cKey) {
     if (c.fornecedorKey) return (allFornecedores[c.fornecedorKey] && (allFornecedores[c.fornecedorKey].nomeFantasia || allFornecedores[c.fornecedorKey].razaoSocial)) || cKey;
@@ -1679,9 +1856,41 @@ function cotacaoCardHtml(entry) {
     var cKey = cEntry[0], c = cEntry[1];
     var statusBadge = {AGUARDANDO: '<span class="badge badge-orange">Aguardando</span>', RESPONDIDO: '<span class="badge badge-green">Respondido</span>', DECLINOU: '<span class="badge badge-gray">Declinou</span>'}[c.status] || '';
     var link = c.rascunhoCotacaoWebLink ? ' <a href="' + escapeAttr(c.rascunhoCotacaoWebLink) + '" target="_blank" style="font-size:11px">rascunho ↗</a>' : '';
-    return '<th style="min-width:190px">' + escapeHtml(nomeConvidado(c, cKey)) + '<br>' + statusBadge + link + '<br>' +
-      '<input type="text" class="cot-resp-condpgto" placeholder="Condição pgto" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.condicaoPagamento || '') + '" style="width:160px;font-size:11px;margin-top:3px;font-weight:400;text-transform:none;letter-spacing:normal">' +
-      ' <button type="button" class="btn btn-ghost btn-sm cot-declinar" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="margin-top:3px;padding:2px 6px;font-size:10px">Declinou</button></th>';
+    var frete = c.frete || {};
+    var venceGeral = cmp.vencedorGeral && cmp.vencedorGeral.cKey === cKey;
+    var totalForn = (cmp.porFornecedor[cKey] || {}).custoTotal;
+    // Condições do FORNECEDOR (valem pra todos os itens dele): frete, prazo
+    // de pagamento, validade da proposta e onde entrega. Ficam no cabeçalho
+    // da coluna; o que varia por item (impostos) fica na célula.
+    var prazo = parsePrazoPagamento(c.condicaoPagamento || '');
+    var prazoHint = prazo.valido
+      ? '<span class="field-hint" style="margin:0">' + (prazo.aVista ? 'à vista' : prazo.parcelas.length + 'x: ' + prazo.parcelas.join('/') + ' dias') + '</span>'
+      : (c.condicaoPagamento ? '<span class="field-hint" style="margin:0;color:var(--warning)">não entendi o prazo</span>' : '');
+    return '<th style="min-width:216px;vertical-align:top">' +
+      escapeHtml(nomeConvidado(c, cKey)) + '<br>' + statusBadge + link +
+      (venceGeral ? ' <span class="badge badge-green" title="Menor custo total entre quem cotou TODOS os itens">🏆 melhor custo</span>' : '') +
+      '<div style="font-weight:400;text-transform:none;letter-spacing:normal;margin-top:5px;display:flex;flex-direction:column;gap:3px">' +
+        '<div style="display:flex;gap:3px">' +
+          '<select class="cot-frete-tipo" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="width:74px;font-size:11px;padding:3px 4px">' +
+            '<option value=""' + (!frete.tipo ? ' selected' : '') + '>Frete…</option>' +
+            '<option value="FOB"' + (frete.tipo === 'FOB' ? ' selected' : '') + '>FOB</option>' +
+            '<option value="CIF"' + (frete.tipo === 'CIF' ? ' selected' : '') + '>CIF</option>' +
+          '</select>' +
+          '<input type="number" min="0" step="any" class="cot-frete-valor" placeholder="R$ frete" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + (frete.valor != null ? escapeAttr(frete.valor) : '') + '" style="width:88px;font-size:11px;padding:3px 5px"' + (frete.tipo === 'CIF' ? ' disabled title="CIF: o frete já está no preço do fornecedor"' : '') + '>' +
+        '</div>' +
+        '<input type="text" class="cot-resp-condpgto" placeholder="Prazo pgto (ex: 14/21/28 DDL)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.condicaoPagamento || '') + '" style="width:100%;font-size:11px;padding:3px 5px">' +
+        prazoHint +
+        '<div style="display:flex;gap:3px">' +
+          '<input type="date" class="cot-validade" title="Validade da proposta" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.validadeProposta || '') + '" style="width:112px;font-size:11px;padding:3px 4px">' +
+          '<select class="cot-local-entrega" title="Local de entrega" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="width:96px;font-size:11px;padding:3px 4px">' +
+            '<option value=""' + (!c.localEntrega ? ' selected' : '') + '>Entrega…</option>' +
+            '<option value="GALPAO"' + (c.localEntrega === 'GALPAO' ? ' selected' : '') + '>Galpão</option>' +
+            '<option value="FABRICA"' + (c.localEntrega === 'FABRICA' ? ' selected' : '') + '>Fábrica</option>' +
+          '</select>' +
+        '</div>' +
+        (totalForn > 0 ? '<div style="font-size:11.5px;margin-top:2px">Custo total: <b>' + fmtBRL(totalForn) + '</b></div>' : '') +
+        '<button type="button" class="btn btn-ghost btn-sm cot-declinar" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" style="padding:2px 6px;font-size:10px;align-self:flex-start">Declinou</button>' +
+      '</div></th>';
   }).join('');
 
   var bodyRows = itensArr.map(function(itEntry) {
@@ -1689,20 +1898,60 @@ function cotacaoCardHtml(entry) {
     var cells = convidadosArr.map(function(cEntry) {
       var cKey = cEntry[0], c = cEntry[1];
       var resp = (c.respostaItens || {})[itemKey] || {};
-      var isMenor = menores[itemKey] && menores[itemKey].cKey === cKey;
-      return '<td style="' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
-        '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="Preço" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '" style="width:90px;margin-bottom:3px;display:block">' +
-        '<input type="number" class="cot-resp-prazo" min="0" step="1" placeholder="Prazo (dias)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '" style="width:90px">' +
+      var calc = ((cmp.porFornecedor[cKey] || {}).itens || {})[itemKey] || {};
+      var isMenor = cmp.vencedorPorItem[itemKey] && cmp.vencedorPorItem[itemKey].cKey === cKey;
+      // A quantidade cotada pode diferir da pedida: o fornecedor cota o lote
+      // mínimo dele. Sem esse campo, comparava-se 3.000 com 5.000.
+      var qtdDiverge = calc.qtd > 0 && it.qtd > 0 && Math.abs(calc.qtd - it.qtd) > 0.001;
+      var custoHtml = calc.custoUnitario != null
+        ? '<div style="font-size:12px;margin-top:3px" title="Preço + IPI + ST + frete rateado − crédito de ICMS, dividido pela quantidade">' +
+            'Custo un.: <b>' + fmtBRL(calc.custoUnitario) + '</b>' + (isMenor ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>'
+        : '<div class="field-hint" style="margin-top:3px">custo: falta preço/qtd</div>';
+      var avisosHtml = (calc.avisos && calc.avisos.length && (calc.preco > 0 || calc.qtd > 0))
+        ? '<div class="field-hint" style="color:var(--warning);margin-top:2px">⚠ ' + escapeHtml(calc.avisos.join('; ')) + '</div>' : '';
+      return '<td style="vertical-align:top;' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
+        '<div style="display:flex;gap:3px;margin-bottom:3px">' +
+          '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="Preço un." data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '" style="width:88px">' +
+          '<input type="number" class="cot-resp-qtd" min="0" step="any" placeholder="Qtd cotada" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '" style="width:88px' + (qtdDiverge ? ';border-color:var(--warning)' : '') + '"' + (qtdDiverge ? ' title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ')"' : '') + '>' +
+        '</div>' +
+        '<div style="display:flex;gap:3px;align-items:center">' +
+          '<input type="number" class="cot-resp-prazo" min="0" step="1" placeholder="Entrega (dias)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '" style="width:88px">' +
+          '<button type="button" class="btn btn-ghost btn-sm cot-fiscal" title="Impostos e desconto deste item" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" style="padding:3px 7px;font-size:11px">🧾</button>' +
+        '</div>' +
+        custoHtml + avisosHtml +
       '</td>';
     }).join('');
-    return '<tr><td style="font-size:12px"><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') + '<br><span style="color:var(--muted);font-size:11px">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</span></td>' + cells + '</tr>';
+    return '<tr><td style="font-size:12px;vertical-align:top"><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') + '<br><span style="color:var(--muted);font-size:11px">pedido: ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</span></td>' + cells + '</tr>';
   }).join('');
 
   var vencedorOpts = '<option value="">Escolha o vencedor...</option>' + convidadosArr.map(function(cEntry) {
     return '<option value="' + escapeAttr(cEntry[0]) + '">' + escapeHtml(nomeConvidado(cEntry[1], cEntry[0])) + '</option>';
   }).join('');
 
-  var footer = '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap">' +
+  // Resumo da decisão: quem tem o menor custo TOTAL e como ficariam as
+  // parcelas. As datas saem da data de hoje só como previsão -- o prazo real
+  // conta a partir da confirmação de recebimento, que ainda não aconteceu.
+  var resumo = '';
+  if (cmp.vencedorGeral) {
+    var vg = cmp.vencedorGeral;
+    var cVenc = (p.fornecedoresConvidados || {})[vg.cKey] || {};
+    var prazoVenc = parsePrazoPagamento(cVenc.condicaoPagamento || '');
+    var parcelasHtml = '';
+    if (prazoVenc.valido && prazoVenc.parcelas.length) {
+      var previsao = calcularParcelasPagamento(vg.custoTotal, prazoVenc.parcelas, new Date().toISOString().slice(0, 10));
+      parcelasHtml = '<div style="font-size:11.5px;color:var(--muted);margin-top:3px">Previsão de pagamento: ' +
+        previsao.map(function(x) { return fmtBRL(x.valor) + ' em ' + fmtDataCurta(x.vencimento); }).join(' · ') +
+        ' <span title="Contado a partir de hoje. O prazo real conta da confirmação de recebimento.">(estimativa)</span></div>';
+    }
+    resumo = '<div style="padding:10px 12px;background:var(--tint-green-bg);border-radius:8px;margin:0 12px 8px;font-size:12.5px">' +
+      '🏆 <b>' + escapeHtml(nomeConvidado(cVenc, vg.cKey)) + '</b> tem o menor custo total: <b>' + fmtBRL(vg.custoTotal) + '</b>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Custo já com IPI, ICMS-ST e frete, menos o crédito de ICMS. Comparados apenas fornecedores que cotaram todos os itens.</div>' +
+      parcelasHtml + '</div>';
+  } else if (convidadosArr.length) {
+    resumo = '<div class="field-hint" style="padding:8px 12px">Nenhum fornecedor cotou todos os itens ainda — sem isso não dá pra comparar o custo total. O ✓ verde em cada linha mostra o melhor custo por item.</div>';
+  }
+
+  var footer = resumo + '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap">' +
     '<select class="cot-vencedor-select" data-key="' + escapeAttr(key) + '" style="max-width:280px">' + vencedorOpts + '</select>' +
     '<button type="button" class="btn btn-green btn-sm cot-gerar-pc" data-key="' + escapeAttr(key) + '">Gerar Pedido de Compra</button>' +
     '<span class="field-hint" style="margin:0">Fornecedor avulso vencedor precisa ser cadastrado em Fornecedores antes de gerar o Pedido de Compra.</span>' +
@@ -1741,10 +1990,11 @@ function renderCotacoesAndamento() {
     : '<div class="empty-hint" style="padding:14px 16px">Nenhuma cotação finalizada ainda.</div>';
 }
 function wireCotacoesAndamento() {
-  document.querySelectorAll('.cot-resp-preco, .cot-resp-prazo').forEach(function(el) {
+  document.querySelectorAll('.cot-resp-preco, .cot-resp-prazo, .cot-resp-qtd').forEach(function(el) {
     el.addEventListener('change', function() {
       var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey'), itemKey = el.getAttribute('data-item');
-      var campo = el.classList.contains('cot-resp-preco') ? 'precoUnit' : 'prazoEntregaDias';
+      var campo = el.classList.contains('cot-resp-preco') ? 'precoUnit'
+        : el.classList.contains('cot-resp-qtd') ? 'qtdCotada' : 'prazoEntregaDias';
       var val = el.value === '' ? null : parseFloat(el.value);
       if (val != null && val < 0) { showAlert('Valor não pode ser negativo.', 'danger'); el.value = ''; return; }
       var updates = {};
@@ -1757,8 +2007,51 @@ function wireCotacoesAndamento() {
   document.querySelectorAll('.cot-resp-condpgto').forEach(function(el) {
     el.addEventListener('change', function() {
       var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey');
-      db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados/' + cKey + '/condicaoPagamento').set(el.value.trim())
+      var texto = el.value.trim();
+      var prazo = parsePrazoPagamento(texto);
+      // Guarda o texto como a pessoa escreveu E as parcelas interpretadas.
+      // O texto é o que ela reconhece; as parcelas é o que o financeiro vai
+      // ler depois pra gerar os títulos, sem precisar reinterpretar string.
+      db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados/' + cKey).update({
+        condicaoPagamento: texto,
+        prazoPagamentoParcelas: prazo.valido ? prazo.parcelas : null
+      }).then(function() {
+        if (texto && !prazo.valido) showAlert('Não consegui ler as parcelas de "' + texto + '". Use algo como "14/21/28 DDL" ou "à vista".', 'info');
+      }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+    });
+  });
+
+  // Condições do fornecedor: frete, validade da proposta e local de entrega
+  document.querySelectorAll('.cot-frete-tipo, .cot-frete-valor').forEach(function(el) {
+    el.addEventListener('change', function() {
+      var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey');
+      var ehTipo = el.classList.contains('cot-frete-tipo');
+      var upd = {};
+      if (ehTipo) {
+        upd['frete/tipo'] = el.value || null;
+        // CIF: o fornecedor paga e já embutiu no preço. Zerar o valor evita
+        // que um número digitado antes fique guardado e confunda depois.
+        if (el.value === 'CIF') upd['frete/valor'] = null;
+      } else {
+        var v = el.value === '' ? null : parseFloat(el.value);
+        if (v != null && v < 0) { showAlert('Frete não pode ser negativo.', 'danger'); el.value = ''; return; }
+        upd['frete/valor'] = v;
+      }
+      db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados/' + cKey).update(upd)
         .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+    });
+  });
+  document.querySelectorAll('.cot-validade, .cot-local-entrega').forEach(function(el) {
+    el.addEventListener('change', function() {
+      var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey');
+      var campo = el.classList.contains('cot-validade') ? 'validadeProposta' : 'localEntrega';
+      db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados/' + cKey + '/' + campo).set(el.value || null)
+        .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+    });
+  });
+  document.querySelectorAll('.cot-fiscal').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      abrirModalFiscal(btn.getAttribute('data-key'), btn.getAttribute('data-ckey'), btn.getAttribute('data-item'));
     });
   });
   document.querySelectorAll('.cot-declinar').forEach(function(btn) {
@@ -1821,17 +2114,40 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
       });
     }
 
+    // O orçamento negociado tem que VIAJAR pra o Pedido de Compra. Sem
+    // isso, todo o detalhamento fiscal morreria na cotação e o recebimento
+    // e o financeiro teriam que reconstruí-lo de cabeça.
+    var cmpPC = compararCotacao(proc.itens || {}, proc.fornecedoresConvidados || {});
+    var calcVenc = (cmpPC.porFornecedor[convidadoKey] || {}).itens || {};
     var itensObj = {};
     Object.entries(proc.itens || {}).forEach(function(itEntry) {
       var origItemKey = itEntry[0], it = itEntry[1];
       var resp = (convidado.respostaItens || {})[origItemKey] || {};
+      var calc = calcVenc[origItemKey] || {};
       var itemKey = db.ref('pedidos_compra').push().key;
       itensObj[itemKey] = {
         materialCodigo: it.materialCodigo, materialNome: it.materialNome || '', qtd: it.qtd, unidade: it.unidade || '',
         precoUnit: resp.precoUnit != null ? parseFloat(resp.precoUnit) : null,
+        // Quantidade que o fornecedor de fato cotou (lote mínimo pode diferir
+        // da pedida) -- é ela que vale pro valor do pedido.
+        qtdCotada: resp.qtdCotada != null ? parseFloat(resp.qtdCotada) : null,
+        prazoEntregaDias: resp.prazoEntregaDias != null ? parseFloat(resp.prazoEntregaDias) : null,
+        pctNf: resp.pctNf != null ? resp.pctNf : null,
+        pctIpi: resp.pctIpi != null ? resp.pctIpi : null,
+        pctIcms: resp.pctIcms != null ? resp.pctIcms : null,
+        pctIcmsSt: resp.pctIcmsSt != null ? resp.pctIcmsSt : null,
+        pctIss: resp.pctIss != null ? resp.pctIss : null,
+        descontoPct: resp.descontoPct != null ? resp.descontoPct : null,
+        // Congelado no momento da decisão: é o número que justificou a
+        // escolha deste fornecedor, e recalculá-lo depois daria outro
+        // resultado se alguém editar a cotação.
+        custoUnitarioNaDecisao: calc.custoUnitario != null ? Math.round(calc.custoUnitario * 10000) / 10000 : null,
+        custoTotalNaDecisao: calc.custoTotal != null ? Math.round(calc.custoTotal * 100) / 100 : null,
         obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey
       };
     });
+    var prazoVencedor = parsePrazoPagamento(convidado.condicaoPagamento || '');
+    var totalPedido = Object.keys(calcVenc).reduce(function(s, k) { return s + (calcVenc[k].custoTotal || 0); }, 0);
     var solicitacoesOrigem = {};
     scKeys.forEach(function(scKey) {
       var s = allSolicitacoes[scKey];
@@ -1847,6 +2163,13 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
         dataCriacao: new Date().toISOString(), dataEmissao: null,
         solicitacoesOrigem: solicitacoesOrigem, itens: itensObj,
         condicaoPagamento: convidado.condicaoPagamento || '',
+        // Prazo já interpretado. O financeiro lê daqui pra gerar os títulos
+        // na confirmação de recebimento, sem reinterpretar a string.
+        prazoPagamentoParcelas: prazoVencedor.valido ? prazoVencedor.parcelas : null,
+        frete: convidado.frete || null,
+        validadePropostaNaDecisao: convidado.validadeProposta || null,
+        localEntrega: convidado.localEntrega || null,
+        valorTotalEstimado: Math.round(totalPedido * 100) / 100,
         origemProcessoCotacaoKey: procKey,
         criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
       }).then(function() {

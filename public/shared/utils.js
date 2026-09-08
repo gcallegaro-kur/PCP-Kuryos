@@ -3128,3 +3128,243 @@ function montarEtiquetasCaixa(op) {
   for (var i = 1; i <= total; i++) paginas += paginaEtiquetaCaixa(op, i, total);
   return paginas;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// ORÇAMENTO DE COTAÇÃO — custo comparável entre fornecedores
+//
+// Até aqui a cotação guardava preço unitário e prazo, e a tela pintava de
+// verde o MENOR PREÇO UNITÁRIO. Com IPI, ICMS-ST e frete diferentes por
+// fornecedor, o menor preço unitário frequentemente NÃO é o menor custo --
+// ou seja, o destaque estava apontando o fornecedor errado.
+//
+// Estas funções calculam o número que de fato permite comparar: o custo
+// unitário final, já com imposto que soma, frete rateado e crédito
+// recuperável descontado.
+//
+// AS REGRAS FISCAIS (decididas com o usuário):
+//
+//   %NF   -- percentual do valor que sai faturado em nota. Paga-se o preço
+//            cheio de qualquer jeito; o que muda é quanto é documentado --
+//            e imposto e crédito só existem sobre a parte faturada.
+//   IPI   -- POR FORA: calculado sobre a base e SOMADO ao valor.
+//   ST    -- POR FORA, como o IPI (ICMS-Substituição Tributária). Comum em
+//            embalagem de cosmético e ausente da lista original.
+//   ISS   -- POR FORA, mas é imposto de SERVIÇO (municipal) -- não convive
+//            com ICMS na mesma linha. Ver cotacaoItemInconsistencias().
+//   ICMS  -- POR DENTRO: já está embutido no preço cotado. NÃO soma.
+//            Entra como CRÉDITO, reduzindo o custo real de quem o recupera.
+//            Somá-lo como o IPI contaria o mesmo imposto duas vezes.
+//   FRETE -- FOB: o comprador paga, então SOMA ao custo.
+//            CIF: o vendedor paga, já está no preço, NÃO soma.
+// ══════════════════════════════════════════════════════════════════════
+
+var COTACAO_FRETE = { FOB: 'FOB — por nossa conta', CIF: 'CIF — por conta do fornecedor' };
+
+// Função PURA. Rateia o frete do fornecedor entre os itens dele,
+// proporcionalmente ao valor líquido de cada um.
+//
+// Rateio POR VALOR (e não por peso ou em partes iguais) porque é o único
+// que não exige um dado que a cotação não tem -- peso quase nunca vem
+// preenchido, e dividir igualmente distorce quando um item vale 10x o
+// outro. `linhas` = [{ itemKey, liquido }].
+function ratearFreteCotacao(linhas, valorFrete) {
+  var frete = parseFloat(valorFrete) || 0;
+  var out = {};
+  var soma = (linhas || []).reduce(function(s, l) { return s + (parseFloat(l.liquido) || 0); }, 0);
+  (linhas || []).forEach(function(l) {
+    // Sem base de rateio (tudo zerado), divide igualmente em vez de somar
+    // zero -- senão um frete real sumiria do custo.
+    out[l.itemKey] = soma > 0
+      ? frete * ((parseFloat(l.liquido) || 0) / soma)
+      : (linhas.length ? frete / linhas.length : 0);
+  });
+  return out;
+}
+
+// Função PURA. Devolve o detalhamento de custo de UM item de UM fornecedor.
+// `resp`   = { precoUnit, qtdCotada, pctNf, pctIpi, pctIcms, pctIcmsSt, pctIss, descontoPct }
+// `freteRateado` = parcela do frete que cabe a este item (0 se CIF)
+// Nunca lança: campo vazio vira 0, e o resultado diz o que faltou.
+function calcularCustoItemCotacao(resp, freteRateado) {
+  var r = resp || {};
+  var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
+  var preco = num(r.precoUnit);
+  var qtd = num(r.qtdCotada);
+
+  var bruto = preco * qtd;
+  var desconto = bruto * (num(r.descontoPct) / 100);
+  var liquido = bruto - desconto;
+
+  // Sem %NF informado, assume 100% faturado -- é o caso normal, e tratar
+  // vazio como 0% zeraria imposto e crédito sem ninguém perceber.
+  var pctNf = (r.pctNf === '' || r.pctNf == null) ? 100 : num(r.pctNf);
+  var baseNf = liquido * (pctNf / 100);
+
+  var ipi = baseNf * (num(r.pctIpi) / 100);
+  var st = baseNf * (num(r.pctIcmsSt) / 100);
+  var iss = baseNf * (num(r.pctIss) / 100);
+  var creditoIcms = baseNf * (num(r.pctIcms) / 100);
+  var frete = num(freteRateado);
+
+  var totalNota = liquido + ipi + st + iss;
+  var custoTotal = totalNota + frete - creditoIcms;
+
+  return {
+    preco: preco, qtd: qtd,
+    bruto: bruto, desconto: desconto, liquido: liquido,
+    pctNf: pctNf, baseNf: baseNf,
+    ipi: ipi, st: st, iss: iss, creditoIcms: creditoIcms, frete: frete,
+    totalNota: totalNota,
+    custoTotal: custoTotal,
+    // O número da comparação. null (e não 0) quando não há quantidade --
+    // 0 ordenaria como "o mais barato de todos" e venceria a cotação.
+    custoUnitario: qtd > 0 ? custoTotal / qtd : null,
+    completo: preco > 0 && qtd > 0
+  };
+}
+
+// Função PURA. Avisos de preenchimento, para a tela mostrar antes de
+// alguém decidir a cotação em cima de um número errado.
+function cotacaoItemInconsistencias(resp) {
+  var r = resp || {};
+  var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
+  var avisos = [];
+  if (!(num(r.precoUnit) > 0)) avisos.push('sem preço');
+  if (!(num(r.qtdCotada) > 0)) avisos.push('sem quantidade cotada');
+  // ISS é imposto de serviço (municipal), ICMS é de mercadoria (estadual).
+  // Os dois na mesma linha significa que alguém preencheu o formulário sem
+  // saber qual se aplica -- e o custo sai inflado.
+  if (num(r.pctIss) > 0 && num(r.pctIcms) > 0) avisos.push('ISS e ICMS juntos — ISS é serviço, ICMS é mercadoria');
+  ['pctNf', 'pctIpi', 'pctIcms', 'pctIcmsSt', 'pctIss', 'descontoPct'].forEach(function(c) {
+    var v = num(r[c]);
+    if (v < 0 || v > 100) avisos.push(c.replace('pct', '%').replace('Pct', ' %') + ' fora de 0–100');
+  });
+  return avisos;
+}
+
+// Função PURA. Compara todos os fornecedores de um processo de cotação e
+// devolve, por item, quem tem o menor CUSTO UNITÁRIO -- não o menor preço.
+//
+// `convidados` = fornecedoresConvidados (objeto), `itens` = itens (objeto).
+function compararCotacao(itens, convidados) {
+  var porFornecedor = {};
+  Object.keys(convidados || {}).forEach(function(cKey) {
+    var c = convidados[cKey] || {};
+    if (c.status === 'DECLINOU') return;
+    var freteCab = c.frete || {};
+    // CIF: o fornecedor paga o frete e ele já está no preço. Somar de novo
+    // seria cobrar o frete duas vezes de quem o embutiu.
+    var valorFrete = freteCab.tipo === 'FOB' ? (parseFloat(freteCab.valor) || 0) : 0;
+    var linhas = Object.keys(itens || {}).map(function(itemKey) {
+      var resp = (c.respostaItens || {})[itemKey] || {};
+      var parcial = calcularCustoItemCotacao(resp, 0);
+      return { itemKey: itemKey, liquido: parcial.liquido };
+    });
+    var rateio = ratearFreteCotacao(linhas, valorFrete);
+    var itensCalc = {};
+    Object.keys(itens || {}).forEach(function(itemKey) {
+      var resp = (c.respostaItens || {})[itemKey] || {};
+      itensCalc[itemKey] = calcularCustoItemCotacao(resp, rateio[itemKey] || 0);
+      itensCalc[itemKey].avisos = cotacaoItemInconsistencias(resp);
+    });
+    porFornecedor[cKey] = {
+      itens: itensCalc,
+      freteTipo: freteCab.tipo || null,
+      freteValor: parseFloat(freteCab.valor) || 0,
+      custoTotal: Object.keys(itensCalc).reduce(function(s, k) { return s + itensCalc[k].custoTotal; }, 0)
+    };
+  });
+
+  // Vencedor por item: menor custo unitário entre quem de fato respondeu.
+  var vencedorPorItem = {};
+  Object.keys(itens || {}).forEach(function(itemKey) {
+    var melhor = null;
+    Object.keys(porFornecedor).forEach(function(cKey) {
+      var calc = porFornecedor[cKey].itens[itemKey];
+      if (!calc || !calc.completo || calc.custoUnitario == null) return;
+      if (!melhor || calc.custoUnitario < melhor.custoUnitario) {
+        melhor = { cKey: cKey, custoUnitario: calc.custoUnitario };
+      }
+    });
+    if (melhor) vencedorPorItem[itemKey] = melhor;
+  });
+
+  // Vencedor geral: menor custo total somando só quem respondeu TODOS os
+  // itens. Um fornecedor que cotou 1 de 5 itens teria o "menor total" sem
+  // ser comparável -- e é o erro clássico deste tipo de tela.
+  var totalItens = Object.keys(itens || {}).length;
+  var vencedorGeral = null;
+  Object.keys(porFornecedor).forEach(function(cKey) {
+    var f = porFornecedor[cKey];
+    var completos = Object.keys(f.itens).filter(function(k) { return f.itens[k].completo; }).length;
+    if (completos !== totalItens || !totalItens) return;
+    if (!vencedorGeral || f.custoTotal < vencedorGeral.custoTotal) {
+      vencedorGeral = { cKey: cKey, custoTotal: f.custoTotal };
+    }
+  });
+
+  return { porFornecedor: porFornecedor, vencedorPorItem: vencedorPorItem, vencedorGeral: vencedorGeral };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PRAZO DE PAGAMENTO — "14/21/28 DDL" vira parcelas com data
+//
+// O texto livre que a Kuryos já usa ("14/21/28 DDL", "30/60/90") é a forma
+// natural de escrever, então o campo continua sendo texto -- o sistema é
+// que aprende a lê-lo, em vez de obrigar a pessoa a preencher três campos.
+//
+// Escopo desta fase (decisão do usuário): estruturar o prazo e calcular os
+// vencimentos. O módulo financeiro (título, baixa, status) vem depois e lê
+// isto pronto.
+// ══════════════════════════════════════════════════════════════════════
+
+// Função PURA. "14/21/28 DDL" -> { parcelas: [14,21,28], aVista: false }
+function parsePrazoPagamento(texto) {
+  var t = String(texto == null ? '' : texto).trim();
+  if (!t) return { parcelas: [], aVista: false, texto: '', valido: false };
+  if (/^\s*(a\s*vista|à\s*vista|avista)\s*$/i.test(t)) {
+    return { parcelas: [0], aVista: true, texto: t, valido: true };
+  }
+  // Pega só os números; "DDL", "dias", "/" e espaços são ruído.
+  var nums = (t.match(/\d+/g) || []).map(function(n) { return parseInt(n, 10); })
+    .filter(function(n) { return !isNaN(n) && n >= 0 && n <= 720; });
+  if (!nums.length) return { parcelas: [], aVista: false, texto: t, valido: false };
+  // Ordena e remove repetidos: "30/30/60" é erro de digitação mais provável
+  // que duas parcelas no mesmo dia.
+  var unicos = [];
+  nums.sort(function(a, b) { return a - b; }).forEach(function(n) {
+    if (unicos.indexOf(n) === -1) unicos.push(n);
+  });
+  return { parcelas: unicos, aVista: unicos.length === 1 && unicos[0] === 0, texto: t, valido: true };
+}
+
+// Função PURA. Divide o valor entre as parcelas e calcula os vencimentos.
+// `dataBase` é a data de contagem do DDL (ISO). A sobra de centavos vai
+// pra ÚLTIMA parcela, senão a soma das parcelas não fecha com o total.
+function calcularParcelasPagamento(valorTotal, parcelas, dataBase) {
+  var total = parseFloat(valorTotal) || 0;
+  var dias = (parcelas || []).slice();
+  if (!dias.length) return [];
+  // Data-only em UTC, de propósito. `new Date('2026-09-08')` é meia-noite
+  // UTC; somar dias com getDate()/setDate() (que são LOCAIS) e depois
+  // formatar com toISOString() (que é UTC) só dá certo por acaso em fuso
+  // negativo -- em UTC+X o vencimento sai um dia adiantado. Trabalhando
+  // 100% em UTC o resultado é o mesmo em qualquer máquina.
+  var base;
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dataBase || ''));
+  if (m) base = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  else {
+    var hoje = dataBase ? new Date(dataBase) : new Date();
+    if (isNaN(hoje)) hoje = new Date();
+    base = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  }
+  var porParcela = Math.round((total / dias.length) * 100) / 100;
+  var out = dias.map(function(d, i) {
+    var venc = new Date(base + d * 86400000);
+    return { parcela: i + 1, dias: d, vencimento: venc.toISOString().slice(0, 10), valor: porParcela };
+  });
+  var somado = Math.round(porParcela * dias.length * 100) / 100;
+  var sobra = Math.round((total - somado) * 100) / 100;
+  if (sobra !== 0) out[out.length - 1].valor = Math.round((out[out.length - 1].valor + sobra) * 100) / 100;
+  return out;
+}
