@@ -54,42 +54,130 @@ window.cycleKuryosTheme = function() {
 // "produção", nunca menos que o operador de chão de fábrica. As regras de
 // escrita em database.rules.json já seguem esse mesmo padrão em todo lugar;
 // aqui só faltava form.html (Apontamento/Registro de Produção).
-const pageAccessRules = {
-  'form.html': ['production', 'admin', 'rotulagem', 'pcp'],
-  'planejamento.html': ['production', 'admin', 'pcp'],
-  'horizonte.html': ['production', 'admin', 'pcp'],
-  'dashboard.html': ['production', 'admin', 'pcp'],
-  'dashboard_analise.html': ['production', 'admin', 'pcp'],
-  'ops.html': ['production', 'admin', 'pcp'],
-  'historico.html': ['production', 'admin', 'pcp'],
-  'pedidos.html': ['admin', 'pcp'],
-  'produtos.html': ['admin', 'pcp'],
-  'insumos.html': ['admin', 'pcp'],
-  'usuarios.html': ['admin', 'pcp'],
-  'admin.html': ['admin', 'pcp'],
-  'clientes.html': ['admin', 'pcp'],
-  'materiais.html': ['admin', 'pcp'],
-  'formulas.html': ['admin', 'pcp'],
-  'cadastros.html': ['admin', 'pcp'],
-  'emitir_op.html': ['admin', 'pcp'],
-  'compras.html': ['admin', 'pcp'],
-  'logistica.html': ['admin', 'pcp'],
-  'estoque.html': ['admin', 'pcp'],
-  'separacao_materiais.html': ['admin', 'pcp'],
-  // Módulo de Qualidade -- papel próprio 'qualidade' (Analista/Inspetora do
-  // CQ). É a ÚNICA página que esse papel enxerga: ele decide o que pode ser
-  // usado e o que não pode, mas não emite OP, não ajusta saldo e não mexe em
-  // cadastro. 'admin'/'pcp' entram junto pela regra de sempre.
-  'qualidade.html': ['admin', 'pcp', 'qualidade'],
-  // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
-  // (decisão do usuário: sem múltiplos papéis por pessoa). 'admin' entra
-  // aqui também (pedido do usuário: ADM vê tudo, sem exceção) -- 'pcp'
-  // deliberadamente NÃO entra em nenhuma linha abaixo.
-  'rh_cadastros.html': ['rh', 'gestor', 'admin'],
-  'rh_avaliacao.html': ['rh', 'gestor', 'admin'],
-  'rh_ferias.html': ['rh', 'gestor', 'admin'],
-  'rh_dashboard.html': ['rh', 'admin']
+// ══════════════════════════════════════════════════════════════════════
+// MÓDULOS DE ACESSO — a fonte ÚNICA de "quem vê o quê"
+//
+// Antes, acesso era um papel só por pessoa, com a lista de páginas fixa no
+// código: mudar o alcance de alguém exigia deploy. Agora o ADM marca módulos
+// por usuário direto na tela de Usuários (pedido do usuário: "é possível
+// adicionar quais módulos incluo dentro deles, via checkbox? isso é uma
+// função exclusiva de admin").
+//
+// O PAPEL NÃO MORREU -- ele virou o PADRÃO. Quem não tem `modulos` gravado
+// (que hoje é todo mundo: os 10 usuários em produção) continua com
+// exatamente o alcance que o papel sempre deu, sem nenhuma mudança. A
+// marcação individual só passa a valer quando o ADM salva pela primeira vez.
+// Sem esse fallback, publicar isto trancaria a fábrica inteira pra fora do
+// sistema na manhã seguinte.
+//
+// Os módulos foram recortados pra que CADA papel de hoje seja exatamente a
+// união de alguns deles -- por isso `apontamento` é só form.html (rotulagem
+// não vê histórico) e `historico.html` mora em `planejamento` (produção vê).
+// Isso é verificado por teste contra os 10 usuários reais.
+const KURYOS_MODULOS = {
+  analytics:    { rotulo: 'Dashboards',            desc: 'Dashboard Diário e Dashboard Geral',
+                  paginas: ['dashboard.html', 'dashboard_analise.html'] },
+  apontamento:  { rotulo: 'Apontamento Diário',    desc: 'Registro de produção no chão de fábrica',
+                  paginas: ['form.html'] },
+  planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
+  emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
+                  paginas: ['emitir_op.html'] },
+  pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Pedidos comerciais e Matriz de Insumos',
+                  paginas: ['pedidos.html', 'insumos.html'] },
+  cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
+                  paginas: ['cadastros.html', 'produtos.html', 'materiais.html', 'clientes.html', 'formulas.html'] },
+  compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
+                  paginas: ['compras.html'] },
+  logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
+                  paginas: ['logistica.html', 'estoque.html', 'separacao_materiais.html'] },
+  qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
+                  paginas: ['qualidade.html'] },
+  config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
+                  paginas: ['admin.html'] },
+  usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
+                  paginas: ['usuarios.html'] },
+  rh:           { rotulo: 'RH — Pessoas',          desc: 'Colaboradores, avaliação de desempenho e férias',
+                  paginas: ['rh_cadastros.html', 'rh_avaliacao.html', 'rh_ferias.html'] },
+  rh_dashboard: { rotulo: 'RH — Dashboard',        desc: 'Indicadores de RH (dado sensível)',
+                  paginas: ['rh_dashboard.html'] }
 };
+
+// Padrão por papel. Reproduz EXATAMENTE o alcance que cada papel tinha antes
+// desta mudança -- é o contrato que o teste de regressão verifica usuário a
+// usuário. 'admin' é '*': vê tudo sempre, e nunca pode ser trancado pra fora.
+const MODULOS_POR_PAPEL = {
+  admin: '*',
+  pcp: ['analytics', 'apontamento', 'planejamento', 'emitir_op', 'pedidos', 'cadastros',
+        'compras', 'logistica', 'qualidade', 'config', 'usuarios'],
+  production: ['analytics', 'apontamento', 'planejamento'],
+  rotulagem: ['apontamento'],
+  qualidade: ['qualidade'],
+  rh: ['rh', 'rh_dashboard'],
+  gestor: ['rh'],
+  pending: []
+};
+
+// página -> lista de módulos que a liberam (derivada, nunca digitada duas
+// vezes). Página fora deste mapa é liberada pra qualquer autenticado -- é o
+// caso dos manuais, material de treinamento sem restrição.
+const PAGINA_MODULOS = (function() {
+  const mapa = {};
+  Object.keys(KURYOS_MODULOS).forEach(function(mod) {
+    KURYOS_MODULOS[mod].paginas.forEach(function(pg) {
+      (mapa[pg] = mapa[pg] || []).push(mod);
+    });
+  });
+  return mapa;
+})();
+
+// Módulos efetivos de um usuário: o que o ADM marcou; se nunca marcou, o
+// padrão do papel. `admin` recebe tudo, sempre -- é a trava contra o ADM
+// desmarcar a própria gestão de usuários e ninguém mais conseguir entrar.
+function modulosDoUsuario(user) {
+  if (!user) return [];
+  if (user.role === 'admin') return Object.keys(KURYOS_MODULOS);
+  const marcados = user.modulos;
+  if (marcados && typeof marcados === 'object') {
+    const ativos = Object.keys(marcados).filter(function(m) {
+      return marcados[m] === true && KURYOS_MODULOS[m];
+    });
+    // Objeto existente porém vazio é uma escolha do ADM ("este usuário não
+    // acessa nada"), não um dado faltando -- respeitamos.
+    return ativos;
+  }
+  const padrao = MODULOS_POR_PAPEL[user.role];
+  if (padrao === '*') return Object.keys(KURYOS_MODULOS);
+  return (padrao || []).slice();
+}
+function usuarioTemModulo(user, modulo) {
+  return modulosDoUsuario(user).indexOf(modulo) !== -1;
+}
+// A pessoa pode abrir esta página?
+function podeAbrirPagina(user, pagina) {
+  const exigidos = PAGINA_MODULOS[pagina];
+  if (!exigidos) return true; // sem regra = liberada (manuais)
+  const meus = modulosDoUsuario(user);
+  return exigidos.some(function(m) { return meus.indexOf(m) !== -1; });
+}
+// Primeira página que a pessoa consegue abrir -- usada como "home" e como
+// destino de um Acesso Negado. Sem isto, mandar alguém pra dashboard.html
+// (que ele também não acessa) trocaria um Acesso Negado por outro, em loop.
+const ORDEM_HOME = ['dashboard.html', 'form.html', 'qualidade.html', 'planejamento.html',
+                    'logistica.html', 'compras.html', 'cadastros.html', 'pedidos.html',
+                    'rh_dashboard.html', 'rh_avaliacao.html'];
+function homeDoUsuario(user) {
+  for (var i = 0; i < ORDEM_HOME.length; i++) {
+    if (podeAbrirPagina(user, ORDEM_HOME[i])) return ORDEM_HOME[i];
+  }
+  return 'login.html?status=pending';
+}
+// Exposto pra usuarios.html montar os checkboxes a partir da MESMA definição.
+window.KURYOS_MODULOS = KURYOS_MODULOS;
+window.MODULOS_POR_PAPEL = MODULOS_POR_PAPEL;
+window.modulosDoUsuario = modulosDoUsuario;
+window.usuarioTemModulo = usuarioTemModulo;
+window.podeAbrirPagina = podeAbrirPagina;
 
 // Extrai o nome da página atual
 function getActivePageName() {
@@ -268,30 +356,30 @@ window.currentUser = null;
               uid: user.uid,
               nome: profile.nome || user.displayName || user.email.split('@')[0],
               email: user.email,
-              role: role
+              role: role,
+              // Módulos marcados pelo ADM. Ausente = usa o padrão do papel
+              // (ver modulosDoUsuario) -- é o que mantém os usuários atuais
+              // exatamente como estavam antes desta mudança.
+              modulos: profile.modulos || null
             };
 
-            // Validação de acessos da página
-            const allowedRoles = pageAccessRules[activePage];
-            if (allowedRoles && !allowedRoles.includes(role)) {
+            // Validação de acessos da página, agora por MÓDULO
+            if (!podeAbrirPagina(window.currentUser, activePage)) {
               clearAuthWatchdog();
-              const deniedRoleLabel = role === 'admin' ? 'Administrador'
-                : role === 'pcp' ? 'PCP'
-                : role === 'rh' ? 'RH Central'
-                : role === 'gestor' ? 'Gestor de Linha'
-                : role === 'rotulagem' ? 'Rotulagem' : 'Produção';
-              alert('Acesso Negado: Seu perfil (' + deniedRoleLabel + ') não tem permissão para acessar esta página.');
-              // Cada "família" de papel tem sua própria home -- mandar um
-              // papel de RH pra dashboard.html (que ele também não acessa)
-              // só trocaria um Acesso Negado por outro, em loop.
-              if (role === 'rh') {
-                window.location.href = 'rh_dashboard.html';
-              } else if (role === 'gestor') {
-                window.location.href = 'rh_avaliacao.html';
-              } else if (role === 'production' || role === 'rotulagem') {
-                window.location.href = 'form.html';
+              const exigidos = (PAGINA_MODULOS[activePage] || [])
+                .map(function(m) { return (KURYOS_MODULOS[m] || {}).rotulo || m; });
+              // Dizer QUAL módulo falta é o que transforma "Acesso Negado"
+              // num pedido acionável ao ADM, em vez de um beco sem saída.
+              alert('Acesso Negado: seu usuário não tem o módulo '
+                + (exigidos.length ? '"' + exigidos.join('" ou "') + '"' : 'necessário')
+                + '.\n\nPeça a um administrador para liberá-lo em Usuários.');
+              const destino = homeDoUsuario(window.currentUser);
+              // Se a home calculada for a própria página negada, não há pra
+              // onde mandar -- redirecionar seria um laço infinito.
+              if (destino.split('?')[0] !== activePage) {
+                window.location.href = destino;
               } else {
-                window.location.href = 'dashboard.html';
+                window.location.href = 'login.html?status=pending';
               }
             } else {
               // Constrói e injeta o menu superior unificado
@@ -422,43 +510,37 @@ function renderUnifiedNavbar(user) {
   sidebar.id = 'unified-navbar';
   sidebar.className = 'kt-sidebar';
 
-  // Módulo de RH -- login completamente separado do PCP pra 'rh'/'gestor'
-  // (decisão do usuário). Esse papel nunca vê nenhum link de PCP/Produção,
-  // e vice-versa -- os dois grupos de link são mutuamente exclusivos pra
-  // ele. 'admin' é a ÚNICA exceção (pedido do usuário: ADM vê tudo, sem
-  // exceção) -- vê o menu de PCP inteiro E o de RH ao mesmo tempo, por
-  // isso showRhGroup é uma condição separada de isRH.
-  const isRH = user.role === 'rh' || user.role === 'gestor';
-  const showRhGroup = isRH || user.role === 'admin';
-  const isRotulagem = user.role === 'rotulagem';
-  // Módulo de Qualidade: papel próprio, com uma página só. Mesma lógica de
-  // 'rotulagem' -- menu enxuto, sem links que dariam "Acesso Negado".
-  const isQualidade = user.role === 'qualidade';
+  // O menu passou a ser montado por MÓDULO, não por papel. Antes, cada link
+  // repetia à mão uma condição de papel que precisava concordar com
+  // pageAccessRules -- duas listas separadas dizendo a mesma coisa, e um
+  // link visível pra quem não tem acesso vira "Acesso Negado" ao clicar.
+  // Agora o menu e a validação de página leem a MESMA função: se o link
+  // aparece, a página abre.
+  const temMod = function(m) { return usuarioTemModulo(user, m); };
   const roleLabel = user.role === 'admin' ? 'Administrador'
     : user.role === 'pcp' ? 'PCP'
     : user.role === 'rh' ? 'RH Central'
     : user.role === 'gestor' ? 'Gestor de Linha'
-    : isQualidade ? 'Qualidade'
-    : (isRotulagem ? 'Rotulagem' : 'Produção');
-  // 'pcp' (novo papel, pedido do usuário: "vê tudo, menos o RH") tem
-  // exatamente o mesmo alcance de página que 'admin' sempre teve no PCP.
-  const isPcpAdmin = user.role === 'admin' || user.role === 'pcp';
+    : user.role === 'qualidade' ? 'Qualidade'
+    : user.role === 'rotulagem' ? 'Rotulagem' : 'Produção';
+  // Um grupo inteiro some quando nenhum link dentro dele sobrevive -- senão
+  // sobra uma legenda flutuando sem nada embaixo (defeito já visto aqui
+  // antes, ao testar com o papel 'production').
+  const grupo = function(titulo, links) {
+    const corpo = links.filter(Boolean).join('');
+    return corpo ? '<div class="kt-nav-group"><div class="kt-nav-cap">' + titulo + '</div>' + corpo + '</div>' : '';
+  };
   const initials = (user.nome || '?').trim().split(/\s+/).slice(0, 2).map(function(s) { return s[0]; }).join('').toUpperCase();
 
-  // Reorganização de menu pedida pelo usuário (blocos: Analytics/Geral/
-  // Compras/PCP/Logística/Produção/RH/ADM) -- por decisão explícita dele,
-  // isto muda só ROTULAGEM e AGRUPAMENTO visual, NUNCA quem vê o quê --
-  // "depois vou delinear os acessos, qual perfil vê o que e faz o que" é
-  // uma etapa futura separada. Cada link mantido com o MESMO gate
-  // (isPcpAdmin) que já tinha antes, só reagrupado em blocos novos.
+  // Blocos: Analytics/Cadastros/Compras/PCP/Logística/Qualidade/Produção/
+  // ADM/RH/Ajuda -- agrupamento definido pelo usuário. O "depois vou
+  // delinear os acessos, qual perfil vê o que e faz o que" que ficou
+  // pendente naquela rodada é exatamente o que os módulos abaixo resolvem.
 
-  // Perfil Rotulagem só tem acesso a form.html -- sidebar minimalista, sem
-  // links pra páginas que dariam "Acesso Negado" se clicadas.
-  const analisesGroup = (isRotulagem || isRH || isQualidade) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Analytics</div>' +
-    ktLink('dashboard.html', 'dashboard', 'Dashboard Diário', activePage) +
-    ktLink('dashboard_analise.html', 'history', 'Dashboard Geral', activePage) +
-    '</div>';
+  const analisesGroup = grupo('Analytics', [
+    temMod('analytics') && ktLink('dashboard.html', 'dashboard', 'Dashboard Diário', activePage),
+    temMod('analytics') && ktLink('dashboard_analise.html', 'history', 'Dashboard Geral', activePage)
+  ]);
 
   // "Cadastros" -- bloco de DADO MESTRE puro (o que as coisas são:
   // material, produto, cliente, fornecedor, fórmula/BOM). Antes se chamava
@@ -468,43 +550,37 @@ function renderUnifiedNavbar(user) {
   // landing em aba diferente. Separar mestre de transacional é a divisão
   // que todo ERP faz (TOTVS/SAP) e deixa explícito onde se cria dado
   // mestre -- que é onde os problemas de cadastro precisam ser atacados.
-  // Gate no GRUPO INTEIRO por isPcpAdmin, não só nos links de dentro,
-  // senão sobra uma legenda flutuando sem link nenhum embaixo pra quem
-  // não é admin/pcp (achado ao testar com o papel 'production').
-  // isPcpAdmin já implica !isRotulagem && !isRH (papéis mutuamente
-  // exclusivos), então um gate só basta.
-  const geralGroup = !isPcpAdmin ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Cadastros</div>' +
-    ktLink('cadastros.html', 'tag', 'Cadastros', activePage) +
-    '</div>';
+  const geralGroup = grupo('Cadastros', [
+    temMod('cadastros') && ktLink('cadastros.html', 'tag', 'Cadastros', activePage)
+  ]);
 
-  const comprasGroup = !isPcpAdmin ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Compras</div>' +
-    ktLink('compras.html', 'cart', 'Compras', activePage) +
-    '</div>';
+  const comprasGroup = grupo('Compras', [
+    temMod('compras') && ktLink('compras.html', 'cart', 'Compras', activePage)
+  ]);
 
-  const pcpGroup = (isRotulagem || isRH || isQualidade) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">PCP</div>' +
-    ktLink('planejamento.html', 'calendar', 'Planejamento', activePage) +
+  const pcpGroup = grupo('PCP', [
+    temMod('planejamento') && ktLink('planejamento.html', 'calendar', 'Planejamento', activePage),
     // horizonte.html tirado do menu a pedido do usuário -- "não é usado
     // pra nada hoje" (o botão de congelar, que era a única mecânica ativa
     // da tela, nunca pegou uso real -- alocacoes_planejamento ficou vazio
     // o tempo todo). Página continua existindo (histórico/dados não
     // apagados), só não é mais oferecida como parte do fluxo ativo.
-    ktLink('ops.html', 'gear', 'Controle de OPs', activePage) +
-    (isPcpAdmin ? ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage) : '') +
-    (isPcpAdmin ? ktLink('pedidos.html', 'list', 'Pedidos', activePage) : '') +
+    temMod('planejamento') && ktLink('ops.html', 'gear', 'Controle de OPs', activePage),
+    temMod('emitir_op') && ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage),
+    temMod('pedidos') && ktLink('pedidos.html', 'list', 'Pedidos', activePage),
     // "Matriz de Insumos > MRP" -- por ora só o rótulo muda (confirmado
     // pelo usuário: "a princípio só renomear"); uma funcionalidade de MRP
     // de verdade fica pra quando o Estoque/Compras (Agendamentos) já
     // estiverem rodando -- registrado em MELHORIAS_FUTURAS.md.
-    (isPcpAdmin ? ktLink('insumos.html', 'box', 'Matriz de Insumos (MRP)', activePage) : '') +
-    (isPcpAdmin ? ktLink('admin.html', 'sliders', 'Ajustes / Config', activePage) : '') +
+    temMod('pedidos') && ktLink('insumos.html', 'box', 'Matriz de Insumos (MRP)', activePage),
+    temMod('config') && ktLink('admin.html', 'sliders', 'Ajustes / Config', activePage),
     // Histórico de Apontamentos aparece TAMBÉM aqui, além de Produção
     // (confirmado pelo usuário: "aparece nos 2 blocos mesmo") -- PCP e
     // Produção são times diferentes que precisam do mesmo histórico.
-    (isPcpAdmin ? ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage) : '') +
-    '</div>';
+    // Aqui ele é oferecido só a quem tem Planejamento junto de outro módulo
+    // de gestão; quem só aponta vê o mesmo link no bloco Produção.
+    temMod('planejamento') && temMod('cadastros') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
+  ]);
 
   // "Logística" -- pedido do usuário: separa do bloco PCP. "Logística" (a
   // página) vira "Agendamentos" no menu -- rótulo só, logistica.html
@@ -515,69 +591,57 @@ function renderUnifiedNavbar(user) {
   // ("organização do estoque"). Estoque estava no bloco "Geral" e desceu
   // pra cá -- os dois links que apontam pro mesmo arquivo agora ficam
   // lado a lado, e "Cadastros" fica só com dado mestre (ver acima).
-  // Mesmo motivo do gate em Cadastros/Compras -- links isPcpAdmin-only,
-  // gate no grupo inteiro.
-  const logisticaGroup = !isPcpAdmin ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Logística</div>' +
-    ktLink('logistica.html', 'truck', 'Agendamentos', activePage) +
-    ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage) +
-    ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage) +
-    ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage) +
-    '</div>';
+  const logisticaGroup = grupo('Logística', [
+    temMod('logistica') && ktLink('logistica.html', 'truck', 'Agendamentos', activePage),
+    temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
+    temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
+    temMod('logistica') && ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage)
+  ]);
 
   // "Qualidade" -- bloco próprio, não uma aba dentro de Estoque. A decisão
-  // de liberar ou não um lote é de outro time, com outro papel de acesso, e
-  // fica lado a lado com o estoque no fluxo mas separada dele na navegação.
-  // Único grupo que o papel 'qualidade' enxerga.
-  const qualidadeGroup = (!isPcpAdmin && !isQualidade) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Qualidade</div>' +
-    ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage) +
-    ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage) +
-    '</div>';
+  // de liberar ou não um lote é de outro time, e fica lado a lado com o
+  // estoque no fluxo mas separada dele na navegação.
+  const qualidadeGroup = grupo('Qualidade', [
+    temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
+    temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage)
+  ]);
 
-  const producaoGroup = (isRH || isQualidade) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Produção</div>' +
-    ktLink('form.html', 'pencil', 'Apontamento Diário', activePage) +
-    (isRotulagem ? '' : ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)) +
-    '</div>';
+  const producaoGroup = grupo('Produção', [
+    temMod('apontamento') && ktLink('form.html', 'pencil', 'Apontamento Diário', activePage),
+    temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
+  ]);
 
-  const usersGroup = isPcpAdmin
-    ? '<div class="kt-nav-group"><div class="kt-nav-cap">ADM</div>' + ktLink('usuarios.html', 'people', 'Usuários', activePage) + '</div>'
-    : '';
+  const usersGroup = grupo('ADM', [
+    temMod('usuarios') && ktLink('usuarios.html', 'people', 'Usuários', activePage)
+  ]);
 
   // RH (Fase 1-3b): Colaboradores/Cargos, Avaliação, Férias -- Documentos
-  // etc. entram em fases futuras (ver plano do módulo). 'admin' vê este
-  // grupo TAMBÉM (showRhGroup), além do grupo PCP inteiro acima -- os
-  // dois não são mais mutuamente exclusivos só pra esse papel.
-  const rhGroup = !showRhGroup ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">RH</div>' +
-    ((user.role === 'rh' || user.role === 'admin') ? ktLink('rh_dashboard.html', 'dashboard', 'Dash', activePage) : '') +
-    ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage) +
-    ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage) +
-    ktLink('rh_ferias.html', 'calendar', 'Férias', activePage) +
-    '</div>';
+  // etc. entram em fases futuras (ver plano do módulo).
+  const rhGroup = grupo('RH', [
+    temMod('rh_dashboard') && ktLink('rh_dashboard.html', 'dashboard', 'Dash', activePage),
+    temMod('rh') && ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage),
+    temMod('rh') && ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage),
+    temMod('rh') && ktLink('rh_ferias.html', 'calendar', 'Férias', activePage)
+  ]);
 
   // "Ajuda" -- os 3 manuais existiam publicados e funcionando desde sempre,
   // mas NENHUMA página do sistema linkava pra eles: só chegava quem soubesse
-  // a URL de cor (achado da auditoria geral). Não têm regra em
-  // pageAccessRules de propósito -- material de treinamento é liberado pra
-  // qualquer papel autenticado; o que muda por papel aqui é só QUAL manual
-  // faz sentido oferecer primeiro, pra não empilhar 3 links iguais pra todo
-  // mundo. RH não entra: os manuais são de PCP/produção, não do módulo dele.
-  const manuaisGroup = (isRH || isQualidade) ? '' :
-    '<div class="kt-nav-group"><div class="kt-nav-cap">Ajuda</div>' +
-    ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage) +
-    (isPcpAdmin ? ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage) : '') +
-    (isRotulagem ? '' : ktLink('manual.html', 'book', 'Manual de Operação', activePage)) +
-    '</div>';
+  // a URL de cor (achado da auditoria geral). Ficam DE FORA de
+  // KURYOS_MODULOS de propósito -- material de treinamento abre pra
+  // qualquer autenticado, sem precisar de módulo; o que os módulos decidem
+  // aqui é só QUAL manual oferecer, pra não empilhar 3 links iguais pra
+  // todo mundo.
+  const manuaisGroup = grupo('Ajuda', [
+    temMod('apontamento') && ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage),
+    temMod('cadastros') && ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage),
+    temMod('planejamento') && ktLink('manual.html', 'book', 'Manual de Operação', activePage)
+  ]);
 
-  // RH Central pousa no Dashboard (é a "tela inicial" dele, por decisão da
-  // especificação); Gestor não acessa o Dashboard nesta fase -- pousa na
-  // Avaliação, sua ferramenta principal.
-  var rhHome = user.role === 'rh' ? 'rh_dashboard.html' : 'rh_avaliacao.html';
-  // Qualidade pousa na própria fila de inspeção -- é a tela de trabalho
-  // dele, e o Dashboard de produção nem está no alcance desse papel.
-  var brandHome = isRH ? rhHome : isQualidade ? 'qualidade.html?tab=fila' : 'dashboard.html';
+  // A home segue os módulos que a pessoa tem, na mesma ordem de preferência
+  // usada quando um Acesso Negado precisa redirecionar -- uma regra só, em
+  // vez de um encadeamento de papéis que precisava ser lembrado a cada
+  // papel novo (foi assim que 'pcp' e 'qualidade' foram esquecidos antes).
+  var brandHome = homeDoUsuario(user);
   sidebar.innerHTML =
     '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
     analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +

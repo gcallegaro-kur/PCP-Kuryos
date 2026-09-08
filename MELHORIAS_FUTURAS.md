@@ -309,6 +309,23 @@ dedicado por tela em vez de fixes pontuais:
 
 ## Segurança / Regras de Acesso
 
+- **Desmarcar um módulo não revoga a ESCRITA no banco** (limite conhecido,
+  aceito ao publicar o acesso por módulo em 2026-09-07). Os checkboxes por
+  usuário valem nas duas pontas, mas de forma **aditiva**: a regra do banco
+  virou `(papel de antes) || (tem o módulo X)`. Ou seja, marcar um módulo
+  **concede** escrita de verdade; desmarcar tira a tela do menu e bloqueia
+  a página, mas o papel continua valendo no servidor. Um usuário `pcp` com
+  "Logística" desmarcada não alcança a tela, porém o token dele ainda
+  gravaria em `estoque` por chamada direta ao SDK.
+  Fechar isso exige trocar papel por módulo NAS REGRAS, com o fallback
+  "sem `modulos` gravado → usa o papel" expresso em cada uma das ~46
+  expressões (`root.child('usuarios').child(auth.uid).child('modulos').exists()`).
+  É expressável, mas é migração de risco alto num sistema em uso diário —
+  um erro tranca a fábrica. Fazer só com o emulador de regras rodando os
+  casos, nunca direto em produção.
+  **Pré-requisito:** decidir antes se `modulos` passa a ser obrigatório em
+  todo usuário (o que elimina o fallback e simplifica muito as regras).
+
 Achado da 5a rodada de auditoria (2026-08-29). Não é um bug — é uma
 decisão consciente pendente de confirmar com o usuário:
 

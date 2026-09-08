@@ -191,6 +191,60 @@
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
+
+    /* ── Módulos de acesso (checkbox por usuário, só ADM) ── */
+    .btn-mod {
+      padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
+      background: var(--panel); color: var(--ink); font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .btn-mod:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-mod:disabled { opacity: .45; cursor: not-allowed; }
+    .mod-resumo { font-size: 11px; color: var(--ink-mute); margin-top: 3px; }
+    .modal-bg {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 1200; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: var(--panel); border-radius: 14px; width: 100%; max-width: 620px; margin: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25); overflow: hidden; border: 1px solid var(--line);
+    }
+    .modal-head {
+      padding: 16px 20px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .modal-head h2 { font-size: 16px; font-weight: 700; color: var(--ink); }
+    .modal-head .sub { font-size: 12px; color: var(--ink-mute); margin-top: 2px; }
+    .modal-x { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--ink-mute); }
+    .modal-body { padding: 16px 20px; max-height: 62vh; overflow-y: auto; }
+    .modal-foot {
+      padding: 14px 20px; border-top: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .mod-item {
+      display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px;
+      border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+    }
+    .mod-item:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .mod-item input { margin-top: 2px; width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; accent-color: var(--accent); }
+    .mod-item .rot { font-size: 13px; font-weight: 600; color: var(--ink); }
+    .mod-item .dsc { font-size: 11.5px; color: var(--ink-mute); line-height: 1.45; }
+    .aviso {
+      font-size: 12px; line-height: 1.55; padding: 10px 12px; border-radius: 8px;
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      color: var(--ink); margin-bottom: 12px;
+    }
+    .btn-salvar {
+      padding: 9px 18px; border: none; border-radius: 8px; background: var(--accent);
+      color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+    .btn-salvar:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-link {
+      background: none; border: none; color: var(--accent); font-size: 12px;
+      cursor: pointer; font-family: inherit; text-decoration: underline; padding: 0;
+    }
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -213,14 +267,39 @@
             <th>Data Cadastro</th>
             <th>Status/Perfil</th>
             <th>Alterar Função</th>
+            <th>Módulos liberados</th>
           </tr>
         </thead>
         <tbody id="users-tbody">
           <tr>
-            <td colspan="5" style="text-align:center; color:var(--ink-mute); padding:30px;">Carregando lista de usuários...</td>
+            <td colspan="6" style="text-align:center; color:var(--ink-mute); padding:30px;">Carregando lista de usuários...</td>
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: módulos liberados por usuário (só ADM chega aqui) -->
+<div class="modal-bg" id="modalModBg">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="modTitulo">Módulos liberados</h2>
+        <div class="sub" id="modSub"></div>
+      </div>
+      <button class="modal-x" id="modFechar" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="aviso" id="modAviso"></div>
+      <div id="modLista"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-link" id="modVoltarPadrao">Voltar ao padrão do perfil</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-mod" id="modCancelar">Cancelar</button>
+        <button class="btn-salvar" id="modSalvar">Salvar módulos</button>
+      </div>
     </div>
   </div>
 </div>
@@ -265,13 +344,15 @@
           listenToUsers();
         } else if (p && p.role !== 'admin') {
           // Achado do agente de auditoria (4a rodada): o menu mostra este
-          // link pra qualquer isPcpAdmin (inclui 'pcp', ver auth_check.js),
-          // mas só 'admin' de fato carrega a tabela -- sem este aviso, quem
-          // não é admin ficava vendo "Carregando..." pra sempre, parecendo
-          // um bug de carregamento em vez de uma restrição de acesso.
+          // link pra quem tem o módulo "Gestão de Usuários" (ver
+          // auth_check.js), mas só 'admin' de fato carrega a tabela -- sem
+          // este aviso, quem não é admin ficava vendo "Carregando..." pra
+          // sempre, parecendo um bug de carregamento em vez de restrição.
+          // Marcar módulos é exclusivo de ADM (pedido do usuário), e a regra
+          // de banco em usuarios/$uid já garante isso do lado do servidor.
           document.getElementById('users-tbody').innerHTML =
-            '<tr><td colspan="5" style="text-align:center; color:var(--ink-mute); padding:30px;">' +
-            'Apenas administradores podem gerenciar usuários.</td></tr>';
+            '<tr><td colspan="6" style="text-align:center; color:var(--ink-mute); padding:30px;">' +
+            'Apenas administradores podem gerenciar usuários e módulos de acesso.</td></tr>';
         }
       });
     }
@@ -285,9 +366,10 @@
       
       const uids = Object.keys(users);
       if (uids.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--ink-mute);">Nenhum usuário cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--ink-mute);">Nenhum usuário cadastrado.</td></tr>';
         return;
       }
+      usuariosCache = users;
       
       // Sort users: pendings first, then by date desc
       const sortedUsers = uids.map(uid => ({
@@ -332,24 +414,157 @@
               <option value="gestor" ${u.role === 'gestor' ? 'selected' : ''}>Gestor de Linha (RH)</option>
             </select>
           </td>
+          <td>${celulaModulos(u, selfLogged)}</td>
         `;
-        
+
+        const btnMod = tr.querySelector('.btn-mod');
+        if (btnMod) btnMod.addEventListener('click', () => abrirModulos(u.uid));
         tbody.appendChild(tr);
       });
     });
   }
   
+  /* ══════════════════════════════════════════════════════════════════
+     MÓDULOS DE ACESSO POR USUÁRIO
+     A definição (quais módulos existem, o que cada um libera e o padrão
+     de cada papel) mora em auth_check.js e é lida daqui -- a mesma que
+     decide o acesso de verdade. Duas listas se contradiriam em uma semana.
+     ══════════════════════════════════════════════════════════════════ */
+  var usuariosCache = {};
+  var modUidAtual = null;
+
+  // Resumo na tabela: quantos módulos, e se está no padrão do papel ou
+  // personalizado. Saber QUAL dos dois é o que evita o ADM achar que já
+  // configurou alguém que na verdade só está herdando o papel.
+  function celulaModulos(u, selfLogged) {
+    if (u.role === 'admin') {
+      return '<span class="badge admin">Todos</span>' +
+             '<div class="mod-resumo">Administrador vê tudo, sem exceção</div>';
+    }
+    if (u.role === 'pending') {
+      return '<span style="color:var(--ink-mute);font-size:12px">—</span>' +
+             '<div class="mod-resumo">Defina um perfil primeiro</div>';
+    }
+    const personalizado = !!(u.modulos && typeof u.modulos === 'object');
+    const ativos = window.modulosDoUsuario(u);
+    const total = Object.keys(window.KURYOS_MODULOS).length;
+    return '<button class="btn-mod"' + (selfLogged ? ' disabled title="Você não pode alterar os próprios módulos"' : '') +
+             '>🔑 ' + ativos.length + ' de ' + total + '</button>' +
+           '<div class="mod-resumo">' + (personalizado ? 'Personalizado' : 'Padrão do perfil ' + escapeHtml(u.role)) + '</div>';
+  }
+
+  function abrirModulos(uid) {
+    const u = usuariosCache[uid];
+    if (!u) return;
+    modUidAtual = uid;
+    const ativos = window.modulosDoUsuario(Object.assign({ uid: uid }, u));
+    const personalizado = !!(u.modulos && typeof u.modulos === 'object');
+
+    document.getElementById('modTitulo').textContent = 'Módulos de ' + (u.nome || u.email || uid);
+    document.getElementById('modSub').textContent = (u.email || '') + ' · perfil ' + (u.role || '—');
+    document.getElementById('modAviso').innerHTML = personalizado
+      ? 'Este usuário tem módulos <b>personalizados</b>. O que estiver marcado aqui é exatamente o que ele acessa — o perfil deixa de decidir.'
+      : 'Este usuário está no <b>padrão do perfil ' + escapeHtml(u.role) + '</b>. Assim que você salvar, a marcação abaixo passa a valer no lugar do perfil.';
+
+    document.getElementById('modLista').innerHTML = Object.keys(window.KURYOS_MODULOS).map(function(m) {
+      const d = window.KURYOS_MODULOS[m];
+      return '<label class="mod-item">' +
+        '<input type="checkbox" data-mod="' + m + '"' + (ativos.indexOf(m) !== -1 ? ' checked' : '') + '>' +
+        '<span><span class="rot">' + escapeHtml(d.rotulo) + '</span>' +
+        '<div class="dsc">' + escapeHtml(d.desc) + '</div></span></label>';
+    }).join('');
+
+    document.getElementById('modalModBg').classList.add('open');
+  }
+
+  function fecharModulos() {
+    document.getElementById('modalModBg').classList.remove('open');
+    modUidAtual = null;
+  }
+
+  function salvarModulos() {
+    if (!modUidAtual) return;
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+      alert('Acesso Negado: apenas administradores podem alterar módulos.');
+      return;
+    }
+    if (modUidAtual === firebase.auth().currentUser.uid) {
+      alert('Você não pode alterar os próprios módulos.');
+      return;
+    }
+    const marcados = {};
+    document.querySelectorAll('#modLista input[data-mod]').forEach(function(chk) {
+      // Grava só os LIGADOS. Guardar `false` funcionaria igual, mas deixa o
+      // nó cheio de ruído e faz um módulo novo (criado depois) nascer
+      // explicitamente negado em vez de simplesmente ausente.
+      if (chk.checked) marcados[chk.getAttribute('data-mod')] = true;
+    });
+    const btn = document.getElementById('modSalvar');
+    btn.disabled = true;
+    // Caminho plano: update({ modulos: {...} }) num nó de usuário substitui
+    // só o ramo `modulos` e preserva nome/email/role/created_at.
+    database.ref('usuarios/' + modUidAtual).update({ modulos: marcados })
+      .then(function() {
+        btn.disabled = false;
+        fecharModulos();
+        const n = Object.keys(marcados).length;
+        showToast(n ? ('Módulos atualizados (' + n + ' liberado' + (n > 1 ? 's' : '') + ').')
+                    : 'Usuário ficou sem nenhum módulo — ele não acessa nenhuma tela.');
+      })
+      .catch(function(err) {
+        btn.disabled = false;
+        console.error(err);
+        showToast('Erro ao salvar módulos: ' + err.message);
+      });
+  }
+
+  // Volta ao padrão do papel apagando o nó -- é diferente de marcar tudo:
+  // se o padrão do papel mudar depois, este usuário acompanha de novo.
+  function voltarAoPadrao() {
+    if (!modUidAtual) return;
+    const u = usuariosCache[modUidAtual] || {};
+    if (!confirm('Voltar ' + (u.nome || 'este usuário') + ' ao padrão do perfil "' + (u.role || '') + '"?\n\n' +
+                 'A marcação personalizada é apagada e ele volta a acompanhar o perfil.')) return;
+    database.ref('usuarios/' + modUidAtual + '/modulos').remove()
+      .then(function() { fecharModulos(); showToast('Usuário voltou ao padrão do perfil.'); })
+      .catch(function(err) { showToast('Erro: ' + err.message); });
+  }
+
+  document.getElementById('modFechar').addEventListener('click', fecharModulos);
+  document.getElementById('modCancelar').addEventListener('click', fecharModulos);
+  document.getElementById('modSalvar').addEventListener('click', salvarModulos);
+  document.getElementById('modVoltarPadrao').addEventListener('click', voltarAoPadrao);
+  document.getElementById('modalModBg').addEventListener('click', function(ev) {
+    if (ev.target === this) fecharModulos();
+  });
+  document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape') fecharModulos(); });
+
   function updateUserRole(uid, newRole) {
     if (!window.currentUser || window.currentUser.role !== 'admin') {
       alert('Acesso Negado: Apenas administradores podem gerenciar perfis de acesso.');
       listenToUsers();
       return;
     }
+    // Trocar o perfil LIMPA a marcação individual. Sem isso, mudar alguém de
+    // "Produção" para "PCP" não mudaria nada na prática -- os módulos
+    // personalizados continuariam mandando, e o ADM veria o novo perfil na
+    // tabela sem que a pessoa tivesse ganhado um acesso sequer.
+    const anterior = usuariosCache[uid] || {};
+    const tinhaPersonalizado = !!(anterior.modulos && typeof anterior.modulos === 'object');
+    if (tinhaPersonalizado &&
+        !confirm('Este usuário tem módulos personalizados.\n\n' +
+                 'Trocar o perfil apaga essa personalização e ele passa a usar o padrão de "' + newRole + '".\n\nContinuar?')) {
+      listenToUsers();
+      return;
+    }
     database.ref('usuarios/' + uid).update({
-      role: newRole
+      role: newRole,
+      modulos: null
     })
     .then(() => {
-      showToast('Perfil de acesso atualizado com sucesso!');
+      showToast(tinhaPersonalizado
+        ? 'Perfil atualizado. Os módulos voltaram ao padrão de "' + newRole + '".'
+        : 'Perfil de acesso atualizado com sucesso!');
     })
     .catch(err => {
       console.error(err);
