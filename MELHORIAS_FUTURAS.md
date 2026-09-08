@@ -17,6 +17,43 @@ relevante para retomar o trabalho depois.
 
 ## Compras
 
+- **NCM no cadastro de material** — o NCM é o que determina as alíquotas de
+  IPI e de ICMS-ST. Hoje o cadastro de material **não tem o campo** (grep em
+  `cadastros.html`: nenhuma ocorrência), então na cotação alguém digita a
+  alíquota de cabeça a cada orçamento, item a item, fornecedor a fornecedor.
+  Isso é erro esperando pra acontecer num número que decide qual fornecedor
+  ganha a compra.
+  Veio da rodada do orçamento de cotação (2026-09-08, commit `63f527c`), que
+  passou a comparar por **custo** (com IPI/ST/frete/crédito) em vez de por
+  preço — o cálculo está pronto e testado, o que falta é a origem confiável
+  das alíquotas.
+  **Escopo sugerido:** campo `ncm` em Materiais; opcionalmente `ipiPadrao` e
+  `icmsStPadrao` por material, para o modal fiscal da cotação
+  (`abrirModalFiscal`, `compras.html`) já abrir pré-preenchido — a pessoa
+  confirma em vez de digitar. Mesmo princípio da condição de pagamento, que
+  nessa rodada passou a vir pronta do cadastro do fornecedor.
+  **Cuidado:** alíquota varia por estado de origem/destino e por regime; o
+  campo do material é um **padrão sugerido**, nunca uma trava — o valor da
+  cotação tem que continuar editável.
+
+- **Anexo da proposta do fornecedor (PDF) na cotação** — não é só trabalho
+  de tela: **o Firebase Storage não está configurado no projeto**. Conferido
+  em 2026-09-07: não existe `storage.rules`, `firebase.json` não tem a chave
+  `storage`, e nenhuma tela do sistema faz upload de arquivo (`grep` por
+  `firebase.storage` e `input type="file"`: zero ocorrências).
+  Ou seja, é um pré-requisito de infraestrutura, não uma melhoria pontual —
+  e quando for feito, destrava de uma vez vários itens que hoje estão
+  bloqueados pelo mesmo motivo: **certificado de calibração** e **foto em
+  RNC** (módulo de Qualidade), **PDF do COA**, e o **arquivo de etiqueta**
+  logo abaixo.
+  **Escopo sugerido:** habilitar Storage, escrever `storage.rules` no mesmo
+  padrão por papel/módulo do `database.rules.json`, e criar um componente de
+  upload reutilizável — fazer upload isolado só pra cotação seria pagar o
+  custo da infraestrutura e aproveitar um caso só.
+  **Decidir antes:** limite de tamanho, tipos aceitos, e por quanto tempo o
+  arquivo é guardado (proposta de fornecedor tem valor probatório em disputa
+  comercial, diferente de um anexo qualquer).
+
 - **Arquivo de etiqueta pronto por item, no Pedido de Compra** — hoje o
   padrão de 11 campos (`PADRAO_ETIQUETA_FORNECEDOR`, `shared/utils.js`) só
   aparece como texto no e-mail de cotação e (depois desta rodada) no
@@ -569,12 +606,43 @@ deriva do BOM, grava `mpCodigo`, mostra saldo disponível por item). Falta:
   clientes órfãos, em escala menor. A correção é a mesma já aplicada em
   Cliente (`8c2166f`): resolver uma chave e avisar quando não casar.
 
-## Qualidade (módulo futuro, fora de escopo até agora)
+## Qualidade
+
+O módulo **existe e está em produção** desde 2026-09-07 (`fc9760f`):
+`qualidade.html`, papel de acesso `qualidade`, fila de inspeção com plano de
+inspeção herdado da especificação cadastrada, RNC com vínculo automático ao
+fornecedor e painel de desempenho por fornecedor. Cobre o recebimento e a
+liberação de palete — as Fases 1 e 2 da spec `ERP_Kuryos_Modulo_CQ_v1.1`.
+
+**As Fases 3–4 não estão registradas neste arquivo** (ronda de linha,
+assépsia, setup/first article, calibração, amostras de retenção, COA). Elas
+não foram construídas porque dependem de coisas que o sistema não tem —
+ver a lista de pré-requisitos abaixo antes de planejar qualquer uma:
+
+- **Ordem de Manipulação (OM) não existe como entidade** — CK-3 (assépsia de
+  tachos), análise de bulk e três dos hard stops da spec são "por OM". Sem a
+  entidade não há onde pendurá-los.
+- **Tarefas Pendentes não existe** — as 14 tarefas CQ-01..CQ-14 com SLA, o
+  escalonamento da ronda e os alertas de vencimento pressupõem essa
+  arquitetura.
+- **Anexo de arquivo não existe** — bloqueia foto em RNC, certificado de
+  calibração e PDF do COA. Mesmo bloqueador do anexo de proposta em
+  **Compras** (ver acima): resolver o Storage uma vez destrava os dois.
 
 - **Etiqueta interna de liberação de Qualidade** — uma 2ª etiqueta,
   distinta da etiqueta de identificação que o fornecedor cola nas
   caixas/fardos (essa já existe, `PADRAO_ETIQUETA_FORNECEDOR`). Explicitamente
   adiada: "Qualidade vai acabar ficando no próximo módulo".
+- **Faixas numéricas nas especificações** — dos 1.323 ensaios cadastrados,
+  só **26% têm mínimo/máximo** preenchidos como número; nos outros 74% a
+  avaliação fica com o analista. Boa parte é legítima ("aspecto", "cor",
+  "odor" não viram número), mas **115 registros de pH e 48 de densidade
+  estão sem faixa** — são grandezas medidas, com a faixa escrita só no texto.
+  Preencher é trabalho de cadastro, não de código, e é o que mais aumenta o
+  que o sistema consegue conferir sozinho no laudo.
+- **Revisar quais ensaios são críticos** — só **3 ensaios em 181
+  especificações** estão marcados como críticos. É a marcação que decide se
+  um desvio para o lote; provavelmente subestima a realidade.
 - **MRP de insumo real + integração do formulário MS Forms "Liberação -
   Embalagens" com o pedido** ⚠ verificar se ainda procede.
 
