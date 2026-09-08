@@ -1789,6 +1789,12 @@ function calendarioUtil() {
 // transportadora/motorista/app. Contato vem do cadastro do fornecedor
 // (contatoNome/contatoTelefone existem nos 393); o endereço NÃO existe no
 // cadastro — só cidade e UF —, por isso é campo próprio aqui.
+// O endereço vem dos campos separados do cadastro (CEP, logradouro, número,
+// complemento, bairro, cidade, UF) montados numa linha. A montagem mora em
+// shared/utils.js pra a Logística ver exatamente o mesmo texto em qualquer
+// tela que precise dele.
+function enderecoDoCadastro(f) { return montarEnderecoCompleto(f); }
+
 function blocoColetaHtml(procKey, cKey, c) {
   if (!c.frete || c.frete.tipo !== 'FOB') return '';
   var col = c.coleta || {};
@@ -1800,7 +1806,16 @@ function blocoColetaHtml(procKey, cKey, c) {
   return '<div style="border:1px solid var(--border);border-radius:8px;padding:7px 8px;margin-top:2px;display:flex;flex-direction:column;gap:5px">' +
     '<div style="font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">🚚 Coleta por nossa conta' +
       (pend.pronto ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>' +
-    campoCot('Endereço de coleta', '<input type="text"' + attrs('cot-coleta-endereco', col.endereco, ' placeholder="rua, nº, cidade/UF"') + '>') +
+    campoCot('Endereço de coleta',
+      '<input type="text"' + attrs('cot-coleta-endereco', col.endereco != null ? col.endereco : enderecoDoCadastro(f), ' placeholder="rua, nº, bairro, cidade/UF"') + '>',
+      // Dizer DE ONDE veio o valor: sem isso a pessoa não sabe se confere um
+      // dado do cadastro ou se está digitando do zero -- e é a diferença
+      // entre confirmar e redigitar.
+      col.endereco != null
+        ? '<span class="field-hint">Digitado nesta cotação.</span>'
+        : (enderecoDoCadastro(f)
+            ? '<span class="field-hint">Veio do cadastro do fornecedor.</span>'
+            : '<span class="field-hint" style="color:var(--warning)">Fornecedor sem endereço no cadastro — preencha lá pra vir sozinho da próxima vez.</span>')) +
     '<div class="cot-linha" style="margin:0">' +
       campoCot('Contato no local', '<input type="text"' + attrs('cot-coleta-contato', col.contatoNome != null ? col.contatoNome : (f.contatoNome || ''), ' placeholder="nome"') + '>') +
       campoCot('Telefone', '<input type="text"' + attrs('cot-coleta-fone', col.contatoTelefone != null ? col.contatoTelefone : (f.contatoTelefone || '')) + '>') +

@@ -3361,6 +3361,77 @@ function somarDiasUteis(dataBase, dias, feriados, diasSemana) {
   return null;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// ENDEREÇO POR CEP
+//
+// Padrão de e-commerce: digita o CEP, o resto vem preenchido e a pessoa só
+// completa número e complemento. Fonte: ViaCEP (pública, sem chave, sem
+// cadastro) -- só o CEP sai daqui, nenhum dado nosso.
+//
+// A busca NUNCA é obrigatória: se a API estiver fora, os campos continuam
+// editáveis à mão. Endereço de fornecedor não pode depender da
+// disponibilidade de um serviço de terceiro.
+// ══════════════════════════════════════════════════════════════════════
+
+// Função PURA. Devolve só os 8 dígitos, ou '' se não for um CEP.
+function normalizarCep(cep) {
+  var d = String(cep == null ? '' : cep).replace(/\D/g, '');
+  return d.length === 8 ? d : '';
+}
+// Função PURA. 01310100 -> "01310-100"
+function formatarCep(cep) {
+  var d = normalizarCep(cep);
+  return d ? d.slice(0, 5) + '-' + d.slice(5) : String(cep == null ? '' : cep);
+}
+
+// Busca o endereço. `fetchFn` é injetável só pra o teste não sair na rede.
+// Resolve SEMPRE (nunca rejeita): { ok, erro, endereco }. Quem chama trata
+// a falha mostrando um aviso, não travando o formulário.
+function buscarEnderecoPorCep(cep, fetchFn) {
+  var limpo = normalizarCep(cep);
+  if (!limpo) return Promise.resolve({ ok: false, erro: 'CEP precisa ter 8 dígitos.' });
+  var f = fetchFn || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return Promise.resolve({ ok: false, erro: 'Busca de CEP indisponível neste navegador.' });
+  return f('https://viacep.com.br/ws/' + limpo + '/json/')
+    .then(function(resp) {
+      if (!resp || !resp.ok) throw new Error('HTTP ' + ((resp && resp.status) || '?'));
+      return resp.json();
+    })
+    .then(function(d) {
+      // ViaCEP responde 200 com { erro: true } pra CEP inexistente -- não é
+      // erro de rede, então precisa ser tratado aqui.
+      if (!d || d.erro) return { ok: false, erro: 'CEP não encontrado.' };
+      return { ok: true, endereco: {
+        cep: limpo,
+        logradouro: d.logradouro || '',
+        bairro: d.bairro || '',
+        cidade: d.localidade || '',
+        uf: (d.uf || '').toUpperCase()
+      } };
+    })
+    .catch(function(e) {
+      return { ok: false, erro: 'Não foi possível consultar o CEP agora (' + e.message + '). Preencha à mão.' };
+    });
+}
+
+// Função PURA: monta o endereço numa linha, a partir dos campos separados.
+// Usada pela Logística no pedido de coleta. Sem logradouro devolve '' --
+// cidade/UF sozinhos não fecham uma coleta, e oferecê-los como se fossem o
+// endereço faria alguém agendar com dado incompleto.
+function montarEnderecoCompleto(f) {
+  var o = f || {};
+  var rua = String(o.logradouro || '').trim();
+  if (!rua) return '';
+  var linha = rua;
+  if (String(o.numero || '').trim()) linha += ', ' + String(o.numero).trim();
+  if (String(o.complemento || '').trim()) linha += ' — ' + String(o.complemento).trim();
+  if (String(o.bairro || '').trim()) linha += ', ' + String(o.bairro).trim();
+  var cidadeUf = [String(o.cidade || '').trim(), String(o.uf || '').trim()].filter(Boolean).join('/');
+  if (cidadeUf) linha += ', ' + cidadeUf;
+  if (normalizarCep(o.cep)) linha += ' — CEP ' + formatarCep(o.cep);
+  return linha;
+}
+
 // Função PURA: o que a Logística precisa ter em mãos pra fechar a coleta.
 // Só se aplica a FOB -- em CIF quem coordena é o fornecedor.
 // Devolve { aplica, pronto, faltando: [...] } pra a tela poder cobrar o
@@ -3371,9 +3442,13 @@ function coletaFobPendencias(convidado, fornecedor) {
   var col = c.coleta || {};
   var f = fornecedor || {};
   var faltando = [];
-  // Endereço de coleta: o cadastro de fornecedor só tem cidade/UF, não o
-  // logradouro -- por isso o campo existe aqui. Ver MELHORIAS_FUTURAS.
-  if (!String(col.endereco || '').trim()) faltando.push('endereço de coleta');
+  // Os três primeiros herdam do cadastro do fornecedor: o que já está
+  // cadastrado NÃO é pendência. `endereco` (logradouro) é campo de
+  // Cadastros › Fornecedores; enquanto estiver vazio lá, a pessoa digita na
+  // cotação, e assim que for preenchido passa a vir sozinho.
+  // Cidade/UF de propósito NÃO contam como endereço: sozinhos não fecham
+  // uma coleta, e aceitá-los deixaria alguém agendar com dado incompleto.
+  if (!String(col.endereco || montarEnderecoCompleto(f) || '').trim()) faltando.push('endereço de coleta');
   if (!String(col.contatoNome || f.contatoNome || '').trim()) faltando.push('contato no local');
   if (!String(col.contatoTelefone || f.contatoTelefone || '').trim()) faltando.push('telefone do contato');
   if (!(parseFloat(col.pesoTotalKg) > 0)) faltando.push('peso total');

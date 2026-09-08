@@ -1267,6 +1267,36 @@
           </div>
           <div class="section-label">Localização e Certificações</div>
           <div class="form-grid">
+            <!-- Endereço em campos separados, no padrão de e-commerce: digita
+                 o CEP e logradouro/bairro/cidade/UF vêm preenchidos; só
+                 número e complemento ficam pra pessoa. É o que a Logística
+                 precisa pra agendar COLETA quando o frete é FOB. Enquanto
+                 estiver vazio, o endereço é digitado na cotação; assim que
+                 preenchido aqui, passa a vir sozinho. -->
+            <div class="form-group">
+              <label>CEP</label>
+              <div style="display:flex;gap:6px">
+                <input type="text" id="fnCep-forn" maxlength="9" placeholder="00000-000" style="flex:1">
+                <button type="button" class="btn btn-ghost btn-sm" id="fnBuscarCep-forn" style="white-space:nowrap">🔎 Buscar</button>
+              </div>
+              <div class="field-hint" id="fnCepHint-forn">Preenche endereço, bairro, cidade e UF automaticamente.</div>
+            </div>
+            <div class="form-group">
+              <label>Número</label>
+              <input type="text" id="fnNumero-forn" placeholder="nº">
+            </div>
+            <div class="form-group full">
+              <label>Logradouro</label>
+              <input type="text" id="fnLogradouro-forn" placeholder="Rua / Avenida">
+            </div>
+            <div class="form-group">
+              <label>Complemento</label>
+              <input type="text" id="fnComplemento-forn" placeholder="galpão, bloco, sala...">
+            </div>
+            <div class="form-group">
+              <label>Bairro</label>
+              <input type="text" id="fnBairro-forn">
+            </div>
             <div class="form-group">
               <label>Cidade</label>
               <input type="text" id="fnCidade-forn" class="uc">
@@ -2603,8 +2633,62 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── % de preenchimento (ver calcularPreenchimento em shared/utils.js) ──
   var CAMPOS_PREENCHIMENTO_FORN = [
     'razaoSocial', 'nomeFantasia', 'cnpj', 'tipos', 'prazoEntregaDias', 'condicaoPagamento',
-    'contatoNome', 'contatoTelefone', 'contatoEmail', 'site', 'cidade', 'uf', 'certificacoes'
+    'contatoNome', 'contatoTelefone', 'contatoEmail', 'site',
+    // `logradouro` (e não `cep`) porque é ele que fecha uma coleta: um CEP
+    // sem número e rua não serve pra transportadora nenhuma.
+    'logradouro', 'cidade', 'uf', 'certificacoes'
   ];
+
+  /* ── Busca de endereço por CEP (padrão de e-commerce) ──
+     Digita o CEP, o resto vem preenchido, e sobra só número e complemento.
+     A busca NUNCA trava o formulário: se a API estiver fora, os campos
+     continuam editáveis à mão -- cadastro de fornecedor não pode depender da
+     disponibilidade de um serviço de terceiro. */
+  var fnCepEl = document.getElementById('fnCep-forn');
+  var fnCepHintEl = document.getElementById('fnCepHint-forn');
+  var fnCepUltimoBuscado = null;
+
+  function fnCepHint(msg, cor) {
+    fnCepHintEl.textContent = msg;
+    fnCepHintEl.style.color = cor || '';
+  }
+
+  function fnPreencherPorCep(silencioso) {
+    var limpo = normalizarCep(fnCepEl.value);
+    if (!limpo) {
+      if (!silencioso) fnCepHint('CEP precisa ter 8 dígitos.', 'var(--danger)');
+      return;
+    }
+    // Não repete a mesma consulta quando a pessoa só sai e volta ao campo.
+    if (silencioso && limpo === fnCepUltimoBuscado) return;
+    fnCepUltimoBuscado = limpo;
+    fnCepHint('Buscando...');
+    buscarEnderecoPorCep(limpo).then(function(r) {
+      if (!r.ok) { fnCepHint(r.erro, 'var(--warning)'); return; }
+      var e = r.endereco;
+      // Só preenche o que veio E o que está vazio na tela, exceto o
+      // logradouro/bairro, que o CEP define. Sobrescrever um número ou
+      // complemento já digitado seria apagar trabalho de quem digitou.
+      if (e.logradouro) document.getElementById('fnLogradouro-forn').value = e.logradouro;
+      if (e.bairro) document.getElementById('fnBairro-forn').value = e.bairro;
+      if (e.cidade) document.getElementById('fnCidade-forn').value = e.cidade;
+      if (e.uf) document.getElementById('fnUf-forn').value = e.uf;
+      fnCepEl.value = formatarCep(e.cep);
+      fnCepHint('Endereço preenchido. Falta o número' +
+        (document.getElementById('fnComplemento-forn').value.trim() ? '' : ' e o complemento') + '.', 'var(--success)');
+      var numEl = document.getElementById('fnNumero-forn');
+      if (!numEl.value.trim()) numEl.focus();
+    });
+  }
+
+  // Máscara leve: só formata, nunca impede digitar.
+  fnCepEl.addEventListener('input', function() {
+    var d = fnCepEl.value.replace(/\D/g, '').slice(0, 8);
+    fnCepEl.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    if (d.length === 8) fnPreencherPorCep(true); // busca sozinho ao completar
+  });
+  fnCepEl.addEventListener('blur', function() { fnPreencherPorCep(true); });
+  document.getElementById('fnBuscarCep-forn').addEventListener('click', function() { fnCepUltimoBuscado = null; fnPreencherPorCep(false); });
 
   var TIPO_FORNECEDOR_LABELS = { mp: 'Matéria-Prima', embalagem: 'Embalagem', transportadora: 'Transportadora', consumo: 'Material de Uso e Consumo', servicos: 'Serviços', tecnologia: 'Tecnologia', equipamentos: 'Equipamentos e Manutenção', publico: 'Órgão Público / Regulatório', outro: 'Outro' };
 
@@ -2730,8 +2814,15 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fnContatoTelefone-forn').value = f.contatoTelefone || '';
     document.getElementById('fnContatoEmail-forn').value = f.contatoEmail || '';
     document.getElementById('fnSite-forn').value = f.site || '';
+    document.getElementById('fnCep-forn').value = f.cep ? formatarCep(f.cep) : '';
+    document.getElementById('fnLogradouro-forn').value = f.logradouro || '';
+    document.getElementById('fnNumero-forn').value = f.numero || '';
+    document.getElementById('fnComplemento-forn').value = f.complemento || '';
+    document.getElementById('fnBairro-forn').value = f.bairro || '';
     document.getElementById('fnCidade-forn').value = f.cidade || '';
     document.getElementById('fnUf-forn').value = f.uf || '';
+    document.getElementById('fnCepHint-forn').textContent = 'Preenche endereço, bairro, cidade e UF automaticamente.';
+    document.getElementById('fnCepHint-forn').style.color = '';
     document.getElementById('fnCertificacoes-forn').value = f.certificacoes || '';
     cnpjsAdicionaisStaged = key ? JSON.parse(JSON.stringify(f.cnpjsAdicionais || [])) : [];
     document.getElementById('fnCnpjAdd-forn').value = '';
@@ -2815,6 +2906,14 @@ document.addEventListener('DOMContentLoaded', function() {
       contatoTelefone: document.getElementById('fnContatoTelefone-forn').value.trim(),
       contatoEmail: document.getElementById('fnContatoEmail-forn').value.trim(),
       site: document.getElementById('fnSite-forn').value.trim(),
+      // CEP guardado só com dígitos: a máscara é de exibição, e guardar
+      // "01310-100" às vezes e "01310100" outras faria qualquer busca
+      // futura por CEP falhar na metade dos registros.
+      cep: normalizarCep(document.getElementById('fnCep-forn').value),
+      logradouro: document.getElementById('fnLogradouro-forn').value.trim(),
+      numero: document.getElementById('fnNumero-forn').value.trim(),
+      complemento: document.getElementById('fnComplemento-forn').value.trim(),
+      bairro: document.getElementById('fnBairro-forn').value.trim(),
       cidade: document.getElementById('fnCidade-forn').value.trim(),
       uf: document.getElementById('fnUf-forn').value.trim().toUpperCase(),
       certificacoes: document.getElementById('fnCertificacoes-forn').value.trim(),
