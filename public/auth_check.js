@@ -384,6 +384,15 @@ window.currentUser = null;
             } else {
               // Constrói e injeta o menu superior unificado
               renderUnifiedNavbar(window.currentUser);
+              // Avisa a página que o PAPEL do usuário já é conhecido.
+              //
+              // A leitura do perfil é assíncrona e quase sempre chega DEPOIS
+              // do primeiro render dos dados -- então qualquer tela que
+              // decida o que mostrar pelo papel (ex: botão de editar só pra
+              // admin) renderiza com window.currentUser ainda null e o
+              // controle nunca aparece, sem erro nenhum no console.
+              // Encontrado ao construir a edição de Pedido de Compra.
+              window.dispatchEvent(new CustomEvent('kuryos-auth-pronto', { detail: window.currentUser }));
               clearAuthWatchdog();
 
               if (role === 'admin' && typeof window.syncAllActiveOpsStatus === 'function') {

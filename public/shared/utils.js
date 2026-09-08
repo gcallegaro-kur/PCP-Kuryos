@@ -2726,6 +2726,72 @@ function fmtBRLDoc(n) {
   return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// O documento carrega o PRÓPRIO estilo, em vez de depender de CSS declarado
+// na página que o imprime. As 5 fichas de OP fizeram o contrário e o bloco
+// acabou copiado em emitir_op.html E ops.html -- a mesma duplicação que já
+// registramos como problema na lista dos campos de etiqueta.
+//
+// Paleta tirada do logotipo: navy #0a1c69. Sem cinza puro -- os neutros
+// puxam levemente pro azul, pra o papel parecer da mesma família que a
+// marca em vez de um formulário genérico.
+//
+// `print-color-adjust: exact` é obrigatório: por padrão o navegador remove
+// fundos na impressão, e sem isso o cabeçalho e o total sairiam brancos.
+function estilosDocumentoPC() {
+  return '<style>' +
+    '#printArea{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.pcdoc{page-break-after:always;padding:14mm 13mm;font-size:10.5px;line-height:1.45}' +
+    '.pcdoc:last-child{page-break-after:auto}' +
+    // Cabeçalho: logo à esquerda, identificação do documento à direita.
+    '.pcdoc-cab{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #0a1c69;padding-bottom:9px;margin-bottom:4px}' +
+    '.pcdoc-logo{height:13mm;width:auto;display:block}' +
+    '.pcdoc-emissor{font-size:8.5px;color:#6b7280;margin-top:5px;letter-spacing:.02em}' +
+    '.pcdoc-id{text-align:right;line-height:1.25}' +
+    '.pcdoc-tipo{font-size:8.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#6b7280}' +
+    '.pcdoc-num{font-size:21px;font-weight:700;color:#0a1c69;letter-spacing:-.01em}' +
+    '.pcdoc-data{font-size:9px;color:#6b7280}' +
+    // Seções: um filete fino e um rótulo pequeno em versalete.
+    '.pcdoc-sec{font-size:8.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#0a1c69;' +
+      'margin:16px 0 6px;padding-bottom:3px;border-bottom:1px solid #dfe3ec}' +
+    // Pares rótulo-acima/valor-abaixo, o mesmo padrão da tela de cotação.
+    '.pcdoc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px 18px}' +
+    '.pcdoc-grid.duas{grid-template-columns:repeat(2,1fr)}' +
+    '.pcdoc-campo>span{display:block;font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8b93a5;margin-bottom:1px}' +
+    '.pcdoc-campo>b{font-size:10.5px;font-weight:600;color:#1a1a1a}' +
+    // Tabela: só filetes horizontais. Grade fechada pesa e não ajuda a ler.
+    '.pcdoc-tab{width:100%;border-collapse:collapse;margin-top:2px;font-variant-numeric:tabular-nums}' +
+    '.pcdoc-tab th{font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;' +
+      'text-align:left;padding:5px 7px;background:#f4f6fb;border-bottom:1px solid #cfd6e4}' +
+    '.pcdoc-tab td{padding:6px 7px;border-bottom:1px solid #eceff5;font-size:10px;vertical-align:top}' +
+    '.pcdoc-tab .num{text-align:right}' +
+    '.pcdoc-cod{font-weight:700;color:#0a1c69}' +
+    '.pcdoc-imposto{font-size:8.5px;color:#6b7280}' +
+    // Total: destaque discreto, alinhado à direita.
+    '.pcdoc-total{margin-top:9px;display:flex;justify-content:flex-end}' +
+    '.pcdoc-total-cx{background:#f4f6fb;border-left:2.5px solid #0a1c69;padding:7px 13px;text-align:right;min-width:52mm}' +
+    '.pcdoc-total-lbl{font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280}' +
+    '.pcdoc-total-val{font-size:15px;font-weight:700;color:#0a1c69;font-variant-numeric:tabular-nums}' +
+    '.pcdoc-nota{font-size:8px;color:#8b93a5;margin-top:3px;text-align:right}' +
+    // Aviso (identificação obrigatória / instrução da etiqueta)
+    '.pcdoc-aviso{margin-top:14px;background:#f7f8fb;border:1px solid #dfe3ec;border-left:2.5px solid #0a1c69;padding:8px 11px;font-size:9.5px;color:#41485a}' +
+    '.pcdoc-aviso b{color:#0a1c69}' +
+    // Assinatura
+    '.pcdoc-assin{margin-top:20px;display:flex;gap:22px}' +
+    '.pcdoc-assin div{flex:1;border-top:1px solid #9aa2b4;padding-top:4px;font-size:8.5px;color:#6b7280;text-align:center}' +
+    // Etiqueta: cartão com a cara do que o fornecedor vai colar.
+    '.pcdoc-etq{border:1px solid #cfd6e4;border-radius:3px;overflow:hidden;margin-top:4px}' +
+    '.pcdoc-etq-linha{display:flex;border-bottom:1px solid #eceff5}' +
+    '.pcdoc-etq-linha:last-child{border-bottom:none}' +
+    '.pcdoc-etq-c{width:47%;padding:6px 9px;background:#f7f8fb;font-size:8.5px;color:#41485a;border-right:1px solid #eceff5}' +
+    '.pcdoc-etq-v{flex:1;padding:6px 9px;font-size:10px;display:flex;align-items:center}' +
+    '.pcdoc-etq-v b{color:#0a1c69;font-weight:700}' +
+    // Campo que o fornecedor preenche: linha pontilhada, convidando a escrever.
+    '.pcdoc-etq-branco{flex:1;border-bottom:1px dotted #a9b1c2;min-height:11px}' +
+    '.pcdoc-rodape{margin-top:16px;padding-top:6px;border-top:1px solid #eceff5;font-size:7.5px;color:#a2a9b8;display:flex;justify-content:space-between}' +
+    '@page{margin:0}' +
+  '</style>';
+}
+
 // Página 1: o pedido em si. `pc` = pedidos_compra/{key}, `fornecedor` =
 // fornecedores/{key} (pode ser null -- o PC guarda o nome denormalizado).
 function paginaPedidoCompra(pc, fornecedor) {
@@ -2752,72 +2818,114 @@ function paginaPedidoCompra(pc, fornecedor) {
       i.pctIcmsSt ? 'ST ' + i.pctIcmsSt + '%' : '',
       i.pctIss ? 'ISS ' + i.pctIss + '%' : ''
     ].filter(Boolean).join(' · ');
+    // Impostos como linha secundária sob a descrição, não em coluna própria:
+    // é informação de conferência, não de leitura principal, e uma 6ª coluna
+    // espremeria as que importam.
     return '<tr>' +
-      '<td>' + escapeHtml(i.materialCodigo || '') + '</td>' +
-      '<td>' + escapeHtml(i.materialNome || '') + '</td>' +
-      '<td>' + fmtNum(q) + ' ' + escapeHtml(i.unidade || '') + '</td>' +
-      '<td>' + (preco ? fmtBRLDoc(preco) : '—') + '</td>' +
-      '<td>' + (preco && q ? fmtBRLDoc(preco * q) : '—') + '</td>' +
-      '<td>' + (impostos || '—') + '</td>' +
+      '<td class="pcdoc-cod">' + escapeHtml(i.materialCodigo || '') + '</td>' +
+      '<td>' + escapeHtml(i.materialNome || '') +
+        (impostos ? '<div class="pcdoc-imposto">' + escapeHtml(impostos) + '</div>' : '') + '</td>' +
+      '<td class="num">' + fmtNum(q) + (i.unidade ? ' ' + escapeHtml(i.unidade) : '') + '</td>' +
+      '<td class="num">' + (preco ? fmtBRLDoc(preco) : '—') + '</td>' +
+      '<td class="num">' + (preco && q ? fmtBRLDoc(preco * q) : '—') + '</td>' +
     '</tr>';
   };
 
-  var linhaDado = function(rot, val) {
-    return val ? '<div><b>' + rot + ':</b> ' + escapeHtml(String(val)) + '</div>' : '';
+  // Campo só aparece se tiver valor: rótulo pendurado sem conteúdo polui o
+  // documento e faz parecer que faltou preencher.
+  var campo = function(rot, val) {
+    return val ? '<div class="pcdoc-campo"><span>' + escapeHtml(rot) + '</span><b>' + escapeHtml(String(val)) + '</b></div>' : '';
   };
 
-  return '<div class="print-page">' +
-    '<div class="print-h">Pedido de Compra ' + escapeHtml(p.numeroFormatado || '') + '</div>' +
-    '<div class="print-sub">Kuryos Cosméticos · emitido em ' +
-      (p.dataEmissao || p.dataCriacao ? new Date(p.dataEmissao || p.dataCriacao).toLocaleDateString('pt-BR') : '—') +
-      (p.criadoPor ? ' por ' + escapeHtml(p.criadoPor) : '') + '</div>' +
+  return '<div class="pcdoc">' +
+    cabecalhoDocumentoPC('Pedido de Compra', p.numeroFormatado,
+      (p.dataEmissao || p.dataCriacao) ? new Date(p.dataEmissao || p.dataCriacao).toLocaleDateString('pt-BR') : null,
+      p.criadoPor) +
 
-    '<div class="print-h" style="font-size:13px;margin-top:12px">Fornecedor</div>' +
-    '<div class="print-grid">' +
-      linhaDado('Razão social', f.razaoSocial || p.fornecedorNome) +
-      linhaDado('CNPJ', f.cnpj) +
-      linhaDado('Contato', f.contatoNome) +
-      linhaDado('Telefone', f.contatoTelefone) +
+    '<div class="pcdoc-sec">Fornecedor</div>' +
+    '<div class="pcdoc-grid">' +
+      campo('Razão social', f.razaoSocial || p.fornecedorNome) +
+      campo('CNPJ', f.cnpj) +
+      campo('Contato', f.contatoNome) +
+      campo('Telefone', f.contatoTelefone) +
+      campo('E-mail', f.contatoEmail) +
     '</div>' +
 
-    '<div class="print-h" style="font-size:13px;margin-top:10px">Itens</div>' +
-    '<table class="print-table"><thead><tr>' +
-      '<th>Código</th><th>Descrição</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Impostos</th>' +
+    '<div class="pcdoc-sec">Itens do pedido</div>' +
+    '<table class="pcdoc-tab"><thead><tr>' +
+      '<th style="width:17%">Código</th><th>Descrição</th>' +
+      '<th class="num" style="width:15%">Quantidade</th>' +
+      '<th class="num" style="width:14%">Preço unit.</th>' +
+      '<th class="num" style="width:15%">Total</th>' +
     '</tr></thead><tbody>' +
-      (itens.length ? itens.map(linhaItem).join('') : '<tr><td colspan="6">Sem itens.</td></tr>') +
+      (itens.length ? itens.map(linhaItem).join('')
+        : '<tr><td colspan="5" style="color:#8b93a5">Nenhum item neste pedido.</td></tr>') +
     '</tbody></table>' +
-    '<div style="text-align:right;margin-top:6px;font-size:13px"><b>Total estimado: ' +
-      fmtBRLDoc(total) + '</b></div>' +
-    '<div style="font-size:10px;color:#555;margin-top:2px;text-align:right">' +
-      'Valor de referência do pedido, conforme cotação. A nota fiscal prevalece.</div>' +
+    '<div class="pcdoc-total"><div class="pcdoc-total-cx">' +
+      '<div class="pcdoc-total-lbl">Total estimado</div>' +
+      '<div class="pcdoc-total-val">' + fmtBRLDoc(total) + '</div>' +
+    '</div></div>' +
+    '<div class="pcdoc-nota">Valor de referência conforme cotação. A nota fiscal prevalece.</div>' +
 
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Condições</div>' +
-    '<div class="print-grid">' +
-      linhaDado('Pagamento', p.condicaoPagamento) +
-      linhaDado('Frete', frete.tipo ? (frete.tipo + (ehFob ? ' — coleta por conta da Kuryos' : ' — entrega por conta do fornecedor')) : null) +
-      linhaDado('Prazo de entrega', p.prazoEntregaDiasUteis != null ? p.prazoEntregaDiasUteis + ' dias úteis' : null) +
-      linhaDado('Data prevista', p.dataPrevistaEntrega ? p.dataPrevistaEntrega.split('-').reverse().join('/') : null) +
-      linhaDado('Entregar em', p.localEntrega === 'GALPAO' ? 'Galpão' : p.localEntrega === 'FABRICA' ? 'Fábrica' : null) +
+    '<div class="pcdoc-sec">Condições comerciais</div>' +
+    '<div class="pcdoc-grid">' +
+      campo('Pagamento', p.condicaoPagamento) +
+      campo('Frete', frete.tipo ? (frete.tipo + (ehFob ? ' — coleta por nossa conta' : ' — entrega por conta do fornecedor')) : null) +
+      campo('Prazo de entrega', p.prazoEntregaDiasUteis != null ? p.prazoEntregaDiasUteis + ' dias úteis' : null) +
+      campo('Data prevista', p.dataPrevistaEntrega ? p.dataPrevistaEntrega.split('-').reverse().join('/') : null) +
+      campo('Entregar em', p.localEntrega === 'GALPAO' ? 'Galpão' : p.localEntrega === 'FABRICA' ? 'Fábrica' : null) +
     '</div>' +
 
     // Bloco de coleta só faz sentido em FOB: é a Kuryos que vai buscar, e o
     // fornecedor precisa saber quem aparece e o que deixar pronto.
-    (ehFob && p.coleta ? '<div class="print-h" style="font-size:13px;margin-top:10px">Coleta (FOB)</div>' +
-      '<div class="print-grid">' +
-        linhaDado('Endereço', p.coleta.endereco) +
-        linhaDado('Contato no local', p.coleta.contatoNome) +
-        linhaDado('Telefone', p.coleta.contatoTelefone) +
-        linhaDado('Peso total', p.coleta.pesoTotalKg ? p.coleta.pesoTotalKg + ' kg' : null) +
+    (ehFob && p.coleta ?
+      '<div class="pcdoc-sec">Coleta — por nossa conta (FOB)</div>' +
+      '<div class="pcdoc-grid duas">' +
+        campo('Endereço de coleta', p.coleta.endereco) +
+        campo('Contato no local', p.coleta.contatoNome) +
+        campo('Telefone', p.coleta.contatoTelefone) +
+        campo('Peso total', p.coleta.pesoTotalKg ? fmtNum(p.coleta.pesoTotalKg) + ' kg' : null) +
       '</div>' +
-      '<div style="font-size:10px;color:#555">A Kuryos agenda a coleta com transportadora própria. ' +
-      'O material deve estar embalado, identificado e disponível na data prevista.</div>' : '') +
+      '<div class="pcdoc-aviso">A coleta é agendada pela Kuryos com transportadora própria. ' +
+      'O material deve estar <b>embalado, identificado e disponível</b> na data prevista.</div>' : '') +
 
-    '<div class="print-h" style="font-size:13px;margin-top:12px">Identificação obrigatória</div>' +
-    '<div style="font-size:11px">Toda caixa ou fardo entregue deve vir com etiqueta contendo os ' +
-      PADRAO_ETIQUETA_FORNECEDOR.length + ' campos da página seguinte. ' +
-      'A conferência é feita no recebimento e a falta de identificação atrasa a liberação do material.</div>' +
+    '<div class="pcdoc-aviso" style="margin-top:14px">' +
+      '<b>Identificação obrigatória.</b> Toda caixa ou fardo deve vir com etiqueta contendo os ' +
+      PADRAO_ETIQUETA_FORNECEDOR.length + ' campos ' +
+      (itens.length > 1 ? 'das páginas seguintes' : 'da página seguinte') + '. ' +
+      'A conferência é feita no recebimento — caixa sem identificação completa atrasa a liberação do material.' +
+    '</div>' +
 
-    campoAssinatura('Responsável pela compra') +
+    '<div class="pcdoc-assin">' +
+      '<div>Responsável pela compra — Kuryos</div>' +
+      '<div>Ciente — ' + escapeHtml(f.razaoSocial || p.fornecedorNome || 'Fornecedor') + '</div>' +
+    '</div>' +
+    rodapeDocumentoPC(p.numeroFormatado, 'Pedido de Compra') +
+  '</div>';
+}
+
+// Cabeçalho comum: logotipo à esquerda, identificação do documento à direita.
+// O logo é o mesmo arquivo da barra lateral (navy #0a1c69), então o papel
+// sai na cor da marca sem nenhuma imagem nova.
+function cabecalhoDocumentoPC(tipo, numero, data, autor) {
+  return '<div class="pcdoc-cab">' +
+    '<div>' +
+      '<img class="pcdoc-logo" src="kuryos-logo.svg" alt="Kuryos">' +
+      '<div class="pcdoc-emissor">KURYOS COSMÉTICOS</div>' +
+    '</div>' +
+    '<div class="pcdoc-id">' +
+      '<div class="pcdoc-tipo">' + escapeHtml(tipo) + '</div>' +
+      '<div class="pcdoc-num">' + escapeHtml(numero || '—') + '</div>' +
+      (data ? '<div class="pcdoc-data">Emitido em ' + escapeHtml(data) +
+        (autor ? ' · ' + escapeHtml(autor) : '') + '</div>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function rodapeDocumentoPC(numero, tipo) {
+  return '<div class="pcdoc-rodape">' +
+    '<span>' + escapeHtml(tipo) + ' ' + escapeHtml(numero || '') + ' · Kuryos Cosméticos</span>' +
+    '<span>Documento gerado pelo sistema Kuryos PCP</span>' +
   '</div>';
 }
 
@@ -2839,33 +2947,43 @@ function paginaEtiquetaFornecedor(pc, item) {
     fornecedor: p.fornecedorNome || '',
     referenciaPC: p.numeroFormatado || ''
   };
+  // Cartão com a cara da etiqueta real, não uma tabela de formulário: o que
+  // a Kuryos já sabe vem impresso em navy; o que é do fornecedor vira uma
+  // linha pontilhada, que se lê como "escreva aqui".
   var linhas = PADRAO_ETIQUETA_FORNECEDOR.map(function(campo) {
     var valor = conhecidos[campo.campo];
-    return '<tr>' +
-      '<td style="width:42%">' + escapeHtml(campo.label) + '</td>' +
-      '<td>' + (valor ? '<b>' + escapeHtml(valor) + '</b>' : '&nbsp;') + '</td>' +
-    '</tr>';
+    return '<div class="pcdoc-etq-linha">' +
+      '<div class="pcdoc-etq-c">' + escapeHtml(campo.label) + '</div>' +
+      '<div class="pcdoc-etq-v">' +
+        (valor ? '<b>' + escapeHtml(valor) + '</b>' : '<span class="pcdoc-etq-branco"></span>') +
+      '</div>' +
+    '</div>';
   }).join('');
 
-  return '<div class="print-page">' +
-    '<div class="print-h">Padrão de Etiqueta — ' + escapeHtml(i.materialCodigo || '') + '</div>' +
-    '<div class="print-sub">Pedido de Compra ' + escapeHtml(p.numeroFormatado || '') +
-      ' · ' + escapeHtml(p.fornecedorNome || '') + '</div>' +
-    '<div style="font-size:11px;margin-bottom:8px">Cole uma etiqueta com estes campos em <b>cada caixa ou fardo</b>. ' +
-      'Os campos em negrito já vêm do pedido; os demais são preenchidos por vocês.</div>' +
-    '<table class="print-table"><thead><tr><th>Campo</th><th>Conteúdo</th></tr></thead><tbody>' +
-      linhas +
-    '</tbody></table>' +
-    '<div style="font-size:10px;color:#555;margin-top:8px">' +
+  return '<div class="pcdoc">' +
+    cabecalhoDocumentoPC('Padrão de Etiqueta', i.materialCodigo || '', null, null) +
+    '<div class="pcdoc-sec">' + escapeHtml(i.materialNome || 'Material') + '</div>' +
+    '<div class="pcdoc-grid duas" style="margin-bottom:10px">' +
+      '<div class="pcdoc-campo"><span>Pedido de compra</span><b>' + escapeHtml(p.numeroFormatado || '—') + '</b></div>' +
+      '<div class="pcdoc-campo"><span>Fornecedor</span><b>' + escapeHtml(p.fornecedorNome || '—') + '</b></div>' +
+    '</div>' +
+    '<div class="pcdoc-aviso" style="margin-top:0">Cole uma etiqueta com estes campos em ' +
+      '<b>cada caixa ou fardo</b>. Os campos em azul já vêm do pedido; as linhas pontilhadas são preenchidas por vocês.</div>' +
+    '<div class="pcdoc-etq">' + linhas + '</div>' +
+    '<div class="pcdoc-nota" style="text-align:left;margin-top:8px">' +
       'A conferência desta identificação é feita no recebimento da Kuryos. ' +
       'Caixa sem etiqueta completa atrasa a liberação do material para uso.</div>' +
+    rodapeDocumentoPC(p.numeroFormatado, 'Padrão de Etiqueta') +
   '</div>';
 }
 
 // Documento completo: pedido + uma página de etiqueta por item.
 function montarDocumentoPedidoCompra(pc, fornecedor) {
   var itens = Object.values((pc || {}).itens || {});
-  return paginaPedidoCompra(pc, fornecedor) +
+  // O <style> vai JUNTO: o documento é autossuficiente e não depende de a
+  // página que o imprime ter declarado o CSS certo.
+  return estilosDocumentoPC() +
+    paginaPedidoCompra(pc, fornecedor) +
     itens.map(function(i) { return paginaEtiquetaFornecedor(pc, i); }).join('');
 }
 
@@ -3348,10 +3466,21 @@ function ratearFreteCotacao(linhas, valorFrete) {
 }
 
 // Função PURA. Devolve o detalhamento de custo de UM item de UM fornecedor.
-// `resp`   = { precoUnit, qtdCotada, pctNf, pctIpi, pctIcms, pctIcmsSt, pctIss, descontoPct }
-// `freteRateado` = parcela do frete que cabe a este item (0 se CIF)
+// `resp`   = { precoUnit, qtdCotada, unidadeCotada, fatorConversao,
+//              pctNf, pctIpi, pctIcms, pctIcmsSt, pctIss, descontoPct }
+// `freteRateado`    = parcela do frete que cabe a este item (0 se CIF)
+// `unidadeCadastro` = unidade em que o material é cadastrado/consumido
+//
+// UNIDADE COTADA ≠ UNIDADE DO CADASTRO é o caso normal, não a exceção: o
+// material pode estar cadastrado em ROLO e o fornecedor orçar em KG. Sem
+// converter, "custo unitário" compara R$/kg de um com R$/rolo de outro e
+// elege o fornecedor errado -- e o número parece perfeitamente plausível.
+//
+// `fatorConversao` = quantas unidades COTADAS cabem em 1 unidade do
+// CADASTRO (ex: 25, se 1 rolo tem 25 kg). Mesma unidade nos dois lados = 1.
+//
 // Nunca lança: campo vazio vira 0, e o resultado diz o que faltou.
-function calcularCustoItemCotacao(resp, freteRateado) {
+function calcularCustoItemCotacao(resp, freteRateado, unidadeCadastro) {
   var r = resp || {};
   var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
   var preco = num(r.precoUnit);
@@ -3375,6 +3504,15 @@ function calcularCustoItemCotacao(resp, freteRateado) {
   var totalNota = liquido + ipi + st + iss;
   var custoTotal = totalNota + frete - creditoIcms;
 
+  // ── Conversão de unidade ──
+  var unCad = String(unidadeCadastro || '').trim();
+  var unCot = String(r.unidadeCotada || '').trim() || unCad;
+  var mesmaUnidade = !unCad || !unCot || unCot.toLowerCase() === unCad.toLowerCase();
+  var fator = parseFloat(r.fatorConversao);
+  if (mesmaUnidade && !(fator > 0)) fator = 1;
+  var fatorOk = fator > 0;
+  var qtdCadastro = fatorOk && qtd > 0 ? qtd / fator : null;
+
   return {
     preco: preco, qtd: qtd,
     bruto: bruto, desconto: desconto, liquido: liquido,
@@ -3382,21 +3520,43 @@ function calcularCustoItemCotacao(resp, freteRateado) {
     ipi: ipi, st: st, iss: iss, creditoIcms: creditoIcms, frete: frete,
     totalNota: totalNota,
     custoTotal: custoTotal,
-    // O número da comparação. null (e não 0) quando não há quantidade --
-    // 0 ordenaria como "o mais barato de todos" e venceria a cotação.
+    // Custo na unidade em que o FORNECEDOR cotou -- é o número que ele
+    // reconhece, e o que vale pra conferir a proposta dele.
+    // null (e não 0) quando não há quantidade: 0 ordenaria como "o mais
+    // barato de todos" e venceria a cotação.
     custoUnitario: qtd > 0 ? custoTotal / qtd : null,
-    completo: preco > 0 && qtd > 0
+    unidadeCotada: unCot || null,
+    unidadeCadastro: unCad || null,
+    fatorConversao: fatorOk ? fator : null,
+    qtdCadastro: qtdCadastro,
+    // O número da COMPARAÇÃO: custo na unidade do cadastro, igual pra todos
+    // os fornecedores. É por ele que se decide quem ganha.
+    custoUnitarioCadastro: qtdCadastro > 0 ? custoTotal / qtdCadastro : null,
+    unidadeDiferente: !mesmaUnidade,
+    // Unidade diferente sem fator = comparação IMPOSSÍVEL. Marcado
+    // explicitamente pra a tela poder recusar eleger um vencedor em vez de
+    // eleger um errado com aparência de certo.
+    conversaoPendente: !mesmaUnidade && !fatorOk,
+    completo: preco > 0 && qtd > 0 && fatorOk
   };
 }
 
 // Função PURA. Avisos de preenchimento, para a tela mostrar antes de
 // alguém decidir a cotação em cima de um número errado.
-function cotacaoItemInconsistencias(resp) {
+function cotacaoItemInconsistencias(resp, unidadeCadastro) {
   var r = resp || {};
   var num = function(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; };
   var avisos = [];
   if (!(num(r.precoUnit) > 0)) avisos.push('sem preço');
   if (!(num(r.qtdCotada) > 0)) avisos.push('sem quantidade cotada');
+  // Unidade cotada diferente da do cadastro sem fator: não dá pra comparar
+  // com os outros fornecedores, e é o aviso mais importante da lista --
+  // sem ele o sistema elegeria um vencedor com número sem sentido.
+  var unCad = String(unidadeCadastro || '').trim();
+  var unCot = String(r.unidadeCotada || '').trim();
+  if (unCad && unCot && unCot.toLowerCase() !== unCad.toLowerCase() && !(num(r.fatorConversao) > 0)) {
+    avisos.push('cotado em ' + unCot + ' mas o cadastro é em ' + unCad + ' — informe a conversão');
+  }
   // ISS é imposto de serviço (municipal), ICMS é de mercadoria (estadual).
   // Os dois na mesma linha significa que alguém preencheu o formulário sem
   // saber qual se aplica -- e o custo sai inflado.
@@ -3423,15 +3583,16 @@ function compararCotacao(itens, convidados) {
     var valorFrete = freteCab.tipo === 'FOB' ? (parseFloat(freteCab.valor) || 0) : 0;
     var linhas = Object.keys(itens || {}).map(function(itemKey) {
       var resp = (c.respostaItens || {})[itemKey] || {};
-      var parcial = calcularCustoItemCotacao(resp, 0);
+      var parcial = calcularCustoItemCotacao(resp, 0, (itens[itemKey] || {}).unidade);
       return { itemKey: itemKey, liquido: parcial.liquido };
     });
     var rateio = ratearFreteCotacao(linhas, valorFrete);
     var itensCalc = {};
     Object.keys(itens || {}).forEach(function(itemKey) {
       var resp = (c.respostaItens || {})[itemKey] || {};
-      itensCalc[itemKey] = calcularCustoItemCotacao(resp, rateio[itemKey] || 0);
-      itensCalc[itemKey].avisos = cotacaoItemInconsistencias(resp);
+      var unCad = (itens[itemKey] || {}).unidade;
+      itensCalc[itemKey] = calcularCustoItemCotacao(resp, rateio[itemKey] || 0, unCad);
+      itensCalc[itemKey].avisos = cotacaoItemInconsistencias(resp, unCad);
     });
     porFornecedor[cKey] = {
       itens: itensCalc,
@@ -3441,18 +3602,26 @@ function compararCotacao(itens, convidados) {
     };
   });
 
-  // Vencedor por item: menor custo unitário entre quem de fato respondeu.
+  // Vencedor por item: menor custo NA UNIDADE DO CADASTRO. Comparar pelo
+  // custo na unidade cotada elegeria o fornecedor errado sempre que dois
+  // cotassem em unidades diferentes (R$/kg contra R$/rolo).
   var vencedorPorItem = {};
   Object.keys(itens || {}).forEach(function(itemKey) {
-    var melhor = null;
+    var melhor = null, temPendente = false;
     Object.keys(porFornecedor).forEach(function(cKey) {
       var calc = porFornecedor[cKey].itens[itemKey];
-      if (!calc || !calc.completo || calc.custoUnitario == null) return;
-      if (!melhor || calc.custoUnitario < melhor.custoUnitario) {
-        melhor = { cKey: cKey, custoUnitario: calc.custoUnitario };
+      if (!calc) return;
+      if (calc.conversaoPendente) { temPendente = true; return; }
+      if (!calc.completo || calc.custoUnitarioCadastro == null) return;
+      if (!melhor || calc.custoUnitarioCadastro < melhor.custoUnitario) {
+        melhor = { cKey: cKey, custoUnitario: calc.custoUnitarioCadastro };
       }
     });
-    if (melhor) vencedorPorItem[itemKey] = melhor;
+    // Com alguém sem conversão definida, NÃO elege vencedor: um "melhor"
+    // calculado ignorando quem não pôde ser convertido é pior que nenhum,
+    // porque parece uma decisão tomada.
+    if (melhor && !temPendente) vencedorPorItem[itemKey] = melhor;
+    else if (temPendente) vencedorPorItem[itemKey] = null;
   });
 
   // Vencedor geral: menor custo total somando só quem respondeu TODOS os

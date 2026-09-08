@@ -471,6 +471,72 @@
   </div>
 </div>
 
+<!-- MODAL: editar Pedido de Compra (só ADM, só enquanto ABERTO) -->
+<div class="modal-bg" id="modalEditarPC">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header purple">
+      <div><h2 id="pcEditTitulo">Editar pedido</h2><div style="font-size:11.5px;opacity:.85" id="pcEditSub"></div></div>
+      <button class="modal-close" id="modalEditarPCClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-note" style="margin-bottom:14px">
+        Correção antes de enviar ao fornecedor. Depois de <b>Marcar Enviado</b> o pedido não pode
+        mais ser editado — o fornecedor já teria o documento em mãos, e mudar aqui sem ele saber
+        cria exatamente a divergência que a página impressa evita.
+      </div>
+
+      <div class="table-wrap" style="padding:0;margin-bottom:16px">
+        <table>
+          <thead><tr><th>Item</th><th style="width:120px">Quantidade</th><th style="width:120px">Preço unit.</th><th style="width:120px;text-align:right">Total</th></tr></thead>
+          <tbody id="pcEditItens"></tbody>
+        </table>
+      </div>
+      <div style="text-align:right;font-size:13px;margin-bottom:14px">
+        Soma dos itens: <b id="pcEditTotal">—</b>
+        <div class="field-hint">Sem impostos e sem frete — o custo completo vem do orçamento da cotação.</div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Condição de pagamento</label>
+          <input type="text" id="pcEditPagamento" placeholder="ex: 14/21/28 DDL">
+        </div>
+        <div class="form-group">
+          <label>Prazo de entrega (dias úteis)</label>
+          <input type="number" id="pcEditPrazo" min="0" step="1">
+          <div class="field-hint">A data prevista é recalculada a partir de hoje.</div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Frete</label>
+          <select id="pcEditFreteTipo">
+            <option value="">—</option>
+            <option value="FOB">FOB — coleta por nossa conta</option>
+            <option value="CIF">CIF — entrega pelo fornecedor</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor do frete (só FOB)</label>
+          <input type="number" id="pcEditFreteValor" min="0" step="any" placeholder="R$">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Entregar em</label>
+        <select id="pcEditLocal">
+          <option value="">—</option>
+          <option value="GALPAO">Galpão</option>
+          <option value="FABRICA">Fábrica</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pcEditCancelar">Cancelar</button>
+      <button class="btn btn-green" id="pcEditSalvar">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
 <!-- Documento do Pedido de Compra pro fornecedor (ver imprimirPedidoCompra) -->
 <div id="printArea"></div>
 
@@ -495,9 +561,25 @@
           <input type="number" id="fiscalPreco" min="0" step="any" placeholder="R$ por unidade">
         </div>
         <div class="form-group">
-          <label>Quantidade cotada * <span id="fiscalQtdUnidade" style="font-weight:400;text-transform:none"></span></label>
+          <label>Quantidade cotada *</label>
           <input type="number" id="fiscalQtd" min="0" step="any">
           <div class="field-hint" id="fiscalQtdPedida"></div>
+        </div>
+      </div>
+
+      <!-- Unidade cotada e conversão. O fornecedor pode orçar numa unidade
+           diferente da do cadastro (material em ROLO, orçado em KG) -- sem
+           converter, a comparação entre fornecedores é sem sentido. -->
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Unidade cotada</label>
+          <input type="text" id="fiscalUnidadeCotada" placeholder="kg, rolo, un, L...">
+          <div class="field-hint" id="fiscalUnidadeHint"></div>
+        </div>
+        <div class="form-group" id="fiscalConversaoBox" style="display:none">
+          <label id="fiscalConversaoLabel">Conversão *</label>
+          <input type="number" id="fiscalFator" min="0" step="any">
+          <div class="field-hint" id="fiscalConversaoHint"></div>
         </div>
       </div>
 
@@ -1551,7 +1633,10 @@ function renderPedidos() {
       CANCELADO: '<span class="badge badge-red">Cancelado</span>'
     }[p.status] || '<span class="badge badge-gray">' + escapeHtml(p.status || '—') + '</span>';
     var acoes = (p.status === 'ABERTO'
-      ? '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button> '
+      ? (podeEditarPC(p)
+          ? '<button class="btn btn-ghost btn-sm pc-editar" data-key="' + escapeAttr(key) + '" title="Corrigir itens e condições antes de enviar ao fornecedor">✏️ Editar</button> '
+          : '') +
+        '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button> '
       : '') +
       '<button class="btn btn-primary btn-sm pc-imprimir" data-key="' + escapeAttr(key) + '" title="Abre o pedido formatado pra imprimir ou salvar em PDF, com o padrão de etiqueta de cada item">🖨 Enviar ao fornecedor</button> ' +
       '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>';
@@ -1580,6 +1665,9 @@ function renderPedidos() {
   });
   document.querySelectorAll('.pc-imprimir').forEach(function(btn) {
     btn.addEventListener('click', function() { imprimirPedidoCompra(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.pc-editar').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalEditarPC(btn.getAttribute('data-key')); });
   });
 }
 
@@ -1619,6 +1707,153 @@ function abrirModalEtiquetaPC(pcKey) {
   }).join('') : '<div class="empty-hint">Esse pedido não tem itens.</div>';
   document.getElementById('modalEtiquetaPC').classList.add('open');
 }
+/* ── Edição de Pedido de Compra ──
+   Pedido do usuário: "possibilidade de admin editar um pedido de compra,
+   apenas se não tiver sido enviado ainda".
+
+   Duas condições, as duas necessárias:
+   - papel ADMIN (não 'pcp'): mexer em preço e quantidade de um pedido já
+     decidido é alterar um acordo comercial, não corrigir um cadastro;
+   - status ABERTO. Depois de ENVIADO o fornecedor já tem o documento na
+     mão, e mudar o pedido no sistema sem ele saber cria justamente a
+     divergência que a página impressa veio resolver. Recebido (parcial ou
+     total) é mais grave ainda: já existe material e movimento de estoque
+     amarrados naquelas quantidades. */
+function podeEditarPC(pc) {
+  return !!(pc && pc.status === 'ABERTO' &&
+    window.currentUser && window.currentUser.role === 'admin');
+}
+
+// A lista de pedidos costuma renderizar ANTES de o perfil do usuário chegar
+// (leitura assíncrona), e aí o botão de editar não aparecia -- sem erro
+// nenhum, só ausente. Re-renderiza quando o papel fica conhecido.
+window.addEventListener('kuryos-auth-pronto', function() {
+  if (typeof renderPedidos === 'function') renderPedidos();
+});
+
+var pcEditKey = null;
+
+function abrirModalEditarPC(key) {
+  var pc = allPedidosCompra[key];
+  if (!pc) { showAlert('Pedido não encontrado.', 'danger'); return; }
+  if (!podeEditarPC(pc)) {
+    showAlert(pc.status !== 'ABERTO'
+      ? 'Este pedido já foi ' + (pc.status === 'ENVIADO' ? 'enviado ao fornecedor' : 'recebido') + ' — não pode mais ser editado.'
+      : 'Apenas administradores podem editar um pedido de compra.', 'danger');
+    return;
+  }
+  pcEditKey = key;
+  document.getElementById('pcEditTitulo').textContent = 'Editar ' + (pc.numeroFormatado || '');
+  document.getElementById('pcEditSub').textContent =
+    (pc.fornecedorNome || '') + ' · criado em ' + fmtData(pc.dataCriacao);
+  document.getElementById('pcEditPagamento').value = pc.condicaoPagamento || '';
+  document.getElementById('pcEditPrazo').value = pc.prazoEntregaDiasUteis != null ? pc.prazoEntregaDiasUteis : '';
+  document.getElementById('pcEditLocal').value = pc.localEntrega || '';
+  document.getElementById('pcEditFreteTipo').value = (pc.frete && pc.frete.tipo) || '';
+  document.getElementById('pcEditFreteValor').value = (pc.frete && pc.frete.valor != null) ? pc.frete.valor : '';
+
+  document.getElementById('pcEditItens').innerHTML = Object.entries(pc.itens || {}).map(function(e) {
+    var ik = e[0], it = e[1];
+    var un = it.unidadeCotada || it.unidade || '';
+    return '<tr>' +
+      '<td style="font-size:12px"><b>' + escapeHtml(it.materialCodigo || '') + '</b>' +
+        (it.materialNome ? '<br><span class="field-hint">' + escapeHtml(it.materialNome) + '</span>' : '') + '</td>' +
+      '<td><input type="number" min="0" step="any" class="pce-qtd" data-item="' + escapeAttr(ik) + '" value="' +
+        escapeAttr(it.qtdCotada != null ? it.qtdCotada : (it.qtd != null ? it.qtd : '')) + '" style="width:96px">' +
+        '<div class="field-hint">' + escapeHtml(un) + '</div></td>' +
+      '<td><input type="number" min="0" step="any" class="pce-preco" data-item="' + escapeAttr(ik) + '" value="' +
+        escapeAttr(it.precoUnit != null ? it.precoUnit : '') + '" style="width:96px"></td>' +
+      '<td class="pce-total" data-item="' + escapeAttr(ik) + '" style="text-align:right;font-weight:700"></td>' +
+    '</tr>';
+  }).join('') || '<tr><td colspan="4" class="no-data">Este pedido não tem itens.</td></tr>';
+
+  document.querySelectorAll('.pce-qtd, .pce-preco').forEach(function(el) {
+    el.addEventListener('input', recalcularTotaisEdicaoPC);
+  });
+  recalcularTotaisEdicaoPC();
+  document.getElementById('modalEditarPC').classList.add('open');
+}
+
+function recalcularTotaisEdicaoPC() {
+  var soma = 0;
+  document.querySelectorAll('#pcEditItens tr').forEach(function(tr) {
+    var q = parseFloat((tr.querySelector('.pce-qtd') || {}).value) || 0;
+    var pr = parseFloat((tr.querySelector('.pce-preco') || {}).value) || 0;
+    var cel = tr.querySelector('.pce-total');
+    if (cel) cel.textContent = (q && pr) ? fmtBRL(q * pr) : '—';
+    soma += q * pr;
+  });
+  // Total SEM imposto e SEM frete, e dito com todas as letras: o número
+  // completo vem do orçamento da cotação, e apresentá-lo aqui como se fosse
+  // o mesmo faria alguém achar que o custo mudou quando só o bruto mudou.
+  document.getElementById('pcEditTotal').textContent = fmtBRL(soma);
+}
+
+function salvarEdicaoPC() {
+  if (!pcEditKey) return;
+  var pc = allPedidosCompra[pcEditKey];
+  // Reconfere no momento de gravar: a lista é reativa e o pedido pode ter
+  // sido enviado por outra pessoa enquanto este modal estava aberto.
+  if (!podeEditarPC(pc)) {
+    showAlert('Este pedido não pode mais ser editado — ele mudou de status enquanto você editava.', 'danger');
+    fecharModalEditarPC();
+    return;
+  }
+  var updates = {}, invalido = false;
+  document.querySelectorAll('#pcEditItens tr').forEach(function(tr) {
+    var qEl = tr.querySelector('.pce-qtd'), pEl = tr.querySelector('.pce-preco');
+    if (!qEl || !pEl) return;
+    var ik = qEl.getAttribute('data-item');
+    var q = qEl.value === '' ? null : parseFloat(qEl.value);
+    var pr = pEl.value === '' ? null : parseFloat(pEl.value);
+    if ((q != null && (isNaN(q) || q < 0)) || (pr != null && (isNaN(pr) || pr < 0))) invalido = true;
+    updates['pedidos_compra/' + pcEditKey + '/itens/' + ik + '/qtdCotada'] = q;
+    updates['pedidos_compra/' + pcEditKey + '/itens/' + ik + '/precoUnit'] = pr;
+  });
+  if (invalido) { showAlert('Quantidade e preço não podem ser negativos.', 'danger'); return; }
+
+  var prazo = document.getElementById('pcEditPrazo').value;
+  var prazoNum = prazo === '' ? null : parseInt(prazo, 10);
+  if (prazoNum != null && (isNaN(prazoNum) || prazoNum < 0)) { showAlert('Prazo de entrega inválido.', 'danger'); return; }
+  var freteTipo = document.getElementById('pcEditFreteTipo').value || null;
+  var freteValor = document.getElementById('pcEditFreteValor').value;
+  var textoPgto = document.getElementById('pcEditPagamento').value.trim();
+  var prazoPgto = parsePrazoPagamento(textoPgto);
+  var cal = calendarioUtil();
+
+  updates['pedidos_compra/' + pcEditKey + '/condicaoPagamento'] = textoPgto;
+  updates['pedidos_compra/' + pcEditKey + '/prazoPagamentoParcelas'] = prazoPgto.valido ? prazoPgto.parcelas : null;
+  updates['pedidos_compra/' + pcEditKey + '/prazoEntregaDiasUteis'] = prazoNum;
+  // Data prevista recalculada a partir de HOJE: o prazo do fornecedor conta
+  // da confirmação, e manter a data antiga com prazo novo seria guardar duas
+  // informações que se contradizem.
+  updates['pedidos_compra/' + pcEditKey + '/dataPrevistaEntrega'] = prazoNum != null
+    ? somarDiasUteis(new Date().toISOString().slice(0, 10), prazoNum, cal.feriados, cal.diasSemana) : null;
+  updates['pedidos_compra/' + pcEditKey + '/localEntrega'] = document.getElementById('pcEditLocal').value || null;
+  updates['pedidos_compra/' + pcEditKey + '/frete/tipo'] = freteTipo;
+  updates['pedidos_compra/' + pcEditKey + '/frete/valor'] = (freteTipo === 'FOB' && freteValor !== '') ? parseFloat(freteValor) : null;
+  // Trilha: quem editou e quando. Alterar pedido decidido sem deixar rastro
+  // é o tipo de coisa que ninguém consegue explicar três meses depois.
+  updates['pedidos_compra/' + pcEditKey + '/editadoEm'] = new Date().toISOString();
+  updates['pedidos_compra/' + pcEditKey + '/editadoPor'] = currentUserNome();
+
+  var btn = document.getElementById('pcEditSalvar');
+  btn.disabled = true;
+  db.ref().update(updates).then(function() {
+    btn.disabled = false;
+    fecharModalEditarPC();
+    showAlert('Pedido atualizado. Reimprima o documento antes de enviar ao fornecedor.', 'success');
+  }).catch(function(err) {
+    btn.disabled = false;
+    showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+}
+
+function fecharModalEditarPC() {
+  document.getElementById('modalEditarPC').classList.remove('open');
+  pcEditKey = null;
+}
+
 function marcarPedidoEnviado(key) {
   if (!confirm('Marcar esse pedido como enviado ao fornecedor?')) return;
   db.ref('pedidos_compra/' + key).update({status: 'ENVIADO', dataEmissao: new Date().toISOString()})
@@ -1906,7 +2141,9 @@ var FISCAL_CAMPOS = [
   ['fiscalIcmsSt', 'pctIcmsSt'], ['fiscalIcms', 'pctIcms'], ['fiscalIss', 'pctIss']
 ];
 // Valores absolutos: só não podem ser negativos.
-var FISCAL_CAMPOS_VALOR = [['fiscalPreco', 'precoUnit'], ['fiscalQtd', 'qtdCotada']];
+var FISCAL_CAMPOS_VALOR = [['fiscalPreco', 'precoUnit'], ['fiscalQtd', 'qtdCotada'], ['fiscalFator', 'fatorConversao']];
+// Texto livre: a unidade cotada é a que o fornecedor usou na proposta.
+var FISCAL_CAMPOS_TEXTO = [['fiscalUnidadeCotada', 'unidadeCotada']];
 
 function abrirModalFiscal(procKey, cKey, itemKey) {
   var p = allProcessosCotacao[procKey];
@@ -1922,18 +2159,44 @@ function abrirModalFiscal(procKey, cKey, itemKey) {
   var un = it.unidade || '';
   document.getElementById('fiscalContexto').innerHTML =
     '<b>' + escapeHtml(it.materialCodigo || '') + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
-    '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>';
-  // Unidade ao lado da quantidade: sem ela, "10.000" não diz se são
-  // unidades, quilos ou litros -- e é o número que multiplica o preço.
-  document.getElementById('fiscalQtdUnidade').textContent = un ? '(' + un + ')' : '';
+    '<br>Fornecedor: <b>' + escapeHtml(nomeForn) + '</b>' +
+    (un ? ' · Cadastrado em <b>' + escapeHtml(un) + '</b>' : '');
   document.getElementById('fiscalQtdPedida').textContent =
     it.qtd != null ? 'Pedido: ' + fmtNum(it.qtd) + (un ? ' ' + un : '') : '';
+  document.getElementById('fiscalUnidadeHint').textContent =
+    un ? 'Deixe vazio se o fornecedor cotou em ' + un + '.' : '';
+  document.getElementById('fiscalUnidadeCotada').placeholder = un || 'kg, rolo, un, L...';
 
-  FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).forEach(function(par) {
+  FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).concat(FISCAL_CAMPOS_TEXTO).forEach(function(par) {
     document.getElementById(par[0]).value = resp[par[1]] != null ? resp[par[1]] : '';
   });
+  atualizarConversaoFiscal();
   atualizarMemoriaFiscal();
   document.getElementById('modalFiscalCot').classList.add('open');
+}
+
+// O campo de conversão só aparece quando a unidade cotada difere da do
+// cadastro. Mostrar sempre pediria "1 un = ? un" pra todo item, que é ruído
+// em 90% dos casos; esconder quando não se aplica deixa o campo visível
+// significar "isto aqui precisa da sua atenção".
+function atualizarConversaoFiscal() {
+  if (!fiscalAlvo) return;
+  var p = allProcessosCotacao[fiscalAlvo.procKey] || {};
+  var it = (p.itens || {})[fiscalAlvo.itemKey] || {};
+  var unCad = String(it.unidade || '').trim();
+  var unCot = String(document.getElementById('fiscalUnidadeCotada').value || '').trim();
+  var box = document.getElementById('fiscalConversaoBox');
+  var precisa = unCad && unCot && unCot.toLowerCase() !== unCad.toLowerCase();
+  box.style.display = precisa ? '' : 'none';
+  if (!precisa) return;
+  document.getElementById('fiscalConversaoLabel').textContent = '1 ' + unCad + ' equivale a quantos ' + unCot + '? *';
+  var fator = parseFloat(document.getElementById('fiscalFator').value);
+  var qtd = parseFloat(document.getElementById('fiscalQtd').value);
+  document.getElementById('fiscalConversaoHint').innerHTML = fator > 0
+    ? (qtd > 0 ? '<span style="color:var(--tint-green-fg)">' + fmtNum(qtd) + ' ' + escapeHtml(unCot) +
+        ' = ' + fmtNum(Math.round((qtd / fator) * 100) / 100) + ' ' + escapeHtml(unCad) + '</span>'
+        : 'Ex.: 1 ' + escapeHtml(unCad) + ' = ' + fator + ' ' + escapeHtml(unCot))
+    : '<span style="color:var(--warning)">Sem isto não dá pra comparar com quem cotou em ' + escapeHtml(unCad) + '.</span>';
 }
 
 // Mostra a conta aberta enquanto a pessoa digita. Sem isso, o custo final
@@ -1948,9 +2211,16 @@ function atualizarMemoriaFiscal() {
     var v = document.getElementById(par[0]).value;
     resp[par[1]] = v === '' ? null : parseFloat(v);
   });
-  var calc = calcularCustoItemCotacao(resp, 0);
+  FISCAL_CAMPOS_TEXTO.forEach(function(par) {
+    var v = document.getElementById(par[0]).value.trim();
+    resp[par[1]] = v === '' ? null : v;
+  });
   var itAtual = ((allProcessosCotacao[fiscalAlvo.procKey] || {}).itens || {})[fiscalAlvo.itemKey] || {};
   var unAtual = itAtual.unidade || '';
+  var calc = calcularCustoItemCotacao(resp, 0, unAtual);
+  // A memória fala na unidade COTADA (a que o fornecedor usou); a conversão
+  // pra unidade do cadastro aparece no fim, que é o número da comparação.
+  var unCot = calc.unidadeCotada || unAtual;
   var avisos = cotacaoItemInconsistencias(resp);
   var linha = function(rot, val, sinal) {
     return '<div style="display:flex;justify-content:space-between;gap:12px"><span>' + rot + '</span><span style="font-variant-numeric:tabular-nums">' + (sinal || '') + fmtBRL(val) + '</span></div>';
@@ -1960,7 +2230,7 @@ function atualizarMemoriaFiscal() {
     : (c.frete && c.frete.tipo === 'CIF' ? '<div class="field-hint" style="margin-top:6px">Frete CIF: já está no preço do fornecedor, não soma.</div>' : '');
   document.getElementById('fiscalMemoriaCorpo').innerHTML =
     '<div class="field-hint" style="margin:0 0 5px">' +
-      (calc.qtd > 0 ? fmtNum(calc.qtd) + (unAtual ? ' ' + escapeHtml(unAtual) : '') + ' × ' + fmtBRL(calc.preco) : 'Informe preço e quantidade') +
+      (calc.qtd > 0 ? fmtNum(calc.qtd) + (unCot ? ' ' + escapeHtml(unCot) : '') + ' × ' + fmtBRL(calc.preco) : 'Informe preço e quantidade') +
     '</div>' +
     linha('Bruto (preço × qtd)', calc.bruto) +
     (calc.desconto ? linha('Desconto', calc.desconto, '− ') : '') +
@@ -1974,8 +2244,22 @@ function atualizarMemoriaFiscal() {
     '<div style="border-top:1px solid var(--border);margin:6px 0"></div>' +
     linha('<b>Custo total (sem frete)</b>', calc.custoTotal) +
     (calc.custoUnitario != null
-      ? linha('<b>Custo por ' + escapeHtml(unAtual || 'unidade') + '</b>', calc.custoUnitario)
+      ? linha('Custo por ' + escapeHtml(unCot || 'unidade'), calc.custoUnitario)
       : '<div class="field-hint">Custo unitário: informe preço e quantidade.</div>') +
+    // O custo na unidade do CADASTRO é o número que decide a cotação --
+    // destacado, e separado do custo na unidade cotada pra não confundir os
+    // dois (que é a origem do problema que este bloco resolve).
+    (calc.unidadeDiferente
+      ? (calc.custoUnitarioCadastro != null
+          ? '<div style="margin-top:6px;padding-top:5px;border-top:1px solid var(--border)">' +
+              linha('<b>Custo por ' + escapeHtml(calc.unidadeCadastro) + ' (comparação)</b>', calc.custoUnitarioCadastro) +
+              '<div class="field-hint">' + fmtNum(calc.qtd) + ' ' + escapeHtml(unCot) + ' = ' +
+                fmtNum(Math.round(calc.qtdCadastro * 100) / 100) + ' ' + escapeHtml(calc.unidadeCadastro) + '</div>' +
+            '</div>'
+          : '<div class="field-hint" style="color:var(--warning);margin-top:6px">⚠ Cotado em ' + escapeHtml(unCot) +
+            ', cadastro em ' + escapeHtml(calc.unidadeCadastro) + '. Informe a conversão — sem ela este fornecedor ' +
+            'fica fora da comparação.</div>')
+      : '') +
     freteAviso +
     (avisos.length ? '<div class="field-hint" style="color:var(--warning);margin-top:6px">⚠ ' + escapeHtml(avisos.join('; ')) + '</div>' : '');
 }
@@ -2005,8 +2289,15 @@ function salvarFiscal() {
     if (num != null && (isNaN(num) || num < 0)) invalidoValor = par[1];
     updates[base + par[1]] = num;
   });
+  FISCAL_CAMPOS_TEXTO.forEach(function(par) {
+    var v = document.getElementById(par[0]).value.trim();
+    updates[base + par[1]] = v === '' ? null : v;
+  });
   if (invalido) { showAlert('Percentual inválido em ' + invalido + ' — use um valor entre 0 e 100.', 'danger'); return; }
-  if (invalidoValor) { showAlert('Valor inválido em ' + (invalidoValor === 'precoUnit' ? 'preço unitário' : 'quantidade cotada') + ' — não pode ser negativo.', 'danger'); return; }
+  if (invalidoValor) {
+    var rot = { precoUnit: 'preço unitário', qtdCotada: 'quantidade cotada', fatorConversao: 'conversão de unidade' }[invalidoValor] || invalidoValor;
+    showAlert('Valor inválido em ' + rot + ' — não pode ser negativo.', 'danger'); return;
+  }
   updates['processos_cotacao/' + fiscalAlvo.procKey + '/fornecedoresConvidados/' + fiscalAlvo.cKey + '/status'] = 'RESPONDIDO';
   db.ref().update(updates).then(function() {
     fecharModalFiscal();
@@ -2014,12 +2305,20 @@ function salvarFiscal() {
   }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
 }
 
+document.getElementById('modalEditarPCClose').addEventListener('click', fecharModalEditarPC);
+document.getElementById('pcEditCancelar').addEventListener('click', fecharModalEditarPC);
+document.getElementById('pcEditSalvar').addEventListener('click', salvarEdicaoPC);
+document.getElementById('modalEditarPC').addEventListener('click', function(ev) { if (ev.target === this) fecharModalEditarPC(); });
+
 document.getElementById('modalFiscalClose').addEventListener('click', fecharModalFiscal);
 document.getElementById('modalFiscalCancel').addEventListener('click', fecharModalFiscal);
 document.getElementById('modalFiscalSave').addEventListener('click', salvarFiscal);
 document.getElementById('modalFiscalCot').addEventListener('click', function(ev) { if (ev.target === this) fecharModalFiscal(); });
-FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).forEach(function(par) {
-  document.getElementById(par[0]).addEventListener('input', atualizarMemoriaFiscal);
+FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).concat(FISCAL_CAMPOS_TEXTO).forEach(function(par) {
+  document.getElementById(par[0]).addEventListener('input', function() {
+    atualizarConversaoFiscal();
+    atualizarMemoriaFiscal();
+  });
 });
 
 /* ── Cotações em andamento (aba própria) ── */
@@ -2092,19 +2391,38 @@ function cotacaoCardHtml(entry) {
       var isMenor = cmp.vencedorPorItem[itemKey] && cmp.vencedorPorItem[itemKey].cKey === cKey;
       // A quantidade cotada pode diferir da pedida: o fornecedor cota o lote
       // mínimo dele. Sem esse campo, comparava-se 3.000 com 5.000.
-      var qtdDiverge = calc.qtd > 0 && it.qtd > 0 && Math.abs(calc.qtd - it.qtd) > 0.001;
-      var custoHtml = calc.custoUnitario != null
-        ? '<div style="font-size:12px;margin-top:3px" title="Preço + IPI + ST + frete rateado − crédito de ICMS, dividido pela quantidade">' +
-            'Custo/' + escapeHtml(it.unidade || 'un') + ': <b>' + fmtBRL(calc.custoUnitario) + '</b>' + (isMenor ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>'
-        : '<div class="field-hint" style="margin-top:3px">custo: falta preço/qtd</div>';
+      var unCot = calc.unidadeCotada || it.unidade || '';
+      // Divergência de quantidade só faz sentido comparando na MESMA
+      // unidade -- 500 kg contra 20 rolos não é divergência, é conversão.
+      var qtdDiverge = !calc.unidadeDiferente && calc.qtd > 0 && it.qtd > 0 && Math.abs(calc.qtd - it.qtd) > 0.001;
+      // O custo mostrado é o COMPARÁVEL (unidade do cadastro). Quando a
+      // unidade cotada difere, mostra os dois: o que o fornecedor cobrou e
+      // o que isso significa na nossa unidade.
+      var custoHtml;
+      if (calc.conversaoPendente) {
+        custoHtml = '<div class="field-hint" style="margin-top:3px;color:var(--warning)">⚠ cotado em ' +
+          escapeHtml(unCot) + ', cadastro em ' + escapeHtml(calc.unidadeCadastro) + ' — falta a conversão</div>';
+      } else if (calc.custoUnitarioCadastro != null) {
+        custoHtml = '<div style="font-size:12px;margin-top:3px" title="Preço + IPI + ST + frete rateado − crédito de ICMS, convertido pra unidade do cadastro">' +
+          'Custo/' + escapeHtml(calc.unidadeCadastro || 'un') + ': <b>' + fmtBRL(calc.custoUnitarioCadastro) + '</b>' +
+          (isMenor ? ' <span style="color:var(--success)">✓</span>' : '') + '</div>' +
+          (calc.unidadeDiferente
+            ? '<div class="field-hint">' + fmtBRL(calc.custoUnitario) + '/' + escapeHtml(unCot) +
+              ' · 1 ' + escapeHtml(calc.unidadeCadastro) + ' = ' + fmtNum(calc.fatorConversao) + ' ' + escapeHtml(unCot) + '</div>'
+            : '');
+      } else {
+        custoHtml = '<div class="field-hint" style="margin-top:3px">custo: falta preço/qtd</div>';
+      }
       var avisosHtml = (calc.avisos && calc.avisos.length && (calc.preco > 0 || calc.qtd > 0))
         ? '<div class="field-hint" style="color:var(--warning);margin-top:2px">⚠ ' + escapeHtml(calc.avisos.join('; ')) + '</div>' : '';
       return '<td style="vertical-align:top;' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
         '<div class="cot-linha">' +
-          // Unidade no próprio rótulo: sem ela "10.000" não diz se são
-          // unidades, quilos ou litros -- e é o número que multiplica o preço.
-          campoCot('Preço por ' + (it.unidade || 'un'), '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
-          campoCot('Qtd cotada' + (it.unidade ? ' (' + it.unidade + ')' : ''), '<input type="number" class="cot-resp-qtd" min="0" step="any" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ' ' + escapeAttr(it.unidade || '') + ')"' : '') + '>') +
+          // A unidade do rótulo é a que o FORNECEDOR cotou -- pode diferir
+          // da do cadastro (material em rolo, orçado em kg), e mostrar a do
+          // cadastro aqui faria a pessoa digitar preço de kg achando que é
+          // de rolo.
+          campoCot('Preço por ' + (unCot || 'un'), '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
+          campoCot('Qtd cotada' + (unCot ? ' (' + unCot + ')' : ''), '<input type="number" class="cot-resp-qtd" min="0" step="any" title="Quantidade que o fornecedor cotou — pode diferir da pedida (lote mínimo)" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida (' + escapeAttr(fmtNum(it.qtd)) + ' ' + escapeAttr(it.unidade || '') + ')"' : '') + '>') +
         '</div>' +
         '<div class="cot-linha" style="align-items:flex-end">' +
           campoCot('Entrega (dias úteis)', '<input type="number" class="cot-resp-prazo" min="0" step="1" title="Prazo em DIAS ÚTEIS — o sistema converte na data de coleta/entrega usando o calendário do PCP" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '">') +
