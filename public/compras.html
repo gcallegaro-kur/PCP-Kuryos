@@ -106,6 +106,26 @@
     /* Resultado calculado: separado dos campos de digitação por uma linha,
        pra ninguém tentar editar o que o sistema calcula. */
     .cot-resultado{margin-top:6px;padding-top:5px;border-top:1px dashed var(--border);font-size:12px}
+
+    /* ── Impressão do Pedido de Compra (documento do fornecedor) ──
+       Mesmo bloco de emitir_op.html/ops.html: paginaPedidoCompra e
+       paginaEtiquetaFornecedor em shared/utils.js já esperam estas classes.
+       Cores fixas de propósito -- é papel, não acompanha tema. */
+    #printArea{display:none}
+    @media print {
+      body *{visibility:hidden}
+      #printArea, #printArea *{visibility:visible}
+      #printArea{display:block;position:absolute;top:0;left:0;width:100%;color:#000;background:#fff}
+      .print-page{page-break-after:always;padding:18px;font-size:12px}
+      .print-page:last-child{page-break-after:auto}
+      .print-h{font-size:16px;font-weight:700;margin-bottom:4px}
+      .print-sub{font-size:11px;color:#555;margin-bottom:12px}
+      .print-table{width:100%;border-collapse:collapse;margin-top:8px}
+      .print-table th,.print-table td{border:1px solid #999;padding:3px 8px;font-size:11px;text-align:left}
+      .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:10px 0;font-size:12px}
+      .print-sign{margin-top:10px;font-size:11px}
+      .print-sign-line{display:inline-block;border-bottom:1px solid #333;min-width:160px;margin-left:6px}
+    }
     .section-note{font-size:12px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card));border-radius:6px;border-left:3px solid var(--border)}
     .section-note a{color:var(--primary);font-weight:600;text-decoration:none}
     .section-note a:hover{text-decoration:underline}
@@ -450,6 +470,9 @@
     </div>
   </div>
 </div>
+
+<!-- Documento do Pedido de Compra pro fornecedor (ver imprimirPedidoCompra) -->
+<div id="printArea"></div>
 
 <!-- MODAL: impostos e desconto de UM item de UM fornecedor ───────────────
      Os impostos variam por item (NCM diferente = IPI diferente), então não
@@ -1529,7 +1552,9 @@ function renderPedidos() {
     }[p.status] || '<span class="badge badge-gray">' + escapeHtml(p.status || '—') + '</span>';
     var acoes = (p.status === 'ABERTO'
       ? '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button> '
-      : '') + '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>';
+      : '') +
+      '<button class="btn btn-primary btn-sm pc-imprimir" data-key="' + escapeAttr(key) + '" title="Abre o pedido formatado pra imprimir ou salvar em PDF, com o padrão de etiqueta de cada item">🖨 Enviar ao fornecedor</button> ' +
+      '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>';
     // Selo de PC criado por fora da cotação. Visível na lista de propósito:
     // é o que deixa perceptível, no dia a dia, se o caminho curto virou o
     // caminho padrão. O title carrega o motivo declarado.
@@ -1553,6 +1578,24 @@ function renderPedidos() {
   document.querySelectorAll('.pc-etiquetas').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirModalEtiquetaPC(btn.getAttribute('data-key')); });
   });
+  document.querySelectorAll('.pc-imprimir').forEach(function(btn) {
+    btn.addEventListener('click', function() { imprimirPedidoCompra(btn.getAttribute('data-key')); });
+  });
+}
+
+// Abre o Pedido de Compra formatado pra impressão / salvar em PDF pelo
+// próprio navegador. Mesmo mecanismo das fichas de OP: escreve no #printArea
+// e chama window.print(); o CSS @media print esconde o resto da página.
+function imprimirPedidoCompra(pcKey) {
+  var pc = allPedidosCompra[pcKey];
+  if (!pc) { showAlert('Pedido não encontrado.', 'danger'); return; }
+  var fornecedor = pc.fornecedorKey ? allFornecedores[pc.fornecedorKey] : null;
+  var area = document.getElementById('printArea');
+  area.innerHTML = montarDocumentoPedidoCompra(pc, fornecedor);
+  window.print();
+  // Limpa depois de imprimir pra o conteúdo não ficar pendurado no DOM (e
+  // vazar numa impressão seguinte de outra coisa).
+  setTimeout(function() { area.innerHTML = ''; }, 1000);
 }
 function abrirModalEtiquetaPC(pcKey) {
   var pc = allPedidosCompra[pcKey];

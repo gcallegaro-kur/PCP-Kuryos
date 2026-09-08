@@ -54,6 +54,18 @@ relevante para retomar o trabalho depois.
   arquivo é guardado (proposta de fornecedor tem valor probatório em disputa
   comercial, diferente de um anexo qualquer).
 
+- **Lista dos 11 campos da etiqueta está DUPLICADA** — `PADRAO_ETIQUETA_FORNECEDOR`
+  vive em `shared/utils.js` e a mesma lista está escrita de novo dentro de
+  `functions/index.js` (`criarRascunhoCotacao`), com um comentário admitindo
+  a cópia: *"Mesma lista de PADRAO_ETIQUETA_FORNECEDOR em
+  public/shared/utils.js"*. Quem mudar num lugar não muda no outro, e o
+  e-mail ao fornecedor passa a pedir uma etiqueta diferente da que o
+  recebimento confere.
+  A Cloud Function não consegue importar de `public/`, então a correção é
+  mover a lista pra um módulo compartilhado (ou gerar o texto do e-mail no
+  cliente e passar pronto pra function). Achado ao construir o documento
+  impresso do PC (2026-09-08).
+
 - **Arquivo de etiqueta pronto por item, no Pedido de Compra** — hoje o
   padrão de 11 campos (`PADRAO_ETIQUETA_FORNECEDOR`, `shared/utils.js`) só
   aparece como texto no e-mail de cotação e (depois desta rodada) no

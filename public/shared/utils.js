@@ -2703,6 +2703,172 @@ var PADRAO_ETIQUETA_FORNECEDOR = [
   { campo: 'codigoBarras', label: 'Código de barras ou QR (material + lote)' }
 ];
 
+/* ══════════════════════════════════════════════════════════════════════
+   PEDIDO DE COMPRA IMPRESSO — o documento que vai pro fornecedor
+
+   Até aqui o sistema parava de falar com o fornecedor no momento em que a
+   compra era DECIDIDA: havia rascunho de e-mail pra cotação (antes), e nada
+   depois. Na prática o pedido saía por fora -- e-mail à mão, WhatsApp --,
+   o que significa que o fornecedor recebia uma versão que ninguém garantia
+   ser igual à do sistema: nem o preço negociado, nem o prazo, nem o
+   endereço de coleta.
+
+   Mesmo mecanismo das 5 fichas de OP: HTML com as classes .print-page/
+   .print-table que emitir_op.html e ops.html já estilizam pra impressão.
+   ══════════════════════════════════════════════════════════════════════ */
+
+// Dinheiro no documento impresso. `toFixed(2).replace('.', ',')` sozinho
+// produz "R$ 8000,00" -- sem separador de milhar, que num papel que vai pro
+// fornecedor é onde alguém lê 8.000 como 800 ou 80.000.
+function fmtBRLDoc(n) {
+  var v = Number(n);
+  if (isNaN(v)) return '—';
+  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Página 1: o pedido em si. `pc` = pedidos_compra/{key}, `fornecedor` =
+// fornecedores/{key} (pode ser null -- o PC guarda o nome denormalizado).
+function paginaPedidoCompra(pc, fornecedor) {
+  var p = pc || {};
+  var f = fornecedor || {};
+  var itens = Object.values(p.itens || {});
+  var frete = p.frete || {};
+  var ehFob = frete.tipo === 'FOB';
+
+  // O total vem do que foi congelado na decisão da cotação. Recalcular aqui
+  // daria outro número se alguém editar a cotação depois de o PC existir --
+  // e o documento tem que refletir o que foi acordado.
+  var total = p.valorTotalEstimado != null ? p.valorTotalEstimado
+    : itens.reduce(function(s, i) {
+        var q = i.qtdCotada != null ? i.qtdCotada : i.qtd;
+        return s + ((parseFloat(i.precoUnit) || 0) * (parseFloat(q) || 0));
+      }, 0);
+
+  var linhaItem = function(i) {
+    var q = i.qtdCotada != null ? i.qtdCotada : i.qtd;
+    var preco = parseFloat(i.precoUnit) || 0;
+    var impostos = [
+      i.pctIpi ? 'IPI ' + i.pctIpi + '%' : '',
+      i.pctIcmsSt ? 'ST ' + i.pctIcmsSt + '%' : '',
+      i.pctIss ? 'ISS ' + i.pctIss + '%' : ''
+    ].filter(Boolean).join(' · ');
+    return '<tr>' +
+      '<td>' + escapeHtml(i.materialCodigo || '') + '</td>' +
+      '<td>' + escapeHtml(i.materialNome || '') + '</td>' +
+      '<td>' + fmtNum(q) + ' ' + escapeHtml(i.unidade || '') + '</td>' +
+      '<td>' + (preco ? fmtBRLDoc(preco) : '—') + '</td>' +
+      '<td>' + (preco && q ? fmtBRLDoc(preco * q) : '—') + '</td>' +
+      '<td>' + (impostos || '—') + '</td>' +
+    '</tr>';
+  };
+
+  var linhaDado = function(rot, val) {
+    return val ? '<div><b>' + rot + ':</b> ' + escapeHtml(String(val)) + '</div>' : '';
+  };
+
+  return '<div class="print-page">' +
+    '<div class="print-h">Pedido de Compra ' + escapeHtml(p.numeroFormatado || '') + '</div>' +
+    '<div class="print-sub">Kuryos Cosméticos · emitido em ' +
+      (p.dataEmissao || p.dataCriacao ? new Date(p.dataEmissao || p.dataCriacao).toLocaleDateString('pt-BR') : '—') +
+      (p.criadoPor ? ' por ' + escapeHtml(p.criadoPor) : '') + '</div>' +
+
+    '<div class="print-h" style="font-size:13px;margin-top:12px">Fornecedor</div>' +
+    '<div class="print-grid">' +
+      linhaDado('Razão social', f.razaoSocial || p.fornecedorNome) +
+      linhaDado('CNPJ', f.cnpj) +
+      linhaDado('Contato', f.contatoNome) +
+      linhaDado('Telefone', f.contatoTelefone) +
+    '</div>' +
+
+    '<div class="print-h" style="font-size:13px;margin-top:10px">Itens</div>' +
+    '<table class="print-table"><thead><tr>' +
+      '<th>Código</th><th>Descrição</th><th>Quantidade</th><th>Preço unit.</th><th>Total</th><th>Impostos</th>' +
+    '</tr></thead><tbody>' +
+      (itens.length ? itens.map(linhaItem).join('') : '<tr><td colspan="6">Sem itens.</td></tr>') +
+    '</tbody></table>' +
+    '<div style="text-align:right;margin-top:6px;font-size:13px"><b>Total estimado: ' +
+      fmtBRLDoc(total) + '</b></div>' +
+    '<div style="font-size:10px;color:#555;margin-top:2px;text-align:right">' +
+      'Valor de referência do pedido, conforme cotação. A nota fiscal prevalece.</div>' +
+
+    '<div class="print-h" style="font-size:13px;margin-top:14px">Condições</div>' +
+    '<div class="print-grid">' +
+      linhaDado('Pagamento', p.condicaoPagamento) +
+      linhaDado('Frete', frete.tipo ? (frete.tipo + (ehFob ? ' — coleta por conta da Kuryos' : ' — entrega por conta do fornecedor')) : null) +
+      linhaDado('Prazo de entrega', p.prazoEntregaDiasUteis != null ? p.prazoEntregaDiasUteis + ' dias úteis' : null) +
+      linhaDado('Data prevista', p.dataPrevistaEntrega ? p.dataPrevistaEntrega.split('-').reverse().join('/') : null) +
+      linhaDado('Entregar em', p.localEntrega === 'GALPAO' ? 'Galpão' : p.localEntrega === 'FABRICA' ? 'Fábrica' : null) +
+    '</div>' +
+
+    // Bloco de coleta só faz sentido em FOB: é a Kuryos que vai buscar, e o
+    // fornecedor precisa saber quem aparece e o que deixar pronto.
+    (ehFob && p.coleta ? '<div class="print-h" style="font-size:13px;margin-top:10px">Coleta (FOB)</div>' +
+      '<div class="print-grid">' +
+        linhaDado('Endereço', p.coleta.endereco) +
+        linhaDado('Contato no local', p.coleta.contatoNome) +
+        linhaDado('Telefone', p.coleta.contatoTelefone) +
+        linhaDado('Peso total', p.coleta.pesoTotalKg ? p.coleta.pesoTotalKg + ' kg' : null) +
+      '</div>' +
+      '<div style="font-size:10px;color:#555">A Kuryos agenda a coleta com transportadora própria. ' +
+      'O material deve estar embalado, identificado e disponível na data prevista.</div>' : '') +
+
+    '<div class="print-h" style="font-size:13px;margin-top:12px">Identificação obrigatória</div>' +
+    '<div style="font-size:11px">Toda caixa ou fardo entregue deve vir com etiqueta contendo os ' +
+      PADRAO_ETIQUETA_FORNECEDOR.length + ' campos da página seguinte. ' +
+      'A conferência é feita no recebimento e a falta de identificação atrasa a liberação do material.</div>' +
+
+    campoAssinatura('Responsável pela compra') +
+  '</div>';
+}
+
+// Página 2: o modelo de etiqueta, com o que a Kuryos já sabe preenchido e o
+// resto em branco pro fornecedor completar. Uma etiqueta por item.
+//
+// Sai na MESMA impressão do pedido (decisão do usuário) -- mandar o pedido
+// e o padrão de identificação em documentos separados é o caminho mais curto
+// pra chegar material sem etiqueta.
+function paginaEtiquetaFornecedor(pc, item) {
+  var p = pc || {}, i = item || {};
+  // O que o sistema sabe vem preenchido; o resto é do fornecedor, e fica
+  // com linha em branco pra ele escrever.
+  var conhecidos = {
+    codigoMaterial: i.materialCodigo || '',
+    descricao: i.materialNome || '',
+    quantidadeUnidade: (i.qtdCotada != null ? fmtNum(i.qtdCotada) : (i.qtd != null ? fmtNum(i.qtd) : '')) +
+      (i.unidade ? ' ' + i.unidade : ''),
+    fornecedor: p.fornecedorNome || '',
+    referenciaPC: p.numeroFormatado || ''
+  };
+  var linhas = PADRAO_ETIQUETA_FORNECEDOR.map(function(campo) {
+    var valor = conhecidos[campo.campo];
+    return '<tr>' +
+      '<td style="width:42%">' + escapeHtml(campo.label) + '</td>' +
+      '<td>' + (valor ? '<b>' + escapeHtml(valor) + '</b>' : '&nbsp;') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="print-page">' +
+    '<div class="print-h">Padrão de Etiqueta — ' + escapeHtml(i.materialCodigo || '') + '</div>' +
+    '<div class="print-sub">Pedido de Compra ' + escapeHtml(p.numeroFormatado || '') +
+      ' · ' + escapeHtml(p.fornecedorNome || '') + '</div>' +
+    '<div style="font-size:11px;margin-bottom:8px">Cole uma etiqueta com estes campos em <b>cada caixa ou fardo</b>. ' +
+      'Os campos em negrito já vêm do pedido; os demais são preenchidos por vocês.</div>' +
+    '<table class="print-table"><thead><tr><th>Campo</th><th>Conteúdo</th></tr></thead><tbody>' +
+      linhas +
+    '</tbody></table>' +
+    '<div style="font-size:10px;color:#555;margin-top:8px">' +
+      'A conferência desta identificação é feita no recebimento da Kuryos. ' +
+      'Caixa sem etiqueta completa atrasa a liberação do material para uso.</div>' +
+  '</div>';
+}
+
+// Documento completo: pedido + uma página de etiqueta por item.
+function montarDocumentoPedidoCompra(pc, fornecedor) {
+  var itens = Object.values((pc || {}).itens || {});
+  return paginaPedidoCompra(pc, fornecedor) +
+    itens.map(function(i) { return paginaEtiquetaFornecedor(pc, i); }).join('');
+}
+
 /* ── Fichas impressas de uma OP (5 fichas, paridade com o Gerador de OPs
    Excel/VBA: OP 1, OF, Ordem de Envase, Rotulagem, Relatório de Produto
    Acabado) -- construído originalmente só em emitir_op.html (emissão
