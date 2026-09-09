@@ -1422,16 +1422,19 @@ function renderPosicoesTableEnd() {
     });
   }
 
-  var total = Object.keys(enderecosEstoque).length;
-  var ocupadasCount = Object.keys(enderecosEstoque).filter(function(k) { return (ocupantesPorEndereco[k] || 0) > 0; }).length;
-  var bloqueadasCount = Object.keys(enderecosEstoque).filter(function(k) { return enderecosEstoque[k].ativo === false; }).length;
+  // Os indicadores acompanham o recorte aplicado na tela (inclusive área).
+  // Antes a tabela filtrava, mas os números continuavam considerando o WMS
+  // inteiro, o que confundia ao consultar apenas um galpão.
+  var total = entries.length;
+  var ocupadasCount = entries.filter(function(entry) { return (ocupantesPorEndereco[entry[0]] || 0) > 0; }).length;
+  var bloqueadasCount = entries.filter(function(entry) { return entry[1].ativo === false; }).length;
   // "Livres" = vaga REALMENTE utilizável: nem ocupada, nem bloqueada. Antes
   // era só (total - ocupadas), então uma posição bloqueada e vazia contava
   // como livre -- os 4 números não fechavam e a capacidade do galpão
   // aparecia superestimada em exatamente as posições que o bloqueio acabou
   // de tirar de uso.
-  var livresCount = Object.keys(enderecosEstoque).filter(function(k) {
-    return (ocupantesPorEndereco[k] || 0) === 0 && enderecosEstoque[k].ativo !== false;
+  var livresCount = entries.filter(function(entry) {
+    return (ocupantesPorEndereco[entry[0]] || 0) === 0 && entry[1].ativo !== false;
   }).length;
   document.getElementById('statTotalPos-end').textContent = fmtNum(total);
   document.getElementById('statOcupadasPos-end').textContent = fmtNum(ocupadasCount);
@@ -1844,8 +1847,26 @@ function toggleBloqueioEndereco(key) {
 // detalhe (esta página já tem estoque_lotes completo carregado, diferente
 // de cadastros.html, que só guarda a contagem).
 var visaoAtualPosicoes = 'lista';
+
+// Mapa por rua e planta baixa trabalham com ruas, não com a tabela de
+// endereços. Centralizar este recorte garante que a área selecionada na
+// barra tenha o mesmo efeito nas três visões da tela.
+function estruturaRuasFiltradaPosicoes() {
+  var filtroArea = document.getElementById('filterArea-end').value;
+  var filtroRua = document.getElementById('filterRua-end').value;
+  var resultado = {};
+  Object.keys(estruturaRuas || {}).forEach(function(chave) {
+    var rua = estruturaRuas[chave];
+    if (!rua) return;
+    if (filtroArea && rua.area !== filtroArea) return;
+    if (filtroRua && chave !== filtroRua) return;
+    resultado[chave] = rua;
+  });
+  return resultado;
+}
+
 function renderMapaVisual() {
-  document.getElementById('mapaVisualGrid-end').innerHTML = mapaVisualRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco);
+  document.getElementById('mapaVisualGrid-end').innerHTML = mapaVisualRuasHtml(estruturaRuasFiltradaPosicoes(), enderecosEstoque, ocupantesPorEndereco);
   document.querySelectorAll('#mapaVisualGrid-end .mapa-cell').forEach(function(cell) {
     cell.addEventListener('click', function() {
       if (cell.classList.contains('mapa-cell-naogerada')) return; // posição nem existe ainda, nada pra mostrar
@@ -1888,7 +1909,7 @@ var nivelPlantaSelecionado = 0;
 
 function renderPlantaBaixa() {
   var canvas = document.getElementById('plantaBaixaCanvas-end');
-  canvas.innerHTML = plantaBaixaRuasHtml(estruturaRuas, enderecosEstoque, ocupantesPorEndereco, nivelPlantaSelecionado);
+  canvas.innerHTML = plantaBaixaRuasHtml(estruturaRuasFiltradaPosicoes(), enderecosEstoque, ocupantesPorEndereco, nivelPlantaSelecionado);
   document.querySelectorAll('#plantaBaixaCanvas-end .planta-bloco').forEach(function(bloco) {
     if (editandoPlanta) {
       bloco.classList.add('planta-bloco-arrastavel');
@@ -1924,7 +1945,7 @@ function renderPlantaBaixa() {
 // apagadas nos níveis que não têm, tratado dentro de plantaBaixaRuasHtml.
 function refreshPlantaNivelSelect() {
   var sel = document.getElementById('plantaNivel-end');
-  var maxNiveis = Object.values(estruturaRuas).reduce(function(max, r) { return Math.max(max, r.niveis || 0); }, 0);
+  var maxNiveis = Object.values(estruturaRuasFiltradaPosicoes()).reduce(function(max, r) { return Math.max(max, r.niveis || 0); }, 0);
   var atual = sel.value;
   var opcoes = ['<option value="0">Todos os níveis (ocupação da rua)</option>'];
   for (var n = 1; n <= maxNiveis; n++) opcoes.push('<option value="' + n + '">Nível ' + n + ' (posições de palete)</option>');
@@ -2120,8 +2141,15 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnCancelarRua-end').addEventListener('click', fecharModalRua);
   document.getElementById('btnSalvarRua-end').addEventListener('click', salvarRuaEGerar);
   document.getElementById('searchInput-end').addEventListener('input', renderPosicoesTableEnd);
-  document.getElementById('filterRua-end').addEventListener('change', renderPosicoesTableEnd);
-  document.getElementById('filterArea-end').addEventListener('change', renderPosicoesTableEnd);
+  function aplicarFiltroVisualPosicoes() {
+    // O nível disponível depende das ruas visíveis na área. Atualiza antes
+    // de desenhar para não deixar, por exemplo, "Nível 6" selecionado numa
+    // fábrica que só possui posições até o nível 3.
+    refreshPlantaNivelSelect();
+    renderPosicoesTableEnd();
+  }
+  document.getElementById('filterRua-end').addEventListener('change', aplicarFiltroVisualPosicoes);
+  document.getElementById('filterArea-end').addEventListener('change', aplicarFiltroVisualPosicoes);
   document.getElementById('filterOcupacao-end').addEventListener('change', renderPosicoesTableEnd);
   document.getElementById('btnVerLista-end').addEventListener('click', function() { trocarVisaoPosicoes('lista'); });
   document.getElementById('btnVerMapa-end').addEventListener('click', function() { trocarVisaoPosicoes('mapa'); });
