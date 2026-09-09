@@ -7,10 +7,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** Cotação — sugestões opcionais de materiais similares e ficha técnica da proposta.
-- **Arquivos ativos:** `public/compras.html`, `AGENT_STATUS.md`.
-- **Estado:** em andamento. Homologados seguirão sendo a única seleção padrão;
-  similares por volume serão uma sugestão explícita por item, sem trocar BOM.
+- **Escopo:** WMS, Logística, emissão de OP e Cotação.
+- **Arquivos ativos:** nenhum.
+- **Estado:** Cotação agora mantém homologados apenas do material original.
+  Materiais de embalagem de volume próximo são sugestões explícitas e exigem
+  ficha técnica quando incluídos, sem trocar BOM ou homologação.
+- **Commit/deploy Cotação:** `94c1ff9`, publicado em 2026-09-09 em
+  `https://prod-kuryos.web.app`.
 - **Estado:** filtro de área aplicado à Lista, Mapa por Rua e Planta Baixa;
   indicadores passam a refletir o recorte. Logística diferencia coleta da
   Kuryos de entrega pelo remetente para agendamento.
