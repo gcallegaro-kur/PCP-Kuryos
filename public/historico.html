@@ -471,6 +471,15 @@
     if (configPostosH.indexOf(linhaNome) >= 0) return false;
     return true;
   }
+  // Qual campo da OP este registro alimenta. Linha/Rotulagem/Posto são
+  // somatórias SEMPRE distintas (ver campoProduzido em shared/utils.js) --
+  // corrigir a Linha quando o registro era de Rotulagem estragaria os dois.
+  function setorDoRegistro(r) {
+    var l = r && r.linha;
+    if (l && configRotulagemH.indexOf(l) >= 0) return 'rotulagem';
+    if (l && configPostosH.indexOf(l) >= 0) return 'posto';
+    return 'linha';
+  }
 
   dbOnValue(db.ref('config'), function(snap) {
     var cfg = snap.val() || {};
@@ -1763,6 +1772,28 @@
           });
         }
         tasks.push(syncPromise);
+
+        /* O total da OP acompanha a edição. Mesma lacuna da exclusão: até
+           aqui só `pedidos/{key}.produzido` era ajustado, e Controle de OPs
+           seguia com o número de antes.
+
+           Editar pode mudar quantidade, SETOR (linha↔rotulagem↔posto) e até
+           o lote. Quando lote e setor continuam os mesmos, uma transaction
+           só com a diferença; quando mudam, tira tudo de onde estava e põe
+           onde passou a ser -- somar a diferença no lote novo deixaria o
+           antigo inflado pra sempre. */
+        var _loteOld = orig ? (orig.lote || '') : '';
+        var _loteNew = data.lote || '';
+        var _setorOld = orig ? setorDoRegistro(orig) : 'linha';
+        var _setorNew = setorDoRegistro(data);
+        if (_loteOld === _loteNew && _setorOld === _setorNew) {
+          var _dOp = qtyNew - qtyOld;
+          if (_loteNew && _dOp) tasks.push(ajustarProduzidoOp(db, _loteNew, _setorNew, _dOp));
+        } else {
+          if (_loteOld && qtyOld) tasks.push(ajustarProduzidoOp(db, _loteOld, _setorOld, -qtyOld));
+          if (_loteNew && qtyNew) tasks.push(ajustarProduzidoOp(db, _loteNew, _setorNew, qtyNew));
+        }
+
         tasks.push(saveOpDatasReais());
 
         Promise.all(tasks).then(function() {
@@ -1779,6 +1810,12 @@
         
         db.ref('registros/' + newDate).push(data).then(function() {
           return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew);
+        }).then(function() {
+          // Registro criado aqui também soma no total da OP -- sem isto, um
+          // lançamento feito pelo Histórico apareceria na lista e nunca em
+          // Controle de OPs (o mesmo bug, no sentido inverso).
+          if (!data.lote || !qtyNew) return Promise.resolve();
+          return ajustarProduzidoOp(db, data.lote, setorDoRegistro(data), qtyNew);
         }).then(function() {
           btn.disabled = false; btn.textContent = 'Salvar';
           closeEditModal();
@@ -1824,7 +1861,16 @@
 
   function deleteRegistro(date, key) {
     var r = allRegistros.find(function(x){ return x._key === key; });
-    var label = r ? (fmtDate(r.data) + ' • ' + r.produto + ' • ' + fmtNum(r.quantidade) + ' un.') : key;
+    // Sem o registro em mãos não dá pra saber a quantidade -- e sem ela não
+    // dá pra corrigir o total do pedido nem o da OP. A versão anterior
+    // apagava assim mesmo, com qty=0: o apontamento sumia da lista e os dois
+    // totais ficavam inflados pra sempre, exatamente a classe de bug que
+    // esta correção existe pra fechar. Melhor recusar e mandar recarregar.
+    if (!r) {
+      showAlert('Não consegui ler esse apontamento pra corrigir os totais junto. Recarregue a página e tente de novo — nada foi excluído.', 'danger');
+      return;
+    }
+    var label = fmtDate(r.data) + ' • ' + r.produto + ' • ' + fmtNum(r.quantidade) + ' un.';
     
     var hasPerdas = r && r.perdas && r.perdas.length;
     var confirmMsg = 'Excluir o registro:\n' + label + '?';
@@ -1855,6 +1901,15 @@
         // mesmo gate de envase da outra exclusão
         var _qtyEf2 = (r && isLinhaEnvase(r.linha)) ? qty : 0;
         return _qtyEf2 ? adjustPedidoProduzido(pedId, prod, -_qtyEf2) : Promise.resolve();
+      })
+      .then(function() {
+        // O TOTAL DA OP também tem que cair. Antes só o pedido era ajustado:
+        // o registro sumia da lista e Controle de OPs seguia mostrando o
+        // número velho (bug relatado com a OP 26247/02). Ao contrário do
+        // pedido, aqui NÃO há gate de envase -- rotulagem e posto têm seus
+        // próprios campos na OP e também precisam ser corrigidos.
+        if (!r || !r.lote || !qty) return Promise.resolve();
+        return ajustarProduzidoOp(db, r.lote, setorDoRegistro(r), -qty);
       })
       .then(function() {
         showAlert('Registro excluído.', 'success');

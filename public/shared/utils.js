@@ -490,6 +490,79 @@ function getProduzido(op, tipo) {
   return (tipo === 'linha' || !tipo) ? (op.produzido || 0) : 0;
 }
 
+/* Ajusta o total produzido de UMA OP em `delta` (negativo pra tirar).
+
+   Bug relatado (2026-09-09, OP 26247/02): apontamento errado + apontamento
+   certo somavam; ao excluir o errado no Histórico, o total da OP em Controle
+   de OPs continuava o mesmo. Causa: `deleteRegistro` (e a edição) ajustavam
+   `pedidos/{key}.produzido`, mas NUNCA `ops/{lote}.produzidoLinha` -- e é
+   dele que getProduzido lê. O registro sumia da lista e o número ficava.
+
+   Medido na base antes da correção: 16 OPs com o total MAIOR que a soma dos
+   apontamentos vivos, ~14.350 unidades fantasma, todas já concluídas -- ou
+   seja, entrando em todo relatório de produção desde então.
+
+   Transaction porque dois apontamentos da mesma OP podem chegar juntos, e
+   `.set()` de um valor lido antes perderia o outro. Clampa em 0: total
+   negativo não existe, e deixar passar propagaria o erro pra frente. */
+function ajustarProduzidoOp(dbRef, lote, tipo, delta) {
+  if (!lote || !delta) return Promise.resolve({ ok: true, semEfeito: true });
+  var campo = campoProduzido(tipo);
+  return dbRef.ref('ops/' + sanitizeKey(lote)).transaction(function(op) {
+    // ABORTA (undefined), não `return op`: quando a OP não existe, `op` é
+    // null, e devolver null numa transaction do RTDB significa APAGAR o nó.
+    // Aqui daria no mesmo por acaso (não há o que apagar), mas é o tipo de
+    // idioma que só precisa de um copy-paste pra virar perda de dado.
+    if (!op) return;
+    var atual = op[campo] != null ? op[campo] : ((campo === 'produzidoLinha') ? (op.produzido || 0) : 0);
+    var novo = Math.max(0, Math.round((atual + delta) * 1000) / 1000);
+    op[campo] = novo;
+    // `produzido` é o campo legado que espelha a Linha (ver getProduzido).
+    // Não espelhar deixaria leitor antigo com o número velho pra sempre.
+    if (campo === 'produzidoLinha') op.produzido = novo;
+    // computeOpStatus é PEGAJOSO por desenho: uma vez 'Concluído' ou
+    // 'Aguardando Confirmação', não volta atrás. Chamar aqui é seguro --
+    // corrige uma OP ainda em andamento e não desfaz decisão de ninguém.
+    if (op.status !== 'Concluído' && op.status !== 'Cancelado') {
+      op.status = computeOpStatus(op);
+    }
+    return op;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: 'OP não encontrada ou alteração não commitada.' };
+    var v = res.snapshot.val() || {};
+    return { ok: true, campo: campo, novoTotal: v[campo] };
+  });
+}
+
+/* Função PURA. Soma os apontamentos VIVOS de um lote, separados por setor.
+   É a fonte de verdade pra recalcular uma OP cujo total ficou dessincronizado
+   -- os registros são o lançamento primário; o total na OP é derivado. */
+function somarRegistrosDoLote(registrosPorData, lote, cfgSetores) {
+  var cfg = cfgSetores || {};
+  var rot = cfg.rotulagem || [], pos = cfg.postos || [];
+  var out = { linha: 0, rotulagem: 0, posto: 0, n: 0 };
+  if (!lote) return out;
+  var alvo = String(lote);
+  Object.keys(registrosPorData || {}).forEach(function(data) {
+    var dia = registrosPorData[data] || {};
+    Object.keys(dia).forEach(function(k) {
+      var r = dia[k];
+      if (!r || String(r.lote || '') !== alvo) return;
+      // Mesma classificação de isLinhaEnvase nas telas: o que não é
+      // rotulagem nem posto é linha (inclusive registro sem linha).
+      var setor = 'linha';
+      if (r.linha && rot.indexOf(r.linha) >= 0) setor = 'rotulagem';
+      else if (r.linha && pos.indexOf(r.linha) >= 0) setor = 'posto';
+      out[setor] += parseFloat(r.quantidade) || 0;
+      out.n++;
+    });
+  });
+  ['linha', 'rotulagem', 'posto'].forEach(function(s) {
+    out[s] = Math.round(out[s] * 1000) / 1000;
+  });
+  return out;
+}
+
 // Deriva o status geral da OP. Decisão explícita do usuário pra esta
 // primeira etapa beta: só a Linha decide "Concluído" -- Rotulagem e Posto
 // continuam rastreados como somatórias 100% distintas em todo lugar (nunca

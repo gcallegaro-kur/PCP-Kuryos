@@ -591,6 +591,12 @@
       if (val && val.linhas) {
         configGlobal.linhas = val.linhas;
       }
+      // Rotulagem e Postos: usados pra classificar o apontamento ao conferir
+      // divergencia (linha/rotulagem/posto sao somatorias distintas na OP).
+      if (val) {
+        configGlobal.rotulagem = val.rotulagem || [];
+        configGlobal.postos = val.postosTrabalho || val.postos || [];
+      }
       recalculateAndRenderOps();
     });
 
@@ -605,6 +611,10 @@
     // significa ler desta coleção, não mais de "pedidos".
     dbOnValue(database.ref('ops'), opsSnap => {
       opsGlobal = opsSnap.val() || {};
+      // Confere o total da OP contra os apontamentos vivos. Roda uma vez só
+      // (o nó de registros é grande) e redesenha quando termina, pra o aviso
+      // de divergência aparecer sem travar o carregamento da tela.
+      conferirDivergencias().then(function() { recalculateAndRenderOps(); });
       recalculateAndRenderOps();
     });
 
@@ -1288,6 +1298,78 @@
   // Linha, o caso histórico) mostra 1 barra igual sempre mostrou; só uma OP
   // com mais de um setor tocado (ex: aberta em Linha E Rotulagem ao mesmo
   // tempo) mostra as barras lado a lado, rotuladas.
+  /* ── Divergência entre o total da OP e os apontamentos ──
+     O total na OP é DERIVADO dos apontamentos, mas gravado à parte. Até
+     2026-09-09 excluir ou editar um apontamento no Histórico não mexia nele
+     (bug relatado com a OP 26247/02): o registro sumia da lista e o número
+     ficava. Isso foi corrigido na origem, mas as OPs que já dessincronizaram
+     não se consertam sozinhas -- eram 16 na base, ~14.350 unidades fantasma,
+     todas já concluídas e entrando em relatório.
+
+     Aqui a tela CONFERE e mostra. Não corrige sozinha: reescrever produção
+     de OP concluída é decisão de gente, e o botão diz exatamente para qual
+     número vai antes de alguém clicar. */
+  var registrosPorDataOps = null;   // carregado sob demanda, é nó grande
+  var divergenciaCache = {};
+
+  function setoresCfgOps() {
+    return { rotulagem: configGlobal.rotulagem || [], postos: configGlobal.postos || [] };
+  }
+
+  function divergenciaProduzidoHtml(op, keyAttr, isAdmin) {
+    if (!op || !op.lote) return '';
+    var d = divergenciaCache[op.lote];
+    if (!d || Math.abs(d.dif) < 0.5) return '';
+    var sinal = d.dif > 0 ? 'a mais' : 'a menos';
+    return '<div style="margin-top:5px;font-size:10.5px;color:var(--warning);line-height:1.35">' +
+      '⚠️ <b>' + fmtNum(Math.abs(d.dif)) + ' un ' + sinal + '</b> que os apontamentos ' +
+      '(' + fmtNum(d.somaRegistros) + ' un em ' + d.n + ' apontamento' + (d.n === 1 ? '' : 's') + ')' +
+      (isAdmin
+        ? ' <button class="btn-edit-inline" title="Regravar o total da OP igual à soma dos apontamentos existentes" ' +
+          'onclick="recalcularProduzido(\'' + keyAttr + '\')">🔄 recalcular</button>'
+        : '') +
+      '</div>';
+  }
+
+  // Carrega os registros UMA vez e calcula a divergência de todas as OPs
+  // visíveis. Fora do render pra não varrer o nó inteiro a cada redesenho.
+  function conferirDivergencias() {
+    if (registrosPorDataOps) return Promise.resolve();
+    return database.ref('registros').once('value').then(function(snap) {
+      registrosPorDataOps = snap.val() || {};
+      var cfg = setoresCfgOps();
+      Object.values(opsGlobal || {}).forEach(function(op) {
+        if (!op || !op.lote) return;
+        var s = somarRegistrosDoLote(registrosPorDataOps, op.lote, cfg);
+        if (!s.n) return; // OP sem apontamento nenhum: nada a comparar
+        divergenciaCache[op.lote] = {
+          somaRegistros: s.linha, n: s.n,
+          dif: Math.round((getProduzido(op, 'linha') - s.linha) * 1000) / 1000
+        };
+      });
+    }).catch(function(err) {
+      console.error('Não foi possível conferir divergências de produção:', err);
+    });
+  }
+
+  window.recalcularProduzido = function(opKey) {
+    var op = opsGlobal[opKey];
+    if (!op || !op.lote) return;
+    var d = divergenciaCache[op.lote];
+    if (!d) return;
+    var atual = getProduzido(op, 'linha');
+    if (!confirm('OP ' + op.lote + '\n\n' +
+        'Total gravado na OP: ' + fmtNum(atual) + ' un\n' +
+        'Soma dos apontamentos: ' + fmtNum(d.somaRegistros) + ' un (' + d.n + ')\n\n' +
+        'Regravar o total como ' + fmtNum(d.somaRegistros) + ' un?\n\n' +
+        'Os apontamentos NÃO são alterados — só o total da OP passa a refletir o que existe.')) return;
+    ajustarProduzidoOp(database, op.lote, 'linha', d.somaRegistros - atual).then(function(r) {
+      if (!r.ok) { showToast('Não foi possível recalcular: ' + (r.erro || '')); return; }
+      divergenciaCache[op.lote] = { somaRegistros: d.somaRegistros, n: d.n, dif: 0 };
+      showToast('OP ' + op.lote + ': total ajustado para ' + fmtNum(d.somaRegistros) + ' un.');
+    }).catch(function(err) { showToast('Erro ao recalcular: ' + err.message); });
+  };
+
   function produzidoBreakdownHtml(op) {
     var planned = op.qtdPlanejada || 0;
     var setores = [
@@ -1420,7 +1502,7 @@
               : ``}
           </div>
         </td>
-        <td>${produzidoBreakdownHtml(op)}${previsaoTerminoHtml(op)}</td>
+        <td>${produzidoBreakdownHtml(op)}${previsaoTerminoHtml(op)}${divergenciaProduzidoHtml(op, escapedKeyAttr, isAdmin)}</td>
         <td>
           ${isCancelada
             ? `<span class="badge-status cancelado" title="${escapeAttr('Cancelada' + (op.motivoCancelamento ? ': ' + op.motivoCancelamento : ''))}">Cancelada</span>`
