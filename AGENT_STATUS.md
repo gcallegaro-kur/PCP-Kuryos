@@ -7,8 +7,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** Comercial — integrar gerador de pedidos ao sistema, com pedidos pré-cadastrados e orçamentos livres.
-- **Arquivos ativos:** `public/comercial.html`, `public/auth_check.js`, `database.rules.json`.
+- **Escopo:** WMS, Logística, emissão de OP, Cotação e apontamento de produção.
+- **Arquivos ativos:** nenhum.
+- **Última entrega Comercial:** tela Pedidos e Orçamentos. Pedido usa cliente/produtos cadastrados e cria automaticamente os itens do backlog do PCP; Orçamento aceita prospectos/itens livres e só entra no PCP ao ser convertido e confirmado.
+- **Commit/deploy Comercial:** `62db872`, publicado em 2026-09-09 em `https://prod-kuryos.web.app` (Hosting e regras RTDB).
 - **Última entrega Logística:** previsão do Pedido de Compra visível no card e usada como data inicial editável do agendamento; CIF indica recebimento e FOB indica disponibilidade para coleta. A previsão de origem fica registrada no agendamento.
 - **Commit/deploy Logística:** `c3ba30f`, publicado em 2026-09-09 em `https://prod-kuryos.web.app`.
 - **Estado Apontamento:** checkpoint recebe total acumulado do operador, mas
