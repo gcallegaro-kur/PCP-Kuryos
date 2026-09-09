@@ -7,8 +7,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** WMS, Logística, emissão de OP, Cotação e apontamento de produção.
-- **Arquivos ativos:** nenhum.
+- **Escopo:** Planejamento do módulo Comercial completo — sem alteração funcional até validação do escopo pelo usuário.
+- **Arquivos ativos:** nenhum (planejamento).
 - **Última entrega Comercial:** orçamento pode vincular cliente cadastrado e preencher seus dados, sem exigir que os itens estejam cadastrados como produtos.
 - **Commit/deploy Comercial:** `ea91fa8`, publicado em 2026-09-09 em `https://prod-kuryos.web.app`.
 - **Última entrega Acessos:** Comercial é módulo próprio em Usuários; permite Pedidos e Orçamentos sem liberar Pedidos/MRP. PCP mantém Comercial no padrão do perfil.
