@@ -12,6 +12,17 @@ Memória completa (histórico, decisões antigas, projetos vizinhos):
 
 ## Como trabalhar aqui
 
+### Coordenação com outros agentes
+
+- Este repositório também é operado pelo Codex. Antes de editar, leia
+  `AGENT_STATUS.md`, confira `git status --short` e registre o seu escopo no
+  seu próprio bloco. As regras completas estão em `AGENTS.md`.
+- Não altere nem faça commit de arquivos que outro agente tenha marcado como
+  ativos. Para tarefas simultâneas com sobreposição, use branches/worktrees
+  separados e integre somente commits revisados.
+- Nunca use `git add -A`: cada commit deve conter exclusivamente seus arquivos
+  e sua tarefa. Quem publicar registra o commit no `AGENT_STATUS.md`.
+
 - **Só eu escrevo no repositório.** O usuário não edita código nem documentos —
   palavras dele: *"eu não anoto nada no repo, só vc"*. Quando ele disser "joguei no
   repo de melhorias" ou "deixei registrado", leia como **"considere adiado, e registre
