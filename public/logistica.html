@@ -114,12 +114,13 @@
 <!-- MODAL: Agendar Entrega -->
 <div class="modal-bg" id="modalAgendar">
   <div class="modal">
-    <div class="modal-header blue"><h2>Agendar Entrega</h2><button class="modal-close" id="modalAgendarClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-header blue"><h2 id="modalAgendarTitulo">Agendar Entrega</h2><button class="modal-close" id="modalAgendarClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="agendarPcInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div id="agFreteInfo" class="agendamento-box" style="margin-bottom:12px"></div>
       <div class="form-grid">
         <div class="form-group">
-          <label>Data agendada *</label>
+          <label id="agDataLabel">Data agendada *</label>
           <input type="date" id="agData">
         </div>
         <div class="form-group">
@@ -131,7 +132,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Transportadora</label>
+          <label>Prestador / transportadora</label>
           <select id="agTransportadora">
             <option value="">Selecione...</option>
           </select>
@@ -143,6 +144,39 @@
         <div class="form-group">
           <label>Placa do veículo</label>
           <input type="text" id="agPlaca">
+        </div>
+        <div id="agColetaFields" class="full" style="display:none">
+          <div class="agendamento-box" style="margin:4px 0 12px"><b>Dados da coleta / viagem</b><br><span class="field-hint">Registre como a Kuryos fará a retirada e o valor que foi acordado.</span></div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Modalidade</label>
+              <select id="agModalidade">
+                <option value="">Selecione...</option>
+                <option value="UBER">Uber</option>
+                <option value="LALAMOVE">Lalamove</option>
+                <option value="TRANSPORTADORA">Transportadora</option>
+                <option value="VEICULO_PROPRIO">Veículo próprio</option>
+                <option value="OUTRO">Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status da coleta</label>
+              <select id="agStatusColeta">
+                <option value="SOLICITADA">Solicitada</option>
+                <option value="CONFIRMADA">Confirmada</option>
+                <option value="COLETADA">Coletada</option>
+                <option value="CANCELADA">Cancelada</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Valor negociado (R$)</label>
+              <input type="number" id="agValorFrete" min="0" step="0.01" placeholder="Ex: 85,00">
+            </div>
+            <div class="form-group">
+              <label>Referência da solicitação</label>
+              <input type="text" id="agReferenciaColeta" placeholder="Ex: código Uber/Lalamove">
+            </div>
+          </div>
         </div>
         <div class="form-group full">
           <label>Observações</label>
@@ -237,18 +271,33 @@ var recebendoKey = null;
 // tipo==='transportadora'. Preserva o valor legado como opção extra se
 // ele não bater com nenhuma cadastrada, pra não perder dado de
 // agendamentos já salvos ao simplesmente trocar pra <select>.
+function nomePrestador(fornecedor) {
+  return fornecedor && (fornecedor.nomeFantasia || fornecedor.razaoSocial || fornecedor.nome || '');
+}
+
 function refreshTransportadoraSelect(desiredValue) {
   var el = document.getElementById('agTransportadora');
   var atual = desiredValue != null ? desiredValue : el.value;
-  var nomes = Object.values(allTransportadoras).filter(function(t) { return tiposFornecedor(t).indexOf('transportadora') !== -1 && t.ativo !== false; })
-    .map(function(t) { return t.nomeFantasia || t.razaoSocial; }).filter(Boolean).sort(function(a, b) { return norm(a).localeCompare(norm(b)); });
+  // Uber e Lalamove já vivem no cadastro de Fornecedores. A coleta pode
+  // usar também um fornecedor que negocie o frete junto com a venda, então
+  // lista os cadastros ativos em vez de restringir ao tipo Transportadora.
+  var prestadores = Object.entries(allTransportadoras).filter(function(entry) {
+    return entry[1] && entry[1].ativo !== false && nomePrestador(entry[1]);
+  }).map(function(entry) { return { key: entry[0], nome: nomePrestador(entry[1]) }; })
+    .sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
   var opts = '<option value="">Selecione...</option>';
-  nomes.forEach(function(nome) { opts += '<option value="' + escapeAttr(nome) + '">' + escapeHtml(nome) + '</option>'; });
-  if (atual && nomes.indexOf(atual) === -1) {
+  prestadores.forEach(function(prestador) { opts += '<option value="' + escapeAttr(prestador.key) + '">' + escapeHtml(prestador.nome) + '</option>'; });
+  var selecionado = prestadores.some(function(p) { return p.key === atual; }) ? atual : '';
+  if (!selecionado && atual) {
+    var porNome = prestadores.filter(function(p) { return p.nome === atual; })[0];
+    selecionado = porNome ? porNome.key : '';
+  }
+  if (atual && !selecionado) {
     opts += '<option value="' + escapeAttr(atual) + '">' + escapeHtml(atual) + ' (não cadastrada)</option>';
+    selecionado = atual;
   }
   el.innerHTML = opts;
-  el.value = atual;
+  el.value = selecionado;
 }
 
 // norm() vem de shared/utils.js -- normalização única do sistema (minúscula,
@@ -331,6 +380,9 @@ function renderReceberList() {
       ? '<div class="agendamento-box">📅 <b>Agendado:</b> ' + fmtData(ag.dataAgendada) + ' (' +
         (ag.janela === 'manha' ? 'manhã' : ag.janela === 'tarde' ? 'tarde' : 'dia todo') + ')' +
         (ag.transportadora ? ' · ' + escapeHtml(ag.transportadora) : '') +
+        (ag.coleta && ag.coleta.modalidade ? ' · ' + escapeHtml(rotuloModalidadeColeta(ag.coleta.modalidade)) : '') +
+        (ag.coleta && ag.coleta.valorNegociado != null ? ' · frete ' + fmtValorBRL(ag.coleta.valorNegociado) : '') +
+        (ag.coleta && ag.coleta.status ? ' · <b>' + escapeHtml(rotuloStatusColeta(ag.coleta.status)) + '</b>' : '') +
         (ag.placa ? ' · placa ' + escapeHtml(ag.placa) : '') + '</div>'
       : '<div class="field-hint" style="margin:8px 0">Nenhuma entrega agendada ainda.</div>';
 
@@ -348,17 +400,18 @@ function renderReceberList() {
 
     return '<div class="pc-card">' +
       '<div class="pc-card-head">' +
-        '<div><div class="pc-titulo">' + escapeHtml(p.numeroFormatado) + ' — ' + escapeHtml(p.fornecedorNome || '') + '</div>' +
+        '<div><div class="pc-titulo">' + escapeHtml(p.numeroFormatado) + ' — ' + escapeHtml(nomeOrigemPedido(p)) + '</div>' +
         '<div class="pc-sub">Criado em ' + fmtData(p.dataCriacao) + (p.dataEmissao ? ' · Enviado em ' + fmtData(p.dataEmissao) : '') + '</div></div>' +
         '<div>' + (statusBadges[p.status] || '') + '</div>' +
       '</div>' +
       '<div class="progresso-bar-wrap"><div class="progresso-bar" style="width:' + prog.pct + '%"></div></div>' +
       '<div class="field-hint">' + fmtNum(prog.totalRecebido) + ' de ' + fmtNum(prog.totalPedido) + ' unidades recebidas (' + prog.pct + '%)</div>' +
+      freteOperacionalHtml(p) +
       agendamentoHtml +
       '<table><thead><tr><th>Material</th><th>Pedido</th><th>Recebido</th><th>Status</th></tr></thead><tbody>' + itensRows + '</tbody></table>' +
       checklistBadgeHtml(p) +
       '<div style="display:flex;gap:8px;margin-top:12px">' +
-        '<button class="btn btn-ghost btn-sm btn-agendar" data-key="' + escapeAttr(key) + '">📅 Agendar Entrega</button>' +
+        '<button class="btn btn-ghost btn-sm btn-agendar" data-key="' + escapeAttr(key) + '">📅 ' + (dadosTransporte(p).responsavel === 'KURYOS' ? 'Programar Coleta' : 'Agendar Entrega') + '</button>' +
         '<button class="btn btn-ghost btn-sm btn-checklist" data-key="' + escapeAttr(key) + '">🏷️ Checklist de Etiqueta</button>' +
         '<button class="btn btn-green btn-sm btn-receber" data-key="' + escapeAttr(key) + '">📦 Registrar Recebimento</button>' +
       '</div>' +
@@ -374,6 +427,61 @@ function renderReceberList() {
   document.querySelectorAll('.btn-checklist').forEach(function(btn) {
     btn.addEventListener('click', function() { openModalChecklist(btn.getAttribute('data-key')); });
   });
+}
+
+// A Logística opera por responsabilidade, não pelo nome comercial da origem.
+// Em compra, FOB/CIF continua sendo a fonte de verdade quando não houver a
+// estrutura nova. Em remessa de cliente/terceiro, `transporte.responsavel`
+// resolve sem forçar um conceito fiscal de compra onde ele não existe.
+function dadosTransporte(p) {
+  var pedido = p || {};
+  var natureza = pedido.naturezaMovimentacao || 'COMPRA_KURYOS';
+  var responsavel = (pedido.transporte || {}).responsavel || '';
+  if (responsavel !== 'KURYOS' && responsavel !== 'REMETENTE') {
+    var tipoFrete = ((pedido.frete || {}).tipo || '').toUpperCase();
+    responsavel = tipoFrete === 'FOB' ? 'KURYOS' : (tipoFrete === 'CIF' ? 'REMETENTE' : '');
+  }
+  return { natureza: natureza, responsavel: responsavel };
+}
+
+function nomeOrigemPedido(p) {
+  var pedido = p || {};
+  return pedido.origemNome || pedido.fornecedorNome || 'Origem não informada';
+}
+
+function rotuloModalidadeColeta(modalidade) {
+  return ({ UBER: 'Uber', LALAMOVE: 'Lalamove', TRANSPORTADORA: 'Transportadora', VEICULO_PROPRIO: 'Veículo próprio', OUTRO: 'Outro' })[modalidade] || modalidade || '—';
+}
+
+function rotuloStatusColeta(status) {
+  return ({ SOLICITADA: 'Coleta solicitada', CONFIRMADA: 'Coleta confirmada', COLETADA: 'Coletada', CANCELADA: 'Coleta cancelada' })[status] || status || '—';
+}
+
+function fmtValorBRL(valor) {
+  var numero = Number(valor);
+  return isFinite(numero) ? numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+}
+
+function modalidadeSugerida(prestadorNome) {
+  var nome = norm(prestadorNome || '');
+  if (nome.indexOf('lalamove') !== -1) return 'LALAMOVE';
+  if (nome.indexOf('uber') !== -1) return 'UBER';
+  return '';
+}
+
+function freteOperacionalHtml(p) {
+  var t = dadosTransporte(p);
+  var compra = t.natureza === 'COMPRA_KURYOS';
+  var origem = nomeOrigemPedido(p);
+  if (t.responsavel === 'KURYOS') {
+    return '<div class="agendamento-box">🚚 <b>' + (compra ? 'Frete FOB' : 'Remessa') + ' — responsabilidade da Kuryos.</b> ' +
+      'A Logística deve programar a <b>coleta</b> com transportadora/veículo.</div>';
+  }
+  if (t.responsavel === 'REMETENTE') {
+    return '<div class="agendamento-box">📦 <b>' + (compra ? 'Frete CIF' : 'Remessa') + ' — responsabilidade de ' + escapeHtml(origem) + '.</b> ' +
+      'A Logística deve aguardar a <b>entrega</b> e programar o recebimento.</div>';
+  }
+  return '<div class="agendamento-box" style="border-color:var(--warning);color:var(--warning)">⚠ <b>Responsabilidade do transporte não informada.</b> Confirme quem fará a coleta/entrega antes de programar.</div>';
 }
 
 // Resumo visual do checklist de etiqueta direto no card do PC -- não trava
@@ -420,13 +528,24 @@ function openModalAgendar(key) {
   agendandoKey = key;
   var p = allPedidosCompra[key];
   if (!p) return;
-  document.getElementById('agendarPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || '');
+  document.getElementById('agendarPcInfo').textContent = p.numeroFormatado + ' — ' + nomeOrigemPedido(p);
+  var transporte = dadosTransporte(p);
+  var ehColetaKuryos = transporte.responsavel === 'KURYOS';
+  document.getElementById('modalAgendarTitulo').textContent = ehColetaKuryos ? 'Programar Coleta' : 'Agendar Entrega';
+  document.getElementById('agDataLabel').textContent = ehColetaKuryos ? 'Data prevista da coleta *' : 'Data prevista da entrega *';
+  document.getElementById('agFreteInfo').innerHTML = freteOperacionalHtml(p);
   var ag = p.agendamento || {};
+  var coleta = ag.coleta || {};
   document.getElementById('agData').value = ag.dataAgendada ? ag.dataAgendada.slice(0, 10) : '';
   document.getElementById('agJanela').value = ag.janela || 'dia_todo';
-  refreshTransportadoraSelect(ag.transportadora || '');
+  refreshTransportadoraSelect(coleta.prestadorKey || ag.prestadorKey || ag.transportadora || '');
   document.getElementById('agMotorista').value = ag.motorista || '';
   document.getElementById('agPlaca').value = ag.placa || '';
+  document.getElementById('agColetaFields').style.display = ehColetaKuryos ? '' : 'none';
+  document.getElementById('agModalidade').value = coleta.modalidade || modalidadeSugerida(coleta.prestadorNome || ag.transportadora) || '';
+  document.getElementById('agStatusColeta').value = coleta.status || 'SOLICITADA';
+  document.getElementById('agValorFrete').value = coleta.valorNegociado != null ? coleta.valorNegociado : '';
+  document.getElementById('agReferenciaColeta').value = coleta.referencia || '';
   document.getElementById('agObservacoes').value = ag.observacoes || '';
   document.getElementById('modalAgendar').classList.add('open');
 }
@@ -434,19 +553,40 @@ function closeModalAgendar() { document.getElementById('modalAgendar').classList
 function saveAgendar() {
   var data = document.getElementById('agData').value;
   if (!data) { showAlert('Informe a data agendada.', 'danger'); return; }
+  var p = allPedidosCompra[agendandoKey] || {};
+  var transporte = dadosTransporte(p);
+  var ehColetaKuryos = transporte.responsavel === 'KURYOS';
+  var prestadorSelect = document.getElementById('agTransportadora');
+  var prestadorKey = prestadorSelect.value;
+  var prestador = allTransportadoras[prestadorKey];
+  var prestadorNome = prestador ? nomePrestador(prestador) : prestadorKey;
+  var valorFrete = document.getElementById('agValorFrete').value;
+  var coleta = ehColetaKuryos ? {
+    modalidade: document.getElementById('agModalidade').value || null,
+    prestadorKey: prestador ? prestadorKey : null,
+    prestadorNome: prestadorNome || null,
+    status: document.getElementById('agStatusColeta').value || 'SOLICITADA',
+    valorNegociado: valorFrete === '' ? null : Number(valorFrete),
+    referencia: document.getElementById('agReferenciaColeta').value.trim() || null
+  } : null;
   var payload = {
     dataAgendada: data,
     janela: document.getElementById('agJanela').value,
-    transportadora: document.getElementById('agTransportadora').value.trim(),
+    transportadora: prestadorNome || '',
+    prestadorKey: prestador ? prestadorKey : null,
     motorista: document.getElementById('agMotorista').value.trim(),
     placa: document.getElementById('agPlaca').value.trim(),
+    coleta: coleta,
     observacoes: document.getElementById('agObservacoes').value.trim(),
+    naturezaMovimentacao: transporte.natureza,
+    responsavelTransporte: transporte.responsavel || null,
+    acaoLogistica: transporte.responsavel === 'KURYOS' ? 'PROGRAMAR_COLETA' : (transporte.responsavel === 'REMETENTE' ? 'AGUARDAR_ENTREGA' : null),
     agendadoPor: currentUserNome(),
     agendadoEm: new Date().toISOString()
   };
   document.getElementById('modalAgendarSave').disabled = true;
   db.ref('pedidos_compra/' + agendandoKey + '/agendamento').set(payload)
-    .then(function() { showAlert('Entrega agendada com sucesso!', 'success'); closeModalAgendar(); })
+    .then(function() { showAlert(ehColetaKuryos ? 'Coleta programada com sucesso!' : 'Entrega agendada com sucesso!', 'success'); closeModalAgendar(); })
     .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalAgendarSave').disabled = false; });
 }
@@ -725,6 +865,13 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalAgendarCancel').addEventListener('click', closeModalAgendar);
   document.getElementById('modalAgendarSave').addEventListener('click', saveAgendar);
   document.getElementById('modalAgendar').addEventListener('click', function(e) { if (e.target === this) closeModalAgendar(); });
+  document.getElementById('agTransportadora').addEventListener('change', function() {
+    var prestador = allTransportadoras[this.value];
+    var sugestao = modalidadeSugerida(nomePrestador(prestador));
+    // Uber e Lalamove são reconhecidos pelo cadastro; nos demais casos a
+    // modalidade é uma decisão operacional do usuário, sem suposição.
+    if (sugestao) document.getElementById('agModalidade').value = sugestao;
+  });
 
   document.getElementById('modalReceberClose').addEventListener('click', closeModalReceber);
   document.getElementById('modalReceberCancel').addEventListener('click', closeModalReceber);
