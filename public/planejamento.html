@@ -824,6 +824,7 @@ window.addEventListener('DOMContentLoaded',function(){
   if (agdFilter) agdFilter.addEventListener('change', function() { renderAgendaTab(); });
 
   setupAjustesLog();
+  setupAvisoAutoAjustePausado();
   loadConfig();
 });
 
@@ -995,6 +996,35 @@ function loadPedidos(){
 // conta própria). O cooldown de 3min por linha já existente em
 // window._autoAjusteCooldown protege contra leitura redundante -- pode
 // chamar liberalmente aqui sem se preocupar em duplicar trabalho.
+/* Aviso de motor pausado.
+   Uma automação desligada em silêncio é a próxima confusão: alguém vai olhar
+   a grade que não se move e achar que o sistema quebrou. O aviso fica na
+   própria tela de Planejamento, que é onde a pergunta nasce. */
+function setupAvisoAutoAjustePausado(){
+  var alvo = document.getElementById('ajustesLogCard');
+  if(!alvo || !alvo.parentNode) return;
+  var box = document.createElement('div');
+  box.id = 'avisoAutoAjustePausado';
+  box.style.cssText = 'display:none;background:color-mix(in srgb, var(--warning) 14%, var(--card));' +
+    'border:1px solid color-mix(in srgb, var(--warning) 45%, var(--card));border-left:4px solid var(--warning);' +
+    'border-radius:10px;padding:11px 15px;margin-bottom:12px;font-size:13px';
+  alvo.parentNode.insertBefore(box, alvo);
+  dbOnValue(db.ref('config/autoAjustePlanejamento'), function(snap){
+    var cfg = snap.val() || {};
+    // Mesma regra do motor (window.autoAjustePlanejamentoAtivo): só
+    // ativo===false desliga. Duplicar a regra aqui com outro critério faria
+    // o aviso mentir.
+    var pausado = (cfg.ativo === false);
+    box.style.display = pausado ? 'block' : 'none';
+    if(!pausado) return;
+    box.innerHTML = '⏸ <b>Auto-ajuste pausado.</b> A grade <b>não</b> se remaneja sozinha após os ' +
+      'apontamentos — ela só muda quando alguém edita aqui.' +
+      (cfg.pausadoPor ? ' Pausado por ' + escapeHtml(cfg.pausadoPor) : '') +
+      (cfg.pausadoEm ? ' em ' + new Date(cfg.pausadoEm).toLocaleDateString('pt-BR') : '') +
+      '. Para religar: Ajustes › Auto-ajuste do Planejamento.';
+  });
+}
+
 function dispararReajusteLinhasComSaldo(){
   if(typeof window.autoAjustarPlanejamento!=='function')return;
   var gatilhoPorLinha={};

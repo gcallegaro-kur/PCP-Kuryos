@@ -1074,11 +1074,41 @@ function _kuryosFutureSlotsForLinha(programacao, linha, todayStr, nowHour) {
   return out;
 }
 
+/* Chave de liga/desliga do motor de reajuste.
+
+   Pedido do usuário (2026-09-09): "conseguimos pausar o auto ajuste do
+   planejamento por ora? Está mais confundindo do que ajudando" -- a grade
+   mudava sozinha depois de um apontamento e ninguém sabia dizer por quê.
+
+   O guard fica AQUI, no ponto de entrada único, e não em cada chamador: são
+   quatro (três em form.html, um em planejamento.html) e um deles esquecido
+   deixaria o motor rodando pela metade -- pior que ligado, porque só parte
+   da fila se movimenta.
+
+   Ausente = LIGADO, de propósito: o código sozinho não muda comportamento
+   nenhum. A pausa é uma decisão gravada em `config/autoAjustePlanejamento`
+   pelo ADM, e reversível por lá. */
+window.autoAjustePlanejamentoAtivo = function(cfg) {
+  // Só `ativo === false` desliga. Nó ausente, objeto vazio ou valor
+  // inesperado mantêm ligado -- um dado corrompido não pode desligar
+  // silenciosamente uma automação que o PCP acha que está funcionando.
+  return !(cfg && cfg.ativo === false);
+};
+
 window.autoAjustarPlanejamento = function(pedidoKey) {
   if (typeof firebase === 'undefined' || !pedidoKey) return;
   var db = firebase.database();
 
-  db.ref('pedidos/' + pedidoKey).once('value').then(function(pedSnap) {
+  db.ref('config/autoAjustePlanejamento').once('value').then(function(cfgSnap) {
+    if (!window.autoAjustePlanejamentoAtivo(cfgSnap.val())) return;
+    return _autoAjustarPlanejamentoInterno(db, pedidoKey);
+  }).catch(function(err) {
+    console.error('Auto-ajuste de planejamento: falha ao ler a configuração —', err);
+  });
+};
+
+function _autoAjustarPlanejamentoInterno(db, pedidoKey) {
+  return db.ref('pedidos/' + pedidoKey).once('value').then(function(pedSnap) {
     var pedidoOrigem = pedSnap.val();
     if (!pedidoOrigem) return;
 

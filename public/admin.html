@@ -311,6 +311,22 @@
     <button class="btn btn-primary btn-sm" id="btnAddTurnoExtra">+ Adicionar</button>
   </div>
 
+  <!-- LIGA/DESLIGA DO MOTOR DE REAJUSTE -->
+  <div class="card">
+    <div class="card-title">Auto-ajuste do Planejamento</div>
+    <div class="section-note">
+      O motor compara o ritmo real de produção com o planejado e <b>remaneja sozinho</b> os
+      horários futuros da linha depois de cada apontamento. Desligado, a Grade Semanal só muda
+      quando alguém a edita — nada mais se move sozinho. O restante do planejamento continua
+      funcionando normalmente (programar, agendar, editar). É reversível a qualquer momento.
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:6px">
+      <input type="checkbox" id="iAutoAjusteAtivo">
+      <span id="lblAutoAjusteAtivo">Auto-ajuste ligado</span>
+    </label>
+    <div class="section-note" id="autoAjusteStatus" style="margin-top:6px"></div>
+  </div>
+
   <!-- ZONA FIXA (CONGELAMENTO AUTOMÁTICO ROLANTE) -->
   <div class="card">
     <div class="card-title">Zona Fixa do Planejamento</div>
@@ -673,6 +689,47 @@ document.getElementById('btnAddTurnoExtra').addEventListener('click', function()
   }).catch(function(err) {
     delete configData.turnosExtras[key];
     showAlert('Erro ao salvar: ' + err.message, 'danger');
+  });
+});
+
+/* Liga/desliga do motor de reajuste automático.
+   Pausar deixa RASTRO (quem, quando): uma automação silenciosamente desligada
+   é a próxima confusão -- alguém vai olhar a grade parada daqui a três meses
+   sem saber que foi decisão de gente. */
+function renderAutoAjuste() {
+  var cfg = configData.autoAjustePlanejamento || {};
+  var ativo = !(cfg.ativo === false);
+  document.getElementById('iAutoAjusteAtivo').checked = ativo;
+  document.getElementById('lblAutoAjusteAtivo').textContent = ativo ? 'Auto-ajuste ligado' : 'Auto-ajuste PAUSADO';
+  var st = document.getElementById('autoAjusteStatus');
+  st.textContent = ativo
+    ? 'Ligado — a grade se remaneja sozinha após os apontamentos.'
+    : '⏸ Pausado' + (cfg.pausadoPor ? ' por ' + cfg.pausadoPor : '') +
+      (cfg.pausadoEm ? ' em ' + new Date(cfg.pausadoEm).toLocaleString('pt-BR') : '') +
+      '. A grade só muda por edição manual.';
+  st.style.color = ativo ? '' : 'var(--warning)';
+}
+
+document.getElementById('iAutoAjusteAtivo').addEventListener('change', function() {
+  var ativo = this.checked;
+  var quem = (window.currentUser && window.currentUser.nome) || 'ADM';
+  // Guarda o estado ANTERIOR pra poder desfazer de verdade. renderAutoAjuste()
+  // lê de configData, então reverter só o checkbox deixaria a tela dizendo
+  // "PAUSADO" depois de uma gravação que falhou -- e a pessoa iria embora
+  // achando que pausou. É o pior desfecho possível pra este botão.
+  var anterior = configData.autoAjustePlanejamento;
+  configData.autoAjustePlanejamento = ativo
+    ? { ativo: true, religadoPor: quem, religadoEm: new Date().toISOString() }
+    : { ativo: false, pausadoPor: quem, pausadoEm: new Date().toISOString() };
+  renderAutoAjuste();
+  saveConfig().then(function() {
+    showAlert(ativo
+      ? 'Auto-ajuste religado — a grade volta a se remanejar após os apontamentos.'
+      : 'Auto-ajuste pausado. A partir de agora a Grade Semanal só muda por edição manual.', 'success');
+  }).catch(function(err) {
+    configData.autoAjustePlanejamento = anterior;
+    renderAutoAjuste();
+    showAlert('Não foi possível salvar — o auto-ajuste continua como estava. ' + err.message, 'danger');
   });
 });
 
@@ -1090,6 +1147,7 @@ function renderAll() {
     document.getElementById('mFim').value = configData.meta.fim || '';
   }
   document.getElementById('iCongelamentoDiasFixos').value = (configData.congelamento && configData.congelamento.diasFixos != null) ? configData.congelamento.diasFixos : 7;
+  renderAutoAjuste();
 
   renderMetasPorLinha();
   renderSetupPadrao();
@@ -1204,6 +1262,9 @@ try {
     configData.turnoPausas = val.turnoPausas || {};
     configData.turnosExtras = val.turnosExtras || {};
     configData.congelamento = val.congelamento || { diasFixos: 7 };
+    // Ausente = ligado (mesma regra de window.autoAjustePlanejamentoAtivo em
+    // auth_check.js). Só `ativo: false` desliga.
+    configData.autoAjustePlanejamento = val.autoAjustePlanejamento || { ativo: true };
     configData.checkpointsPorTurno = val.checkpointsPorTurno || 0; // 0 = usa a grade horária completa (comportamento atual)
     configData.andonParadaMinutos = val.andonParadaMinutos || 15;
     configData.opAtrasoHoras = val.opAtrasoHoras || 1;
