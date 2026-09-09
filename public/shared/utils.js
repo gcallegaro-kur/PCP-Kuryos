@@ -87,12 +87,39 @@ function dbOnValue(ref, onData, opts) {
 // Achado do usuário (Busca Avançada de Materiais, campo Formato):
 // "CILÍNDRICO" e "CILINDRICO" eram tratados como valores diferentes em
 // toda busca/filtro/comparação -- nenhuma página do app tirava acento,
-// só maiúscula (ver `.uc`, cadastros.html). Cada página ainda mantém sua
-// própria função `norm()` local (não centralizada aqui ainda -- ver nota
-// em cadastros.html); esta função é o bloco de construção reaproveitável
-// pra ir fechando essa lacuna página por página.
+// só maiúscula (ver `.uc`, cadastros.html).
 function stripAccents(s) {
   return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/* Normalização ÚNICA para busca, filtro e comparação de texto no sistema
+   inteiro: minúscula, sem acento, sem espaço nas pontas.
+
+   Antes existiam DOZE `norm()` diferentes, um por página, em duas versões:
+   duas tiravam acento (cadastros.html, compras.html) e dez não. Consequências
+   medidas antes da correção:
+
+   - Cadastrando uma FÓRMULA ou um BOM, buscar "acido" não achava "ÁCIDO" --
+     o autocomplete compartilhado tinha o seu próprio `norm()` só de
+     minúscula, então a lista simplesmente vinha vazia (relatado pelo
+     usuário).
+   - O mesmo produto casava com o histórico de produção em cadastros.html e
+     NÃO casava em produtos.html, porque as duas telas montavam o mesmo
+     `prodHoraCalcMap` com regras diferentes de acento.
+
+   Acento nunca distingue dois registros de verdade nesta operação: "ÁCIDO
+   CÍTRICO" e "ACIDO CITRICO" são o mesmo insumo digitado por duas pessoas.
+   Tratá-los como coisas diferentes só produz cadastro duplicado e busca que
+   não acha o que existe.
+
+   NÃO confundir com `sanitizeKey`, que monta CHAVE de banco e continua
+   sensível a acento de propósito -- mudá-la órfãaria todo registro já
+   gravado. */
+function norm(s) {
+  // `s || ''` (como faziam as 14 cópias) transformava o NÚMERO 0 em string
+  // vazia, porque 0 é falsy -- e busca vazia não filtra nada, então procurar
+  // por "0" devolvia a lista inteira. Só null/undefined viram vazio.
+  return stripAccents(s == null ? '' : String(s)).toLowerCase().trim();
 }
 
 function sanitizeKey(str) {
@@ -696,7 +723,10 @@ function attachAutocomplete(input, getItems, opts) {
   var activeIndex = -1;
   var suppressNextRender = false;
 
-  function norm(s) { return String(s || '').toLowerCase(); }
+  // Usa a normalização do sistema (sem acento). Este componente tinha um
+  // `norm()` próprio só de minúscula, e era ele que fazia buscar "acido" não
+  // achar "ÁCIDO" ao montar fórmula e BOM -- a lista vinha vazia e parecia
+  // que o material não estava cadastrado.
 
   function position() {
     var r = input.getBoundingClientRect();
