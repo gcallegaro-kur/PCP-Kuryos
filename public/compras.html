@@ -485,15 +485,15 @@
         cria exatamente a divergência que a página impressa evita.
       </div>
 
-      <div class="table-wrap" style="padding:0;margin-bottom:16px">
-        <table>
-          <thead><tr><th>Item</th><th style="width:120px">Quantidade</th><th style="width:120px">Preço unit.</th><th style="width:120px;text-align:right">Total</th></tr></thead>
+      <div class="table-wrap" style="padding:0;margin-bottom:16px;overflow-x:auto">
+        <table style="min-width:600px">
+          <thead><tr><th>Item</th><th style="width:180px">Quantidade e unidade</th><th style="width:120px">Preço unit.</th><th style="width:120px;text-align:right">Total</th></tr></thead>
           <tbody id="pcEditItens"></tbody>
         </table>
       </div>
       <div style="text-align:right;font-size:13px;margin-bottom:14px">
         Soma dos itens: <b id="pcEditTotal">—</b>
-        <div class="field-hint">Sem impostos e sem frete — o custo completo vem do orçamento da cotação.</div>
+        <div class="field-hint">Sem impostos e sem frete — o documento abre os dois em linhas próprias.</div>
       </div>
 
       <div class="form-grid">
@@ -1674,9 +1674,46 @@ function renderPedidos() {
 // Abre o Pedido de Compra formatado pra impressão / salvar em PDF pelo
 // próprio navegador. Mesmo mecanismo das fichas de OP: escreve no #printArea
 // e chama window.print(); o CSS @media print esconde o resto da página.
+/* Pedidos criados ANTES de o sistema ler a unidade de compra do cadastro não
+   guardaram em que unidade o fornecedor orçou. Se o material é cadastrado em
+   ROLO e comprado em KG, o documento imprime a unidade de estoque -- "35
+   rolo" onde o orçamento era de 35 kg. Número certo com unidade errada é
+   pior que número errado: o fornecedor entrega 35 rolos (~408 kg) e ninguém
+   desconfia do papel.
+
+   Adivinhar a unidade aqui seria trocar um erro silencioso por outro. Então
+   o sistema PARA e manda confirmar na edição, onde a pessoa vê as duas
+   unidades e escolhe. */
+function pendenciasUnidadePC(pc) {
+  return Object.values((pc || {}).itens || {}).filter(function(it) {
+    if (it.unidadeCotada) return false;
+    var mat = findMaterialByCodigo(it.materialCodigo) || {};
+    var cad = String(it.unidade || mat.unidade || '').trim();
+    var compra = String(mat.unidadeCompra || '').trim();
+    return !!(cad && compra && cad.toLowerCase() !== compra.toLowerCase());
+  });
+}
+
 function imprimirPedidoCompra(pcKey) {
   var pc = allPedidosCompra[pcKey];
   if (!pc) { showAlert('Pedido não encontrado.', 'danger'); return; }
+  var pend = pendenciasUnidadePC(pc);
+  if (pend.length) {
+    var cods = pend.map(function(i) { return i.materialCodigo; }).join(', ');
+    if (podeEditarPC(pc)) {
+      // Dá pra corrigir agora: não imprime, manda corrigir.
+      showAlert('Este pedido foi criado antes do registro da unidade de compra. ' + cods +
+        ' — o cadastro é em uma unidade e a compra em outra. Abra “Editar” e confirme a unidade ' +
+        'do orçamento antes de imprimir.', 'danger');
+      return;
+    }
+    // Já enviado (ou quem abriu não é admin): ninguém consegue corrigir, e
+    // impedir a reimpressão de um documento que o fornecedor já tem em mãos
+    // só esconderia informação. Imprime, mas com o risco dito na cara.
+    if (!confirm('Atenção: ' + cods + ' pode estar com a unidade errada — o material é cadastrado ' +
+        'em uma unidade e comprado em outra, e este pedido não registrou qual foi a do orçamento.\n\n' +
+        'Confira contra a proposta do fornecedor antes de usar este documento.\n\nImprimir mesmo assim?')) return;
+  }
   var fornecedor = pc.fornecedorKey ? allFornecedores[pc.fornecedorKey] : null;
   var area = document.getElementById('printArea');
   area.innerHTML = montarDocumentoPedidoCompra(pc, fornecedor);
@@ -1754,38 +1791,133 @@ function abrirModalEditarPC(key) {
 
   document.getElementById('pcEditItens').innerHTML = Object.entries(pc.itens || {}).map(function(e) {
     var ik = e[0], it = e[1];
-    var un = it.unidadeCotada || it.unidade || '';
+    var op = unidadesDoItemPC(it);
+    // A unidade é EDITÁVEL. Sem isso, um pedido antigo (criado antes de o
+    // sistema ler a unidade de compra do cadastro) só podia ser "consertado"
+    // distorcendo a quantidade -- foi exatamente o que aconteceu no caso
+    // relatado: trocar 35 kg por "3 rolos" com preço de kg dava R$ 180.
+    var opcoes = op.opcoes.map(function(u) {
+      return '<option value="' + escapeAttr(u) + '"' +
+        (u.toLowerCase() === op.atual.toLowerCase() ? ' selected' : '') + '>' + escapeHtml(u) + '</option>';
+    }).join('');
     return '<tr>' +
       '<td style="font-size:12px"><b>' + escapeHtml(it.materialCodigo || '') + '</b>' +
         (it.materialNome ? '<br><span class="field-hint">' + escapeHtml(it.materialNome) + '</span>' : '') + '</td>' +
-      '<td><input type="number" min="0" step="any" class="pce-qtd" data-item="' + escapeAttr(ik) + '" value="' +
-        escapeAttr(it.qtdCotada != null ? it.qtdCotada : (it.qtd != null ? it.qtd : '')) + '" style="width:96px">' +
-        '<div class="field-hint">' + escapeHtml(un) + '</div></td>' +
+      '<td>' +
+        '<div style="display:flex;gap:6px">' +
+          '<input type="number" min="0" step="any" class="pce-qtd" data-item="' + escapeAttr(ik) + '" value="' +
+            escapeAttr(it.qtdCotada != null ? it.qtdCotada : (it.qtd != null ? it.qtd : '')) + '" style="width:88px">' +
+          '<select class="pce-un" data-item="' + escapeAttr(ik) + '" data-cad="' + escapeAttr(op.cadastro) + '"' +
+            ' data-uncompra="' + escapeAttr(op.compra) + '"' +
+            ' data-fatorcad="' + escapeAttr(op.fatorCadastro != null ? op.fatorCadastro : '') + '" style="width:82px">' + opcoes + '</select>' +
+        '</div>' +
+        '<input type="number" min="0" step="any" class="pce-fator" data-item="' + escapeAttr(ik) + '" value="' +
+          escapeAttr(op.fator != null ? op.fator : '') + '" placeholder="conversão" style="width:176px;margin-top:5px">' +
+        '<div class="field-hint pce-equiv" data-item="' + escapeAttr(ik) + '"></div>' +
+      '</td>' +
       '<td><input type="number" min="0" step="any" class="pce-preco" data-item="' + escapeAttr(ik) + '" value="' +
         escapeAttr(it.precoUnit != null ? it.precoUnit : '') + '" style="width:96px"></td>' +
       '<td class="pce-total" data-item="' + escapeAttr(ik) + '" style="text-align:right;font-weight:700"></td>' +
     '</tr>';
   }).join('') || '<tr><td colspan="4" class="no-data">Este pedido não tem itens.</td></tr>';
 
-  document.querySelectorAll('.pce-qtd, .pce-preco').forEach(function(el) {
+  document.querySelectorAll('.pce-qtd, .pce-preco, .pce-fator').forEach(function(el) {
     el.addEventListener('input', recalcularTotaisEdicaoPC);
+  });
+  document.querySelectorAll('.pce-un').forEach(function(el) {
+    el.addEventListener('change', recalcularTotaisEdicaoPC);
   });
   recalcularTotaisEdicaoPC();
   document.getElementById('modalEditarPC').classList.add('open');
 }
 
+/* Unidades possíveis pra um item de PC, e qual está valendo.
+   O cadastro do material é a fonte: ele já sabe a unidade de estoque
+   ("rolo"), a de compra ("kg") e o fator entre as duas. Um pedido antigo não
+   guardou nada disso, então a lista precisa nascer do cadastro pra a pessoa
+   poder corrigir sem digitar nada. */
+function unidadesDoItemPC(it) {
+  var mat = findMaterialByCodigo(it.materialCodigo) || {};
+  var cad = String(it.unidade || mat.unidade || '').trim();
+  var compra = String(mat.unidadeCompra || '').trim();
+  var atual = String(it.unidadeCotada || '').trim() || cad;
+  var opcoes = [];
+  [cad, compra, atual].forEach(function(u) {
+    if (u && !opcoes.some(function(x) { return x.toLowerCase() === u.toLowerCase(); })) opcoes.push(u);
+  });
+  if (!opcoes.length) opcoes.push('un');
+  var fator = it.fatorConversao != null ? it.fatorConversao
+    : (compra && atual.toLowerCase() === compra.toLowerCase() ? mat.fatorConversao : null);
+  return { cadastro: cad, compra: compra, atual: atual, opcoes: opcoes, fator: fator,
+           // Fator do CADASTRO separado do fator do item: ele fica de reserva
+           // e só entra se a pessoa trocar a unidade pra a de compra que ele
+           // descreve. Sem isso, quem escolhesse "kg" teria que digitar
+           // 11,6666667 de cabeça, com o cadastro sabendo o número.
+           fatorCadastro: mat.fatorConversao != null ? mat.fatorConversao : null };
+}
+
+// Lê uma linha do modal. Devolve o mesmo shape que `calcularCustoItemCotacao`
+// espera, pra o modal e a cotação nunca calcularem de formas diferentes.
+function lerLinhaEdicaoPC(tr) {
+  var qEl = tr.querySelector('.pce-qtd');
+  if (!qEl) return null;
+  var unEl = tr.querySelector('.pce-un'), fEl = tr.querySelector('.pce-fator');
+  var fatorCad = unEl ? parseFloat(unEl.getAttribute('data-fatorcad')) : NaN;
+  return {
+    itemKey: qEl.getAttribute('data-item'),
+    unidadeCadastro: unEl ? (unEl.getAttribute('data-cad') || '') : '',
+    // O CADASTRO inteiro, não só a unidade: é ele que sabe que 1 rolo = 11,67
+    // kg. Passar só a string faria a conversão virar pendência sempre que a
+    // pessoa trocasse a unidade, com o número disponível ali do lado.
+    cadastro: {
+      unidade: unEl ? (unEl.getAttribute('data-cad') || '') : '',
+      unidadeCompra: unEl ? (unEl.getAttribute('data-uncompra') || '') : '',
+      fatorConversao: isNaN(fatorCad) ? null : fatorCad
+    },
+    resp: {
+      qtdCotada: qEl.value === '' ? null : parseFloat(qEl.value),
+      precoUnit: (tr.querySelector('.pce-preco') || {}).value === '' ? null
+        : parseFloat((tr.querySelector('.pce-preco') || {}).value),
+      unidadeCotada: unEl ? unEl.value : '',
+      fatorConversao: (fEl && fEl.value !== '') ? parseFloat(fEl.value) : null
+    }
+  };
+}
+
 function recalcularTotaisEdicaoPC() {
   var soma = 0;
   document.querySelectorAll('#pcEditItens tr').forEach(function(tr) {
-    var q = parseFloat((tr.querySelector('.pce-qtd') || {}).value) || 0;
-    var pr = parseFloat((tr.querySelector('.pce-preco') || {}).value) || 0;
+    var l = lerLinhaEdicaoPC(tr);
+    if (!l) return;
+    var calc = calcularCustoItemCotacao(l.resp, 0, l.cadastro);
     var cel = tr.querySelector('.pce-total');
-    if (cel) cel.textContent = (q && pr) ? fmtBRL(q * pr) : '—';
-    soma += q * pr;
+    if (cel) cel.textContent = calc.bruto ? fmtBRL(calc.bruto) : '—';
+    soma += calc.bruto;
+    // Equivalência na unidade de estoque, na hora: é ela que diz se a
+    // conversão faz sentido antes de o pedido sair. "35 kg ≈ 3 rolo" fecha;
+    // "35 rolo ≈ 3 rolo" denuncia o fator aplicado onde não devia.
+    var eq = tr.querySelector('.pce-equiv');
+    if (eq) {
+      eq.textContent = !calc.unidadeDiferente
+        ? 'Mesma unidade do cadastro — sem conversão.'
+        : calc.conversaoPendente
+          ? '⚠ Cotado em ' + calc.unidadeCotada + ' e o cadastro é em ' + l.unidadeCadastro + ' — informe quantos ' + calc.unidadeCotada + ' cabem em 1 ' + l.unidadeCadastro + '.'
+          : '1 ' + l.unidadeCadastro + ' = ' + fmtNum(calc.fatorConversao) + ' ' + calc.unidadeCotada +
+            (calc.qtdCadastro != null ? ' · este pedido ≈ ' + fmtNum(calc.qtdCadastro) + ' ' + l.unidadeCadastro : '');
+    }
+    // O campo de fator é OVERRIDE, não obrigação: com o cadastro sabendo a
+    // conversão, ele fica vazio e o placeholder diz de onde veio o número.
+    var fEl = tr.querySelector('.pce-fator');
+    if (fEl) {
+      fEl.style.display = calc.unidadeDiferente ? '' : 'none';
+      fEl.placeholder = (calc.fatorConversao && fEl.value === '')
+        ? fmtNum(calc.fatorConversao) + ' ' + calc.unidadeCotada + ' por ' + l.unidadeCadastro + ' (do cadastro)'
+        : 'quantos ' + (calc.unidadeCotada || '?') + ' cabem em 1 ' + (l.unidadeCadastro || '?');
+    }
   });
-  // Total SEM imposto e SEM frete, e dito com todas as letras: o número
-  // completo vem do orçamento da cotação, e apresentá-lo aqui como se fosse
-  // o mesmo faria alguém achar que o custo mudou quando só o bruto mudou.
+  // Soma BRUTA dos itens. O documento abre desconto, impostos e frete em
+  // linhas próprias -- mostrar aqui um "custo completo" faria dois números
+  // diferentes brigarem pela mesma etiqueta.
   document.getElementById('pcEditTotal').textContent = fmtBRL(soma);
 }
 
@@ -1799,24 +1931,63 @@ function salvarEdicaoPC() {
     fecharModalEditarPC();
     return;
   }
-  var updates = {}, invalido = false;
-  document.querySelectorAll('#pcEditItens tr').forEach(function(tr) {
-    var qEl = tr.querySelector('.pce-qtd'), pEl = tr.querySelector('.pce-preco');
-    if (!qEl || !pEl) return;
-    var ik = qEl.getAttribute('data-item');
-    var q = qEl.value === '' ? null : parseFloat(qEl.value);
-    var pr = pEl.value === '' ? null : parseFloat(pEl.value);
-    if ((q != null && (isNaN(q) || q < 0)) || (pr != null && (isNaN(pr) || pr < 0))) invalido = true;
-    updates['pedidos_compra/' + pcEditKey + '/itens/' + ik + '/qtdCotada'] = q;
-    updates['pedidos_compra/' + pcEditKey + '/itens/' + ik + '/precoUnit'] = pr;
-  });
-  if (invalido) { showAlert('Quantidade e preço não podem ser negativos.', 'danger'); return; }
-
   var prazo = document.getElementById('pcEditPrazo').value;
   var prazoNum = prazo === '' ? null : parseInt(prazo, 10);
   if (prazoNum != null && (isNaN(prazoNum) || prazoNum < 0)) { showAlert('Prazo de entrega inválido.', 'danger'); return; }
   var freteTipo = document.getElementById('pcEditFreteTipo').value || null;
-  var freteValor = document.getElementById('pcEditFreteValor').value;
+  var freteValorTxt = document.getElementById('pcEditFreteValor').value;
+  // CIF: o frete já está embutido no preço do fornecedor. Rateá-lo de novo
+  // sobre os itens cobraria o mesmo frete duas vezes -- mesma regra da
+  // cotação, aplicada aqui pelo mesmo motivo.
+  var freteRatear = (freteTipo === 'FOB' && freteValorTxt !== '') ? parseFloat(freteValorTxt) || 0 : 0;
+
+  var updates = {}, invalido = false, pendencia = null, linhas = [];
+  document.querySelectorAll('#pcEditItens tr').forEach(function(tr) {
+    var l = lerLinhaEdicaoPC(tr);
+    if (!l) return;
+    var q = l.resp.qtdCotada, pr = l.resp.precoUnit;
+    if ((q != null && (isNaN(q) || q < 0)) || (pr != null && (isNaN(pr) || pr < 0))) invalido = true;
+    var parcial = calcularCustoItemCotacao(l.resp, 0, l.cadastro);
+    // Unidade diferente da do cadastro e sem fator: gravar assim deixaria o
+    // pedido sem saber quantos rolos entram quando chegarem os kg -- e o
+    // recebimento descobriria isso com o caminhão no pátio.
+    if (parcial.conversaoPendente && !pendencia) {
+      pendencia = 'O item ' + (tr.querySelector('b') ? tr.querySelector('b').textContent : '') +
+        ' está cotado em ' + parcial.unidadeCotada + ' e o cadastro é em ' + l.unidadeCadastro +
+        ' — informe a conversão antes de salvar.';
+    }
+    linhas.push({ itemKey: l.itemKey, liquido: parcial.liquido, l: l });
+  });
+  if (invalido) { showAlert('Quantidade e preço não podem ser negativos.', 'danger'); return; }
+  if (pendencia) { showAlert(pendencia, 'danger'); return; }
+
+  // Recalcula o custo de cada item com o frete NOVO rateado, e o total do
+  // pedido junto. Antes disso, editar só mexia em preço e quantidade: o
+  // total continuava o congelado na decisão da cotação, então tirar o frete
+  // não mudava nada no documento (defeito relatado pelo usuário).
+  var rateio = ratearFreteCotacao(linhas.map(function(x) {
+    return { itemKey: x.itemKey, liquido: x.liquido };
+  }), freteRatear);
+  var totalRecalc = 0;
+  linhas.forEach(function(x) {
+    var base = 'pedidos_compra/' + pcEditKey + '/itens/' + x.itemKey + '/';
+    var calc = calcularCustoItemCotacao(x.l.resp, rateio[x.itemKey] || 0, x.l.cadastro);
+    totalRecalc += calc.custoTotal;
+    updates[base + 'qtdCotada'] = x.l.resp.qtdCotada;
+    updates[base + 'precoUnit'] = x.l.resp.precoUnit;
+    updates[base + 'unidadeCotada'] = calc.unidadeCotada;
+    updates[base + 'fatorConversao'] = calc.fatorConversao;
+    // Quantos rolos entram quando chegarem os kg. É o número que o
+    // recebimento e o WMS usam pra dar entrada.
+    updates[base + 'qtdEmUnidadeEstoque'] = calc.qtdCadastro != null
+      ? Math.round(calc.qtdCadastro * 10000) / 10000 : null;
+    updates[base + 'custoUnitarioNaDecisao'] = calc.custoUnitario != null
+      ? Math.round(calc.custoUnitario * 10000) / 10000 : null;
+    updates[base + 'custoTotalNaDecisao'] = Math.round(calc.custoTotal * 100) / 100;
+  });
+  updates['pedidos_compra/' + pcEditKey + '/valorTotalEstimado'] = Math.round(totalRecalc * 100) / 100;
+
+  var freteValor = freteValorTxt;
   var textoPgto = document.getElementById('pcEditPagamento').value.trim();
   var prazoPgto = parsePrazoPagamento(textoPgto);
   var cal = calendarioUtil();

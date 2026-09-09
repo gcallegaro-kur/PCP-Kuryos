@@ -2768,7 +2768,11 @@ function estilosDocumentoPC() {
     '.pcdoc-imposto{font-size:8.5px;color:#6b7280}' +
     // Total: destaque discreto, alinhado à direita.
     '.pcdoc-total{margin-top:9px;display:flex;justify-content:flex-end}' +
-    '.pcdoc-total-cx{background:#f4f6fb;border-left:2.5px solid #0a1c69;padding:7px 13px;text-align:right;min-width:52mm}' +
+    '.pcdoc-total-cx{background:#f4f6fb;border-left:2.5px solid #0a1c69;padding:7px 13px;text-align:right;min-width:62mm}' +
+    // Subtotal e impostos: pares rótulo/valor em cinza, acima do total.
+    '.pcdoc-tot-linha{display:flex;justify-content:space-between;gap:16px;font-size:9px;color:#6b7280;' +
+      'padding-bottom:2px;font-variant-numeric:tabular-nums}' +
+    '.pcdoc-tot-linha+.pcdoc-total-lbl{margin-top:4px;padding-top:4px;border-top:1px solid #cfd6e4}' +
     '.pcdoc-total-lbl{font-size:7.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280}' +
     '.pcdoc-total-val{font-size:15px;font-weight:700;color:#0a1c69;font-variant-numeric:tabular-nums}' +
     '.pcdoc-nota{font-size:8px;color:#8b93a5;margin-top:3px;text-align:right}' +
@@ -2792,6 +2796,61 @@ function estilosDocumentoPC() {
   '</style>';
 }
 
+// Função PURA. Os totais que vão no papel do FORNECEDOR -- que NÃO são os
+// mesmos números do custo interno.
+//
+// O documento imprimia `valorTotalEstimado`, que é CUSTO: traz o frete FOB
+// somado e o crédito de ICMS descontado. Duas consequências, as duas ruins
+// num papel que sai da empresa:
+//   1. as linhas da tabela somavam um número e o "Total" mostrava outro --
+//      o fornecedor confere e não fecha;
+//   2. o total ficava ABAIXO do que ele vai faturar, porque o crédito de
+//      ICMS é nosso, não dele.
+// E, por ser congelado na decisão, não mexia quando o pedido era editado --
+// tirar o frete não mudava o total (caso relatado pelo usuário).
+//
+// Aqui o total é o que o fornecedor vai cobrar: itens − desconto + IPI + ST
+// + ISS. O frete FOB fica FORA do total (quem paga a transportadora somos
+// nós, em outra nota) e aparece como informação. Em CIF já está no preço, e
+// somar seria cobrá-lo duas vezes.
+function totaisDocumentoPC(pc) {
+  var p = pc || {};
+  var frete = p.frete || {};
+  var t = {
+    bruto: 0, desconto: 0, subtotal: 0, ipi: 0, st: 0, iss: 0, totalNota: 0,
+    freteTipo: frete.tipo || null,
+    freteFob: frete.tipo === 'FOB' ? (parseFloat(frete.valor) || 0) : 0
+  };
+  Object.values(p.itens || {}).forEach(function(i) {
+    // Reusa a MESMA função de custo da cotação: dois cálculos de imposto
+    // vivendo em lugares diferentes divergem no primeiro ajuste que alguém
+    // fizer num deles. Frete rateado 0 aqui de propósito -- ele entra (ou
+    // não) no rodapé, nunca dentro do item.
+    var c = calcularCustoItemCotacao({
+      precoUnit: i.precoUnit,
+      qtdCotada: i.qtdCotada != null ? i.qtdCotada : i.qtd,
+      unidadeCotada: i.unidadeCotada, fatorConversao: i.fatorConversao,
+      pctNf: i.pctNf, pctIpi: i.pctIpi, pctIcms: i.pctIcms,
+      pctIcmsSt: i.pctIcmsSt, pctIss: i.pctIss, descontoPct: i.descontoPct
+    }, 0, i.unidade);
+    t.bruto += c.bruto; t.desconto += c.desconto; t.subtotal += c.liquido;
+    t.ipi += c.ipi; t.st += c.st; t.iss += c.iss;
+  });
+  t.totalNota = t.subtotal + t.ipi + t.st + t.iss;
+  return t;
+}
+
+// Linha secundária da caixa de totais (subtotal, desconto, cada imposto).
+// Discreta de propósito: o número que salta aos olhos tem que ser um só.
+function linhaTotalPC(rotulo, valor) {
+  // Abatimento sai como "− R$ 100,00", não "R$ -100,00": o sinal colado no
+  // R$ some numa impressão a laser e o desconto vira acréscimo.
+  var v = Number(valor) || 0;
+  var txt = v < 0 ? '− ' + fmtBRLDoc(-v) : fmtBRLDoc(v);
+  return '<div class="pcdoc-tot-linha"><span>' + escapeHtml(rotulo) + '</span>' +
+    '<span>' + txt + '</span></div>';
+}
+
 // Página 1: o pedido em si. `pc` = pedidos_compra/{key}, `fornecedor` =
 // fornecedores/{key} (pode ser null -- o PC guarda o nome denormalizado).
 function paginaPedidoCompra(pc, fornecedor) {
@@ -2800,15 +2859,7 @@ function paginaPedidoCompra(pc, fornecedor) {
   var itens = Object.values(p.itens || {});
   var frete = p.frete || {};
   var ehFob = frete.tipo === 'FOB';
-
-  // O total vem do que foi congelado na decisão da cotação. Recalcular aqui
-  // daria outro número se alguém editar a cotação depois de o PC existir --
-  // e o documento tem que refletir o que foi acordado.
-  var total = p.valorTotalEstimado != null ? p.valorTotalEstimado
-    : itens.reduce(function(s, i) {
-        var q = i.qtdCotada != null ? i.qtdCotada : i.qtd;
-        return s + ((parseFloat(i.precoUnit) || 0) * (parseFloat(q) || 0));
-      }, 0);
+  var tot = totaisDocumentoPC(p);
 
   var linhaItem = function(i) {
     var q = i.qtdCotada != null ? i.qtdCotada : i.qtd;
@@ -2870,10 +2921,25 @@ function paginaPedidoCompra(pc, fornecedor) {
       (itens.length ? itens.map(linhaItem).join('')
         : '<tr><td colspan="5" style="color:#8b93a5">Nenhum item neste pedido.</td></tr>') +
     '</tbody></table>' +
+    // Totais abertos linha a linha: o fornecedor confere a soma da tabela
+    // contra o subtotal, e cada acréscimo aparece nomeado. Um total fechado
+    // que não bate com as linhas é a primeira coisa que ele questiona.
     '<div class="pcdoc-total"><div class="pcdoc-total-cx">' +
-      '<div class="pcdoc-total-lbl">Total estimado</div>' +
-      '<div class="pcdoc-total-val">' + fmtBRLDoc(total) + '</div>' +
+      linhaTotalPC('Subtotal dos itens', tot.bruto) +
+      (tot.desconto > 0 ? linhaTotalPC('Desconto', -tot.desconto) : '') +
+      (tot.ipi > 0 ? linhaTotalPC('IPI', tot.ipi) : '') +
+      (tot.st > 0 ? linhaTotalPC('ICMS-ST', tot.st) : '') +
+      (tot.iss > 0 ? linhaTotalPC('ISS', tot.iss) : '') +
+      '<div class="pcdoc-total-lbl">Total do pedido</div>' +
+      '<div class="pcdoc-total-val">' + fmtBRLDoc(tot.totalNota) + '</div>' +
     '</div></div>' +
+    // Frete FOB fora do total, dito com todas as letras: é a Kuryos que
+    // contrata e paga a transportadora, então ele não entra na nota do
+    // fornecedor. Somá-lo aqui faria o pedido cobrar do fornecedor um valor
+    // que ele nunca vai faturar.
+    (ehFob && tot.freteFob > 0
+      ? '<div class="pcdoc-nota">Frete FOB estimado de ' + fmtBRLDoc(tot.freteFob) +
+        ' — contratado e pago pela Kuryos, fora deste total.</div>' : '') +
     '<div class="pcdoc-nota">Valor de referência conforme cotação. A nota fiscal prevalece.</div>' +
 
     '<div class="pcdoc-sec">Condições comerciais</div>' +
