@@ -122,6 +122,7 @@
         <div class="form-group">
           <label id="agDataLabel">Data agendada *</label>
           <input type="date" id="agData">
+          <div id="agDataHint" class="field-hint" style="margin-top:4px"></div>
         </div>
         <div class="form-group">
           <label>Janela</label>
@@ -406,6 +407,7 @@ function renderReceberList() {
       '</div>' +
       '<div class="progresso-bar-wrap"><div class="progresso-bar" style="width:' + prog.pct + '%"></div></div>' +
       '<div class="field-hint">' + fmtNum(prog.totalRecebido) + ' de ' + fmtNum(prog.totalPedido) + ' unidades recebidas (' + prog.pct + '%)</div>' +
+      previsaoLogisticaHtml(p) +
       freteOperacionalHtml(p) +
       agendamentoHtml +
       '<table><thead><tr><th>Material</th><th>Pedido</th><th>Recebido</th><th>Status</th></tr></thead><tbody>' + itensRows + '</tbody></table>' +
@@ -467,6 +469,18 @@ function modalidadeSugerida(prestadorNome) {
   if (nome.indexOf('lalamove') !== -1) return 'LALAMOVE';
   if (nome.indexOf('uber') !== -1) return 'UBER';
   return '';
+}
+
+// A previsão do PC é o ponto de partida operacional: para CIF, recebimento;
+// para FOB, a data em que o fornecedor deve liberar a carga para coleta.
+// Ela não substitui o agendamento, que a Logística confirma ou ajusta.
+function previsaoLogisticaHtml(p) {
+  if (!p || !p.dataPrevistaEntrega) return '';
+  var t = dadosTransporte(p);
+  var ehColetaKuryos = t.responsavel === 'KURYOS';
+  var texto = ehColetaKuryos ? 'Previsão de disponibilidade para coleta' : 'Previsão de recebimento';
+  return '<div class="field-hint" style="margin:7px 0">🗓️ ' + texto + ' (Compras): <b>' + fmtData(p.dataPrevistaEntrega) + '</b>' +
+    (p.prazoEntregaDiasUteis != null ? ' · prazo informado: ' + escapeHtml(String(p.prazoEntregaDiasUteis)) + ' dia(s) útil(eis)' : '') + '</div>';
 }
 
 function freteOperacionalHtml(p) {
@@ -532,11 +546,17 @@ function openModalAgendar(key) {
   var transporte = dadosTransporte(p);
   var ehColetaKuryos = transporte.responsavel === 'KURYOS';
   document.getElementById('modalAgendarTitulo').textContent = ehColetaKuryos ? 'Programar Coleta' : 'Agendar Entrega';
-  document.getElementById('agDataLabel').textContent = ehColetaKuryos ? 'Data prevista da coleta *' : 'Data prevista da entrega *';
+  document.getElementById('agDataLabel').textContent = ehColetaKuryos ? 'Data programada da coleta *' : 'Data agendada da entrega *';
   document.getElementById('agFreteInfo').innerHTML = freteOperacionalHtml(p);
   var ag = p.agendamento || {};
   var coleta = ag.coleta || {};
-  document.getElementById('agData').value = ag.dataAgendada ? ag.dataAgendada.slice(0, 10) : '';
+  var previsaoPc = p.dataPrevistaEntrega ? p.dataPrevistaEntrega.slice(0, 10) : '';
+  document.getElementById('agData').value = ag.dataAgendada ? ag.dataAgendada.slice(0, 10) : previsaoPc;
+  document.getElementById('agDataHint').textContent = previsaoPc
+    ? (ehColetaKuryos
+      ? 'Sugerida pela previsão de disponibilidade do fornecedor em Compras. Confirme ou ajuste a coleta.'
+      : 'Sugerida pela previsão de recebimento informada em Compras. Confirme ou ajuste a entrega.')
+    : 'Nenhuma previsão foi informada em Compras.';
   document.getElementById('agJanela').value = ag.janela || 'dia_todo';
   refreshTransportadoraSelect(coleta.prestadorKey || ag.prestadorKey || ag.transportadora || '');
   document.getElementById('agMotorista').value = ag.motorista || '';
@@ -580,6 +600,7 @@ function saveAgendar() {
     observacoes: document.getElementById('agObservacoes').value.trim(),
     naturezaMovimentacao: transporte.natureza,
     responsavelTransporte: transporte.responsavel || null,
+    previsaoOrigemPc: p.dataPrevistaEntrega || null,
     acaoLogistica: transporte.responsavel === 'KURYOS' ? 'PROGRAMAR_COLETA' : (transporte.responsavel === 'REMETENTE' ? 'AGUARDAR_ENTREGA' : null),
     agendadoPor: currentUserNome(),
     agendadoEm: new Date().toISOString()

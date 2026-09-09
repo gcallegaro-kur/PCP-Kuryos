@@ -7,8 +7,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** WMS, Logística, emissão de OP, Cotação e apontamento de produção.
-- **Arquivos ativos:** nenhum.
+- **Escopo:** Logística — usar a previsão do Pedido de Compra como base editável do agendamento CIF/FOB.
+- **Arquivos ativos:** `public/logistica.html`.
 - **Estado Apontamento:** checkpoint recebe total acumulado do operador, mas
   registro salva o incremento confirmado na transação; fechamento começa no
   fim do último checkpoint, preservando os períodos úteis.
