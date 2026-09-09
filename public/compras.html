@@ -3392,8 +3392,16 @@ function comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens) {
         : '<div class="field-hint">Aguardando preço/quantidade' + (calc.conversaoPendente ? ' e conversão' : '') + '.</div>';
       return '<div class="cot-opcao' + (melhor ? ' melhor' : '') + '"><div class="cot-opcao-nome">' + escapeHtml(nomeConvidadoCotacao(c, cKey)) + (melhor ? ' ✓' : '') + '</div>' + detalhes + '</div>';
     }).join('') || '<span class="field-hint">Nenhum fornecedor convidado para este item.</span>';
+    // A sugestão automática só entra quando a comparação é conclusiva. A
+    // escolha salva no processo sempre prevalece, porque o comprador pode
+    // preferir prazo, qualidade ou uma negociação específica ao menor custo.
+    var escolhido = (p.vencedoresPorItem || {})[itemKey] || ((cmp.vencedorPorItem[itemKey] || {}).cKey || '');
+    var opcoesVencedor = '<option value="">Escolha o fornecedor...</option>' + convidadosArr
+      .filter(function(cEntry) { return convidadoCotaItem(cEntry[1], itemKey, chavesItens); })
+      .map(function(cEntry) { return '<option value="' + escapeAttr(cEntry[0]) + '"' + (cEntry[0] === escolhido ? ' selected' : '') + '>' + escapeHtml(nomeConvidadoCotacao(cEntry[1], cEntry[0])) + '</option>'; }).join('');
     return '<div class="cot-comparacao-item"><div class="cot-comparacao-item-head"><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
-      '<div class="field-hint">Pedido: ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</div></div><div class="cot-comparacao-opcoes">' + opcoes + '</div></div>';
+      '<div class="field-hint">Pedido: ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</div></div><div class="cot-comparacao-opcoes">' + opcoes + '</div>' +
+      '<div style="padding:0 10px 10px"><label class="cot-campo" style="max-width:360px"><span>Comprar este material de</span><select class="cot-vencedor-item" data-item="' + escapeAttr(itemKey) + '">' + opcoesVencedor + '</select></label></div></div>';
   }).join('') + '</div>';
 }
 
@@ -3417,13 +3425,12 @@ function cotacaoCardHtml(entry) {
         (atual.rascunhoCotacaoWebLink ? '<a class="btn btn-ghost btn-sm" href="' + escapeAttr(atual.rascunhoCotacaoWebLink) + '" target="_blank">Abrir rascunho ↗</a>' : '') + '</div>' +
       condicoesCotacaoGuiada(key, fornecedorAtivo, atual) +
       (atual.status === 'DECLINOU' ? '<div class="empty-hint">Este fornecedor declinou a cotação.</div>' : '<div class="cot-itens-proposta">' + itensArr.map(function(e) { return itemRespostaCotacaoGuiada(key, fornecedorAtivo, atual, e[0], e[1], cmp, chavesItens); }).join('') + '</div>') + '</div>';
-  var vencedorOpts = '<option value="">Escolha o fornecedor para gerar o pedido...</option>' + convidadosArr.map(function(cEntry) { return '<option value="' + escapeAttr(cEntry[0]) + '">' + escapeHtml(nomeConvidadoCotacao(cEntry[1], cEntry[0])) + '</option>'; }).join('');
-  var resumo = cmp.vencedorGeral
-    ? '<div style="padding:10px 12px;background:var(--tint-green-bg);border-radius:9px;margin-bottom:10px;font-size:12.5px">🏆 Melhor custo total comparável: <b>' + escapeHtml(nomeConvidadoCotacao((p.fornecedoresConvidados || {})[cmp.vencedorGeral.cKey] || {}, cmp.vencedorGeral.cKey)) + '</b> — <b>' + fmtBRL(cmp.vencedorGeral.custoTotal) + '</b></div>'
-    : '<div class="field-hint" style="margin-bottom:10px">Compare cada material quando houver respostas; fornecedores convidados para itens diferentes não formam um total único.</div>';
+  var escolhas = p.vencedoresPorItem || {};
+  var escolhidos = itensArr.filter(function(e) { return escolhas[e[0]] || ((cmp.vencedorPorItem[e[0]] || {}).cKey); }).length;
+  var resumo = '<div class="field-hint" style="margin-bottom:10px"><b>' + escolhidos + ' de ' + itensArr.length + ' materiais</b> com fornecedor definido. Cada fornecedor receberá um Pedido de Compra apenas com os itens escolhidos para ele.</div>';
   return '<div class="card cot-processo-card"><div class="cot-processo-head"><div><div class="cot-processo-titulo">' + escapeHtml(p.numeroFormatado) + '</div><div class="cot-processo-meta">' + itensArr.length + ' materiais · ' + convidadosArr.length + ' fornecedores convidados</div></div><button type="button" class="btn btn-danger-ghost btn-sm cot-cancelar" data-key="' + escapeAttr(key) + '">Cancelar processo</button></div>' +
     '<div class="cot-etapas"><button type="button" class="cot-etapa' + (visao === 'preencher' ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-visao="preencher">1. Preencher proposta</button><button type="button" class="cot-etapa' + (visao === 'comparar' ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-visao="comparar">2. Comparar propostas</button></div>' +
-    conteudo + '<div class="cot-processo-footer">' + resumo + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select class="cot-vencedor-select" data-key="' + escapeAttr(key) + '" style="max-width:330px">' + vencedorOpts + '</select><button type="button" class="btn btn-green btn-sm cot-gerar-pc" data-key="' + escapeAttr(key) + '">Gerar Pedido de Compra</button></div></div></div>';
+    conteudo + '<div class="cot-processo-footer">' + resumo + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn btn-green btn-sm cot-gerar-pcs" data-key="' + escapeAttr(key) + '">Gerar pedidos por fornecedor</button><span class="field-hint">Defina o vencedor de cada material na etapa “Comparar propostas”.</span></div></div></div>';
 }
 
 function renderCotacoesAndamento() {
@@ -3461,6 +3468,15 @@ function wireCotacoesAndamento() {
       cotacaoFornecedorAtivoPorProcesso[btn.getAttribute('data-key')] = btn.getAttribute('data-ckey');
       cotacaoVisaoPorProcesso[btn.getAttribute('data-key')] = 'preencher';
       renderCotacoesAndamento();
+    });
+  });
+  document.querySelectorAll('.cot-vencedor-item').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var card = sel.closest('.cot-processo-card');
+      var procKey = card && card.querySelector('.cot-gerar-pcs') ? card.querySelector('.cot-gerar-pcs').getAttribute('data-key') : '';
+      if (!procKey) return;
+      db.ref('processos_cotacao/' + procKey + '/vencedoresPorItem/' + sel.getAttribute('data-item')).set(sel.value || null)
+        .catch(function(err) { showAlert('Erro ao salvar escolha: ' + err.message, 'danger'); });
     });
   });
   document.querySelectorAll('.cot-resp-preco, .cot-resp-prazo, .cot-resp-qtd').forEach(function(el) {
@@ -3560,17 +3576,115 @@ function wireCotacoesAndamento() {
         .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
     });
   });
-  document.querySelectorAll('.cot-gerar-pc').forEach(function(btn) {
+  document.querySelectorAll('.cot-gerar-pcs').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var procKey = btn.getAttribute('data-key');
       var card = btn.closest('.card');
-      var sel = card ? card.querySelector('.cot-vencedor-select') : null;
-      var cKey = sel ? sel.value : '';
-      if (!cKey) { showAlert('Escolha o fornecedor vencedor antes de gerar o Pedido de Compra.', 'danger'); return; }
-      gerarPedidoDeCotacao(procKey, cKey);
+      var escolhas = {};
+      if (card) card.querySelectorAll('.cot-vencedor-item').forEach(function(sel) { escolhas[sel.getAttribute('data-item')] = sel.value; });
+      gerarPedidosDeCotacaoPorItem(procKey, escolhas);
     });
   });
 }
+// Cria um PC para UM fornecedor, somente com os itens que foram decididos
+// para ele. A reserva das solicitações é feita pela função orquestradora,
+// uma única vez para a cotação inteira.
+function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) {
+  var convidado = (proc.fornecedoresConvidados || {})[convidadoKey] || {};
+  var fornecedor = allFornecedores[convidado.fornecedorKey] || {};
+  var cmp = compararCotacao(proc.itens || {}, proc.fornecedoresConvidados || {});
+  var calcVenc = (cmp.porFornecedor[convidadoKey] || {}).itens || {};
+  var itensObj = {}, solicitacoesOrigem = {}, totalPedido = 0, prazoMaior = null;
+  itemKeys.forEach(function(origItemKey) {
+    var it = (proc.itens || {})[origItemKey] || {};
+    var resp = (convidado.respostaItens || {})[origItemKey] || {};
+    var calc = calcVenc[origItemKey] || {};
+    var itemKey = db.ref('pedidos_compra').push().key;
+    itensObj[itemKey] = {
+      materialCodigo: it.materialCodigo, materialNome: it.materialNome || '', qtd: it.qtd, unidade: it.unidade || '',
+      precoUnit: resp.precoUnit != null ? parseFloat(resp.precoUnit) : null,
+      qtdCotada: resp.qtdCotada != null ? parseFloat(resp.qtdCotada) : null,
+      unidadeCotada: calc.unidadeCotada || it.unidadeCompra || it.unidade || null,
+      fatorConversao: calc.fatorConversao != null ? calc.fatorConversao : null,
+      qtdEmUnidadeEstoque: calc.qtdCadastro != null ? Math.round(calc.qtdCadastro * 10000) / 10000 : null,
+      prazoEntregaDias: resp.prazoEntregaDias != null ? parseFloat(resp.prazoEntregaDias) : null,
+      pctNf: resp.pctNf != null ? resp.pctNf : null, pctIpi: resp.pctIpi != null ? resp.pctIpi : null,
+      pctIcms: resp.pctIcms != null ? resp.pctIcms : null, pctIcmsSt: resp.pctIcmsSt != null ? resp.pctIcmsSt : null,
+      pctIss: resp.pctIss != null ? resp.pctIss : null, descontoPct: resp.descontoPct != null ? resp.descontoPct : null,
+      custoUnitarioNaDecisao: calc.custoUnitario != null ? Math.round(calc.custoUnitario * 10000) / 10000 : null,
+      custoTotalNaDecisao: calc.custoTotal != null ? Math.round(calc.custoTotal * 100) / 100 : null,
+      obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey
+    };
+    totalPedido += calc.custoTotal || 0;
+    var prazo = parseFloat(resp.prazoEntregaDias);
+    if (!isNaN(prazo) && (prazoMaior == null || prazo > prazoMaior)) prazoMaior = prazo;
+    var sc = allSolicitacoes[it.origemSolicitacaoKey];
+    if (sc) solicitacoesOrigem[it.origemSolicitacaoKey] = { numero: sc.numero, numeroFormatado: sc.numeroFormatado };
+  });
+  var prazoPgto = parsePrazoPagamento(convidado.condicaoPagamento || '');
+  var cal = calendarioUtil();
+  var dataPrevista = prazoMaior != null ? somarDiasUteis(new Date().toISOString().slice(0, 10), prazoMaior, cal.feriados, cal.diasSemana) : null;
+  return nextSequential(db, 'config/contadores/pedidoCompra', 'PC', 4).then(function(seq) {
+    var pcKey = db.ref('pedidos_compra').push().key;
+    return db.ref('pedidos_compra/' + pcKey).set({
+      numero: seq.numero, numeroFormatado: seq.formatado, status: 'ABERTO',
+      fornecedorKey: convidado.fornecedorKey, fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial || '',
+      dataCriacao: new Date().toISOString(), dataEmissao: null, solicitacoesOrigem: solicitacoesOrigem, itens: itensObj,
+      condicaoPagamento: convidado.condicaoPagamento || '', prazoPagamentoParcelas: prazoPgto.valido ? prazoPgto.parcelas : null,
+      frete: convidado.frete || null, coleta: (convidado.frete && convidado.frete.tipo === 'FOB') ? (convidado.coleta || {}) : null,
+      prazoEntregaDiasUteis: prazoMaior, dataPrevistaEntrega: dataPrevista, validadePropostaNaDecisao: convidado.validadeProposta || null,
+      localEntrega: convidado.localEntrega || null, valorTotalEstimado: Math.round(totalPedido * 100) / 100,
+      origemProcessoCotacaoKey: procKey, criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
+    }).then(function() { return { cKey: convidadoKey, pcKey: pcKey, numero: seq.formatado }; });
+  });
+}
+
+function gerarPedidosDeCotacaoPorItem(procKey, escolhasTela) {
+  var proc = allProcessosCotacao[procKey];
+  if (!proc) return;
+  var itens = proc.itens || {}, convidados = proc.fornecedoresConvidados || {};
+  var escolhas = Object.assign({}, proc.vencedoresPorItem || {}, escolhasTela || {});
+  var comparacao = compararCotacao(itens, convidados);
+  // Mantém a escolha explícita acima de tudo, mas aproveita a sugestão
+  // automática quando ela já é conclusiva (todos os convidados do item
+  // responderam). Assim o comprador só intervém onde há decisão de fato.
+  Object.keys(itens).forEach(function(itemKey) {
+    if (!escolhas[itemKey] && comparacao.vencedorPorItem[itemKey]) escolhas[itemKey] = comparacao.vencedorPorItem[itemKey].cKey;
+  });
+  var grupos = {}, erros = [];
+  Object.keys(itens).forEach(function(itemKey) {
+    var cKey = escolhas[itemKey], c = convidados[cKey];
+    if (!cKey || !c) { erros.push((itens[itemKey].materialCodigo || itemKey) + ': escolha o fornecedor'); return; }
+    if (!convidadoCotaItem(c, itemKey, Object.keys(itens))) { erros.push((itens[itemKey].materialCodigo || itemKey) + ': fornecedor não foi convidado'); return; }
+    if (!c.fornecedorKey) { erros.push(nomeConvidadoCotacao(c, cKey) + ': cadastre o fornecedor avulso antes de gerar'); return; }
+    var resp = (c.respostaItens || {})[itemKey] || {};
+    if (resp.precoUnit == null || resp.qtdCotada == null) { erros.push((itens[itemKey].materialCodigo || itemKey) + ': faltam preço ou quantidade'); return; }
+    (grupos[cKey] = grupos[cKey] || []).push(itemKey);
+  });
+  if (erros.length) { showAlert('Não foi possível gerar: ' + erros.join('; '), 'danger'); return; }
+  var scKeys = Object.keys(proc.solicitacoesOrigem || {});
+  if (!scKeys.length) { showAlert('Esse processo não tem solicitações de origem.', 'danger'); return; }
+  var reservas = scKeys.map(function(scKey) { return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) { return atual === 'APROVADA' ? 'CONSOLIDADA' : undefined; }); });
+  Promise.all(reservas).then(function(results) {
+    var falharam = results.filter(function(r) { return !r.committed; });
+    if (falharam.length) {
+      var reverts = {};
+      results.forEach(function(r, i) { if (r.committed) reverts['solicitacoes_compra/' + scKeys[i] + '/status'] = 'APROVADA'; });
+      return db.ref().update(reverts).then(function() { throw new Error('Uma ou mais solicitações já foram consolidadas ou alteradas por outro processo.'); });
+    }
+    var cadeia = Promise.resolve(), criados = [];
+    Object.keys(grupos).forEach(function(cKey) { cadeia = cadeia.then(function() { return criarPedidoCotacaoPorFornecedor(procKey, proc, cKey, grupos[cKey]).then(function(pc) { criados.push(pc); }); }); });
+    return cadeia.then(function() {
+      var pcsPorFornecedor = {}; criados.forEach(function(pc) { pcsPorFornecedor[pc.cKey] = pc.pcKey; });
+      return db.ref('processos_cotacao/' + procKey).update({
+        status: 'DECIDIDO', vencedoresPorItem: escolhas, pedidosCompraGeradosPorFornecedor: pcsPorFornecedor,
+        fornecedorVencedorConvidadoKey: criados.length === 1 ? criados[0].cKey : null,
+        pedidoCompraGeradoKey: criados.length === 1 ? criados[0].pcKey : null
+      }).then(function() { showAlert(criados.length + ' Pedido(s) de Compra criado(s): ' + criados.map(function(pc) { return pc.numero; }).join(', ') + '.', 'success'); });
+    });
+  }).catch(function(err) { showAlert('Erro ao gerar pedidos: ' + err.message, 'danger'); });
+}
+
 // Reaproveita a mesma lógica de reserva por .transaction() que o antigo
 // saveConsolidar() usava -- só o preço agora vem da resposta do convidado
 // vencedor, não é mais digitado na hora.
