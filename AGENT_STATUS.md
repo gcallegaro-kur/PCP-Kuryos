@@ -7,13 +7,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** WMS e Logística.
-- **Arquivos ativos:** `public/estoque.html`, `public/logistica.html`.
+- **Escopo:** WMS, Logística e emissão de OP.
+- **Arquivos ativos:** nenhum.
 - **Estado:** filtro de área aplicado à Lista, Mapa por Rua e Planta Baixa;
   indicadores passam a refletir o recorte. Logística diferencia coleta da
   Kuryos de entrega pelo remetente para agendamento.
 - **Validação:** sintaxe JavaScript de `public/estoque.html` validada com Node.
-- **Commit/deploy:** pendente. Não incluir alterações de outro agente.
+- **Commit/deploy:** `855de2f` (saldo na OP), `250f5ef` (Logística) e
+  `88ad322` (WMS) commitados e publicados em 2026-09-09.
+- **Última entrega:** saldo de estoque por material na criação de OP,
+  exclusivamente como referência visual; destaca saldo menor que o consumo.
+- **Validação adicional:** sintaxe JavaScript de `public/emitir_op.html`
+  validada com Node.
+- **Última entrega Logística:** dados de coleta/viagem (modalidade, prestador
+  cadastrado, valor negociado, referência e status), em `250f5ef`.
 
 ### Claude
 
