@@ -23,6 +23,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   cadastrado, valor negociado, referência e status), em `250f5ef`.
 - **Última entrega Cotação:** fluxo guiado para preencher uma proposta por
   fornecedor e comparar por material, em `365c759`; publicado em 2026-09-09.
+- **Última entrega Cotação:** decisão por material e geração automática de
+  um PC por fornecedor, em `913effc`; publicado em 2026-09-09.
 
 ### Claude
 
