@@ -359,16 +359,30 @@
      entrega que já está na doca. -->
 <div class="modal-bg" id="modalPcDireto">
   <div class="modal">
-    <div class="modal-header"><h2>Pedido de Compra Direto</h2><button class="modal-close" id="modalPcdClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-header"><h2 id="pcdTitulo">Entrada Direta de Material</h2><button class="modal-close" id="modalPcdClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
-      <div class="section-note">
-        Use para material que <b>já chegou ou está chegando</b> sem Pedido de Compra no sistema.
-        Ele nasce já como <b>ENVIADO</b>, então aparece na hora em Logística → Recebimento.
-        Fica marcado como direto no histórico — é assim que dá pra enxergar depois quanto
-        da entrada está passando fora do processo de cotação.
+      <div class="section-note" id="pcdInfo"></div>
+
+      <div class="section-label">Origem e transporte</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Natureza da entrada *</label>
+          <select id="pcdNatureza">
+            <option value="COMPRA_KURYOS">Compra da Kuryos</option>
+            <option value="REMESSA_CLIENTE">Material remetido por cliente</option>
+            <option value="REMESSA_TERCEIRO">Material remetido por terceiro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quem coordena o transporte? *</label>
+          <select id="pcdResponsavelTransporte">
+            <option value="REMETENTE">Remetente agenda a entrega</option>
+            <option value="KURYOS">Kuryos agenda a coleta</option>
+          </select>
+        </div>
       </div>
 
-      <div class="section-label">Fornecedor</div>
+      <div class="section-label" id="pcdOrigemLabel">Fornecedor</div>
       <div class="form-group full" style="position:relative">
         <input type="text" id="pcdFornecedor" placeholder="Buscar fornecedor por nome..." autocomplete="off">
         <input type="hidden" id="pcdFornecedorKey">
@@ -387,6 +401,8 @@
           <option value="PERIODO_ADAPTACAO">Período de adaptação — compra anterior ao sistema</option>
           <option value="COMPRA_DIRETA">Compra direta / emergencial, sem cotação</option>
           <option value="AMOSTRA_BONIFICACAO">Amostra ou bonificação do fornecedor</option>
+          <option value="MATERIAL_REMETIDO_CLIENTE">Material remetido pelo cliente</option>
+          <option value="TRANSFERENCIA_TERCEIRO">Transferência ou remessa de terceiro</option>
           <option value="OUTRO">Outro</option>
         </select>
       </div>
@@ -444,19 +460,50 @@
       <div class="section-label">Itens consolidados e candidatos a convidar</div>
       <div id="cotItensCandidatos"></div>
 
-      <div class="section-label">Fornecedor avulso (ainda não cadastrado)</div>
-      <div class="form-grid">
-        <div class="form-group"><label>Nome</label><input type="text" id="cotAvulsoNome" placeholder="Nome do fornecedor"></div>
-        <div class="form-group"><label>E-mail</label><input type="text" id="cotAvulsoEmail" placeholder="email@fornecedor.com"></div>
-      </div>
-      <button type="button" class="btn btn-ghost btn-sm" id="btnAddAvulso" style="margin-top:8px">+ Adicionar à lista de convidados</button>
-      <div id="cotAvulsosList" style="margin-top:10px"></div>
-
       <div class="field-hint" style="margin-top:12px">Ao confirmar, cria o processo de cotação e um <b>rascunho</b> de e-mail (via Outlook) pra cada convidado com e-mail conhecido — nada é enviado automaticamente, você revisa e envia da caixa da Kuryos.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalIniciarCotacaoCancel">Cancelar</button>
       <button class="btn btn-purple" id="modalIniciarCotacaoSave">Iniciar Cotação e Criar Rascunhos</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Outro fornecedor para UM item da cotação.
+     Dois caminhos, deliberadamente nesta ordem: primeiro procurar no cadastro
+     (a empresa quase sempre já existe, e cadastrar de novo cria duplicata),
+     só depois criar pelo CNPJ. -->
+<div class="modal-bg" id="modalOutroForn">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><h2>Outro fornecedor para este item</h2><button class="modal-close" id="modalOutroFornClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="section-note" id="ofContexto"></div>
+
+      <div class="section-label">1. Já cadastrado</div>
+      <div class="kt-search" style="margin-bottom:8px"><span class="icon">🔍</span><input type="text" id="ofBusca" placeholder="Buscar por nome ou CNPJ..."></div>
+      <div id="ofLista" style="max-height:230px;overflow-y:auto"></div>
+
+      <div class="section-label" style="margin-top:16px">2. Não está no cadastro — pelo CNPJ</div>
+      <div class="section-note">O CNPJ é a âncora: nome comercial varia e vira cadastro duplicado. Preenchemos a razão social pra você a partir da base pública — se não vier, digite à mão.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>CNPJ</label>
+          <input type="text" id="ofCnpj" placeholder="00.000.000/0000-00" inputmode="numeric">
+          <div class="field-hint" id="ofCnpjHint"></div>
+        </div>
+        <div class="form-group">
+          <label>Nome do fornecedor</label>
+          <input type="text" id="ofNome" placeholder="Preenchido pelo CNPJ, ou digite">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>E-mail (opcional — sem ele não sai rascunho de cotação)</label>
+        <input type="text" id="ofEmail" placeholder="email@fornecedor.com">
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="ofAddNovo">+ Adicionar este fornecedor ao item</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="modalOutroFornCancel">Fechar</button>
     </div>
   </div>
 </div>
@@ -684,7 +731,12 @@ var cotacaoSelecionadas = {}; // scKey -> true
 // só { fornecedorKey: true } -- a associação "convidei o WM PRA O FRASCO" era
 // descartada, e a grade abria célula de álcool pro fornecedor de frasco.
 var cotConvidadosSelecionados = {};
-var cotAvulsosBuffer = []; // [{nome, email}], só dentro do modal Iniciar Cotação até salvar
+// Extras e avulsos POR ITEM. Antes o avulso era do processo inteiro -- um
+// fornecedor novo de frasco aparecia tambem na linha do alcool, exatamente o
+// problema que o escopo veio resolver.
+var cotExtrasPorLinha = {};   // { 'scKey/itemKey': [fornecedorKey, ...] } cadastrados, fora da homologacao
+var cotAvulsosPorLinha = {};  // { 'scKey/itemKey': [{cnpj, nome, email, cidade, uf}, ...] }
+var ofLinhaAtual = null, ofMaterialAtual = null;
 var allPedidosComerciais = {};
 var scPrefillOrigem = null; // {pedidoKey, sku} quando a solicitação em edição veio de "Gerar de Pedido"
 
@@ -2246,34 +2298,16 @@ function candidatosCotacaoParaMaterial(materialCodigo) {
   // Todo homologado (direto ou por variante) é, por definição, homologado.
   lista.forEach(function(c) { c.homologado = true; c.viaTipo = false; });
 
-  /* Rede pros materiais SEM homologado -- 593 dos 906, e ZERO dos 207 MPES.
-     Sem isso, "cada item só oferece seus fornecedores" deixaria 2 em cada 3
-     itens com nenhuma opção, impossíveis de cotar.
+  /* Só HOMOLOGADOS. Decisão do usuário (2026-09-09), revendo a sugestão por
+     tipo que eu tinha proposto: "E se deixarmos só os homologados, podendo
+     adicionar outros por seleção ou até texto livre, a partir da informação
+     do CNPJ? acho que faz mais sentido para nossa operação agora."
 
-     Oferece quem tem `fornecedor.tipo` compatível com a família do código
-     (EP/ES/ET → embalagem, MPGR/MPES → mp). Marcados como NÃO homologados:
-     dá pra convidar, e a tela diz que é fora da homologação.
-
-     É AQUI que se aperta o parafuso quando a base de homologados estiver
-     madura ("pendendo para 3 em algum momento") -- basta parar de devolver
-     esta lista. */
-  if (!lista.length) {
-    var tipoAlvo = tipoFornecedorParaMaterial(materialCodigo);
-    if (tipoAlvo) {
-      Object.entries(allFornecedores).forEach(function(e) {
-        var fKey = e[0], f = e[1];
-        if (!f || f.ativo === false) return;
-        var tipos = f.tipos && f.tipos.length ? f.tipos : (f.tipo ? [f.tipo] : []);
-        if (tipos.indexOf(tipoAlvo) === -1) return;
-        lista.push({
-          key: fKey, nome: f.nomeFantasia || f.razaoSocial || fKey,
-          status: null, origemMaterial: materialCodigo,
-          viaVariante: false, viaTipo: true, homologado: false, tipo: tipoAlvo
-        });
-      });
-      lista.sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
-    }
-  }
+     É mais honesto: sugerir por tipo ainda era o sistema PALPITANDO quem
+     fornece o quê. Aqui a lista só afirma o que a Kuryos de fato homologou, e
+     qualquer outro entra por escolha explícita de quem está cotando --
+     `cotExtrasPorLinha` (selecionado do cadastro) ou `cotAvulsosPorLinha`
+     (digitado com CNPJ). */
   return lista;
 }
 
@@ -2305,7 +2339,7 @@ function renderCotModalConteudo() {
   window.__cotItensConsolidados = rows;
 
   var box = document.getElementById('cotItensCandidatos');
-  if (!rows.length) { box.innerHTML = '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>'; renderCotAvulsosList(); return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>'; return; }
 
   box.innerHTML = rows.map(function(r) {
     // Identidade da LINHA (item de uma solicitação), não do material: o mesmo
@@ -2314,9 +2348,7 @@ function renderCotModalConteudo() {
     var candidatos = candidatosCotacaoParaMaterial(r.it.materialCodigo);
     var candidatosHtml = candidatos.length
       ? candidatos.map(function(c) {
-          var origem = c.viaTipo
-            ? ('⚠ não homologado — sugerido por ser fornecedor de ' + escapeHtml(c.tipo))
-            : (c.viaVariante ? ('via variante equivalente ' + escapeHtml(c.origemMaterial)) : 'homologado');
+          var origem = c.viaVariante ? ('homologado via variante equivalente ' + escapeHtml(c.origemMaterial)) : 'homologado';
           return '<label class="chk-row" style="cursor:pointer;padding:5px 0">' +
             '<input type="checkbox" class="cot-cand-check" data-linha="' + escapeAttr(linhaId) + '" data-fkey="' + escapeAttr(c.key) + '"' +
               ((cotConvidadosSelecionados[linhaId] || {})[c.key] ? ' checked' : '') + '>' +
@@ -2324,12 +2356,59 @@ function renderCotModalConteudo() {
               ' <span style="color:var(--muted);font-size:11px">(' + origem + ')</span></div>' +
           '</label>';
         }).join('')
-      : '<div class="empty-hint">Nenhum fornecedor homologado/candidato pra esse material ainda. <a href="cadastros.html?tab=materiais" target="_blank">Cadastrar em Materiais</a>, ou adicione um fornecedor avulso abaixo.</div>';
+      : '<div class="empty-hint" style="padding:6px 0">Nenhum fornecedor <b>homologado</b> pra esse material. Adicione um abaixo, ou homologue em <a href="cadastros.html?tab=materiais" target="_blank">Cadastros › Materiais</a>.</div>';
+
+    // Extras deste item: escolhidos do cadastro (fora da homologação) e
+    // digitados por CNPJ. Ficam POR ITEM, não no processo -- um fornecedor
+    // novo de frasco não tem nada que aparecer na linha do álcool.
+    var extras = (cotExtrasPorLinha[linhaId] || []).map(function(fKey, idx) {
+      var f = allFornecedores[fKey] || {};
+      return '<div class="chk-row" style="padding:5px 0">' +
+        '<div class="chk-row-body">✓ ' + escapeHtml(f.nomeFantasia || f.razaoSocial || fKey) +
+          ' <span class="badge badge-orange" style="font-size:10px">fora da homologação</span>' +
+          (f.cnpj ? '<div style="font-size:11px;color:var(--muted)">CNPJ ' + escapeHtml(f.cnpj) + '</div>' : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-danger-ghost btn-sm cot-extra-rm" data-linha="' + escapeAttr(linhaId) + '" data-idx="' + idx + '">Remover</button>' +
+      '</div>';
+    }).join('');
+    var avulsos = (cotAvulsosPorLinha[linhaId] || []).map(function(av, idx) {
+      return '<div class="chk-row" style="padding:5px 0">' +
+        '<div class="chk-row-body">✓ ' + escapeHtml(av.nome) +
+          ' <span class="badge badge-gray" style="font-size:10px">novo, sem cadastro</span>' +
+          '<div style="font-size:11px;color:var(--muted)">CNPJ ' + escapeHtml(formatarCnpj(av.cnpj)) +
+            (av.cidade ? ' · ' + escapeHtml(av.cidade) + '/' + escapeHtml(av.uf || '') : '') +
+            (av.email ? ' · ' + escapeHtml(av.email) : '') + '</div>' +
+        '</div>' +
+        '<button type="button" class="btn btn-danger-ghost btn-sm cot-avulso-rm" data-linha="' + escapeAttr(linhaId) + '" data-idx="' + idx + '">Remover</button>' +
+      '</div>';
+    }).join('');
+
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden">' +
       '<div style="padding:8px 12px;background:var(--surface-2);font-size:12.5px"><b>' + escapeHtml(r.it.materialCodigo) + '</b> — ' + escapeHtml(r.it.materialNome || '') + ' · ' + fmtNum(r.it.qtd) + ' ' + escapeHtml(r.it.unidade || '') + '</div>' +
-      '<div style="padding:4px 12px">' + candidatosHtml + '</div>' +
+      '<div style="padding:4px 12px">' + candidatosHtml + extras + avulsos +
+        '<button type="button" class="btn btn-ghost btn-sm cot-add-outro" data-linha="' + escapeAttr(linhaId) + '" ' +
+          'data-material="' + escapeAttr(r.it.materialCodigo) + '" style="margin:6px 0">+ Outro fornecedor</button>' +
+      '</div>' +
     '</div>';
   }).join('');
+
+  document.querySelectorAll('.cot-add-outro').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      abrirModalOutroFornecedor(btn.getAttribute('data-linha'), btn.getAttribute('data-material'));
+    });
+  });
+  document.querySelectorAll('.cot-extra-rm').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      cotExtrasPorLinha[btn.getAttribute('data-linha')].splice(parseInt(btn.getAttribute('data-idx'), 10), 1);
+      renderCotModalConteudo();
+    });
+  });
+  document.querySelectorAll('.cot-avulso-rm').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      cotAvulsosPorLinha[btn.getAttribute('data-linha')].splice(parseInt(btn.getAttribute('data-idx'), 10), 1);
+      renderCotModalConteudo();
+    });
+  });
 
   document.querySelectorAll('.cot-cand-check').forEach(function(el) {
     el.addEventListener('change', function() {
@@ -2343,34 +2422,170 @@ function renderCotModalConteudo() {
       renderCotModalConteudo();
     });
   });
-  renderCotAvulsosList();
 }
-function renderCotAvulsosList() {
-  var box = document.getElementById('cotAvulsosList');
-  if (!cotAvulsosBuffer.length) { box.innerHTML = ''; return; }
-  box.innerHTML = cotAvulsosBuffer.map(function(av, idx) {
-    return '<div class="chk-row"><div class="chk-row-body"><b>' + escapeHtml(av.nome) + '</b> — ' + escapeHtml(av.email || 'sem e-mail') + '</div>' +
-      '<button type="button" class="btn btn-danger-ghost btn-sm cot-avulso-remover" data-idx="' + idx + '">Remover</button></div>';
-  }).join('');
-  document.querySelectorAll('.cot-avulso-remover').forEach(function(btn) {
-    btn.addEventListener('click', function() { cotAvulsosBuffer.splice(parseInt(btn.getAttribute('data-idx'), 10), 1); renderCotAvulsosList(); });
+
+/* ── Outro fornecedor para UM item ──
+   Substitui o "fornecedor avulso" que era do processo inteiro. Decisão do
+   usuário (2026-09-09): "deixarmos só os homologados, podendo adicionar
+   outros por seleção ou até texto livre, a partir da informação do CNPJ".
+
+   Dois caminhos, nesta ordem de propósito: primeiro PROCURAR no cadastro (a
+   empresa quase sempre já existe, e cadastrar de novo é como nascem as
+   duplicatas), só depois criar pelo CNPJ. Sempre escopado ao item. */
+function abrirModalOutroFornecedor(linhaId, materialCodigo) {
+  ofLinhaAtual = linhaId; ofMaterialAtual = materialCodigo;
+  var mat = findMaterialByCodigo(materialCodigo) || {};
+  document.getElementById('ofContexto').innerHTML =
+    'Item: <b>' + escapeHtml(materialCodigo) + '</b> — ' + escapeHtml(mat.mpNome || '') +
+    '. Quem for adicionado aqui cota <b>só este item</b>.';
+  document.getElementById('ofBusca').value = '';
+  document.getElementById('ofCnpj').value = '';
+  document.getElementById('ofCnpj').removeAttribute('data-empresa');
+  document.getElementById('ofNome').value = '';
+  document.getElementById('ofEmail').value = '';
+  document.getElementById('ofCnpjHint').textContent = '';
+  renderOfLista();
+  document.getElementById('modalOutroForn').classList.add('open');
+}
+
+function fecharModalOutroFornecedor() {
+  document.getElementById('modalOutroForn').classList.remove('open');
+  ofLinhaAtual = null; ofMaterialAtual = null;
+}
+
+function renderOfLista() {
+  var busca = norm(document.getElementById('ofBusca').value);
+  var jaHomologados = {};
+  candidatosCotacaoParaMaterial(ofMaterialAtual).forEach(function(c) { jaHomologados[c.key] = true; });
+  var jaExtras = cotExtrasPorLinha[ofLinhaAtual] || [];
+  // Ordena colocando o tipo compatível primeiro. NÃO é filtro -- o usuário
+  // pediu liberdade de escolher qualquer um. É só não obrigar a rolar 395
+  // fornecedores pra achar quem faz sentido. `tipoFornecedorParaMaterial`
+  // continua útil aqui, agora ordenando em vez de decidir.
+  var tipoAlvo = tipoFornecedorParaMaterial(ofMaterialAtual);
+  var lista = Object.entries(allFornecedores).filter(function(e) {
+    var f = e[1];
+    if (!f || f.ativo === false) return false;
+    if (jaHomologados[e[0]] || jaExtras.indexOf(e[0]) !== -1) return false;
+    if (!busca) return true;
+    return (norm(f.nomeFantasia) + ' ' + norm(f.razaoSocial) + ' ' + norm(f.cnpj)).indexOf(busca) !== -1;
+  }).map(function(e) {
+    var f = e[1];
+    var tipos = (f.tipos && f.tipos.length) ? f.tipos : (f.tipo ? [f.tipo] : []);
+    return { key: e[0], f: f, combina: !!(tipoAlvo && tipos.indexOf(tipoAlvo) !== -1) };
+  });
+  lista.sort(function(a, b) {
+    if (a.combina !== b.combina) return a.combina ? -1 : 1;
+    return norm(a.f.nomeFantasia || a.f.razaoSocial).localeCompare(norm(b.f.nomeFantasia || b.f.razaoSocial));
+  });
+
+  var box = document.getElementById('ofLista');
+  if (!lista.length) {
+    box.innerHTML = '<div class="empty-hint">' +
+      (busca ? 'Nenhum fornecedor cadastrado com esse termo.' : 'Todos os cadastrados já estão nesta linha.') +
+      '</div>';
+    return;
+  }
+  box.innerHTML = lista.slice(0, 60).map(function(x) {
+    var f = x.f;
+    return '<div class="chk-row"><div class="chk-row-body">' +
+      escapeHtml(f.nomeFantasia || f.razaoSocial || x.key) +
+      (x.combina ? ' <span class="badge badge-blue" style="font-size:10px">' + escapeHtml(tipoAlvo) + '</span>' : '') +
+      '<div style="font-size:11px;color:var(--muted)">' +
+        (f.cnpj ? 'CNPJ ' + escapeHtml(f.cnpj) : 'sem CNPJ') +
+        (f.cidade ? ' · ' + escapeHtml(f.cidade) + '/' + escapeHtml(f.uf || '') : '') +
+      '</div></div>' +
+      '<button type="button" class="btn btn-ghost btn-sm of-add" data-fkey="' + escapeAttr(x.key) + '">Adicionar</button></div>';
+  }).join('') + (lista.length > 60 ? '<div class="field-hint">Mostrando 60 de ' + lista.length + ' — refine a busca.</div>' : '');
+
+  box.querySelectorAll('.of-add').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var fKey = btn.getAttribute('data-fkey');
+      if (!cotExtrasPorLinha[ofLinhaAtual]) cotExtrasPorLinha[ofLinhaAtual] = [];
+      cotExtrasPorLinha[ofLinhaAtual].push(fKey);
+      renderOfLista();
+      renderCotModalConteudo();
+    });
   });
 }
-function adicionarFornecedorAvulso() {
-  var nome = document.getElementById('cotAvulsoNome').value.trim();
-  var email = document.getElementById('cotAvulsoEmail').value.trim();
-  if (!nome) { showAlert('Informe ao menos o nome do fornecedor avulso.', 'danger'); return; }
-  cotAvulsosBuffer.push({nome: nome, email: email});
-  document.getElementById('cotAvulsoNome').value = '';
-  document.getElementById('cotAvulsoEmail').value = '';
-  renderCotAvulsosList();
+
+// CNPJ digitado: valida o dígito verificador ANTES de consultar -- erro de
+// digitação não vira consulta desperdiçada nem cadastro sujo que ninguém acha
+// depois. A consulta é conveniência: falhou, digita-se o nome à mão.
+function ofConsultarCnpj() {
+  var hint = document.getElementById('ofCnpjHint');
+  var bruto = document.getElementById('ofCnpj').value;
+  var limpo = normalizarCnpj(bruto);
+  if (!limpo) {
+    hint.textContent = bruto.replace(/\D/g, '').length ? 'Faltam dígitos — o CNPJ tem 14.' : '';
+    hint.style.color = '';
+    return;
+  }
+  document.getElementById('ofCnpj').value = formatarCnpj(limpo);
+  if (!cnpjValido(limpo)) {
+    hint.textContent = '⚠ CNPJ inválido (dígito verificador não bate). Confira a digitação.';
+    hint.style.color = 'var(--danger)';
+    return;
+  }
+  hint.textContent = 'Consultando...'; hint.style.color = '';
+  buscarEmpresaPorCnpj(limpo).then(function(r) {
+    if (!r.ok) { hint.textContent = r.erro; hint.style.color = 'var(--warning)'; return; }
+    var e = r.empresa;
+    if (!document.getElementById('ofNome').value.trim()) {
+      document.getElementById('ofNome').value = e.nomeFantasia || e.razaoSocial;
+    }
+    // Situação cadastral diferente de ATIVA é o tipo de coisa que só se
+    // descobre quando a nota não sai. Melhor saber antes de cotar.
+    hint.innerHTML = '✓ ' + escapeHtml(e.razaoSocial) +
+      (e.cidade ? ' — ' + escapeHtml(e.cidade) + '/' + escapeHtml(e.uf) : '') +
+      (e.situacao && e.situacao.toUpperCase() !== 'ATIVA'
+        ? ' <b style="color:var(--danger)">· situação ' + escapeHtml(e.situacao) + '</b>' : '');
+    hint.style.color = 'var(--success)';
+    document.getElementById('ofCnpj').setAttribute('data-empresa', JSON.stringify(e));
+  });
 }
+
+function ofAdicionarNovo() {
+  var limpo = normalizarCnpj(document.getElementById('ofCnpj').value);
+  var nome = document.getElementById('ofNome').value.trim();
+  if (!limpo) { showAlert('Informe o CNPJ — é ele que evita cadastrar a mesma empresa duas vezes.', 'danger'); return; }
+  if (!cnpjValido(limpo)) { showAlert('CNPJ inválido — confira a digitação.', 'danger'); return; }
+  if (!nome) { showAlert('Informe o nome do fornecedor.', 'danger'); return; }
+
+  // Já existe no cadastro com esse CNPJ? Então é seleção, não criação.
+  // Deixar criar de novo é exatamente como nascem os cadastros duplicados que
+  // o próprio cadastro de fornecedores já tem mecanismo pra detectar.
+  var jaCadastrado = Object.entries(allFornecedores).filter(function(e) {
+    return normalizarCnpj((e[1] || {}).cnpj) === limpo;
+  })[0];
+
+  if (jaCadastrado) {
+    if (!cotExtrasPorLinha[ofLinhaAtual]) cotExtrasPorLinha[ofLinhaAtual] = [];
+    if (cotExtrasPorLinha[ofLinhaAtual].indexOf(jaCadastrado[0]) === -1) {
+      cotExtrasPorLinha[ofLinhaAtual].push(jaCadastrado[0]);
+    }
+    showAlert('Esse CNPJ já está cadastrado como "' +
+      (jaCadastrado[1].nomeFantasia || jaCadastrado[1].razaoSocial) +
+      '" — usei o cadastro existente em vez de criar outro.', 'success');
+  } else {
+    var emp = {};
+    try { emp = JSON.parse(document.getElementById('ofCnpj').getAttribute('data-empresa') || '{}'); } catch (err) { emp = {}; }
+    if (!cotAvulsosPorLinha[ofLinhaAtual]) cotAvulsosPorLinha[ofLinhaAtual] = [];
+    cotAvulsosPorLinha[ofLinhaAtual].push({
+      cnpj: limpo, nome: nome,
+      email: document.getElementById('ofEmail').value.trim(),
+      razaoSocial: emp.razaoSocial || '', cidade: emp.cidade || '', uf: emp.uf || ''
+    });
+  }
+  fecharModalOutroFornecedor();
+  renderCotModalConteudo();
+}
+
 function abrirModalIniciarCotacao() {
   if (!Object.keys(cotacaoSelecionadas).length) return;
   cotConvidadosSelecionados = {};
-  cotAvulsosBuffer = [];
-  document.getElementById('cotAvulsoNome').value = '';
-  document.getElementById('cotAvulsoEmail').value = '';
+  cotExtrasPorLinha = {};
+  cotAvulsosPorLinha = {};
   renderCotModalConteudo(); // popula window.__cotItensConsolidados
   // default: já marca todos os candidatos encontrados, pra agilizar -- o
   // usuário desmarca quem não quiser convidar.
@@ -2406,8 +2621,17 @@ function salvarIniciarCotacao() {
       escopoPorFornecedor[fKey][linhaId] = true;
     });
   });
+  // Extras: cadastrados escolhidos a mao para UM item. Entram no mesmo escopo
+  // -- a diferenca deles e so nao serem homologados, o que a celula sinaliza.
+  Object.keys(cotExtrasPorLinha).forEach(function(linhaId) {
+    (cotExtrasPorLinha[linhaId] || []).forEach(function(fKey) {
+      if (!escopoPorFornecedor[fKey]) escopoPorFornecedor[fKey] = {};
+      escopoPorFornecedor[fKey][linhaId] = true;
+    });
+  });
   var convidadosCadastrados = Object.keys(escopoPorFornecedor);
-  if (!convidadosCadastrados.length && !cotAvulsosBuffer.length) { showAlert('Convide ao menos um fornecedor (cadastrado ou avulso) pra cotar.', 'danger'); return; }
+  var temAvulso = Object.keys(cotAvulsosPorLinha).some(function(k) { return (cotAvulsosPorLinha[k] || []).length; });
+  if (!convidadosCadastrados.length && !temAvulso) { showAlert('Convide ao menos um fornecedor pra cotar — pelos homologados de cada item ou em "+ Outro fornecedor".', 'danger'); return; }
 
   var btn = document.getElementById('modalIniciarCotacaoSave');
   btn.disabled = true;
@@ -2463,13 +2687,38 @@ function salvarIniciarCotacao() {
       itens: itensDoConvidado,
       foraHomologacao: Object.keys(foraHomologacao).length ? foraHomologacao : null };
   });
-  cotAvulsosBuffer.forEach(function(av) {
+  // Avulsos: agrupados por CNPJ. O mesmo fornecedor novo adicionado em dois
+  // itens vira UM convidado cotando os dois -- nao dois convidados homonimos,
+  // que e o que aconteceria agrupando por linha.
+  var avulsosPorCnpj = {};
+  Object.keys(cotAvulsosPorLinha).forEach(function(linhaId) {
+    (cotAvulsosPorLinha[linhaId] || []).forEach(function(av) {
+      if (!avulsosPorCnpj[av.cnpj]) avulsosPorCnpj[av.cnpj] = { dados: av, linhas: {} };
+      avulsosPorCnpj[av.cnpj].linhas[linhaId] = true;
+    });
+  });
+  Object.keys(avulsosPorCnpj).forEach(function(cnpj) {
+    var reg = avulsosPorCnpj[cnpj], av = reg.dados;
     var cKey = db.ref('processos_cotacao').push().key;
-    // Avulso é digitado à mão, sem cadastro e sem homologação: cota TODOS os
-    // itens (escopo vazio = processo inteiro, ver escopoDoConvidado). Quem o
-    // adicionou sabe o que está fazendo.
-    fornecedoresConvidados[cKey] = { fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', prazoPagamentoParcelas: null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null,
-      itens: null, foraHomologacao: null };
+    var itensDoAvulso = {};
+    Object.keys(reg.linhas).forEach(function(linhaId) {
+      var itemKey = itemKeyPorLinha[linhaId];
+      if (itemKey) itensDoAvulso[itemKey] = true;
+    });
+    // Avulso nunca e homologado -- ele nem esta no cadastro ainda. Marcar
+    // TODOS os itens dele deixa isso visivel na grade, e e o gancho pra
+    // sugerir cadastrar/homologar se ele vencer.
+    fornecedoresConvidados[cKey] = {
+      fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null,
+      cnpjAvulso: av.cnpj, razaoSocialAvulso: av.razaoSocial || null,
+      cidadeAvulso: av.cidade || null, ufAvulso: av.uf || null,
+      status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {},
+      condicaoPagamento: '', prazoPagamentoParcelas: null, frete: null,
+      validadeProposta: null, localEntrega: null,
+      convidadoEm: new Date().toISOString(), respondidoEm: null,
+      itens: itensDoAvulso,
+      foraHomologacao: itensDoAvulso
+    };
   });
 
   nextSequential(db, 'config/contadores/processoCotacao', 'COT', 4).then(function(seq) {
@@ -3362,16 +3611,41 @@ function openModalPcDireto() {
   pcdItensBuilder = [{ materialCodigo: '', qtd: null, precoUnit: null }];
   document.getElementById('pcdFornecedor').value = '';
   document.getElementById('pcdFornecedorKey').value = '';
+  document.getElementById('pcdNatureza').value = 'COMPRA_KURYOS';
+  document.getElementById('pcdResponsavelTransporte').value = 'REMETENTE';
   document.getElementById('pcdMotivo').value = '';
   document.getElementById('pcdObs').value = '';
+  atualizarPcdNatureza();
   renderPcdItensBuilder();
   document.getElementById('modalPcDireto').classList.add('open');
 }
 function closeModalPcDireto() { document.getElementById('modalPcDireto').classList.remove('open'); }
 
+// Compra e remessa entram no mesmo recebimento físico, mas não são a mesma
+// coisa comercialmente. A separação evita inventar um PC/fornecedor quando o
+// material pertence ao cliente e dá à Logística uma instrução inequívoca.
+function atualizarPcdNatureza() {
+  var natureza = document.getElementById('pcdNatureza').value;
+  var compra = natureza === 'COMPRA_KURYOS';
+  var coletaKuryos = document.getElementById('pcdResponsavelTransporte').value === 'KURYOS';
+  document.getElementById('pcdTitulo').textContent = compra ? 'Pedido de Compra Direto' : 'Entrada Direta de Material';
+  document.getElementById('pcdOrigemLabel').textContent = compra ? 'Fornecedor' : 'Remetente';
+  document.getElementById('pcdFornecedor').placeholder = compra
+    ? 'Buscar fornecedor por nome...'
+    : 'Informe o cliente ou terceiro que remeterá o material...';
+  document.getElementById('pcdInfo').innerHTML = compra
+    ? 'Use para material que <b>já chegou ou está chegando</b> sem Pedido de Compra no sistema. Ele entra em Logística → Recebimento e fica marcado como direto.'
+    : 'Registre o material que será <b>remetido à Kuryos</b>, sem criar uma compra fictícia. A Logística verá se deve ' +
+      (coletaKuryos ? '<b>programar a coleta</b>.' : '<b>aguardar a entrega do remetente</b>.');
+}
+
 function salvarPcDireto() {
   var fornecedorKey = document.getElementById('pcdFornecedorKey').value;
-  if (!fornecedorKey) { showAlert('Escolha o fornecedor na lista de sugestões.', 'danger'); return; }
+  var natureza = document.getElementById('pcdNatureza').value;
+  var compra = natureza === 'COMPRA_KURYOS';
+  var origemNomeDigitado = document.getElementById('pcdFornecedor').value.trim();
+  if (compra && !fornecedorKey) { showAlert('Escolha o fornecedor na lista de sugestões.', 'danger'); return; }
+  if (!compra && !origemNomeDigitado) { showAlert('Informe o cliente ou terceiro que remeterá o material.', 'danger'); return; }
   var motivo = document.getElementById('pcdMotivo').value;
   if (!motivo) { showAlert('Informe por que este material entrou sem passar por cotação.', 'danger'); return; }
 
@@ -3382,6 +3656,7 @@ function salvarPcDireto() {
   btn.disabled = true; btn.textContent = 'Criando...';
 
   var fornecedor = allFornecedores[fornecedorKey];
+  var responsavelTransporte = document.getElementById('pcdResponsavelTransporte').value;
   var itensObj = {};
   itensValidos.forEach(function(it) {
     var mat = findMaterialByCodigo(it.materialCodigo);
@@ -3409,11 +3684,18 @@ function salvarPcDireto() {
       // pedido obviamente já foi feito ao fornecedor. É também o único
       // status que o recebimento (logistica.html) enxerga.
       status: 'ENVIADO',
-      fornecedorKey: fornecedorKey,
+      fornecedorKey: fornecedorKey || null,
       fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '',
+      naturezaMovimentacao: natureza,
+      origemNome: compra ? (fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '') : origemNomeDigitado,
+      origemTipo: compra ? 'FORNECEDOR' : (natureza === 'REMESSA_CLIENTE' ? 'CLIENTE' : 'TERCEIRO'),
+      transporte: {
+        responsavel: responsavelTransporte,
+        acaoLogistica: responsavelTransporte === 'KURYOS' ? 'PROGRAMAR_COLETA' : 'AGUARDAR_ENTREGA'
+      },
       dataCriacao: agora, dataEmissao: agora,
       itens: itensObj,
-      condicaoPagamento: (fornecedor && fornecedor.condicaoPagamento) || '',
+      condicaoPagamento: compra && fornecedor ? (fornecedor.condicaoPagamento || '') : '',
       // ── marca de auditoria ──
       origemDireta: true,
       motivoDireto: motivo,
@@ -3423,7 +3705,7 @@ function salvarPcDireto() {
   }).then(function() {
     btn.disabled = false; btn.textContent = 'Criar e liberar pra recebimento';
     closeModalPcDireto();
-    showAlert('Pedido de Compra direto criado e já disponível em Logística → Recebimento.', 'success');
+    showAlert((compra ? 'Pedido de Compra direto' : 'Entrada por remessa') + ' criado e já disponível em Logística → Recebimento.', 'success');
   }).catch(function(err) {
     btn.disabled = false; btn.textContent = 'Criar e liberar pra recebimento';
     showAlert('Erro ao criar o pedido: ' + err.message, 'danger');
@@ -3437,6 +3719,8 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalPcdClose').addEventListener('click', closeModalPcDireto);
   document.getElementById('modalPcdCancel').addEventListener('click', closeModalPcDireto);
   document.getElementById('modalPcdSave').addEventListener('click', salvarPcDireto);
+  document.getElementById('pcdNatureza').addEventListener('change', atualizarPcdNatureza);
+  document.getElementById('pcdResponsavelTransporte').addEventListener('change', atualizarPcdNatureza);
   document.getElementById('btnAddPcdItem').addEventListener('click', function() {
     pcdItensBuilder.push({ materialCodigo: '', qtd: null, precoUnit: null });
     renderPcdItensBuilder();
@@ -3478,7 +3762,12 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalIniciarCotacaoCancel').addEventListener('click', fecharModalIniciarCotacao);
   document.getElementById('modalIniciarCotacaoSave').addEventListener('click', salvarIniciarCotacao);
   document.getElementById('modalIniciarCotacao').addEventListener('click', function(e) { if (e.target === this) fecharModalIniciarCotacao(); });
-  document.getElementById('btnAddAvulso').addEventListener('click', adicionarFornecedorAvulso);
+  document.getElementById('modalOutroFornClose').addEventListener('click', fecharModalOutroFornecedor);
+  document.getElementById('modalOutroFornCancel').addEventListener('click', fecharModalOutroFornecedor);
+  document.getElementById('ofAddNovo').addEventListener('click', ofAdicionarNovo);
+  var _tof;
+  document.getElementById('ofBusca').addEventListener('input', function() { clearTimeout(_tof); _tof = setTimeout(renderOfLista, 200); });
+  document.getElementById('ofCnpj').addEventListener('blur', ofConsultarCnpj);
 
   var fecharEtiquetaPC = function() { document.getElementById('modalEtiquetaPC').classList.remove('open'); };
   document.getElementById('modalEtiquetaPCClose').addEventListener('click', fecharEtiquetaPC);

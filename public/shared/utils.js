@@ -4201,6 +4201,78 @@ function formatarCep(cep) {
 // Busca o endereço. `fetchFn` é injetável só pra o teste não sair na rede.
 // Resolve SEMPRE (nunca rejeita): { ok, erro, endereco }. Quem chama trata
 // a falha mostrando um aviso, não travando o formulário.
+/* ── CNPJ ──
+   Pedido do usuário (2026-09-09): na cotação, além dos homologados, "poder
+   adicionar outros por seleção ou até texto livre, a partir da informação do
+   CNPJ".
+
+   O CNPJ é a âncora certa pra fornecedor digitado à mão: nome comercial varia
+   ("WM", "WM Embalagens", "W.M. Embalagens Ltda") e vira cadastro duplicado;
+   CNPJ não. Guardando ele, o avulso de hoje vira cadastro de verdade amanhã
+   sem ninguém adivinhar se é a mesma empresa. */
+function normalizarCnpj(cnpj) {
+  var d = String(cnpj == null ? '' : cnpj).replace(/\D/g, '');
+  return d.length === 14 ? d : '';
+}
+
+function formatarCnpj(cnpj) {
+  var d = normalizarCnpj(cnpj);
+  if (!d) return String(cnpj || '');
+  return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
+}
+
+// Função PURA. Dígito verificador do CNPJ. Pega erro de digitação ANTES de
+// gastar uma consulta externa -- e antes de gravar um fornecedor com CNPJ
+// que não existe, que é o tipo de sujeira que ninguém acha depois.
+function cnpjValido(cnpj) {
+  var d = normalizarCnpj(cnpj);
+  if (!d) return false;
+  // Todos os dígitos iguais (00000000000000) passa na conta mas não é CNPJ.
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  function dv(base) {
+    var pesos = base.length === 12 ? [5,4,3,2,9,8,7,6,5,4,3,2] : [6,5,4,3,2,9,8,7,6,5,4,3,2];
+    var soma = 0;
+    for (var i = 0; i < base.length; i++) soma += parseInt(base[i], 10) * pesos[i];
+    var r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  }
+  return dv(d.slice(0, 12)) === parseInt(d[12], 10) &&
+         dv(d.slice(0, 13)) === parseInt(d[13], 10);
+}
+
+/* Consulta pública de CNPJ (BrasilAPI), mesmo espírito do ViaCEP que já está
+   em uso: conveniência que preenche razão social e cidade, NUNCA obrigação.
+   Falhou, está fora do ar, sem internet? Devolve ok:false e a pessoa digita o
+   nome à mão -- o fluxo não pode depender de um serviço de terceiro.
+   Nunca rejeita, pra quem chama não precisar de try/catch. */
+function buscarEmpresaPorCnpj(cnpj, fetchFn) {
+  var limpo = normalizarCnpj(cnpj);
+  if (!limpo) return Promise.resolve({ ok: false, erro: 'CNPJ precisa ter 14 dígitos.' });
+  if (!cnpjValido(limpo)) return Promise.resolve({ ok: false, erro: 'CNPJ inválido (dígito verificador não bate). Confira a digitação.' });
+  var f = fetchFn || (typeof fetch === 'function' ? fetch : null);
+  if (!f) return Promise.resolve({ ok: false, erro: 'Consulta de CNPJ indisponível neste navegador.' });
+  return f('https://brasilapi.com.br/api/cnpj/v1/' + limpo)
+    .then(function(resp) {
+      if (resp && resp.status === 404) return { __naoAchou: true };
+      if (!resp || !resp.ok) throw new Error('HTTP ' + ((resp && resp.status) || '?'));
+      return resp.json();
+    })
+    .then(function(d) {
+      if (!d || d.__naoAchou) return { ok: false, erro: 'CNPJ não encontrado na base pública. Dá pra seguir digitando o nome à mão.' };
+      return { ok: true, empresa: {
+        cnpj: limpo,
+        razaoSocial: d.razao_social || '',
+        nomeFantasia: d.nome_fantasia || d.razao_social || '',
+        cidade: d.municipio || '',
+        uf: (d.uf || '').toUpperCase(),
+        situacao: d.descricao_situacao_cadastral || ''
+      } };
+    })
+    .catch(function(e) {
+      return { ok: false, erro: 'Não foi possível consultar o CNPJ agora (' + e.message + '). Digite o nome à mão.' };
+    });
+}
+
 function buscarEnderecoPorCep(cep, fetchFn) {
   var limpo = normalizarCep(cep);
   if (!limpo) return Promise.resolve({ ok: false, erro: 'CEP precisa ter 8 dígitos.' });
