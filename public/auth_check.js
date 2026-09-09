@@ -640,14 +640,27 @@ function renderUnifiedNavbar(user) {
   // qualquer autenticado, sem precisar de módulo; o que os módulos decidem
   // aqui é só QUAL manual oferecer, pra não empilhar 3 links iguais pra
   // todo mundo.
+  // Agora há UM manual por operação, e o índice (manuais.html) é o ponto de
+  // entrada -- sem ele cada manual seria um beco sem saída, e a pessoa
+  // precisaria saber a URL do próximo de cor (foi assim que os 3 manuais
+  // antigos ficaram invisíveis até a auditoria). O menu oferece o índice
+  // sempre, mais os manuais das operações que a pessoa de fato executa: uma
+  // lista com os 9 seria ruído pra todo mundo.
   const manuaisGroup = grupo('Ajuda', [
-    temMod('apontamento') && ktLink('manual_apontador.html', 'book', 'Manual do Apontador', activePage),
-    temMod('cadastros') && ktLink('manual_pcp_comercial.html', 'book', 'Manual do PCP', activePage),
-    temMod('planejamento') && ktLink('manual.html', 'book', 'Manual de Operação', activePage),
+    ktLink('manuais.html', 'book', 'Manuais de Operação', activePage),
+    temMod('apontamento') && ktLink('manual_apontamento.html', 'book', 'Apontamento', activePage),
+    temMod('planejamento') && ktLink('manual_pcp.html', 'book', 'Planejamento e OPs', activePage),
+    temMod('pedidos') && ktLink('manual_comercial.html', 'book', 'Pedidos e MRP', activePage),
+    temMod('compras') && ktLink('manual_compras.html', 'book', 'Compras', activePage),
+    temMod('logistica') && ktLink('manual_logistica.html', 'book', 'Recebimento', activePage),
+    temMod('logistica') && ktLink('manual_estoque.html', 'book', 'Estoque e WMS', activePage),
+    temMod('qualidade') && ktLink('manual_qualidade.html', 'book', 'Qualidade', activePage),
+    temMod('cadastros') && ktLink('manual_cadastros.html', 'book', 'Cadastros', activePage),
+    temMod('usuarios') && ktLink('manual_admin.html', 'book', 'Administração', activePage),
     // Referência completa: única sem gate de módulo, porque é o documento
     // que descreve o sistema INTEIRO -- inclusive as partes que a pessoa
     // não acessa, que é justamente o que ela precisa ler pra saber o que
-    // pedir ao ADM. Os outros três são material de rotina por função.
+    // pedir ao ADM. Os outros são material de rotina por operação.
     ktLink('manual_referencia.html', 'book', 'Referência do Sistema', activePage)
   ]);
 

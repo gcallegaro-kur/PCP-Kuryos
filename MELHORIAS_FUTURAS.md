@@ -15,6 +15,35 @@ relevante para retomar o trabalho depois.
 
 ---
 
+## Integração entre setores (auditoria de 2026-09-08)
+
+Os gargalos de comunicação entre entidades estão levantados em documento
+próprio: **`AUDITORIA_INTEGRACAO.md`**, na raiz do repositório. Nove elos, cada
+um com a evidência no código e o número lido de produção.
+
+Os três que valem agir primeiro, e por quê:
+
+- **Selo de qualidade do fornecedor na cotação** — `desempenhoQualidadeFornecedor`
+  já existe em `shared/utils.js` e tem UMA única chamada em todo o sistema
+  (`qualidade.html:1252`). O comprador compara orçamentos sem ver que o
+  fornecedor reprovou lote. Falta só exibir.
+- **"Gerar solicitação de compra" na Matriz de Insumos** — `insumos.html` calcula
+  a falta e `compras.html` nunca lê o nó `insumos`; nem `insumos.html` referencia
+  `solicitacoes_compra`. Não há caminho de ida nem de volta: o MRP existe pra
+  antecipar a falta e a informação não chega a quem compra.
+- **Área de endereço para quarentena** — `config/areasEndereco` tem cinco áreas
+  (GAL, FAB, ROT, MP, MUC) e nenhuma de retenção. O status separa no sistema,
+  nada separa no chão. É cadastro, não código, e precisa existir antes do Dia D.
+
+Registrado junto, com número: dos **906 materiais cadastrados, só 37 têm
+qualquer registro de estoque, e 11 desses estão com saldo NEGATIVO** (pior caso
+ET-00012, −538.784 un). O consumo desconta corretamente a cada apontamento; o
+que falta é a entrada. Isso torna o saldo inutilizável como base de decisão até
+o Dia D — e é o motivo de "mostrar saldo em Compras" NÃO ser a primeira
+correção da lista, apesar de ser a mais fácil.
+
+---
+
 ## Compras
 
 - **NCM no cadastro de material** — o NCM é o que determina as alíquotas de

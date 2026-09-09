@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual — Estoque e WMS</title>
+  <link rel="stylesheet" href="shared/manual.css">
+</head>
+<body>
+<div class="container">
+  <a class="manual-voltar" href="manuais.html">← Todos os manuais</a>
+
+  <div class="header">
+    <img src="kuryos-logo.svg" alt="Kuryos">
+    <h1>Estoque e WMS</h1>
+    <p>Logística · Almoxarifado — Logística › Estoque e Separação de Materiais</p>
+  </div>
+
+  <div class="intro-box">
+    <strong>Duas coisas diferentes na mesma tela.</strong> <b>Estoque</b> é posição de inventário —
+    quanto tem. <b>WMS</b> é organização de espaço — onde está. São propositalmente independentes:
+    ajustar quantidade nunca exige endereço, e endereçar nunca muda quantidade.
+  </div>
+
+  <div class="section-title"><span class="icon">🗂️</span> 1. As abas</div>
+  <div class="table-scroll">
+    <table class="field-guide">
+      <thead><tr><th style="width:32%">Aba</th><th>O que faz</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Saldo Agregado</strong></td><td>Saldo total por material. O botão <b>⚖️ Ajustar</b> corrige quantidade.</td></tr>
+        <tr><td><strong>Saldo por Lote/Endereço</strong></td><td>Onde cada lote está, com status. Permite <b>Transferir</b> de posição.</td></tr>
+        <tr><td><strong>Lotes Vencendo</strong></td><td>O que está perto do vencimento.</td></tr>
+        <tr><td><strong>Histórico de Movimentações</strong></td><td>Toda entrada, saída e transferência, com autor e motivo.</td></tr>
+        <tr><td><strong>🛣️ Estrutura de Ruas</strong></td><td>Cadastro das ruas do armazém, por área.</td></tr>
+        <tr><td><strong>🗺️ Posições</strong></td><td>Mapa das posições. Dá para bloquear uma posição.</td></tr>
+        <tr><td><strong>📍 Endereçamento</strong></td><td>Distribui no espaço o saldo já conhecido. <b>Nunca altera quantidade</b> — só diz onde está.</td></tr>
+        <tr><td><strong>📋 Inventário Rotativo</strong></td><td>Contagem cíclica, algumas posições por dia.</td></tr>
+        <tr><td><strong>📦 Conferência de PA</strong></td><td>A produção declara o palete, a Logística confere e a diferença fica registrada.</td></tr>
+        <tr><td><strong>🔬 Liberação de Qualidade</strong></td><td>Ponte para o módulo de Qualidade.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title"><span class="icon">📍</span> 2. Como se lê um endereço</div>
+  <p class="txt">
+    O código é <b>ÁREA-RUA.NÍVEL.PRÉDIO</b>. Por exemplo, <code class="inline">GAL-1.2.3</code> é o
+    Galpão, rua 1, nível 2, prédio 3. O prefixo de área permite existir rua 1 no galpão e rua 1 na
+    fábrica sem uma ser confundida com a outra.
+  </p>
+
+  <div class="sub-title">Status do lote — o que pode e o que não pode sair</div>
+  <div class="table-scroll">
+    <table class="field-guide">
+      <thead><tr><th style="width:38%">Status</th><th style="width:16%">Pode usar?</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td>Aguardando conferência</td><td><span class="badge badge-red">Não</span></td><td>Palete declarado pela produção, ainda não conferido.</td></tr>
+        <tr><td>Quarentena</td><td><span class="badge badge-red">Não</span></td><td>Esperando laudo da Qualidade.</td></tr>
+        <tr><td>Aprovado</td><td><span class="badge badge-green">Sim</span></td><td>Liberado pela Qualidade.</td></tr>
+        <tr><td>Aprovado c/ concessão</td><td><span class="badge badge-green">Sim</span></td><td>Fora de especificação, mas autorizado nominalmente por alguém.</td></tr>
+        <tr><td>Liberado p/ expedição</td><td><span class="badge badge-green">Sim</span></td><td>Produto acabado liberado.</td></tr>
+        <tr><td>Reprovado · Retido · Vencido</td><td><span class="badge badge-red">Não</span></td><td>Continua fisicamente no estoque até ser devolvido ou descartado.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title"><span class="icon">📍</span> 3. Endereçar</div>
+  <p class="where">Aba <code>📍 Endereçamento</code></p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Escolha o item</strong>
+      <p>A tela mostra, só como referência, quanto o sistema conhece daquele material, quanto já
+      está endereçado e quanto ainda não tem posição. É informativo — nunca trava.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Informe posição e quantidade</strong>
+      <p>Uma linha por posição. Lote e validade são opcionais — numa contagem inicial nem sempre se
+      sabe o lote do fornecedor de cabeça.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Salve e siga</strong>
+      <p>O formulário limpa e mantém o item selecionado, pronto para a próxima posição do mesmo
+      material. É feito para percorrer o galpão em sequência.</p></div></li>
+  </ul>
+  <div class="ok-card">
+    <strong>Endereçar nunca mexe no saldo.</strong> Você está dizendo <i>onde</i> está o que o
+    sistema já sabia que existe. Para corrigir <i>quanto</i> existe, use <b>⚖️ Ajustar</b> na aba
+    Saldo Agregado — são operações diferentes, de propósito.
+  </div>
+
+  <div class="section-title"><span class="icon">📋</span> 4. Separar material para a OP</div>
+  <p class="where">Logística › <code>Separação de Materiais</code></p>
+  <p class="txt">
+    Resolve a pergunta “o que precisa subir do galpão para a fábrica?”, que antes era feita de boca
+    em boca.
+  </p>
+  <ul class="step-list">
+    <li class="step-item"><div class="step-number">1</div><div class="step-content">
+      <strong>Escolha a OP na lista de pendentes</strong>
+      <p>Aparecem primeiro as que ainda não tiveram separação.</p></div></li>
+    <li class="step-item"><div class="step-number">2</div><div class="step-content">
+      <strong>Confira a sugestão de origem</strong>
+      <p>O sistema sugere de qual lote tirar seguindo <b>FEFO</b> — o que vence antes sai antes. A
+      quantidade vem preenchida e pode ser corrigida linha a linha. Lote em quarentena, reprovado ou
+      vencido <b>nunca é sugerido</b>.</p></div></li>
+    <li class="step-item"><div class="step-number">3</div><div class="step-content">
+      <strong>Escolha o destino</strong>
+      <p>Obrigatório e sempre manual — o sistema nunca adivinha para onde o material vai. Frascos
+      costumam ir para RÓTULOS; válvulas, sobretampas e caixas de embarque para FÁBRICA.</p></div></li>
+    <li class="step-item"><div class="step-number">4</div><div class="step-content">
+      <strong>✅ Confirmar Separação</strong>
+      <p>Move os lotes. Se faltar saldo endereçado, o aviso aparece <b>mas não impede</b> separar o
+      que há — é melhor mandar o que existe e sinalizar a falta.</p></div></li>
+  </ul>
+
+  <div class="section-title"><span class="icon">🔢</span> 5. Inventário rotativo</div>
+  <p class="txt">
+    Contagem cíclica: algumas posições por dia, em vez de parar tudo uma vez por ano. A contagem é
+    <b>cega</b> — o saldo esperado só aparece <i>depois</i> que você informa o contado. É assim que a
+    contagem vale alguma coisa: sabendo o número esperado, a tendência é confirmá-lo.
+  </p>
+
+  <div class="section-title"><span class="icon">🔄</span> De quem vem, pra quem vai</div>
+  <div class="handoff">
+    <div class="handoff-cx">
+      <h4>↓ Chega até você</h4>
+      <p><b>Do Recebimento:</b> o lote com endereço, validade e status de quarentena.</p>
+      <p><b>Da Qualidade:</b> a liberação. Antes dela, a Separação não enxerga o lote.</p>
+      <p><b>Do PCP:</b> a OP emitida, que aparece sozinha na fila de separação.</p>
+      <p><b>Da Produção:</b> o palete de produto acabado declarado, aguardando conferência.</p>
+    </div>
+    <div class="handoff-cx">
+      <h4>↑ Sai de você</h4>
+      <p><b>Para a Produção:</b> o material separado, entregue na área da fábrica.</p>
+      <p><b>Para a Qualidade:</b> o palete conferido, que entra na fila de inspeção.</p>
+      <p><b>Para o PCP:</b> a falta de material, quando a separação não fecha —
+      <span class="badge badge-orange">manual</span> o aviso aparece na sua tela, mas não chega a
+      ninguém.</p>
+    </div>
+  </div>
+
+  <div class="note-card">
+    <strong>Três coisas para saber antes de confiar no número.</strong>
+    <br>· <b>A entrada está incompleta.</b> O consumo da produção desconta certo, automaticamente, a
+    cada apontamento. Mas dos 906 materiais cadastrados só cerca de 40 têm registro de saldo, e
+    alguns estão <b>negativos</b> — porque se desconta de um estoque em que nunca se deu entrada.
+    Enquanto o inventário geral não estabelecer o saldo de abertura, o número da tela não serve para
+    decidir compra nem emissão de OP.
+    <br>· <b>Duas fontes de saldo.</b> O <i>Saldo Agregado</i> e a soma dos lotes são mantidos
+    separadamente e podem divergir — é assim de propósito, porque estoque e WMS são coisas
+    distintas. Quando divergirem, o inventário físico é o desempate.
+    <br>· <b>Liberado não é movido.</b> Quando a Qualidade aprova, o lote fica onde foi recebido —
+    transferir para a posição definitiva é ação manual, na aba Saldo por Lote/Endereço.
+  </div>
+
+  <div class="footer">Kuryos Cosméticos · Sistema PCP — Manual de Estoque e WMS</div>
+</div>
+</body>
+</html>

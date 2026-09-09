@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual — Cadastros</title>
+  <link rel="stylesheet" href="shared/manual.css">
+</head>
+<body>
+<div class="container">
+  <a class="manual-voltar" href="manuais.html">← Todos os manuais</a>
+
+  <div class="header">
+    <img src="kuryos-logo.svg" alt="Kuryos">
+    <h1>Cadastros</h1>
+    <p>PCP · Desenvolvimento — Cadastros › Cadastros</p>
+  </div>
+
+  <div class="intro-box">
+    <strong>Onde vale o dobro de atenção.</strong> Tudo o que o resto do sistema usa nasce aqui.
+    Cadastro errado não fica errado só nesta tela: vira OP errada, compra errada, laudo sem
+    critério e nota fiscal com peso errado. É o único lugar do sistema em que um erro se propaga
+    para todos os setores ao mesmo tempo.
+  </div>
+
+  <p class="txt">
+    Os quatro cadastros mestres: <b>+ Novo Produto</b>, <b>+ Novo Material</b>,
+    <b>+ Novo Cliente</b> e <b>+ Novo Fornecedor</b>.
+  </p>
+
+  <div class="section-title"><span class="icon">📦</span> 1. Produto</div>
+  <div class="table-scroll">
+    <table class="field-guide">
+      <thead><tr><th style="width:28%">Aba</th><th>O que guarda</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Identificação</strong></td><td>Código, descrição, cliente.</td></tr>
+        <tr><td><strong>Classificação</strong></td><td>Categoria e subcategoria.</td></tr>
+        <tr><td><strong>Embalagem</strong></td><td>Unidades por caixa e peso por caixa. <span class="badge badge-orange">alimenta a NF</span></td></tr>
+        <tr><td><strong>Regulatório</strong></td><td>Informações de registro do produto.</td></tr>
+        <tr><td><strong>Parâmetros de Lote</strong></td><td>Regras de lote e validade.</td></tr>
+        <tr><td><strong>Fórmula</strong></td><td>Composição do bulk. <b>Versionada.</b></td></tr>
+        <tr><td><strong>BOM (Embalagem)</strong></td><td>Lista de materiais de embalagem. <b>Versionada.</b></td></tr>
+        <tr><td><strong>Especificações</strong></td><td>Ensaios de qualidade: ensaio, método, faixa mínima/máxima e se é crítico. É o que a Qualidade usa para laudar. <b>Versionada.</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="ok-card">
+    <strong>Versionamento e aprovação em duas vias.</strong> Fórmula, BOM e Especificação têm
+    versão. <b>+ Nova Versão</b> cria a próxima; a aprovação exige <b>Aprovar (P&amp;D)</b> e
+    <b>Aprovar (Qualidade)</b>. <b>Só a versão aprovada vale para emitir OP</b> — e a OP guarda a
+    versão que usou, que é o que permite explicar um lote seis meses depois.
+  </div>
+
+  <div class="note-card">
+    <strong>Três campos que travam operação quando ficam vazios.</strong>
+    <br>· <b>Unidades por Caixa</b> e <b>Peso por Caixa</b>: o sistema avisa ao emitir OP, mas
+    deixa passar. Sem eles não há cálculo de carga nem peso correto na nota.
+    <br>· <b>Prazo de validade</b>: sem ele, o FEFO do produto acabado não funciona — o palete vai
+    para o fim da fila e vence no fundo do estoque.
+    <br>· <b>Mínimo e máximo nos ensaios</b>: sem número, o sistema não consegue julgar o laudo
+    sozinho e a decisão fica inteira com o analista.
+  </div>
+
+  <div class="section-title"><span class="icon">🧱</span> 2. Material</div>
+  <p class="txt">
+    Além de código, descrição e unidade, três campos decidem como o material se comporta em
+    Compras e no Estoque:
+  </p>
+  <div class="table-scroll">
+    <table class="field-guide">
+      <thead><tr><th style="width:28%">Campo</th><th>Para que serve</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Unidade</strong></td><td>Como o material é <b>estocado e consumido</b> — por exemplo, <i>rolo</i>.</td></tr>
+        <tr><td><strong>Unidade de compra</strong></td><td>Como o fornecedor <b>vende</b> — por exemplo, <i>kg</i>. Preenchendo, a cotação já abre na unidade certa.</td></tr>
+        <tr><td><strong>Fator de conversão</strong></td><td>Quantas unidades de compra cabem em 1 unidade de estoque (11,67 kg por rolo). É o que evita um pedido de 35 kg sair impresso como 35 rolos.</td></tr>
+        <tr><td><strong>Fornecedores homologados</strong></td><td>Quem já está aprovado para fornecer aquele item. Aparece no fluxo de cotação.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title"><span class="icon">🏢</span> 3. Cliente e Fornecedor</div>
+  <p class="txt">
+    No fornecedor, o <b>endereço se preenche pelo CEP</b>, como em e-commerce: digite o CEP e o
+    sistema traz logradouro, bairro, cidade e UF — sobra só número e complemento. Esse endereço é o
+    que a Logística usa para agendar coleta FOB, e o CNPJ e o contato são o que sai impresso no
+    Pedido de Compra.
+  </p>
+
+  <div class="section-title"><span class="icon">🔄</span> De quem vem, pra quem vai</div>
+  <div class="handoff">
+    <div class="handoff-cx">
+      <h4>↓ Chega até você</h4>
+      <p><b>Do Desenvolvimento e do cliente:</b> fórmula, especificação e dados regulatórios do
+      produto novo.</p>
+      <p><b>De Compras:</b> fornecedor novo a cadastrar, com CNPJ e contato.</p>
+    </div>
+    <div class="handoff-cx">
+      <h4>↑ Sai de você</h4>
+      <p><b>Para o PCP:</b> fórmula e BOM aprovados — sem os dois, não se emite OP.</p>
+      <p><b>Para a Qualidade:</b> a especificação, que vira o formulário de laudo.</p>
+      <p><b>Para Compras:</b> unidade de compra e fator de conversão, que fazem a cotação nascer
+      certa.</p>
+      <p><b>Para a Logística:</b> peso por caixa e validade, que alimentam carga e FEFO.</p>
+    </div>
+  </div>
+
+  <div class="footer">Kuryos Cosméticos · Sistema PCP — Manual de Cadastros</div>
+</div>
+</body>
+</html>

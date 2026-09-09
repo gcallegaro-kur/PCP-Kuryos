@@ -1,0 +1,183 @@
+/* Estilo compartilhado dos manuais operacionais.
+   Extraído de manual_referencia.html, que carregava tudo inline: com um
+   manual por operação, o mesmo bloco de ~90 linhas de CSS estaria copiado
+   em 10 arquivos, e a primeira mudança de cor viraria 10 edições -- a mesma
+   duplicação que já corrigimos na lista de campos da etiqueta.
+
+   Documento AUTÔNOMO de propósito: não carrega theme.css nem auth_check.js.
+   Manual tem que abrir e imprimir mesmo pra quem não está logado, e é
+   material que circula em PDF fora do sistema. Por isso o modo escuro é
+   resolvido aqui, e não pelos tokens da aplicação. */
+
+:root {
+  color-scheme: light;
+  --primary: #0a1c69;
+  --secondary: #1e3a8a;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #3b82f6;
+  --text: #1f2937;
+  --muted: #4b5563;
+  --bg: #f9fafb;
+  --card: #ffffff;
+  --border: #e5e7eb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --primary: #5e83ea; --secondary: #93b4f5; --success: #34c98f;
+    --warning: #fbbf5c; --danger: #f87171; --info: #7aa5f7;
+    --text: #f5f5f7; --muted: #98989d; --bg: #000000; --card: #1c1c1e; --border: #38383a;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5; padding: 40px 20px;
+}
+.container {
+  max-width: 860px; margin: 0 auto; background: var(--card); padding: 40px;
+  border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border);
+}
+
+/* Volta pro índice: sem isso, cada manual é um beco sem saída e a pessoa
+   precisa saber a URL do próximo de cor. */
+.manual-voltar {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+  color: var(--secondary); text-decoration: none; margin-bottom: 18px;
+}
+.manual-voltar:hover { text-decoration: underline; }
+
+.header { text-align: center; border-bottom: 3px solid var(--primary); padding-bottom: 20px; margin-bottom: 30px; }
+.header img { height: 45px; margin-bottom: 10px; }
+.header h1 { font-size: 26px; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; }
+.header p { font-size: 14px; color: var(--muted); margin-top: 5px; font-weight: 600; }
+
+.intro-box {
+  background: color-mix(in srgb, var(--info) 16%, var(--card)); border-left: 5px solid var(--info);
+  padding: 15px 20px; border-radius: 0 8px 8px 0; font-size: 14px;
+  color: color-mix(in srgb, var(--info) 55%, var(--text)); margin-bottom: 30px; font-weight: 500;
+}
+.intro-box.warn {
+  background: color-mix(in srgb, var(--warning) 16%, var(--card));
+  border-left-color: var(--warning); color: color-mix(in srgb, var(--warning) 60%, var(--text));
+}
+
+.section-title {
+  font-size: 18px; color: var(--primary); margin-top: 34px; margin-bottom: 15px;
+  display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--border); padding-bottom: 8px;
+}
+.section-title span.icon { font-size: 22px; }
+.sub-title { font-size: 15px; color: var(--secondary); font-weight: 700; margin-top: 22px; margin-bottom: 8px; }
+p.txt { font-size: 13.5px; color: var(--muted); margin-bottom: 10px; }
+ul.txt, ol.txt { font-size: 13.5px; color: var(--muted); margin: 0 0 10px 20px; }
+ul.txt li, ol.txt li { margin-bottom: 5px; }
+
+.step-list { list-style: none; display: flex; flex-direction: column; gap: 13px; margin-top: 10px; }
+.step-item { display: flex; gap: 15px; align-items: flex-start; }
+.step-number {
+  background: var(--primary); color: white; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+  flex-shrink: 0; margin-top: 2px;
+}
+.step-content strong { color: var(--primary); font-size: 14.5px; }
+.step-content p { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+
+/* Tabelas largas rolam dentro da própria caixa: sem isto o corpo da página
+   rola de lado no celular, que é onde boa parte da operação lê o manual. */
+.table-scroll { overflow-x: auto; margin-top: 12px; }
+.field-guide { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 460px; }
+.field-guide th, .field-guide td { border: 1px solid var(--border); padding: 9px 11px; text-align: left; vertical-align: top; }
+.field-guide th { background: color-mix(in srgb, var(--text) 6%, var(--card)); color: var(--primary); font-weight: 700; }
+.field-guide td strong { color: var(--text); }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.badge-green { background: color-mix(in srgb, var(--success) 22%, var(--card)); color: var(--success); }
+.badge-gray { background: color-mix(in srgb, var(--text) 10%, var(--card)); color: var(--muted); }
+.badge-blue { background: color-mix(in srgb, var(--info) 20%, var(--card)); color: color-mix(in srgb, var(--info) 55%, var(--text)); }
+.badge-red { background: color-mix(in srgb, var(--danger) 18%, var(--card)); color: color-mix(in srgb, var(--danger) 50%, var(--text)); }
+.badge-orange { background: color-mix(in srgb, var(--warning) 20%, var(--card)); color: var(--warning); }
+
+.note-card {
+  background: color-mix(in srgb, var(--warning) 14%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--card));
+  border-radius: 8px; padding: 14px; margin-top: 16px; font-size: 13px;
+  color: color-mix(in srgb, var(--warning) 65%, var(--text));
+}
+.note-card strong { color: var(--warning); }
+.ok-card {
+  background: color-mix(in srgb, var(--success) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--card));
+  border-radius: 8px; padding: 14px; margin-top: 16px; font-size: 13px;
+  color: color-mix(in srgb, var(--success) 62%, var(--text));
+}
+.ok-card strong { color: var(--success); }
+.stop-card {
+  background: color-mix(in srgb, var(--danger) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--card));
+  border-radius: 8px; padding: 14px; margin-top: 16px; font-size: 13px;
+  color: color-mix(in srgb, var(--danger) 55%, var(--text));
+}
+.stop-card strong { color: var(--danger); }
+
+.toc { background: color-mix(in srgb, var(--text) 4%, var(--card)); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 8px; }
+.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--primary); margin-bottom: 10px; }
+.toc ol { margin-left: 18px; font-size: 13.5px; column-count: 2; column-gap: 28px; }
+@media (max-width: 620px) { .toc ol { column-count: 1; } }
+.toc li { margin-bottom: 5px; break-inside: avoid; }
+.toc a { color: var(--secondary); text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+
+.where { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.where code, code.inline {
+  background: color-mix(in srgb, var(--text) 8%, var(--card)); padding: 2px 6px;
+  border-radius: 4px; font-size: 11.5px; font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* ── Bloco de entrega (handoff) ──
+   Todo manual termina dizendo DE QUEM vem o trabalho e PRA QUEM vai. É o
+   ponto onde a operação mais erra: cada setor conhece a própria tela e não
+   sabe o que o anterior deixou pendente nem o que o próximo espera. */
+.handoff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+@media (max-width: 620px) { .handoff { grid-template-columns: 1fr; } }
+.handoff-cx { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; background: color-mix(in srgb, var(--text) 3%, var(--card)); }
+.handoff-cx h4 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--primary); margin-bottom: 7px; }
+.handoff-cx p { font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+.handoff-cx p:last-child { margin-bottom: 0; }
+.handoff-cx b { color: var(--text); }
+
+/* Cartões do índice geral dos manuais */
+.manual-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; }
+.manual-cartao {
+  display: block; text-decoration: none; border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; background: var(--card); transition: border-color .15s, transform .15s;
+}
+.manual-cartao:hover { border-color: var(--primary); transform: translateY(-2px); }
+.manual-cartao .mc-icone { font-size: 24px; display: block; margin-bottom: 8px; }
+.manual-cartao .mc-titulo { font-size: 15px; font-weight: 700; color: var(--primary); display: block; margin-bottom: 4px; }
+.manual-cartao .mc-quem { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; display: block; margin-bottom: 6px; }
+.manual-cartao .mc-desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+
+.footer { text-align: center; margin-top: 44px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 15px; }
+
+@media print {
+  body { background: white; padding: 0; }
+  .container { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+  .manual-voltar { display: none; }
+  .section-title { break-after: avoid; }
+  .step-item, .handoff-cx, .note-card, .ok-card, .stop-card { break-inside: avoid; }
+  .step-number { background: #0a1c69 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .badge-green { background: #d1fae5 !important; color:#047857 !important; -webkit-print-color-adjust: exact; }
+  .badge-gray { background: #f3f4f6 !important; color:#4b5563 !important; -webkit-print-color-adjust: exact; }
+  .badge-blue { background: #dbeafe !important; color:#1d4ed8 !important; -webkit-print-color-adjust: exact; }
+  .badge-red { background: #fee2e2 !important; color:#b91c1c !important; -webkit-print-color-adjust: exact; }
+  .badge-orange { background: #ffedd5 !important; color:#c2410c !important; -webkit-print-color-adjust: exact; }
+  .note-card { background: #fffbeb !important; border: 1px solid #fde68a !important; color:#92400e !important; -webkit-print-color-adjust: exact; }
+  .ok-card { background: #ecfdf5 !important; border: 1px solid #a7f3d0 !important; color:#065f46 !important; -webkit-print-color-adjust: exact; }
+  .stop-card { background: #fef2f2 !important; border: 1px solid #fecaca !important; color:#991b1b !important; -webkit-print-color-adjust: exact; }
+  .intro-box { background: #eff6ff !important; border-left: 5px solid #3b82f6 !important; color:#1e40af !important; -webkit-print-color-adjust: exact; }
+  .field-guide th { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
+  .toc, .handoff-cx { background: #f9fafb !important; -webkit-print-color-adjust: exact; }
+}
