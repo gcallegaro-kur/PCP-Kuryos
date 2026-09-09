@@ -7,8 +7,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** Comercial — permitir orçamento para cliente cadastrado com produto ainda não cadastrado.
-- **Arquivos ativos:** `public/comercial.html`.
+- **Escopo:** WMS, Logística, emissão de OP, Cotação e apontamento de produção.
+- **Arquivos ativos:** nenhum.
+- **Última entrega Comercial:** orçamento pode vincular cliente cadastrado e preencher seus dados, sem exigir que os itens estejam cadastrados como produtos.
+- **Commit/deploy Comercial:** `ea91fa8`, publicado em 2026-09-09 em `https://prod-kuryos.web.app`.
 - **Última entrega Acessos:** Comercial é módulo próprio em Usuários; permite Pedidos e Orçamentos sem liberar Pedidos/MRP. PCP mantém Comercial no padrão do perfil.
 - **Commit/deploy Acessos:** `245dd95`, publicado em 2026-09-09 em `https://prod-kuryos.web.app` (Hosting e regras RTDB).
 - **Última entrega Comercial:** tela Pedidos e Orçamentos. Pedido usa cliente/produtos cadastrados e cria automaticamente os itens do backlog do PCP; Orçamento aceita prospectos/itens livres e só entra no PCP ao ser convertido e confirmado.
