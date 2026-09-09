@@ -106,6 +106,39 @@
     /* Resultado calculado: separado dos campos de digitação por uma linha,
        pra ninguém tentar editar o que o sistema calcula. */
     .cot-resultado{margin-top:6px;padding-top:5px;border-top:1px dashed var(--border);font-size:12px}
+    /* Fluxo de cotação: resposta e comparação são momentos diferentes.
+       A grade antiga cruzava todos os fornecedores com todos os materiais,
+       criando uma planilha horizontal impossível de preencher com calma. */
+    .cot-processo-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+    .cot-processo-titulo{font-size:14px;font-weight:750;color:var(--text)}
+    .cot-processo-meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+    .cot-etapas{display:flex;gap:5px;padding:12px 16px 0;flex-wrap:wrap}
+    .cot-etapa{border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 11px;font:700 12px var(--font-ui);cursor:pointer}
+    .cot-etapa.active{background:var(--primary);border-color:var(--primary);color:white}
+    .cot-fornecedor-tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+    .cot-fornecedor-tab{min-width:174px;text-align:left;border:1px solid var(--border);background:var(--card);border-radius:10px;padding:9px 10px;cursor:pointer;font:inherit;color:var(--text)}
+    .cot-fornecedor-tab.active{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent)}
+    .cot-fornecedor-tab b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cot-fornecedor-tab span{font-size:10.5px;color:var(--muted)}
+    .cot-proposta{padding:14px 16px}
+    .cot-proposta-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
+    .cot-proposta-head h3{font-size:15px;margin:0}
+    .cot-condicoes{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
+    .cot-condicoes-title{font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px}
+    .cot-itens-proposta{display:flex;flex-direction:column;gap:10px}
+    .cot-item-proposta{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)}
+    .cot-item-proposta-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;align-items:flex-start}
+    .cot-item-proposta b{font-size:13px}
+    .cot-item-proposta .cot-linha{max-width:510px}
+    .cot-comparacao{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+    .cot-comparacao-item{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    .cot-comparacao-item-head{padding:10px 12px;background:var(--surface-2);font-size:12.5px}
+    .cot-comparacao-opcoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:8px;padding:10px}
+    .cot-opcao{border:1px solid var(--border);border-radius:9px;padding:9px;font-size:12px;background:var(--card)}
+    .cot-opcao.melhor{border-color:var(--success);background:var(--tint-green-bg)}
+    .cot-opcao .cot-opcao-nome{font-weight:750;margin-bottom:4px}
+    .cot-opcao .cot-opcao-custo{font-size:14px;font-weight:800;color:var(--primary)}
+    .cot-processo-footer{padding:12px 16px;border-top:1px solid var(--border);background:var(--surface-2)}
 
     /* ── Impressão do Pedido de Compra (documento do fornecedor) ──
        Mesmo bloco de emitir_op.html/ops.html: paginaPedidoCompra e
@@ -3095,7 +3128,10 @@ function seloQualidadeHtml(fornecedorKey) {
     '. Detalhe em Qualidade › Desempenho de Fornecedor.">' + icone + ' ' + escapeHtml(q.texto) + '</span>';
 }
 
-function cotacaoCardHtml(entry) {
+// Mantida temporariamente como referência durante a migração visual. A
+// renderização usada é a versão guiada declarada logo antes de
+// renderCotacoesAndamento().
+function cotacaoGradeLegadaHtml(entry) {
   var key = entry[0], p = entry[1];
   var itensArr = Object.entries(p.itens || {});
   var convidadosArr = Object.entries(p.fornecedoresConvidados || {});
@@ -3273,6 +3309,123 @@ function cotacaoCardHtml(entry) {
     footer +
   '</div>';
 }
+/* ── Cotação guiada ──────────────────────────────────────────────────
+   Preencher uma proposta e compará-las são tarefas diferentes. Este modo
+   preserva os mesmos campos e os mesmos listeners da grade anterior, mas
+   mostra primeiro UM fornecedor e seus itens em uma lista vertical. */
+var cotacaoVisaoPorProcesso = {};
+var cotacaoFornecedorAtivoPorProcesso = {};
+
+function nomeConvidadoCotacao(c, cKey) {
+  if (c.fornecedorKey) {
+    var f = allFornecedores[c.fornecedorKey] || {};
+    return f.nomeFantasia || f.razaoSocial || cKey;
+  }
+  return (c.nomeAvulso || cKey) + ' (avulso)';
+}
+function statusConvidadoCotacao(c) {
+  return { AGUARDANDO: 'Aguardando', RESPONDIDO: 'Respondido', DECLINOU: 'Declinou' }[c.status] || 'Aguardando';
+}
+function classeStatusConvidado(c) {
+  return { AGUARDANDO: 'badge-orange', RESPONDIDO: 'badge-green', DECLINOU: 'badge-gray' }[c.status] || 'badge-orange';
+}
+
+function condicoesCotacaoGuiada(procKey, cKey, c) {
+  var frete = c.frete || {};
+  var prazo = parsePrazoPagamento(c.condicaoPagamento || '');
+  var prazoHint = prazo.valido
+    ? '<span class="field-hint">' + (prazo.aVista ? 'à vista' : prazo.parcelas.length + 'x: ' + prazo.parcelas.join('/') + ' dias') + '</span>'
+    : (c.condicaoPagamento ? '<span class="field-hint" style="color:var(--warning)">não entendi o prazo</span>' : '');
+  return '<div class="cot-condicoes"><div class="cot-condicoes-title">Condições desta proposta</div>' +
+    '<div class="form-grid">' +
+      campoCot('Frete', '<select class="cot-frete-tipo" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '">' +
+        '<option value=""' + (!frete.tipo ? ' selected' : '') + '>Não informado</option>' +
+        '<option value="FOB"' + (frete.tipo === 'FOB' ? ' selected' : '') + '>FOB — coleta Kuryos</option>' +
+        '<option value="CIF"' + (frete.tipo === 'CIF' ? ' selected' : '') + '>CIF — entrega fornecedor</option>' +
+      '</select>') +
+      campoCot('Valor do frete', '<input type="number" min="0" step="any" class="cot-frete-valor" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + (frete.valor != null ? escapeAttr(frete.valor) : '') + '"' + (frete.tipo === 'CIF' ? ' disabled title="CIF: frete já está no preço"' : ' placeholder="R$"') + '>') +
+      campoCot('Prazo de pagamento', '<input type="text" class="cot-resp-condpgto" placeholder="Ex: 14/21/28 DDL" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.condicaoPagamento || '') + '">', prazoHint) +
+      campoCot('Validade da proposta', '<input type="date" class="cot-validade" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" value="' + escapeAttr(c.validadeProposta || '') + '">') +
+      campoCot('Entregar em', '<select class="cot-local-entrega" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '">' +
+        '<option value=""' + (!c.localEntrega ? ' selected' : '') + '>Não informado</option>' +
+        '<option value="GALPAO"' + (c.localEntrega === 'GALPAO' ? ' selected' : '') + '>Galpão</option>' +
+        '<option value="FABRICA"' + (c.localEntrega === 'FABRICA' ? ' selected' : '') + '>Fábrica</option>' +
+      '</select>') +
+    '</div>' + blocoColetaHtml(procKey, cKey, c) + '</div>';
+}
+
+function itemRespostaCotacaoGuiada(procKey, cKey, c, itemKey, it, cmp, chavesItens) {
+  if (!convidadoCotaItem(c, itemKey, chavesItens)) return '';
+  var resp = (c.respostaItens || {})[itemKey] || {};
+  var calc = ((cmp.porFornecedor[cKey] || {}).itens || {})[itemKey] || {};
+  var unCot = calc.unidadeCotada || it.unidade || '';
+  var qtdDiverge = !calc.unidadeDiferente && calc.qtd > 0 && it.qtd > 0 && Math.abs(calc.qtd - it.qtd) > 0.001;
+  var menor = cmp.vencedorPorItem[itemKey] && cmp.vencedorPorItem[itemKey].cKey === cKey;
+  var custo = calc.conversaoPendente
+    ? '<span class="field-hint" style="color:var(--warning)">⚠ Falta conversão entre ' + escapeHtml(unCot) + ' e ' + escapeHtml(calc.unidadeCadastro || it.unidade || '') + '.</span>'
+    : (calc.custoUnitarioCadastro != null
+      ? '<span class="field-hint">Custo comparável: <b>' + fmtBRL(calc.custoUnitarioCadastro) + '/' + escapeHtml(calc.unidadeCadastro || 'un') + '</b>' + (menor ? ' <span style="color:var(--success)">✓ melhor opção</span>' : '') + '</span>'
+      : '<span class="field-hint">Preencha preço e quantidade para comparar.</span>');
+  return '<div class="cot-item-proposta">' +
+    '<div class="cot-item-proposta-top"><div><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
+      '<div class="field-hint">Pedido: ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</div></div>' +
+      (c.foraHomologacao && c.foraHomologacao[itemKey] ? '<span class="badge badge-orange">⚠ fora da homologação</span>' : '') + '</div>' +
+    '<div class="cot-linha">' +
+      campoCot('Preço por ' + (unCot || 'un'), '<input type="number" class="cot-resp-preco" min="0" step="any" placeholder="R$" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.precoUnit != null ? escapeAttr(resp.precoUnit) : '') + '">') +
+      campoCot('Qtd cotada (' + (unCot || 'un') + ')', '<input type="number" class="cot-resp-qtd" min="0" step="any" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.qtdCotada != null ? escapeAttr(resp.qtdCotada) : '') + '"' + (qtdDiverge ? ' style="border-color:var(--warning)" title="Diferente da quantidade pedida"' : '') + '>') +
+      campoCot('Entrega (dias úteis)', '<input type="number" class="cot-resp-prazo" min="0" step="1" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" value="' + (resp.prazoEntregaDias != null ? escapeAttr(resp.prazoEntregaDias) : '') + '">') +
+      campoCot('Impostos', '<button type="button" class="btn btn-ghost cot-fiscal" data-key="' + escapeAttr(procKey) + '" data-ckey="' + escapeAttr(cKey) + '" data-item="' + escapeAttr(itemKey) + '" style="padding:5px 7px;font-size:11px">🧾 ' + (temFiscal(resp) ? 'Editar' : 'Definir') + '</button>') +
+    '</div>' + dataEntregaHtml(resp.prazoEntregaDias) + '<div style="margin-top:5px">' + custo + '</div></div>';
+}
+
+function comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens) {
+  return '<div class="cot-comparacao">' + itensArr.map(function(itemEntry) {
+    var itemKey = itemEntry[0], it = itemEntry[1];
+    var opcoes = convidadosArr.filter(function(cEntry) { return convidadoCotaItem(cEntry[1], itemKey, chavesItens); }).map(function(cEntry) {
+      var cKey = cEntry[0], c = cEntry[1];
+      var resp = (c.respostaItens || {})[itemKey] || {};
+      var calc = ((cmp.porFornecedor[cKey] || {}).itens || {})[itemKey] || {};
+      var melhor = cmp.vencedorPorItem[itemKey] && cmp.vencedorPorItem[itemKey].cKey === cKey;
+      var detalhes = calc.custoUnitarioCadastro != null
+        ? '<div class="cot-opcao-custo">' + fmtBRL(calc.custoUnitarioCadastro) + '/' + escapeHtml(calc.unidadeCadastro || it.unidade || 'un') + '</div>' +
+          '<div class="field-hint">Entrega: ' + (resp.prazoEntregaDias != null ? resp.prazoEntregaDias + ' dias úteis' : 'não informada') + '</div>'
+        : '<div class="field-hint">Aguardando preço/quantidade' + (calc.conversaoPendente ? ' e conversão' : '') + '.</div>';
+      return '<div class="cot-opcao' + (melhor ? ' melhor' : '') + '"><div class="cot-opcao-nome">' + escapeHtml(nomeConvidadoCotacao(c, cKey)) + (melhor ? ' ✓' : '') + '</div>' + detalhes + '</div>';
+    }).join('') || '<span class="field-hint">Nenhum fornecedor convidado para este item.</span>';
+    return '<div class="cot-comparacao-item"><div class="cot-comparacao-item-head"><b>' + escapeHtml(it.materialCodigo) + '</b>' + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') +
+      '<div class="field-hint">Pedido: ' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</div></div><div class="cot-comparacao-opcoes">' + opcoes + '</div></div>';
+  }).join('') + '</div>';
+}
+
+function cotacaoCardHtml(entry) {
+  var key = entry[0], p = entry[1];
+  var itensArr = Object.entries(p.itens || {}), convidadosArr = Object.entries(p.fornecedoresConvidados || {});
+  var chavesItens = itensArr.map(function(e) { return e[0]; });
+  var cmp = compararCotacao(p.itens || {}, p.fornecedoresConvidados || {});
+  var visao = cotacaoVisaoPorProcesso[key] || 'preencher';
+  var fornecedorAtivo = cotacaoFornecedorAtivoPorProcesso[key];
+  if (!convidadosArr.some(function(e) { return e[0] === fornecedorAtivo; })) fornecedorAtivo = convidadosArr.length ? convidadosArr[0][0] : '';
+  cotacaoFornecedorAtivoPorProcesso[key] = fornecedorAtivo;
+  var atual = (p.fornecedoresConvidados || {})[fornecedorAtivo] || {};
+  var tabs = convidadosArr.map(function(cEntry) {
+    var cKey = cEntry[0], c = cEntry[1];
+    return '<button type="button" class="cot-fornecedor-tab' + (cKey === fornecedorAtivo ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '"><b>' + escapeHtml(nomeConvidadoCotacao(c, cKey)) + '</b><span>' + escapeHtml(statusConvidadoCotacao(c)) + '</span></button>';
+  }).join('');
+  var conteudo = visao === 'comparar'
+    ? comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens)
+    : '<div class="cot-fornecedor-tabs">' + tabs + '</div><div class="cot-proposta"><div class="cot-proposta-head"><div><h3>' + escapeHtml(nomeConvidadoCotacao(atual, fornecedorAtivo)) + '</h3><span class="badge ' + classeStatusConvidado(atual) + '">' + escapeHtml(statusConvidadoCotacao(atual)) + '</span>' + seloQualidadeHtml(atual.fornecedorKey) + '</div>' +
+        (atual.rascunhoCotacaoWebLink ? '<a class="btn btn-ghost btn-sm" href="' + escapeAttr(atual.rascunhoCotacaoWebLink) + '" target="_blank">Abrir rascunho ↗</a>' : '') + '</div>' +
+      condicoesCotacaoGuiada(key, fornecedorAtivo, atual) +
+      (atual.status === 'DECLINOU' ? '<div class="empty-hint">Este fornecedor declinou a cotação.</div>' : '<div class="cot-itens-proposta">' + itensArr.map(function(e) { return itemRespostaCotacaoGuiada(key, fornecedorAtivo, atual, e[0], e[1], cmp, chavesItens); }).join('') + '</div>') + '</div>';
+  var vencedorOpts = '<option value="">Escolha o fornecedor para gerar o pedido...</option>' + convidadosArr.map(function(cEntry) { return '<option value="' + escapeAttr(cEntry[0]) + '">' + escapeHtml(nomeConvidadoCotacao(cEntry[1], cEntry[0])) + '</option>'; }).join('');
+  var resumo = cmp.vencedorGeral
+    ? '<div style="padding:10px 12px;background:var(--tint-green-bg);border-radius:9px;margin-bottom:10px;font-size:12.5px">🏆 Melhor custo total comparável: <b>' + escapeHtml(nomeConvidadoCotacao((p.fornecedoresConvidados || {})[cmp.vencedorGeral.cKey] || {}, cmp.vencedorGeral.cKey)) + '</b> — <b>' + fmtBRL(cmp.vencedorGeral.custoTotal) + '</b></div>'
+    : '<div class="field-hint" style="margin-bottom:10px">Compare cada material quando houver respostas; fornecedores convidados para itens diferentes não formam um total único.</div>';
+  return '<div class="card cot-processo-card"><div class="cot-processo-head"><div><div class="cot-processo-titulo">' + escapeHtml(p.numeroFormatado) + '</div><div class="cot-processo-meta">' + itensArr.length + ' materiais · ' + convidadosArr.length + ' fornecedores convidados</div></div><button type="button" class="btn btn-danger-ghost btn-sm cot-cancelar" data-key="' + escapeAttr(key) + '">Cancelar processo</button></div>' +
+    '<div class="cot-etapas"><button type="button" class="cot-etapa' + (visao === 'preencher' ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-visao="preencher">1. Preencher proposta</button><button type="button" class="cot-etapa' + (visao === 'comparar' ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-visao="comparar">2. Comparar propostas</button></div>' +
+    conteudo + '<div class="cot-processo-footer">' + resumo + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select class="cot-vencedor-select" data-key="' + escapeAttr(key) + '" style="max-width:330px">' + vencedorOpts + '</select><button type="button" class="btn btn-green btn-sm cot-gerar-pc" data-key="' + escapeAttr(key) + '">Gerar Pedido de Compra</button></div></div></div>';
+}
+
 function renderCotacoesAndamento() {
   var abertos = Object.entries(allProcessosCotacao).filter(function(e) { return e[1].status === 'ABERTO'; })
     .sort(function(a, b) { return (b[1].criadoEm || '').localeCompare(a[1].criadoEm || ''); });
@@ -3297,6 +3450,19 @@ function renderCotacoesAndamento() {
     : '<div class="empty-hint" style="padding:14px 16px">Nenhuma cotação finalizada ainda.</div>';
 }
 function wireCotacoesAndamento() {
+  document.querySelectorAll('.cot-etapa').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      cotacaoVisaoPorProcesso[btn.getAttribute('data-key')] = btn.getAttribute('data-visao');
+      renderCotacoesAndamento();
+    });
+  });
+  document.querySelectorAll('.cot-fornecedor-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      cotacaoFornecedorAtivoPorProcesso[btn.getAttribute('data-key')] = btn.getAttribute('data-ckey');
+      cotacaoVisaoPorProcesso[btn.getAttribute('data-key')] = 'preencher';
+      renderCotacoesAndamento();
+    });
+  });
   document.querySelectorAll('.cot-resp-preco, .cot-resp-prazo, .cot-resp-qtd').forEach(function(el) {
     el.addEventListener('change', function() {
       var procKey = el.getAttribute('data-key'), cKey = el.getAttribute('data-ckey'), itemKey = el.getAttribute('data-item');
