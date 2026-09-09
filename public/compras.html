@@ -680,7 +680,10 @@ var scItensBuilder = []; // [{materialCodigo, qtd, obs}] -- só em memória até
 // cotação -- mesma seleção alimenta o botão "Iniciar Cotação" e o conteúdo
 // do modal (não existe uma segunda lista de seleção dentro do modal).
 var cotacaoSelecionadas = {}; // scKey -> true
-var cotConvidadosSelecionados = {}; // fornecedorKey -> true, só dentro do modal Iniciar Cotação
+// Convite POR ITEM: { 'scKey/itemKey': { fornecedorKey: true } }. Antes era
+// só { fornecedorKey: true } -- a associação "convidei o WM PRA O FRASCO" era
+// descartada, e a grade abria célula de álcool pro fornecedor de frasco.
+var cotConvidadosSelecionados = {};
 var cotAvulsosBuffer = []; // [{nome, email}], só dentro do modal Iniciar Cotação até salvar
 var allPedidosComerciais = {};
 var scPrefillOrigem = null; // {pedidoKey, sku} quando a solicitação em edição veio de "Gerar de Pedido"
@@ -2236,9 +2239,51 @@ function candidatosCotacaoParaMaterial(materialCodigo) {
     }));
   }, []);
   var vistos = {};
-  return diretos.concat(deVariantes).filter(function(c) {
+  var lista = diretos.concat(deVariantes).filter(function(c) {
     if (vistos[c.key]) return false;
     vistos[c.key] = true; return true;
+  });
+  // Todo homologado (direto ou por variante) é, por definição, homologado.
+  lista.forEach(function(c) { c.homologado = true; c.viaTipo = false; });
+
+  /* Rede pros materiais SEM homologado -- 593 dos 906, e ZERO dos 207 MPES.
+     Sem isso, "cada item só oferece seus fornecedores" deixaria 2 em cada 3
+     itens com nenhuma opção, impossíveis de cotar.
+
+     Oferece quem tem `fornecedor.tipo` compatível com a família do código
+     (EP/ES/ET → embalagem, MPGR/MPES → mp). Marcados como NÃO homologados:
+     dá pra convidar, e a tela diz que é fora da homologação.
+
+     É AQUI que se aperta o parafuso quando a base de homologados estiver
+     madura ("pendendo para 3 em algum momento") -- basta parar de devolver
+     esta lista. */
+  if (!lista.length) {
+    var tipoAlvo = tipoFornecedorParaMaterial(materialCodigo);
+    if (tipoAlvo) {
+      Object.entries(allFornecedores).forEach(function(e) {
+        var fKey = e[0], f = e[1];
+        if (!f || f.ativo === false) return;
+        var tipos = f.tipos && f.tipos.length ? f.tipos : (f.tipo ? [f.tipo] : []);
+        if (tipos.indexOf(tipoAlvo) === -1) return;
+        lista.push({
+          key: fKey, nome: f.nomeFantasia || f.razaoSocial || fKey,
+          status: null, origemMaterial: materialCodigo,
+          viaVariante: false, viaTipo: true, homologado: false, tipo: tipoAlvo
+        });
+      });
+      lista.sort(function(a, b) { return norm(a.nome).localeCompare(norm(b.nome)); });
+    }
+  }
+  return lista;
+}
+
+// Este fornecedor é homologado pra este material? Usado pra marcar o convite
+// e a grade quando alguém convida fora da homologação (permitido de
+// propósito: fornecedor novo e cotação exploratória existem).
+function fornecedorEhHomologadoPara(fKey, materialCodigo) {
+  if (!fKey) return false; // avulso nunca é homologado
+  return candidatosCotacaoParaMaterial(materialCodigo).some(function(c) {
+    return c.key === fKey && c.homologado;
   });
 }
 
@@ -2263,13 +2308,20 @@ function renderCotModalConteudo() {
   if (!rows.length) { box.innerHTML = '<div class="empty-hint">As solicitações selecionadas não têm itens.</div>'; renderCotAvulsosList(); return; }
 
   box.innerHTML = rows.map(function(r) {
+    // Identidade da LINHA (item de uma solicitação), não do material: o mesmo
+    // material pode vir de duas solicitações e ser convidado diferente em cada.
+    var linhaId = r.scKey + '/' + r.itemKey;
     var candidatos = candidatosCotacaoParaMaterial(r.it.materialCodigo);
     var candidatosHtml = candidatos.length
       ? candidatos.map(function(c) {
-          var origem = c.viaVariante ? ('via variante equivalente ' + escapeHtml(c.origemMaterial)) : 'direto';
+          var origem = c.viaTipo
+            ? ('⚠ não homologado — sugerido por ser fornecedor de ' + escapeHtml(c.tipo))
+            : (c.viaVariante ? ('via variante equivalente ' + escapeHtml(c.origemMaterial)) : 'homologado');
           return '<label class="chk-row" style="cursor:pointer;padding:5px 0">' +
-            '<input type="checkbox" class="cot-cand-check" data-fkey="' + escapeAttr(c.key) + '"' + (cotConvidadosSelecionados[c.key] ? ' checked' : '') + '>' +
-            '<div class="chk-row-body">' + escapeHtml(c.nome) + ' <span style="color:var(--muted);font-size:11px">(' + origem + ')</span></div>' +
+            '<input type="checkbox" class="cot-cand-check" data-linha="' + escapeAttr(linhaId) + '" data-fkey="' + escapeAttr(c.key) + '"' +
+              ((cotConvidadosSelecionados[linhaId] || {})[c.key] ? ' checked' : '') + '>' +
+            '<div class="chk-row-body">' + escapeHtml(c.nome) +
+              ' <span style="color:var(--muted);font-size:11px">(' + origem + ')</span></div>' +
           '</label>';
         }).join('')
       : '<div class="empty-hint">Nenhum fornecedor homologado/candidato pra esse material ainda. <a href="cadastros.html?tab=materiais" target="_blank">Cadastrar em Materiais</a>, ou adicione um fornecedor avulso abaixo.</div>';
@@ -2281,8 +2333,13 @@ function renderCotModalConteudo() {
 
   document.querySelectorAll('.cot-cand-check').forEach(function(el) {
     el.addEventListener('change', function() {
-      var fKey = el.getAttribute('data-fkey');
-      if (el.checked) cotConvidadosSelecionados[fKey] = true; else delete cotConvidadosSelecionados[fKey];
+      var linhaId = el.getAttribute('data-linha'), fKey = el.getAttribute('data-fkey');
+      if (!cotConvidadosSelecionados[linhaId]) cotConvidadosSelecionados[linhaId] = {};
+      if (el.checked) cotConvidadosSelecionados[linhaId][fKey] = true;
+      else {
+        delete cotConvidadosSelecionados[linhaId][fKey];
+        if (!Object.keys(cotConvidadosSelecionados[linhaId]).length) delete cotConvidadosSelecionados[linhaId];
+      }
       renderCotModalConteudo();
     });
   });
@@ -2319,7 +2376,16 @@ function abrirModalIniciarCotacao() {
   // usuário desmarca quem não quiser convidar.
   var todos = {};
   (window.__cotItensConsolidados || []).forEach(function(r) {
-    candidatosCotacaoParaMaterial(r.it.materialCodigo).forEach(function(c) { todos[c.key] = true; });
+    var linhaId = r.scKey + '/' + r.itemKey;
+    candidatosCotacaoParaMaterial(r.it.materialCodigo).forEach(function(c) {
+      // Só os HOMOLOGADOS vêm marcados. O sugerido por tipo aparece na lista
+      // mas desmarcado: convidar fora da homologação é decisão consciente,
+      // não default -- senão a "sugestão" vira convite automático e a base de
+      // homologados nunca melhora.
+      if (!c.homologado) return;
+      if (!todos[linhaId]) todos[linhaId] = {};
+      todos[linhaId][c.key] = true;
+    });
   });
   cotConvidadosSelecionados = todos;
   renderCotModalConteudo();
@@ -2331,7 +2397,16 @@ function salvarIniciarCotacao() {
   if (!scKeys.length) { showAlert('Selecione ao menos uma solicitação aprovada.', 'danger'); return; }
   var itensConsolidados = window.__cotItensConsolidados || [];
   if (!itensConsolidados.length) { showAlert('As solicitações selecionadas não têm itens.', 'danger'); return; }
-  var convidadosCadastrados = Object.keys(cotConvidadosSelecionados).filter(function(k) { return cotConvidadosSelecionados[k]; });
+  // Achata a seleção por item numa lista de fornecedores, guardando PARA
+  // QUAIS linhas cada um foi convidado.
+  var escopoPorFornecedor = {};   // fornecedorKey -> { 'scKey/itemKey': true }
+  Object.keys(cotConvidadosSelecionados).forEach(function(linhaId) {
+    Object.keys(cotConvidadosSelecionados[linhaId] || {}).forEach(function(fKey) {
+      if (!escopoPorFornecedor[fKey]) escopoPorFornecedor[fKey] = {};
+      escopoPorFornecedor[fKey][linhaId] = true;
+    });
+  });
+  var convidadosCadastrados = Object.keys(escopoPorFornecedor);
   if (!convidadosCadastrados.length && !cotAvulsosBuffer.length) { showAlert('Convide ao menos um fornecedor (cadastrado ou avulso) pra cotar.', 'danger'); return; }
 
   var btn = document.getElementById('modalIniciarCotacaoSave');
@@ -2339,8 +2414,10 @@ function salvarIniciarCotacao() {
   btn.textContent = 'Criando...';
 
   var itensObj = {};
+  var itemKeyPorLinha = {};   // 'scKey/itemKey' -> chave nova do item no processo
   itensConsolidados.forEach(function(r) {
     var itemKey = db.ref('processos_cotacao').push().key;
+    itemKeyPorLinha[r.scKey + '/' + r.itemKey] = itemKey;
     // Unidade de compra e fator vêm do CADASTRO do material. Os dois campos
     // já existiam em Cadastros › Materiais e nada os lia -- a pessoa
     // preenchia "1 rolo = 11,67 kg" lá e a cotação continuava tratando tudo
@@ -2368,11 +2445,31 @@ function salvarIniciarCotacao() {
     // digitar na cotação sobrescreve. Redigitar o que o sistema já sabe é o
     // atrito que faz o campo ficar vazio.
     var padraoPgto = (allFornecedores[fKey] && allFornecedores[fKey].condicaoPagamento) || '';
-    fornecedoresConvidados[cKey] = { fornecedorKey: fKey, nomeAvulso: null, emailAvulso: null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: padraoPgto, prazoPagamentoParcelas: parsePrazoPagamento(padraoPgto).parcelas || null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null };
+    // ESCOPO: pra quais itens do processo este fornecedor foi convidado.
+    // É o que faz a grade parar de oferecer álcool a fornecedor de frasco --
+    // e o que permite o vencedor geral existir em cotação mista.
+    var itensDoConvidado = {}, foraHomologacao = {};
+    Object.keys(escopoPorFornecedor[fKey] || {}).forEach(function(linhaId) {
+      var itemKey = itemKeyPorLinha[linhaId];
+      if (!itemKey) return;
+      itensDoConvidado[itemKey] = true;
+      // Marca o convite feito FORA da homologação (fornecedor novo, sugerido
+      // por tipo). Não bloqueia -- decisão do usuário: permitir e sinalizar,
+      // pra a base de homologados se corrigir com o uso.
+      var it = itensObj[itemKey];
+      if (it && !fornecedorEhHomologadoPara(fKey, it.materialCodigo)) foraHomologacao[itemKey] = true;
+    });
+    fornecedoresConvidados[cKey] = { fornecedorKey: fKey, nomeAvulso: null, emailAvulso: null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: padraoPgto, prazoPagamentoParcelas: parsePrazoPagamento(padraoPgto).parcelas || null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null,
+      itens: itensDoConvidado,
+      foraHomologacao: Object.keys(foraHomologacao).length ? foraHomologacao : null };
   });
   cotAvulsosBuffer.forEach(function(av) {
     var cKey = db.ref('processos_cotacao').push().key;
-    fornecedoresConvidados[cKey] = { fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', prazoPagamentoParcelas: null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null };
+    // Avulso é digitado à mão, sem cadastro e sem homologação: cota TODOS os
+    // itens (escopo vazio = processo inteiro, ver escopoDoConvidado). Quem o
+    // adicionou sabe o que está fazendo.
+    fornecedoresConvidados[cKey] = { fornecedorKey: null, nomeAvulso: av.nome, emailAvulso: av.email || null, status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {}, condicaoPagamento: '', prazoPagamentoParcelas: null, frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null,
+      itens: null, foraHomologacao: null };
   });
 
   nextSequential(db, 'config/contadores/processoCotacao', 'COT', 4).then(function(seq) {
@@ -2753,6 +2850,7 @@ function cotacaoCardHtml(entry) {
   var key = entry[0], p = entry[1];
   var itensArr = Object.entries(p.itens || {});
   var convidadosArr = Object.entries(p.fornecedoresConvidados || {});
+  var chavesItens = itensArr.map(function(e) { return e[0]; });
 
   // A comparação passou a ser por CUSTO UNITÁRIO FINAL (com IPI, ICMS-ST,
   // frete rateado e crédito de ICMS), não por preço unitário. A lógica mora
@@ -2783,7 +2881,7 @@ function cotacaoCardHtml(entry) {
       : (c.condicaoPagamento ? '<span class="field-hint" style="margin:0;color:var(--warning)">não entendi o prazo</span>' : '');
     return '<th style="min-width:216px;vertical-align:top">' +
       escapeHtml(nomeConvidado(c, cKey)) + '<br>' + statusBadge + link +
-      (venceGeral ? ' <span class="badge badge-green" title="Menor custo total entre quem cotou TODOS os itens">🏆 melhor custo</span>' : '') +
+      (venceGeral ? ' <span class="badge badge-green" title="Menor custo total entre os fornecedores convidados para exatamente os mesmos itens">🏆 melhor custo</span>' : '') +
       // Reputação ao lado do preço, não numa tela que o comprador não abre.
       // Não bloqueia nada de propósito: quem decide é quem compra, mas
       // decidindo com a informação à vista.
@@ -2817,6 +2915,21 @@ function cotacaoCardHtml(entry) {
     var itemKey = itEntry[0], it = itEntry[1];
     var cells = convidadosArr.map(function(cEntry) {
       var cKey = cEntry[0], c = cEntry[1];
+      /* Fora do escopo do convite: célula TRAVADA. Era o problema relatado --
+         "um fornecedor de frasco não fornece álcool, logo não tenho como
+         preencher a cotação de álcool de um fornecedor de frascos". A célula
+         aberta não era só ruído visual: ela mantinha viva a expectativa de
+         que aquele fornecedor deveria responder ali.
+
+         Processo antigo (sem `itens` no convidado) tem escopo = tudo, e
+         continua exatamente como antes. */
+      if (!convidadoCotaItem(c, itemKey, chavesItens)) {
+        return '<td style="background:color-mix(in srgb, var(--text) 4%, var(--card));text-align:center;' +
+          'color:var(--muted);font-size:11px" ' +
+          'title="Este fornecedor não foi convidado para este item. Para incluí-lo, inicie uma nova cotação.">' +
+          '— não cota este item —</td>';
+      }
+      var foraHomolog = c.foraHomologacao && c.foraHomologacao[itemKey];
       var resp = (c.respostaItens || {})[itemKey] || {};
       var calc = ((cmp.porFornecedor[cKey] || {}).itens || {})[itemKey] || {};
       var isMenor = cmp.vencedorPorItem[itemKey] && cmp.vencedorPorItem[itemKey].cKey === cKey;
@@ -2847,6 +2960,9 @@ function cotacaoCardHtml(entry) {
       var avisosHtml = (calc.avisos && calc.avisos.length && (calc.preco > 0 || calc.qtd > 0))
         ? '<div class="field-hint" style="color:var(--warning);margin-top:2px">⚠ ' + escapeHtml(calc.avisos.join('; ')) + '</div>' : '';
       return '<td style="vertical-align:top;' + (isMenor ? 'background:var(--tint-green-bg)' : '') + '">' +
+        (foraHomolog
+          ? '<div class="badge badge-orange" style="margin-bottom:4px" title="Convidado fora da homologação: este fornecedor não está homologado para este material no cadastro. Se ele vencer, vale homologá-lo.">⚠ fora da homologação</div>'
+          : '') +
         '<div class="cot-linha">' +
           // A unidade do rótulo é a que o FORNECEDOR cotou -- pode diferir
           // da do cadastro (material em rolo, orçado em kg), e mostrar a do
@@ -2887,10 +3003,10 @@ function cotacaoCardHtml(entry) {
     }
     resumo = '<div style="padding:10px 12px;background:var(--tint-green-bg);border-radius:8px;margin:0 12px 8px;font-size:12.5px">' +
       '🏆 <b>' + escapeHtml(nomeConvidado(cVenc, vg.cKey)) + '</b> tem o menor custo total: <b>' + fmtBRL(vg.custoTotal) + '</b>' +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Custo já com IPI, ICMS-ST e frete, menos o crédito de ICMS. Comparados apenas fornecedores que cotaram todos os itens.</div>' +
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Custo já com IPI, ICMS-ST e frete, menos o crédito de ICMS. Comparados apenas fornecedores convidados para <b>exatamente os mesmos itens</b>.</div>' +
       parcelasHtml + '</div>';
   } else if (convidadosArr.length) {
-    resumo = '<div class="field-hint" style="padding:8px 12px">Nenhum fornecedor cotou todos os itens ainda — sem isso não dá pra comparar o custo total. O ✓ verde em cada linha mostra o melhor custo por item.</div>';
+    resumo = '<div class="field-hint" style="padding:8px 12px">Sem custo total comparável: ou ainda falta alguém responder, ou cada fornecedor foi convidado para itens diferentes — somar cestas diferentes não compara nada. <b>O ✓ verde em cada linha mostra o melhor custo por item</b>, que é a comparação que vale aqui.</div>';
   }
 
   var footer = resumo + '<div style="display:flex;gap:8px;align-items:center;padding:10px 12px;flex-wrap:wrap">' +

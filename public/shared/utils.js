@@ -1014,6 +1014,40 @@ function volumeNominalEmLitros(produto) {
 // `pecas` = quantidade de unidades a produzir (ex: saldo em aberto do
 // pedido, não necessariamente o pedido inteiro).
 // Retorna { ok, erro?, itens: [{mpCodigo, mpNome, quantidade, unidade, origem}], massaLoteKg, volumeGranelL }
+/* Função PURA. Que TIPO de fornecedor atende este material, pelo prefixo do
+   código.
+
+   Problema relatado (2026-09-09): a grade de cotação é produto cartesiano --
+   todo fornecedor convidado ganha célula preenchível para todo item. "Um
+   fornecedor de frasco não fornece álcool, na esmagadora maioria dos casos,
+   logo não tenho como preencher a cotação de álcool de um fornecedor de
+   frascos."
+
+   O caminho certo é a homologação por material, mas ela cobre só 313 dos 906
+   materiais (35%) -- e ZERO dos 207 MPES. Escopar só por ela deixaria 2 em
+   cada 3 itens sem coluna nenhuma, impossíveis de cotar. Daí este corte
+   grosso, que usa `fornecedor.tipo` (preenchido em 379 dos 395) como rede:
+   separa frasco de álcool sem depender de um mutirão de cadastro.
+
+   Decisão do usuário: hoje o não-homologado é SUGERIDO por tipo; no futuro a
+   intenção é exigir homologação ("pendendo para 3 em algum momento"). Por
+   isso a regra mora aqui, num ponto só -- apertar depois é trocar o corpo
+   desta função, não caçar filtro espalhado por tela. */
+var TIPO_FORNECEDOR_POR_PREFIXO = {
+  EP: 'embalagem',    // embalagem primária (frasco, válvula, tampa)
+  ES: 'embalagem',    // embalagem secundária (rótulo, celofane)
+  ET: 'embalagem',    // embalagem terciária (caixa de embarque)
+  MPGR: 'mp',         // matéria-prima a granel
+  MPES: 'mp',         // matéria-prima especial (essência, ativo)
+  MU: 'consumo'       // material de uso e consumo
+};
+function tipoFornecedorParaMaterial(mpCodigo) {
+  var cod = String(mpCodigo || '').trim().toUpperCase();
+  if (!cod) return null;
+  var prefixo = cod.split('-')[0];
+  return TIPO_FORNECEDOR_POR_PREFIXO[prefixo] || null;
+}
+
 /* Função PURA. Junta a explosão de VÁRIOS SKUs numa lista só de materiais.
 
    Pedido do usuário (2026-09-09): abrir o pedido inteiro e marcar os itens a
@@ -3964,6 +3998,25 @@ function cotacaoItemInconsistencias(resp, itemCadastro) {
 // devolve, por item, quem tem o menor CUSTO UNITÁRIO -- não o menor preço.
 //
 // `convidados` = fornecedoresConvidados (objeto), `itens` = itens (objeto).
+/* Função PURA. Quais itens deste processo o convidado foi chamado a cotar.
+
+   `convidado.itens` ({itemKey: true}) passou a ser gravado no convite pra a
+   grade parar de oferecer álcool a fornecedor de frasco. Processo criado
+   ANTES disso não tem o campo -- e nesse caso o escopo é o processo inteiro,
+   que é exatamente como ele funcionava. Sem esse fallback, toda cotação
+   antiga perderia a comparação de uma vez. */
+function escopoDoConvidado(convidado, todosItens) {
+  var esc = convidado && convidado.itens;
+  if (!esc || !Object.keys(esc).length) return (todosItens || []).slice();
+  return (todosItens || []).filter(function(k) { return !!esc[k]; });
+}
+
+// Este convidado pode preencher ESTE item? É o que decide se a célula da
+// grade abre ou fica travada.
+function convidadoCotaItem(convidado, itemKey, todosItens) {
+  return escopoDoConvidado(convidado, todosItens).indexOf(itemKey) !== -1;
+}
+
 function compararCotacao(itens, convidados) {
   var porFornecedor = {};
   Object.keys(convidados || {}).forEach(function(cKey) {
@@ -3996,10 +4049,19 @@ function compararCotacao(itens, convidados) {
   // Vencedor por item: menor custo NA UNIDADE DO CADASTRO. Comparar pelo
   // custo na unidade cotada elegeria o fornecedor errado sempre que dois
   // cotassem em unidades diferentes (R$/kg contra R$/rolo).
+  // Declarado ANTES do primeiro uso: com `var`, usá-lo mais abaixo o deixaria
+  // undefined aqui, escopoDoConvidado devolveria lista vazia e NENHUM
+  // fornecedor disputaria item nenhum.
+  var todosItens = Object.keys(itens || {});
   var vencedorPorItem = {};
   Object.keys(itens || {}).forEach(function(itemKey) {
     var melhor = null, temPendente = false;
     Object.keys(porFornecedor).forEach(function(cKey) {
+      // Fora do escopo do convite = não disputa este item. Sem isto, um
+      // fornecedor de frasco que nunca foi chamado pro álcool ainda podia
+      // marcar `conversaoPendente` e BLOQUEAR a eleição do vencedor do
+      // álcool -- ninguém ganhava, por causa de quem nem foi convidado.
+      if (!convidadoCotaItem((convidados || {})[cKey], itemKey, todosItens)) return;
       var calc = porFornecedor[cKey].itens[itemKey];
       if (!calc) return;
       if (calc.conversaoPendente) { temPendente = true; return; }
@@ -4015,15 +4077,41 @@ function compararCotacao(itens, convidados) {
     else if (temPendente) vencedorPorItem[itemKey] = null;
   });
 
-  // Vencedor geral: menor custo total somando só quem respondeu TODOS os
-  // itens. Um fornecedor que cotou 1 de 5 itens teria o "menor total" sem
-  // ser comparável -- e é o erro clássico deste tipo de tela.
-  var totalItens = Object.keys(itens || {}).length;
+  // Vencedor geral: menor custo total somando só quem respondeu todos os
+  // itens QUE FOI CONVIDADO A COTAR. Um fornecedor que cotou 1 de 5 sem
+  // motivo não é comparável -- mas um fornecedor de frasco convidado só pros
+  // 2 itens de embalagem, numa cotação que também tem álcool, respondeu tudo
+  // o que lhe cabia.
+  //
+  // Antes o denominador era SEMPRE o total de itens do processo, e como
+  // ninguém cotava fora do seu ramo, numa cotação mista NENHUM fornecedor
+  // podia ser vencedor geral -- a comparação global nascia morta. Só entrou
+  // em cena quando o convite passou a guardar o escopo (`convidado.itens`);
+  // convidado sem escopo (processo antigo) continua valendo pra tudo.
   var vencedorGeral = null;
+  /* Só compara quem disputou a MESMA cesta.
+     Com o escopo por convite, um fornecedor de álcool "ganharia" de um de
+     frascos só porque R$ 6.000 de álcool é menos que R$ 8.000 de frascos --
+     cestas diferentes, comparação sem sentido, e um troféu que induz ao erro.
+     Defeito introduzido junto com o escopo e pego na verificação da grade.
+
+     Regra: agrupa por assinatura de escopo e só elege vencedor geral quando
+     ao menos DOIS disputam exatamente os mesmos itens. Um sozinho na cesta
+     não venceu ninguém. */
+  var porEscopo = {};
+  Object.keys(porFornecedor).forEach(function(cKey) {
+    var escopo = escopoDoConvidado((convidados || {})[cKey], todosItens);
+    if (!escopo.length) return;
+    var assinatura = escopo.slice().sort().join('|');
+    (porEscopo[assinatura] = porEscopo[assinatura] || []).push(cKey);
+  });
   Object.keys(porFornecedor).forEach(function(cKey) {
     var f = porFornecedor[cKey];
-    var completos = Object.keys(f.itens).filter(function(k) { return f.itens[k].completo; }).length;
-    if (completos !== totalItens || !totalItens) return;
+    var escopo = escopoDoConvidado((convidados || {})[cKey], todosItens);
+    if (!escopo.length) return;
+    if ((porEscopo[escopo.slice().sort().join('|')] || []).length < 2) return;
+    var completos = escopo.filter(function(k) { return f.itens[k] && f.itens[k].completo; }).length;
+    if (completos !== escopo.length) return;
     if (!vencedorGeral || f.custoTotal < vencedorGeral.custoTotal) {
       vencedorGeral = { cKey: cKey, custoTotal: f.custoTotal };
     }
