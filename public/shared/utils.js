@@ -1014,6 +1014,51 @@ function volumeNominalEmLitros(produto) {
 // `pecas` = quantidade de unidades a produzir (ex: saldo em aberto do
 // pedido, não necessariamente o pedido inteiro).
 // Retorna { ok, erro?, itens: [{mpCodigo, mpNome, quantidade, unidade, origem}], massaLoteKg, volumeGranelL }
+/* Função PURA. Junta a explosão de VÁRIOS SKUs numa lista só de materiais.
+
+   Pedido do usuário (2026-09-09): abrir o pedido inteiro e marcar os itens a
+   incluir, em vez de gerar uma solicitação por SKU. Dois SKUs do mesmo pedido
+   quase sempre compartilham material (o mesmo frasco, a mesma essência) --
+   mandar duas linhas do mesmo código faria o comprador cotar duas vezes o que
+   é uma compra só, e o aviso de duplicado da tela dispararia em todo pedido.
+
+   `explosoes` = [{ sku, produto, itens: [{mpCodigo, mpNome, quantidade,
+   unidade, origem}] }]. Devolve os materiais somados, cada um dizendo de
+   quais SKUs veio -- é o que permite conferir a conta depois. */
+function consolidarMateriaisDeSkus(explosoes) {
+  var porMaterial = {};
+  (explosoes || []).forEach(function(e) {
+    (e && e.itens || []).forEach(function(it) {
+      if (!it || !it.mpCodigo) return;
+      var k = String(it.mpCodigo);
+      if (!porMaterial[k]) {
+        porMaterial[k] = {
+          mpCodigo: it.mpCodigo, mpNome: it.mpNome || '',
+          unidade: it.unidade || '', origem: it.origem || '',
+          quantidade: 0, skus: [], detalhe: []
+        };
+      }
+      var m = porMaterial[k];
+      m.quantidade += parseFloat(it.quantidade) || 0;
+      if (!m.mpNome && it.mpNome) m.mpNome = it.mpNome;
+      if (!m.unidade && it.unidade) m.unidade = it.unidade;
+      if (e.sku && m.skus.indexOf(e.sku) === -1) m.skus.push(e.sku);
+      m.detalhe.push({ sku: e.sku || '', quantidade: parseFloat(it.quantidade) || 0 });
+    });
+  });
+  var lista = Object.keys(porMaterial).map(function(k) {
+    var m = porMaterial[k];
+    // Arredonda só no fim: somar valores já arredondados acumula erro item a
+    // item, e material de fórmula sai em kg com 3 casas.
+    m.quantidade = Math.round(m.quantidade * 1000) / 1000;
+    return m;
+  });
+  // Maior quantidade primeiro não ajuda aqui (kg e un misturados); ordem
+  // alfabética por código é a que a pessoa consegue conferir contra o BOM.
+  lista.sort(function(a, b) { return String(a.mpCodigo).localeCompare(String(b.mpCodigo)); });
+  return lista;
+}
+
 function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCache) {
   var volInfo = volumeNominalEmLitros(produto);
   if (!volInfo.ok) return { ok: false, erro: 'Produto cadastrado com unidade de volume "' + (volInfo.unidade || '—') + '" -- só sei calcular a partir de ml ou L.' };

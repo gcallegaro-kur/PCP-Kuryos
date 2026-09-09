@@ -417,15 +417,19 @@
 
 <!-- MODAL: Gerar Solicitação a partir de Pedido -->
 <div class="modal-bg" id="modalGerarPedido">
-  <div class="modal">
+  <div class="modal" style="max-width:800px">
     <div class="modal-header"><h2>Gerar Solicitação a partir de um Pedido</h2><button class="modal-close" id="modalGerarPedidoClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
-      <div class="section-note">Escolha um pedido em produção -- calculamos os materiais necessários direto da Fórmula/BOM aprovada × saldo em aberto (quantidade ainda não produzida). Você confere e ajusta antes de enviar.</div>
-      <div class="kt-search" style="margin-bottom:10px"><span class="icon">🔍</span><input type="text" id="gpSearch" placeholder="Buscar por SKU, produto ou cliente..."></div>
-      <div id="gpPedidosList" style="max-height:340px;overflow-y:auto"></div>
+      <div class="section-note">Abra o pedido, marque os itens que entram na solicitação e gere <b>uma solicitação só</b> — calculamos os materiais direto da Fórmula/BOM × saldo em aberto de cada item, e <b>somamos o que se repete</b> entre eles. Você confere e ajusta antes de enviar.</div>
+      <div class="kt-search" style="margin-bottom:10px"><span class="icon">🔍</span><input type="text" id="gpSearch" placeholder="Buscar por nº do pedido, cliente, SKU ou produto..."></div>
+      <div id="gpPedidosList" style="max-height:420px;overflow-y:auto"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="modalGerarPedidoCancel">Cancelar</button>
+      <div style="font-size:12.5px;color:var(--muted)" id="gpResumoSelecao">Nenhum item selecionado.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" id="modalGerarPedidoCancel">Cancelar</button>
+        <button class="btn btn-primary" id="gpGerar" disabled>Gerar solicitação</button>
+      </div>
     </div>
   </div>
 </div>
@@ -678,6 +682,7 @@ var scItensBuilder = []; // [{materialCodigo, qtd, obs}] -- só em memória até
 var cotacaoSelecionadas = {}; // scKey -> true
 var cotConvidadosSelecionados = {}; // fornecedorKey -> true, só dentro do modal Iniciar Cotação
 var cotAvulsosBuffer = []; // [{nome, email}], só dentro do modal Iniciar Cotação até salvar
+var allPedidosComerciais = {};
 var scPrefillOrigem = null; // {pedidoKey, sku} quando a solicitação em edição veio de "Gerar de Pedido"
 
 // Mesmo padrão já usado em planejamento.html/horizonte.html/dashboard_analise.html:
@@ -1184,10 +1189,17 @@ function saveSolicitacao() {
     updates['solicitacoes_compra/' + key] = data;
     // Marca o pedido como já enviado pra compras -- evita gerar de novo sem
     // querer; não impede (pode precisar complementar), só sinaliza na lista.
-    if (origem && origem.pedidoKey) {
-      updates['pedidos/' + origem.pedidoKey + '/enviadoParaCompras'] = true;
-      updates['pedidos/' + origem.pedidoKey + '/enviadoParaComprasEm'] = new Date().toISOString();
-    }
+    // Com seleção múltipla a origem traz VÁRIAS linhas; marcar só a primeira
+    // deixaria as outras parecendo que ninguém pediu. `pedidoKey` (singular)
+    // continua funcionando pra quem chamar do jeito antigo.
+    var _origemKeys = (origem && origem.pedidoKeys && origem.pedidoKeys.length)
+      ? origem.pedidoKeys
+      : ((origem && origem.pedidoKey) ? [origem.pedidoKey] : []);
+    var _agora = new Date().toISOString();
+    _origemKeys.forEach(function(pk) {
+      updates['pedidos/' + pk + '/enviadoParaCompras'] = true;
+      updates['pedidos/' + pk + '/enviadoParaComprasEm'] = _agora;
+    });
     return db.ref().update(updates);
   }).then(function() {
     showAlert('Solicitação enviada com sucesso!', 'success');
@@ -1197,80 +1209,248 @@ function saveSolicitacao() {
 }
 
 /* ══════════════ Gerar Solicitação a partir de Pedido ══════════════ */
-function renderGpPedidosList() {
+/* Pedido do usuário (2026-09-09): "Ideal seria também poder incluir todos os
+   itens do pedido, selecionar via checkbox (...) ao invés de abrir SKU por
+   SKU, abrir o pedido completo e selecionar os itens que quero incluir".
+
+   Antes a lista era plana, uma linha por SKU, e clicar gerava a solicitação
+   daquele SKU sozinho. Um pedido com 4 SKUs virava 4 solicitações -- e o
+   comprador cotava 4 vezes o frasco que é o mesmo nos quatro.
+
+   Agora agrupa por PEDIDO (parentPedidoId), mostra número, cliente e data, e
+   gera UMA solicitação com os materiais dos itens marcados SOMADOS. */
+var gpSelecionados = {};   // { pedidoLinhaKey: true }
+var gpAbertos = {};        // { pedidoId: true } -- quais grupos estão expandidos
+
+// A data e o cliente do pedido comercial. /pedidos (a linha por SKU) não tem
+// data nenhuma -- ela só existe em pedidos_comerciais, ligada por
+// parentPedidoId. 2 dos 69 ids não têm par lá; esses caem no fallback.
+function gpCabecalhoPedido(pedidoId) {
+  var c = allPedidosComerciais[pedidoId] || null;
+  return {
+    numero: pedidoId,
+    cliente: c ? (c.cliente || '') : '',
+    dataPedido: c ? (c.dataPedido || '') : '',
+    totalQtd: c ? (c.total_qtd || 0) : 0,
+    achou: !!c
+  };
+}
+
+function gpGruposFiltrados() {
   var search = norm(document.getElementById('gpSearch').value);
-  var box = document.getElementById('gpPedidosList');
-
-  var rows = Object.entries(allPedidos).filter(function(entry) {
-    var p = entry[1];
-    if (!p || !p.sku) return false;
-    // "Em produção" = não concluído/cancelado e ainda tem saldo em aberto --
-    // mesmo critério de "ativo" já usado em outras telas (isConcluido, shared/utils.js).
-    if (isConcluido(p)) return false;
+  var grupos = {};
+  Object.entries(allPedidos).forEach(function(entry) {
+    var key = entry[0], p = entry[1];
+    if (!p || !p.sku) return;
+    // Mesmo critério de "ativo" das outras telas (isConcluido, shared/utils.js).
+    if (isConcluido(p)) return;
     var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
-    if (saldo <= 0) return false;
-    if (search) {
-      var hay = norm(p.sku) + ' ' + norm(p.produto) + ' ' + norm(p.cliente);
-      if (hay.indexOf(search) === -1) return false;
-    }
-    return true;
-  }).sort(function(a, b) { return (b[1].priority || 0) - (a[1].priority || 0); });
+    if (saldo <= 0) return;
+    var pid = p.parentPedidoId || p.id || '(sem pedido)';
+    if (!grupos[pid]) grupos[pid] = { pedidoId: pid, cab: gpCabecalhoPedido(pid), linhas: [], saldoTotal: 0 };
+    grupos[pid].linhas.push({ key: key, p: p, saldo: saldo });
+    grupos[pid].saldoTotal += saldo;
+  });
+  var lista = Object.values(grupos);
+  if (search) {
+    // A busca casa no PEDIDO (número, cliente, data) ou em QUALQUER item dele
+    // -- procurar por um SKU tem que trazer o pedido inteiro, senão a pessoa
+    // acha o item e perde o contexto que ela veio buscar.
+    lista = lista.filter(function(g) {
+      var hay = norm(g.pedidoId) + ' ' + norm(g.cab.cliente) + ' ' + norm(g.cab.dataPedido) + ' ' +
+        g.linhas.map(function(l) { return norm(l.p.sku) + ' ' + norm(l.p.produto) + ' ' + norm(l.p.cliente); }).join(' ');
+      return hay.indexOf(search) !== -1;
+    });
+  }
+  // Mais recente primeiro; sem data vai pro fim (não some, mas não disputa o topo).
+  lista.sort(function(a, b) {
+    var da = a.cab.dataPedido || '', db_ = b.cab.dataPedido || '';
+    if (da && db_ && da !== db_) return db_.localeCompare(da);
+    if (da && !db_) return -1;
+    if (!da && db_) return 1;
+    return String(a.pedidoId).localeCompare(String(b.pedidoId));
+  });
+  return lista;
+}
 
-  if (!rows.length) {
+function renderGpPedidosList() {
+  var box = document.getElementById('gpPedidosList');
+  var grupos = gpGruposFiltrados();
+  if (!grupos.length) {
     box.innerHTML = '<div class="no-data">Nenhum pedido em produção com saldo em aberto encontrado.</div>';
+    gpAtualizarResumo();
     return;
   }
 
-  box.innerHTML = rows.map(function(entry) {
-    var key = entry[0], p = entry[1];
-    var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
-    var jaEnviado = p.enviadoParaCompras
-      ? '<span class="badge badge-blue" title="Já foi enviado pra Compras em ' + fmtData(p.enviadoParaComprasEm) + '">já enviado</span>'
-      : '';
-    return '<div class="chk-row" style="cursor:pointer" data-key="' + escapeAttr(key) + '">' +
-      '<div class="chk-row-body">' +
-        '<b>' + escapeHtml(p.sku) + '</b> — ' + escapeHtml(p.produto || '—') + ' ' + jaEnviado + '<br>' +
-        '<span style="color:var(--muted)">Cliente: ' + escapeHtml(p.cliente || '—') + ' · Saldo em aberto: ' + fmtNum(saldo) + ' un.</span>' +
+  box.innerHTML = grupos.map(function(g) {
+    var aberto = gpAbertos[g.pedidoId];
+    var nSel = g.linhas.filter(function(l) { return gpSelecionados[l.key]; }).length;
+    var todosMarcados = nSel === g.linhas.length && nSel > 0;
+    var cab = g.cab;
+    var jaEnviado = g.linhas.some(function(l) { return l.p.enviadoParaCompras; });
+
+    var itensHtml = aberto ? g.linhas.map(function(l) {
+      var pr = l.p;
+      var pend = gpPendenciaDoSku(pr.sku);
+      return '<label class="chk-row" style="cursor:pointer;padding-left:26px;' +
+          (pend ? 'opacity:.7' : '') + '">' +
+        '<input type="checkbox" class="gp-item" data-key="' + escapeAttr(l.key) + '"' +
+          (gpSelecionados[l.key] ? ' checked' : '') + (pend ? ' disabled' : '') + '>' +
+        '<div class="chk-row-body">' +
+          '<b>' + escapeHtml(pr.sku) + '</b> — ' + escapeHtml(pr.produto || '—') +
+          (pr.enviadoParaCompras ? ' <span class="badge badge-blue" title="Já foi enviado pra Compras em ' + escapeAttr(fmtData(pr.enviadoParaComprasEm)) + '">já enviado</span>' : '') +
+          '<br><span style="color:var(--muted);font-size:11.5px">' +
+            'Saldo em aberto: <b>' + fmtNum(l.saldo) + '</b> un · pedido ' + fmtNum(pr.qtdTotal || 0) +
+            ', produzido ' + fmtNum(pr.produzido || 0) +
+          '</span>' +
+          (pend ? '<br><span style="color:var(--danger);font-size:11px">⚠ ' + escapeHtml(pend) + '</span>' : '') +
+        '</div>' +
+      '</label>';
+    }).join('') : '';
+
+    return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:9px;overflow:hidden">' +
+      '<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;background:color-mix(in srgb, var(--text) 4%, var(--card))">' +
+        '<input type="checkbox" class="gp-grupo" data-pid="' + escapeAttr(g.pedidoId) + '"' + (todosMarcados ? ' checked' : '') + '>' +
+        '<div class="gp-toggle" data-pid="' + escapeAttr(g.pedidoId) + '" style="flex:1;cursor:pointer;min-width:0">' +
+          '<div style="font-weight:700;font-size:13.5px">' +
+            'Pedido #' + escapeHtml(String(g.pedidoId)) +
+            (cab.cliente ? ' · ' + escapeHtml(cab.cliente) : '') +
+            (cab.dataPedido ? ' · <span style="font-weight:400;color:var(--muted)">' + escapeHtml(fmtDataCurta(cab.dataPedido)) + '</span>' : '') +
+            (!cab.achou ? ' <span class="badge badge-gray" title="Sem pedido comercial correspondente — número e data podem estar incompletos">sem cadastro comercial</span>' : '') +
+            (jaEnviado ? ' <span class="badge badge-blue">já enviado</span>' : '') +
+          '</div>' +
+          '<div style="font-size:11.5px;color:var(--muted)">' +
+            g.linhas.length + (g.linhas.length === 1 ? ' item' : ' itens') +
+            ' · saldo em aberto ' + fmtNum(g.saldoTotal) + ' un' +
+            (nSel ? ' · <b style="color:var(--primary)">' + nSel + ' selecionado' + (nSel === 1 ? '' : 's') + '</b>' : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="gp-toggle" data-pid="' + escapeAttr(g.pedidoId) + '" style="cursor:pointer;color:var(--muted);font-size:12px">' +
+          (aberto ? '▼' : '▶') + '</span>' +
       '</div>' +
+      (aberto ? '<div style="padding:4px 8px 8px">' + itensHtml + '</div>' : '') +
     '</div>';
   }).join('');
 
-  box.querySelectorAll('.chk-row').forEach(function(row) {
-    row.addEventListener('click', function() { gerarSolicitacaoDePedido(row.getAttribute('data-key')); });
+  box.querySelectorAll('.gp-toggle').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var pid = el.getAttribute('data-pid');
+      gpAbertos[pid] = !gpAbertos[pid];
+      renderGpPedidosList();
+    });
   });
+  box.querySelectorAll('.gp-grupo').forEach(function(chk) {
+    chk.addEventListener('change', function() {
+      var pid = chk.getAttribute('data-pid');
+      var g = gpGruposFiltrados().filter(function(x) { return String(x.pedidoId) === pid; })[0];
+      if (!g) return;
+      g.linhas.forEach(function(l) {
+        // Item sem fórmula/BOM não pode ser marcado nem pelo "marcar tudo" --
+        // ele entraria na solicitação sem material nenhum.
+        if (gpPendenciaDoSku(l.p.sku)) return;
+        if (chk.checked) gpSelecionados[l.key] = true; else delete gpSelecionados[l.key];
+      });
+      gpAbertos[pid] = true;
+      renderGpPedidosList();
+    });
+  });
+  box.querySelectorAll('.gp-item').forEach(function(chk) {
+    chk.addEventListener('change', function() {
+      var k = chk.getAttribute('data-key');
+      if (chk.checked) gpSelecionados[k] = true; else delete gpSelecionados[k];
+      renderGpPedidosList();
+    });
+  });
+  gpAtualizarResumo();
 }
 
-function gerarSolicitacaoDePedido(pedidoKey) {
-  var p = allPedidos[pedidoKey];
-  if (!p) return;
-  var produto = getProdutoBySkuCompras(p.sku);
-  if (!produto) { showAlert('Produto "' + p.sku + '" não encontrado no cadastro de Produtos.', 'danger'); return; }
+// Por que este SKU não pode entrar. Devolve '' quando está tudo certo.
+function gpPendenciaDoSku(sku) {
+  if (!getProdutoBySkuCompras(sku)) return 'Produto não encontrado no cadastro de Produtos.';
+  if (!melhorFormulaDoProduto(sku, allFormulasCompras)) return 'Sem Fórmula/BOM cadastrada.';
+  return '';
+}
 
-  var achado = melhorFormulaDoProduto(p.sku, allFormulasCompras);
-  if (!achado) { showAlert('Esse produto não tem Fórmula/BOM cadastrada -- cadastre em Cadastros antes de gerar a solicitação.', 'danger'); return; }
-  var formula = achado.registro;
-  var bom = allBomCompras[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+function gpAtualizarResumo() {
+  var n = Object.keys(gpSelecionados).length;
+  var el = document.getElementById('gpResumoSelecao');
+  var btn = document.getElementById('gpGerar');
+  var saldo = Object.keys(gpSelecionados).reduce(function(s, k) {
+    var p = allPedidos[k]; if (!p) return s;
+    return s + Math.max(0, (p.qtdTotal || 0) - (p.produzido || 0));
+  }, 0);
+  el.textContent = n
+    ? n + (n === 1 ? ' item selecionado' : ' itens selecionados') + ' · ' + fmtNum(saldo) + ' un a produzir'
+    : 'Nenhum item selecionado.';
+  btn.disabled = !n;
+}
 
-  var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
-  var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriais);
-  if (!calc.ok) { showAlert(calc.erro, 'danger'); return; }
-  if (!calc.itens.length) { showAlert('A Fórmula/BOM desse produto não tem itens cadastrados.', 'danger'); return; }
+function gerarSolicitacaoDosSelecionados() {
+  var keys = Object.keys(gpSelecionados);
+  if (!keys.length) return;
 
-  var avisoFormula = achado.temAprovada ? '' : ' (⚠️ sem versão APROVADA -- usando a mais recente, confira com P&D/Qualidade)';
-  var itensPrefill = calc.itens.map(function(it) {
-    return { materialCodigo: it.mpCodigo, qtd: it.quantidade, obs: it.origem === 'formula' ? 'fórmula' : 'BOM' };
+  var explosoes = [], erros = [], semAprovada = [], pedidosIds = {}, pedidoKeys = [];
+  keys.forEach(function(key) {
+    var p = allPedidos[key];
+    if (!p) return;
+    var produto = getProdutoBySkuCompras(p.sku);
+    var achado = melhorFormulaDoProduto(p.sku, allFormulasCompras);
+    if (!produto || !achado) { erros.push(p.sku + ': ' + gpPendenciaDoSku(p.sku)); return; }
+    var formula = achado.registro;
+    var bom = allBomCompras[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
+    var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriais);
+    if (!calc.ok) { erros.push(p.sku + ': ' + calc.erro); return; }
+    if (!calc.itens.length) { erros.push(p.sku + ': a Fórmula/BOM não tem itens cadastrados.'); return; }
+    if (!achado.temAprovada) semAprovada.push(p.sku);
+    explosoes.push({ sku: p.sku, produto: p.produto || '', saldo: saldo, itens: calc.itens });
+    pedidoKeys.push(key);
+    pedidosIds[p.parentPedidoId || p.id || '?'] = true;
   });
+
+  if (!explosoes.length) {
+    showAlert('Nenhum item selecionado pôde ser calculado:\n' + erros.join('\n'), 'danger');
+    return;
+  }
+  // Erro em ALGUNS não pode cancelar o resto em silêncio -- mas quem envia
+  // precisa saber o que ficou de fora, senão descobre pela falta.
+  if (erros.length && !confirm('Estes itens NÃO entraram:\n\n' + erros.join('\n') +
+      '\n\nGerar a solicitação só com os ' + explosoes.length + ' que deram certo?')) return;
+
+  var consolidado = consolidarMateriaisDeSkus(explosoes);
+  var itensPrefill = consolidado.map(function(m) {
+    return {
+      materialCodigo: m.mpCodigo,
+      qtd: m.quantidade,
+      // Diz de onde veio a quantidade. Com vários SKUs somados, sem isto o
+      // número fica impossível de conferir contra o BOM.
+      obs: (m.origem === 'formula' ? 'fórmula' : 'BOM') +
+           (m.skus.length > 1 ? ' · soma de ' + m.skus.join(' + ') : '')
+    };
+  });
+
+  var ids = Object.keys(pedidosIds);
+  var resumoSkus = explosoes.map(function(e) { return e.sku + ' (' + fmtNum(e.saldo) + ' un)'; }).join(', ');
+  var justificativa = 'Gerado a partir do' + (ids.length > 1 ? 's pedidos #' : ' pedido #') + ids.join(', #') +
+    ' — ' + explosoes.length + ' item(ns): ' + resumoSkus + '.' +
+    (semAprovada.length ? ' ⚠️ SEM versão APROVADA de Fórmula/BOM: ' + semAprovada.join(', ') + ' — confira com P&D/Qualidade.' : '') +
+    (erros.length ? ' Ficaram de fora: ' + erros.join('; ') : '');
 
   closeModalGerarPedido();
   openModalSolicitacao({
     itens: itensPrefill,
-    justificativa: 'Gerado automaticamente a partir do pedido #' + (p.id || pedidoKey) + ' -- ' + p.sku + ' (' + (p.produto || '') + '), saldo em aberto: ' + fmtNum(saldo) + ' un.' + avisoFormula,
-    origem: { pedidoKey: pedidoKey, sku: p.sku }
+    justificativa: justificativa,
+    // pedidoKeys (plural) marca TODAS as linhas como enviadas pra compras --
+    // com a seleção múltipla, marcar só uma deixaria as outras parecendo que
+    // ninguém pediu.
+    origem: { pedidoKeys: pedidoKeys, pedidoKey: pedidoKeys[0], sku: explosoes[0].sku }
   });
 }
 
 function openModalGerarPedido() {
   document.getElementById('gpSearch').value = '';
+  gpSelecionados = {};
+  gpAbertos = {};
   renderGpPedidosList();
   document.getElementById('modalGerarPedido').classList.add('open');
 }
@@ -3174,6 +3354,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalGerarPedido').addEventListener('click', function(e) { if (e.target === this) closeModalGerarPedido(); });
   var _tgp = null;
   document.getElementById('gpSearch').addEventListener('input', function() { clearTimeout(_tgp); _tgp = setTimeout(renderGpPedidosList, 200); });
+  document.getElementById('gpGerar').addEventListener('click', gerarSolicitacaoDosSelecionados);
 
   document.getElementById('btnIniciarCotacao').addEventListener('click', abrirModalIniciarCotacao);
   document.getElementById('btnCopiarTextoCotacao').addEventListener('click', copiarTextoCotacao);
@@ -3281,6 +3462,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     // Só leitura -- pra "Gerar de Pedido" (explosão de Fórmula/BOM contra o
     // saldo em aberto do pedido). Nenhuma dessas 5 tem CRUD aqui.
+    // Cabeçalho do pedido comercial: número, cliente e DATA. A linha por SKU
+    // em /pedidos não guarda data nenhuma -- ela só existe aqui.
+    dbOnValue(db.ref('pedidos_comerciais'), function(snap) {
+      allPedidosComerciais = snap.val() || {};
+      if (document.getElementById('modalGerarPedido').classList.contains('open')) renderGpPedidosList();
+    });
     dbOnValue(db.ref('pedidos'), function(snap) { allPedidos = snap.val() || {}; });
     dbOnValue(db.ref('produtos'), function(snap) { allProdutosCompras = snap.val() || {}; });
     dbOnValue(db.ref('formulas'), function(snap) { allFormulasCompras = snap.val() || {}; });
