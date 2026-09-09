@@ -2977,6 +2977,18 @@ function syncNextItem() {
         : Promise.resolve(null);
       return opUpdatePromise.then(function(opResult) {
         var deltaReal = (opResult && opResult.deltaAplicado != null) ? opResult.deltaAplicado : item.qtd;
+        // O operador informa o TOTAL acumulado da OP. `item.qtd` foi
+        // calculado quando clicou e pode estar velho se o checkpoint anterior
+        // ainda estiver na fila/local cache. A transação acima é a única
+        // fonte de verdade do incremento; persistir o mesmo delta no registro
+        // evita que Histórico some "1.000 + 3.000" em vez de "1.000 + 2.000".
+        var confirmarDelta = (opResult && opResult.committed && item.registro && item.id)
+          ? db.ref('registros/' + item.data + '/' + item.id).update({
+              quantidade: deltaReal,
+              qtdIncrementoConfirmado: deltaReal
+            })
+          : Promise.resolve();
+        return confirmarDelta.then(function() {
         if (item.pedidoId && deltaReal && item.produto && isSetorEnvase(item.tipo)) {
           var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
           if (pedKey) {
@@ -3005,6 +3017,7 @@ function syncNextItem() {
             });
           }
         }
+        });
       });
     });
   } else if (item.type === 'fechamento_op') {
@@ -3049,6 +3062,15 @@ function syncNextItem() {
             // confirmado).
             if (op.status !== 'Concluído') op.status = 'Aguardando Confirmação';
             return op;
+          }).then(function(resultado) {
+            // Mesmo princípio do checkpoint: o valor exibido e agregado no
+            // Histórico precisa ser o delta que esta transação confirmou,
+            // não o qtdFinal calculado contra um cache possivelmente velho.
+            if (!resultado.committed) return resultado;
+            return db.ref('registros/' + item.data + '/' + item.id).update({
+              quantidade: deltaRealFechamento,
+              qtdIncrementoConfirmado: deltaRealFechamento
+            }).then(function() { return resultado; });
           })
         : Promise.resolve(null);
       saves.push(opPromise.then(function() {
@@ -3877,20 +3899,25 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   var hora = pad(new Date().getHours()) + ':00';
   var turno = guessShift();
 
-  // Achado da auditoria: este era o único fechamento que ainda não gravava
-  // período real -- ficava preso ao formato antigo de grade horária no
-  // Histórico. Diferente de "Apontamento por Total" (que rastreia
-  // op.abertaDesde), esta aba não guarda um instante de abertura próprio;
-  // a melhor aproximação real é o apontamento HORÁRIO mais antigo já feito
-  // hoje pra essa OP nesta linha (é dele que qtdFinal está descontando,
-  // via "apontado"/qtdFinal acima) até agora, que é quando o encerramento
-  // realmente acontece.
+  // Esta aba não guarda um instante de abertura próprio. Quando houve um
+  // checkpoint (intervalo/encerramento de turno), o próximo período começa
+  // no FIM dele — não no primeiro apontamento do dia. Ex.: 07h–12h com
+  // acumulado 1.000 e 13h–16h até 3.000 gera dois períodos de trabalho,
+  // 1.000 e 2.000, sem atribuir o intervalo inteiro ao fechamento final.
   var agora = new Date().toISOString();
   var regsDestaOp = opTodayRegs.filter(function(r) {
     return r.linha === linha && (lote ? r.lote === lote : true) && r.tipo !== 'fechamento_op';
   });
   var periodoInicioCalc = null;
-  if (regsDestaOp.length) {
+  var checkpointsComFim = regsDestaOp.filter(function(r) {
+    return r.tipo === 'apontamento_total' && r.periodoFim && regTimestampIso(r, 'periodoFim') < agora;
+  });
+  if (checkpointsComFim.length) {
+    var ultimoCheckpoint = checkpointsComFim.reduce(function(a, b) {
+      return regTimestampIso(a, 'periodoFim') > regTimestampIso(b, 'periodoFim') ? a : b;
+    });
+    periodoInicioCalc = regTimestampIso(ultimoCheckpoint, 'periodoFim');
+  } else if (regsDestaOp.length) {
     var maisAntigo = regsDestaOp.reduce(function(a, b) {
       return (regTimestampIso(a, 'periodoInicio') < regTimestampIso(b, 'periodoInicio')) ? a : b;
     });
