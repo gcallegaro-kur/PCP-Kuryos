@@ -205,7 +205,15 @@
         <option value="REPROVADO">Reprovado</option>
         <option value="VENCIDO">Vencido</option>
       </select>
+      <!-- Fila de endereçamento definitivo. Antes, liberar só trocava o
+           status e o lote ficava na posição em que foi descarregado -- não
+           havia onde ver "o que a Qualidade liberou e ainda não foi guardado
+           no lugar certo". -->
+      <label class="kt-check" style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap">
+        <input type="checkbox" id="slSoAguardando"> Só aguardando posição definitiva
+      </label>
     </div>
+    <div id="slAvisoAguardando"></div>
     <div class="section-note">Cada linha é um lote específico (de uma entrada de recebimento ou de uma conclusão de OP) numa posição -- uma mesma posição pode ter vários lotes/itens misturados. O saldo aqui é do LOTE, independente do agregado da aba anterior (que não escolhe lote no consumo -- ver limitação no plano).</div>
     <div class="card">
       <div class="card-title" id="slCount">Lotes em estoque</div>
@@ -908,7 +916,20 @@ function renderSaldoLotes() {
   var filtroTipo = document.getElementById('slFiltroTipo').value;
   var filtroStatus = document.getElementById('slFiltroStatus').value;
 
-  var linhas = todosOsLotes().filter(function(x) {
+  var soAguardando = document.getElementById('slSoAguardando').checked;
+
+  var todos = todosOsLotes();
+  // Contagem sobre TUDO, não sobre o filtro: o aviso precisa dizer quantos
+  // existem, mesmo quando a busca atual esconde a maioria deles.
+  var nAguardando = todos.filter(function(x) { return x.lote.aguardandoEnderecoDefinitivo; }).length;
+  document.getElementById('slAvisoAguardando').innerHTML = nAguardando
+    ? '<div class="section-note" style="border-left:3px solid var(--warning)">📦 <b>' + nAguardando +
+      ' lote(s) liberado(s) pela Qualidade ainda na posição em que foram recebidos.</b> ' +
+      'Liberar não move o material — transfira para a posição definitiva usando o botão “Transferir” de cada linha.</div>'
+    : '';
+
+  var linhas = todos.filter(function(x) {
+    if (soAguardando && !x.lote.aguardandoEnderecoDefinitivo) return false;
     if (filtroTipo && x.lote.itemTipo !== filtroTipo) return false;
     if (filtroStatus && (x.lote.status || 'LIBERADO') !== filtroStatus) return false;
     if (search) {
@@ -916,7 +937,14 @@ function renderSaldoLotes() {
       if (hay.indexOf(search) === -1) return false;
     }
     return true;
-  }).sort(function(a, b) { return norm(a.lote.itemCodigo).localeCompare(norm(b.lote.itemCodigo)); });
+  }).sort(function(a, b) {
+    // Aguardando posição sobe: é trabalho pendente, e trabalho pendente no
+    // fim de uma lista alfabética nunca é feito.
+    var pa = a.lote.aguardandoEnderecoDefinitivo ? 0 : 1;
+    var pb = b.lote.aguardandoEnderecoDefinitivo ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return norm(a.lote.itemCodigo).localeCompare(norm(b.lote.itemCodigo));
+  });
 
   document.getElementById('slCount').textContent = 'Lotes em estoque (' + linhas.length + ')';
   var tbody = document.getElementById('slBody');
@@ -927,8 +955,11 @@ function renderSaldoLotes() {
   tbody.innerHTML = linhas.map(function(x) {
     var l = x.lote;
     var tipoBadge = l.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span>' : '<span class="badge badge-blue">MP</span>';
+    var pendEndereco = l.aguardandoEnderecoDefinitivo
+      ? ' <span class="badge badge-orange" title="Liberado pela Qualidade e ainda na posição em que foi recebido. Transfira para o endereço definitivo.">📦 guardar</span>'
+      : '';
     return '<tr>' +
-      '<td>' + tipoBadge + ' ' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + '</td>' +
+      '<td>' + tipoBadge + ' ' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + pendEndereco + '</td>' +
       '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
       '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
       '<td>' + fmtData(l.dataValidade) + '</td>' +
@@ -2049,6 +2080,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('slSearch').addEventListener('input', function() { clearTimeout(_tsl); _tsl = setTimeout(renderSaldoLotes, 200); });
   document.getElementById('slFiltroTipo').addEventListener('change', renderSaldoLotes);
   document.getElementById('slFiltroStatus').addEventListener('change', renderSaldoLotes);
+  document.getElementById('slSoAguardando').addEventListener('change', renderSaldoLotes);
   document.getElementById('modalTransferirClose').addEventListener('click', fecharModalTransferir);
   // Inventário rotativo
   document.getElementById('modalContagemClose').addEventListener('click', fecharModalContagem);

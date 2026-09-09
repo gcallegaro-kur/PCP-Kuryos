@@ -790,6 +790,16 @@ function nextSequential(dbRef, counterPath, prefix, pad) {
     return (cur || 0) + 1;
   }).then(function(result) {
     var n = result.snapshot.val();
+    // Transação abortada (concorrência, regra negada, conexão) devolvia
+    // committed:false com snapshot nulo -- e o número saía como "SC-null",
+    // "PC-null" ou lote "26251/null", gravado de forma permanente num
+    // documento que vai pro fornecedor ou pro chão de fábrica.
+    // Falhar alto é melhor: todo chamador já trata erro mostrando alerta, e
+    // um número ausente é recuperável, um número corrompido não.
+    if (!result.committed || n == null || isNaN(n)) {
+      throw new Error('Não foi possível reservar o próximo número em ' + counterPath +
+        '. Nada foi gravado — tente de novo.');
+    }
     var formatted = prefix
       ? prefix + '-' + String(n).padStart(pad || 4, '0')
       : String(n).padStart(pad || 4, '0');
@@ -1362,6 +1372,10 @@ function transferirLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, novoEndere
     var enderecoAnterior = lote.enderecoKey;
     return loteRef.update({
       enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
+      // Mover É o cumprimento da pendência criada na liberação — a fila de
+      // "liberado, aguardando posição definitiva" precisa esvaziar sozinha
+      // quando a Logística faz o trabalho, senão vira lista que ninguém olha.
+      aguardandoEnderecoDefinitivo: null,
       atualizadoEm: new Date().toISOString()
     }).then(function() {
       return dbRef.ref('movimentos_estoque/' + itemKey).push({
@@ -1758,6 +1772,23 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       ensaios: laudo.ensaios || null,
       resumoPlano: laudo.resumoPlano || null
     };
+    // ── Pendência de endereçamento definitivo ──
+    // Levantado pelo usuário (2026-09-08): "o correto não seria ir para
+    // quarentena e, após aprovado, ser endereçado pela logística?".
+    //
+    // O bloqueio de uso já existia -- material em QUARENTENA não é sugerido
+    // pela Separação. O que faltava é o passo DEPOIS: liberar só trocava o
+    // status, e o lote continuava exatamente na posição em que foi
+    // descarregado. Se aquilo era área de retenção ou posição de passagem, o
+    // material ficava liberado no sistema e no lugar errado no chão.
+    //
+    // A marca só faz sentido pra lote LIBERADO que está em alguma posição:
+    // reprovado não se move pra estoque bom, e lote sem endereço não tem de
+    // onde sair. Ela é limpa em transferirLoteEndereco, quando a Logística
+    // de fato move.
+    var liberou = laudo.decisao === 'LIBERADO' || laudo.decisao === 'LIBERADO_EXPEDICAO' ||
+                  laudo.decisao === 'APROVADO_CONCESSAO';
+    atual.aguardandoEnderecoDefinitivo = (liberou && atual.enderecoKey) ? true : null;
     atual.atualizadoEm = agora;
     return atual;
   }).then(function(res) {
@@ -2290,6 +2321,113 @@ function desempenhoQualidadeFornecedor(estoqueLotes, pedidosCompra, rncs) {
     return a.taxaAprovacao - b.taxaAprovacao; // pior primeiro
   });
   return lista;
+}
+
+// Função PURA. Classifica o desempenho de UM fornecedor em algo que cabe num
+// selo -- para a cotação poder mostrar, ao lado do preço, com quem se está
+// prestes a fechar.
+//
+// Achado da auditoria de integração (2026-09-08): `desempenhoQualidadeFornecedor`
+// existia e tinha UMA única chamada em todo o sistema, dentro de qualidade.html.
+// O comprador comparava orçamentos por custo sem enxergar que aquele fornecedor
+// reprovou lote três vezes no trimestre. O sistema calculava a reputação e não
+// a usava na única decisão em que ela importa.
+//
+// `bucket` é um item da lista devolvida por desempenhoQualidadeFornecedor.
+// Devolve null quando não há histórico: selo vazio é ruído, e "sem dados" não
+// é a mesma coisa que "sem problema" -- quem lê precisa distinguir.
+function classificarQualidadeFornecedor(bucket) {
+  var b = bucket;
+  if (!b || (!b.inspecionados && !b.rncs)) return null;
+  var taxa = b.taxaAprovacao;
+  // RNC ABERTA pesa mais que a taxa: é problema não resolvido, agora, e a
+  // taxa é histórico. Fechar compra nova com pendência em aberto é
+  // exatamente o que o selo existe pra evitar.
+  var nivel;
+  if (b.rncsAbertas > 0) nivel = 'ruim';
+  else if (taxa == null) nivel = 'neutro';
+  else if (taxa >= 95) nivel = 'bom';
+  else if (taxa >= 80) nivel = 'atencao';
+  else nivel = 'ruim';
+  var partes = [];
+  if (taxa != null) partes.push(fmtPct1(taxa) + '% aprovação');
+  if (b.rncsAbertas > 0) partes.push(b.rncsAbertas + ' RNC' + (b.rncsAbertas > 1 ? 's' : '') + ' aberta' + (b.rncsAbertas > 1 ? 's' : ''));
+  else if (b.rncs > 0) partes.push(b.rncs + ' RNC' + (b.rncs > 1 ? 's' : '') + ' encerrada' + (b.rncs > 1 ? 's' : ''));
+  if (!partes.length && b.emQuarentena > 0) partes.push(b.emQuarentena + ' em quarentena');
+  if (!partes.length) return null;
+  return {
+    nivel: nivel,
+    texto: partes.join(' · '),
+    // Detalhe pro title= -- quem quiser o número exato passa o mouse, sem
+    // encher a coluna, que já é a mais densa da tela.
+    detalhe: b.inspecionados
+      ? b.liberados + ' liberados, ' + b.reprovados + ' reprovados e ' +
+        b.concessoes + ' com concessão em ' + b.inspecionados + ' lotes inspecionados'
+      : 'sem lote inspecionado ainda',
+    taxaAprovacao: taxa,
+    rncsAbertas: b.rncsAbertas || 0
+  };
+}
+
+// Função PURA. A partir dos insumos de um pedido (Matriz de Insumos) e do
+// saldo de estoque, devolve o que precisa ser COMPRADO.
+//
+// Achado da auditoria de integração (2026-09-08): a Matriz calculava a falta,
+// mostrava na tela e parava ali. `compras.html` nunca lia o nó `insumos` e
+// `insumos.html` nunca referenciava `solicitacoes_compra` -- não havia caminho
+// de ida nem de volta. O MRP existe pra descobrir a falta ANTES de ela parar a
+// linha, e a informação não chegava a quem compra.
+//
+// A conta é a MESMA que a tela já mostra ao lado de cada insumo
+// (necessário − disponível, com disponível = saldo − empenhado). Usar uma
+// fórmula diferente aqui faria o botão pedir um número que a pessoa não vê em
+// lugar nenhum -- e ninguém confia num número que não consegue conferir.
+//
+// `insumos` = insumosData do pedido; `estoque` = nó estoque inteiro.
+function faltasParaSolicitacao(insumos, estoque) {
+  var out = { itens: [], semCodigo: [], semEstoque: 0 };
+  Object.keys(insumos || {}).forEach(function(k) {
+    var it = insumos[k] || {};
+    var necessaria = parseFloat(it.qtdNecessaria) || 0;
+    if (necessaria <= 0) return;
+    // Insumo digitado à mão não tem material vinculado: não dá pra montar
+    // uma solicitação sem código, e inventar um seria pior. Fica listado
+    // como pendência pra pessoa resolver no cadastro.
+    if (!it.mpCodigo) { out.semCodigo.push(it.nome || k); return; }
+    var est = (estoque || {})[sanitizeKey(it.mpCodigo)];
+    var temRegistro = !!est;
+    var disponivel = temRegistro ? ((est.saldoAtual || 0) - (est.saldoEmpenhado || 0)) : 0;
+    if (!temRegistro) out.semEstoque++;
+    // Saldo negativo (existem em produção) não vira "falta maior": o que ele
+    // significa é que a base está errada, não que se precisa comprar mais.
+    // Tratado como zero disponível, e sinalizado.
+    var disponivelUtil = disponivel > 0 ? disponivel : 0;
+    var falta = necessaria - disponivelUtil;
+    if (falta <= 0) return;
+    out.itens.push({
+      insumoKey: k,
+      mpCodigo: it.mpCodigo,
+      nome: it.nome || it.mpCodigo,
+      unidade: it.unidade || (est && est.unidade) || '',
+      qtdNecessaria: necessaria,
+      qtdRecebida: parseFloat(it.qtdRecebida) || 0,
+      disponivel: temRegistro ? disponivel : null,
+      saldoNegativo: disponivel < 0,
+      semRegistroEstoque: !temRegistro,
+      falta: Math.round(falta * 10000) / 10000
+    });
+  });
+  // Maior falta primeiro: é a que trava mais rápido.
+  out.itens.sort(function(a, b) { return b.falta - a.falta; });
+  return out;
+}
+
+// Uma casa decimal, sem casa quando é inteiro: "97,5%" e "100%", nunca
+// "100,0%".
+function fmtPct1(n) {
+  var v = Number(n);
+  if (isNaN(v)) return '—';
+  return (Math.round(v * 10) / 10).toString().replace('.', ',');
 }
 
 // ══════════════════════════════════════════════════════════════════════

@@ -872,6 +872,12 @@
         <input type="hidden" id="selPedido">
       </span>
       <button class="btn btn-primary btn-sm" id="btnGerarDoBom" disabled title="Selecione um pedido primeiro.">⚙ Gerar do BOM</button>
+      <!-- Fecha o elo MRP → Compras. Até a auditoria de 2026-09-08 a Matriz
+           calculava a falta, mostrava na tela e parava ali: compras.html
+           nunca lia o nó `insumos` e insumos.html nunca referenciava
+           `solicitacoes_compra`. Não havia caminho de ida nem de volta, e a
+           falta descoberta aqui só chegava ao comprador por conversa. -->
+      <button class="btn btn-warning btn-sm" id="btnGerarSolicitacao" disabled title="Selecione um pedido primeiro.">🛒 Solicitar Compra</button>
       <button class="btn btn-success btn-sm" id="btnNovoInsumo" disabled>+ Novo Insumo</button>
     </div>
 
@@ -947,6 +953,32 @@
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost btn-sm" id="recvModalCancel">Cancelar</button>
         <button class="btn btn-success btn-sm" id="recvModalSave">✓ Salvar Recebimento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Solicitar Compra a partir da falta calculada pela Matriz.
+     A quantidade vem preenchida com a MESMA falta que a tela mostra ao lado
+     de cada insumo, e continua editável: quem envia confere antes. -->
+<div class="modal-bg" id="solCompraModalBg">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header" style="background:linear-gradient(135deg,#0a1c69,#1e3a8a)">
+      <h2>🛒 Solicitar Compra</h2>
+      <button class="modal-close" id="solCompraClose">×</button>
+    </div>
+    <div class="modal-body" style="max-height:520px;overflow-y:auto">
+      <div id="solCompraResumo"></div>
+      <div id="solCompraItens"></div>
+      <label class="form-label">Justificativa</label>
+      <textarea id="solCompraJustificativa" class="form-ctrl" style="height:60px;resize:none"></textarea>
+      <div class="form-hint">Vai junto na solicitação, para quem aprova entender a urgência.</div>
+    </div>
+    <div class="modal-footer">
+      <div style="font-size:12px;opacity:.8" id="solCompraContagem"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="solCompraCancel">Cancelar</button>
+        <button class="btn btn-success btn-sm" id="solCompraSave">✓ Enviar Solicitação</button>
       </div>
     </div>
   </div>
@@ -1411,6 +1443,11 @@
     // criando registro órfão sem nome e sem qtdRecebida.
     insumosData = {};
     document.getElementById('btnNovoInsumo').disabled = !key;
+    // Solicitar Compra segue a mesma condição: sem pedido selecionado não há
+    // matriz de onde tirar a falta.
+    var btnSol = document.getElementById('btnGerarSolicitacao');
+    btnSol.disabled = !key;
+    btnSol.title = key ? 'Gerar solicitação de compra com o que falta neste pedido' : 'Selecione um pedido primeiro.';
     atualizarBotaoGerarBom(); // reavalia se dá pra gerar do BOM pro pedido escolhido
 
     if (!key) {
@@ -1765,6 +1802,137 @@
     if (st) db.ref('pedidos/' + currentPedKey + '/insumoStatus').set(st);
     if (currentPedKey && pedidosCache[currentPedKey]) renderPedidoInfo();
   }
+
+  /* ── Solicitar Compra a partir da falta ───────────────────────────
+     Fecha o elo MRP → Compras (auditoria de integração, 2026-09-08). A conta
+     é a MESMA já exibida ao lado de cada insumo -- `faltasParaSolicitacao`
+     em shared/utils.js, testada isolada. Aqui fica só a tela. */
+  var solCompraFaltas = null;
+
+  function abrirModalSolicitarCompra() {
+    if (!currentPedKey) { showAlert('Selecione um pedido primeiro.', 'danger'); return; }
+    var r = faltasParaSolicitacao(insumosData, allEstoqueIns);
+    solCompraFaltas = r;
+
+    var avisos = [];
+    if (r.semCodigo.length) {
+      avisos.push('<div class="form-hint" style="color:var(--warning)"><b>' + r.semCodigo.length +
+        ' insumo(s) sem material vinculado</b> ficaram de fora — solicitação de compra precisa de código de material. ' +
+        'Resolva em Cadastros ou use "⚙ Gerar do BOM". (' + r.semCodigo.slice(0, 4).map(escHtml).join(', ') +
+        (r.semCodigo.length > 4 ? '…' : '') + ')</div>');
+    }
+    if (r.semEstoque) {
+      avisos.push('<div class="form-hint" style="color:var(--warning)"><b>' + r.semEstoque +
+        ' item(ns) sem registro de estoque</b> — a falta foi calculada como se o saldo fosse zero. ' +
+        'Confira no galpão antes de enviar.</div>');
+    }
+    document.getElementById('solCompraResumo').innerHTML = avisos.join('');
+
+    var box = document.getElementById('solCompraItens');
+    if (!r.itens.length) {
+      box.innerHTML = '<div class="no-sel" style="padding:24px">Nenhuma falta a comprar: o estoque disponível cobre todos os insumos deste pedido.</div>';
+      document.getElementById('solCompraSave').disabled = true;
+    } else {
+      document.getElementById('solCompraSave').disabled = false;
+      box.innerHTML = '<label class="form-label">Itens a solicitar</label>' +
+        r.itens.map(function(it, i) {
+          // O disponível já mostra o número; o alerta explica o que ele
+          // significa, sem repetir o valor.
+          var dispTxt, alerta = '';
+          if (it.semRegistroEstoque) {
+            dispTxt = 'sem registro';
+            alerta = '<span style="color:var(--warning);font-size:10px"> · calculado como saldo zero</span>';
+          } else {
+            dispTxt = fmtNum(it.disponivel);
+            if (it.saldoNegativo) alerta = '<span style="color:var(--danger);font-size:10px"> · saldo negativo, base de estoque furada</span>';
+          }
+          return '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
+            '<input type="checkbox" class="solc-usar" data-i="' + i + '" checked>' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:13px;font-weight:600">' + escHtml(it.nome) + '</div>' +
+              '<div style="font-size:10.5px;color:var(--muted)">' + escHtml(it.mpCodigo) +
+                ' · precisa ' + fmtNum(it.qtdNecessaria) +
+                ' · disp. ' + dispTxt + alerta + '</div>' +
+            '</div>' +
+            '<input type="number" class="solc-qtd form-ctrl" data-i="' + i + '" min="0" step="any" ' +
+              'style="width:104px;margin:0" value="' + it.falta + '">' +
+            '<span style="font-size:11px;color:var(--muted);width:38px">' + escHtml(it.unidade || '') + '</span>' +
+          '</div>';
+        }).join('');
+    }
+    document.getElementById('solCompraContagem').textContent =
+      r.itens.length + ' item(ns) com falta';
+    document.getElementById('solCompraJustificativa').value =
+      'Falta apurada na Matriz de Insumos do pedido ' + (currentPedKey || '') + '.';
+    document.getElementById('solCompraModalBg').classList.add('open');
+  }
+
+  function salvarSolicitacaoCompra() {
+    if (!solCompraFaltas || !currentPedKey) return;
+    var escolhidos = [];
+    document.querySelectorAll('#solCompraItens .solc-usar').forEach(function(chk) {
+      if (!chk.checked) return;
+      var i = parseInt(chk.getAttribute('data-i'), 10);
+      var qtdEl = document.querySelector('#solCompraItens .solc-qtd[data-i="' + i + '"]');
+      var qtd = parseFloat(qtdEl && qtdEl.value);
+      if (!(qtd > 0)) return;
+      escolhidos.push({ it: solCompraFaltas.itens[i], qtd: qtd });
+    });
+    if (!escolhidos.length) { showAlert('Selecione ao menos um item com quantidade maior que zero.', 'danger'); return; }
+
+    var btn = document.getElementById('solCompraSave');
+    btn.disabled = true;
+    var autor = (window.currentUser && window.currentUser.nome) || 'Sistema';
+    var itensObj = {};
+    escolhidos.forEach(function(e) {
+      var itemKey = db.ref('solicitacoes_compra').push().key;
+      itensObj[itemKey] = {
+        materialCodigo: e.it.mpCodigo,
+        materialNome: e.it.nome,
+        qtd: e.qtd,
+        unidade: e.it.unidade || '',
+        // Rastro de ONDE o número saiu: sem isso, quem aprova não consegue
+        // conferir a conta nem entender por que essa quantidade e não outra.
+        obs: 'Matriz de Insumos: necessário ' + fmtNum(e.it.qtdNecessaria) +
+             ', disponível ' + (e.it.disponivel == null ? 'sem registro' : fmtNum(e.it.disponivel))
+      };
+    });
+
+    nextSequential(db, 'config/contadores/solicitacaoCompra', 'SC', 4).then(function(seq) {
+      var key = db.ref('solicitacoes_compra').push().key;
+      var updates = {};
+      updates['solicitacoes_compra/' + key] = {
+        numero: seq.numero, numeroFormatado: seq.formatado,
+        itens: itensObj,
+        justificativa: document.getElementById('solCompraJustificativa').value.trim(),
+        solicitante: autor, status: 'PENDENTE',
+        aprovacao: null, rejeicao: null,
+        criadoPor: autor, criadoEm: new Date().toISOString(),
+        // Marca a procedência. É o que permite responder depois "quanto da
+        // nossa compra nasceu do MRP e quanto nasceu de pedido avulso?" --
+        // mesmo princípio da marca origemDireta no Pedido de Compra Direto.
+        origemMatriz: true,
+        pedidoOrigemKey: currentPedKey
+      };
+      // Sinaliza no pedido que a falta já virou solicitação. Não impede gerar
+      // de novo (pode faltar mais depois), só evita a duplicata por esquecimento.
+      updates['pedidos/' + currentPedKey + '/solicitacaoInsumosEm'] = new Date().toISOString();
+      updates['pedidos/' + currentPedKey + '/solicitacaoInsumosNumero'] = seq.formatado;
+      return db.ref().update(updates).then(function() { return seq; });
+    }).then(function(seq) {
+      btn.disabled = false;
+      document.getElementById('solCompraModalBg').classList.remove('open');
+      showAlert('Solicitação ' + seq.formatado + ' enviada a Compras com ' + escolhidos.length + ' item(ns).', 'success');
+    }).catch(function(err) {
+      btn.disabled = false;
+      showAlert('Erro ao enviar solicitação: ' + err.message, 'danger');
+    });
+  }
+
+  document.getElementById('btnGerarSolicitacao').addEventListener('click', abrirModalSolicitarCompra);
+  document.getElementById('solCompraClose').addEventListener('click', function() { document.getElementById('solCompraModalBg').classList.remove('open'); });
+  document.getElementById('solCompraCancel').addEventListener('click', function() { document.getElementById('solCompraModalBg').classList.remove('open'); });
+  document.getElementById('solCompraSave').addEventListener('click', salvarSolicitacaoCompra);
 
   // ── Modal: Novo / Editar Insumo ──────────────────────────────────
   document.getElementById('btnNovoInsumo').addEventListener('click', openNewInsumoModal);

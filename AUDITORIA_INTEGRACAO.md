@@ -26,17 +26,46 @@ implementação, não no mapa.
 
 ## Resumo
 
-| # | Elo | Gravidade | Custa hoje |
-|---|-----|-----------|------------|
-| 1 | MRP → Compras | 🔴 Alta | A necessidade calculada morre na tela |
-| 2 | Estoque → Compras | 🔴 Alta | Compra-se sem ver o que já tem |
-| 3 | Entrada de estoque | 🔴 Alta | 4% dos materiais têm saldo; 11 estão negativos |
-| 4 | Qualidade → Compras | 🟠 Média | Fornecedor ruim não aparece na cotação |
-| 5 | Compras → Financeiro | 🟠 Média | Dado gravado para um leitor que não existe |
-| 6 | Qualidade → Logística | 🟠 Média | Liberar não move o material |
-| 7 | Área de quarentena | 🟠 Média | Status separa; o chão não |
-| 8 | Separação → PCP | 🟡 Baixa | A falta não sobe |
-| 9 | Duas fontes de saldo | 🟡 Baixa | Divergência silenciosa |
+| # | Elo | Gravidade | Custa hoje | Status |
+|---|-----|-----------|------------|--------|
+| 1 | MRP → Compras | 🔴 Alta | A necessidade calculada morria na tela | ✅ **fechado** |
+| 2 | Estoque → Compras | 🔴 Alta | Compra-se sem ver o que já tem | ⏸ adiado até o Dia D |
+| 3 | Entrada de estoque | 🔴 Alta | 4% dos materiais têm saldo; 11 negativos | ⏸ depende do Dia D |
+| 4 | Qualidade → Compras | 🟠 Média | Fornecedor ruim não aparecia na cotação | ✅ **fechado** |
+| 5 | Compras → Financeiro | 🟠 Média | Dado gravado para um leitor que não existe | 📄 documentado |
+| 6 | Qualidade → Logística | 🟠 Média | Liberar não movia o material | ✅ **fechado** |
+| 7 | Área de quarentena | 🟠 Média | Status separava; o chão não | ✅ **área criada** |
+| 8 | Separação → PCP | 🟡 Baixa | A falta não sobe | aberto |
+| 9 | Duas fontes de saldo | 🟡 Baixa | Divergência silenciosa | limitação aceita |
+
+**Correções aplicadas em 2026-09-08**, todas testadas e em produção:
+
+- **(1)** Botão **🛒 Solicitar Compra** na Matriz de Insumos. Gera a solicitação
+  com a falta já calculada — a mesma conta que a tela mostra —, marcada com
+  `origemMatriz` e com o registro de como cada quantidade foi apurada. Itens
+  cobertos pelo estoque não entram; item sem material vinculado vira aviso, não
+  linha inválida. Regra do banco estendida (aditivamente) para o módulo
+  `pedidos` poder criar solicitação.
+- **(4)** **Selo de qualidade** na coluna de cada fornecedor convidado, na
+  cotação. Verde ≥95%, laranja 80–94%, vermelho abaixo disso **ou com RNC
+  aberta** — pendência não resolvida pesa mais que histórico bom. Sem histórico
+  não gera selo: "não sei" é diferente de "está bem". Não bloqueia nada.
+- **(6)** Liberar um lote agora marca `aguardandoEnderecoDefinitivo`. Ele sobe
+  ao topo da lista de lotes com o selo **📦 guardar**, e há o filtro
+  *"Só aguardando posição definitiva"*. **Transferir limpa a marca** — fila que
+  não esvazia sozinha vira lista que ninguém olha. Reprovado não entra (não vai
+  pro estoque bom); lote sem endereço também não (não há de onde movê-lo).
+- **(7)** Área **QUARENTENA (QUA)** criada em `config/areasEndereco`,
+  aditivamente, com as cinco existentes intactas. **Falta cadastrar ruas e
+  posições nela** antes de virar destino de recebimento.
+
+**Achado extra, fora da lista original.** Verificando a correção (1), o número
+da solicitação saiu como `SC-null`. Era limitação do mock, mas expôs um buraco
+real: `nextSequential` não checava `result.committed`, então uma transação
+abortada gravava `SC-null`, `PC-null` ou lote `26251/null` — permanentemente,
+num documento que vai pro fornecedor ou pro chão de fábrica. Agora lança erro
+com mensagem clara. Vale para os 9 pontos que usam o helper (SC, COT, PC,
+código de material e lote de OP).
 
 ---
 

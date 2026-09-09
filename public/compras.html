@@ -2522,6 +2522,52 @@ FISCAL_CAMPOS.concat(FISCAL_CAMPOS_VALOR).concat(FISCAL_CAMPOS_TEXTO).forEach(fu
 });
 
 /* ── Cotações em andamento (aba própria) ── */
+/* ── Selo de qualidade do fornecedor na cotação ──
+   O comprador comparava orçamentos por custo sem ver que aquele fornecedor
+   reprovou lote. A função de cálculo já existia em shared/utils.js e tinha
+   UMA chamada em todo o sistema, dentro de qualidade.html.
+
+   O resultado é MEMORIZADO: desempenhoQualidadeFornecedor varre estoque_lotes
+   inteiro, e a grade de cotação chama uma vez por fornecedor convidado, por
+   render. Sem cache, um processo com 4 convidados varria tudo 4 vezes a cada
+   tecla digitada na grade. O cache é invalidado quando qualquer um dos dois
+   nós-fonte muda. */
+var allRncsCompras = {};
+var allEstoqueLotesCompras = {};
+var _qualidadeFornCache = null;
+
+function invalidarQualidadeFornecedores() {
+  _qualidadeFornCache = null;
+  // A grade já renderizada continuaria mostrando o selo antigo; redesenhar é
+  // barato e mantém a tela honesta quando a Qualidade lauda algo agora.
+  // Nome conferido no arquivo: é renderCotacoesAndamento, não renderCotacoes
+  // -- um typeof guard com o nome errado nunca dispara e não acusa nada.
+  if (typeof renderCotacoesAndamento === 'function') {
+    try { renderCotacoesAndamento(); } catch (e) { console.error('Falha ao redesenhar cotações após atualização de qualidade:', e); }
+  }
+}
+
+function qualidadeDoFornecedor(fornecedorKey) {
+  if (!fornecedorKey) return null;
+  if (!_qualidadeFornCache) {
+    _qualidadeFornCache = {};
+    desempenhoQualidadeFornecedor(allEstoqueLotesCompras, allPedidosCompra, allRncsCompras)
+      .forEach(function(b) { _qualidadeFornCache[b.fornecedorKey] = b; });
+  }
+  return classificarQualidadeFornecedor(_qualidadeFornCache[fornecedorKey]);
+}
+
+// Fornecedor avulso (sem cadastro) não tem histórico rastreável -- devolve
+// vazio em vez de um selo neutro, que sugeriria "conferido, sem problema".
+function seloQualidadeHtml(fornecedorKey) {
+  var q = qualidadeDoFornecedor(fornecedorKey);
+  if (!q) return '';
+  var classe = { bom: 'badge-green', atencao: 'badge-orange', ruim: 'badge-red', neutro: 'badge-gray' }[q.nivel] || 'badge-gray';
+  var icone = { bom: '✓', atencao: '⚠', ruim: '⚠', neutro: '•' }[q.nivel] || '';
+  return ' <span class="badge ' + classe + '" title="Qualidade: ' + escapeAttr(q.detalhe) +
+    '. Detalhe em Qualidade › Desempenho de Fornecedor.">' + icone + ' ' + escapeHtml(q.texto) + '</span>';
+}
+
 function cotacaoCardHtml(entry) {
   var key = entry[0], p = entry[1];
   var itensArr = Object.entries(p.itens || {});
@@ -2557,6 +2603,10 @@ function cotacaoCardHtml(entry) {
     return '<th style="min-width:216px;vertical-align:top">' +
       escapeHtml(nomeConvidado(c, cKey)) + '<br>' + statusBadge + link +
       (venceGeral ? ' <span class="badge badge-green" title="Menor custo total entre quem cotou TODOS os itens">🏆 melhor custo</span>' : '') +
+      // Reputação ao lado do preço, não numa tela que o comprador não abre.
+      // Não bloqueia nada de propósito: quem decide é quem compra, mas
+      // decidindo com a informação à vista.
+      seloQualidadeHtml(c.fornecedorKey) +
       '<div class="cot-cab">' +
         '<div class="cot-cab-sep"></div>' +
         '<div class="cot-linha" style="margin:0">' +
@@ -3235,6 +3285,17 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('formulas'), function(snap) { allFormulasCompras = snap.val() || {}; });
     dbOnValue(db.ref('bom'), function(snap) { allBomCompras = snap.val() || {}; });
     dbOnValue(db.ref('sku_historico'), function(snap) { skuHistoricoCompras = snap.val() || {}; });
+    // Histórico de qualidade do fornecedor, pra o selo na cotação. Dois nós
+    // que Compras nunca lia -- a reputação do fornecedor era calculada e
+    // ficava só na tela da Qualidade (auditoria de integração, 2026-09-08).
+    dbOnValue(db.ref('nao_conformidades'), function(snap) {
+      allRncsCompras = snap.val() || {};
+      invalidarQualidadeFornecedores();
+    });
+    dbOnValue(db.ref('estoque_lotes'), function(snap) {
+      allEstoqueLotesCompras = snap.val() || {};
+      invalidarQualidadeFornecedores();
+    });
   } catch (err) {
     setStatus(false, 'Erro');
     console.error(err);
