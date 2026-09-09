@@ -83,8 +83,10 @@ const KURYOS_MODULOS = {
                   paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html'] },
-  pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Pedidos comerciais e Matriz de Insumos',
-                  paginas: ['comercial.html', 'pedidos.html', 'insumos.html'] },
+  comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
+                  paginas: ['comercial.html'] },
+  pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
+                  paginas: ['pedidos.html', 'insumos.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
                   paginas: ['cadastros.html', 'produtos.html', 'materiais.html', 'clientes.html', 'formulas.html'] },
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
@@ -108,7 +110,7 @@ const KURYOS_MODULOS = {
 // usuário. 'admin' é '*': vê tudo sempre, e nunca pode ser trancado pra fora.
 const MODULOS_POR_PAPEL = {
   admin: '*',
-  pcp: ['analytics', 'apontamento', 'planejamento', 'emitir_op', 'pedidos', 'cadastros',
+  pcp: ['analytics', 'apontamento', 'planejamento', 'emitir_op', 'comercial', 'pedidos', 'cadastros',
         'compras', 'logistica', 'qualidade', 'config', 'usuarios'],
   production: ['analytics', 'apontamento', 'planejamento'],
   rotulagem: ['apontamento'],
@@ -164,7 +166,7 @@ function podeAbrirPagina(user, pagina) {
 // destino de um Acesso Negado. Sem isto, mandar alguém pra dashboard.html
 // (que ele também não acessa) trocaria um Acesso Negado por outro, em loop.
 const ORDEM_HOME = ['dashboard.html', 'form.html', 'qualidade.html', 'planejamento.html',
-                    'logistica.html', 'compras.html', 'cadastros.html', 'pedidos.html',
+                    'logistica.html', 'comercial.html', 'compras.html', 'cadastros.html', 'pedidos.html',
                     'rh_dashboard.html', 'rh_avaliacao.html'];
 function homeDoUsuario(user) {
   for (var i = 0; i < ORDEM_HOME.length; i++) {
@@ -568,7 +570,7 @@ function renderUnifiedNavbar(user) {
   ]);
 
   const comercialGroup = grupo('Comercial', [
-    temMod('pedidos') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage)
+    temMod('comercial') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage)
   ]);
 
   const pcpGroup = grupo('PCP', [
@@ -654,7 +656,7 @@ function renderUnifiedNavbar(user) {
     ktLink('manuais.html', 'book', 'Manuais de Operação', activePage),
     temMod('apontamento') && ktLink('manual_apontamento.html', 'book', 'Apontamento', activePage),
     temMod('planejamento') && ktLink('manual_pcp.html', 'book', 'Planejamento e OPs', activePage),
-    temMod('pedidos') && ktLink('manual_comercial.html', 'book', 'Pedidos e MRP', activePage),
+    (temMod('pedidos') || temMod('comercial')) && ktLink('manual_comercial.html', 'book', 'Pedidos e MRP', activePage),
     temMod('compras') && ktLink('manual_compras.html', 'book', 'Compras', activePage),
     temMod('logistica') && ktLink('manual_logistica.html', 'book', 'Recebimento', activePage),
     temMod('logistica') && ktLink('manual_estoque.html', 'book', 'Estoque e WMS', activePage),
