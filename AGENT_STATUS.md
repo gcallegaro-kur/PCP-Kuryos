@@ -7,11 +7,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** Histórico de produção — clareza entre checkpoint e fechamento de OP.
-- **Arquivos ativos:** `public/historico.html`, `AGENT_STATUS.md`.
-- **Estado:** em andamento. Confirmada a regra de delta: intervalo registra
-  o acumulado até então e fechamento só acrescenta o restante; ajustando a
-  apresentação para deixar isso inequívoco.
+- **Escopo:** WMS, Logística, emissão de OP, Cotação e Histórico de produção.
+- **Arquivos ativos:** nenhum.
+- **Estado Histórico:** checkpoint de intervalo e fechamento de OP usam
+  quantidade incremental nos totais; a tela agora mostra o acumulado e o
+  incremento separadamente, sem sugerir soma duplicada.
+- **Commit/deploy Histórico:** `35afccb`, publicado em 2026-09-09 em
+  `https://prod-kuryos.web.app`.
 - **Estado:** Cotação agora mantém homologados apenas do material original.
   Materiais de embalagem de volume próximo são sugestões explícitas e exigem
   ficha técnica quando incluídos, sem trocar BOM ou homologação.
