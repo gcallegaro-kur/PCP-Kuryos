@@ -224,10 +224,10 @@
   <div id="cardMateriais" class="card" style="display:none">
     <div class="card-title">4. Consumo de Materiais (fórmula + embalagem)</div>
     <table>
-      <thead><tr><th>Material</th><th>Origem</th><th class="num">%</th><th class="num">Quantidade</th><th></th></tr></thead>
+      <thead><tr><th>Material</th><th>Origem</th><th class="num">%</th><th class="num">Quantidade</th><th class="num">Estoque atual</th><th></th></tr></thead>
       <tbody id="materiaisBody"></tbody>
     </table>
-    <div class="field-hint" style="margin-top:8px">"Substituir" troca só o consumo dessa OP -- não altera a fórmula/BOM cadastrada.</div>
+    <div class="field-hint" style="margin-top:8px">"Substituir" troca só o consumo dessa OP -- não altera a fórmula/BOM cadastrada. O estoque é uma referência visual e não bloqueia a emissão.</div>
   </div>
 
   <!-- 4. Emissão -->
@@ -312,7 +312,7 @@ firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 
-var allProdutos = {}, allMateriais = {}, allFormulas = {}, allBom = {}, allEspecificacoes = {}, configData = {};
+var allProdutos = {}, allMateriais = {}, allFormulas = {}, allBom = {}, allEspecificacoes = {}, allEstoque = {}, configData = {};
 var allAlocacoes = {}, allOps = {}, allPedidos = {}, configPlanejamento = {diasSemana:[1,2,3,4,5], feriados:{}};
 var produtoSelecionado = null; // {key, ...campos}
 var formulaEscolhida = null;   // registro de formulas/ escolhido (APROVADA de preferência)
@@ -795,11 +795,32 @@ function fmtBomHint(it) {
   var unPorEmbalagem = Math.round(1 / it.qtdPorPeca);
   return ' <span class="field-hint">(' + fmtNum(unPorEmbalagem) + ' un./' + escapeHtml(it.unidade || 'un') + ')</span>';
 }
+
+// A OP não decide nem trava pelo saldo (o inventário de abertura ainda está
+// em consolidação), mas mostrá-lo ao lado do consumo calculado evita que o
+// PCP precise sair da tela para comparar opções ao substituir um material.
+function saldoEstoqueDoMaterial(codigo) {
+  var chave = sanitizeKey(codigo || '');
+  return allEstoque[chave] || Object.values(allEstoque).find(function(e) {
+    return e && (e.materialCodigo === codigo || e.mpCodigo === codigo);
+  }) || null;
+}
+
+function estoqueAtualHtml(it) {
+  var estoque = saldoEstoqueDoMaterial(it.mpCodigo);
+  var saldo = estoque && Number(estoque.saldoAtual);
+  if (!estoque || !isFinite(saldo)) return '<span class="field-hint">Sem saldo registrado</span>';
+  var insuficiente = saldo < (Number(it.quantidade) || 0);
+  var unidade = estoque.unidade || it.unidade || '';
+  return '<span' + (insuficiente ? ' style="color:var(--danger);font-weight:700" title="Saldo menor que o consumo desta OP"' : '') + '>' +
+    fmtNum(saldo) + ' ' + escapeHtml(unidade) + '</span>';
+}
+
 function renderMateriaisTable() {
   var tbody = document.getElementById('materiaisBody');
   var entries = Object.entries(materiaisConsumo);
   if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Nenhum item -- confira a fórmula/BOM cadastrada.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">Nenhum item -- confira a fórmula/BOM cadastrada.</td></tr>';
     return;
   }
   var somaPct = entries.reduce(function(s, e) { return s + (e[1].origem === 'formula' ? (e[1].percentual || 0) : 0); }, 0);
@@ -815,12 +836,13 @@ function renderMateriaisTable() {
       '<td>' + origemBadge + '</td>' +
       '<td class="num">' + (it.origem === 'formula' ? fmtPct3(it.percentual) + '%' : '—') + '</td>' +
       '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + fmtBomHint(it) + '</td>' +
+      '<td class="num">' + estoqueAtualHtml(it) + '</td>' +
       '<td><button class="btn btn-ghost btn-sm subst-btn" data-key="' + escapeAttr(key) + '">Substituir</button></td>' +
     '</tr>';
   }).join('') +
     // Vermelho quando a soma foge de 100% -- sinal visual antes mesmo de
     // tentar emitir (emitirOP() bloqueia de verdade, isto aqui só avisa cedo).
-    '<tr style="font-weight:700"><td colspan="2">TOTAL (fórmula)</td><td class="num"' + (Math.abs(somaPct - 100) >= 0.0005 ? ' style="color:var(--danger)"' : '') + '>' + fmtPct3(somaPct) + '%</td><td colspan="2"></td></tr>';
+    '<tr style="font-weight:700"><td colspan="2">TOTAL (fórmula)</td><td class="num"' + (Math.abs(somaPct - 100) >= 0.0005 ? ' style="color:var(--danger)"' : '') + '>' + fmtPct3(somaPct) + '%</td><td colspan="3"></td></tr>';
   tbody.querySelectorAll('.subst-btn').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirSubstituicao(btn.getAttribute('data-key')); });
   });
@@ -1404,6 +1426,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; });
     dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; });
+    dbOnValue(db.ref('estoque'), function(snap) {
+      allEstoque = snap.val() || {};
+      if (Object.keys(materiaisConsumo).length) renderMateriaisTable();
+    });
     dbOnValue(db.ref('formulas'), function(snap) { allFormulas = snap.val() || {}; });
     dbOnValue(db.ref('bom'), function(snap) { allBom = snap.val() || {}; });
     dbOnValue(db.ref('especificacoes'), function(snap) { allEspecificacoes = snap.val() || {}; });
