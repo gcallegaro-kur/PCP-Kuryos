@@ -244,6 +244,7 @@
     <div class="tab-panel active" id="panelRegistros">
       <div class="card-title">
         <span id="tableCount">—</span>
+        <span style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none">Checkpoint mostra o acumulado; fechamento mostra o total da OP. Os totais do sistema usam somente o incremento de cada período.</span>
       </div>
       <div class="table-wrap">
         <table>
@@ -698,7 +699,9 @@
       // mas nunca aplicada aqui. Superestimava produção real sempre que
       // havia apontamento de rotulagem/posto no período carregado. As
       // outras 4 stats continuam sem filtro de propósito -- contam
-      // "quantos registros/dias/pedidos", não produção.
+      // "quantos registros/dias/pedidos", não produção. `quantidade` já é
+      // sempre o incremento real: qtdTotalOP é apenas o acumulado mostrado
+      // em checkpoints/fechamentos e nunca pode ser somado de novo aqui.
       if (isLinhaEnvase(r.linha)) totalQtd += r.quantidade;
       diasSet[r.data] = 1;
       if (r.pedidoId) { pedSet[r.pedidoId] = 1; comPed++; }
@@ -753,11 +756,16 @@
       
       if (r.tipo === 'fechamento_op') {
         rowStyle = ' style="background-color: #fdf2f8;"';
-        qtyContent = '<strong>' + fmtNum(r.qtdTotalOP) + '</strong><br><span style="font-size:10px;color:var(--muted)">Meta: ' + fmtNum(r.qtdEsperadaOP) + '</span>';
+        qtyContent = '<strong>' + fmtNum(r.qtdTotalOP) + '</strong><br><span style="font-size:10px;color:var(--muted)">Total final · neste período: ' + fmtNum(r.quantidade) + '</span>' +
+          (r.qtdEsperadaOP ? '<br><span style="font-size:10px;color:var(--muted)">Meta: ' + fmtNum(r.qtdEsperadaOP) + '</span>' : '');
         prodContent = '<span class="badge badge-purple" style="margin-right:6px">✔ Fechamento OP</span>' + escapedProd;
         if (r.justificativaDivergencia) {
           prodContent += '<br><span style="font-size:11px;color:var(--danger);font-weight:600">Justificativa Desvio: ' + escapedJustificativa + '</span>';
         }
+      } else if (r.tipo === 'apontamento_total') {
+        rowStyle = ' style="background-color:var(--tint-blue-bg);"';
+        qtyContent = '<strong>' + fmtNum(r.qtdTotalOP || r.quantidade) + '</strong><br><span style="font-size:10px;color:var(--muted)">Checkpoint acumulado · neste período: ' + fmtNum(r.quantidade) + '</span>';
+        prodContent = '<span class="badge badge-blue" style="margin-right:6px">◷ Checkpoint</span>' + escapedProd;
       } else {
         prodContent = escapedProd;
       }

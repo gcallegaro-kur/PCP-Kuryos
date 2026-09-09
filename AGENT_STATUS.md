@@ -7,8 +7,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** WMS, Logística, emissão de OP e Cotação.
-- **Arquivos ativos:** nenhum.
+- **Escopo:** Histórico de produção — clareza entre checkpoint e fechamento de OP.
+- **Arquivos ativos:** `public/historico.html`, `AGENT_STATUS.md`.
+- **Estado:** em andamento. Confirmada a regra de delta: intervalo registra
+  o acumulado até então e fechamento só acrescenta o restante; ajustando a
+  apresentação para deixar isso inequívoco.
 - **Estado:** Cotação agora mantém homologados apenas do material original.
   Materiais de embalagem de volume próximo são sugestões explícitas e exigem
   ficha técnica quando incluídos, sem trocar BOM ou homologação.
