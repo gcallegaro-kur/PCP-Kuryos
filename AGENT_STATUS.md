@@ -7,8 +7,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Escopo:** WMS, Logística, emissão de OP, Cotação e apontamento de produção.
-- **Arquivos ativos:** nenhum.
+- **Escopo:** Comercial — integrar gerador de pedidos ao sistema, com pedidos pré-cadastrados e orçamentos livres.
+- **Arquivos ativos:** `public/comercial.html`, `public/auth_check.js`, `database.rules.json`.
 - **Última entrega Logística:** previsão do Pedido de Compra visível no card e usada como data inicial editável do agendamento; CIF indica recebimento e FOB indica disponibilidade para coleta. A previsão de origem fica registrada no agendamento.
 - **Commit/deploy Logística:** `c3ba30f`, publicado em 2026-09-09 em `https://prod-kuryos.web.app`.
 - **Estado Apontamento:** checkpoint recebe total acumulado do operador, mas

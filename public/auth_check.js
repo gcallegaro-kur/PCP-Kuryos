@@ -84,7 +84,7 @@ const KURYOS_MODULOS = {
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Pedidos comerciais e Matriz de Insumos',
-                  paginas: ['pedidos.html', 'insumos.html'] },
+                  paginas: ['comercial.html', 'pedidos.html', 'insumos.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
                   paginas: ['cadastros.html', 'produtos.html', 'materiais.html', 'clientes.html', 'formulas.html'] },
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
@@ -567,6 +567,10 @@ function renderUnifiedNavbar(user) {
     temMod('compras') && ktLink('compras.html', 'cart', 'Compras', activePage)
   ]);
 
+  const comercialGroup = grupo('Comercial', [
+    temMod('pedidos') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage)
+  ]);
+
   const pcpGroup = grupo('PCP', [
     temMod('planejamento') && ktLink('planejamento.html', 'calendar', 'Planejamento', activePage),
     // horizonte.html tirado do menu a pedido do usuário -- "não é usado
@@ -671,7 +675,7 @@ function renderUnifiedNavbar(user) {
   var brandHome = homeDoUsuario(user);
   sidebar.innerHTML =
     '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + geralGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
+    analisesGroup + geralGroup + comercialGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +
