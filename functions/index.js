@@ -1362,6 +1362,7 @@ exports.checkNotificacoes = onSchedule(
     // um alerta de OP emitida é urgente, não pode ficar preso porque a
     // checagem de linha parada deu erro).
     const checks = [
+      ["comercial", () => checkNotificacoesComercial(destinatarios)],
       ["linhas paradas", () => operando ? checkLinhasParadas(config, destinatarios) : Promise.resolve()],
       ["ops atrasadas", () => operando ? checkOpsAtrasadas(destinatarios) : Promise.resolve()],
       ["ops emitidas", () => checkOpsEmitidas(destinatarios)],
@@ -1377,3 +1378,27 @@ exports.checkNotificacoes = onSchedule(
     }
   },
 );
+
+// Comercial registra eventos no RTDB; a caixa corporativa só é usada para
+// avisos internos. O e-mail ao cliente continua uma ação humana explícita.
+async function checkNotificacoesComercial(destinatarios) {
+  const snap = await db.ref("notificacoes_comercial").orderByChild("status").equalTo("PENDENTE").once("value");
+  const pendentes = snap.val() || {};
+  for (const [key, aviso] of Object.entries(pendentes)) {
+    const tipo = String(aviso.tipo || "evento comercial").replaceAll("_", " ");
+    const assunto = "Comercial Kuryos — " + tipo;
+    const corpo = "Há uma atualização comercial para acompanhamento interno.\n\n" +
+      "Cliente: " + (aviso.cliente || "—") + "\n" +
+      "Documento: " + (aviso.pedido || aviso.orcamento || "—") + "\n" +
+      "Evento: " + tipo + "\n\n" +
+      "Consulte o módulo Comercial no sistema.";
+    try {
+      if (await sendMailViaGraph(destinatarios, assunto, corpo)) {
+        await db.ref("notificacoes_comercial/" + key).update({status: "ENVIADO", enviadoEm: new Date().toISOString()});
+      }
+    } catch (e) {
+      await db.ref("notificacoes_comercial/" + key).update({status: "ERRO", erro: String(e.message || e), erroEm: new Date().toISOString()});
+      console.error("Falha na notificação comercial " + key + ":", e);
+    }
+  }
+}
