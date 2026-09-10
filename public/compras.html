@@ -3446,11 +3446,24 @@ function comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens) {
 function itensMarcadosFornecedorCotacao(box) {
   return Array.from(box.querySelectorAll('.caf-item:checked')).map(function(el) { return el.value; });
 }
-function fornecedorCombinaComItensCotacao(fKey, itens) {
-  return itens.some(function(itemKey) {
-    var it = itemKey && (allProcessosCotacao[window.__cafProcesso] || {}).itens && (allProcessosCotacao[window.__cafProcesso] || {}).itens[itemKey];
-    return it && fornecedorEhHomologadoPara(fKey, it.materialCodigo);
+function sugestoesFornecedorCotacao(procKey, itemKeys) {
+  var proc = allProcessosCotacao[procKey] || {}, sugestoes = {};
+  (itemKeys || []).forEach(function(itemKey) {
+    var it = (proc.itens || {})[itemKey] || {}, codigo = it.materialCodigo;
+    candidatosCotacaoParaMaterial(codigo).forEach(function(c) {
+      sugestoes[c.key] = sugestoes[c.key] || { itens:{}, materialSimilarPorItem:{} };
+      sugestoes[c.key].itens[itemKey] = true; // homologado para o próprio item
+    });
+    possiveisSimilaresPorVolume(codigo).forEach(function(similar) {
+      homologadosDoMaterial(similar.mpCodigo).forEach(function(c) {
+        sugestoes[c.key] = sugestoes[c.key] || { itens:{}, materialSimilarPorItem:{} };
+        sugestoes[c.key].itens[itemKey] = true;
+        // Se também é homologado diretamente, o vínculo direto prevalece.
+        if (!fornecedorEhHomologadoPara(c.key, codigo)) sugestoes[c.key].materialSimilarPorItem[itemKey] = similar.mpCodigo;
+      });
+    });
   });
+  return sugestoes;
 }
 function gravarFornecedorNaCotacao(procKey, dados, itemKeys) {
   var novoKey = db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados').push().key;
@@ -3469,16 +3482,19 @@ function gravarFornecedorNaCotacao(procKey, dados, itemKeys) {
       status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {},
       condicaoPagamento: dados.condicaoPagamento || '', prazoPagamentoParcelas: dados.prazoPagamentoParcelas || null,
       frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null,
-      itens: {}, foraHomologacao: null
+      itens: {}, foraHomologacao: null, materialSimilarPorItem: null
     };
     convidado.itens = convidado.itens || {};
-    var fora = convidado.foraHomologacao || {};
+    var fora = convidado.foraHomologacao || {}, similares = convidado.materialSimilarPorItem || {};
     itemKeys.forEach(function(itemKey) {
       convidado.itens[itemKey] = true;
       var it = (proc.itens || {})[itemKey] || {};
-      if (!fornecedorKey || !fornecedorEhHomologadoPara(fornecedorKey, it.materialCodigo)) fora[itemKey] = true;
+      var similar = (dados.materialSimilarPorItem || {})[itemKey];
+      if (similar) { fora[itemKey] = true; similares[itemKey] = similar; }
+      else if (!fornecedorKey || !fornecedorEhHomologadoPara(fornecedorKey, it.materialCodigo)) fora[itemKey] = true;
     });
     convidado.foraHomologacao = Object.keys(fora).length ? fora : null;
+    convidado.materialSimilarPorItem = Object.keys(similares).length ? similares : null;
     proc.fornecedoresConvidados[chaveAlvo] = convidado;
     return proc;
   }).then(function(r) {
@@ -3498,7 +3514,7 @@ function abrirAdicionarFornecedorCotacao(procKey) {
   box.innerHTML = '<div class="modal-header purple"><h2>＋ Fornecedor na cotação</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body">' +
     '<div class="section-note">Escolha primeiro os materiais que este fornecedor irá cotar. Isso preserva convites por item — um fornecedor de embalagem não passa a receber cotação de matéria-prima.</div>' +
     '<div class="section-label">Materiais para este fornecedor *</div><div id="cafItens" style="max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:5px">' + itensHtml + '</div>' +
-    '<div class="section-label" style="margin-top:16px">Fornecedor cadastrado</div><div class="kt-search"><span class="icon">🔍</span><input type="text" id="cafBusca" placeholder="Buscar por nome ou CNPJ..."></div><div id="cafLista" style="max-height:210px;overflow:auto;margin-top:8px"></div>' +
+    '<div class="section-label" style="margin-top:16px">Fornecedores sugeridos</div><div class="field-hint">Homologados do próprio material e homologados de possíveis similares por volume. Similar exige validação técnica.</div><div class="kt-search"><span class="icon">🔍</span><input type="text" id="cafBusca" placeholder="Filtrar sugestões por nome ou CNPJ..."></div><div id="cafLista" style="max-height:210px;overflow:auto;margin-top:8px"></div>' +
     '<div class="section-label" style="margin-top:18px">Ou fornecedor novo, fora da base</div><div class="form-grid"><div class="form-group"><label>CNPJ *</label><input id="cafCnpj" inputmode="numeric" placeholder="00.000.000/0000-00"><div class="field-hint" id="cafCnpjHint"></div></div><div class="form-group"><label>Nome *</label><input id="cafNome" placeholder="Razão social ou nome fantasia"></div><div class="form-group"><label>E-mail para cotação</label><input id="cafEmail" type="email" placeholder="opcional"></div></div>' +
     '<div class="modal-actions"><button type="button" class="btn btn-ghost caf-fechar">Cancelar</button><button type="button" class="btn btn-primary" id="cafAdicionarAvulso">Adicionar fornecedor novo</button></div></div>';
   overlay.appendChild(box); document.body.appendChild(overlay);
@@ -3506,12 +3522,17 @@ function abrirAdicionarFornecedorCotacao(procKey) {
   function escopo() { var itens = itensMarcadosFornecedorCotacao(box); if (!itens.length) { showAlert('Selecione ao menos um material para este fornecedor.', 'danger'); return null; } return itens; }
   function lista() {
     var busca = norm(box.querySelector('#cafBusca').value), selecionados = itensMarcadosFornecedorCotacao(box);
-    var fornecedores = Object.entries(allFornecedores || {}).filter(function(e) { var f = e[1] || {}; return f.ativo !== false && (!busca || (norm(f.nomeFantasia) + ' ' + norm(f.razaoSocial) + ' ' + norm(f.cnpj)).indexOf(busca) !== -1); })
-      .map(function(e) { return {key:e[0], f:e[1], combina:fornecedorCombinaComItensCotacao(e[0], selecionados)}; })
-      .sort(function(a,b) { return (b.combina - a.combina) || norm(a.f.nomeFantasia || a.f.razaoSocial).localeCompare(norm(b.f.nomeFantasia || b.f.razaoSocial)); });
+    if (!selecionados.length) { box.querySelector('#cafLista').innerHTML = '<div class="empty-hint">Selecione acima os materiais para ver seus fornecedores sugeridos.</div>'; return; }
+    var sugestoes = sugestoesFornecedorCotacao(procKey, selecionados);
+    var fornecedores = Object.entries(allFornecedores || {}).filter(function(e) {
+      var f = e[1] || {};
+      return f.ativo !== false && sugestoes[e[0]] &&
+        (!busca || (norm(f.nomeFantasia) + ' ' + norm(f.razaoSocial) + ' ' + norm(f.cnpj)).indexOf(busca) !== -1);
+    }).map(function(e) { return {key:e[0], f:e[1], sugestao:sugestoes[e[0]]}; })
+      .sort(function(a,b) { return norm(a.f.nomeFantasia || a.f.razaoSocial).localeCompare(norm(b.f.nomeFantasia || b.f.razaoSocial)); });
     var alvo = box.querySelector('#cafLista');
-    alvo.innerHTML = fornecedores.slice(0, 60).map(function(x) { return '<div class="chk-row"><div class="chk-row-body"><b>' + escapeHtml(x.f.nomeFantasia || x.f.razaoSocial || x.key) + '</b>' + (x.combina ? ' <span class="badge badge-green">homologado para item selecionado</span>' : ' <span class="badge badge-orange">fora da homologação</span>') + '<div class="field-hint">' + escapeHtml(x.f.cnpj || 'sem CNPJ') + '</div></div><button type="button" class="btn btn-ghost btn-sm caf-add-base" data-key="' + escapeAttr(x.key) + '">Adicionar</button></div>'; }).join('') || '<div class="empty-hint">Nenhum fornecedor encontrado.</div>';
-    alvo.querySelectorAll('.caf-add-base').forEach(function(btn) { btn.addEventListener('click', function() { var itens = escopo(); if (!itens) return; var f = allFornecedores[btn.getAttribute('data-key')] || {}; gravarFornecedorNaCotacao(procKey, {fornecedorKey:btn.getAttribute('data-key'), condicaoPagamento:f.condicaoPagamento || '', prazoPagamentoParcelas:parsePrazoPagamento(f.condicaoPagamento || '').parcelas || null}, itens).then(function() { fechar(); showAlert('Fornecedor incluído na cotação para os materiais selecionados.', 'success'); }).catch(function(e) { showAlert('Erro: ' + e.message, 'danger'); }); }); });
+    alvo.innerHTML = fornecedores.slice(0, 60).map(function(x) { var sims = Object.entries(x.sugestao.materialSimilarPorItem || {}).map(function(e) { return (proc.itens || {})[e[0]].materialCodigo + ' ← ' + e[1]; }); return '<div class="chk-row"><div class="chk-row-body"><b>' + escapeHtml(x.f.nomeFantasia || x.f.razaoSocial || x.key) + '</b> ' + (sims.length ? '<span class="badge badge-orange">possível similar</span>' : '<span class="badge badge-green">homologado</span>') + '<div class="field-hint">' + escapeHtml(x.f.cnpj || 'sem CNPJ') + (sims.length ? ' · via ' + escapeHtml(sims.join(', ')) + ' · validar ficha técnica' : '') + '</div></div><button type="button" class="btn btn-ghost btn-sm caf-add-base" data-key="' + escapeAttr(x.key) + '">Adicionar</button></div>'; }).join('') || '<div class="empty-hint">Nenhum fornecedor homologado ou similar sugerido. Para uma exceção, use CNPJ abaixo.</div>';
+    alvo.querySelectorAll('.caf-add-base').forEach(function(btn) { btn.addEventListener('click', function() { var itens = escopo(); if (!itens) return; var fKey = btn.getAttribute('data-key'), sugestao = sugestoesFornecedorCotacao(procKey, itens)[fKey]; if (!sugestao) { showAlert('Este fornecedor não é uma sugestão para os materiais selecionados.', 'danger'); return; } var itensSugeridos = Object.keys(sugestao.itens), f = allFornecedores[fKey] || {}; gravarFornecedorNaCotacao(procKey, {fornecedorKey:fKey, condicaoPagamento:f.condicaoPagamento || '', prazoPagamentoParcelas:parsePrazoPagamento(f.condicaoPagamento || '').parcelas || null, materialSimilarPorItem:sugestao.materialSimilarPorItem}, itensSugeridos).then(function() { fechar(); showAlert('Fornecedor incluído para os materiais compatíveis da seleção.', 'success'); }).catch(function(e) { showAlert('Erro: ' + e.message, 'danger'); }); }); });
   }
   box.querySelector('.modal-close').onclick = fechar; box.querySelector('.caf-fechar').onclick = fechar; overlay.addEventListener('click', function(e) { if (e.target === overlay) fechar(); });
   box.querySelector('#cafBusca').addEventListener('input', lista); box.querySelectorAll('.caf-item').forEach(function(el) { el.addEventListener('change', lista); });
