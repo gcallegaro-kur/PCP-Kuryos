@@ -403,28 +403,28 @@
   <!-- ════════ CONFERÊNCIA DE PRODUTO ACABADO ════════ -->
   <div class="tab-panel" id="tab-conferenciapa">
     <div class="section-note">
-      Quando a produção conclui uma OP, o palete é <b>declarado</b> aqui — mas ainda não conta
-      como disponível. A Logística recebe, arruma e <b>confere</b> a quantidade real de caixas.
-      Se o conferido diferir do declarado, a diferença fica registrada (é sinal de perda, erro de
-      contagem ou palete incompleto). Depois de conferido, o palete segue para a liberação do CQ.
+      A produção entrega os paletes já montados. Aqui a Logística registra cada palete físico,
+      confere caixas fechadas/parciais e unidades, e informa a posição na fábrica. O total é
+      conciliado com a OP apontada; divergência exige justificativa. Só então o PA entra no WMS
+      com status <b>Quarentena</b>, aguardando o CQ.
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="stat-val" id="cpaStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">Paletes a conferir</div></div>
-      <div class="stat"><div class="stat-val" id="cpaStatDeclarado">—</div><div class="stat-lbl">Unidades declaradas</div></div>
+      <div class="stat"><div class="stat-val" id="cpaStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">OPs aguardando conferência</div></div>
+      <div class="stat"><div class="stat-val" id="cpaStatDeclarado">—</div><div class="stat-lbl">Unidades apontadas</div></div>
       <div class="stat"><div class="stat-val" id="cpaStatDivergencias" style="color:var(--danger)">—</div><div class="stat-lbl">Com divergência (30 dias)</div></div>
     </div>
 
     <div class="card">
-      <div class="card-header"><h3>Paletes aguardando conferência</h3></div>
+      <div class="card-header"><h3>OPs para Conferência de Produto Acabado</h3></div>
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Produto</th>
-            <th style="width:120px">Lote / OP</th>
-            <th style="width:110px">Posição</th>
-            <th style="width:110px;text-align:right">Declarado</th>
-            <th style="width:150px;text-align:right">Conferido</th>
+            <th>Produto / OP</th>
+            <th style="width:130px;text-align:right">Apontado</th>
+            <th style="width:130px;text-align:right">Paletizado</th>
+            <th style="width:130px;text-align:right">Diferença</th>
+            <th style="width:150px">Situação</th>
             <th style="width:120px"></th>
           </tr></thead>
           <tbody id="cpaFilaBody"></tbody>
@@ -1446,91 +1446,101 @@ function renderPosicoesTableEnd() {
 
 // ══════════════════════════════════════════════════════════════════════
 // CONFERÊNCIA DE PRODUTO ACABADO (Logística)
-// A quantidade conferida é digitada direto na linha -- é uma tela de
-// trabalho repetitivo (vários paletes por dia), abrir modal pra cada um
-// seria atrito sem ganho.
+// Uma OP aponta o total produzido; não pressupõe quantidade de paletes. A
+// Logística registra os paletes físicos e faz a conciliação antes da entrada
+// no WMS. Assim uma OP pode resultar em vários paletes sem criar estoque
+// fictício no momento do apontamento.
 // ══════════════════════════════════════════════════════════════════════
+var allOps = {}, allConferenciasPA = {};
+
+function qtdApontadaPA(op) {
+  return typeof getProduzido === 'function' ? getProduzido(op || {}, 'linha') : ((op || {}).produzidoLinha || (op || {}).produzido || 0);
+}
+function paletesDaConferencia(conf) { return Object.values((conf || {}).paletes || {}); }
+function totalPaletizado(conf) { return paletesDaConferencia(conf).reduce(function(s, p) { return s + (parseFloat(p.qtdUnidades) || 0); }, 0); }
+function statusConferenciaPA(conf, diferenca) {
+  if (!conf) return 'Aguardando paletes';
+  if (conf.status === 'CONFERIDO_COM_DIVERGENCIA') return 'Conferido c/ divergência';
+  if (conf.status === 'CONFERIDO') return 'Conferido';
+  return diferenca === 0 ? 'Pronto para finalizar' : 'Em conferência';
+}
+
 function renderConferenciaPA() {
   var tbody = document.getElementById('cpaFilaBody');
   if (!tbody) return;
-  var fila = paletesAguardandoConferencia(allEstoqueLotes);
-
-  var totalDeclarado = fila.reduce(function(s, f) { return s + (f.qtdDeclarada || 0); }, 0);
+  var fila = Object.entries(allOps || {}).map(function(e) { return { key:e[0], op:e[1] || {}, conf:allConferenciasPA[e[0]] || null }; })
+    .filter(function(x) { return x.op.status === 'Concluído' && x.op.sku && qtdApontadaPA(x.op) > 0; })
+    .filter(function(x) { return !x.conf || (x.conf.status !== 'CONFERIDO' && x.conf.status !== 'CONFERIDO_COM_DIVERGENCIA'); })
+    .sort(function(a, b) { return String(a.op.dataFimReal || '').localeCompare(String(b.op.dataFimReal || '')); });
+  var totalApontado = fila.reduce(function(s, f) { return s + qtdApontadaPA(f.op); }, 0);
   var corte = new Date(Date.now() - 30 * 86400000).toISOString();
-  var comDiv = 0;
-  Object.values(allEstoqueLotes || {}).forEach(function(lotesDoItem) {
-    Object.values(lotesDoItem || {}).forEach(function(l) {
-      if (!l || !l.conferencia || !l.conferencia.conferidoEm) return;
-      if (l.conferencia.conferidoEm < corte) return;
-      if (l.conferencia.divergencia !== 0) comDiv++;
-    });
-  });
+  var comDiv = Object.values(allConferenciasPA || {}).filter(function(c) { return c && c.conferidoEm >= corte && c.divergencia !== 0; }).length;
   document.getElementById('cpaStatFila').textContent = fmtNum(fila.length);
-  document.getElementById('cpaStatDeclarado').textContent = fmtNum(totalDeclarado);
+  document.getElementById('cpaStatDeclarado').textContent = fmtNum(totalApontado);
   document.getElementById('cpaStatDivergencias').textContent = fmtNum(comDiv);
-
   if (!fila.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum palete aguardando conferência. Eles aparecem aqui quando a produção conclui uma OP e registra o endereço.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP concluída aguardando Conferência de Produto Acabado.</td></tr>';
     return;
   }
   tbody.innerHTML = fila.map(function(f) {
-    return '<tr>' +
-      '<td><b>' + escapeHtml(f.sku || '') + '</b>' + (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
-      '<td>' + escapeHtml(f.loteOrigem || '—') + '</td>' +
-      '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
-      '<td style="text-align:right">' + fmtNum(f.qtdDeclarada) + '</td>' +
-      '<td style="text-align:right">' +
-        '<input type="number" class="cpa-qtd" min="0" step="any" style="width:120px;text-align:right" ' +
-        'placeholder="' + escapeAttr(String(f.qtdDeclarada)) + '" ' +
-        'data-sku="' + escapeAttr(f.sku) + '" data-lote="' + escapeAttr(f.loteKey) + '">' +
-      '</td>' +
-      '<td style="text-align:right"><button class="btn btn-green btn-sm" data-conferir-sku="' + escapeAttr(f.sku) + '" data-conferir-lote="' + escapeAttr(f.loteKey) + '">✓ Conferir</button></td>' +
-    '</tr>';
+    var apontada = qtdApontadaPA(f.op), paletizada = totalPaletizado(f.conf), dif = Math.round((paletizada - apontada) * 1000) / 1000;
+    return '<tr><td><b>' + escapeHtml(f.op.sku) + '</b><br><span class="field-hint">OP ' + escapeHtml(f.op.lote || f.key) + ' · ' + escapeHtml(f.op.produto || f.op.produtoNome || '') + '</span></td>' +
+      '<td style="text-align:right">' + fmtNum(apontada) + '</td><td style="text-align:right">' + fmtNum(paletizada) + '</td>' +
+      '<td style="text-align:right;color:' + (dif === 0 ? 'var(--success)' : 'var(--danger)') + '">' + (dif > 0 ? '+' : '') + fmtNum(dif) + '</td>' +
+      '<td>' + escapeHtml(statusConferenciaPA(f.conf, dif)) + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-green btn-sm" data-cpa-op="' + escapeAttr(f.key) + '">' + (f.conf ? 'Continuar' : 'Registrar paletes') + '</button></td></tr>';
   }).join('');
-  tbody.querySelectorAll('[data-conferir-lote]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      confirmarConferenciaPA(btn.getAttribute('data-conferir-sku'), btn.getAttribute('data-conferir-lote'));
-    });
-  });
+  tbody.querySelectorAll('[data-cpa-op]').forEach(function(btn) { btn.addEventListener('click', function() { abrirConferenciaPAModal(btn.getAttribute('data-cpa-op')); }); });
 }
 
-function confirmarConferenciaPA(sku, loteKey) {
-  var input = document.querySelector('.cpa-qtd[data-lote="' + loteKey + '"]');
-  if (!input) return;
-  var v = input.value.trim();
-  if (v === '') {
-    showAlert('Informe a quantidade conferida. Se bate com o declarado, digite o mesmo número — confirmar sem contar não é conferência.', 'danger');
-    return;
-  }
-  var qtd = parseFloat(v);
-  if (isNaN(qtd) || qtd < 0) { showAlert('Quantidade inválida.', 'danger'); return; }
-
-  var itemKey = sanitizeKey(sku);
-  var lote = (allEstoqueLotes[itemKey] || {})[loteKey] || {};
-  var declarada = lote.qtdDeclarada != null ? lote.qtdDeclarada : (lote.saldoLote || 0);
-  var dif = Math.round((qtd - declarada) * 1000) / 1000;
-  var obs = null;
-  if (dif !== 0) {
-    // Divergência exige explicação na hora: depois ninguém lembra por que
-    // faltaram 50 unidades, e é justamente esse "por quê" que transforma o
-    // número num dado útil.
-    obs = prompt('Divergência de ' + (dif > 0 ? '+' : '') + dif + ' unidade(s) em relação ao declarado (' +
-      declarada + ').\n\nO que explica a diferença? (obrigatório)', '');
-    if (obs === null) return;
-    obs = String(obs).trim();
-    if (!obs) { showAlert('Explique a divergência para registrar a conferência.', 'danger'); return; }
-  }
-
-  conferirPaletePA(db, sku, loteKey, qtd, currentUserNome(), obs).then(function(r) {
-    if (!r.ok) { showAlert(r.erro, 'danger'); return; }
-    showAlert(r.divergencia === 0
-      ? ('Palete conferido (' + fmtNum(r.conferida) + ') — segue para liberação do CQ.')
-      : ('Palete conferido com divergência de ' + (r.divergencia > 0 ? '+' : '') + fmtNum(r.divergencia) +
-         '. Saldo ajustado para ' + fmtNum(r.conferida) + ' e segue para o CQ.'),
-      r.divergencia === 0 ? 'success' : 'danger');
-  }).catch(function(err) {
-    showAlert('Erro ao registrar a conferência: ' + err.message, 'danger');
-  });
+function opcoesEnderecoPA() {
+  return Object.entries(allEnderecosEstoque || {}).filter(function(e) { return e[1] && e[1].ativo !== false; })
+    .sort(function(a,b) { return String(a[1].codigo || a[0]).localeCompare(String(b[1].codigo || b[0])); })
+    .map(function(e) { return '<option value="' + escapeAttr(e[0]) + '">' + escapeHtml(e[1].codigo || e[0]) + (e[1].area ? ' · ' + escapeHtml(e[1].area) : '') + '</option>'; }).join('');
+}
+function linhaPaletePA(numero) {
+  return '<div class="cpa-palete" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:10px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Palete ' + numero + '</b><button type="button" class="btn btn-sm cpa-remover" style="color:var(--danger)">Remover</button></div>' +
+    '<div class="form-grid"><div class="form-group"><label>Caixas fechadas</label><input class="cpa-caixas" type="number" min="0" step="1" value="0"></div>' +
+    '<div class="form-group"><label>Unid. por caixa</label><input class="cpa-multiplo" type="number" min="1" step="1" placeholder="se aplicável"></div>' +
+    '<div class="form-group"><label>Unid. caixa parcial</label><input class="cpa-parcial" type="number" min="0" step="1" value="0"></div>' +
+    '<div class="form-group"><label>Total conferido *</label><input class="cpa-total" type="number" min="0" step="1" placeholder="unidades"></div>' +
+    '<div class="form-group"><label>Endereço físico *</label><select class="cpa-endereco"><option value="">Selecione…</option>' + opcoesEnderecoPA() + '</select></div></div></div>';
+}
+function recalcularLinhaPaletePA(linha) {
+  var caixas = parseFloat(linha.querySelector('.cpa-caixas').value) || 0, multiplo = parseFloat(linha.querySelector('.cpa-multiplo').value) || 0, parcial = parseFloat(linha.querySelector('.cpa-parcial').value) || 0;
+  if (multiplo > 0) linha.querySelector('.cpa-total').value = caixas * multiplo + parcial;
+}
+function abrirConferenciaPAModal(opKey) {
+  var op = allOps[opKey]; if (!op) return;
+  var conf = allConferenciasPA[opKey] || {}, apontada = qtdApontadaPA(op);
+  var overlay = document.createElement('div'); overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+  var box = document.createElement('div'); box.style.cssText = 'background:var(--card);border-radius:16px;padding:20px;max-width:860px;width:100%;max-height:90vh;overflow:auto;box-shadow:var(--shadow)';
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;gap:12px"><div><div style="font-weight:800;font-size:17px">Conferência de Produto Acabado</div><div class="field-hint">OP ' + escapeHtml(op.lote || opKey) + ' · ' + escapeHtml(op.sku) + ' · ' + escapeHtml(op.produto || op.produtoNome || '') + '</div></div><button type="button" class="btn btn-sm" id="cpaFechar">Fechar</button></div>' +
+    '<div class="section-note" style="margin:14px 0">Apontado na OP: <b>' + fmtNum(apontada) + ' un.</b> Registre os paletes físicos. O total somente é finalizado quando conciliado ou justificado.</div><div id="cpaPaletes"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn" id="cpaAdicionar">+ Adicionar palete</button><span id="cpaResumo" class="field-hint" style="align-self:center"></span></div>' +
+    '<div class="form-group" id="cpaJustWrap" style="display:none;margin-top:14px"><label>Justificativa da divergência *</label><textarea id="cpaJust" rows="2" placeholder="Ex.: avaria identificada na conferência; completar com evidência quando aplicável."></textarea></div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button type="button" class="btn btn-green" id="cpaSalvar">Conferir e endereçar paletes</button></div>';
+  overlay.appendChild(box); document.body.appendChild(overlay);
+  var lista = box.querySelector('#cpaPaletes'), qtdInicial = Math.max(1, paletesDaConferencia(conf).length + 1);
+  function adicionar() { lista.insertAdjacentHTML('beforeend', linhaPaletePA(lista.children.length + 1)); ligarLinhas(); atualizar(); }
+  function ligarLinhas() { lista.querySelectorAll('.cpa-palete').forEach(function(l) { l.querySelectorAll('.cpa-caixas,.cpa-multiplo,.cpa-parcial').forEach(function(i) { i.oninput = function() { recalcularLinhaPaletePA(l); atualizar(); }; }); l.querySelector('.cpa-total').oninput = atualizar; l.querySelector('.cpa-remover').onclick = function() { if (lista.children.length > 1) { l.remove(); atualizar(); } }; }); }
+  function atualizar() { var total = Array.from(lista.querySelectorAll('.cpa-total')).reduce(function(s, i) { return s + (parseFloat(i.value) || 0); }, totalPaletizado(conf)); var dif = Math.round((total - apontada) * 1000) / 1000; box.querySelector('#cpaResumo').textContent = 'Total: ' + fmtNum(total) + ' un. · Diferença: ' + (dif > 0 ? '+' : '') + fmtNum(dif); box.querySelector('#cpaJustWrap').style.display = dif === 0 ? 'none' : 'block'; }
+  for (var i = 0; i < qtdInicial; i++) adicionar();
+  box.querySelector('#cpaAdicionar').onclick = adicionar; box.querySelector('#cpaFechar').onclick = function() { document.body.removeChild(overlay); };
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) document.body.removeChild(overlay); });
+  box.querySelector('#cpaSalvar').onclick = function() { salvarConferenciaPA(opKey, op, conf, lista, box, overlay); };
+}
+function salvarConferenciaPA(opKey, op, conf, lista, box, overlay) {
+  var novos = Array.from(lista.querySelectorAll('.cpa-palete')).map(function(l, i) { return { numero: paletesDaConferencia(conf).length + i + 1, caixasFechadas: parseFloat(l.querySelector('.cpa-caixas').value) || 0, unidadesPorCaixa: parseFloat(l.querySelector('.cpa-multiplo').value) || null, unidadesCaixaParcial: parseFloat(l.querySelector('.cpa-parcial').value) || 0, qtdUnidades: parseFloat(l.querySelector('.cpa-total').value), enderecoKey:l.querySelector('.cpa-endereco').value }; });
+  if (novos.some(function(p) { return isNaN(p.qtdUnidades) || p.qtdUnidades < 0 || !p.enderecoKey; })) { showAlert('Cada palete precisa de quantidade conferida e endereço físico.', 'danger'); return; }
+  var apontada = qtdApontadaPA(op), total = totalPaletizado(conf) + novos.reduce(function(s,p) { return s + p.qtdUnidades; }, 0), dif = Math.round((total - apontada) * 1000) / 1000, just = (box.querySelector('#cpaJust').value || '').trim();
+  if (dif !== 0 && !just) { showAlert('Explique a divergência antes de finalizar a conferência.', 'danger'); return; }
+  var agora = new Date().toISOString(), itemKey = sanitizeKey(op.sku), atual = paletesDaConferencia(conf), updates = {}, paletes = {};
+  atual.forEach(function(p, i) { paletes['existente_' + i] = p; });
+  novos.forEach(function(p) { var key = db.ref('conferencias_pa/' + opKey + '/paletes').push().key, end = allEnderecosEstoque[p.enderecoKey] || {}; p.registradoEm = agora; p.registradoPor = currentUserNome(); paletes[key] = p; var loteKey = 'pa_' + opKey + '_' + key; updates['estoque_lotes/' + itemKey + '/' + loteKey] = { itemTipo:'produto', itemCodigo:op.sku, itemNome:op.produto || op.produtoNome || null, unidade:'un', loteOrigem:op.lote || null, opKey:opKey, opLote:op.lote || null, paleteNumero:p.numero, caixasFechadas:p.caixasFechadas, unidadesPorCaixa:p.unidadesPorCaixa, unidadesCaixaParcial:p.unidadesCaixaParcial, saldoLote:p.qtdUnidades, qtdOriginal:p.qtdUnidades, enderecoKey:p.enderecoKey, enderecoCodigo:end.codigo || p.enderecoKey, origemTipo:'conferencia_pa', origemRef:opKey, status:'QUARENTENA', conferencia:{qtdConferida:p.qtdUnidades, conferidoEm:agora, conferidoPor:currentUserNome()}, criadoEm:agora, atualizadoEm:agora, criadoPor:currentUserNome() }; updates['movimentos_estoque/' + itemKey + '/' + db.ref('movimentos_estoque/' + itemKey).push().key] = { tipo:'conferencia_pa', motivo:'ENTRADA PA CONFERIDA E ENDEREÇADA', qtd:p.qtdUnidades, saldoApos:p.qtdUnidades, ref:opKey, loteKey:loteKey, enderecoKey:p.enderecoKey, enderecoCodigo:end.codigo || p.enderecoKey, itemTipo:'produto', itemCodigo:op.sku, itemNome:op.produto || op.produtoNome || null, unidade:'un', autor:currentUserNome(), em:agora }; });
+  updates['conferencias_pa/' + opKey] = { opKey:opKey, opLote:op.lote || null, sku:op.sku, produto:op.produto || op.produtoNome || null, qtdApontada:apontada, qtdPaletizada:total, divergencia:dif, justificativa:dif !== 0 ? just : null, status:dif === 0 ? 'CONFERIDO' : 'CONFERIDO_COM_DIVERGENCIA', paletes:paletes, conferidoEm:agora, conferidoPor:currentUserNome() };
+  db.ref().update(updates).then(function() { document.body.removeChild(overlay); showAlert('Paletes conferidos, endereçados e enviados para Quarentena/CQ.', 'success'); }).catch(function(err) { showAlert('Erro ao registrar paletes: ' + err.message, 'danger'); });
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2194,6 +2204,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutos = snap.val() || {};
+      renderConferenciaPA();
+    });
+    dbOnValue(db.ref('ops'), function(snap) {
+      allOps = snap.val() || {};
+      renderConferenciaPA();
+    });
+    dbOnValue(db.ref('conferencias_pa'), function(snap) {
+      allConferenciasPA = snap.val() || {};
+      renderConferenciaPA();
     });
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allFornecedores = snap.val() || {};

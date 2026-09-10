@@ -114,6 +114,7 @@ const MODULOS_POR_PAPEL = {
         'compras', 'logistica', 'qualidade', 'config', 'usuarios'],
   production: ['analytics', 'apontamento', 'planejamento'],
   rotulagem: ['apontamento'],
+  logistica: ['logistica'],
   qualidade: ['qualidade'],
   rh: ['rh', 'rh_dashboard'],
   gestor: ['rh'],

@@ -7,6 +7,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
+- **Escopo em andamento:** Conferência de Produto Acabado pela Logística: apontamento permanece intocado; OP concluída é conciliada contra os paletes físicos, que são conferidos, endereçados na fábrica e entram com status Quarentena.
+- **Arquivos ativos:** `public/ops.html`, `public/estoque.html`, `public/auth_check.js`, `public/login.html`, `public/usuarios.html`, `database.rules.json`, `AGENT_STATUS.md`. Não alterar `public/shared/utils.js` enquanto MRP estiver em integração.
 - **Última entrega WMS:** Conferência de PA mantida como etapa específica da Logística (produção → conferência → quarentena → CQ). Nova tela **Descarte e Logística Reversa** segrega lotes vencidos, reprovados ou retidos; a saída só baixa o lote ao confirmar coleta/destinação e deixa movimento auditável.
 - **Validação WMS:** `run_descarte_test.js`, sintaxe JS/HTML, JSON das regras e `git diff --check` aprovados. Hosting e regras RTDB publicados em 2026-09-09.
 - **Commit/deploy WMS:** `051ce9e`, publicado em 2026-09-09 em `https://prod-kuryos.web.app`.
