@@ -7,9 +7,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
-- **Entrega Apontamento em validação/publicação:** pausa permanece `apontamento_total`; todos os botões de encerramento gravam `fechamento_op`. Quantidade, liberação da linha e status final entram na mesma transaction; UI só confirma após ACK. OP, pedido, consumo e perdas ficaram idempotentes por ID/dedupe contra clique, retry e reconexão.
+- **Última entrega Apontamento:** pausa permanece `apontamento_total`; todos os botões de encerramento gravam `fechamento_op`. Quantidade, liberação da linha e status final entram na mesma transaction; UI só confirma após ACK. OP, pedido, consumo e perdas ficaram idempotentes por ID/dedupe contra clique, retry e reconexão.
 - **Correção operacional:** lote `26247/06` confirmado em produção com checkpoint 864 e OP/pedido ainda sem o incremento final de 797. Reparo auditável aguarda somente o horário exato de encerramento informado pelo usuário, para não inventar horas úteis.
 - **Validação:** `run_apontamento_encerramento_test.js`, sintaxe de todos os scripts de `public/form.html` e `git diff --check` aprovados.
+- **Commit/deploy Apontamento:** `076c236`, Hosting publicado e conferido por HTTP 200 em 2026-09-10 em `https://prod-kuryos.web.app`; GitHub `main` atualizado.
 - **Arquivos ativos:** `public/form.html`, `run_apontamento_encerramento_test.js` e `AGENT_STATUS.md`. `public/shared/utils.js` permanece reservado ao MRP/Claude e não será incluído nem publicado.
 - **Última entrega Compras:** “＋ Fornecedor” sugere somente homologados do próprio item e homologados de materiais similares por volume, como na abertura da cotação. Similar fica marcado, vinculado ao item original e exige especificação técnica antes de gerar PC; fornecedor avulso continua pelo CNPJ.
 - **Validação Compras:** sintaxe e `git diff --check` aprovados; cenário cobre homologado direto + homologado via material similar.
