@@ -120,6 +120,8 @@
     .cot-fornecedor-tab.active{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent)}
     .cot-fornecedor-tab b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cot-fornecedor-tab span{font-size:10.5px;color:var(--muted)}
+    .cot-fornecedor-tab.add{min-width:132px;border-style:dashed;color:var(--primary);background:var(--tint-blue-bg)}
+    .cot-fornecedor-tab.add span{color:var(--primary)}
     .cot-proposta{padding:14px 16px}
     .cot-proposta-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
     .cot-proposta-head h3{font-size:15px;margin:0}
@@ -926,6 +928,10 @@ document.querySelectorAll('.tab').forEach(function(tab) {
     document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
   });
 });
+function abrirAbaCompras(target) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+}
 
 /* ══════════════ SOLICITAÇÕES ══════════════ */
 function renderSolicitacoes() {
@@ -2816,6 +2822,8 @@ function salvarIniciarCotacao() {
     cotacaoSelecionadas = {};
     updateBtnCotacao();
     fecharModalIniciarCotacao();
+    // A próxima tarefa é preencher a cotação, não voltar para Solicitações.
+    abrirAbaCompras('cotacoes');
   }).catch(function(err) { showAlert('Erro: ' + (err.message || err), 'danger'); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Iniciar Cotação e Criar Rascunhos'; });
 }
@@ -3431,6 +3439,87 @@ function comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens) {
   }).join('') + '</div>';
 }
 
+/* ── Fornecedor adicionado depois que a cotação já começou ────────────
+   O convite continua sendo por item. A caixa "+ Fornecedor" não despeja a
+   empresa em todos os materiais do processo: quem opera escolhe o escopo e
+   o sistema marca explicitamente o que está fora da homologação. */
+function itensMarcadosFornecedorCotacao(box) {
+  return Array.from(box.querySelectorAll('.caf-item:checked')).map(function(el) { return el.value; });
+}
+function fornecedorCombinaComItensCotacao(fKey, itens) {
+  return itens.some(function(itemKey) {
+    var it = itemKey && (allProcessosCotacao[window.__cafProcesso] || {}).itens && (allProcessosCotacao[window.__cafProcesso] || {}).itens[itemKey];
+    return it && fornecedorEhHomologadoPara(fKey, it.materialCodigo);
+  });
+}
+function gravarFornecedorNaCotacao(procKey, dados, itemKeys) {
+  var novoKey = db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados').push().key;
+  var fornecedorKey = dados.fornecedorKey || null, cnpj = dados.cnpjAvulso || null, chaveAlvo = novoKey;
+  return db.ref('processos_cotacao/' + procKey).transaction(function(proc) {
+    if (!proc || proc.status !== 'ABERTO') return;
+    proc.fornecedoresConvidados = proc.fornecedoresConvidados || {};
+    var existente = Object.entries(proc.fornecedoresConvidados).find(function(e) {
+      var c = e[1] || {};
+      return fornecedorKey ? c.fornecedorKey === fornecedorKey : (!c.fornecedorKey && normalizarCnpj(c.cnpjAvulso) === normalizarCnpj(cnpj));
+    });
+    chaveAlvo = existente ? existente[0] : novoKey;
+    var convidado = existente ? existente[1] : {
+      fornecedorKey: fornecedorKey, nomeAvulso: dados.nomeAvulso || null, emailAvulso: dados.emailAvulso || null,
+      cnpjAvulso: cnpj, razaoSocialAvulso: dados.razaoSocialAvulso || null, cidadeAvulso: dados.cidadeAvulso || null, ufAvulso: dados.ufAvulso || null,
+      status: 'AGUARDANDO', rascunhoCotacaoWebLink: null, respostaItens: {},
+      condicaoPagamento: dados.condicaoPagamento || '', prazoPagamentoParcelas: dados.prazoPagamentoParcelas || null,
+      frete: null, validadeProposta: null, localEntrega: null, convidadoEm: new Date().toISOString(), respondidoEm: null,
+      itens: {}, foraHomologacao: null
+    };
+    convidado.itens = convidado.itens || {};
+    var fora = convidado.foraHomologacao || {};
+    itemKeys.forEach(function(itemKey) {
+      convidado.itens[itemKey] = true;
+      var it = (proc.itens || {})[itemKey] || {};
+      if (!fornecedorKey || !fornecedorEhHomologadoPara(fornecedorKey, it.materialCodigo)) fora[itemKey] = true;
+    });
+    convidado.foraHomologacao = Object.keys(fora).length ? fora : null;
+    proc.fornecedoresConvidados[chaveAlvo] = convidado;
+    return proc;
+  }).then(function(r) {
+    if (!r.committed) throw new Error('A cotação não está mais aberta.');
+    cotacaoFornecedorAtivoPorProcesso[procKey] = chaveAlvo;
+    cotacaoVisaoPorProcesso[procKey] = 'preencher';
+    return chaveAlvo;
+  });
+}
+function abrirAdicionarFornecedorCotacao(procKey) {
+  var proc = allProcessosCotacao[procKey];
+  if (!proc || proc.status !== 'ABERTO') { showAlert('Esta cotação não está aberta para novos convidados.', 'danger'); return; }
+  window.__cafProcesso = procKey;
+  var overlay = document.createElement('div'); overlay.className = 'modal-bg open';
+  var box = document.createElement('div'); box.className = 'modal'; box.style.maxWidth = '760px';
+  var itensHtml = Object.entries(proc.itens || {}).map(function(e) { var it = e[1] || {}; return '<label class="chk-row"><input class="caf-item" type="checkbox" value="' + escapeAttr(e[0]) + '"><span class="chk-row-body"><b>' + escapeHtml(it.materialCodigo || '') + '</b> — ' + escapeHtml(it.materialNome || '') + '<div class="field-hint">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + '</div></span></label>'; }).join('');
+  box.innerHTML = '<div class="modal-header purple"><h2>＋ Fornecedor na cotação</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body">' +
+    '<div class="section-note">Escolha primeiro os materiais que este fornecedor irá cotar. Isso preserva convites por item — um fornecedor de embalagem não passa a receber cotação de matéria-prima.</div>' +
+    '<div class="section-label">Materiais para este fornecedor *</div><div id="cafItens" style="max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:5px">' + itensHtml + '</div>' +
+    '<div class="section-label" style="margin-top:16px">Fornecedor cadastrado</div><div class="kt-search"><span class="icon">🔍</span><input type="text" id="cafBusca" placeholder="Buscar por nome ou CNPJ..."></div><div id="cafLista" style="max-height:210px;overflow:auto;margin-top:8px"></div>' +
+    '<div class="section-label" style="margin-top:18px">Ou fornecedor novo, fora da base</div><div class="form-grid"><div class="form-group"><label>CNPJ *</label><input id="cafCnpj" inputmode="numeric" placeholder="00.000.000/0000-00"><div class="field-hint" id="cafCnpjHint"></div></div><div class="form-group"><label>Nome *</label><input id="cafNome" placeholder="Razão social ou nome fantasia"></div><div class="form-group"><label>E-mail para cotação</label><input id="cafEmail" type="email" placeholder="opcional"></div></div>' +
+    '<div class="modal-actions"><button type="button" class="btn btn-ghost caf-fechar">Cancelar</button><button type="button" class="btn btn-primary" id="cafAdicionarAvulso">Adicionar fornecedor novo</button></div></div>';
+  overlay.appendChild(box); document.body.appendChild(overlay);
+  function fechar() { document.body.removeChild(overlay); window.__cafProcesso = null; }
+  function escopo() { var itens = itensMarcadosFornecedorCotacao(box); if (!itens.length) { showAlert('Selecione ao menos um material para este fornecedor.', 'danger'); return null; } return itens; }
+  function lista() {
+    var busca = norm(box.querySelector('#cafBusca').value), selecionados = itensMarcadosFornecedorCotacao(box);
+    var fornecedores = Object.entries(allFornecedores || {}).filter(function(e) { var f = e[1] || {}; return f.ativo !== false && (!busca || (norm(f.nomeFantasia) + ' ' + norm(f.razaoSocial) + ' ' + norm(f.cnpj)).indexOf(busca) !== -1); })
+      .map(function(e) { return {key:e[0], f:e[1], combina:fornecedorCombinaComItensCotacao(e[0], selecionados)}; })
+      .sort(function(a,b) { return (b.combina - a.combina) || norm(a.f.nomeFantasia || a.f.razaoSocial).localeCompare(norm(b.f.nomeFantasia || b.f.razaoSocial)); });
+    var alvo = box.querySelector('#cafLista');
+    alvo.innerHTML = fornecedores.slice(0, 60).map(function(x) { return '<div class="chk-row"><div class="chk-row-body"><b>' + escapeHtml(x.f.nomeFantasia || x.f.razaoSocial || x.key) + '</b>' + (x.combina ? ' <span class="badge badge-green">homologado para item selecionado</span>' : ' <span class="badge badge-orange">fora da homologação</span>') + '<div class="field-hint">' + escapeHtml(x.f.cnpj || 'sem CNPJ') + '</div></div><button type="button" class="btn btn-ghost btn-sm caf-add-base" data-key="' + escapeAttr(x.key) + '">Adicionar</button></div>'; }).join('') || '<div class="empty-hint">Nenhum fornecedor encontrado.</div>';
+    alvo.querySelectorAll('.caf-add-base').forEach(function(btn) { btn.addEventListener('click', function() { var itens = escopo(); if (!itens) return; var f = allFornecedores[btn.getAttribute('data-key')] || {}; gravarFornecedorNaCotacao(procKey, {fornecedorKey:btn.getAttribute('data-key'), condicaoPagamento:f.condicaoPagamento || '', prazoPagamentoParcelas:parsePrazoPagamento(f.condicaoPagamento || '').parcelas || null}, itens).then(function() { fechar(); showAlert('Fornecedor incluído na cotação para os materiais selecionados.', 'success'); }).catch(function(e) { showAlert('Erro: ' + e.message, 'danger'); }); }); });
+  }
+  box.querySelector('.modal-close').onclick = fechar; box.querySelector('.caf-fechar').onclick = fechar; overlay.addEventListener('click', function(e) { if (e.target === overlay) fechar(); });
+  box.querySelector('#cafBusca').addEventListener('input', lista); box.querySelectorAll('.caf-item').forEach(function(el) { el.addEventListener('change', lista); });
+  box.querySelector('#cafCnpj').addEventListener('blur', function() { var input = box.querySelector('#cafCnpj'), hint = box.querySelector('#cafCnpjHint'), cnpj = normalizarCnpj(input.value); input.value = cnpj ? formatarCnpj(cnpj) : ''; if (!cnpj || !cnpjValido(cnpj)) { hint.textContent = cnpj ? 'CNPJ inválido.' : ''; return; } hint.textContent = 'Consultando...'; buscarEmpresaPorCnpj(cnpj).then(function(r) { if (!r.ok) { hint.textContent = r.erro; return; } var e = r.empresa; if (!box.querySelector('#cafNome').value.trim()) box.querySelector('#cafNome').value = e.nomeFantasia || e.razaoSocial; input.setAttribute('data-empresa', JSON.stringify(e)); hint.textContent = '✓ ' + (e.razaoSocial || e.nomeFantasia || 'empresa encontrada'); }); });
+  box.querySelector('#cafAdicionarAvulso').onclick = function() { var itens = escopo(), cnpj = normalizarCnpj(box.querySelector('#cafCnpj').value), nome = box.querySelector('#cafNome').value.trim(); if (!itens) return; if (!cnpj || !cnpjValido(cnpj)) { showAlert('Informe um CNPJ válido para o fornecedor novo.', 'danger'); return; } if (!nome) { showAlert('Informe o nome do fornecedor novo.', 'danger'); return; } var cadastrado = Object.entries(allFornecedores || {}).find(function(e) { return normalizarCnpj((e[1] || {}).cnpj) === cnpj; }); if (cadastrado) { showAlert('Este CNPJ já está no cadastro. Use o fornecedor cadastrado acima.', 'info'); return; } var emp = {}; try { emp = JSON.parse(box.querySelector('#cafCnpj').getAttribute('data-empresa') || '{}'); } catch(e) {} gravarFornecedorNaCotacao(procKey, {cnpjAvulso:cnpj, nomeAvulso:nome, emailAvulso:box.querySelector('#cafEmail').value.trim(), razaoSocialAvulso:emp.razaoSocial || '', cidadeAvulso:emp.cidade || '', ufAvulso:emp.uf || ''}, itens).then(function() { fechar(); showAlert('Fornecedor novo incluído na cotação, marcado como fora da homologação.', 'success'); }).catch(function(e) { showAlert('Erro: ' + e.message, 'danger'); }); };
+  lista();
+}
+
 function cotacaoCardHtml(entry) {
   var key = entry[0], p = entry[1];
   var itensArr = Object.entries(p.itens || {}), convidadosArr = Object.entries(p.fornecedoresConvidados || {});
@@ -3444,7 +3533,7 @@ function cotacaoCardHtml(entry) {
   var tabs = convidadosArr.map(function(cEntry) {
     var cKey = cEntry[0], c = cEntry[1];
     return '<button type="button" class="cot-fornecedor-tab' + (cKey === fornecedorAtivo ? ' active' : '') + '" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(cKey) + '"><b>' + escapeHtml(nomeConvidadoCotacao(c, cKey)) + '</b><span>' + escapeHtml(statusConvidadoCotacao(c)) + '</span></button>';
-  }).join('');
+  }).join('') + '<button type="button" class="cot-fornecedor-tab add cot-fornecedor-add" data-key="' + escapeAttr(key) + '"><b>＋ Fornecedor</b><span>incluir na cotação</span></button>';
   var conteudo = visao === 'comparar'
     ? comparacaoCotacaoGuiada(p, cmp, itensArr, convidadosArr, chavesItens)
     : '<div class="cot-fornecedor-tabs">' + tabs + '</div><div class="cot-proposta"><div class="cot-proposta-head"><div><h3>' + escapeHtml(nomeConvidadoCotacao(atual, fornecedorAtivo)) + '</h3><span class="badge ' + classeStatusConvidado(atual) + '">' + escapeHtml(statusConvidadoCotacao(atual)) + '</span>' + seloQualidadeHtml(atual.fornecedorKey) + '</div>' +
@@ -3489,12 +3578,15 @@ function wireCotacoesAndamento() {
       renderCotacoesAndamento();
     });
   });
-  document.querySelectorAll('.cot-fornecedor-tab').forEach(function(btn) {
+  document.querySelectorAll('.cot-fornecedor-tab[data-ckey]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       cotacaoFornecedorAtivoPorProcesso[btn.getAttribute('data-key')] = btn.getAttribute('data-ckey');
       cotacaoVisaoPorProcesso[btn.getAttribute('data-key')] = 'preencher';
       renderCotacoesAndamento();
     });
+  });
+  document.querySelectorAll('.cot-fornecedor-add').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirAdicionarFornecedorCotacao(btn.getAttribute('data-key')); });
   });
   document.querySelectorAll('.cot-vencedor-item').forEach(function(sel) {
     sel.addEventListener('change', function() {
