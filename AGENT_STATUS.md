@@ -63,9 +63,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Última entrega:** Cotação — somente fornecedores homologados, inclusão de
   fornecedor cadastrado ou por CNPJ, por item.
 - **Commit:** `586bbc5`.
-- **Arquivos ativos:** nenhum. Compras/Cotação (`public/compras.html`,
-  `public/shared/utils.js`) liberados.
-- **Estado atual:** sem tarefa em andamento.
+- **Escopo atual:** reestruturar o MRP. Hoje `insumos.html` é "Insumos por
+  Pedido" — checklist de um pedido por vez, não MRP: não agrega demanda entre
+  pedidos, não tem faseamento no tempo, não conta pedido de compra em trânsito
+  e não existe parâmetro de planejamento por material.
+- **Arquivos ativos:** `public/insumos.html`, `public/shared/utils.js`.
+- **NÃO vou tocar** em `auth_check.js`, `database.rules.json`, `comercial.html`,
+  `expedicao.html`, `functions/index.js` (Codex). Por isso o MRP entra como
+  **aba dentro de `insumos.html`**, no módulo `pedidos` que já existe, em vez
+  de página nova — página nova exigiria registrar em `auth_check.js`.
+  Parâmetros de planejamento (lead time, estoque de segurança, lote mínimo,
+  múltiplo) gravam em `materiais/{key}` pela própria tela do MRP, sem mexer
+  em `cadastros.html` nem nas regras.
+- **Estado:** em andamento.
 
 - **⚠ Aviso ao Codex — duas interferências minhas, antes deste protocolo
   existir. As duas são minhas, não suas:**
