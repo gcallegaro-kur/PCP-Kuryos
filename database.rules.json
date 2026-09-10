@@ -137,6 +137,18 @@
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true)"
     },
+    "comercial_eventos": {
+      ".read": "auth != null",
+      "$documento": { "$evento": { ".write": "auth != null && !data.exists() && newData.exists() && ((root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true)" } }
+    },
+    "documentos_comerciais": {
+      ".read": "auth != null",
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true)"
+    },
+    "expedicoes_comerciais": {
+      ".read": "auth != null",
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true))"
+    },
     "ajustes_planejamento": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true))"
