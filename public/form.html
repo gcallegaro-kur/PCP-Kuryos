@@ -2641,12 +2641,45 @@ function updatePendingBadge() {
   }
 }
 
+// Promises de confirmação existem só durante a sessão atual; a fila em si
+// continua persistida no localStorage. Assim os fluxos críticos (checkpoint
+// e fechamento) só mostram sucesso depois do ACK completo do Firebase, sem
+// perder a capacidade de retomar uma escrita após reload/reconexão.
+var _syncWaiters = {};
+function aguardarSyncItem(id) {
+  return new Promise(function(resolve, reject) {
+    if (!_syncWaiters[id]) _syncWaiters[id] = [];
+    _syncWaiters[id].push({ resolve: resolve, reject: reject });
+  });
+}
+function concluirSyncItem(id, resultado) {
+  var waiters = _syncWaiters[id] || [];
+  delete _syncWaiters[id];
+  waiters.forEach(function(w) { w.resolve(resultado); });
+}
+function falharSyncItem(id, erro) {
+  var waiters = _syncWaiters[id] || [];
+  delete _syncWaiters[id];
+  waiters.forEach(function(w) { w.reject(erro); });
+}
+
 function queueOfflineWrite(item) {
   var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
-  pending.push(item);
+  var querAguardar = !!item.aguardarConfirmacao;
+  if (!item.id) item.id = db.ref('registros/' + item.data).push().key;
+  // Fechamento/checkpoint recebe uma chave lógica estável. Se o operador
+  // tentar novamente enquanto a primeira tentativa ainda está pendente, a
+  // mesma operação é aguardada em vez de criar outro registro.
+  var existente = item.dedupeKey && pending.find(function(p) { return p.dedupeKey === item.dedupeKey; });
+  if (existente) {
+    item = existente;
+    if (!isSyncing) _syncRetryCount = 0;
+  }
+  else pending.push(item);
   localStorage.setItem('kuryos_pending_sync', JSON.stringify(pending));
   updatePendingBadge();
   triggerSync();
+  return querAguardar ? aguardarSyncItem(item.id) : Promise.resolve({ id: item.id, item: item, enfileirado: true });
 }
 
 var isSyncing = false;
@@ -2702,10 +2735,11 @@ function regTimestampIso(reg, campo) {
 // o callback rode várias vezes por causa de conflito. qtd continua sendo
 // usado como está (delta já conhecido de verdade) pros apontamentos por
 // hora/retroativo, que nunca fazem essa subtração.
-function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso, qtdTotalConhecido) {
+function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso, qtdTotalConhecido, operacaoId, efeitosOp) {
   if (!lote || (!qtd && qtdTotalConhecido == null)) return Promise.resolve();
   var loteKey = sanitizeKey(lote);
   var deltaAplicado = qtd || 0; // capturado de novo a cada tentativa da transaction abaixo -- o valor da tentativa que commitar é o que vale
+  var aplicacaoNova = true;
   // tsIso/tsFimIso são o início/fim reais do apontamento (podem ser
   // retroativos) -- sem isso, um lançamento retroativo de dias atrás
   // carimbava a OP com o momento em que alguém clicou em salvar, não com
@@ -2731,12 +2765,45 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // `produzido` fica espelhando produzidoLinha, de rede de segurança pra
     // qualquer leitor antigo que ainda não foi migrado.
     var campo = campoProduzido(tipo);
+    var aplicacoes = op.apontamentosAplicados || {};
+    var aplicacaoExistente = operacaoId && aplicacoes[operacaoId];
+    if (aplicacaoExistente) {
+      // Retry depois de qualquer falha posterior à transaction: recupera o
+      // delta originalmente confirmado. Sem isso, qtdTotal - produzido vira
+      // zero no retry e o Histórico sobrescreve o período verdadeiro com 0.
+      deltaAplicado = Number(aplicacaoExistente.quantidade) || 0;
+      aplicacaoNova = false;
+      return op;
+    }
     var deltaDestaTentativa = (qtdTotalConhecido != null)
       ? Math.max(qtdTotalConhecido - (op[campo] || 0), 0)
       : (qtd || 0);
     deltaAplicado = deltaDestaTentativa;
+    aplicacaoNova = true;
     op[campo] = (op[campo] || 0) + deltaDestaTentativa;
     if (campo === 'produzidoLinha') op.produzido = op[campo];
+    if (operacaoId) {
+      aplicacoes[operacaoId] = {
+        quantidade: deltaDestaTentativa,
+        qtdTotalOP: qtdTotalConhecido != null ? qtdTotalConhecido : null,
+        tipo: efeitosOp && efeitosOp.tipoEvento ? efeitosOp.tipoEvento : 'registro',
+        timestamp: tsFim
+      };
+      op.apontamentosAplicados = aplicacoes;
+    }
+    // Produção + liberação/continuidade da OP pertencem à mesma transaction.
+    // Nunca mais limpamos a linha antes de confirmar que o total foi gravado.
+    if (efeitosOp) {
+      if (efeitosOp.manterAberta) {
+        op[efeitosOp.campoInicio] = efeitosOp.reinicioEm || tsFim;
+      } else if (efeitosOp.encerrarAlocacao) {
+        op[efeitosOp.campoInicio] = null;
+        op[efeitosOp.campoNome] = null;
+      }
+      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído') {
+        op.status = 'Aguardando Confirmação';
+      }
+    }
     if (!isNaN(tsMs)) {
       var iniMs = op.dataInicioReal ? new Date(op.dataInicioReal).getTime() : NaN;
       if (isNaN(iniMs) || tsMs < iniMs) op.dataInicioReal = ts;
@@ -2759,7 +2826,7 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // confiável). Fica FORA da transaction acima (não dá pra fazer leitura
     // de fórmula/BOM dentro de uma transaction, que roda várias vezes em
     // caso de conflito) -- best-effort, não desfaz o apontamento se falhar.
-    if (isSetorEnvase(tipo) && result.committed && result.snapshot.exists()) {
+    if (isSetorEnvase(tipo) && aplicacaoNova && result.committed && result.snapshot.exists()) {
       var opAtual = result.snapshot.val();
       // deltaAplicado (não qtd) -- mesmo achado crítico acima: dar baixa de
       // estoque pelo delta calculado fora da transaction repetiria o mesmo
@@ -2787,6 +2854,7 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       }
     }
     result.deltaAplicado = deltaAplicado;
+    result.aplicacaoNova = aplicacaoNova;
     return result;
   });
 }
@@ -2869,6 +2937,23 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
 // produzido gravado em 18.657 quando a soma real de envase era 13.170.
 function isSetorEnvase(tipo) { return !tipo || tipo === 'linha'; }
 
+// O mesmo id usado na OP protege também o acumulado do pedido. Uma falha
+// depois de atualizar pedidos/ fazia o retry somar o mesmo período outra vez.
+function aplicarProducaoPedidoIdempotente(pedKey, item, delta, mediaPorHora) {
+  if (!pedKey || !item || !item.id || !delta) return Promise.resolve(null);
+  return db.ref('pedidos/' + pedKey).transaction(function(p) {
+    if (!p) return p;
+    var aplicacoes = p.apontamentosAplicados || {};
+    if (aplicacoes[item.id]) return p;
+    p.produzido = (p.produzido || 0) + delta;
+    p.ultimoApontamento = new Date().toISOString();
+    if (mediaPorHora > 0) p.mediaPorHora = mediaPorHora;
+    aplicacoes[item.id] = { quantidade: delta, lote: item.lote || (item.registro && item.registro.lote) || '' };
+    p.apontamentosAplicados = aplicacoes;
+    return p;
+  });
+}
+
 function syncNextItem() {
   var pending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
   if (pending.length === 0 || !isOnline) {
@@ -2904,7 +2989,7 @@ function syncNextItem() {
       // sem retry possível (o item nunca mais existiria pra reprocessar).
       // Agora encadeia de verdade: só sai da fila depois que ops/ committar.
       var opUpdatePromise = (item.registro && item.registro.lote)
-        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, undefined, regTimestampIso(item.registro, 'periodoInicio'), item.tipo, regTimestampIso(item.registro, 'periodoFim'))
+        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, undefined, regTimestampIso(item.registro, 'periodoInicio'), item.tipo, regTimestampIso(item.registro, 'periodoFim'), null, item.id)
         : Promise.resolve(null);
       return opUpdatePromise.then(function() {
         var saves = [];
@@ -2926,12 +3011,7 @@ function syncNextItem() {
           if (pedKey) {
             saves.push(opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
               if (!ativa) return;
-              return db.ref('pedidos/' + pedKey).transaction(function(p) {
-                if (!p) return p;
-                p.produzido = (p.produzido || 0) + item.qtd;
-                p.ultimoApontamento = new Date().toISOString();
-                return p;
-              }).then(function(res) {
+              return aplicarProducaoPedidoIdempotente(pedKey, item, item.qtd).then(function(res) {
                 if (res.committed && res.snapshot.exists()) {
                   var val = res.snapshot.val();
                   if (typeof window.updateOpStatusAutomatically === 'function') {
@@ -2973,10 +3053,23 @@ function syncNextItem() {
       // contra o total digitado (item.registro.qtdTotalOP) em vez do delta
       // pré-calculado fora da transaction.
       var opUpdatePromise = (item.registro && item.registro.lote)
-        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, item.mediaPorHoraCalculada, regTimestampIso(item.registro), item.tipo, undefined, item.registro.qtdTotalOP)
+        ? updateOpRecordOnApontamento(item.registro.lote, item.qtd, item.mediaPorHoraCalculada, regTimestampIso(item.registro, 'periodoInicio'), item.tipo, regTimestampIso(item.registro, 'periodoFim'), item.registro.qtdTotalOP, item.id, item.efeitosOp)
         : Promise.resolve(null);
       return opUpdatePromise.then(function(opResult) {
         var deltaReal = (opResult && opResult.deltaAplicado != null) ? opResult.deltaAplicado : item.qtd;
+        item.deltaConfirmado = deltaReal;
+        // Versões anteriores podiam deixar no aparelho um encerramento com
+        // type=apontamento_total, sem efeitosOp, depois de já colocar a OP em
+        // Aguardando Confirmação. Ao reconectar após a correção do total, esse
+        // legado teria delta zero e criaria um checkpoint fantasma. Descarta
+        // apenas essa combinação inequívoca; checkpoint zero de OP ativa
+        // continua válido para registrar tempo sem produção.
+        var opSincronizada = opResult && opResult.snapshot && opResult.snapshot.val ? opResult.snapshot.val() : null;
+        var descartarLegado = deltaReal === 0 && !item.efeitosOp && opSincronizada && opSincronizada.status === 'Aguardando Confirmação';
+        if (descartarLegado) {
+          item.descartadoComoLegado = true;
+          return db.ref('registros/' + item.data + '/' + item.id).remove();
+        }
         // O operador informa o TOTAL acumulado da OP. `item.qtd` foi
         // calculado quando clicou e pode estar velho se o checkpoint anterior
         // ainda estiver na fila/local cache. A transação acima é a única
@@ -2994,13 +3087,7 @@ function syncNextItem() {
           if (pedKey) {
             return opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
               if (!ativa) return;
-              return db.ref('pedidos/' + pedKey).transaction(function(p) {
-                if (!p) return p;
-                p.produzido = (p.produzido || 0) + deltaReal;
-                p.ultimoApontamento = new Date().toISOString();
-                if (item.mediaPorHoraCalculada > 0) p.mediaPorHora = item.mediaPorHoraCalculada;
-                return p;
-              }).then(function(res) {
+              return aplicarProducaoPedidoIdempotente(pedKey, item, deltaReal, item.mediaPorHoraCalculada).then(function(res) {
                 if (res.committed && res.snapshot.exists()) {
                   var val = res.snapshot.val();
                   if (typeof window.updateOpStatusAutomatically === 'function') {
@@ -3027,64 +3114,38 @@ function syncNextItem() {
     // próximo apontamento -- com push() isso gravava a MESMA produção
     // duas vezes em registros/. Com set() o retry sobrescreve o mesmo nó.
     promise = db.ref('registros/' + item.data + '/' + item.id).set(item.registro).then(function() {
-      var saves = [];
-      // Achado CRÍTICO do agente de auditoria: mesmo padrão do apontamento_total
-      // -- item.qtdFinal era calculado fora da transaction (contra opsCache,
-      // que pode estar velho) e usado direto tanto pra ops/{lote} quanto,
-      // em paralelo (Promise.all), pra pedidos/{pedKey}.produzido. Agora a
-      // transaction de ops/ recalcula o delta real contra o total digitado
-      // (item.registro.qtdTotalOP) e o passo de pedidos/ (que precisa do
-      // resultado, não roda mais em paralelo) usa esse delta real.
       var deltaRealFechamento = item.qtdFinal || 0;
       var opPromise = item.lote
-        ? db.ref('ops/' + sanitizeKey(item.lote)).transaction(function(op) {
-            if (!op) return op;
-            if (op.status === 'Cancelado') return; // defesa em profundidade, ver updateOpRecordOnApontamento
-            // Mesma separação por setor de updateOpRecordOnApontamento --
-            // "Finalizar OP" nunca soma no campo errado só porque é um
-            // encerramento deliberado.
-            var campo = campoProduzido(item.tipo);
-            var totalDigitado = item.registro && item.registro.qtdTotalOP;
-            var dReal = (typeof totalDigitado === 'number')
-              ? Math.max(totalDigitado - (op[campo] || 0), 0)
-              : (item.qtdFinal || 0);
-            deltaRealFechamento = dReal; // captura o delta da tentativa que efetivamente commitar
-            op[campo] = (op[campo] || 0) + dReal;
-            if (campo === 'produzidoLinha') op.produzido = op[campo];
-            op.dataFimReal = new Date().toISOString();
-            if (!op.dataInicioReal) op.dataInicioReal = op.dataFimReal;
-            // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é
-            // 100% manual pelo PCP, sem exceção -- quem fecha na linha
-            // registra o resultado (quantidade final, perdas) e libera a
-            // linha, mas só o PCP confirma 'Concluído' de verdade, em
-            // ops.html. Guarda contra o caso raro de já estar Concluído
-            // (não reabre pra "aguardando" um fechamento que já foi
-            // confirmado).
-            if (op.status !== 'Concluído') op.status = 'Aguardando Confirmação';
-            return op;
-          }).then(function(resultado) {
-            // Mesmo princípio do checkpoint: o valor exibido e agregado no
-            // Histórico precisa ser o delta que esta transação confirmou,
-            // não o qtdFinal calculado contra um cache possivelmente velho.
-            if (!resultado.committed) return resultado;
+        ? updateOpRecordOnApontamento(
+            item.lote,
+            item.qtdFinal,
+            item.mediaPorHoraCalculada,
+            regTimestampIso(item.registro, 'periodoInicio'),
+            item.tipo,
+            regTimestampIso(item.registro, 'periodoFim'),
+            item.registro && item.registro.qtdTotalOP,
+            item.id,
+            item.efeitosOp || { tipoEvento: 'fechamento_op', aguardarConfirmacao: true }
+          ).then(function(resultado) {
+            if (!resultado || !resultado.committed) {
+              throw new Error('A OP não aceitou o fechamento. Ela pode ter sido cancelada ou removida.');
+            }
+            deltaRealFechamento = resultado.deltaAplicado;
+            item.deltaConfirmado = deltaRealFechamento;
             return db.ref('registros/' + item.data + '/' + item.id).update({
               quantidade: deltaRealFechamento,
               qtdIncrementoConfirmado: deltaRealFechamento
             }).then(function() { return resultado; });
           })
         : Promise.resolve(null);
-      saves.push(opPromise.then(function() {
+      return opPromise.then(function(opResult) {
+        var saves = [];
         if (item.pedidoId && deltaRealFechamento && item.produto && isSetorEnvase(item.tipo)) {
           var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
           if (pedKey) {
-            return opAindaAtivaAsync(item.lote).then(function(ativa) {
+            saves.push(opAindaAtivaAsync(item.lote).then(function(ativa) {
               if (!ativa) return;
-              return db.ref('pedidos/' + pedKey).transaction(function(p) {
-                if (!p) return p;
-                p.produzido = (p.produzido || 0) + deltaRealFechamento;
-                p.ultimoApontamento = new Date().toISOString();
-                return p;
-              }).then(function(res) {
+              return aplicarProducaoPedidoIdempotente(pedKey, item, deltaRealFechamento, item.mediaPorHoraCalculada).then(function(res) {
                 if (res.committed && res.snapshot.exists()) {
                   var val = res.snapshot.val();
                   if (typeof window.updateOpStatusAutomatically === 'function') {
@@ -3098,27 +3159,28 @@ function syncNextItem() {
                   }
                 }
               });
-            });
+            }));
           }
         }
-      }));
-      if (item.perdas && item.perdas.length && item.lote) {
-        var loteSafe = sanitizeKey(item.lote);
-        // Guarda a chave desta perda DENTRO do registro: perdas/{lote} é um nó
-        // com vários push() (retroativo, fechamento, Painel de Turno). Sem essa
-        // referência, excluir um registro no Histórico só sabia apagar o nó
-        // INTEIRO -- levando junto as perdas lançadas por outro turno na mesma
-        // OP. Ver deleteRegistro em historico.html.
-        var _perdaKey = db.ref('perdas/' + loteSafe).push().key;
-        saves.push(db.ref('perdas/' + loteSafe + '/' + _perdaKey).set({
-          data: item.data, lote: item.lote, produto: item.produto, linha: item.registro.linha,
-          pedidoId: item.pedidoId, perdas: item.perdas, timestamp: new Date().toISOString()
-        }));
-        saves.push(db.ref('registros/' + item.data + '/' + item.id + '/perdaKey').set(_perdaKey));
-        saves.push(baixarEstoquePerdas(item.perdas, item.lote));
-      }
-      return Promise.all(saves);
+        if (item.perdas && item.perdas.length && item.lote) {
+          var loteSafe = sanitizeKey(item.lote);
+          // Chave determinística: retry sobrescreve a mesma perda, sem criar
+          // um segundo lançamento para o mesmo fechamento.
+          var _perdaKey = item.perdaKey || item.id;
+          saves.push(db.ref('perdas/' + loteSafe + '/' + _perdaKey).set({
+            data: item.data, lote: item.lote, produto: item.produto, linha: item.registro.linha,
+            pedidoId: item.pedidoId, perdas: item.perdas, timestamp: item.registro.timestamp
+          }));
+          saves.push(db.ref('registros/' + item.data + '/' + item.id + '/perdaKey').set(_perdaKey));
+          // A produção e a baixa de consumo só acontecem na primeira aplicação
+          // da operação. A mesma trava evita repetir perdas num retry.
+          if (!opResult || opResult.aplicacaoNova) saves.push(baixarEstoquePerdas(item.perdas, item.lote));
+        }
+        return Promise.all(saves);
+      });
     });
+  } else {
+    promise = Promise.reject(new Error('Tipo de apontamento desconhecido: ' + String(item.type || 'sem tipo')));
   }
 
   promise.then(function() {
@@ -3127,6 +3189,7 @@ function syncNextItem() {
     localStorage.setItem('kuryos_pending_sync', JSON.stringify(currentPending));
     updatePendingBadge();
     _syncRetryCount = 0;
+    concluirSyncItem(item.id, { id: item.id, item: item });
     setTimeout(syncNextItem, 100);
   }).catch(function(err) {
     console.error('Erro ao sincronizar registro offline:', err);
@@ -3140,6 +3203,8 @@ function syncNextItem() {
     if (_syncRetryCount <= _SYNC_MAX_RETRIES) {
       var _delay = Math.min(30000, 2000 * Math.pow(2, _syncRetryCount - 1));
       setTimeout(function() { if (isOnline) triggerSync(); }, _delay);
+    } else {
+      falharSyncItem(item.id, err);
     }
   });
 }
@@ -3871,6 +3936,11 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   e.preventDefault();
   var btn = document.getElementById('btnFinalizarOP');
   btn.disabled = true; btn.textContent = 'Finalizando...';
+  if (!isOnline) {
+    btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
+    alert('Sem conexão com o servidor. O encerramento não foi enviado; mantenha os dados na tela e tente novamente quando o indicador mostrar Conectado.');
+    return;
+  }
 
   var linha     = this.dataset.opLinha || '';
   var lote      = document.getElementById('opLote').value.trim();
@@ -3884,6 +3954,11 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
 
   if (!produto) { btn.disabled=false; btn.textContent='🏁 Finalizar OP'; alert('Selecione o produto.'); return; }
   if (!qtdTotal) { btn.disabled=false; btn.textContent='🏁 Finalizar OP'; alert('Informe a quantidade total da OP.'); return; }
+  if (qtdTotal < apontado) {
+    btn.disabled=false; btn.textContent='🏁 Finalizar OP';
+    alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontado) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
+    return;
+  }
 
   // Validar justificativa se houver desvio
   var qtdEsperada = parseInt(this.dataset.opQtdEsperada || 0) || 0;
@@ -3956,29 +4031,40 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
     qtdFinal: qtdFinal,
     lote: lote,
     perdas: perdas,
+    aguardarConfirmacao: true,
+    dedupeKey: 'fechamento:' + sanitizeKey(lote) + ':' + qtdTotal + ':' + (configPostos.indexOf(linha) !== -1 ? 'posto' : 'linha'),
+    efeitosOp: { tipoEvento: 'fechamento_op', aguardarConfirmacao: true },
     // Modo Avançado nunca oferece Rotulagem no seletor de linha (só mistura
     // configLinhas + configPostos) -- então o tipo aqui é sempre um dos dois.
     tipo: configPostos.indexOf(linha) !== -1 ? 'posto' : 'linha'
   };
-  queueOfflineWrite(item);
-
-  btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
-  document.getElementById('opForm').style.display = 'none';
-  // Fase 7 do plano: conclusão é 100% manual pelo PCP -- deixa claro aqui
-  // que ainda falta essa confirmação, pra não parecer que já terminou de
-  // vez.
-  showSuccess('OP finalizada!', 'Último período: ' + fmtNum(qtdFinal) + ' un. · Lote: ' + (lote||'—') + ' · Aguardando confirmação do PCP');
-  buildOpSuggestions();
+  btn.textContent = 'Confirmando gravação...';
+  queueOfflineWrite(item).then(function(syncResult) {
+    var deltaConfirmado = syncResult && syncResult.item && syncResult.item.deltaConfirmado;
+    if (deltaConfirmado == null) deltaConfirmado = qtdFinal;
+    btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
+    document.getElementById('opForm').style.display = 'none';
+    // Fase 7 do plano: conclusão é 100% manual pelo PCP -- deixa claro aqui
+    // que ainda falta essa confirmação, pra não parecer que já terminou de
+    // vez.
+    showSuccess('OP finalizada!', 'Último período: ' + fmtNum(deltaConfirmado) + ' un. · Total confirmado: ' + fmtNum(qtdTotal) + ' · Lote: ' + (lote||'—') + ' · Aguardando confirmação do PCP');
+    buildOpSuggestions();
+  }).catch(function(err) {
+    btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
+    alert('O fechamento não foi confirmado pelo servidor e continua pendente. Não lance novamente com outro valor. Detalhe: ' + err.message);
+  });
 });
 
 // ── Apontamento por Total: submit (Encerrar OP) ─────────────────────
 document.getElementById('totalForm').addEventListener('submit', function(e) {
   e.preventDefault();
+  var formTotal = this;
   var btn = document.getElementById('btnSalvarTotal');
   btn.disabled = true; btn.textContent = 'Salvando...';
   function reenable() { btn.disabled = false; btn.textContent = 'Encerrar e Salvar'; }
 
   if (!encerrandoLote) { reenable(); alert('Nenhuma OP selecionada pra encerrar.'); return; }
+  if (!isOnline) { reenable(); alert('Sem conexão com o servidor. O encerramento não foi enviado; mantenha os dados na tela e tente novamente quando o indicador mostrar Conectado.'); return; }
   var op = findOpByLote(encerrandoLote);
   if (!op || !op.abertaDesde) { reenable(); alert('Essa OP não está mais aberta.'); renderOpsAbertas(); return; }
   if (bloquearSeOpCancelada(op, 'ser encerrada')) { reenable(); renderOpsAbertas(); return; }
@@ -3994,16 +4080,25 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
   var horas    = horasDesde(inicioISO);
 
   if (!operador) { reenable(); alert('Informe o operador.'); return; }
+  if (!qtdTotal) { reenable(); alert('Informe a quantidade total produzida na OP.'); return; }
   if (!horas) { reenable(); alert('Período de duração zero — aguarde um pouco antes de encerrar.'); return; }
+  var qtdEsperada = parseInt(op.qtdPlanejada || 0) || 0;
+  var temDesvio = qtdEsperada > 0 && qtdTotal !== qtdEsperada;
+  if (temDesvio && !obs) {
+    reenable();
+    alert('A quantidade final difere da planejada. Informe o motivo nas observações para manter a auditoria do fechamento.');
+    document.getElementById('tObs').focus();
+    return;
+  }
 
   // "Abrir OP" (Modo Avançado) só grava em abertaDesde/abertaLinha -- par
   // reservado pra tipo 'linha', então esse fluxo nunca é outro setor.
   var apontado = getProduzido(op, 'linha');
   var delta = qtdTotal - apontado;
   if (delta < 0) {
-    if (!confirm('A quantidade digitada (' + fmtNum(qtdTotal) + ') é menor que o já registrado (' + fmtNum(apontado) + ' un.). Confirma mesmo assim? Nenhuma quantidade nova será somada.')) {
-      reenable(); return;
-    }
+    reenable();
+    alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontado) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
+    return;
   }
   delta = Math.max(delta, 0);
   var ritmo = horas > 0 ? Math.round(delta / horas) : 0;
@@ -4016,41 +4111,54 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
   var registro = {
     data: today(), hora: pad(new Date().getHours()) + ':00', linha: linha, produto: produto,
     quantidade: delta, operador: operador, turno: guessShift(),
-    timestamp: new Date().toISOString(),
-    tipo: 'apontamento_total',
+    timestamp: fimISO,
+    tipo: 'fechamento_op',
     horasTrabalhadas: Math.round(horas * 100) / 100,
     periodoInicio: inicioISO,
     periodoFim: fimISO,
-    qtdTotalOP: qtdTotal
+    qtdTotalOP: qtdTotal,
+    qtdEsperadaOP: qtdEsperada
   };
   if (lote)     registro.lote = lote;
   if (pedidoId) registro.pedidoId = pedidoId;
   if (obs)      registro.obs = obs;
+  if (temDesvio) registro.justificativaDivergencia = obs;
 
   var clientKey = db.ref('registros/' + today()).push().key;
   var item = {
     id: clientKey,
-    type: 'apontamento_total',
+    type: 'fechamento_op',
     data: today(),
     registro: registro,
     pedidoId: pedidoId,
     produto: produto,
-    qtd: delta,
+    qtdFinal: delta,
     lote: lote,
     mediaPorHoraCalculada: ritmo,
+    aguardarConfirmacao: true,
+    dedupeKey: 'fechamento:' + sanitizeKey(lote) + ':' + qtdTotal + ':linha',
+    efeitosOp: {
+      tipoEvento: 'fechamento_op',
+      encerrarAlocacao: true,
+      campoInicio: 'abertaDesde',
+      campoNome: 'abertaLinha',
+      aguardarConfirmacao: true
+    },
     tipo: 'linha'
   };
-  queueOfflineWrite(item);
-
-  // Fecha o ciclo aberto por "Abrir OP" -- assim que sai da fila local, mesmo
-  // padrão de escrita usada em qualquer outro update simples desse arquivo.
-  db.ref('ops/' + sanitizeKey(lote)).update({ abertaDesde: null, abertaLinha: null });
-
-  reenable();
-  this.reset();
-  document.getElementById('encerrarCard').style.display = 'none';
-  encerrandoLote = null;
-  showSuccess('OP encerrada!', fmtNum(delta) + ' un. neste período · Ritmo: ' + fmtNum(ritmo) + ' un./h · Lote: ' + (lote||'—'));
+  btn.textContent = 'Confirmando gravação...';
+  queueOfflineWrite(item).then(function(syncResult) {
+    var deltaConfirmado = syncResult && syncResult.item && syncResult.item.deltaConfirmado;
+    if (deltaConfirmado == null) deltaConfirmado = delta;
+    reenable();
+    formTotal.reset();
+    document.getElementById('encerrarCard').style.display = 'none';
+    encerrandoLote = null;
+    showSuccess('OP encerrada!', fmtNum(deltaConfirmado) + ' un. neste período · Total confirmado: ' + fmtNum(qtdTotal) + ' · Ritmo: ' + fmtNum(ritmo) + ' un./h · Aguardando confirmação do PCP');
+  }).catch(function(err) {
+    reenable();
+    alert('O fechamento não foi confirmado pelo servidor e continua pendente. Não lance novamente com outro valor. Detalhe: ' + err.message);
+  });
 });
 
 // ════════════════════════════════════════════════════════
@@ -4500,6 +4608,7 @@ document.getElementById('btnFecharAlocarOp').addEventListener('click', function(
 // marca a OP como Concluído independente do percentual batido.
 function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
   opts = opts || {};
+  if (!isOnline) return Promise.reject(new Error('Sem conexão com o servidor. Tente novamente quando o indicador mostrar Conectado.'));
   var tipo = opts.tipo || 'linha';
   var campoInicio = campoAberturaInicio(tipo);
   var campoNome = campoAberturaNome(tipo);
@@ -4517,45 +4626,55 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
   var ritmo = horas > 0 ? Math.round(delta / horas) : 0;
   var pedKeyResolvido = op.skuPedidoKey ? resolvePedidoKeyBySkuKey(op.skuPedidoKey, pedidosCache) : null;
   var pedidoId = (pedKeyResolvido && pedidosCache[pedKeyResolvido]) ? (pedidosCache[pedKeyResolvido].id || '') : '';
+  var ehFechamento = !!opts.forcarConcluido && !opts.manterAberta;
+  var tipoEvento = ehFechamento ? 'fechamento_op' : 'apontamento_total';
+  var registro = {
+    data: today(), hora: pad(new Date().getHours()) + ':00', linha: linha, produto: produto,
+    quantidade: delta, operador: operador, turno: guessShift(),
+    timestamp: fimISO, tipo: tipoEvento,
+    horasTrabalhadas: Math.round(horas * 100) / 100,
+    periodoInicio: inicioISO, periodoFim: fimISO, qtdTotalOP: qtdTotal
+  };
+  if (ehFechamento) registro.qtdEsperadaOP = parseInt(op.qtdPlanejada || 0) || 0;
+  if (lote) registro.lote = lote;
+  if (pedidoId) registro.pedidoId = pedidoId;
+  if (opts.justificativa) registro.justificativaDivergencia = opts.justificativa;
+  if (opts.perdas && opts.perdas.length) registro.perdas = opts.perdas;
+  var clientKey = db.ref('registros/' + today()).push().key;
+  var item = {
+    id: clientKey,
+    type: tipoEvento,
+    data: today(),
+    registro: registro,
+    pedidoId: pedidoId,
+    produto: produto,
+    lote: lote,
+    perdas: opts.perdas || [],
+    mediaPorHoraCalculada: ritmo,
+    aguardarConfirmacao: true,
+    dedupeKey: (ehFechamento ? 'fechamento:' : 'checkpoint:') + sanitizeKey(lote) + ':' + qtdTotal + ':' + tipo + ':' + (ehFechamento ? '' : inicioISO),
+    efeitosOp: {
+      tipoEvento: tipoEvento,
+      manterAberta: !!opts.manterAberta,
+      encerrarAlocacao: !opts.manterAberta,
+      campoInicio: campoInicio,
+      campoNome: campoNome,
+      reinicioEm: fimISO,
+      aguardarConfirmacao: ehFechamento
+    },
+    // setor (linha/rotulagem) já sabido aqui (opts.tipo) -- sem isso, a
+    // OP fica com produzido errado ao sincronizar.
+    tipo: tipo
+  };
+  if (ehFechamento) item.qtdFinal = delta;
+  else item.qtd = delta;
 
-  if (delta > 0) {
-    var registro = {
-      data: today(), hora: pad(new Date().getHours()) + ':00', linha: linha, produto: produto,
-      quantidade: delta, operador: operador, turno: guessShift(),
-      timestamp: new Date().toISOString(), tipo: 'apontamento_total',
-      horasTrabalhadas: Math.round(horas * 100) / 100,
-      periodoInicio: inicioISO, periodoFim: fimISO, qtdTotalOP: qtdTotal
-    };
-    if (lote) registro.lote = lote;
-    if (pedidoId) registro.pedidoId = pedidoId;
-    if (opts.justificativa) registro.justificativaDivergencia = opts.justificativa;
-    var clientKey = db.ref('registros/' + today()).push().key;
-    queueOfflineWrite({
-      id: clientKey, type: 'apontamento_total', data: today(), registro: registro,
-      pedidoId: pedidoId, produto: produto, qtd: delta, lote: lote, mediaPorHoraCalculada: ritmo,
-      // setor (linha/rotulagem) já sabido aqui (opts.tipo) -- sem isso, a
-      // OP de produzido errado ao sincronizar (era exatamente o bug do
-      // caso real que motivou essa separação).
-      tipo: tipo
-    });
-  }
-
-  var loteKey = sanitizeKey(lote);
-  var opUpdate = {};
-  if (opts.manterAberta) {
-    opUpdate[campoInicio] = new Date().toISOString();
-  } else {
-    opUpdate[campoInicio] = null;
-    opUpdate[campoNome] = null;
-  }
-  // Fase 7 do plano (PLANO_PLANEJAMENTO_PCP.md): conclusão de OP é 100%
-  // manual pelo PCP, sem exceção -- "Encerrar OP" (Painel de Turno) libera
-  // a linha e registra o resultado, mas não conclui mais sozinho. Fica
-  // 'Aguardando Confirmação' até o PCP confirmar em ops.html.
-  if (opts.forcarConcluido) opUpdate.status = 'Aguardando Confirmação';
-
-  return db.ref('ops/' + loteKey).update(opUpdate).then(function() {
-    return { delta: delta, ritmo: ritmo, lote: lote };
+  // A liberação da linha e o status final estão dentro da mesma transaction
+  // que confirma a quantidade. O chamador só recebe sucesso depois de toda
+  // a cadeia terminar no servidor.
+  return queueOfflineWrite(item).then(function(syncResult) {
+    var deltaConfirmado = syncResult && syncResult.item && syncResult.item.deltaConfirmado;
+    return { delta: deltaConfirmado != null ? deltaConfirmado : delta, ritmo: ritmo, lote: lote };
   });
 }
 
@@ -4629,22 +4748,6 @@ document.getElementById('btnAddPerdaEncerrarTurno').addEventListener('click', fu
   addPerda('encerrarOpTurnoPerdasList', 'encerrarOpTurnoNoPerdasMsg');
 });
 
-// Grava as perdas estruturadas (mesmo formato tipado + material específico
-// de collectPerdas/Fechar Lote) direto em perdas/{lote} -- fora da fila
-// offline por ora, mesmo padrão já usado pelo salvarPerdaOP antigo que este
-// substitui (gap de fila offline pra esta escrita já é conhecido/registrado
-// em MELHORIAS_FUTURAS.md, não é regressão introduzida aqui).
-function salvarPerdasEncerrarOP(lote, produto, linha, pedidoId, perdas) {
-  if (!perdas || !perdas.length) return Promise.resolve();
-  return db.ref('perdas/' + sanitizeKey(lote)).push({
-    data: today(), lote: lote, produto: produto, linha: linha,
-    pedidoId: pedidoId || '', perdas: perdas,
-    timestamp: new Date().toISOString()
-  }).then(function() {
-    return baixarEstoquePerdas(perdas, lote);
-  });
-}
-
 document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click', function() {
   if (!encerrarOpAlvoAtual) return;
   var qtd = parseInt(document.getElementById('encerrarOpTurnoQtd').value) || 0;
@@ -4660,15 +4763,13 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     return;
   }
   // "Qtd. total" é o acumulado desde o início da OP, não o produzido desde o
-  // último apontamento -- confundir os dois faz a diferença calculada dar
-  // zero e nada é gravado, sem nenhum aviso (só o modal fecha "com sucesso").
-  // Mesma trava e mesma frase já usadas no Apontamento por Total (Modo
-  // Avançado), só que aqui cobre também valor igual (lá só cobria menor).
+  // último apontamento. Um total igual é permitido (fechamento sem produção
+  // adicional); um total menor exige corrigir o registro existente, nunca
+  // pode ser mascarado por um novo fechamento de incremento zero.
   var apontadoAlvo = getProduzido(opAlvo, encerrarOpAlvoAtual.tipo);
-  if (qtd <= apontadoAlvo) {
-    if (!confirm('A quantidade digitada (' + fmtNum(qtd) + ') não é maior que o já registrado (' + fmtNum(apontadoAlvo) + ' un.). Confirma mesmo assim? Nenhuma quantidade nova será somada.')) {
-      return;
-    }
+  if (qtd < apontadoAlvo) {
+    alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontadoAlvo) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
+    return;
   }
   var btn = this;
   // Achado do agente de auditoria (4a rodada): só `disabled=true` não dá
@@ -4679,21 +4780,25 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
   var textoOriginal = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Encerrando...';
-  var pedKeyResolvido = opAlvo.skuPedidoKey ? resolvePedidoKeyBySkuKey(opAlvo.skuPedidoKey, pedidosCache) : null;
-  var pedidoIdAlvo = (pedKeyResolvido && pedidosCache[pedKeyResolvido]) ? (pedidosCache[pedKeyResolvido].id || '') : '';
-  fecharAlocacaoOP(encerrarOpAlvoAtual.lote, qtd, operador, {
-    manterAberta: false, forcarConcluido: true, tipo: encerrarOpAlvoAtual.tipo,
-    justificativa: hasDeviation ? justificativa : ''
-  }).then(function(res) {
-    return salvarPerdasEncerrarOP(encerrarOpAlvoAtual.lote, opAlvo.produto || '', encerrarOpAlvoAtual.nome, pedidoIdAlvo, perdas).then(function() { return res; });
+  // Snapshot imutável: o modal pode ser fechado enquanto a rede responde;
+  // usar a variável global depois do ACK podia gerar erro na mensagem mesmo
+  // com o fechamento já salvo, levando o operador a tentar novamente.
+  var alvoEncerramento = {
+    lote: encerrarOpAlvoAtual.lote,
+    nome: encerrarOpAlvoAtual.nome,
+    tipo: encerrarOpAlvoAtual.tipo
+  };
+  fecharAlocacaoOP(alvoEncerramento.lote, qtd, operador, {
+    manterAberta: false, forcarConcluido: true, tipo: alvoEncerramento.tipo,
+    justificativa: hasDeviation ? justificativa : '', perdas: perdas
   }).then(function(res) {
     btn.disabled = false;
     btn.textContent = textoOriginal;
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');
     // Fase 7 do plano: conclusão é 100% manual pelo PCP -- avisa aqui que
     // ainda falta essa confirmação.
-    showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + encerrarOpAlvoAtual.nome + ' · Aguardando confirmação do PCP');
-    encerrarOpAlvoAtual = null;
+    showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + alvoEncerramento.nome + ' · Aguardando confirmação do PCP');
+    if (encerrarOpAlvoAtual && encerrarOpAlvoAtual.lote === alvoEncerramento.lote) encerrarOpAlvoAtual = null;
   }).catch(function(err) {
     btn.disabled = false;
     btn.textContent = textoOriginal;
