@@ -1615,6 +1615,94 @@ function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, a
   });
 }
 
+// ── Descarte e logística reversa ───────────────────────────────────────
+// A solicitação só SEGREGA o lote: ela não baixa quantidade. A baixa física
+// ocorre exclusivamente quando a coleta/destinação é confirmada, preservando
+// a diferença entre "solicitei" e "o material saiu da Kuryos".
+function solicitarDestinacaoLote(dbRef, itemCodigo, loteKey, dados, autor) {
+  if (!itemCodigo || !loteKey || !dados || !dados.quantidade || dados.quantidade <= 0) {
+    return Promise.resolve({ ok: false, erro: 'Informe lote e quantidade para a destinação.' });
+  }
+  var itemKey = sanitizeKey(itemCodigo);
+  var solicitacaoKey = dbRef.ref('solicitacoes_descarte').push().key;
+  var agora = new Date().toISOString();
+  var anterior = null;
+  return dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey).transaction(function(atual) {
+    if (!atual || !(atual.saldoLote > 0) || atual.destinacao) return;
+    if (Number(dados.quantidade) > Number(atual.saldoLote)) return;
+    anterior = atual.status || 'LIBERADO';
+    atual.status = 'AGUARDANDO_DESCARTE';
+    atual.destinacao = {
+      solicitacaoKey: solicitacaoKey, statusAnterior: anterior, estado: 'SOLICITADO',
+      quantidade: Number(dados.quantidade), solicitadoEm: agora, solicitadoPor: autor || null
+    };
+    atual.atualizadoEm = agora;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: 'Lote indisponível, já segregado ou com saldo insuficiente.' };
+    var lote = res.snapshot.val() || {};
+    var registro = {
+      status: 'SOLICITADO', criadoEm: agora, criadoPor: autor || null,
+      itemKey: itemKey, itemTipo: lote.itemTipo || null, itemCodigo: itemCodigo,
+      itemNome: lote.itemNome || null, unidade: lote.unidade || null,
+      loteKey: loteKey, loteOrigem: lote.loteOrigem || null,
+      enderecoKey: lote.enderecoKey || null, enderecoCodigo: lote.enderecoCodigo || null,
+      quantidade: Number(dados.quantidade), saldoNoPedido: lote.saldoLote || 0,
+      motivo: dados.motivo || null, classificacao: dados.classificacao || null,
+      destino: dados.destino || null, transportador: dados.transportador || null,
+      coletaPrevista: dados.coletaPrevista || null, observacao: dados.observacao || null,
+      rncNumero: dados.rncNumero || null, statusAnterior: anterior
+    };
+    return dbRef.ref('solicitacoes_descarte/' + solicitacaoKey).set(registro).then(function() {
+      return { ok: true, solicitacaoKey: solicitacaoKey, registro: registro };
+    }).catch(function(err) {
+      // Não deixa lote preso se a gravação da solicitação falhar depois da
+      // segregação. Só desfaz se a solicitação ainda for exatamente esta.
+      return dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey).transaction(function(atual) {
+        if (!atual || !atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) return;
+        atual.status = atual.destinacao.statusAnterior || 'REPROVADO';
+        atual.destinacao = null; atual.atualizadoEm = new Date().toISOString();
+        return atual;
+      }).then(function() { throw err; });
+    });
+  });
+}
+
+function confirmarDestinacaoLote(dbRef, solicitacaoKey, autor, comprovante) {
+  if (!solicitacaoKey) return Promise.resolve({ ok: false, erro: 'Solicitação não identificada.' });
+  return dbRef.ref('solicitacoes_descarte/' + solicitacaoKey).once('value').then(function(snap) {
+    var s = snap.val();
+    if (!s || s.status !== 'SOLICITADO') return { ok: false, erro: 'Esta solicitação não está pendente.' };
+    var loteRef = dbRef.ref('estoque_lotes/' + s.itemKey + '/' + s.loteKey);
+    var abatido = 0, agora = new Date().toISOString();
+    return loteRef.transaction(function(atual) {
+      if (!atual || !atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) return;
+      abatido = Math.min(Number(s.quantidade) || 0, Number(atual.saldoLote) || 0);
+      if (!(abatido > 0)) return;
+      atual.saldoLote = Math.round((Number(atual.saldoLote) - abatido) * 1000) / 1000;
+      atual.status = atual.saldoLote === 0 ? 'DESCARTADO' : (atual.destinacao.statusAnterior || 'REPROVADO');
+      atual.destinacao = null; atual.atualizadoEm = agora;
+      return atual;
+    }).then(function(res) {
+      if (!res || !res.committed || !(abatido > 0)) return { ok: false, erro: 'Não foi possível confirmar a saída deste lote.' };
+      var lote = res.snapshot.val() || {};
+      return dbRef.ref('movimentos_estoque/' + s.itemKey).push({
+        tipo: 'descarte_logistica_reversa', motivo: s.motivo || 'DESCARTE / LOGÍSTICA REVERSA',
+        qtd: -abatido, saldoApos: lote.saldoLote, ref: solicitacaoKey,
+        loteKey: s.loteKey, enderecoKey: lote.enderecoKey || s.enderecoKey || null,
+        itemTipo: s.itemTipo || lote.itemTipo, itemCodigo: s.itemCodigo,
+        itemNome: s.itemNome || lote.itemNome || null, unidade: s.unidade || lote.unidade || null,
+        autor: autor || null, em: agora
+      }).then(function() {
+        return dbRef.ref('solicitacoes_descarte/' + solicitacaoKey).update({
+          status: 'CONCLUIDO', concluidoEm: agora, concluidoPor: autor || null,
+          quantidadeDestinada: abatido, comprovante: comprovante || null
+        });
+      }).then(function() { return { ok: true, abatido: abatido }; });
+    });
+  });
+}
+
 // ── WMS Fase 2: separação guiada por OP ─────────────────────────────────
 // Pedido do usuário: "OP emitida -> Ordem de Separação -> Logística separa
 // no galpão... material transferido pro espaço dedicado na fábrica" --
@@ -1866,7 +1954,9 @@ var STATUS_LOTE = {
   LIBERADO_EXPEDICAO:     { rotulo: 'Liberado p/ expedição',  badge: 'badge-green',  disponivel: true,  aplicaA: 'produto'  },
   REPROVADO:              { rotulo: 'Reprovado',              badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
   RETIDO:                 { rotulo: 'Retido',                 badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
-  VENCIDO:                { rotulo: 'Vencido',                badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    }
+  VENCIDO:                { rotulo: 'Vencido',                badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
+  AGUARDANDO_DESCARTE:    { rotulo: 'Aguardando destinação',  badge: 'badge-orange', disponivel: false, aplicaA: 'ambos'    },
+  DESCARTADO:             { rotulo: 'Descartado',             badge: 'badge-gray',   disponivel: false, aplicaA: 'ambos'    }
 };
 
 // "Está disponível pra uso?" numa função só. É a pergunta que a separação, o
