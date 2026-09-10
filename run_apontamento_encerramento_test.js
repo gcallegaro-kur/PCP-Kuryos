@@ -101,6 +101,34 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   await ctx.aplicarProducaoPedidoIdempotente('0019__GLMKAM01', item, 797, 398);
   await ctx.aplicarProducaoPedidoIdempotente('0019__GLMKAM01', item, 797, 398);
   if (data.pedidos['0019__GLMKAM01'].produzido !== 1661) throw new Error('Pedido duplicou o mesmo fechamento');
+  if (data.pedidos['0019__GLMKAM01'].status !== 'Concluído') throw new Error('Pedido que atingiu o total não foi concluído');
+
+  const ajustes = [];
+  const consumptionCtx = {
+    console, Promise, Math, parseFloat, Object,
+    allFormulasForm: { f1: { codProduto: 'GLMKAM01', versao: 'v1', status: 'RASCUNHO', itens: { agua: { mpCodigo: 'MPGR-00132', percentualMM: 97.38 } } } },
+    allBomForm: { 'GLMKAM01__v1': { itens: {
+      frasco: { materialCodigo: 'EP-00092', materialNome: 'Frasco', qtdPorPeca: 1 },
+      tampa: { materialCodigo: 'EP-00069', materialNome: 'Tampa', qtdPorPeca: 1 },
+      caixa: { materialCodigo: 'ET-00012', materialNome: 'Caixa', qtdPorPeca: 0.041666 }
+    } } },
+    allProdutosForm: { GLMKAM01: { sku: 'GLMKAM01', densidadeGranel: -1, volume: 325, unidadeVolume: 'ml' } },
+    allMateriaisForm: {},
+    melhorFormulaDoProduto: () => ({ registro: consumptionCtx.allFormulasForm.f1 }),
+    chaveVersao: (sku, versao) => sku + '__' + versao,
+    sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),
+    explodirMateriaisNecessarios: () => { throw new Error('Não deveria explodir fórmula com densidade -1'); },
+    ajustarEstoque: (db, codigo, delta) => { ajustes.push({ codigo, delta }); return Promise.resolve(); },
+    baixarEmpenho: () => Promise.resolve(), baixaWmsSegura: () => Promise.resolve(),
+    db: {}, window: { currentUser: { nome: 'Teste' } }
+  };
+  vm.createContext(consumptionCtx);
+  vm.runInContext(extractFunction('baixarEstoqueConsumo'), consumptionCtx);
+  await consumptionCtx.baixarEstoqueConsumo({ sku: 'GLMKAM01', lote: '26247/06' }, 797, 'consumo_producao', '26247/06');
+  if (ajustes.length !== 3) throw new Error('Densidade inválida deveria baixar somente os 3 itens do BOM');
+  const deltas = Object.fromEntries(ajustes.map(a => [a.codigo, a.delta]));
+  if (deltas['EP-00092'] !== -797 || deltas['EP-00069'] !== -797 || deltas['ET-00012'] !== -33.208) throw new Error('Consumo do BOM ficou incorreto');
+  if ('MPGR-00132' in deltas) throw new Error('Fórmula com densidade -1 não pode movimentar estoque');
 
   const totalForm = source.slice(source.indexOf("document.getElementById('totalForm')"), source.indexOf('// ════════════════════════════════════════════════', source.indexOf("document.getElementById('totalForm')")));
   if (!totalForm.includes("type: 'fechamento_op'") || !totalForm.includes("tipo: 'fechamento_op'")) throw new Error('Encerrar OP legado ainda grava checkpoint');
@@ -132,5 +160,5 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   if (queued[0].type !== 'apontamento_total' || !queued[0].efeitosOp.manterAberta) throw new Error('Pausa deixou de ser checkpoint');
   if (queued[1].type !== 'fechamento_op' || queued[1].registro.tipo !== 'fechamento_op' || !queued[1].efeitosOp.aguardarConfirmacao) throw new Error('Encerramento do Painel não é fechamento real');
 
-  console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento');
+  console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento; densidade inválida não inverte estoque');
 })().catch(err => { console.error(err); process.exit(1); });

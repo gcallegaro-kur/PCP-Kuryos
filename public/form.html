@@ -2910,7 +2910,31 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   var bom = allBomForm[chaveVersao(op.sku, formula.versao)] || { itens: {} };
   var produto = allProdutosForm[op.sku];
   if (!produto) return Promise.resolve();
-  var calc = explodirMateriaisNecessarios(produto, qtdReal, formula, bom, allMateriaisForm);
+  var densidade = parseFloat(produto.densidadeGranel);
+  var calc;
+  if (densidade > 0) {
+    calc = explodirMateriaisNecessarios(produto, qtdReal, formula, bom, allMateriaisForm);
+  } else {
+    // Alguns cadastros importados usam -1 como marcador de densidade não
+    // informada. A explosão tratava -1 como número válido: gerava consumo
+    // NEGATIVO de fórmula e ajustarEstoque acabava aumentando matéria-prima.
+    // Sem densidade, não é fisicamente possível calcular kg da fórmula, mas
+    // o BOM por peça continua exato e deve ser baixado normalmente.
+    console.error('Consumo de fórmula não calculado na OP ' + (op.lote || ref || '') + ': produto ' + op.sku + ' sem densidade positiva. Embalagens do BOM serão baixadas.');
+    calc = {
+      ok: true,
+      itens: Object.values((bom && bom.itens) || {}).map(function(it) {
+        var mat = allMateriaisForm[sanitizeKey(it.materialCodigo)] || Object.values(allMateriaisForm).find(function(m) { return m && m.mpCodigo === it.materialCodigo; });
+        return {
+          mpCodigo: it.materialCodigo,
+          mpNome: it.materialNome,
+          quantidade: Math.round((qtdReal * (it.qtdPorPeca || 0)) * 1000) / 1000,
+          unidade: (mat && mat.unidade) || 'un',
+          origem: 'bom'
+        };
+      })
+    };
+  }
   if (!calc.ok || !calc.itens.length) return Promise.resolve();
   var autorConsumo = (window.currentUser && window.currentUser.nome) || null;
   return Promise.all(calc.itens.map(function(it) {
@@ -2948,6 +2972,9 @@ function aplicarProducaoPedidoIdempotente(pedKey, item, delta, mediaPorHora) {
     p.produzido = (p.produzido || 0) + delta;
     p.ultimoApontamento = new Date().toISOString();
     if (mediaPorHora > 0) p.mediaPorHora = mediaPorHora;
+    if ((p.qtdTotal || 0) > 0 && p.produzido >= p.qtdTotal && String(p.statusManual || '').toLowerCase() !== 'cancelado') {
+      p.status = 'Concluído';
+    }
     aplicacoes[item.id] = { quantidade: delta, lote: item.lote || (item.registro && item.registro.lote) || '' };
     p.apontamentosAplicados = aplicacoes;
     return p;
