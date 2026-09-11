@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/rotas-pc.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -136,6 +137,7 @@
     <div class="modal-body">
       <div id="agendarPcInfo" class="field-hint" style="margin-bottom:12px"></div>
       <div id="agFreteInfo" class="agendamento-box" style="margin-bottom:12px"></div>
+      <div id="agRotaBox" style="margin-bottom:12px"></div>
       <div class="form-grid">
         <div class="form-group">
           <label id="agDataLabel">Data agendada *</label>
@@ -412,7 +414,8 @@ function renderReceberList() {
         (ag.coleta && ag.coleta.modalidade ? ' · ' + escapeHtml(rotuloModalidadeColeta(ag.coleta.modalidade)) : '') +
         (ag.coleta && ag.coleta.valorNegociado != null ? ' · frete ' + fmtValorBRL(ag.coleta.valorNegociado) : '') +
         (ag.coleta && ag.coleta.status ? ' · <b>' + escapeHtml(rotuloStatusColeta(ag.coleta.status)) + '</b>' : '') +
-        (ag.placa ? ' · placa ' + escapeHtml(ag.placa) : '') + '</div>'
+        (ag.placa ? ' · placa ' + escapeHtml(ag.placa) : '') +
+        (ag.rotaEfetiva && (!rotaConfirmadaPedido(p) || !RotasPC.rotasIguais(ag.rotaEfetiva, rotaConfirmadaPedido(p))) ? ' · <b style="color:var(--warning)">rota excepcional</b>' : '') + '</div>'
       : '<div class="field-hint" style="margin:8px 0">Nenhuma entrega agendada ainda.</div>';
 
     var itensRows = itens.map(function(itEntry) {
@@ -437,6 +440,7 @@ function renderReceberList() {
       '<div class="field-hint">' + fmtNum(prog.totalRecebido) + ' de ' + fmtNum(prog.totalPedido) + ' unidades recebidas (' + prog.pct + '%)</div>' +
       previsaoLogisticaHtml(p) +
       freteOperacionalHtml(p) +
+      rotaResumoCardHtml(p) +
       agendamentoHtml +
       '<table><thead><tr><th>Material</th><th>Pedido</th><th>Recebido</th><th>Status</th></tr></thead><tbody>' + itensRows + '</tbody></table>' +
       checklistBadgeHtml(p) +
@@ -524,6 +528,84 @@ function freteOperacionalHtml(p) {
       'A Logística deve aguardar a <b>entrega</b> e programar o recebimento.</div>';
   }
   return '<div class="agendamento-box" style="border-color:var(--warning);color:var(--warning)">⚠ <b>Responsabilidade do transporte não informada.</b> Confirme quem fará a coleta/entrega antes de programar.</div>';
+}
+
+function rotaConfirmadaPedido(p) {
+  var rota = p && p.rota ? RotasPC.normalizarRota(p.rota) : null;
+  return rota && rota.statusConfirmacao === 'CONFIRMADA' && RotasPC.validarRota(rota).pronto ? rota : null;
+}
+
+function rotaResumoCardHtml(p) {
+  var rota = rotaConfirmadaPedido(p);
+  if (!rota) return '<div class="agendamento-box" style="border-color:var(--warning);color:var(--warning)">⚠ <b>Rota pendente no Pedido de Compra.</b> Confirme origem e destino antes de agendar.</div>';
+  return '<div class="agendamento-box" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px">' +
+    '<div><b>Origem confirmada no PC</b><br>' + escapeHtml(rota.origem.nome || '—') + '<br><span class="field-hint">' + escapeHtml(RotasPC.formatarEndereco(rota.origem) || '—') + '</span></div>' +
+    '<div><b>Destino confirmado no PC</b><br>' + escapeHtml(rota.destino.nome || '—') + '<br><span class="field-hint">' + escapeHtml(RotasPC.formatarEndereco(rota.destino) || '—') + '</span></div>' +
+  '</div>';
+}
+
+function camposLocalAgendamentoHtml(prefix, titulo) {
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px"><b>' + escapeHtml(titulo) + '</b><div class="form-grid" style="margin-top:8px">' +
+    '<div class="form-group"><label>Local / empresa *</label><input id="' + prefix + 'Nome"></div>' +
+    '<div class="form-group"><label>CEP *</label><input id="' + prefix + 'Cep" maxlength="9"></div>' +
+    '<div class="form-group"><label>Logradouro *</label><input id="' + prefix + 'Logradouro"></div>' +
+    '<div class="form-group"><label>Número *</label><input id="' + prefix + 'Numero" placeholder="ou S/N"></div>' +
+    '<div class="form-group"><label>Complemento</label><input id="' + prefix + 'Complemento"></div>' +
+    '<div class="form-group"><label>Bairro *</label><input id="' + prefix + 'Bairro"></div>' +
+    '<div class="form-group"><label>Cidade *</label><input id="' + prefix + 'Cidade"></div>' +
+    '<div class="form-group"><label>UF *</label><input id="' + prefix + 'Uf" maxlength="2"></div>' +
+    '<div class="form-group"><label>Contato</label><input id="' + prefix + 'ContatoNome"></div>' +
+    '<div class="form-group"><label>Telefone</label><input id="' + prefix + 'ContatoTelefone"></div>' +
+    '<div class="form-group"><label>Horário</label><input id="' + prefix + 'HorarioAtendimento"></div>' +
+    '<div class="form-group full"><label>Referência</label><input id="' + prefix + 'Referencia"></div>' +
+    '<div class="form-group full"><label>Instruções</label><textarea id="' + prefix + 'Instrucoes" rows="2"></textarea></div>' +
+  '</div></div>';
+}
+
+var agRotaBase = null;
+var agRotaEfetivaBase = null;
+
+function resumoLocalAgendamento(titulo, local, origem) {
+  var mapa = RotasPC.urlMapa(local);
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px"><b>' + escapeHtml(titulo) + '</b>' +
+    '<div style="font-size:12.5px;line-height:1.5;margin-top:4px;white-space:pre-line">' + escapeHtml(RotasPC.resumoLocal(local) || 'Endereço não informado') + '</div>' +
+    '<div style="display:flex;gap:6px;margin-top:7px"><button type="button" class="btn btn-ghost btn-sm ag-copy-rota" data-lado="' + (origem ? 'origem' : 'destino') + '">Copiar</button>' +
+    (mapa ? '<a class="btn btn-ghost btn-sm" href="' + escapeAttr(mapa) + '" target="_blank" rel="noopener">Abrir mapa</a>' : '') + '</div></div>';
+}
+
+function renderRotaAgendamento(p) {
+  var pcRota = rotaConfirmadaPedido(p);
+  agRotaBase = pcRota || RotasPC.rotaInicial(p, null);
+  var ag = p.agendamento || {};
+  agRotaEfetivaBase = ag.rotaEfetiva ? RotasPC.normalizarRota(ag.rotaEfetiva) : RotasPC.normalizarRota(agRotaBase);
+  var corrigida = pcRota && !RotasPC.rotasIguais(agRotaEfetivaBase, pcRota);
+  var box = document.getElementById('agRotaBox');
+  box.innerHTML = '<div class="agendamento-box" style="margin:0">' +
+    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><b>' + (pcRota ? 'Rota confirmada no Pedido de Compra' : 'Rota pendente no Pedido de Compra') + '</b><br><span class="field-hint">' +
+      (pcRota ? 'A agenda usa este snapshot; alterações de cadastro não mudam o pedido.' : 'Pedido antigo ou incompleto: preencha a exceção operacional antes de agendar.') + '</span></div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="agEditarRota">' + (pcRota ? 'Corrigir para esta viagem' : 'Completar rota') + '</button></div>' +
+    (corrigida ? '<div style="margin-top:8px;color:var(--warning)"><b>Exceção operacional ativa nesta viagem.</b> <button type="button" class="btn btn-ghost btn-sm" id="agVoltarRotaPc">Voltar à rota do PC</button></div>' : '') +
+    '<div id="agRotaResumo" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:9px">' +
+      resumoLocalAgendamento('Origem', agRotaEfetivaBase.origem, true) + resumoLocalAgendamento('Destino', agRotaEfetivaBase.destino, false) + '</div>' +
+    '<div id="agRotaEditor" style="display:none;margin-top:10px">' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">' + camposLocalAgendamentoHtml('agOrigem', 'Origem efetiva') + camposLocalAgendamentoHtml('agDestino', 'Destino efetivo') + '</div>' +
+      '<div class="form-group full" style="margin-top:10px"><label>Motivo da exceção *</label><textarea id="agMotivoRota" rows="2" placeholder="Explique por que esta viagem não seguirá exatamente a rota do PC (mínimo 10 caracteres)"></textarea></div>' +
+      '<div class="field-hint">Exceção operacional — não altera o cadastro nem o Pedido de Compra.</div>' +
+    '</div></div>';
+  document.getElementById('agEditarRota').addEventListener('click', function() {
+    document.getElementById('agRotaEditor').style.display = '';
+    RotasPC.preencherEditor('agOrigem', agRotaEfetivaBase.origem);
+    RotasPC.preencherEditor('agDestino', agRotaEfetivaBase.destino);
+  });
+  var voltar = document.getElementById('agVoltarRotaPc');
+  if (voltar) voltar.addEventListener('click', function() { agRotaEfetivaBase = RotasPC.normalizarRota(pcRota); renderRotaAgendamento(Object.assign({}, p, {agendamento: Object.assign({}, ag, {rotaEfetiva: pcRota})})); });
+  box.querySelectorAll('.ag-copy-rota').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var txt = RotasPC.resumoLocal(btn.getAttribute('data-lado') === 'origem' ? agRotaEfetivaBase.origem : agRotaEfetivaBase.destino);
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function() { showAlert('Endereço copiado.', 'success'); });
+      else window.prompt('Copie o endereço:', txt);
+    });
+  });
 }
 
 // Resumo visual do checklist de etiqueta direto no card do PC -- não trava
@@ -619,6 +701,7 @@ function openModalAgendar(key) {
   document.getElementById('modalAgendarTitulo').textContent = ehColetaKuryos ? 'Programar Coleta' : 'Agendar Entrega';
   document.getElementById('agDataLabel').textContent = ehColetaKuryos ? 'Data programada da coleta *' : 'Data agendada da entrega *';
   document.getElementById('agFreteInfo').innerHTML = freteOperacionalHtml(p);
+  renderRotaAgendamento(p);
   var ag = p.agendamento || {};
   var coleta = ag.coleta || {};
   var previsaoPc = p.dataPrevistaEntrega ? p.dataPrevistaEntrega.slice(0, 10) : '';
@@ -640,11 +723,12 @@ function openModalAgendar(key) {
   document.getElementById('agObservacoes').value = ag.observacoes || '';
   document.getElementById('modalAgendar').classList.add('open');
 }
-function closeModalAgendar() { document.getElementById('modalAgendar').classList.remove('open'); agendandoKey = null; }
+function closeModalAgendar() { document.getElementById('modalAgendar').classList.remove('open'); agendandoKey = null; agRotaBase = null; agRotaEfetivaBase = null; }
 function saveAgendar() {
   var data = document.getElementById('agData').value;
   if (!data) { showAlert('Informe a data agendada.', 'danger'); return; }
   var p = allPedidosCompra[agendandoKey] || {};
+  var agAnterior = p.agendamento || {};
   var transporte = dadosTransporte(p);
   var ehColetaKuryos = transporte.responsavel === 'KURYOS';
   var prestadorSelect = document.getElementById('agTransportadora');
@@ -660,6 +744,34 @@ function saveAgendar() {
     valorNegociado: valorFrete === '' ? null : Number(valorFrete),
     referencia: document.getElementById('agReferenciaColeta').value.trim() || null
   } : null;
+  var editorRota = document.getElementById('agRotaEditor');
+  var editandoRota = editorRota && editorRota.style.display !== 'none';
+  var rotaEfetiva = RotasPC.normalizarRota(agRotaEfetivaBase || agRotaBase || {});
+  if (editandoRota) {
+    rotaEfetiva.origem = RotasPC.lerEditor('agOrigem', rotaEfetiva.origem);
+    rotaEfetiva.destino = RotasPC.lerEditor('agDestino', rotaEfetiva.destino);
+  }
+  var validaRota = RotasPC.validarRota(rotaEfetiva);
+  if (!validaRota.pronto) {
+    showAlert('Não é possível agendar sem a rota completa: ' + validaRota.faltando.join(', ') + '.', 'danger');
+    return;
+  }
+  var rotaDoPcConfirmada = rotaConfirmadaPedido(p);
+  var divergeDoPc = !rotaDoPcConfirmada || !RotasPC.rotasIguais(rotaEfetiva, rotaDoPcConfirmada);
+  var mesmaExcecaoAnterior = agAnterior.rotaEfetiva && RotasPC.rotasIguais(rotaEfetiva, agAnterior.rotaEfetiva);
+  var motivoRota = editandoRota ? document.getElementById('agMotivoRota').value.trim() : '';
+  if (divergeDoPc && !mesmaExcecaoAnterior && motivoRota.length < 10) {
+    showAlert('Informe um motivo com ao menos 10 caracteres para a exceção de rota.', 'danger');
+    return;
+  }
+  var alteracoesRota = Object.assign({}, agAnterior.alteracoesRota || {});
+  if (divergeDoPc && !mesmaExcecaoAnterior) {
+    var alteracaoKey = db.ref('pedidos_compra/' + agendandoKey + '/agendamento/alteracoesRota').push().key;
+    alteracoesRota[alteracaoKey] = {
+      rotaDoPedido: RotasPC.normalizarRota(agRotaBase || {}), rotaEfetiva: rotaEfetiva,
+      motivo: motivoRota, alteradoPor: currentUserNome(), alteradoEm: new Date().toISOString()
+    };
+  }
   var payload = {
     dataAgendada: data,
     janela: document.getElementById('agJanela').value,
@@ -673,6 +785,10 @@ function saveAgendar() {
     responsavelTransporte: transporte.responsavel || null,
     previsaoOrigemPc: p.dataPrevistaEntrega || null,
     acaoLogistica: transporte.responsavel === 'KURYOS' ? 'PROGRAMAR_COLETA' : (transporte.responsavel === 'REMETENTE' ? 'AGUARDAR_ENTREGA' : null),
+    rotaEfetiva: rotaEfetiva,
+    rotaConfirmadaNoPc: !!rotaDoPcConfirmada,
+    rotaConfirmadaNoPcEm: rotaDoPcConfirmada ? rotaDoPcConfirmada.confirmadaEm : null,
+    alteracoesRota: Object.keys(alteracoesRota).length ? alteracoesRota : null,
     agendadoPor: currentUserNome(),
     agendadoEm: new Date().toISOString()
   };

@@ -7,6 +7,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
+- **Escopo atual — endereços do transporte no PC:** Compras confirma snapshots estruturados de origem/coleta e destino/entrega no Pedido de Compra; Logística consome esses endereços no agendamento, bloqueia ausência e permite correção excepcional com motivo e histórico. Cobrir cotação, PC direto, edição, retirada/FOB, entrega/CIF e remessa.
+- **Arquivos ativos neste escopo:** `public/compras.html`, `public/logistica.html`, `public/shared/rotas-pc.js`, `run_rotas_pc_test.js`, `public/manual_compras.html`, `public/manual_logistica.html` e `AGENT_STATUS.md`. Não alterar `public/shared/utils.js` nem `public/insumos.html`, reservados ao MRP/Claude.
+- **Entrega pronta — rota do PC:** origem e destino estruturados são sugeridos pelo cadastro/cotação, revisados e congelados no PC. FOB exige origem + contato/telefone; CIF exige destino; remessas não usam CIF/FOB. PC sem rota confirmada não pode ser enviado/agendado. Logística mostra, copia e abre a rota no mapa; exceção vale só para a viagem e preserva rota do PC, antes/depois, motivo, usuário e data. O PDF do PC inclui a rota congelada.
+- **Validação rota do PC:** `run_rotas_pc_test.js` cobre FOB, CIF, remessa, snapshot imutável, comparação de exceção, PDF e integrações; regressões de recebimento, lote interno, Conferência PA, Qualidade e Descarte aprovadas. Commit/deploy pendentes.
+
 - **Escopo atual — lote interno/recebimento:** implementar `AK-AAAA-NNNNNN` com contador anual transacional no servidor, linhas separadas por lote do fornecedor, recebimento/estoque/CQ idempotentes, etiquetas, cancelamento/estorno e devolução auditáveis; validar cenários completos e publicar.
 - **Arquivos ativos neste escopo:** nenhum; entrega encerrada. `public/shared/utils.js` e `public/insumos.html` continuam reservados ao MRP/Claude.
 - **Entrega pronta — lote interno/recebimento:** novos lotes seguem `AK-AAAA-NNNNNN` (base histórica 2026 preservada; próximo lógico 576), gerados no servidor com contador anual, índice global, lock por PC e idempotência. Um item aceita múltiplos lotes externos e volumes; confirmação grava PC, saldo físico, `estoque_lotes`, movimentos e fila CQ por update multipath. Histórico ganhou etiquetas Code39+QR, reimpressão, cancelamento seguro e devolução com reabertura do saldo do PC.

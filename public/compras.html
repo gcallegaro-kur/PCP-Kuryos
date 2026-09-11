@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/rotas-pc.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -423,6 +424,9 @@
         <input type="hidden" id="pcdFornecedorKey">
       </div>
 
+      <div class="section-label">Rota confirmada</div>
+      <div id="pcdRotaEditor"></div>
+
       <div class="section-label">Itens recebidos</div>
       <div class="item-row-head"><div>Material</div><div>Fornecedores homologados</div><div>Quantidade</div><div>Un.</div><div>Preço unit. (opcional)</div><div></div></div>
       <div id="pcdItensBuilder"></div>
@@ -615,6 +619,8 @@
           <option value="FABRICA">Fábrica</option>
         </select>
       </div>
+      <div class="section-label">Rota do pedido</div>
+      <div id="pcEditRotaEditor"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="pcEditCancelar">Cancelar</button>
@@ -1970,6 +1976,32 @@ function pendenciasUnidadePC(pc) {
   });
 }
 
+function blocoRotaDocumentoPC(pc) {
+  var rota = pc && pc.rota;
+  if (!rota || rota.statusConfirmacao !== 'CONFIRMADA') return '';
+  rota = RotasPC.normalizarRota(rota);
+  function localHtml(titulo, local) {
+    var l = RotasPC.normalizarLocal(local);
+    return '<div class="pcdoc-campo"><span>' + escapeHtml(titulo) + '</span><b>' + escapeHtml(l.nome || '—') + '</b>' +
+      '<div style="font-size:10px;line-height:1.45;margin-top:4px">' + escapeHtml(RotasPC.formatarEndereco(l) || '—') +
+      (l.contatoNome || l.contatoTelefone ? '<br>Contato: ' + escapeHtml([l.contatoNome, l.contatoTelefone].filter(Boolean).join(' · ')) : '') +
+      (l.horarioAtendimento ? '<br>Horário: ' + escapeHtml(l.horarioAtendimento) : '') +
+      (l.referencia ? '<br>Referência: ' + escapeHtml(l.referencia) : '') +
+      (l.instrucoes ? '<br>Instruções: ' + escapeHtml(l.instrucoes) : '') + '</div></div>';
+  }
+  return '<div class="pcdoc-sec">Rota confirmada</div><div class="pcdoc-grid duas">' +
+    localHtml('Origem', rota.origem) + localHtml('Destino', rota.destino) + '</div>' +
+    '<div class="pcdoc-nota">Rota congelada neste pedido em ' + escapeHtml(rota.confirmadaEm ? new Date(rota.confirmadaEm).toLocaleString('pt-BR') : '—') +
+    ' por ' + escapeHtml(rota.confirmadaPor || '—') + '.</div>';
+}
+
+function montarDocumentoPedidoCompraComRota(pc, fornecedor) {
+  var html = montarDocumentoPedidoCompra(pc, fornecedor), bloco = blocoRotaDocumentoPC(pc);
+  if (!bloco) return html;
+  var ancora = '<div class="pcdoc-aviso" style="margin-top:14px">';
+  return html.replace(ancora, bloco + ancora);
+}
+
 function imprimirPedidoCompra(pcKey) {
   var pc = allPedidosCompra[pcKey];
   if (!pc) { showAlert('Pedido não encontrado.', 'danger'); return; }
@@ -1992,7 +2024,7 @@ function imprimirPedidoCompra(pcKey) {
   }
   var fornecedor = pc.fornecedorKey ? allFornecedores[pc.fornecedorKey] : null;
   var area = document.getElementById('printArea');
-  area.innerHTML = montarDocumentoPedidoCompra(pc, fornecedor);
+  area.innerHTML = montarDocumentoPedidoCompraComRota(pc, fornecedor);
   window.print();
   // Limpa depois de imprimir pra o conteúdo não ficar pendurado no DOM (e
   // vazar numa impressão seguinte de outra coisa).
@@ -2045,6 +2077,88 @@ window.addEventListener('kuryos-auth-pronto', function() {
 });
 
 var pcEditKey = null;
+var pcEditRotaBase = null;
+var pcdRotaBase = null;
+
+function camposLocalRotaHtml(prefix, titulo, dica) {
+  return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)">' +
+    '<div style="font-weight:800;font-size:13px;margin-bottom:2px">' + escapeHtml(titulo) + '</div>' +
+    '<div class="field-hint" style="margin-bottom:9px">' + escapeHtml(dica) + '</div>' +
+    '<div class="form-grid">' +
+      '<div class="form-group"><label>Local / empresa *</label><input id="' + prefix + 'Nome" type="text"></div>' +
+      '<div class="form-group"><label>CNPJ</label><input id="' + prefix + 'Cnpj" type="text" placeholder="00.000.000/0000-00"></div>' +
+      '<div class="form-group"><label>CEP *</label><input id="' + prefix + 'Cep" type="text" maxlength="9" placeholder="00000-000"></div>' +
+      '<div class="form-group"><label>Logradouro *</label><input id="' + prefix + 'Logradouro" type="text"></div>' +
+      '<div class="form-group"><label>Número *</label><input id="' + prefix + 'Numero" type="text" placeholder="ou S/N"></div>' +
+      '<div class="form-group"><label>Complemento</label><input id="' + prefix + 'Complemento" type="text"></div>' +
+      '<div class="form-group"><label>Bairro *</label><input id="' + prefix + 'Bairro" type="text"></div>' +
+      '<div class="form-group"><label>Cidade *</label><input id="' + prefix + 'Cidade" type="text"></div>' +
+      '<div class="form-group"><label>UF *</label><input id="' + prefix + 'Uf" type="text" maxlength="2"></div>' +
+      '<div class="form-group"><label>Contato no local</label><input id="' + prefix + 'ContatoNome" type="text"></div>' +
+      '<div class="form-group"><label>Telefone</label><input id="' + prefix + 'ContatoTelefone" type="text"></div>' +
+      '<div class="form-group"><label>Horário de atendimento</label><input id="' + prefix + 'HorarioAtendimento" type="text" placeholder="Ex.: 08h às 16h"></div>' +
+      '<div class="form-group full"><label>Referência</label><input id="' + prefix + 'Referencia" type="text" placeholder="Portaria, doca, ponto de referência..."></div>' +
+      '<div class="form-group full"><label>Instruções</label><textarea id="' + prefix + 'Instrucoes" rows="2" placeholder="Regras de acesso, agendamento, contato alternativo..."></textarea></div>' +
+    '</div></div>';
+}
+
+function editorRotaHtml(prefix) {
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">' +
+    camposLocalRotaHtml(prefix + 'Origem', 'Origem', 'Onde o material será retirado ou despachado.') +
+    camposLocalRotaHtml(prefix + 'Destino', 'Destino', 'Endereço físico que receberá o material.') +
+    '</div>' +
+    '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:11px;font-size:12.5px;font-weight:700">' +
+      '<input type="checkbox" id="' + prefix + 'RotaConfirmada" style="width:auto;margin-top:2px">' +
+      '<span>Confirmo que conferi a rota. Origem e destino ficarão congelados neste Pedido de Compra.</span>' +
+    '</label>' +
+    '<div id="' + prefix + 'RotaHint" class="field-hint" style="margin-top:5px"></div>';
+}
+
+function prepararEditorRota(prefix) {
+  var box = document.getElementById(prefix + 'RotaEditor');
+  box.innerHTML = editorRotaHtml(prefix);
+  box.querySelectorAll('input, textarea').forEach(function(el) {
+    if (el.id === prefix + 'RotaConfirmada') return;
+    el.addEventListener('input', function() {
+      document.getElementById(prefix + 'RotaConfirmada').checked = false;
+      document.getElementById(prefix + 'RotaHint').textContent = 'Dados alterados — confira e marque a confirmação novamente.';
+    });
+  });
+}
+
+function preencherEditorRota(prefix, rota) {
+  RotasPC.preencherEditor(prefix + 'Origem', rota.origem);
+  RotasPC.preencherEditor(prefix + 'Destino', rota.destino);
+}
+
+function lerRotaEditor(prefix, base, natureza, responsavel, incoterm) {
+  var rota = RotasPC.normalizarRota(base || {});
+  rota.natureza = natureza;
+  rota.responsavelTransporte = responsavel;
+  rota.incoterm = natureza === 'COMPRA_KURYOS' ? incoterm : null;
+  rota.origem = RotasPC.lerEditor(prefix + 'Origem', rota.origem);
+  rota.destino = RotasPC.lerEditor(prefix + 'Destino', rota.destino);
+  return rota;
+}
+
+function confirmarRotaDoEditor(prefix, rota) {
+  if (!document.getElementById(prefix + 'RotaConfirmada').checked) {
+    showAlert('Confira origem e destino e marque a confirmação da rota.', 'danger');
+    return null;
+  }
+  var validacao = RotasPC.validarRota(rota);
+  if (!validacao.pronto) {
+    showAlert('Complete a rota antes de continuar: ' + validacao.faltando.join(', ') + '.', 'danger');
+    return null;
+  }
+  var agora = new Date().toISOString(), por = currentUserNome();
+  rota.statusConfirmacao = 'CONFIRMADA'; rota.confirmadaEm = agora; rota.confirmadaPor = por;
+  rota.origem.confirmadoEm = agora; rota.origem.confirmadoPor = por;
+  rota.destino.confirmadoEm = agora; rota.destino.confirmadoPor = por;
+  rota.origem.fonte = rota.origem.fonte === 'CADASTRO_SUGERIDO' ? 'CADASTRO_CONFIRMADO' : (rota.origem.fonte || 'DIGITADO');
+  rota.destino.fonte = rota.destino.fonte || 'CONFIRMADO';
+  return rota;
+}
 
 function abrirModalEditarPC(key) {
   var pc = allPedidosCompra[key];
@@ -2064,6 +2178,15 @@ function abrirModalEditarPC(key) {
   document.getElementById('pcEditLocal').value = pc.localEntrega || '';
   document.getElementById('pcEditFreteTipo').value = (pc.frete && pc.frete.tipo) || '';
   document.getElementById('pcEditFreteValor').value = (pc.frete && pc.frete.valor != null) ? pc.frete.valor : '';
+
+  prepararEditorRota('pcEdit');
+  pcEditRotaBase = RotasPC.rotaInicial(pc, allFornecedores[pc.fornecedorKey]);
+  preencherEditorRota('pcEdit', pcEditRotaBase);
+  var rotaJaConfirmada = pcEditRotaBase.statusConfirmacao === 'CONFIRMADA' && RotasPC.validarRota(pcEditRotaBase).pronto;
+  document.getElementById('pcEditRotaConfirmada').checked = rotaJaConfirmada;
+  document.getElementById('pcEditRotaHint').textContent = rotaJaConfirmada
+    ? 'Rota confirmada por ' + (pcEditRotaBase.confirmadaPor || '—') + '. Salvar novamente cria um novo snapshot antes do envio.'
+    : 'A rota precisa ser confirmada antes de liberar este pedido à Logística.';
 
   document.getElementById('pcEditItens').innerHTML = Object.entries(pc.itens || {}).map(function(e) {
     var ik = e[0], it = e[1];
@@ -2211,6 +2334,10 @@ function salvarEdicaoPC() {
   var prazoNum = prazo === '' ? null : parseInt(prazo, 10);
   if (prazoNum != null && (isNaN(prazoNum) || prazoNum < 0)) { showAlert('Prazo de entrega inválido.', 'danger'); return; }
   var freteTipo = document.getElementById('pcEditFreteTipo').value || null;
+  var responsavelTransporte = freteTipo === 'FOB' ? 'KURYOS' : (freteTipo === 'CIF' ? 'REMETENTE' : '');
+  var rotaEditada = lerRotaEditor('pcEdit', pcEditRotaBase, 'COMPRA_KURYOS', responsavelTransporte, freteTipo);
+  rotaEditada = confirmarRotaDoEditor('pcEdit', rotaEditada);
+  if (!rotaEditada) return;
   var freteValorTxt = document.getElementById('pcEditFreteValor').value;
   // CIF: o frete já está embutido no preço do fornecedor. Rateá-lo de novo
   // sobre os itens cobraria o mesmo frete duas vezes -- mesma regra da
@@ -2279,6 +2406,9 @@ function salvarEdicaoPC() {
   updates['pedidos_compra/' + pcEditKey + '/localEntrega'] = document.getElementById('pcEditLocal').value || null;
   updates['pedidos_compra/' + pcEditKey + '/frete/tipo'] = freteTipo;
   updates['pedidos_compra/' + pcEditKey + '/frete/valor'] = (freteTipo === 'FOB' && freteValor !== '') ? parseFloat(freteValor) : null;
+  updates['pedidos_compra/' + pcEditKey + '/rota'] = rotaEditada;
+  updates['pedidos_compra/' + pcEditKey + '/transporte/responsavel'] = responsavelTransporte;
+  updates['pedidos_compra/' + pcEditKey + '/transporte/acaoLogistica'] = responsavelTransporte === 'KURYOS' ? 'PROGRAMAR_COLETA' : 'AGUARDAR_ENTREGA';
   // Trilha: quem editou e quando. Alterar pedido decidido sem deixar rastro
   // é o tipo de coisa que ninguém consegue explicar três meses depois.
   updates['pedidos_compra/' + pcEditKey + '/editadoEm'] = new Date().toISOString();
@@ -2302,6 +2432,12 @@ function fecharModalEditarPC() {
 }
 
 function marcarPedidoEnviado(key) {
+  var pc = allPedidosCompra[key];
+  var validacao = RotasPC.validarRota(pc && pc.rota);
+  if (!pc || !pc.rota || pc.rota.statusConfirmacao !== 'CONFIRMADA' || !validacao.pronto) {
+    showAlert('Antes de marcar como enviado, abra Editar e confirme a rota completa do Pedido de Compra' + (validacao.faltando.length ? ': ' + validacao.faltando.join(', ') : '') + '.', 'danger');
+    return;
+  }
   if (!confirm('Marcar esse pedido como enviado ao fornecedor?')) return;
   db.ref('pedidos_compra/' + key).update({status: 'ENVIADO', dataEmissao: new Date().toISOString()})
     .then(function() { showAlert('Pedido marcado como enviado.', 'success'); })
@@ -3098,6 +3234,14 @@ document.getElementById('modalEditarPCClose').addEventListener('click', fecharMo
 document.getElementById('pcEditCancelar').addEventListener('click', fecharModalEditarPC);
 document.getElementById('pcEditSalvar').addEventListener('click', salvarEdicaoPC);
 document.getElementById('modalEditarPC').addEventListener('click', function(ev) { if (ev.target === this) fecharModalEditarPC(); });
+document.getElementById('pcEditFreteTipo').addEventListener('change', function() {
+  var cb = document.getElementById('pcEditRotaConfirmada'); if (cb) cb.checked = false;
+});
+document.getElementById('pcEditLocal').addEventListener('change', function() {
+  var nome = document.getElementById('pcEditDestinoNome');
+  if (nome && (!nome.value || /Kuryos$/i.test(nome.value))) nome.value = this.value === 'GALPAO' ? 'Galpão Kuryos' : this.value === 'FABRICA' ? 'Fábrica Kuryos' : 'Kuryos';
+  var cb = document.getElementById('pcEditRotaConfirmada'); if (cb) cb.checked = false;
+});
 
 document.getElementById('modalFiscalClose').addEventListener('click', fecharModalFiscal);
 document.getElementById('modalFiscalCancel').addEventListener('click', fecharModalFiscal);
@@ -3775,12 +3919,18 @@ function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) 
   var dataPrevista = prazoMaior != null ? somarDiasUteis(new Date().toISOString().slice(0, 10), prazoMaior, cal.feriados, cal.diasSemana) : null;
   return nextSequential(db, 'config/contadores/pedidoCompra', 'PC', 4).then(function(seq) {
     var pcKey = db.ref('pedidos_compra').push().key;
+    var rotaPendente = RotasPC.rotaInicial({
+      naturezaMovimentacao: 'COMPRA_KURYOS', fornecedorKey: convidado.fornecedorKey,
+      fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial || '', frete: convidado.frete || null,
+      coleta: convidado.coleta || null, localEntrega: convidado.localEntrega || null
+    }, fornecedor);
     return db.ref('pedidos_compra/' + pcKey).set({
       numero: seq.numero, numeroFormatado: seq.formatado, status: 'ABERTO',
       fornecedorKey: convidado.fornecedorKey, fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial || '',
       dataCriacao: new Date().toISOString(), dataEmissao: null, solicitacoesOrigem: solicitacoesOrigem, itens: itensObj,
       condicaoPagamento: convidado.condicaoPagamento || '', prazoPagamentoParcelas: prazoPgto.valido ? prazoPgto.parcelas : null,
       frete: convidado.frete || null, coleta: (convidado.frete && convidado.frete.tipo === 'FOB') ? (convidado.coleta || {}) : null,
+      rota: rotaPendente,
       prazoEntregaDiasUteis: prazoMaior, dataPrevistaEntrega: dataPrevista, validadePropostaNaDecisao: convidado.validadeProposta || null,
       localEntrega: convidado.localEntrega || null, valorTotalEstimado: Math.round(totalPedido * 100) / 100,
       origemProcessoCotacaoKey: procKey, criadoPor: currentUserNome(), criadoEm: new Date().toISOString()
@@ -3939,6 +4089,11 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
 
     return nextSequential(db, 'config/contadores/pedidoCompra', 'PC', 4).then(function(seq) {
       var pcKey = db.ref('pedidos_compra').push().key;
+      var rotaPendente = RotasPC.rotaInicial({
+        naturezaMovimentacao: 'COMPRA_KURYOS', fornecedorKey: convidado.fornecedorKey,
+        fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '', frete: convidado.frete || null,
+        coleta: convidado.coleta || null, localEntrega: convidado.localEntrega || null
+      }, fornecedor);
       return db.ref('pedidos_compra/' + pcKey).set({
         numero: seq.numero, numeroFormatado: seq.formatado, status: 'ABERTO',
         fornecedorKey: convidado.fornecedorKey,
@@ -3954,6 +4109,7 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
         // motorista ou app, e precisa de endereço, peso e contato. Em CIF
         // fica null -- quem coordena é o fornecedor.
         coleta: (convidado.frete && convidado.frete.tipo === 'FOB') ? (convidado.coleta || {}) : null,
+        rota: rotaPendente,
         // Data prevista, já convertida de dias úteis pelo calendário do PCP.
         // Congelada aqui porque conta a partir da decisão da compra, não de
         // quando alguém abrir a tela depois.
@@ -4051,6 +4207,11 @@ function openModalPcDireto() {
   document.getElementById('pcdResponsavelTransporte').value = 'REMETENTE';
   document.getElementById('pcdMotivo').value = '';
   document.getElementById('pcdObs').value = '';
+  prepararEditorRota('pcd');
+  pcdRotaBase = RotasPC.rotaInicial({ naturezaMovimentacao: 'COMPRA_KURYOS', transporte: { responsavel: 'REMETENTE' }, frete: { tipo: 'CIF' } }, null);
+  preencherEditorRota('pcd', pcdRotaBase);
+  document.getElementById('pcdRotaConfirmada').checked = false;
+  document.getElementById('pcdRotaHint').textContent = 'Informe e confira a rota antes de liberar o recebimento.';
   atualizarPcdNatureza();
   renderPcdItensBuilder();
   document.getElementById('modalPcDireto').classList.add('open');
@@ -4093,6 +4254,12 @@ function salvarPcDireto() {
 
   var fornecedor = allFornecedores[fornecedorKey];
   var responsavelTransporte = document.getElementById('pcdResponsavelTransporte').value;
+  var incoterm = compra ? (responsavelTransporte === 'KURYOS' ? 'FOB' : 'CIF') : null;
+  var rotaDireta = lerRotaEditor('pcd', pcdRotaBase, natureza, responsavelTransporte, incoterm);
+  rotaDireta.origem.entidadeTipo = compra ? 'FORNECEDOR' : (natureza === 'REMESSA_CLIENTE' ? 'CLIENTE' : 'TERCEIRO');
+  rotaDireta.origem.entidadeKey = fornecedorKey || null;
+  rotaDireta = confirmarRotaDoEditor('pcd', rotaDireta);
+  if (!rotaDireta) return;
   var itensObj = {};
   itensValidos.forEach(function(it) {
     var mat = findMaterialByCodigo(it.materialCodigo);
@@ -4129,6 +4296,8 @@ function salvarPcDireto() {
         responsavel: responsavelTransporte,
         acaoLogistica: responsavelTransporte === 'KURYOS' ? 'PROGRAMAR_COLETA' : 'AGUARDAR_ENTREGA'
       },
+      rota: rotaDireta,
+      frete: compra ? { tipo: incoterm, valor: null } : null,
       dataCriacao: agora, dataEmissao: agora,
       itens: itensObj,
       condicaoPagamento: compra && fornecedor ? (fornecedor.condicaoPagamento || '') : '',
@@ -4157,12 +4326,26 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalPcdSave').addEventListener('click', salvarPcDireto);
   document.getElementById('pcdNatureza').addEventListener('change', atualizarPcdNatureza);
   document.getElementById('pcdResponsavelTransporte').addEventListener('change', atualizarPcdNatureza);
+  ['pcdNatureza', 'pcdResponsavelTransporte'].forEach(function(id) {
+    document.getElementById(id).addEventListener('change', function() {
+      var cb = document.getElementById('pcdRotaConfirmada'); if (cb) cb.checked = false;
+      var hint = document.getElementById('pcdRotaHint'); if (hint) hint.textContent = 'Regra de transporte alterada — confira a rota novamente.';
+    });
+  });
   document.getElementById('btnAddPcdItem').addEventListener('click', function() {
     pcdItensBuilder.push({ materialCodigo: '', qtd: null, precoUnit: null });
     renderPcdItensBuilder();
   });
   attachAutocomplete(document.getElementById('pcdFornecedor'), function() { return pcFornecedorItems; }, {
-    onSelect: function(item) { document.getElementById('pcdFornecedorKey').value = item.key; }
+    onSelect: function(item) {
+      document.getElementById('pcdFornecedorKey').value = item.key;
+      var atual = lerRotaEditor('pcd', pcdRotaBase, document.getElementById('pcdNatureza').value, document.getElementById('pcdResponsavelTransporte').value, null);
+      atual.origem = RotasPC.origemFornecedor(allFornecedores[item.key], item.key, item.label || '');
+      pcdRotaBase = atual;
+      RotasPC.preencherEditor('pcdOrigem', atual.origem);
+      document.getElementById('pcdRotaConfirmada').checked = false;
+      document.getElementById('pcdRotaHint').textContent = 'Origem preenchida pelo cadastro — confira antes de confirmar.';
+    }
   });
   document.getElementById('pcdFornecedor').addEventListener('input', function() {
     document.getElementById('pcdFornecedorKey').value = '';
