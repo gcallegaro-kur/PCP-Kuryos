@@ -66,7 +66,8 @@ const salvar = extractFunction('salvarContagemConferenciaPA');
 const finalizar = extractFunction('finalizarConferenciaPA');
 if (salvar.includes("updates['estoque_lotes/")) throw new Error('Contagem divergente ainda consegue criar estoque antes da conciliação');
 if (!finalizar.includes("httpsCallable('finalizarConferenciaPA')")) throw new Error('Finalização não foi delegada ao servidor');
-if (source.includes("x.op.status === 'Aguardando Confirmação'")) throw new Error('OP sem confirmação definitiva do PCP apareceu na fila da Logística');
+if (!source.includes("x.op.status === 'Concluído' || x.op.status === 'Aguardando Confirmação'")) throw new Error('Fila da Logística não exibe as OPs pendentes de confirmação do PCP');
+if (!source.includes('PENDENTE PCP') || !source.includes('A entrada permanece bloqueada') || !source.includes('disabled title="O PCP precisa confirmar a conclusão antes da conferência"')) throw new Error('OP pendente do PCP não está claramente sinalizada e bloqueada para conferência');
 if (!source.includes("INICIO_FLUXO_CONFERENCIA_PA = '2026-09-10T00:00:00.000Z'") || !source.includes('String(x.op.dataFimReal || \'\') >= INICIO_FLUXO_CONFERENCIA_PA')) throw new Error('Fila voltaria a exibir as 1.251 OPs históricas sem WMS');
 
 (async () => {

@@ -408,12 +408,14 @@
       confere caixas fechadas/parciais e unidades, e informa a posição na fábrica. O total é
       conciliado com a OP apontada. Se houver diferença, o estoque fica bloqueado e o sistema exige
       tripla conferência. Só depois da conciliação o PA entra no WMS, já endereçado e com status
-      <b>Quarentena</b>, aguardando o CQ.
+      <b>Quarentena</b>, aguardando o CQ. OPs encerradas pela Produção, mas ainda não confirmadas pelo
+      PCP, aparecem destacadas como pendência para cobrança, sem liberar a conferência antecipadamente.
     </div>
 
     <div class="stats">
+      <div class="stat"><div class="stat-val" id="cpaStatPendentePcp" style="color:var(--danger)">—</div><div class="stat-lbl">Aguardando confirmação do PCP</div></div>
       <div class="stat"><div class="stat-val" id="cpaStatFila" style="color:var(--warning)">—</div><div class="stat-lbl">OPs aguardando conferência</div></div>
-      <div class="stat"><div class="stat-val" id="cpaStatDeclarado">—</div><div class="stat-lbl">Unidades apontadas</div></div>
+      <div class="stat"><div class="stat-val" id="cpaStatDeclarado">—</div><div class="stat-lbl">Unidades liberadas para conferência</div></div>
       <div class="stat"><div class="stat-val" id="cpaStatDivergencias" style="color:var(--danger)">—</div><div class="stat-lbl">Com divergência (30 dias)</div></div>
     </div>
 
@@ -1521,34 +1523,41 @@ function renderConferenciaPA() {
   var tbody = document.getElementById('cpaFilaBody');
   if (!tbody) return;
   var fila = Object.entries(allOps || {}).map(function(e) { return { key:e[0], op:e[1] || {}, conf:allConferenciasPA[e[0]] || null }; })
-    .filter(function(x) { return x.op.status === 'Concluído' && x.op.sku && qtdApontadaPA(x.op) > 0; })
+    .filter(function(x) { return (x.op.status === 'Concluído' || x.op.status === 'Aguardando Confirmação') && x.op.sku && qtdApontadaPA(x.op) > 0; })
     .filter(function(x) { return !!x.conf || String(x.op.dataFimReal || '') >= INICIO_FLUXO_CONFERENCIA_PA; })
     .filter(function(x) { return !x.conf || (x.conf.status !== 'CONFERIDO' && x.conf.status !== 'CONFERIDO_COM_DIVERGENCIA'); })
-    .sort(function(a, b) { return String(a.op.dataFimReal || '').localeCompare(String(b.op.dataFimReal || '')); });
-  var totalApontado = fila.reduce(function(s, f) { return s + qtdApontadaPA(f.op); }, 0);
+    .sort(function(a, b) {
+      var pa = a.op.status === 'Aguardando Confirmação' ? 0 : 1, pb = b.op.status === 'Aguardando Confirmação' ? 0 : 1;
+      return pa - pb || String(a.op.dataFimReal || '').localeCompare(String(b.op.dataFimReal || ''));
+    });
+  var pendentesPcp = fila.filter(function(f) { return f.op.status === 'Aguardando Confirmação'; });
+  var liberadas = fila.filter(function(f) { return f.op.status === 'Concluído'; });
+  var totalApontado = liberadas.reduce(function(s, f) { return s + qtdApontadaPA(f.op); }, 0);
   var corte = new Date(Date.now() - 30 * 86400000).toISOString();
   var comDiv = Object.values(allConferenciasPA || {}).filter(function(c) {
     if (!c) return false;
     var aberto = c.status === 'DIVERGENCIA_RECONTAGEM' || c.status === 'SEM_CONVERGENCIA' || c.status === 'AGUARDANDO_CONCILIACAO';
     return aberto || ((c.conferidoEm || '') >= corte && c.divergencia !== 0);
   }).length;
-  document.getElementById('cpaStatFila').textContent = fmtNum(fila.length);
+  document.getElementById('cpaStatPendentePcp').textContent = fmtNum(pendentesPcp.length);
+  document.getElementById('cpaStatFila').textContent = fmtNum(liberadas.length);
   document.getElementById('cpaStatDeclarado').textContent = fmtNum(totalApontado);
   document.getElementById('cpaStatDivergencias').textContent = fmtNum(comDiv);
   if (!fila.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP concluída aguardando Conferência de Produto Acabado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP aguardando confirmação do PCP ou Conferência de Produto Acabado.</td></tr>';
     return;
   }
   tbody.innerHTML = fila.map(function(f) {
+    var pendentePcp = f.op.status === 'Aguardando Confirmação';
     var apontada = qtdApontadaPA(f.op), contagens = contagensDaConferenciaPA(f.conf), estado = analisarTriplaConferenciaPA(apontada, contagens);
     var paletizada = contagens.length ? contagens[contagens.length - 1].total : 0, dif = contagens.length ? arredondarQtdPA(paletizada - apontada) : 0;
     var alarme = estado.status === 'DIVERGENCIA_RECONTAGEM' || estado.status === 'SEM_CONVERGENCIA' || estado.status === 'AGUARDANDO_CONCILIACAO';
     var acao = estado.status === 'AGUARDANDO_CONCILIACAO' ? 'Conciliar' : (contagens.length ? 'Continuar' : 'Registrar paletes');
-    return '<tr' + (alarme ? ' style="background:var(--tint-red-bg)"' : '') + '><td><b>' + escapeHtml(f.op.sku) + '</b><br><span class="field-hint">OP ' + escapeHtml(f.op.lote || f.key) + ' · ' + escapeHtml(f.op.produto || f.op.produtoNome || '') + '</span>' + (alarme ? '<br><span class="badge badge-red">TRIPLA CONFERÊNCIA</span>' : '') + '</td>' +
+    return '<tr' + ((alarme || pendentePcp) ? ' style="background:var(--tint-red-bg)"' : '') + '><td><b>' + escapeHtml(f.op.sku) + '</b><br><span class="field-hint">OP ' + escapeHtml(f.op.lote || f.key) + ' · ' + escapeHtml(f.op.produto || f.op.produtoNome || '') + '</span>' + (pendentePcp ? '<br><span class="badge badge-red">PENDENTE PCP</span>' : (alarme ? '<br><span class="badge badge-red">TRIPLA CONFERÊNCIA</span>' : '')) + '</td>' +
       '<td style="text-align:right">' + fmtNum(apontada) + '</td><td style="text-align:right">' + fmtNum(paletizada) + '</td>' +
       '<td style="text-align:right;color:' + (!contagens.length || dif === 0 ? 'var(--success)' : 'var(--danger)') + '">' + (!contagens.length ? '—' : (dif > 0 ? '+' : '') + fmtNum(dif)) + '</td>' +
-      '<td>' + escapeHtml(statusConferenciaPA(f.conf, apontada)) + (contagens.length ? '<br><span class="field-hint">' + contagens.length + ' contagem(ns)</span>' : '') + '</td>' +
-      '<td style="text-align:right"><button class="btn ' + (alarme ? 'btn-danger-ghost' : 'btn-green') + ' btn-sm" data-cpa-op="' + escapeAttr(f.key) + '">' + acao + '</button></td></tr>';
+      '<td>' + (pendentePcp ? '<b style="color:var(--danger)">Aguardando confirmação do PCP</b><br><span class="field-hint">A entrada permanece bloqueada</span>' : escapeHtml(statusConferenciaPA(f.conf, apontada)) + (contagens.length ? '<br><span class="field-hint">' + contagens.length + ' contagem(ns)</span>' : '')) + '</td>' +
+      '<td style="text-align:right">' + (pendentePcp ? '<button class="btn btn-sm" disabled title="O PCP precisa confirmar a conclusão antes da conferência">Aguardando PCP</button>' : '<button class="btn ' + (alarme ? 'btn-danger-ghost' : 'btn-green') + ' btn-sm" data-cpa-op="' + escapeAttr(f.key) + '">' + acao + '</button>') + '</td></tr>';
   }).join('');
   tbody.querySelectorAll('[data-cpa-op]').forEach(function(btn) { btn.addEventListener('click', function() { abrirConferenciaPAModal(btn.getAttribute('data-cpa-op')); }); });
 }
