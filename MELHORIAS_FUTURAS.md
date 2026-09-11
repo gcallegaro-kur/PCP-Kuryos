@@ -761,6 +761,12 @@ Manipulação.
 
 ## Outros achados antigos — reconfirmar antes de agir
 
+- **Migrar Cloud Functions de Node.js 20 antes de 30/10/2026** — o deploy
+  de 11/09/2026 confirmou que o runtime está depreciado e será desativado
+  nessa data. Planejar atualização conjunta do `functions/package.json`,
+  `firebase-functions` e regressão das callables/triggers; não atualizar a
+  dependência isoladamente porque a CLI advertiu sobre mudanças incompatíveis.
+
 - **OP 26215/01 com `status`/`motivoCancelamento` dessincronizado** ⚠ —
   causa raiz nunca encontrada, identificado bem no início desta sessão e
   nunca revisitado.
