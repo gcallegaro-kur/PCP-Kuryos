@@ -15,6 +15,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
+- **Entrega dados do cliente no pedido comercial:** seleção preenche contato comercial, telefone, e-mail, endereços de entrega/faturamento e pagamento; permite ajustes no pedido, preserva-os em atualizações do cadastro e limpa dados ao trocar cliente. Cadastro ganhou campos de endereços completos; pedido mantém valores próprios para PCP/Expedição.
+- **Validação/publicação:** `run_cliente_comercial_test.js` e regressão da Expedição aprovados; commit `69f475b` no origin/main e Hosting publicado em 2026-09-11 por worktree limpo. Comercial, Cadastros e módulo cadastral HTTP 200, idênticos ao commit.
+- **Arquivos ativos neste escopo:** nenhum; entrega encerrada. MRP/Claude preservado.
+
 - **Entrega Expedição por paletes PA:** carga seleciona paletes inteiros conferidos, liberados pela Qualidade e endereçados; herda pedido/cliente/OP/lote, preserva caixas completas/parcial, conferência, laudo e dados comerciais. Saída física, movimentos e expedido dos pedidos confirmados em uma única transação, com idempotência e revalidação concorrente. NF externa permanece separada da situação física; API futura registrada no backlog.
 - **Validação Expedição:** run_expedicao_test.js e run_expedicao_ui_test.js aprovados (navegador desktop/celular, reload/retry, CQ, WMS, legado e concorrência), além das regressões de Conferência PA, Recebimento, Lote Interno, Qualidade e Descarte. Base medida em 5,32 MB; a transação na raiz deve ser reavaliada se o volume crescer significativamente.
 - **Commit/deploy Expedição:** `3d7a60f`, enviado ao origin/main e publicado em 2026-09-11 (Hosting, RTDB, confirmarExpedicaoPA e finalizarConferenciaPA), por worktree limpo. HTTP 200 e arquivos idênticos ao commit; callable sem login retorna 401. Estoque de PA ainda sem paletes na verificação.
