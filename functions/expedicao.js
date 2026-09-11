@@ -1,6 +1,7 @@
 'use strict';
 
 const {analisar} = require('./expedicao_regras');
+const {agendaDaSaida} = require('./agenda_expedicao');
 function erro(code, message) { throw Object.assign(new Error(message), {code}); }
 function chave(v) { return typeof v === 'string' && v.length > 0 && v.length <= 128 && !/[.#$[\]/]/.test(v); }
 function texto(v, max = 500) { return String(v || '').trim().slice(0, max); }
@@ -12,6 +13,7 @@ function prepararSaida(base, data, autor, uid, agora) {
     if (anterior.criadoPorUid !== uid) erro('permission-denied', 'Esta operação pertence a outro usuário.');
     return {cargaKey, carga: anterior, updates: {}, repetida: true};
   }
+  const agenda = agendaDaSaida(base, data);
   if (!Array.isArray(data.paletes) || !data.paletes.length || data.paletes.length > 100) erro('invalid-argument', 'Selecione entre 1 e 100 paletes.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data.data || '') || !Number.isFinite(Date.parse(data.data)) || new Date(data.data).toISOString().slice(0, 10) !== data.data) erro('invalid-argument', 'Informe uma data válida para a saída.');
   const hoje = new Date(agora).toLocaleDateString('en-CA', {timeZone: 'America/Sao_Paulo'});
@@ -76,9 +78,22 @@ function prepararSaida(base, data, autor, uid, agora) {
     pedidos, cliente: primeira.cliente, clienteKey: primeira.clienteKey, data: data.data, status: 'EXPEDIDO', tipo: data.tipo,
     enderecoEntrega: primeira.frete.enderecoEntrega || '', nf: texto(data.nf, 30), serie: texto(data.serie, 10), chaveNfe,
     statusFiscal: data.nf ? 'NF_EXTERNA_INFORMADA' : 'PENDENTE', valorFaturado: valor,
-    transportadora: texto(data.transportadora), veiculo: texto(data.veiculo, 100), observacoes: texto(data.observacoes, 2000),
+    transportadora: texto(data.transportadora), motorista: texto(data.motorista), contatoMotorista: texto(data.contatoMotorista, 60), placa: texto(data.placa, 20).toUpperCase(),
+    veiculo: texto(data.veiculo || [data.motorista, data.placa].filter(Boolean).join(' / '), 100), observacoes: texto(data.observacoes, 2000),
+    agendaKey: agenda ? data.agendaKey : null, agendamento: agenda ? JSON.parse(JSON.stringify(agenda)) : null,
     itens, totalPaletes: itens.length, totalUnidades: itens.reduce((s, l) => s + l.qtd, 0), criadoEm: agora, criadoPor: autor, criadoPorUid: uid};
   updates['expedicoes_comerciais/' + cargaKey] = carga;
+  if (agenda) {
+    const agPath = 'agendamentos_expedicao/' + data.agendaKey + '/';
+    updates[agPath + 'status'] = 'EXPEDIDO';
+    updates[agPath + 'expedicaoId'] = cargaKey;
+    updates[agPath + 'revisao'] = agenda.revisao + 1;
+    updates[agPath + 'atualizadoEm'] = agora;
+    updates[agPath + 'atualizadoPor'] = autor;
+    ['transportadora', 'motorista', 'contatoMotorista', 'placa'].forEach(k => { updates[agPath + k] = carga[k]; });
+    updates[agPath + 'historico/r' + (agenda.revisao + 1)] = {tipo: 'SAIDA_CONFIRMADA', em: agora, por: autor,
+      transportadora: carga.transportadora, motorista: carga.motorista, contatoMotorista: carga.contatoMotorista, placa: carga.placa};
+  }
   return {cargaKey, carga, updates, repetida: false};
 }
 module.exports = {prepararSaida};

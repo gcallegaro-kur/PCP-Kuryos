@@ -107,7 +107,7 @@
 <div class="header">
   <div>
     <h1>Logística</h1>
-    <div class="header-sub">Agendamento de entrega e recebimento de materiais dos Pedidos de Compra</div>
+    <div class="header-sub">Recebimento de materiais e agendamento de saídas de produto acabado</div>
   </div>
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
 </div>
@@ -119,6 +119,7 @@
 <div class="tabs">
   <button class="tab active" data-tab="receber">A Receber</button>
   <button class="tab" data-tab="historico">Histórico</button>
+  <button class="tab" data-tab="agenda-pa">Saídas de PA</button>
 </div>
 
 <div class="main">
@@ -128,6 +129,7 @@
   <div class="tab-panel" id="tab-historico">
     <div id="historicoList"></div>
   </div>
+  <div class="tab-panel" id="tab-agenda-pa"><div class="card"><h2>Agenda de saídas de PA</h2><p class="field-hint">Transportadora, motorista e placa são compartilhados com a Expedição. Para montar uma nova carga, selecione os paletes na Expedição.</p><div id="agendaPA"></div></div></div>
 </div>
 
 <!-- MODAL: Agendar Entrega -->
@@ -1297,5 +1299,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+<link rel="stylesheet" href="shared/agenda-pa.css">
+<script src="shared/agenda-pa-tela.js"></script>
+<script>AgendaPAUI.iniciar({container:document.getElementById('agendaPA'),db:db,fn:firebase.functions(),onErro:function(msg){showAlert(msg,'danger');}});</script>
 </body>
 </html>

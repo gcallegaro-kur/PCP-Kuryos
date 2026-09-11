@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Codex — Dev 3 11/09
+
+- **Escopo:** grade de Expedição baseada na planilha, composição compacta de caixas parciais e agenda de transporte PA compartilhada com Logística.
+- **Coordenação:** base do Dev 2 publicada em `3d7a60f`, arquivos liberados. Escopo ativo: `public/expedicao.html`, `public/logistica.html`, `public/shared/expedicao-grade*`, `public/shared/agenda-pa*`, `functions/agenda_expedicao.js`, `functions/expedicao.js`, `functions/index.js`, `database.rules.json`, testes de grade/agenda/UI, `public/manual_logistica.html` e este bloco. Não tocar no MRP/Claude.
+- **Entrega pronta:** grade por palete com filtros/ordenação, caixas completas e parcial na mesma linha, totais e histórico. Agenda PA acessível pela Expedição e Logística; transporte compartilhado com revisão/histórico, sem baixa ao agendar, sem palete em duas agendas, cancelamento com motivo. Confirmação encerra agenda e baixa estoque/pedidos atomicamente, preservando transporte agendado e efetivo.
+- **Validação:** testes de grade/parciais, agenda/handler com concorrência e permissão revogada, navegador em duas telas (transporte, revisão, reabertura, saída e histórico), reload/idempotência/celular e regressões de rota PC, Conferência PA, Recebimento, Lote Interno, Qualidade e Descarte aprovados. Revisão visual feita com dados de teste.
+- **Publicação:** commit/push/deploy em preparação por worktree limpo; MRP/Claude preservado.
+
 ### Codex
 
 - **Entrega Expedição por paletes PA:** carga seleciona paletes inteiros conferidos, liberados pela Qualidade e endereçados; herda pedido/cliente/OP/lote, preserva caixas completas/parcial, conferência, laudo e dados comerciais. Saída física, movimentos e expedido dos pedidos confirmados em uma única transação, com idempotência e revalidação concorrente. NF externa permanece separada da situação física; API futura registrada no backlog.

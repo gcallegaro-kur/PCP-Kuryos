@@ -6,10 +6,37 @@ const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {prepararFinalizacao} = require("./conferencia_pa");
 const {prepararSaida} = require("./expedicao");
+const {prepararAgenda} = require("./agenda_expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
 
 admin.initializeApp();
 const db = admin.database();
+
+exports.salvarAgendamentoExpedicaoPA = onCall({timeoutSeconds: 120, memory: "512MiB"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para agendar a carga.");
+  const uid = request.auth.uid;
+  const permitido = user => ["admin", "pcp", "logistica"].includes(user.role) || user.modulos && user.modulos.logistica === true;
+  const user = (await db.ref("usuarios/" + uid).once("value")).val() || {};
+  if (!permitido(user)) throw new HttpsError("permission-denied", "Seu perfil não pode agendar saídas de PA.");
+  const autor = user.nome || request.auth.token.email || uid;
+  const agora = new Date().toISOString();
+  let agenda, falha;
+  await db.ref().once("value");
+  const result = await db.ref().transaction(base => {
+    falha = null;
+    if (!base) return base;
+    try {
+      if (!permitido((base.usuarios || {})[uid] || {})) throw Object.assign(new Error("Permissão de Logística revogada."), {code: "permission-denied"});
+      agenda = prepararAgenda(base, request.data || {}, autor, uid, agora);
+      if (!base.agendamentos_expedicao) base.agendamentos_expedicao = {};
+      base.agendamentos_expedicao[agenda.agendaKey] = agenda;
+      return base;
+    } catch (e) { falha = e; return; }
+  }, undefined, false);
+  if (falha) throw new HttpsError(falha.code || "failed-precondition", falha.message);
+  if (!result.committed || !agenda) throw new HttpsError("aborted", "A agenda mudou. Reabra a carga e tente novamente.");
+  return {ok: true, agendaKey: agenda.agendaKey, revisao: agenda.revisao, status: agenda.status};
+});
 
 // A transação engloba saldo do palete, pedido e carga: qualquer alteração
 // concorrente (CQ, transferência, descarte ou outra saída) reexecuta a validação.

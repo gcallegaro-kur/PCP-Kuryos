@@ -1,0 +1,21 @@
+'use strict';
+const assert = require('node:assert/strict');
+const grade = require('./public/shared/expedicao-grade');
+const palete = (caixas, multiplo, parcial) => ({caixasFechadas: caixas, unidadesPorCaixa: multiplo,
+  unidadesCaixaParcial: parcial, saldoLote: caixas * multiplo + parcial});
+const misto = palete(12, 24, 7), parcial = palete(0, 24, 7), fechado = palete(4, 24, 0);
+assert.equal(grade.composicao(misto).resumo, '12 cx × 24 + 1 parcial com 7 = 295 un');
+assert.equal(grade.composicao(misto).volumes, 13);
+assert.equal(grade.composicao(parcial).resumo, '1 parcial com 7 = 7 un');
+assert.equal(grade.composicao(parcial).volumes, 1);
+assert.equal(grade.composicao(fechado).texto, '4 cx × 24');
+assert.equal(grade.composicao({...misto, saldoLote: 270}).valida, false, 'Saldo alterado não pode exibir composição antiga como válida');
+assert.equal(grade.composicao(palete(0, null, 7)).volumes, 1, 'Parcial sem múltiplo continua sendo uma caixa');
+assert.equal(grade.composicao({saldoLote: 7}).valida, false, 'Legado sem conferência não pode inventar caixas');
+assert.equal(grade.composicao(palete(1, 24, 24)).valida, false);
+assert.equal(grade.composicao(palete(1, 24, -1)).valida, false);
+assert.deepEqual(grade.totais([misto, parcial, fechado]), {paletes: 3, unidades: 398, caixasFechadas: 16, caixasParciais: 2, volumes: 18, composicoesPendentes: 0});
+assert.equal(grade.diasEstoque('2026-09-01T20:00:00Z', '2026-09-11'), 10);
+assert.equal(grade.diasEstoque('2026-09-11', '2026-09-01'), null);
+assert.equal(grade.diasEstoque('2026-02-30', '2026-09-11'), null);
+console.log('OK grade Expedição: caixas fechadas/parciais, volumes, saldo divergente, dados ausentes e dias em estoque.');
