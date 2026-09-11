@@ -3,6 +3,8 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {onValueCreated} = require("firebase-functions/v2/database");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
+const {prepararFinalizacao} = require("./conferencia_pa");
 
 admin.initializeApp();
 const db = admin.database();
@@ -1338,6 +1340,103 @@ async function sendApuracaoParcialEmail(hojeStr, turnoNome, totalItens, config, 
   `;
   await sendMailViaGraph(destinatarios, assunto, corpo, {html: true});
 }
+
+// Finalização da Conferência de Produto Acabado. A contagem continua leve no
+// navegador, mas a transformação em estoque acontece somente aqui: o servidor
+// relê OP, consenso, endereços e lotes anteriores, reserva a finalização e faz
+// uma única atualização multipath. Isso impede duas abas de criarem ou
+// sobrescreverem paletes diferentes para a mesma OP.
+exports.finalizarConferenciaPA = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para finalizar a conferência.");
+  const uid = request.auth.uid;
+  const userSnap = await db.ref("usuarios/" + uid).once("value");
+  const user = userSnap.val() || {};
+  const permitido = ["admin", "pcp", "logistica"].includes(user.role) || user.modulos && user.modulos.logistica === true;
+  if (!permitido) throw new HttpsError("permission-denied", "Seu perfil não pode finalizar a Conferência de Produto Acabado.");
+
+  const data = request.data || {};
+  const opKey = String(data.opKey || "").trim();
+  if (!opKey || /[.#$[\]\/]/.test(opKey)) throw new HttpsError("invalid-argument", "OP inválida.");
+  const confRef = db.ref("conferencias_pa/" + opKey);
+  const itemFromOp = (op) => sanitizeKey(op && op.sku);
+  const lerContexto = async () => {
+    const [opSnap, confSnap, endSnap] = await Promise.all([
+      db.ref("ops/" + opKey).once("value"), confRef.once("value"), db.ref("enderecos_estoque").once("value"),
+    ]);
+    const op = opSnap.val();
+    const lotesSnap = op && op.sku ? await db.ref("estoque_lotes/" + itemFromOp(op)).once("value") : null;
+    return {op, conf: confSnap.val(), enderecos: endSnap.val() || {}, lotesItem: lotesSnap ? lotesSnap.val() || {} : {}};
+  };
+  const autor = user.nome || request.auth.token.name || request.auth.token.email || uid;
+  const conciliacao = data.conciliacao && typeof data.conciliacao === "object" ? {
+    motivo: String(data.conciliacao.motivo || ""),
+    observacao: String(data.conciliacao.observacao || "").trim(),
+  } : null;
+
+  let contexto = await lerContexto();
+  if (contexto.conf && contexto.conf.finalizadoEm) {
+    return {ok: true, jaFinalizado: true, total: contexto.conf.qtdPaletizada, diferenca: contexto.conf.divergencia || 0, rncNumero: contexto.conf.rncNumero || null};
+  }
+  let plano;
+  try {
+    plano = prepararFinalizacao({...contexto, opKey, autor, conciliacao, agora: new Date().toISOString()});
+  } catch (e) {
+    throw new HttpsError(e.code || "failed-precondition", e.message);
+  }
+
+  const token = crypto.randomUUID();
+  const reservaEm = new Date().toISOString();
+  let erroTransacao = null;
+  const lock = await confRef.transaction((atual) => {
+    if (!atual) return;
+    if (atual.finalizadoEm) return atual;
+    const inicioLock = Date.parse(atual.finalizandoEm || "");
+    const lockVigente = atual.finalizacaoStatus === "FINALIZANDO" && Number.isFinite(inicioLock) && Date.now() - inicioLock < 120000;
+    if (lockVigente) return;
+    try {
+      const validado = prepararFinalizacao({opKey, op: contexto.op, conf: atual, enderecos: contexto.enderecos,
+        lotesItem: contexto.lotesItem, autor, conciliacao, agora: reservaEm});
+      if (validado.finalId !== plano.finalId) throw Object.assign(new Error("As contagens mudaram durante a finalização. Tente novamente."), {code: "aborted"});
+    } catch (e) {
+      erroTransacao = e;
+      return;
+    }
+    atual.finalizacaoStatus = "FINALIZANDO";
+    atual.finalizacaoId = plano.finalId;
+    atual.finalizacaoToken = token;
+    atual.finalizandoEm = reservaEm;
+    atual.finalizandoPor = autor;
+    return atual;
+  }, undefined, false);
+
+  const reservado = lock.snapshot && lock.snapshot.val() || {};
+  if (reservado.finalizadoEm) {
+    return {ok: true, jaFinalizado: true, total: reservado.qtdPaletizada, diferenca: reservado.divergencia || 0, rncNumero: reservado.rncNumero || null};
+  }
+  if (!lock.committed || reservado.finalizacaoToken !== token) {
+    if (erroTransacao) throw new HttpsError(erroTransacao.code || "failed-precondition", erroTransacao.message);
+    throw new HttpsError("aborted", "Outra sessão já está finalizando esta OP. Aguarde alguns segundos e atualize a tela.");
+  }
+
+  try {
+    contexto = await lerContexto();
+    if (!contexto.conf || contexto.conf.finalizacaoToken !== token) throw Object.assign(new Error("A reserva da finalização foi alterada."), {code: "aborted"});
+    plano = prepararFinalizacao({...contexto, opKey, autor, conciliacao, agora: new Date().toISOString()});
+    plano.updates["conferencias_pa/" + opKey + "/finalizacaoToken"] = null;
+    await db.ref().update(plano.updates);
+    return {ok: true, total: plano.total, diferenca: plano.diferenca, rncNumero: plano.rncNumero || null};
+  } catch (e) {
+    await confRef.transaction((atual) => {
+      if (!atual || atual.finalizadoEm || atual.finalizacaoToken !== token) return atual;
+      atual.finalizacaoStatus = "ERRO";
+      atual.finalizacaoErro = String(e.message || e).slice(0, 500);
+      atual.finalizacaoErroEm = new Date().toISOString();
+      atual.finalizacaoToken = null;
+      return atual;
+    }, undefined, false);
+    throw new HttpsError(e.code || "internal", e.message || "Não foi possível finalizar a conferência.");
+  }
+});
 
 exports.checkNotificacoes = onSchedule(
   {
