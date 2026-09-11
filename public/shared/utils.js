@@ -2079,7 +2079,7 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       loteKey: loteKey,
       enderecoKey: (res.snapshot.val() || {}).enderecoKey || null,
       enderecoCodigo: (res.snapshot.val() || {}).enderecoCodigo || null,
-      itemTipo: 'material',
+      itemTipo: (res.snapshot.val() || {}).itemTipo || 'material',
       itemCodigo: itemCodigo,
       itemNome: (res.snapshot.val() || {}).itemNome || null,
       unidade: (res.snapshot.val() || {}).unidade || null,
