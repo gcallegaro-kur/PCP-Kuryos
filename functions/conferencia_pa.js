@@ -111,6 +111,7 @@ function prepararFinalizacao({opKey, op, conf, enderecos, lotesItem, autor, conc
     const identificador = "PA-" + String(op.lote || opKey).replace(/[^A-Za-z0-9]/g, "-") + "-P" + numero;
     updates["estoque_lotes/" + itemKey + "/" + loteKey] = {
       itemTipo: "produto", itemCodigo: op.sku, itemNome: op.produto || op.produtoNome || null, unidade: "un",
+      skuPedidoKey: op.skuPedidoKey || null, cliente: op.cliente || null,
       loteOrigem: op.lote || null, opKey, opLote: op.lote || null, paleteNumero: numero, identificadorPalete: identificador,
       caixasFechadas: p.caixasFechadas, unidadesPorCaixa: p.unidadesPorCaixa || null,
       unidadesCaixaParcial: p.unidadesCaixaParcial, saldoLote: p.qtdUnidades, qtdOriginal: p.qtdUnidades,

@@ -761,6 +761,15 @@ Manipulação.
 
 ## Outros achados antigos — reconfirmar antes de agir
 
+- **API de emissão de NF a partir da Expedição** — confirmada como etapa futura em 11/09/2026.
+  As novas cargas de `expedicoes_comerciais` preservam os pedidos comerciais e cadastro do cliente,
+  OP/apontamento consolidado, paletes, caixas completas/parcial, conferência, Qualidade, endereço
+  de saída e transporte. Integrar emissão, retorno de chave/XML, autorização e cancelamento fiscal
+  sem repetir a saída física. Hoje `statusFiscal` distingue pendência de NF externa informada;
+  não representa autorização da SEFAZ. Pontos de integração: `functions/expedicao.js` e
+  `public/shared/expedicao-tela.js`. O provedor e os campos fiscais obrigatórios serão definidos
+  nesta etapa futura. Registrar/atualizar NF depois da saída também entra nesse fluxo.
+
 - **Migrar Cloud Functions de Node.js 20 antes de 30/10/2026** — o deploy
   de 11/09/2026 confirmou que o runtime está depreciado e será desativado
   nessa data. Planejar atualização conjunta do `functions/package.json`,

@@ -5,10 +5,46 @@ const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {prepararFinalizacao} = require("./conferencia_pa");
+const {prepararSaida} = require("./expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
 
 admin.initializeApp();
 const db = admin.database();
+
+// A transação engloba saldo do palete, pedido e carga: qualquer alteração
+// concorrente (CQ, transferência, descarte ou outra saída) reexecuta a validação.
+exports.confirmarExpedicaoPA = onCall({timeoutSeconds: 120, memory: "512MiB"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para confirmar a saída.");
+  const uid = request.auth.uid;
+  const user = (await db.ref("usuarios/" + uid).once("value")).val() || {};
+  if (!["admin", "pcp", "logistica"].includes(user.role) && !(user.modulos && user.modulos.logistica === true)) {
+    throw new HttpsError("permission-denied", "Seu perfil não pode confirmar a saída física de PA.");
+  }
+  const autor = user.nome || request.auth.token.email || uid;
+  const agora = new Date().toISOString();
+  let plano, falha;
+  // Prefetch evita que o primeiro callback aborte por cache vazio no Admin SDK.
+  await db.ref().once("value");
+  const result = await db.ref().transaction((base) => {
+    falha = null;
+    if (!base) return base;
+    try {
+      const perfil = (base.usuarios || {})[uid] || {};
+      if (!["admin", "pcp", "logistica"].includes(perfil.role) && !(perfil.modulos && perfil.modulos.logistica === true)) throw Object.assign(new Error("Permissão de Logística revogada."), {code: "permission-denied"});
+      plano = prepararSaida(base, request.data || {}, autor, uid, agora);
+      for (const [path, value] of Object.entries(plano.updates)) {
+        const partes = path.split("/");
+        let node = base;
+        for (const parte of partes.slice(0, -1)) node = node[parte] || (node[parte] = {});
+        node[partes[partes.length - 1]] = value;
+      }
+      return base;
+    } catch (e) { falha = e; return; }
+  }, undefined, false);
+  if (falha) throw new HttpsError(falha.code || "failed-precondition", falha.message);
+  if (!result.committed || !plano) throw new HttpsError("aborted", "O estoque mudou. Atualize a seleção e tente novamente.");
+  return {ok: true, cargaKey: plano.cargaKey, numero: plano.carga.numero, repetida: plano.repetida};
+});
 
 const OPS_API_KEY = defineSecret("OPS_API_KEY");
 const PEDIDOS_API_KEY = defineSecret("PEDIDOS_API_KEY");
