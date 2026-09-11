@@ -189,6 +189,7 @@
     .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
     .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
+<script src="shared/cliente-comercial.js"></script>
 </head>
 <body class="kuryos-theme has-sidebar">
 
@@ -1090,6 +1091,11 @@
               <input type="text" id="fUf-cli" maxlength="2" style="text-transform:uppercase">
             </div>
           </div>
+          <div class="form-grid">
+            <div class="form-group full"><label>Endereço de entrega</label><input type="text" id="fEnderecoEntrega-cli" placeholder="Logradouro, número, complemento, bairro, cidade, UF e CEP"></div>
+            <div class="form-group full"><label>Endereço de faturamento</label><input type="text" id="fEnderecoFaturamento-cli" placeholder="Endereço completo de faturamento"></div>
+          </div>
+          <div class="field-hint">Usados como sugestão nos novos pedidos comerciais. Alterações no cadastro não mudam pedidos já gravados.</div>
           <div class="section-label">Comercial</div>
           <div class="form-grid">
             <div class="form-group">
@@ -2510,6 +2516,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fContatoTecNome-cli').value = c.contatoTecNome || '';
     document.getElementById('fContatoTecTelefone-cli').value = c.contatoTecTelefone || '';
     document.getElementById('fContatoTecEmail-cli').value = c.contatoTecEmail || '';
+    document.getElementById('fEnderecoEntrega-cli').value = ClienteComercial.dados(c).pEntrega;
+    document.getElementById('fEnderecoFaturamento-cli').value = ClienteComercial.dados(c).pFaturamento;
     document.getElementById('fCidade-cli').value = c.cidade || '';
     document.getElementById('fUf-cli').value = c.uf || '';
     document.getElementById('fCondicaoPagamento-cli').value = c.condicaoPagamento || '';
@@ -2553,6 +2561,8 @@ document.addEventListener('DOMContentLoaded', function() {
       contatoTecNome: document.getElementById('fContatoTecNome-cli').value.trim(),
       contatoTecTelefone: document.getElementById('fContatoTecTelefone-cli').value.trim(),
       contatoTecEmail: document.getElementById('fContatoTecEmail-cli').value.trim(),
+      enderecoEntrega: document.getElementById('fEnderecoEntrega-cli').value.trim(),
+      enderecoFaturamento: document.getElementById('fEnderecoFaturamento-cli').value.trim(),
       cidade: document.getElementById('fCidade-cli').value.trim(),
       uf: document.getElementById('fUf-cli').value.trim().toUpperCase(),
       condicaoPagamento: document.getElementById('fCondicaoPagamento-cli').value.trim(),
