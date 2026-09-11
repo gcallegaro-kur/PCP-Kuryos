@@ -9,6 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+  <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -88,6 +90,11 @@
     .rc-item-progress{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
     .rc-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
     .rc-form-grid .span-2{grid-column:span 2}
+    .rc-lotes{display:grid;gap:10px;margin-top:10px}
+    .rc-lote-row{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:12px;position:relative}
+    .rc-lote-title{font-size:11px;font-weight:750;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+    .rc-lote-remove{position:absolute;right:10px;top:8px;border:0;background:none;color:var(--danger);font-size:12px;font-weight:700;cursor:pointer}
+    .rc-auto-lote{padding:9px 11px;border:1.5px dashed var(--border);border-radius:7px;background:var(--card);color:var(--muted);font-size:12px}
     .rc-readonly{background:var(--surface-2)!important;color:var(--muted)!important}
     .rc-required-note{font-size:11px;color:var(--muted);margin-top:12px}
     @media(max-width:920px){.rc-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -276,12 +283,15 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
+var functionsInstance = firebase.functions();
 var allPedidosCompra = {};
 var allTransportadoras = {};
 var allMateriais = {};
 var allEnderecosEstoque = {}; // WMS Fase 1 -- popula o <select> de endereço de destino no recebimento
 var agendandoKey = null;
 var recebendoKey = null;
+var recebimentoIdempotencyKey = null;
+var historicoLimite = 100;
 
 // Transportadora é um Tipo dentro do cadastro de Fornecedores (aba
 // Cadastros) -- não tem coleção própria, era redundante com Fornecedores
@@ -532,27 +542,70 @@ function checklistBadgeHtml(p) {
 /* ══════════════ Aba Histórico ══════════════ */
 function renderHistoricoList() {
   var box = document.getElementById('historicoList');
-  var pcs = Object.entries(allPedidosCompra).filter(function(e) {
-    return e[1].status === 'RECEBIDO_TOTAL' || e[1].status === 'CANCELADO';
-  }).sort(function(a, b) { return (b[1].dataCriacao || '').localeCompare(a[1].dataCriacao || ''); });
-
-  if (!pcs.length) {
-    box.innerHTML = '<div class="card"><div class="no-data">Nenhum Pedido de Compra finalizado ainda.</div></div>';
+  var recebimentos = [];
+  Object.entries(allPedidosCompra).forEach(function(pcEntry) {
+    Object.entries(pcEntry[1].recebimentos || {}).forEach(function(recEntry) {
+      recebimentos.push({pedidoKey:pcEntry[0], pedido:pcEntry[1], recebimentoKey:recEntry[0], recebimento:recEntry[1]});
+    });
+  });
+  recebimentos.sort(function(a, b) { return (b.recebimento.criadoEm || b.recebimento.data || '').localeCompare(a.recebimento.criadoEm || a.recebimento.data || ''); });
+  if (!recebimentos.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Nenhum recebimento registrado ainda.</div></div>';
     return;
   }
+  var totalRecebimentos = recebimentos.length;
+  recebimentos = recebimentos.slice(0, historicoLimite);
+  box.innerHTML = '<div class="field-hint" style="margin:0 0 10px">Exibindo ' + recebimentos.length + ' de ' + totalRecebimentos + ' recebimento(s), do mais recente para o mais antigo.</div>' + recebimentos.map(function(reg) {
+    var rec = reg.recebimento, cancelado = rec.status === 'CANCELADO';
+    var linhas = Object.entries(rec.itensRecebidos || {});
+    var operavel = !!rec.idempotencyKey && linhas.length > 0 && linhas.every(function(entry) { return !!entry[1].loteKey; });
+    var itensHtml = linhas.map(function(entry) {
+      var l = entry[1], q = l.entradaQualidade || {}, disponivelDevolver = Math.max(0, Number(l.qtdRecebidaAgora || 0) - Number(l.qtdDevolvida || 0));
+      return '<div style="padding:8px 0;border-top:1px solid var(--tint-gray-bg);display:flex;justify-content:space-between;gap:10px;align-items:center">' +
+        '<div><b>' + escapeHtml(q.loteInterno || 'Legado sem AK automático') + '</b> · ' + escapeHtml(l.materialCodigo || '') + ' — ' + escapeHtml(l.materialNome || '') +
+        '<div class="field-hint">Lote fornecedor: ' + escapeHtml(q.loteOrigem || '—') + ' · ' + fmtNum(l.qtdRecebidaAgora) + ' ' + escapeHtml(l.unidade || '') +
+        (l.qtdDevolvida ? ' · devolvido: ' + fmtNum(l.qtdDevolvida) : '') + '</div></div>' +
+        (!cancelado && operavel && q.loteInterno && l.loteKey && disponivelDevolver > 0 ? '<button class="btn btn-ghost btn-sm btn-devolver-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '" data-linha="' + escapeAttr(entry[0]) + '" data-max="' + escapeAttr(String(disponivelDevolver)) + '">Devolver</button>' : '') + '</div>';
+    }).join('');
+    return '<div class="pc-card"><div class="pc-card-head"><div><div class="pc-titulo">' + escapeHtml(reg.pedido.numeroFormatado || reg.pedidoKey) + ' — ' + escapeHtml(nomeOrigemPedido(reg.pedido)) + '</div>' +
+      '<div class="pc-sub">Recebido em ' + fmtData(rec.data || rec.criadoEm) + ' · NF ' + escapeHtml(rec.notaFiscal || '—') + ' · por ' + escapeHtml(rec.recebidoPor || '—') + '</div></div>' +
+      '<span class="badge ' + (cancelado ? 'badge-red' : 'badge-green') + '">' + (cancelado ? 'Cancelado' : 'Recebido') + '</span></div>' + itensHtml +
+      '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-ghost btn-sm btn-etiquetas-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">🏷️ Reimprimir etiquetas</button>' +
+      (!cancelado && operavel ? '<button class="btn btn-ghost btn-sm btn-cancelar-rec" style="color:var(--danger)" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">Cancelar recebimento</button>' : '') + '</div></div>';
+  }).join('') + (historicoLimite < totalRecebimentos ? '<button id="btnMaisHistorico" class="btn btn-ghost" style="width:100%;justify-content:center">Mostrar mais recebimentos</button>' : '');
+  box.querySelectorAll('.btn-etiquetas-rec').forEach(function(btn) { btn.addEventListener('click', function() { reimprimirRecebimento(btn.dataset.pc, btn.dataset.rec); }); });
+  box.querySelectorAll('.btn-cancelar-rec').forEach(function(btn) { btn.addEventListener('click', function() { cancelarRecebimentoTela(btn.dataset.pc, btn.dataset.rec); }); });
+  box.querySelectorAll('.btn-devolver-rec').forEach(function(btn) { btn.addEventListener('click', function() { devolverRecebimentoTela(btn.dataset.pc, btn.dataset.rec, btn.dataset.linha, Number(btn.dataset.max)); }); });
+  var mais = document.getElementById('btnMaisHistorico');
+  if (mais) mais.addEventListener('click', function() { historicoLimite += 100; renderHistoricoList(); });
+}
 
-  box.innerHTML = '<div class="card"><div class="card-title">Pedidos finalizados (' + pcs.length + ')</div><div style="padding:0 16px 16px">' +
-    '<table><thead><tr><th>Número</th><th>Fornecedor</th><th>Criado em</th><th>Itens</th><th>Status</th></tr></thead><tbody>' +
-    pcs.map(function(entry) {
-      var p = entry[1];
-      var itensResumo = Object.values(p.itens || {}).map(function(i) { return escapeHtml(i.materialCodigo) + ' (' + fmtNum(i.qtd) + ' ' + escapeHtml(i.unidade || '') + ')'; }).join(', ');
-      return '<tr><td class="code-cell" style="font-family:monospace;font-weight:700;color:var(--primary)">' + escapeHtml(p.numeroFormatado) + '</td>' +
-        '<td>' + escapeHtml(p.fornecedorNome || '') + '</td>' +
-        '<td>' + fmtData(p.dataCriacao) + '</td>' +
-        '<td style="font-size:12px">' + itensResumo + '</td>' +
-        '<td>' + (statusBadges[p.status] || '') + '</td></tr>';
-    }).join('') +
-    '</tbody></table></div></div>';
+function lotesEtiquetaDoRecebimento(pedidoKey, recebimentoKey) {
+  var p = allPedidosCompra[pedidoKey] || {}, rec = p.recebimentos && p.recebimentos[recebimentoKey] || {};
+  return Object.values(rec.itensRecebidos || {}).map(function(l) {
+    var q = l.entradaQualidade || {};
+    return {loteInterno:q.loteInterno, loteOrigem:q.loteOrigem, materialCodigo:l.materialCodigo, materialNome:l.materialNome,
+      quantidade:l.qtdRecebidaAgora, qtdVolumes:q.qtdVolumes || 1, unidade:l.unidade, enderecoCodigo:q.enderecoCodigo || '', dataRecebimento:rec.data,
+      dataValidade:q.dataValidade, fornecedorNome:p.fornecedorNome || p.origemNome, notaFiscal:rec.notaFiscal};
+  }).filter(function(l) { return l.loteInterno; });
+}
+function reimprimirRecebimento(pedidoKey, recebimentoKey) { imprimirEtiquetasRecebimento(lotesEtiquetaDoRecebimento(pedidoKey, recebimentoKey)); }
+function cancelarRecebimentoTela(pedidoKey, recebimentoKey) {
+  var motivo = window.prompt('Informe o motivo do cancelamento. Só é permitido antes da análise ou movimentação dos lotes:');
+  if (!motivo || !motivo.trim()) return;
+  functionsInstance.httpsCallable('cancelarRecebimento')({pedidoKey:pedidoKey, recebimentoKey:recebimentoKey, motivo:motivo.trim()})
+    .then(function() { showAlert('Recebimento cancelado e saldos estornados.', 'success'); })
+    .catch(function(err) { showAlert(err.message || 'Não foi possível cancelar.', 'danger'); });
+}
+function devolverRecebimentoTela(pedidoKey, recebimentoKey, linhaKey, maximo) {
+  var qtd = Number(window.prompt('Quantidade a devolver (máximo ' + fmtNum(maximo) + '):', String(maximo)));
+  if (!(qtd > 0)) return;
+  var motivo = window.prompt('Informe o motivo da devolução ao fornecedor:');
+  if (!motivo || !motivo.trim()) return;
+  var operacaoKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : db.ref('devolucoes_operacoes').push().key.replace(/[^A-Za-z0-9_-]/g, '');
+  functionsInstance.httpsCallable('registrarDevolucaoRecebimento')({pedidoKey:pedidoKey, recebimentoKey:recebimentoKey, linhaKey:linhaKey, quantidade:qtd, motivo:motivo.trim(), idempotencyKey:operacaoKey})
+    .then(function() { showAlert('Devolução registrada, estoque baixado e saldo do pedido reaberto.', 'success'); })
+    .catch(function(err) { showAlert(err.message || 'Não foi possível registrar a devolução.', 'danger'); });
 }
 
 /* ══════════════ Modal Agendar ══════════════ */
@@ -650,8 +703,24 @@ function codigoFornecedorRecebimento(material, fornecedorKey) {
 function opcoesAvaliacaoRecebimento() {
   return '<option value="">Selecione…</option><option value="5">5 — Ótimo</option><option value="4">4 — Bom</option><option value="3">3 — Regular</option><option value="2">2 — Ruim</option><option value="1">1 — Péssimo</option>';
 }
+function htmlLoteRecebimento(qtd, unidade, removivel) {
+  return '<div class="rc-lote-row">' +
+    (removivel ? '<button type="button" class="rc-lote-remove" title="Remover este lote">Remover</button>' : '') +
+    '<div class="rc-lote-title">Lote físico do fornecedor</div><div class="rc-form-grid">' +
+      '<div class="form-group"><label>Lote do fornecedor *</label><input class="rc-lote" type="text" placeholder="Use NÃO INFORMADO quando não existir"></div>' +
+      '<div class="form-group"><label>Lote interno</label><div class="rc-auto-lote">Gerado automaticamente ao confirmar</div></div>' +
+      '<div class="form-group"><label>Quantidade deste lote *</label><input type="number" class="rc-qtd" min="0" step="any" value="' + escapeAttr(String(qtd || 0)) + '"><div class="field-hint">' + escapeHtml(unidade || '') + '</div></div>' +
+      '<div class="form-group"><label>Volumes / embalagens *</label><input type="number" class="rc-volumes" min="1" step="1" value="1"><div class="field-hint">Gera uma etiqueta por volume.</div></div>' +
+      '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-amostragem" type="number" min="0" step="any" value="0"></div>' +
+      '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
+      '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
+      '<div class="form-group"><label>Validade</label><input type="date" class="rc-validade"></div>' +
+      '<div class="form-group"><label>Endereço físico de entrada *</label><select class="rc-endereco">' + opcoesEnderecoSelect() + '</select><div class="field-hint">Quarentena é status, não endereço.</div></div>' +
+    '</div></div>';
+}
 function openModalReceber(key) {
   recebendoKey = key;
+  recebimentoIdempotencyKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : db.ref('recebimentos_operacoes').push().key.replace(/[^A-Za-z0-9_-]/g, '');
   var p = allPedidosCompra[key];
   if (!p) return;
   document.getElementById('receberPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || p.origemNome || 'Origem não informada');
@@ -678,16 +747,18 @@ function openModalReceber(key) {
         '<div class="form-group span-2"><label>Identificação do material *</label><input class="rc-identificacao" type="text" value="' + escapeAttr(it.materialNome || '') + '" placeholder="Descrição conferida na etiqueta"></div>' +
         '<div class="form-group"><label>SKU interno</label><input class="rc-readonly rc-sku-interno" type="text" readonly value="' + escapeAttr(it.materialCodigo || '') + '"></div>' +
         '<div class="form-group"><label>SKU do fornecedor *</label><input class="rc-sku-fornecedor" type="text" value="' + escapeAttr(skuFornecedor) + '" placeholder="Código na etiqueta/NF"></div>' +
-        '<div class="form-group"><label>Lote do fornecedor *</label><input class="rc-lote" type="text" placeholder="Lote na embalagem"></div>' +
-        '<div class="form-group"><label>Lote interno *</label><input class="rc-lote-interno" type="text" placeholder="Identificação interna"></div>' +
-        '<div class="form-group"><label>Recebendo agora *</label><input type="number" class="rc-qtd" min="0" step="any" value="' + (restante > 0 ? restante : 0) + '"><div class="field-hint">' + escapeHtml(it.unidade || '') + '</div></div>' +
-        '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-amostragem" type="number" min="0" step="any" value="0"></div>' +
-        '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
-        '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
-        '<div class="form-group"><label>Validade</label><input type="date" class="rc-validade"></div>' +
-        '<div class="form-group span-2"><label>Endereço físico de entrada *</label><select class="rc-endereco">' + opcoesEnderecoSelect() + '</select><div class="field-hint">Quarentena é o status; informe onde o material ficará fisicamente.</div></div>' +
-      '</div></div>';
+      '</div><div class="rc-lotes">' + htmlLoteRecebimento(restante, it.unidade || '', false) + '</div>' +
+      '<button type="button" class="btn btn-ghost btn-sm rc-add-lote" style="margin-top:10px">＋ Outro lote deste material</button></div>';
   }).join('');
+  lista.querySelectorAll('.rc-add-lote').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var card = btn.closest('.rc-item-card');
+      card.querySelector('.rc-lotes').insertAdjacentHTML('beforeend', htmlLoteRecebimento(0, (p.itens[card.getAttribute('data-item')] || {}).unidade || '', true));
+    });
+  });
+  lista.onclick = function(e) {
+    if (e.target.classList.contains('rc-lote-remove')) e.target.closest('.rc-lote-row').remove();
+  };
   document.getElementById('modalReceber').classList.add('open');
 }
 
@@ -708,23 +779,29 @@ function opcoesEnderecoSelect() {
 }
 function closeModalReceber() { document.getElementById('modalReceber').classList.remove('open'); recebendoKey = null; }
 function lerItensRecebimentoDaTela() {
-  return Array.from(document.querySelectorAll('.rc-item-card')).map(function(card) {
-    return {
-      itemKey: card.getAttribute('data-item'),
-      tipoMaterial: card.querySelector('.rc-tipo').value,
+  var linhas = [];
+  document.querySelectorAll('.rc-item-card').forEach(function(card) {
+    var comum = {
+      itemKey: card.getAttribute('data-item'), tipoMaterial: card.querySelector('.rc-tipo').value,
       identificacaoMaterial: card.querySelector('.rc-identificacao').value.trim(),
       skuInterno: card.querySelector('.rc-sku-interno').value.trim(),
-      skuFornecedor: card.querySelector('.rc-sku-fornecedor').value.trim(),
-      loteOrigem: card.querySelector('.rc-lote').value.trim(),
-      loteInterno: card.querySelector('.rc-lote-interno').value.trim(),
-      qtdRecebida: Number(card.querySelector('.rc-qtd').value || 0),
-      qtdAmostragem: Number(card.querySelector('.rc-amostragem').value),
-      certificadoFornecedor: card.querySelector('.rc-certificado').value,
-      condicoesEmbalagem: Number(card.querySelector('.rc-cond-embalagem').value),
-      dataValidade: card.querySelector('.rc-validade').value || null,
-      enderecoKey: card.querySelector('.rc-endereco').value
+      skuFornecedor: card.querySelector('.rc-sku-fornecedor').value.trim()
     };
+    card.querySelectorAll('.rc-lote-row').forEach(function(row) {
+      var qtd = Number(row.querySelector('.rc-qtd').value || 0);
+      if (qtd <= 0) return;
+      linhas.push(Object.assign({}, comum, {
+        loteOrigem: row.querySelector('.rc-lote').value.trim(), qtdRecebida: qtd,
+        qtdVolumes: Number(row.querySelector('.rc-volumes').value),
+        qtdAmostragem: Number(row.querySelector('.rc-amostragem').value),
+        certificadoFornecedor: row.querySelector('.rc-certificado').value,
+        condicoesEmbalagem: Number(row.querySelector('.rc-cond-embalagem').value),
+        dataValidade: row.querySelector('.rc-validade').value || null,
+        enderecoKey: row.querySelector('.rc-endereco').value
+      }));
+    });
   });
+  return linhas;
 }
 function validarEntradaRecebimento(dados) {
   if (!dados.data) return 'Informe a data do recebimento.';
@@ -741,7 +818,6 @@ function validarEntradaRecebimento(dados) {
     if (!it.identificacaoMaterial) return 'Informe a identificação do material de ' + rotulo + '.';
     if (!it.skuFornecedor) return 'Informe o SKU do fornecedor de ' + rotulo + '.';
     if (!it.loteOrigem) return 'Informe o lote do fornecedor de ' + rotulo + '.';
-    if (!it.loteInterno) return 'Informe o lote interno de ' + rotulo + '.';
     if (!isFinite(it.qtdAmostragem) || it.qtdAmostragem < 0) return 'Informe uma quantidade de amostragem válida para ' + rotulo + '.';
     if (it.certificadoFornecedor !== 'SIM' && it.certificadoFornecedor !== 'NAO') return 'Informe se ' + rotulo + ' veio com certificado do fornecedor.';
     if (![1, 2, 3, 4, 5].includes(Number(it.condicoesEmbalagem))) return 'Avalie as condições da embalagem de ' + rotulo + ' de 1 a 5.';
@@ -764,7 +840,7 @@ function validarEntradaRecebimento(dados) {
 // a função automaticamente com o dado mais recente do servidor sempre que
 // há conflito, então o resultado final sempre reflete TODOS os
 // recebimentos concorrentes, não só o último a chegar.
-function saveReceber() {
+function saveReceberLegado() {
   var p = allPedidosCompra[recebendoKey];
   if (!p) return;
   // Captura antes de fechar o modal. closeModalReceber limpa recebendoKey;
@@ -952,6 +1028,65 @@ function incrementarEstoque(itensRecebidos, origemTipo, origemRef) {
   return Promise.all(itens.map(function(it) {
     return ajustarEstoque(db, it.materialCodigo, it.qtdRecebidaAgora, origemTipo, origemRef, { materialNome: it.materialNome, unidade: it.unidade });
   }));
+}
+
+function escaparEtiqueta(valor) {
+  return String(valor == null ? '' : valor).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; });
+}
+function imprimirEtiquetasRecebimento(lotes) {
+  if (!lotes || !lotes.length) return;
+  var janela = window.open('', '_blank', 'width=900,height=700');
+  if (!janela) { showAlert('O navegador bloqueou a janela de etiquetas. Libere pop-ups e use Reimprimir no Histórico.', 'danger'); return; }
+  var etiquetas = [];
+  lotes.forEach(function(l) { for (var v = 1; v <= (Number(l.qtdVolumes) || 1); v++) etiquetas.push({lote:l, volume:v, total:Number(l.qtdVolumes) || 1}); });
+  var cards = etiquetas.map(function(et) {
+    var l = et.lote;
+    return '<section><div class="status">QUARENTENA</div><h1>' + escaparEtiqueta(l.loteInterno) + '</h1>' +
+      '<h2>' + escaparEtiqueta(l.materialCodigo) + ' — ' + escaparEtiqueta(l.materialNome) + '</h2>' +
+      '<div class="grid"><b>Lote fornecedor</b><span>' + escaparEtiqueta(l.loteOrigem) + '</span>' +
+      '<b>Fornecedor</b><span>' + escaparEtiqueta(l.fornecedorNome || '—') + '</span>' +
+      '<b>Quantidade</b><span>' + escaparEtiqueta(l.quantidade) + ' ' + escaparEtiqueta(l.unidade) + '</span>' +
+      '<b>Volume</b><span>' + et.volume + ' de ' + et.total + '</span>' +
+      '<b>Recebimento / NF</b><span>' + escaparEtiqueta(l.dataRecebimento) + ' · ' + escaparEtiqueta(l.notaFiscal) + '</span>' +
+      '<b>Validade</b><span>' + escaparEtiqueta(l.dataValidade || 'Não se aplica') + '</span>' +
+      '<b>Endereço</b><span>' + escaparEtiqueta(l.enderecoCodigo || '—') + '</span></div>' +
+      '<div class="codes">' + code39Svg(l.loteInterno, 10, 0.25) + qrCodeSvg(l.loteInterno, 18) + '</div></section>';
+  }).join('');
+  janela.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas de recebimento</title><style>@page{size:100mm 70mm;margin:4mm}body{font-family:Arial,sans-serif;margin:0;color:#111}section{width:92mm;min-height:62mm;border:2px solid #111;border-radius:8px;padding:5mm;box-sizing:border-box;page-break-after:always;position:relative}.status{position:absolute;right:5mm;top:5mm;background:#f59e0b;color:#111;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:800}h1{font-size:24px;margin:0 0 5px}h2{font-size:12px;margin:0 0 9px;max-width:66mm}.grid{display:grid;grid-template-columns:30mm 1fr;gap:3px;font-size:10px}.codes{display:flex;align-items:center;justify-content:space-between;margin-top:5px;height:18mm}.codes svg{max-width:68mm}@media print{section:last-child{page-break-after:auto}}</style></head><body>' + cards + '<script>window.onload=function(){window.print()}<\/script></body></html>');
+  janela.document.close();
+}
+
+// Fluxo vigente: o navegador apenas coleta os dados. O servidor gera os AKs
+// e confirma PC + estoque + lotes + movimentos na mesma operação idempotente.
+function saveReceber() {
+  var p = allPedidosCompra[recebendoKey];
+  if (!p) return;
+  var pedidoKey = recebendoKey;
+  var payload = {
+    pedidoKey: pedidoKey,
+    idempotencyKey: recebimentoIdempotencyKey,
+    data: document.getElementById('rcData').value,
+    notaFiscal: document.getElementById('rcNotaFiscal').value.trim(),
+    condicoesVeiculo: Number(document.getElementById('rcCondVeiculo').value),
+    observacoes: document.getElementById('rcObservacoes').value.trim(),
+    linhas: lerItensRecebimentoDaTela()
+  };
+  var erro = validarEntradaRecebimento({data:payload.data, notaFiscal:payload.notaFiscal, condicoesVeiculo:payload.condicoesVeiculo, itens:payload.linhas});
+  if (erro) { showAlert(erro, 'danger'); return; }
+  document.getElementById('modalReceberSave').disabled = true;
+  document.getElementById('modalReceberSave').textContent = 'Registrando com segurança…';
+  functionsInstance.httpsCallable('registrarRecebimento')(payload).then(function(res) {
+    var resultado = res.data || {};
+    closeModalReceber();
+    showAlert((resultado.lotes || []).length + ' lote(s) interno(s) gerado(s): ' + (resultado.lotes || []).map(function(l) { return l.loteInterno; }).join(', '), 'success');
+    imprimirEtiquetasRecebimento(resultado.lotes || []);
+  }).catch(function(err) {
+    var msg = err && err.message ? err.message.replace(/^.*?:\s*/, '') : 'Não foi possível registrar o recebimento.';
+    showAlert(msg, 'danger');
+  }).finally(function() {
+    var btn = document.getElementById('modalReceberSave');
+    btn.disabled = false; btn.textContent = 'Confirmar Recebimento';
+  });
 }
 
 /* ══════════════ Modal Checklist de Etiqueta ══════════════ */

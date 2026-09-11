@@ -5,6 +5,7 @@ const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const {prepararFinalizacao} = require("./conferencia_pa");
+const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
 
 admin.initializeApp();
 const db = admin.database();
@@ -1340,6 +1341,306 @@ async function sendApuracaoParcialEmail(hojeStr, turnoNome, totalItens, config, 
   `;
   await sendMailViaGraph(destinatarios, assunto, corpo, {html: true});
 }
+
+function podeOperarLogistica(user) {
+  return ["admin", "pcp", "logistica"].includes(user && user.role) || user && user.modulos && user.modulos.logistica === true;
+}
+
+async function usuarioCallableLogistica(request) {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para registrar o recebimento.");
+  const snap = await db.ref("usuarios/" + request.auth.uid).once("value");
+  const user = snap.val() || {};
+  if (!podeOperarLogistica(user)) throw new HttpsError("permission-denied", "Seu perfil não pode operar recebimentos.");
+  return {uid: request.auth.uid, user, autor: user.nome || request.auth.token.name || request.auth.token.email || request.auth.uid};
+}
+
+async function reservarLock(ref, token, autor) {
+  const agora = new Date().toISOString();
+  const tx = await ref.transaction((atual) => {
+    const inicio = Date.parse(atual && atual.iniciadoEm || "");
+    if (atual && atual.token !== token && Number.isFinite(inicio) && Date.now() - inicio < 120000) return;
+    return {token, autor, iniciadoEm: agora};
+  }, undefined, false);
+  return tx.committed && tx.snapshot.val() && tx.snapshot.val().token === token;
+}
+
+function maiorSequenciaLoteInterno(valor, ano) {
+  let maior = ano === 2026 ? 575 : 0;
+  const regex = new RegExp(`^AK-?${ano}-?0*(\\d+)$`, "i");
+  function visitar(no) {
+    if (!no || typeof no !== "object") return;
+    if (no.loteInterno) {
+      const match = String(no.loteInterno).trim().match(regex);
+      if (match) maior = Math.max(maior, Number(match[1]) || 0);
+    }
+    Object.values(no).forEach(visitar);
+  }
+  visitar(valor);
+  return maior;
+}
+
+// Recebimento de materiais: toda a cadeia operacional é efetivada por uma
+// única atualização multipath no servidor. O contador é reservado antes e
+// pode deixar lacunas justificadas em falha, mas um AK nunca é repetido.
+exports.registrarRecebimento = onCall(async (request) => {
+  const identidade = await usuarioCallableLogistica(request);
+  const data = request.data || {};
+  const pedidoKey = String(data.pedidoKey || "").trim();
+  const idempotencyKey = String(data.idempotencyKey || "").trim();
+  if (!pedidoKey || /[.#$[\]\/]/.test(pedidoKey)) throw new HttpsError("invalid-argument", "Pedido de Compra inválido.");
+  if (!/^[A-Za-z0-9_-]{12,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "Identificador do recebimento inválido.");
+
+  const operacaoRef = db.ref(`recebimentos_operacoes/${identidade.uid}/${idempotencyKey}`);
+  const anterior = (await operacaoRef.once("value")).val();
+  if (anterior && anterior.status === "CONCLUIDO") return anterior.resultado;
+
+  const token = crypto.randomUUID();
+  const pcLockRef = db.ref("recebimentos_locks/" + pedidoKey);
+  const conseguiuLock = await reservarLock(pcLockRef, token, identidade.autor);
+  if (!conseguiuLock) throw new HttpsError("aborted", "Outro recebimento deste pedido está sendo finalizado. Aguarde alguns segundos e tente novamente.");
+
+  try {
+    await operacaoRef.set({status: "PROCESSANDO", pedidoKey, token, iniciadoEm: new Date().toISOString(), autor: identidade.autor});
+    const [pedidoSnap, enderecosSnap] = await Promise.all([
+      db.ref("pedidos_compra/" + pedidoKey).once("value"), db.ref("enderecos_estoque").once("value"),
+    ]);
+    const pedido = pedidoSnap.val();
+    if (!pedido) throw Object.assign(new Error("Pedido de Compra não encontrado."), {code: "not-found"});
+    if (["CANCELADO"].includes(pedido.status)) throw Object.assign(new Error("O Pedido de Compra está cancelado."), {code: "failed-precondition"});
+    const entrada = validarEPrepararLinhas(data, pedido, enderecosSnap.val() || {});
+    const ano = Number(entrada.data.slice(0, 4));
+    const contadorRef = db.ref("contadores_lote_interno/" + ano);
+    const contadorAntes = await contadorRef.once("value");
+    let baseExistente = ano === 2026 ? 575 : 0;
+    if (!contadorAntes.exists()) {
+      const lotesExistentes = await db.ref("estoque_lotes").once("value");
+      baseExistente = maiorSequenciaLoteInterno(lotesExistentes.val() || {}, ano);
+    }
+    const contadorTx = await contadorRef.transaction((atual) => Math.max(Number(atual) || 0, baseExistente) + entrada.linhas.length, undefined, false);
+    if (!contadorTx.committed) throw Object.assign(new Error("Não foi possível reservar os lotes internos."), {code: "aborted"});
+    const fimSequencia = Number(contadorTx.snapshot.val());
+    const inicioSequencia = fimSequencia - entrada.linhas.length + 1;
+    const agora = new Date().toISOString();
+    const recKey = "REC-" + idempotencyKey;
+    const deltas = {};
+    Object.entries(entrada.totais).forEach(([key, qtd]) => { deltas[key] = qtd; });
+    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const updates = {};
+    const itensRecebidos = {};
+    const lotesResultado = [];
+    const estoqueSomado = {};
+
+    entrada.linhas.forEach((linha, indice) => {
+      const loteInterno = formatarLoteInterno(ano, inicioSequencia + indice);
+      const materialCodigo = linha.item.materialCodigo;
+      const materialNome = linha.item.materialNome || linha.identificacaoMaterial;
+      const unidade = linha.item.unidade || "";
+      const materialKey = sanitizeKey(materialCodigo);
+      const linhaKey = `L${String(indice + 1).padStart(3, "0")}`;
+      const loteKey = sanitizeKey(loteInterno);
+      const recebimento = {
+        tipoMaterial: linha.tipoMaterial, identificacaoMaterial: linha.identificacaoMaterial,
+        skuInterno: materialCodigo, skuFornecedor: linha.skuFornecedor,
+        loteInterno, loteOrigem: linha.loteOrigem, notaFiscal: entrada.notaFiscal,
+        qtdRecebida: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, qtdAmostragem: linha.qtdAmostragem,
+        certificadoFornecedor: linha.certificadoFornecedor,
+        condicoesVeiculo: entrada.condicoesVeiculo, condicoesEmbalagem: linha.condicoesEmbalagem,
+        fornecedorKey: pedido.fornecedorKey || null,
+        fornecedorNome: pedido.fornecedorNome || pedido.origemNome || null,
+        recebidoPor: identidade.autor, recebidoEm: agora,
+      };
+      itensRecebidos[linhaKey] = {
+        itemKey: linha.itemKey, materialCodigo, materialNome, unidade,
+        qtdRecebidaAgora: linha.qtdRecebida, loteKey,
+        entradaQualidade: {...recebimento, dataValidade: linha.dataValidade, enderecoKey: linha.enderecoKey, enderecoCodigo: linha.enderecoCodigo},
+      };
+      updates[`estoque_lotes/${materialKey}/${loteKey}`] = {
+        itemTipo: "material", itemCodigo: materialCodigo, itemNome: materialNome, unidade,
+        loteOrigem: linha.loteOrigem, loteInterno, dataValidade: linha.dataValidade,
+        dataRecebimento: entrada.data, saldoLote: linha.qtdRecebida, qtdOriginal: linha.qtdRecebida,
+        enderecoKey: linha.enderecoKey, enderecoCodigo: linha.enderecoCodigo,
+        origemTipo: "recebimento_pc", origemRef: pedidoKey, recebimentoKey: recKey,
+        recebimentoLinhaKey: linhaKey, pedidoItemKey: linha.itemKey, recebimento,
+        status: "QUARENTENA", criadoPor: identidade.autor, criadoEm: agora, atualizadoEm: agora,
+      };
+      updates[`lotes_internos/${loteKey}`] = {loteInterno, materialKey, loteKey, pedidoKey, recebimentoKey: recKey,
+        criadoEm: agora, criadoPor: identidade.autor};
+      const movKey = db.ref(`movimentos_estoque/${materialKey}`).push().key;
+      updates[`movimentos_estoque/${materialKey}/${movKey}`] = {
+        tipo: "recebimento_pc", motivo: "RECEBIMENTO", qtd: linha.qtdRecebida, saldoApos: null,
+        ref: pedidoKey, loteKey, enderecoKey: linha.enderecoKey, itemTipo: "material",
+        itemCodigo: materialCodigo, itemNome: materialNome, unidade, autor: identidade.autor, em: agora,
+      };
+      estoqueSomado[materialKey] = estoqueSomado[materialKey] || {qtd: 0, materialCodigo, materialNome, unidade};
+      estoqueSomado[materialKey].qtd += linha.qtdRecebida;
+      lotesResultado.push({loteInterno, loteOrigem: linha.loteOrigem, loteKey, materialKey, materialCodigo, materialNome,
+        quantidade: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, unidade, enderecoCodigo: linha.enderecoCodigo, dataRecebimento: entrada.data,
+        dataValidade: linha.dataValidade, fornecedorNome: pedido.fornecedorNome || pedido.origemNome || null,
+        notaFiscal: entrada.notaFiscal});
+    });
+
+    Object.entries(apos.novosTotais).forEach(([key, qtd]) => { updates[`pedidos_compra/${pedidoKey}/itens/${key}/qtdRecebida`] = qtd; });
+    updates[`pedidos_compra/${pedidoKey}/status`] = apos.status;
+    updates[`pedidos_compra/${pedidoKey}/recebimentos/${recKey}`] = {
+      data: entrada.data, notaFiscal: entrada.notaFiscal, itensRecebidos,
+      condicoesVeiculo: entrada.condicoesVeiculo, observacoes: String(data.observacoes || "").trim().slice(0, 1000),
+      recebidoPor: identidade.autor, criadoEm: agora, status: "ATIVO", idempotencyKey,
+    };
+    Object.entries(estoqueSomado).forEach(([key, info]) => {
+      updates[`estoque/${key}/saldoAtual`] = admin.database.ServerValue.increment(info.qtd);
+      updates[`estoque/${key}/materialCodigo`] = info.materialCodigo;
+      updates[`estoque/${key}/materialNome`] = info.materialNome;
+      updates[`estoque/${key}/unidade`] = info.unidade;
+      updates[`estoque/${key}/ultimaAtualizacao`] = agora;
+      updates[`estoque/${key}/ultimaMovimentacao`] = {tipo: "recebimento_pc", qtd: info.qtd, ref: pedidoKey, em: agora};
+    });
+    const resultado = {ok: true, pedidoKey, recebimentoKey: recKey, statusPedido: apos.status, lotes: lotesResultado};
+    updates[`recebimentos_operacoes/${identidade.uid}/${idempotencyKey}`] = {status: "CONCLUIDO", pedidoKey, concluidoEm: agora, autor: identidade.autor, resultado};
+    updates[`recebimentos_locks/${pedidoKey}`] = null;
+    await db.ref().update(updates);
+    return resultado;
+  } catch (e) {
+    await Promise.all([
+      pcLockRef.transaction((atual) => atual && atual.token === token ? null : atual, undefined, false),
+      operacaoRef.update({status: "ERRO", erro: String(e.message || e).slice(0, 500), erroEm: new Date().toISOString()}),
+    ]).catch(() => null);
+    throw new HttpsError(e.code || "internal", e.message || "Não foi possível registrar o recebimento.");
+  }
+});
+
+exports.cancelarRecebimento = onCall(async (request) => {
+  const identidade = await usuarioCallableLogistica(request);
+  const data = request.data || {};
+  const pedidoKey = String(data.pedidoKey || "").trim();
+  const recebimentoKey = String(data.recebimentoKey || "").trim();
+  const motivo = String(data.motivo || "").trim().slice(0, 500);
+  if (!pedidoKey || !recebimentoKey || !motivo) throw new HttpsError("invalid-argument", "Pedido, recebimento e motivo são obrigatórios.");
+  const token = crypto.randomUUID();
+  const lockRef = db.ref("recebimentos_locks/" + pedidoKey);
+  if (!await reservarLock(lockRef, token, identidade.autor)) throw new HttpsError("aborted", "Outro recebimento deste pedido está em processamento.");
+  try {
+    const pedidoSnap = await db.ref("pedidos_compra/" + pedidoKey).once("value");
+    const pedido = pedidoSnap.val();
+    const recebimento = pedido && pedido.recebimentos && pedido.recebimentos[recebimentoKey];
+    if (!recebimento) throw Object.assign(new Error("Recebimento não encontrado."), {code: "not-found"});
+    if (recebimento.status === "CANCELADO") {
+      await lockRef.transaction((atual) => atual && atual.token === token ? null : atual, undefined, false);
+      return {ok: true, jaCancelado: true};
+    }
+    const linhas = Object.values(recebimento.itensRecebidos || {});
+    const lotes = await Promise.all(linhas.map((linha) => db.ref(`estoque_lotes/${sanitizeKey(linha.materialCodigo)}/${linha.loteKey}`).once("value")));
+    lotes.forEach((snap, i) => {
+      const lote = snap.val();
+      if (!lote) throw Object.assign(new Error(`O lote ${linhas[i].entradaQualidade && linhas[i].entradaQualidade.loteInterno || ""} não foi encontrado.`), {code: "failed-precondition"});
+      if (lote.status !== "QUARENTENA" || Math.abs((Number(lote.saldoLote) || 0) - (Number(lote.qtdOriginal) || 0)) > 0.0001) {
+        throw Object.assign(new Error(`O lote ${lote.loteInterno || linhas[i].loteKey} já foi analisado ou movimentado. Use devolução/RNC em vez de cancelar.`), {code: "failed-precondition"});
+      }
+    });
+    const deltas = {};
+    linhas.forEach((linha) => { deltas[linha.itemKey] = (deltas[linha.itemKey] || 0) - (Number(linha.qtdRecebidaAgora) || 0); });
+    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const agora = new Date().toISOString();
+    const updates = {};
+    Object.entries(apos.novosTotais).forEach(([key, qtd]) => { updates[`pedidos_compra/${pedidoKey}/itens/${key}/qtdRecebida`] = qtd; });
+    updates[`pedidos_compra/${pedidoKey}/status`] = apos.status;
+    updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/status`] = "CANCELADO";
+    updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/cancelamento`] = {motivo, por: identidade.autor, em: agora};
+    const estoqueCancelado = {};
+    linhas.forEach((linha, i) => {
+      const qtd = Number(linha.qtdRecebidaAgora) || 0;
+      const materialKey = sanitizeKey(linha.materialCodigo);
+      estoqueCancelado[materialKey] = (estoqueCancelado[materialKey] || 0) + qtd;
+      updates[`estoque_lotes/${materialKey}/${linha.loteKey}/saldoLote`] = 0;
+      updates[`estoque_lotes/${materialKey}/${linha.loteKey}/status`] = "CANCELADO";
+      updates[`estoque_lotes/${materialKey}/${linha.loteKey}/cancelamento`] = {motivo, por: identidade.autor, em: agora};
+      updates[`estoque_lotes/${materialKey}/${linha.loteKey}/atualizadoEm`] = agora;
+      const movKey = db.ref(`movimentos_estoque/${materialKey}`).push().key;
+      updates[`movimentos_estoque/${materialKey}/${movKey}`] = {tipo: "cancelamento_recebimento", motivo: "CANCELAMENTO DE RECEBIMENTO", qtd: -qtd,
+        saldoApos: null, ref: pedidoKey, loteKey: linha.loteKey, itemTipo: "material", itemCodigo: linha.materialCodigo,
+        itemNome: linha.materialNome || null, unidade: linha.unidade || null, autor: identidade.autor, observacao: motivo, em: agora};
+    });
+    Object.entries(estoqueCancelado).forEach(([materialKey, qtd]) => {
+      updates[`estoque/${materialKey}/saldoAtual`] = admin.database.ServerValue.increment(-qtd);
+      updates[`estoque/${materialKey}/ultimaAtualizacao`] = agora;
+      updates[`estoque/${materialKey}/ultimaMovimentacao`] = {tipo: "cancelamento_recebimento", qtd: -qtd, ref: pedidoKey, em: agora};
+    });
+    updates[`recebimentos_locks/${pedidoKey}`] = null;
+    await db.ref().update(updates);
+    return {ok: true, statusPedido: apos.status};
+  } catch (e) {
+    await lockRef.transaction((atual) => atual && atual.token === token ? null : atual, undefined, false).catch(() => null);
+    throw new HttpsError(e.code || "internal", e.message || "Não foi possível cancelar o recebimento.");
+  }
+});
+
+exports.registrarDevolucaoRecebimento = onCall(async (request) => {
+  const identidade = await usuarioCallableLogistica(request);
+  const data = request.data || {};
+  const pedidoKey = String(data.pedidoKey || "").trim();
+  const recebimentoKey = String(data.recebimentoKey || "").trim();
+  const linhaKey = String(data.linhaKey || "").trim();
+  const qtd = Number(data.quantidade);
+  const motivo = String(data.motivo || "").trim().slice(0, 500);
+  const idempotencyKey = String(data.idempotencyKey || "").trim();
+  if (!pedidoKey || !recebimentoKey || !linhaKey || !(qtd > 0) || !motivo || !/^[A-Za-z0-9_-]{12,100}$/.test(idempotencyKey)) throw new HttpsError("invalid-argument", "Recebimento, lote, quantidade, motivo e identificador são obrigatórios.");
+  const operacaoRef = db.ref(`devolucoes_operacoes/${identidade.uid}/${idempotencyKey}`);
+  const anterior = (await operacaoRef.once("value")).val();
+  if (anterior && anterior.status === "CONCLUIDO") return anterior.resultado;
+  const token = crypto.randomUUID();
+  const lockRef = db.ref("recebimentos_locks/" + pedidoKey);
+  if (!await reservarLock(lockRef, token, identidade.autor)) throw new HttpsError("aborted", "Outro recebimento deste pedido está em processamento.");
+  try {
+    await operacaoRef.set({status: "PROCESSANDO", pedidoKey, recebimentoKey, linhaKey, token, iniciadoEm: new Date().toISOString()});
+    const pedidoSnap = await db.ref("pedidos_compra/" + pedidoKey).once("value");
+    const pedido = pedidoSnap.val();
+    const recebimento = pedido && pedido.recebimentos && pedido.recebimentos[recebimentoKey];
+    const linha = recebimento && recebimento.itensRecebidos && recebimento.itensRecebidos[linhaKey];
+    if (!linha) throw Object.assign(new Error("Lote do recebimento não encontrado."), {code: "not-found"});
+    const materialKey = sanitizeKey(linha.materialCodigo);
+    const loteRef = db.ref(`estoque_lotes/${materialKey}/${linha.loteKey}`);
+    const lote = (await loteRef.once("value")).val();
+    if (!lote) throw Object.assign(new Error("Lote de estoque não encontrado."), {code: "not-found"});
+    if (!["QUARENTENA", "REPROVADO"].includes(lote.status)) throw Object.assign(new Error("Somente lotes em quarentena ou reprovados podem ser devolvidos por este fluxo."), {code: "failed-precondition"});
+    const saldo = Number(lote.saldoLote) || 0;
+    if (qtd > saldo + 0.0001) throw Object.assign(new Error(`A devolução excede o saldo do lote (${saldo}).`), {code: "failed-precondition"});
+    const devolvidaAntes = Number(linha.qtdDevolvida) || 0;
+    const agora = new Date().toISOString();
+    const itemAtual = pedido.itens && pedido.itens[linha.itemKey] || {};
+    const deltas = {[linha.itemKey]: -qtd};
+    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const novoSaldo = Math.max(0, saldo - qtd);
+    const movKey = db.ref(`movimentos_estoque/${materialKey}`).push().key;
+    const eventoKey = db.ref(`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/devolucoes`).push().key;
+    const updates = {};
+    updates[`pedidos_compra/${pedidoKey}/itens/${linha.itemKey}/qtdRecebida`] = apos.novosTotais[linha.itemKey];
+    updates[`pedidos_compra/${pedidoKey}/status`] = apos.status;
+    updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/itensRecebidos/${linhaKey}/qtdDevolvida`] = devolvidaAntes + qtd;
+    updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/devolucoes/${eventoKey}`] = {linhaKey, loteInterno: lote.loteInterno, quantidade: qtd, motivo, por: identidade.autor, em: agora};
+    updates[`estoque/${materialKey}/saldoAtual`] = admin.database.ServerValue.increment(-qtd);
+    updates[`estoque/${materialKey}/ultimaAtualizacao`] = agora;
+    updates[`estoque/${materialKey}/ultimaMovimentacao`] = {tipo: "devolucao_fornecedor", qtd: -qtd, ref: pedidoKey, em: agora};
+    updates[`estoque_lotes/${materialKey}/${linha.loteKey}/saldoLote`] = novoSaldo;
+    updates[`estoque_lotes/${materialKey}/${linha.loteKey}/qtdDevolvida`] = (Number(lote.qtdDevolvida) || 0) + qtd;
+    updates[`estoque_lotes/${materialKey}/${linha.loteKey}/status`] = novoSaldo <= 0.0001 ? "DEVOLVIDO" : lote.status;
+    updates[`estoque_lotes/${materialKey}/${linha.loteKey}/ultimaDevolucao`] = {quantidade: qtd, motivo, por: identidade.autor, em: agora};
+    updates[`estoque_lotes/${materialKey}/${linha.loteKey}/atualizadoEm`] = agora;
+    updates[`movimentos_estoque/${materialKey}/${movKey}`] = {tipo: "devolucao_fornecedor", motivo: "DEVOLUÇÃO AO FORNECEDOR", qtd: -qtd,
+      saldoApos: null, ref: pedidoKey, loteKey: linha.loteKey, itemTipo: "material", itemCodigo: linha.materialCodigo,
+      itemNome: linha.materialNome || itemAtual.materialNome || null, unidade: linha.unidade || itemAtual.unidade || null,
+      autor: identidade.autor, observacao: motivo, em: agora};
+    const resultado = {ok: true, saldoLote: novoSaldo, statusPedido: apos.status};
+    updates[`devolucoes_operacoes/${identidade.uid}/${idempotencyKey}`] = {status: "CONCLUIDO", concluidoEm: agora, resultado};
+    updates[`recebimentos_locks/${pedidoKey}`] = null;
+    await db.ref().update(updates);
+    return resultado;
+  } catch (e) {
+    await Promise.all([
+      lockRef.transaction((atual) => atual && atual.token === token ? null : atual, undefined, false),
+      operacaoRef.update({status: "ERRO", erro: String(e.message || e).slice(0, 500), erroEm: new Date().toISOString()}),
+    ]).catch(() => null);
+    throw new HttpsError(e.code || "internal", e.message || "Não foi possível registrar a devolução.");
+  }
+});
 
 // Finalização da Conferência de Produto Acabado. A contagem continua leve no
 // navegador, mas a transformação em estoque acontece somente aqui: o servidor

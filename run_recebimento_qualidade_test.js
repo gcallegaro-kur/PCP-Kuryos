@@ -16,7 +16,7 @@ validarSintaxeHtml(logistica, 'public/logistica.html');
 validarSintaxeHtml(qualidade, 'public/qualidade.html');
 [
   'Tipo de material *', 'Identificação do material *', 'SKU do fornecedor *', 'SKU interno',
-  'Lote do fornecedor *', 'Lote interno *', 'Nº da nota fiscal *', 'Recebendo agora *',
+  'Lote do fornecedor *', 'Lote interno', 'Nº da nota fiscal *', 'Quantidade deste lote *',
   'Quantidade de amostragem *', 'Data do recebimento *', 'Certificado do fornecedor *',
   'Condições do veículo *', 'Condições da embalagem *'
 ].forEach(campo => { if (!logistica.includes(campo)) throw new Error('Campo do formulário ausente: ' + campo); });
@@ -60,7 +60,8 @@ if (ctx.tipoMaterialRecebimento('MPGR-001', null) !== 'MATERIA_PRIMA') throw new
 if (ctx.tipoMaterialRecebimento('EP-001', null) !== 'EMBALAGEM') throw new Error('Embalagem não foi classificada automaticamente');
 if (ctx.codigoFornecedorRecebimento({ fornecedores:{ forn1:{ codigoFornecedor:'ABC-9' } } }, 'forn1') !== 'ABC-9') throw new Error('SKU do fornecedor não veio da homologação');
 if (logistica.includes('origemRef: recebendoKey')) throw new Error('Fechar o modal ainda consegue apagar o vínculo do lote com o PC');
-if (!logistica.includes("showAlert('Recebimento registrado e enviado para a fila da Qualidade!'")) throw new Error('A tela confirma sucesso antes de integrar com a Qualidade');
+if (!logistica.includes("httpsCallable('registrarRecebimento')")) throw new Error('Recebimento não usa a operação segura no servidor');
+if (!logistica.includes('Gerado automaticamente ao confirmar')) throw new Error('Tela ainda induz digitação manual do lote interno');
 
 const itemValido = {
   itemKey:'i1', tipoMaterial:'EMBALAGEM', identificacaoMaterial:'Frasco 200 ml', skuInterno:'EP-001',
@@ -78,7 +79,6 @@ const obrigatorios = [
   ['identificação', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { identificacaoMaterial:'' })] })],
   ['SKU fornecedor', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { skuFornecedor:'' })] })],
   ['lote fornecedor', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { loteOrigem:'' })] })],
-  ['lote interno', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { loteInterno:'' })] })],
   ['certificado', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { certificadoFornecedor:'' })] })],
   ['embalagem', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { condicoesEmbalagem:0 })] })],
   ['endereço', Object.assign({}, entradaValida, { itens:[Object.assign({}, itemValido, { enderecoKey:'' })] })]
