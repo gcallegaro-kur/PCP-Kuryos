@@ -81,7 +81,18 @@
     input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
     input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent)}
     .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .rc-intro{background:color-mix(in srgb,var(--primary) 6%,var(--card));border:1px solid color-mix(in srgb,var(--primary) 20%,var(--border));border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
+    .rc-item-card{border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:12px;background:var(--card)}
+    .rc-item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--tint-gray-bg)}
+    .rc-item-title{font-size:13.5px;font-weight:750;line-height:1.35}
+    .rc-item-progress{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+    .rc-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .rc-form-grid .span-2{grid-column:span 2}
+    .rc-readonly{background:var(--surface-2)!important;color:var(--muted)!important}
+    .rc-required-note{font-size:11px;color:var(--muted);margin-top:12px}
+    @media(max-width:920px){.rc-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+    @media(max-width:600px){.rc-form-grid{grid-template-columns:1fr}.rc-form-grid .span-2{grid-column:span 1}.rc-item-head{display:block}.rc-item-progress{text-align:left;margin-top:4px}}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -194,26 +205,32 @@
 
 <!-- MODAL: Registrar Recebimento -->
 <div class="modal-bg" id="modalReceber">
-  <div class="modal" style="max-width:720px">
+  <div class="modal" style="max-width:980px">
     <div class="modal-header"><h2>Registrar Recebimento</h2><button class="modal-close" id="modalReceberClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="receberPcInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div class="rc-intro"><b>Entrada de materiais e envio ao Controle de Qualidade</b><br>Os dados abaixo substituem o formulário externo. Cada item recebido será endereçado no WMS com status <b>Quarentena</b> e aparecerá automaticamente na fila da Qualidade.</div>
       <div class="form-grid" style="margin-bottom:14px">
         <div class="form-group">
           <label>Data do recebimento *</label>
           <input type="date" id="rcData">
         </div>
         <div class="form-group">
-          <label>Nota fiscal</label>
-          <input type="text" id="rcNotaFiscal" placeholder="Número da NF">
+          <label>Nº da nota fiscal *</label>
+          <input type="text" id="rcNotaFiscal" placeholder="Use “SEM NF” quando não houver">
+        </div>
+        <div class="form-group full">
+          <label>Condições do veículo *</label>
+          <select id="rcCondVeiculo">
+            <option value="">Selecione…</option><option value="5">5 — Ótimo</option><option value="4">4 — Bom</option><option value="3">3 — Regular</option><option value="2">2 — Ruim</option><option value="1">1 — Péssimo</option>
+          </select>
+          <div class="field-hint">Avalie limpeza, odores e evidências de pragas.</div>
         </div>
       </div>
       <div class="section-label" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Itens recebidos nesta entrega</div>
-      <div class="field-hint" style="margin-bottom:8px">Lote do fornecedor, validade e endereço de destino são opcionais por item -- preenchendo, o saldo desse item fica rastreável por lote/posição em Estoque/WMS; deixando em branco, o saldo total sobe normalmente, só sem esse detalhe.</div>
-      <table>
-        <thead><tr><th>Material</th><th>Pedido</th><th>Já recebido</th><th style="min-width:110px">Recebendo agora</th><th style="min-width:110px">Lote do fornecedor</th><th style="min-width:120px">Validade</th><th style="min-width:140px">Endereço de destino</th></tr></thead>
-        <tbody id="rcItensBody"></tbody>
-      </table>
+      <div class="field-hint" style="margin-bottom:8px">Para não receber um item nesta entrega, informe quantidade zero. Os demais campos tornam-se obrigatórios apenas nos itens com quantidade recebida.</div>
+      <div id="rcItensBody"></div>
+      <div class="rc-required-note">* Campos obrigatórios. Validade é opcional quando não se aplica ao material.</div>
       <div class="form-group full" style="margin-top:14px">
         <label>Observações</label>
         <textarea id="rcObservacoes" rows="2" placeholder="Ex: divergência de quantidade, avaria, etc."></textarea>
@@ -261,6 +278,7 @@ kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 var allPedidosCompra = {};
 var allTransportadoras = {};
+var allMateriais = {};
 var allEnderecosEstoque = {}; // WMS Fase 1 -- popula o <select> de endereço de destino no recebimento
 var agendandoKey = null;
 var recebendoKey = null;
@@ -613,43 +631,75 @@ function saveAgendar() {
 }
 
 /* ══════════════ Modal Receber ══════════════ */
+function materialRecebimentoPorCodigo(codigo) {
+  return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m && m.mpCodigo === codigo; }) || null;
+}
+function tipoMaterialRecebimento(codigo, material) {
+  var tipo = material && material.tipo;
+  if (tipo === 'MPGR' || tipo === 'MPES') return 'MATERIA_PRIMA';
+  if (tipo === 'EP' || tipo === 'ES' || tipo === 'ET') return 'EMBALAGEM';
+  var prefixo = String(codigo || '').toUpperCase();
+  if (prefixo.indexOf('MP') === 0) return 'MATERIA_PRIMA';
+  if (prefixo.indexOf('EP') === 0 || prefixo.indexOf('ES') === 0 || prefixo.indexOf('ET') === 0) return 'EMBALAGEM';
+  return '';
+}
+function codigoFornecedorRecebimento(material, fornecedorKey) {
+  var vinculo = material && material.fornecedores && material.fornecedores[fornecedorKey];
+  return vinculo && vinculo.codigoFornecedor ? String(vinculo.codigoFornecedor) : '';
+}
+function opcoesAvaliacaoRecebimento() {
+  return '<option value="">Selecione…</option><option value="5">5 — Ótimo</option><option value="4">4 — Bom</option><option value="3">3 — Regular</option><option value="2">2 — Ruim</option><option value="1">1 — Péssimo</option>';
+}
 function openModalReceber(key) {
   recebendoKey = key;
   var p = allPedidosCompra[key];
   if (!p) return;
-  document.getElementById('receberPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || '');
+  document.getElementById('receberPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || p.origemNome || 'Origem não informada');
   document.getElementById('rcData').value = new Date().toISOString().slice(0, 10);
   document.getElementById('rcNotaFiscal').value = '';
+  document.getElementById('rcCondVeiculo').value = '';
   document.getElementById('rcObservacoes').value = '';
 
-  var tbody = document.getElementById('rcItensBody');
+  var lista = document.getElementById('rcItensBody');
   var itens = Object.entries(p.itens || {});
-  tbody.innerHTML = itens.map(function(entry) {
+  lista.innerHTML = itens.map(function(entry) {
     var itemKey = entry[0], it = entry[1];
     var qtd = parseFloat(it.qtd) || 0;
     var qtdRec = parseFloat(it.qtdRecebida) || 0;
     var restante = Math.max(0, qtd - qtdRec);
-    return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-      '<td>' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + '</td>' +
-      '<td>' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
-      '<td>' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</td>' +
-      '<td><input type="number" class="rc-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (restante > 0 ? restante : '') + '"></td>' +
-      '<td><input type="text" class="rc-lote" data-item="' + escapeAttr(itemKey) + '" placeholder="Opcional"></td>' +
-      '<td><input type="date" class="rc-validade" data-item="' + escapeAttr(itemKey) + '"></td>' +
-      '<td><select class="rc-endereco" data-item="' + escapeAttr(itemKey) + '">' + opcoesEnderecoSelect() + '</select></td>' +
-    '</tr>';
+    var material = materialRecebimentoPorCodigo(it.materialCodigo);
+    var tipo = tipoMaterialRecebimento(it.materialCodigo, material);
+    var skuFornecedor = codigoFornecedorRecebimento(material, p.fornecedorKey);
+    return '<div class="rc-item-card" data-item="' + escapeAttr(itemKey) + '">' +
+      '<div class="rc-item-head"><div class="rc-item-title">' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + '</div>' +
+      '<div class="rc-item-progress">Pedido: ' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '<br>Já recebido: ' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</div></div>' +
+      '<div class="rc-form-grid">' +
+        '<div class="form-group"><label>Tipo de material *</label><select class="rc-tipo"><option value="">Selecione…</option><option value="EMBALAGEM"' + (tipo === 'EMBALAGEM' ? ' selected' : '') + '>Embalagem</option><option value="MATERIA_PRIMA"' + (tipo === 'MATERIA_PRIMA' ? ' selected' : '') + '>Matéria-prima</option></select></div>' +
+        '<div class="form-group span-2"><label>Identificação do material *</label><input class="rc-identificacao" type="text" value="' + escapeAttr(it.materialNome || '') + '" placeholder="Descrição conferida na etiqueta"></div>' +
+        '<div class="form-group"><label>SKU interno</label><input class="rc-readonly rc-sku-interno" type="text" readonly value="' + escapeAttr(it.materialCodigo || '') + '"></div>' +
+        '<div class="form-group"><label>SKU do fornecedor *</label><input class="rc-sku-fornecedor" type="text" value="' + escapeAttr(skuFornecedor) + '" placeholder="Código na etiqueta/NF"></div>' +
+        '<div class="form-group"><label>Lote do fornecedor *</label><input class="rc-lote" type="text" placeholder="Lote na embalagem"></div>' +
+        '<div class="form-group"><label>Lote interno *</label><input class="rc-lote-interno" type="text" placeholder="Identificação interna"></div>' +
+        '<div class="form-group"><label>Recebendo agora *</label><input type="number" class="rc-qtd" min="0" step="any" value="' + (restante > 0 ? restante : 0) + '"><div class="field-hint">' + escapeHtml(it.unidade || '') + '</div></div>' +
+        '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-amostragem" type="number" min="0" step="any" value="0"></div>' +
+        '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
+        '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
+        '<div class="form-group"><label>Validade</label><input type="date" class="rc-validade"></div>' +
+        '<div class="form-group span-2"><label>Endereço físico de entrada *</label><select class="rc-endereco">' + opcoesEnderecoSelect() + '</select><div class="field-hint">Quarentena é o status; informe onde o material ficará fisicamente.</div></div>' +
+      '</div></div>';
   }).join('');
   document.getElementById('modalReceber').classList.add('open');
 }
 
 // WMS Fase 1: opções do <select> de endereço de destino, uma por posição
 // cadastrada em Endereços (cadastros.html) -- ordenado por código pra ficar
-// fácil de achar (1.1.1, 1.1.2, 1.1.3...). Vazio ("Sem endereço") é sempre
-// a opção padrão -- preencher é opcional por item, ver hint no modal.
+// fácil de achar (1.1.1, 1.1.2, 1.1.3...). O vazio força uma escolha
+// consciente. Quarentena é status, não endereço: a Logística registra a
+// posição física real onde o material ficará.
 function opcoesEnderecoSelect() {
   var entries = Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
     .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
-  var opts = '<option value="">Sem endereço</option>';
+  var opts = '<option value="">Selecione o endereço…</option>';
   entries.forEach(function(entry) {
     var key = entry[0], e = entry[1];
     opts += '<option value="' + escapeAttr(key) + '">' + escapeHtml(e.codigo) + ' (' + escapeHtml(e.area || '') + ')</option>';
@@ -657,6 +707,48 @@ function opcoesEnderecoSelect() {
   return opts;
 }
 function closeModalReceber() { document.getElementById('modalReceber').classList.remove('open'); recebendoKey = null; }
+function lerItensRecebimentoDaTela() {
+  return Array.from(document.querySelectorAll('.rc-item-card')).map(function(card) {
+    return {
+      itemKey: card.getAttribute('data-item'),
+      tipoMaterial: card.querySelector('.rc-tipo').value,
+      identificacaoMaterial: card.querySelector('.rc-identificacao').value.trim(),
+      skuInterno: card.querySelector('.rc-sku-interno').value.trim(),
+      skuFornecedor: card.querySelector('.rc-sku-fornecedor').value.trim(),
+      loteOrigem: card.querySelector('.rc-lote').value.trim(),
+      loteInterno: card.querySelector('.rc-lote-interno').value.trim(),
+      qtdRecebida: Number(card.querySelector('.rc-qtd').value || 0),
+      qtdAmostragem: Number(card.querySelector('.rc-amostragem').value),
+      certificadoFornecedor: card.querySelector('.rc-certificado').value,
+      condicoesEmbalagem: Number(card.querySelector('.rc-cond-embalagem').value),
+      dataValidade: card.querySelector('.rc-validade').value || null,
+      enderecoKey: card.querySelector('.rc-endereco').value
+    };
+  });
+}
+function validarEntradaRecebimento(dados) {
+  if (!dados.data) return 'Informe a data do recebimento.';
+  if (!String(dados.notaFiscal || '').trim()) return 'Informe o número da nota fiscal. Quando não existir, registre “SEM NF”.';
+  if (![1, 2, 3, 4, 5].includes(Number(dados.condicoesVeiculo))) return 'Avalie as condições do veículo de 1 a 5.';
+  var qtdInvalida = (dados.itens || []).find(function(it) { return !isFinite(it.qtdRecebida) || Number(it.qtdRecebida) < 0; });
+  if (qtdInvalida) return 'A quantidade recebida de ' + (qtdInvalida.skuInterno || 'um item') + ' é inválida.';
+  var ativos = (dados.itens || []).filter(function(it) { return Number(it.qtdRecebida) > 0; });
+  if (!ativos.length) return 'Informe ao menos uma quantidade recebida maior que zero.';
+  for (var i = 0; i < ativos.length; i++) {
+    var it = ativos[i], rotulo = it.skuInterno || ('item ' + (i + 1));
+    if (!isFinite(it.qtdRecebida) || it.qtdRecebida <= 0) return 'A quantidade recebida de ' + rotulo + ' é inválida.';
+    if (it.tipoMaterial !== 'EMBALAGEM' && it.tipoMaterial !== 'MATERIA_PRIMA') return 'Selecione o tipo de material de ' + rotulo + '.';
+    if (!it.identificacaoMaterial) return 'Informe a identificação do material de ' + rotulo + '.';
+    if (!it.skuFornecedor) return 'Informe o SKU do fornecedor de ' + rotulo + '.';
+    if (!it.loteOrigem) return 'Informe o lote do fornecedor de ' + rotulo + '.';
+    if (!it.loteInterno) return 'Informe o lote interno de ' + rotulo + '.';
+    if (!isFinite(it.qtdAmostragem) || it.qtdAmostragem < 0) return 'Informe uma quantidade de amostragem válida para ' + rotulo + '.';
+    if (it.certificadoFornecedor !== 'SIM' && it.certificadoFornecedor !== 'NAO') return 'Informe se ' + rotulo + ' veio com certificado do fornecedor.';
+    if (![1, 2, 3, 4, 5].includes(Number(it.condicoesEmbalagem))) return 'Avalie as condições da embalagem de ' + rotulo + ' de 1 a 5.';
+    if (!it.enderecoKey) return 'Informe o endereço físico de entrada de ' + rotulo + '.';
+  }
+  return null;
+}
 // Achado do Auditor: a versão anterior lia `qtdRecebida` do estado em
 // memória (`allPedidosCompra`, populado pelo listener) e gravava um valor
 // ABSOLUTO novo via `.update()` simples -- sem proteção contra dois usuários
@@ -675,50 +767,49 @@ function closeModalReceber() { document.getElementById('modalReceber').classList
 function saveReceber() {
   var p = allPedidosCompra[recebendoKey];
   if (!p) return;
+  // Captura antes de fechar o modal. closeModalReceber limpa recebendoKey;
+  // usar a global depois disso criava lote sem origemRef e quebrava o elo
+  // automático da Qualidade com o fornecedor e o Pedido de Compra.
+  var pedidoKeyRecebimento = recebendoKey;
   var data = document.getElementById('rcData').value;
-  if (!data) { showAlert('Informe a data do recebimento.', 'danger'); return; }
-
-  var linhas = Array.from(document.querySelectorAll('.rc-qtd'));
-  var qtdsDigitadas = {}; // itemKey -> quantidade recebida nesta entrega
-  var erroLocal = null;
-  linhas.forEach(function(input) {
-    var qtdAgora = parseFloat(input.value) || 0;
-    if (qtdAgora === 0) return; // não registra item sem quantidade recebida nesta entrega
-    if (qtdAgora < 0) { erroLocal = 'Quantidade recebida não pode ser negativa.'; return; }
-    qtdsDigitadas[input.getAttribute('data-item')] = qtdAgora;
-  });
+  var notaFiscal = document.getElementById('rcNotaFiscal').value.trim();
+  var condicoesVeiculo = Number(document.getElementById('rcCondVeiculo').value);
+  var itensEntrada = lerItensRecebimentoDaTela();
+  var erroLocal = validarEntradaRecebimento({ data:data, notaFiscal:notaFiscal, condicoesVeiculo:condicoesVeiculo, itens:itensEntrada });
   if (erroLocal) { showAlert(erroLocal, 'danger'); return; }
-  if (!Object.keys(qtdsDigitadas).length) { showAlert('Informe ao menos uma quantidade recebida maior que zero.', 'danger'); return; }
 
-  // WMS Fase 1: lote/validade/endereço por item, opcionais (ver hint no
-  // modal) -- só entram no putaway quem tiver os 3 preenchidos (endereço é
-  // o que decide: sem endereço, não dá pra registrar ONDE o lote está, então
-  // não cria o registro granular, mas o saldo total sobe normalmente).
+  var qtdsDigitadas = {}; // itemKey -> quantidade recebida nesta entrega
   var dadosLotePorItem = {};
-  Object.keys(qtdsDigitadas).forEach(function(itemKey) {
-    var linha = document.querySelector('tr[data-item="' + CSS.escape(itemKey) + '"]');
-    if (!linha) return;
-    var loteInput = linha.querySelector('.rc-lote');
-    var validadeInput = linha.querySelector('.rc-validade');
-    var enderecoSelect = linha.querySelector('.rc-endereco');
-    var enderecoKey = enderecoSelect ? enderecoSelect.value : '';
-    if (!enderecoKey) return; // sem endereço, não registra o lote granular pra este item
-    dadosLotePorItem[itemKey] = {
-      loteOrigem: (loteInput && loteInput.value.trim()) || '',
-      dataValidade: (validadeInput && validadeInput.value) || null,
-      enderecoKey: enderecoKey
+  itensEntrada.filter(function(it) { return it.qtdRecebida > 0; }).forEach(function(it) {
+    qtdsDigitadas[it.itemKey] = it.qtdRecebida;
+    dadosLotePorItem[it.itemKey] = {
+      tipoMaterial: it.tipoMaterial,
+      identificacaoMaterial: it.identificacaoMaterial,
+      skuInterno: it.skuInterno,
+      skuFornecedor: it.skuFornecedor,
+      loteOrigem: it.loteOrigem,
+      loteInterno: it.loteInterno,
+      qtdAmostragem: it.qtdAmostragem,
+      certificadoFornecedor: it.certificadoFornecedor === 'SIM',
+      condicoesVeiculo: condicoesVeiculo,
+      condicoesEmbalagem: it.condicoesEmbalagem,
+      dataValidade: it.dataValidade,
+      enderecoKey: it.enderecoKey,
+      notaFiscal: notaFiscal,
+      dataRecebimento: data,
+      fornecedorKey: p.fornecedorKey || null,
+      fornecedorNome: p.fornecedorNome || p.origemNome || null
     };
   });
 
   document.getElementById('modalReceberSave').disabled = true;
-  var recKey = db.ref('pedidos_compra/' + recebendoKey + '/recebimentos').push().key;
-  var notaFiscal = document.getElementById('rcNotaFiscal').value.trim();
+  var recKey = db.ref('pedidos_compra/' + pedidoKeyRecebimento + '/recebimentos').push().key;
   var observacoes = document.getElementById('rcObservacoes').value.trim();
   var recebidoPor = currentUserNome();
   var erroExcedente = null; // preenchido dentro da transaction se algum item passar do total pedido
   var itensRecebidosParaEstoque = null; // idem -- só o resultado da tentativa que de fato commitou importa
 
-  db.ref('pedidos_compra/' + recebendoKey).transaction(function(atual) {
+  db.ref('pedidos_compra/' + pedidoKeyRecebimento).transaction(function(atual) {
     if (!atual) return atual; // PC sumiu do banco entretanto -- aborta sem tocar em nada
     erroExcedente = null; // a função pode rodar mais de uma vez em caso de conflito -- reseta a cada tentativa
     var itens = atual.itens || {};
@@ -741,7 +832,11 @@ function saveReceber() {
         erroExcedente = 'Recebendo ' + fmtNum(qtdAgora) + ' de ' + it.materialCodigo + ' passaria do total pedido (' + fmtNum(qtd) + '). Máximo permitido agora: ' + fmtNum(Math.max(0, qtd - qtdRecAtual)) + '.';
         return; // aborta a transaction sem gravar nada
       }
-      itensRecebidos[itemKey] = {materialCodigo: it.materialCodigo, materialNome: it.materialNome || '', qtdRecebidaAgora: qtdAgora, unidade: it.unidade || ''};
+      itensRecebidos[itemKey] = {
+        materialCodigo: it.materialCodigo, materialNome: it.materialNome || '',
+        qtdRecebidaAgora: qtdAgora, unidade: it.unidade || '',
+        entradaQualidade: Object.assign({}, dadosLotePorItem[itemKey])
+      };
       itens[itemKey] = Object.assign({}, it, {qtdRecebida: novoTotal});
     }
 
@@ -749,6 +844,7 @@ function saveReceber() {
     if (!atual.recebimentos) atual.recebimentos = {};
     atual.recebimentos[recKey] = {
       data: data, notaFiscal: notaFiscal, itensRecebidos: itensRecebidos,
+      condicoesVeiculo: condicoesVeiculo,
       observacoes: observacoes, recebidoPor: recebidoPor, criadoEm: new Date().toISOString()
     };
 
@@ -766,33 +862,36 @@ function saveReceber() {
   }).then(function(result) {
     if (erroExcedente) { showAlert(erroExcedente, 'danger'); return; }
     if (!result.committed) { showAlert('Não foi possível registrar o recebimento (o pedido pode ter sido removido). Atualize a lista e tente de novo.', 'danger'); return; }
-    showAlert('Recebimento registrado com sucesso!', 'success');
-    closeModalReceber();
-    // Entrada de estoque -- secundário e best-effort: o recebimento contra o
-    // Pedido de Compra (fonte de verdade) já está gravado e confirmado nesse
-    // ponto; se isso falhar, avisa mas não desfaz nem trava o recebimento.
-    incrementarEstoque(itensRecebidosParaEstoque, 'recebimento_pc', recebendoKey).catch(function(err) {
-      console.error('Falha ao atualizar saldo de estoque:', err);
-      showAlert('Recebimento registrado, mas o saldo de estoque não pôde ser atualizado agora: ' + err.message, 'danger');
-    });
-    // WMS Fase 1: putaway granular (lote/validade/endereço) -- também
-    // secundário e best-effort, mesmo espírito de incrementarEstoque acima.
-    // Só roda pros itens que tiveram endereço preenchido (dadosLotePorItem
-    // já filtra isso na coleta) -- o saldo agregado sobe de qualquer jeito
-    // via incrementarEstoque, independente disso.
-    registrarPutawayRecebimento(itensRecebidosParaEstoque, dadosLotePorItem, recKey).catch(function(err) {
-      console.error('Falha ao registrar putaway do recebimento:', err);
-      showAlert('Recebimento registrado, mas o detalhe de lote/endereço não pôde ser salvo agora: ' + err.message, 'danger');
+    // A confirmação visual só acontece depois do saldo e do lote em
+    // quarentena. Assim "recebido com sucesso" também significa que o item
+    // já está disponível na fila da Qualidade, não apenas dentro do PC.
+    var falhasIntegracao = [];
+    return Promise.all([
+      incrementarEstoque(itensRecebidosParaEstoque, 'recebimento_pc', pedidoKeyRecebimento).catch(function(err) {
+        console.error('Falha ao atualizar saldo de estoque:', err);
+        falhasIntegracao.push('saldo de estoque: ' + err.message);
+      }),
+      registrarPutawayRecebimento(itensRecebidosParaEstoque, dadosLotePorItem, recKey, pedidoKeyRecebimento).catch(function(err) {
+        console.error('Falha ao registrar putaway do recebimento:', err);
+        falhasIntegracao.push('fila da Qualidade/WMS: ' + err.message);
+      })
+    ]).then(function() {
+      closeModalReceber();
+      if (falhasIntegracao.length) {
+        showAlert('O recebimento foi gravado no Pedido de Compra, mas houve falha na integração com ' + falhasIntegracao.join(' e ') + '. Não registre a entrega novamente; acione o administrador.', 'danger');
+      } else {
+        showAlert('Recebimento registrado e enviado para a fila da Qualidade!', 'success');
+      }
     });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalReceberSave').disabled = false; });
 }
 
 // WMS Fase 1: cria o registro granular (estoque_lotes) pra cada item
-// recebido que teve endereço de destino preenchido -- itensRecebidos vem
-// da MESMA transaction que já commitou o recebimento (fonte de verdade),
-// dadosLotePorItem só tem entradas pros itens com endereço (ver saveReceber).
-function registrarPutawayRecebimento(itensRecebidos, dadosLotePorItem, recKey) {
+// recebido. itensRecebidos vem da MESMA transaction que já commitou o
+// recebimento (fonte de verdade); dadosLotePorItem carrega também a ficha
+// de entrada que a Qualidade recebe sem redigitação.
+function registrarPutawayRecebimento(itensRecebidos, dadosLotePorItem, recKey, pedidoKeyRecebimento) {
   var recebidoPor = currentUserNome();
   var itens = Object.entries(itensRecebidos || {}).filter(function(entry) {
     return entry[1].qtdRecebidaAgora > 0 && dadosLotePorItem[entry[0]];
@@ -803,11 +902,29 @@ function registrarPutawayRecebimento(itensRecebidos, dadosLotePorItem, recKey) {
     var enderecoInfo = allEnderecosEstoque[dadosLote.enderecoKey];
     return putawayEstoqueLote(db, 'material', it.materialCodigo, {
       itemNome: it.materialNome, unidade: it.unidade,
-      loteOrigem: dadosLote.loteOrigem || null, dataValidade: dadosLote.dataValidade || null,
-      dataRecebimento: new Date().toISOString().slice(0, 10),
+      loteOrigem: dadosLote.loteOrigem, loteInterno: dadosLote.loteInterno,
+      dataValidade: dadosLote.dataValidade || null,
+      dataRecebimento: dadosLote.dataRecebimento,
       saldoLote: it.qtdRecebidaAgora, qtdOriginal: it.qtdRecebidaAgora,
       enderecoKey: dadosLote.enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
-      origemTipo: 'recebimento_pc', origemRef: recebendoKey, recebimentoKey: recKey,
+      origemTipo: 'recebimento_pc', origemRef: pedidoKeyRecebimento, recebimentoKey: recKey,
+      recebimento: {
+        tipoMaterial: dadosLote.tipoMaterial,
+        identificacaoMaterial: dadosLote.identificacaoMaterial,
+        skuInterno: dadosLote.skuInterno,
+        skuFornecedor: dadosLote.skuFornecedor,
+        loteInterno: dadosLote.loteInterno,
+        notaFiscal: dadosLote.notaFiscal,
+        qtdRecebida: it.qtdRecebidaAgora,
+        qtdAmostragem: dadosLote.qtdAmostragem,
+        certificadoFornecedor: dadosLote.certificadoFornecedor,
+        condicoesVeiculo: dadosLote.condicoesVeiculo,
+        condicoesEmbalagem: dadosLote.condicoesEmbalagem,
+        fornecedorKey: dadosLote.fornecedorKey,
+        fornecedorNome: dadosLote.fornecedorNome,
+        recebidoPor: recebidoPor,
+        recebidoEm: new Date().toISOString()
+      },
       // Material recebido entra em QUARENTENA, não liberado -- decisão do
       // usuário, e é o padrão da indústria cosmética (mesmo modelo de
       // "estoque em inspeção" de SAP/TOTVS). O lote conta no estoque físico
@@ -911,6 +1028,9 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allTransportadoras = snap.val() || {};
       refreshTransportadoraSelect();
+    });
+    dbOnValue(db.ref('materiais'), function(snap) {
+      allMateriais = snap.val() || {};
     });
     dbOnValue(db.ref('pedidos_compra'), function(snap) {
       allPedidosCompra = snap.val() || {};

@@ -168,6 +168,7 @@
             <th>Item</th>
             <th style="width:130px">Lote</th>
             <th style="width:150px">Fornecedor / origem</th>
+            <th style="width:190px">Entrada da Logística</th>
             <th style="width:100px">Posição</th>
             <th style="width:110px;text-align:right">Saldo</th>
             <th style="width:130px">Recebido em</th>
@@ -339,6 +340,7 @@
     <div class="modal-header"><h2 id="modalLaudoTitle">Laudo de Qualidade</h2><button class="modal-close" id="modalLaudoClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="qLoteInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div id="qRecebimentoInfo" class="section-note" style="display:none;margin-bottom:14px"></div>
 
       <!-- Plano de inspeção: só aparece quando o item tem especificação -->
       <div id="qPlanoBox" style="display:none">
@@ -369,6 +371,7 @@
       <!-- Checklist de recebimento: só faz sentido pra material que chegou
            de fora. Palete de PA é nosso, veio da linha, não de um caminhão. -->
       <div id="qChecklistRecebimento">
+        <div class="field-hint" id="qChecklistOrigem" style="margin-bottom:8px"></div>
         <div class="form-grid">
           <div class="form-group">
             <label>Condições do veículo</label>
@@ -720,7 +723,7 @@ function renderFila() {
   document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação (' + fila.length + ')';
 
   if (!fila.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
   } else {
     tbody.innerHTML = fila.map(function(f) {
       var dias = diasDesde(f.dataRecebimento || f.criadoEm);
@@ -734,6 +737,12 @@ function renderFila() {
       var origem = forn ? escapeHtml(forn.fornecedorNome || '—') +
           (forn.pedidoNumero ? '<br><span class="field-hint">' + escapeHtml(forn.pedidoNumero) + '</span>' : '')
         : (f.itemTipo === 'produto' ? '<span class="field-hint">Produção interna</span>' : '<span class="field-hint">—</span>');
+      var entrada = lote.recebimento;
+      var resumoEntrada = entrada
+        ? '<b>NF ' + escapeHtml(entrada.notaFiscal || '—') + '</b><br><span class="field-hint">Amostra: ' + fmtNum(entrada.qtdAmostragem || 0) +
+          ' · Cert.: ' + (entrada.certificadoFornecedor ? 'sim' : 'não') + '<br>Veículo: ' + escapeHtml(entrada.condicoesVeiculo || '—') +
+          '/5 · Embalagem: ' + escapeHtml(entrada.condicoesEmbalagem || '—') + '/5</span>'
+        : '<span class="field-hint">' + (f.itemTipo === 'produto' ? 'Não se aplica' : 'Entrada anterior ao novo formulário') + '</span>';
       var espec = especificacaoVigente(allEspecificacoes, f.itemCodigo);
       return '<tr>' +
         '<td>' + (f.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') +
@@ -743,6 +752,7 @@ function renderFila() {
         '<td>' + escapeHtml(f.loteOrigem || '—') +
           (f.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(f.dataValidade) + '</span>' : '') + '</td>' +
         '<td>' + origem + '</td>' +
+        '<td>' + resumoEntrada + '</td>' +
         '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
         '<td style="text-align:right">' + fmtNum(f.saldoLote) + ' ' + escapeHtml(f.unidade || '') + '</td>' +
         '<td>' + fmtData(f.dataRecebimento || f.criadoEm) + badgeDias + '</td>' +
@@ -806,6 +816,7 @@ function abrirLaudo(itemCodigo, loteKey) {
   var itemTipo = lote.itemTipo || 'material';
   var espec = especificacaoVigente(allEspecificacoes, itemCodigo);
   var forn = fornecedorDoLote(lote, allPedidosCompra);
+  var entrada = lote.recebimento || null;
 
   laudoAtual = {
     itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, itemTipo: itemTipo,
@@ -825,17 +836,37 @@ function abrirLaudo(itemCodigo, loteKey) {
     (forn ? '<br>Fornecedor: <b>' + escapeHtml(forn.fornecedorNome || '—') + '</b>' +
       (forn.pedidoNumero ? ' · ' + escapeHtml(forn.pedidoNumero) : '') : '');
 
+  var entradaBox = document.getElementById('qRecebimentoInfo');
+  if (itemTipo === 'material' && entrada) {
+    entradaBox.style.display = '';
+    entradaBox.innerHTML = '<b>Entrada registrada pela Logística</b><br>' +
+      'NF: ' + escapeHtml(entrada.notaFiscal || '—') + ' · Lote interno: ' + escapeHtml(entrada.loteInterno || lote.loteInterno || '—') +
+      ' · SKU fornecedor: ' + escapeHtml(entrada.skuFornecedor || '—') + '<br>' +
+      'Amostra separada: ' + fmtNum(entrada.qtdAmostragem || 0) + ' · Certificado: ' + (entrada.certificadoFornecedor ? 'sim' : 'não') +
+      ' · Veículo: ' + escapeHtml(entrada.condicoesVeiculo || '—') + '/5 · Embalagem: ' + escapeHtml(entrada.condicoesEmbalagem || '—') + '/5' +
+      (entrada.recebidoPor ? '<br><span class="field-hint">Recebido por ' + escapeHtml(entrada.recebidoPor) + '</span>' : '');
+  } else {
+    entradaBox.style.display = 'none';
+    entradaBox.innerHTML = '';
+  }
+
   // Checklist de recebimento só pra material vindo de fora -- palete de PA
   // saiu da nossa linha, não de um caminhão.
   document.getElementById('qChecklistRecebimento').style.display = itemTipo === 'produto' ? 'none' : '';
 
   document.getElementById('qDataInspecao').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('qQtdAmostrada').value = '';
-  document.getElementById('qCondVeiculo').value = '';
-  document.getElementById('qCondEmbalagem').value = '';
+  document.getElementById('qQtdAmostrada').value = entrada && entrada.qtdAmostragem != null ? entrada.qtdAmostragem : '';
+  document.getElementById('qCondVeiculo').value = entrada && entrada.condicoesVeiculo != null ? String(entrada.condicoesVeiculo) : '';
+  document.getElementById('qCondEmbalagem').value = entrada && entrada.condicoesEmbalagem != null ? String(entrada.condicoesEmbalagem) : '';
   document.getElementById('qIntegridade').value = '';
   document.getElementById('qVazamento').value = '';
-  document.getElementById('qCertificado').checked = false;
+  document.getElementById('qCertificado').checked = !!(entrada && entrada.certificadoFornecedor);
+  document.getElementById('qCondVeiculo').disabled = !!entrada;
+  document.getElementById('qCondEmbalagem').disabled = !!entrada;
+  document.getElementById('qCertificado').disabled = !!entrada;
+  document.getElementById('qChecklistOrigem').textContent = entrada
+    ? 'Condições e certificado vieram da conferência da Logística e não podem ser alterados no laudo.'
+    : 'Entrada anterior ao novo formulário: complete os dados disponíveis durante o laudo.';
   document.getElementById('qObservacao').value = '';
 
   renderPlanoInspecao();
