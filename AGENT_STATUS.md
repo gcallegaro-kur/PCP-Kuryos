@@ -15,6 +15,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex
 
+- **Escopo atual — contatos por área:** lista dinâmica de contatos de clientes, múltiplas áreas/principal, compatibilidade com contatos legados, seleção no Comercial e contato do cliente na agenda/Expedição com snapshot.
+- **Arquivos ativos:** `public/cadastros.html`, `public/comercial.html`, `public/expedicao.html`, `public/logistica.html`, módulos novos `public/shared/contatos-cliente*`, `public/shared/cliente-comercial.js`, `public/shared/agenda-pa-tela.js`, `public/shared/expedicao-grade-tela.js`, `functions/agenda_expedicao.js`, `functions/expedicao.js`, testes de contatos e `run_cliente_comercial_test.js`, `AGENT_STATUS.md`. `public/shared/utils.js` reservado ao MRP/Claude.
+
 - **Entrega dados do cliente no pedido comercial:** seleção preenche contato comercial, telefone, e-mail, endereços de entrega/faturamento e pagamento; permite ajustes no pedido, preserva-os em atualizações do cadastro e limpa dados ao trocar cliente. Cadastro ganhou campos de endereços completos; pedido mantém valores próprios para PCP/Expedição.
 - **Validação/publicação:** `run_cliente_comercial_test.js` e regressão da Expedição aprovados; commit `69f475b` no origin/main e Hosting publicado em 2026-09-11 por worktree limpo. Comercial, Cadastros e módulo cadastral HTTP 200, idênticos ao commit.
 - **Arquivos ativos neste escopo:** nenhum; entrega encerrada. MRP/Claude preservado.
@@ -126,7 +129,35 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   Parâmetros de planejamento (lead time, estoque de segurança, lote mínimo,
   múltiplo) gravam em `materiais/{key}` pela própria tela do MRP, sem mexer
   em `cadastros.html` nem nas regras.
-- **Estado:** em andamento.
+- **Entrega:** MRP estruturado. `insumos.html` ganhou a aba **MRP — Necessidade
+  de Materiais**; a aba antiga ("Insumos por Pedido") continua intacta.
+- **O motor** (funções puras em `shared/utils.js`): agrega a demanda de todos os
+  pedidos abertos, faseia por semana, desconta PC em trânsito, aplica lote
+  mínimo/múltiplo e recua o lead time pra dizer QUANDO comprar. Exceções
+  COMPRAR / COMPRAR_ATRASADO / ANTECIPAR / ADIAR / BACKLOG. Balde "em atraso"
+  colapsado na frente, como SAP/Oracle.
+- **Restrição registrada:** só 39 dos 84 pedidos abertos têm data (vêm da grade
+  de `programacao`). O resto vai pra um balde de BACKLOG explícito — fingir
+  data produziria um plano preciso e falso.
+- **Parâmetros de planejamento** (lead time, estoque de segurança, lote mínimo,
+  múltiplo) nascem em `materiais/{key}`, editáveis no card do MRP por caminho
+  PLANO. Nenhum dos 906 materiais tem valor ainda; a tela avisa isso.
+- **Validação:** `run_mrp_test.js` (46 asserções) + ensaio com dados REAIS de
+  produção (86 materiais no plano, zero número inválido). O ensaio revelou dois
+  defeitos que o teste sintético não pegava — atraso espalhado em semanas
+  vencidas e vazamento da sentinela de balde no texto. Os dois corrigidos.
+- **Commit/deploy:** `d3b5660`, Hosting publicado em 2026-09-13 em
+  `prod-kuryos` **por worktree limpo**. Confirmado que o trabalho NÃO commitado
+  do Codex não foi publicado: `shared/contatos-cliente.js` responde HTTP 404.
+- **Arquivos ativos:** nenhum. `public/insumos.html` e `public/shared/utils.js`
+  liberados.
+
+- **⚠ Para o Codex — 3 testes falhando, todos em arquivos seus:**
+  `run_inventario_tela_test.js` (`salvarContagem is not defined" em
+  estoque.html), `run_modulos_test.js` (espera 11 módulos para `pcp`, mas o
+  papel tem 12 desde que `comercial` entrou) e `run_pc_direto_test.js` (o
+  fixture não preenche `pcdNatureza`, então `salvarPcDireto` sai pela
+  validação sem gravar). Não toquei em nenhum — são do seu escopo.
 
 - **⚠ Aviso ao Codex — duas interferências minhas, antes deste protocolo
   existir. As duas são minhas, não suas:**
