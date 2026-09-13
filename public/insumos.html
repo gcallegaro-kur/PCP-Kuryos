@@ -180,6 +180,42 @@
       color: var(--text);
     }
     
+    /* ── MRP ── */
+    .mrp-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .mrp-kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 18px; min-width:132px; }
+    .mrp-kpi b { display:block; font-size:26px; line-height:1.1; color:var(--primary); font-variant-numeric:tabular-nums; }
+    .mrp-kpi span { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .mrp-kpi.critico { border-color:var(--danger); }
+    .mrp-kpi.critico b { color:var(--danger); }
+    .mrp-aviso { background:color-mix(in srgb, var(--warning) 12%, var(--card)); border:1px solid color-mix(in srgb, var(--warning) 40%, var(--card)); border-left:4px solid var(--warning); border-radius:10px; padding:10px 14px; font-size:12.5px; margin-bottom:10px; }
+    .mrp-filtro { display:flex; gap:16px; margin:14px 0 10px; font-size:12.5px; }
+    .mrp-filtro label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+    .mrp-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+    .mrp-card.critico { border-left:4px solid var(--danger); }
+    .mrp-card-cab { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; font-size:13.5px; margin-bottom:8px; }
+    .mrp-sub { font-size:11.5px; color:var(--muted); margin-top:3px; font-weight:400; }
+    .mrp-tag { display:inline-block; background:color-mix(in srgb, var(--text) 10%, var(--card)); border-radius:4px; padding:1px 6px; font-size:10px; margin-left:4px; }
+    .mrp-tag.alerta { background:color-mix(in srgb, var(--warning) 24%, var(--card)); color:var(--warning); }
+    .mrp-exc { border-radius:8px; padding:8px 12px; margin-bottom:6px; font-size:12.5px; }
+    .mrp-exc div { font-size:11.5px; opacity:.9; margin-top:2px; }
+    .mrp-exc.critico { background:color-mix(in srgb, var(--danger) 12%, var(--card)); color:var(--danger); }
+    .mrp-exc.acao { background:color-mix(in srgb, var(--warning) 14%, var(--card)); color:var(--warning); }
+    .mrp-exc.info { background:color-mix(in srgb, var(--text) 5%, var(--card)); color:var(--muted); }
+    .mrp-grade-wrap { overflow-x:auto; margin:8px 0; }
+    .mrp-grade { border-collapse:collapse; font-size:12px; min-width:420px; font-variant-numeric:tabular-nums; }
+    .mrp-grade th, .mrp-grade td { border:1px solid var(--border); padding:5px 10px; text-align:right; white-space:nowrap; }
+    .mrp-grade th { background:color-mix(in srgb, var(--text) 5%, var(--card)); text-align:center; font-size:11px; }
+    .mrp-grade th.atras { background:color-mix(in srgb, var(--danger) 12%, var(--card)); color:var(--danger); }
+    .mrp-th-sub { font-size:9px; font-weight:400; text-transform:uppercase; }
+    .mrp-grade .mrp-rot { text-align:left; color:var(--muted); font-size:11.5px; cursor:help; }
+    .mrp-grade tr.liq td, .mrp-grade tr.ordem td { font-weight:700; }
+    .mrp-grade tr.ordem td { color:var(--primary); }
+    .mrp-grade tr.proj td { color:var(--muted); }
+    .mrp-backlog { background:color-mix(in srgb, var(--text) 5%, var(--card)); border-radius:8px; padding:8px 12px; font-size:12px; color:var(--muted); margin-top:6px; }
+    .mrp-params { margin-top:10px; }
+    .mrp-params summary { cursor:pointer; font-size:12px; color:var(--muted); }
+    .mrp-params-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:8px; }
+    @media (max-width:640px) { .mrp-card-cab { flex-direction:column; } }
     .tab-content {
       display: none;
     }
@@ -837,8 +873,14 @@
 
   <!-- Tab navigation -->
   <div class="top-tabs">
+    <button class="top-tab" id="tabBtnMrp" onclick="switchTab('mrp')">🧮 MRP — Necessidade de Materiais</button>
     <button class="top-tab active" id="tabBtnMatriz" onclick="switchTab('matriz')">📋 Visão Geral (Matriz)</button>
     <button class="top-tab" id="tabBtnDetalhes" onclick="switchTab('detalhes')">🔍 Detalhes do Pedido</button>
+  </div>
+
+  <!-- TAB: MRP -->
+  <div class="tab-content" id="panelMrp">
+    <div id="mrpConteudo"><div class="no-sel" style="padding:40px">Calculando o plano...</div></div>
   </div>
 
   <!-- TAB: MATRIZ DE INSUMOS -->
@@ -1130,6 +1172,12 @@
   // sem nenhuma escrita -- é o primeiro passo pra necessidade líquida
   // (bruta menos disponível), que é o que separa isto de um MRP de verdade.
   dbOnValue(db.ref('estoque'), function(snap) { allEstoqueIns = snap.val() || {}; });
+  // Recebimentos programados: PC ja colocado e ainda nao recebido. Sem isto
+  // o MRP manda comprar de novo o que ja esta a caminho.
+  dbOnValue(db.ref('pedidos_compra'), function(snap) {
+    allPedidosCompraIns = snap.val() || {};
+    if (currentTab === 'mrp') renderMrp();
+  });
 
   // Listen to pedidos
   dbOnValue(db.ref('pedidos'), function(snap) {
@@ -1171,7 +1219,24 @@
   });
 
   // ── Tab Management ────────────────────────────────────────────────
+  var ABAS_INSUMOS = {
+    mrp:      { btn: 'tabBtnMrp',      panel: 'panelMrp',      aoAbrir: function() { renderMrp(); } },
+    matriz:   { btn: 'tabBtnMatriz',   panel: 'panelMatriz',   aoAbrir: function() { renderMatriz(); } },
+    detalhes: { btn: 'tabBtnDetalhes', panel: 'panelDetalhes', aoAbrir: null }
+  };
   function switchTab(tabName) {
+    if (!ABAS_INSUMOS[tabName]) tabName = 'matriz';
+    currentTab = tabName;
+    Object.keys(ABAS_INSUMOS).forEach(function(k) {
+      var a = ABAS_INSUMOS[k], ativo = (k === tabName);
+      var b = document.getElementById(a.btn), p = document.getElementById(a.panel);
+      if (b) b.classList.toggle("active", ativo);
+      if (p) p.classList.toggle("active", ativo);
+    });
+    if (ABAS_INSUMOS[tabName].aoAbrir) ABAS_INSUMOS[tabName].aoAbrir();
+    return;
+  }
+  function switchTabAntigo(tabName) {
     currentTab = tabName;
     if (tabName === 'matriz') {
       document.getElementById('tabBtnMatriz').classList.add('active');
@@ -2464,6 +2529,330 @@
 
   // Default switch to matrix
   switchTab('matriz');
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   MRP — Necessidade de Materiais (aba)
+
+   A tela antiga ("Insumos por Pedido") continua na outra aba e segue útil: é
+   o checklist de UM pedido. Esta aqui é o outro problema, o de planejamento:
+   olhar TODOS os pedidos abertos ao mesmo tempo, no tempo, contra o que já
+   existe e o que já foi comprado.
+
+   De onde vem cada número (nada é inventado):
+     demanda      = saldo em aberto de cada linha de pedido × explosão de
+                    fórmula/BOM da versão vigente
+     data         = primeira data em que aquele pedido aparece na grade de
+                    `programacao`. Material precisa estar lá quando a OP
+                    COMEÇA, não diluído ao longo da corrida.
+     sem data     = pedido aberto que ninguém programou -> balde de backlog
+     disponível   = estoque.saldoAtual − saldoEmpenhado
+     em trânsito  = itens de `pedidos_compra` ENVIADO/RECEBIDO_PARCIAL que
+                    ainda têm saldo a receber, na dataPrevistaEntrega
+   ══════════════════════════════════════════════════════════════════════ */
+var allPedidosCompraIns = {};
+var mrpCache = null;
+var mrpFiltro = 'acao';   // 'acao' | 'todos'
+
+// Primeira data programada de cada linha de pedido. `programacao` é
+// {data: {hora: {envN: {pedidoKey, ...}}}} -- varrida uma vez só.
+function mrpPrimeiraDataProgramada() {
+  var mapa = {};
+  Object.keys(programacaoCache || {}).forEach(function(data) {
+    var dia = programacaoCache[data] || {};
+    Object.keys(dia).forEach(function(hora) {
+      var slot = dia[hora] || {};
+      Object.keys(slot).forEach(function(env) {
+        var s = slot[env];
+        if (!s || !s.pedidoKey) return;
+        if (!mapa[s.pedidoKey] || data < mapa[s.pedidoKey]) mapa[s.pedidoKey] = data;
+      });
+    });
+  });
+  return mapa;
+}
+
+// Itens de pedido de compra ainda a receber, por material.
+function mrpRecebimentosPorMaterial() {
+  var out = {};
+  Object.entries(allPedidosCompraIns || {}).forEach(function(e) {
+    var pc = e[1];
+    if (!pc || !pc.itens) return;
+    // Só PC que a Logística ainda vai receber. ABERTO ainda não foi ao
+    // fornecedor; RECEBIDO já entrou no estoque e contá-lo seria contar duas
+    // vezes o mesmo material.
+    if (pc.status !== 'ENVIADO' && pc.status !== 'RECEBIDO_PARCIAL') return;
+    Object.values(pc.itens).forEach(function(it) {
+      if (!it || !it.materialCodigo) return;
+      var pedida = parseFloat(it.qtdEmUnidadeEstoque);
+      if (!(pedida > 0)) pedida = parseFloat(it.qtdCotada);
+      if (!(pedida > 0)) pedida = parseFloat(it.qtd) || 0;
+      var recebida = parseFloat(it.qtdRecebida) || 0;
+      var falta = pedida - recebida;
+      if (!(falta > 0)) return;
+      (out[it.materialCodigo] = out[it.materialCodigo] || []).push({
+        data: pc.dataPrevistaEntrega || pc.agendamento && pc.agendamento.dataAgendada || null,
+        qtd: falta, pedido: e[0], refNome: pc.numeroFormatado || e[0]
+      });
+    });
+  });
+  return out;
+}
+
+/* Monta a demanda de material a partir dos pedidos em aberto.
+   Reusa `explodirMateriaisNecessarios` -- a MESMA função que a emissão de OP
+   e o botão "Solicitar Compra" usam. Um segundo cálculo de necessidade aqui
+   divergiria do primeiro ajuste que alguém fizesse no outro. */
+function mrpDemandaPorMaterial() {
+  var datas = mrpPrimeiraDataProgramada();
+  var out = {}, semFormula = [];
+  Object.entries(pedidosCache || {}).forEach(function(e) {
+    var key = e[0], p = e[1];
+    if (!p || !p.sku) return;
+    if (typeof isConcluido === 'function' && isConcluido(p)) return;
+    var saldo = (parseFloat(p.qtdTotal) || 0) - (parseFloat(p.produzido) || 0);
+    if (!(saldo > 0)) return;
+
+    var produto = allProdutosIns[p.sku];
+    var achado = (typeof melhorFormulaDoProduto === 'function')
+      ? melhorFormulaDoProduto(p.sku, allFormulasIns) : null;
+    if (!produto || !achado) { semFormula.push(p.sku); return; }
+    var formula = achado.registro;
+    var bom = allBomIns[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
+    if (!calc.ok) { semFormula.push(p.sku + ' (' + calc.erro + ')'); return; }
+
+    calc.itens.forEach(function(it) {
+      (out[it.mpCodigo] = out[it.mpCodigo] || []).push({
+        data: datas[key] || null,
+        qtd: it.quantidade,
+        origem: 'pedido',
+        refNome: (p.id || key) + ' · ' + p.sku
+      });
+    });
+  });
+  return { demanda: out, semFormula: semFormula };
+}
+
+// Roda o MRP inteiro. Chamado quando a aba abre e quando um parâmetro muda.
+function calcularMrpCompleto() {
+  var d = mrpDemandaPorMaterial();
+  var recebs = mrpRecebimentosPorMaterial();
+  var hoje = new Date().toISOString().slice(0, 10);
+  var codigos = {};
+  Object.keys(d.demanda).forEach(function(c) { codigos[c] = true; });
+  Object.keys(recebs).forEach(function(c) { codigos[c] = true; });
+
+  var linhas = Object.keys(codigos).map(function(cod) {
+    var mat = allMateriaisIns[sanitizeKey(cod)] ||
+      Object.values(allMateriaisIns).filter(function(m) { return m && m.mpCodigo === cod; })[0] || { mpCodigo: cod };
+    var est = allEstoqueIns[sanitizeKey(cod)];
+    // Disponível = o que existe menos o que já está comprometido com OP
+    // emitida. Usar o saldo bruto faria o MRP achar que tem material que já
+    // tem dono.
+    var disponivel = est ? ((parseFloat(est.saldoAtual) || 0) - (parseFloat(est.saldoEmpenhado) || 0)) : 0;
+    var r = calcularMrpMaterial(mat, disponivel, d.demanda[cod] || [], recebs[cod] || [], hoje);
+    r.semRegistroEstoque = !est;
+    return r;
+  });
+  linhas.sort(function(a, b) {
+    if (b.prioridade !== a.prioridade) return b.prioridade - a.prioridade;
+    return String(a.mpCodigo).localeCompare(String(b.mpCodigo));
+  });
+  mrpCache = { linhas: linhas, semFormula: d.semFormula, hoje: hoje };
+  return mrpCache;
+}
+
+function fmtSemanaMrp(iso) {
+  if (!iso) return "—";
+  if (iso === "0000-00-00") return "Em atraso";   // sentinela do balde vencido
+  var p = String(iso).split("-");
+  return p[2] + "/" + p[1];
+}
+
+function renderMrp() {
+  var box = document.getElementById('mrpConteudo');
+  if (!box) return;
+  var r = calcularMrpCompleto();
+
+  var comAcao = r.linhas.filter(function(l) { return l.prioridade >= 0; });
+  var criticos = r.linhas.filter(function(l) { return l.prioridade === 3; }).length;
+  var naoConfig = r.linhas.filter(function(l) { return !l.params.configurado; }).length;
+
+  // Painel de cabeçalho: o que exige decisão HOJE, antes de qualquer tabela.
+  var resumo = '<div class="mrp-kpis">' +
+    '<div class="mrp-kpi' + (criticos ? ' critico' : '') + '"><b>' + criticos + '</b><span>compras atrasadas</span></div>' +
+    '<div class="mrp-kpi"><b>' + comAcao.length + '</b><span>materiais com ação</span></div>' +
+    '<div class="mrp-kpi"><b>' + r.linhas.length + '</b><span>materiais no plano</span></div>' +
+    '</div>';
+
+  // Avisos de qualidade do plano. Um MRP que não diz o quanto confiar nele é
+  // pior que nenhum: o número tem cara de verdade.
+  var avisos = [];
+  if (naoConfig) {
+    avisos.push('<div class="mrp-aviso">⚙️ <b>' + naoConfig + ' de ' + r.linhas.length +
+      ' materiais sem parâmetro de planejamento.</b> Sem lead time, o plano assume prazo zero e manda comprar tudo para ontem. ' +
+      'Preencha na coluna <b>Parâmetros</b> — leva segundos por material e é o que torna a data de compra confiável.</div>');
+  }
+  if (r.semFormula.length) {
+    avisos.push('<div class="mrp-aviso">📐 <b>' + r.semFormula.length + ' SKU(s) ficaram de fora</b> por não ter Fórmula/BOM utilizável: ' +
+      escHtml(r.semFormula.slice(0, 5).join(', ')) + (r.semFormula.length > 5 ? '…' : '') +
+      '. A necessidade deles não está neste plano.</div>');
+  }
+  avisos.push('<div class="mrp-aviso">📦 <b>O saldo de estoque ainda não tem base.</b> ' +
+    'A saída desconta a cada apontamento, mas a maioria dos materiais nunca teve entrada registrada — ' +
+    'até o inventário geral, trate a necessidade líquida como referência e confira o físico antes de comprar.</div>');
+
+  if (!r.linhas.length) {
+    box.innerHTML = resumo + avisos.join('') +
+      '<div class="no-sel" style="padding:40px">Nenhum material com demanda ou pedido de compra em aberto.</div>';
+    return;
+  }
+
+  var lista = mrpFiltro === 'acao' ? comAcao : r.linhas;
+  if (!lista.length) {
+    box.innerHTML = resumo + avisos.join('') +
+      '<div class="no-sel" style="padding:40px">Nenhuma ação pendente — todo material com demanda está coberto por estoque ou por pedido já colocado.</div>';
+    return;
+  }
+
+  box.innerHTML = resumo + avisos.join('') +
+    '<div class="mrp-filtro">' +
+      '<label><input type="radio" name="mrpF" value="acao"' + (mrpFiltro === 'acao' ? ' checked' : '') + '> Só o que exige ação (' + comAcao.length + ')</label>' +
+      '<label><input type="radio" name="mrpF" value="todos"' + (mrpFiltro === 'todos' ? ' checked' : '') + '> Todos os materiais (' + r.linhas.length + ')</label>' +
+    '</div>' +
+    lista.map(mrpCardMaterial).join('');
+
+  box.querySelectorAll('input[name="mrpF"]').forEach(function(el) {
+    el.addEventListener('change', function() { mrpFiltro = el.value; renderMrp(); });
+  });
+  box.querySelectorAll('.mrp-param').forEach(function(inp) {
+    inp.addEventListener('change', function() { salvarParamMrp(inp); });
+  });
+  box.querySelectorAll('.mrp-solicitar').forEach(function(btn) {
+    btn.addEventListener('click', function() { solicitarDoMrp(btn.getAttribute('data-cod')); });
+  });
+}
+
+function mrpCardMaterial(l) {
+  var p = l.params;
+  var excecoesHtml = l.excecoes.map(function(e) {
+    var rot = rotuloExcecaoMrp(e, fmtNum);
+    return '<div class="mrp-exc ' + rot.nivel + '">' + rot.icone + ' <b>' + escHtml(rot.titulo) + '</b>' +
+      '<div>' + escHtml(rot.texto) + '</div></div>';
+  }).join('');
+
+  var colunas = l.baldes.map(function(b) {
+    return '<th' + (b.atrasado ? ' class="atras"' : '') + '>' + fmtSemanaMrp(b.semana) +
+      (b.atrasado ? '<div class="mrp-th-sub">atrasado</div>' : '') + '</th>';
+  }).join('');
+  function linhaGrade(rot, campo, classe, dica) {
+    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '>' +
+      '<td class="mrp-rot"' + (dica ? ' title="' + escapeAttr(dica) + '"' : '') + '>' + rot + '</td>' +
+      l.baldes.map(function(b) {
+        var v = b[campo];
+        return '<td>' + (v ? fmtNum(v) : '—') + '</td>';
+      }).join('') + '</tr>';
+  }
+
+  var grade = l.baldes.length
+    ? '<div class="mrp-grade-wrap"><table class="mrp-grade">' +
+        '<thead><tr><th></th>' + colunas + '</tr></thead><tbody>' +
+        linhaGrade('Necessidade bruta', 'bruta', '', 'Explosão de fórmula/BOM do saldo em aberto dos pedidos programados para esta semana.') +
+        linhaGrade('Recebimentos programados', 'recebimentos', '', 'Pedidos de compra já colocados, na data prevista de entrega.') +
+        linhaGrade('Saldo projetado', 'saldoProjetado', 'proj', 'Saldo ao fim da semana, já considerando a ordem planejada.') +
+        linhaGrade('Necessidade líquida', 'liquida', 'liq', 'Bruta − disponível − em trânsito + estoque de segurança.') +
+        linhaGrade('Ordem planejada', 'ordemPlanejada', 'ordem', 'Necessidade líquida ajustada ao lote mínimo e ao múltiplo.') +
+      '</tbody></table></div>'
+    : '<div class="field-hint" style="padding:6px 0">Sem demanda programada — só backlog e/ou pedidos a receber.</div>';
+
+  var backlogHtml = l.backlog.bruta > 0
+    ? '<div class="mrp-backlog">📋 Backlog sem data: <b>' + fmtNum(l.backlog.bruta) + ' ' + escHtml(l.unidade) + '</b>' +
+      ' em ' + l.backlog.itens + ' pedido(s) que ninguém programou' +
+      (l.backlog.liquida > 0 ? ' — faltariam <b>' + fmtNum(l.backlog.liquida) + '</b>' : ' — coberto pelo saldo') + '.</div>'
+    : '';
+
+  return '<div class="mrp-card' + (l.prioridade === 3 ? ' critico' : '') + '">' +
+    '<div class="mrp-card-cab">' +
+      '<div><b>' + escHtml(l.mpCodigo) + '</b> — ' + escHtml(l.mpNome) +
+        '<div class="mrp-sub">Disponível: <b>' + fmtNum(l.disponivelInicial) + ' ' + escHtml(l.unidade) + '</b>' +
+        (l.semRegistroEstoque ? ' <span class="mrp-tag">sem registro de estoque</span>' : '') +
+        (l.disponivelInicial < 0 ? ' <span class="mrp-tag alerta">saldo negativo</span>' : '') +
+        (!p.configurado ? ' <span class="mrp-tag alerta">sem parâmetros</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button class="btn btn-warning btn-sm mrp-solicitar" data-cod="' + escapeAttr(l.mpCodigo) + '">🛒 Solicitar</button>' +
+    '</div>' +
+    excecoesHtml + grade + backlogHtml +
+    '<details class="mrp-params"><summary>Parâmetros de planejamento</summary>' +
+      '<div class="mrp-params-grid">' +
+        mrpCampoParam(l.mpCodigo, 'leadTimeDias', 'Lead time (dias)', p.leadTimeDias, 'Prazo entre colocar o pedido e o material estar disponível. É ele que transforma "falta" em "compre até tal dia".') +
+        mrpCampoParam(l.mpCodigo, 'estoqueSeguranca', 'Estoque de segurança', p.estoqueSeguranca, 'Piso do saldo. O plano compra para nunca ficar abaixo disto.') +
+        mrpCampoParam(l.mpCodigo, 'loteMinimo', 'Lote mínimo', p.loteMinimo, 'Menor quantidade que o fornecedor aceita vender.') +
+        mrpCampoParam(l.mpCodigo, 'multiplo', 'Múltiplo de compra', p.multiplo, 'Embalagem de venda: caixa de 500, fardo de 12. A ordem sempre arredonda para cima nele.') +
+      '</div></details>' +
+  '</div>';
+}
+
+function mrpCampoParam(cod, campo, rotulo, valor, dica) {
+  return '<div class="fg"><label title="' + escapeAttr(dica) + '">' + rotulo + '</label>' +
+    '<input type="number" min="0" step="any" class="form-ctrl mrp-param" data-cod="' + escapeAttr(cod) + '" ' +
+    'data-campo="' + campo + '" value="' + (valor || '') + '" placeholder="0"></div>';
+}
+
+// Grava direto em materiais/{key}. Caminho PLANO de propósito: update com
+// objeto aninhado no RTDB substitui o nó inteiro -- foi assim que 375
+// produtos foram sobrescritos uma vez neste sistema.
+function salvarParamMrp(inp) {
+  var cod = inp.getAttribute('data-cod'), campo = inp.getAttribute('data-campo');
+  var v = inp.value === '' ? null : parseFloat(inp.value);
+  if (v != null && (isNaN(v) || v < 0)) { showAlert('Valor inválido para ' + campo + '.', 'danger'); inp.value = ''; return; }
+  var mat = allMateriaisIns[sanitizeKey(cod)] ||
+    Object.entries(allMateriaisIns).filter(function(e) { return e[1] && e[1].mpCodigo === cod; }).map(function(e) { return e[1]; })[0];
+  var key = null;
+  Object.keys(allMateriaisIns).forEach(function(k) { if (allMateriaisIns[k] === mat) key = k; });
+  if (!key) { showAlert('Material ' + cod + ' não encontrado no cadastro.', 'danger'); return; }
+  var upd = {};
+  upd['materiais/' + key + '/' + campo] = v;
+  db.ref().update(upd).then(function() {
+    showAlert('Parâmetro salvo para ' + cod + '.', 'success');
+    renderMrp();
+  }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); });
+}
+
+// Leva a necessidade do MRP para a solicitação de compra, reusando o modal
+// que já existe na outra aba.
+function solicitarDoMrp(cod) {
+  var l = (mrpCache && mrpCache.linhas || []).filter(function(x) { return x.mpCodigo === cod; })[0];
+  if (!l) return;
+  var total = l.excecoes.filter(function(e) { return e.tipo.indexOf('COMPRAR') === 0 || e.tipo === 'BACKLOG'; })
+    .reduce(function(s, e) { return s + (parseFloat(e.qtd) || 0); }, 0);
+  if (!(total > 0)) { showAlert('Este material não tem necessidade de compra no plano atual.', 'danger'); return; }
+  solCompraFaltas = { itens: [{
+    insumoKey: null, mpCodigo: l.mpCodigo, nome: l.mpNome, unidade: l.unidade,
+    qtdNecessaria: l.baldes.reduce(function(s, b) { return s + b.bruta; }, 0) + l.backlog.bruta,
+    qtdRecebida: 0, disponivel: l.disponivelInicial,
+    saldoNegativo: l.disponivelInicial < 0, semRegistroEstoque: l.semRegistroEstoque,
+    falta: Math.round(total * 1000) / 1000
+  }], semCodigo: [], semEstoque: l.semRegistroEstoque ? 1 : 0 };
+  document.getElementById('solCompraResumo').innerHTML =
+    '<div class="form-hint">Necessidade calculada pelo MRP para <b>' + escHtml(l.mpCodigo) + '</b>.</div>';
+  document.getElementById('solCompraItens').innerHTML =
+    '<label class="form-label">Item</label>' +
+    '<div style="display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">' +
+      '<input type="checkbox" class="solc-usar" data-i="0" checked>' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + escHtml(l.mpNome) + '</div>' +
+      '<div style="font-size:10.5px;color:var(--muted)">' + escHtml(l.mpCodigo) + ' · disp. ' + fmtNum(l.disponivelInicial) + '</div></div>' +
+      '<input type="number" class="solc-qtd form-ctrl" data-i="0" min="0" step="any" style="width:104px;margin:0" value="' + (Math.round(total * 1000) / 1000) + '">' +
+      '<span style="font-size:11px;color:var(--muted);width:38px">' + escHtml(l.unidade) + '</span>' +
+    '</div>';
+  document.getElementById('solCompraContagem').textContent = '1 item do MRP';
+  document.getElementById('solCompraJustificativa').value =
+    'Necessidade apurada pelo MRP para ' + l.mpCodigo + ' — ' + l.mpNome + '.';
+  document.getElementById('solCompraSave').disabled = false;
+  document.getElementById('solCompraModalBg').classList.add('open');
+}
+
 </script>
 </body>
 </html>

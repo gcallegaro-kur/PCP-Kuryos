@@ -4493,3 +4493,281 @@ function calcularParcelasPagamento(valorTotal, parcelas, dataBase) {
   if (sobra !== 0) out[out.length - 1].valor = Math.round((out[out.length - 1].valor + sobra) * 100) / 100;
   return out;
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// MRP — PLANEJAMENTO DE NECESSIDADES DE MATERIAL
+//
+// O que existia antes: `insumos.html` era "Insumos por Pedido" -- um
+// checklist de UM pedido por vez. Isso não é MRP. Faltavam as quatro coisas
+// que definem o método:
+//   1. AGREGAR a demanda de todos os pedidos abertos (o mesmo frasco em três
+//      pedidos é uma compra só, não três);
+//   2. FASEAR no tempo (precisar de 10.000 na semana que vem e 10.000 em
+//      dezembro não é precisar de 20.000 hoje);
+//   3. Descontar o que JÁ FOI COMPRADO e ainda não chegou (recebimentos
+//      programados) -- senão compra-se em duplicidade;
+//   4. Recuar o lead time pra dizer QUANDO COLOCAR o pedido, não só quanto.
+//
+// A saída de um MRP profissional não é uma lista de quantidades: é uma lista
+// de AÇÕES com data (comprar, antecipar, adiar, cancelar). É isso que estas
+// funções produzem.
+//
+// ── Restrição real desta operação, medida antes de projetar ──
+// Das 65 OPs ativas, só 1 tem data planejada; dos 98 itens de pedido em
+// aberto, 6 têm data. A única demanda com data confiável é a que está na
+// grade de `programacao` -- cerca de 6 dias úteis à frente.
+//
+// Por isso o horizonte é dividido em DEMANDA FIRME (programada, com data) e
+// BACKLOG (sem data). Um MRP que fingisse datas para o backlog produziria um
+// plano preciso e falso. Aqui o backlog aparece num balde próprio, explícito,
+// e o comprador enxerga a diferença entre "preciso disto na terça" e "isto
+// está pedido mas ninguém programou".
+// ══════════════════════════════════════════════════════════════════════
+
+// Parâmetros de planejamento de um material, com defaults explícitos.
+// Nenhum dos 906 materiais tem esses campos hoje -- eles nascem aqui e são
+// preenchidos pela própria tela do MRP. Default conservador de propósito:
+// leadTime 0 e segurança 0 fazem o sistema dizer "compre agora", que é um
+// erro visível, em vez de esconder a necessidade num prazo inventado.
+function parametrosMrpMaterial(mat) {
+  var m = mat || {};
+  var n = function(v) { var x = parseFloat(v); return isNaN(x) || x < 0 ? 0 : x; };
+  return {
+    leadTimeDias: n(m.leadTimeDias),
+    estoqueSeguranca: n(m.estoqueSeguranca),
+    loteMinimo: n(m.loteMinimo),
+    multiplo: n(m.multiplo),
+    // Sem nenhum parâmetro preenchido o plano ainda sai, mas a tela precisa
+    // dizer que ele está cru -- plano com lead time zero manda comprar tudo
+    // pra ontem, e quem vê isso três vezes para de olhar.
+    configurado: !!(n(m.leadTimeDias) || n(m.estoqueSeguranca) || n(m.loteMinimo) || n(m.multiplo))
+  };
+}
+
+/* Função PURA. Arredonda a necessidade líquida para o que dá pra comprar de
+   verdade: respeita lote mínimo e múltiplo de embalagem.
+
+   Sem isso o MRP pede 1.037 un de um item vendido em caixa de 500 -- e quem
+   compra corrige na mão toda vez, até parar de confiar no número. */
+function aplicarLoteamento(qtd, params) {
+  var p = params || {};
+  var q = parseFloat(qtd) || 0;
+  if (q <= 0) return 0;
+  if (p.loteMinimo > 0 && q < p.loteMinimo) q = p.loteMinimo;
+  if (p.multiplo > 0) q = Math.ceil(q / p.multiplo) * p.multiplo;
+  return Math.round(q * 1000) / 1000;
+}
+
+/* Função PURA. Agrupa uma data em balde semanal (segunda-feira da semana).
+   Balde semanal e não diário porque a operação compra por semana, e um
+   gráfico com 60 colunas de dia não é lido por ninguém. Sempre UTC: mistura
+   de getDate() local com toISOString() já causou erro de um dia neste
+   sistema. */
+function baldeSemanaMrp(dataIso) {
+  var s = String(dataIso || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  var d = new Date(s + 'T00:00:00Z');
+  var dow = d.getUTCDay();               // 0=domingo
+  var recuo = dow === 0 ? 6 : dow - 1;   // volta pra segunda
+  d.setUTCDate(d.getUTCDate() - recuo);
+  return d.toISOString().slice(0, 10);
+}
+
+// Soma dias corridos a uma data ISO, em UTC. Usada pra recuar o lead time.
+function somarDiasIso(dataIso, dias) {
+  var s = String(dataIso || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  var d = new Date(s + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + (parseInt(dias, 10) || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+/* Função PURA — o núcleo do MRP.
+
+   Entrada:
+     material   { mpCodigo, mpNome, unidade, ...parâmetros }
+     disponivel saldo em mãos JÁ LÍQUIDO de empenho (saldoAtual − saldoEmpenhado)
+     demandas   [{ data|null, qtd, origem, refNome }]  data null = backlog
+     recebimentos [{ data, qtd, pedido, refNome }]     PCs colocados e não recebidos
+     hoje       'YYYY-MM-DD'
+
+   Saída: baldes semanais com a mecânica clássica --
+     bruta → recebimentos → projeção de saldo → líquida → ordem planejada --
+     mais a lista de exceções, que é o que a pessoa realmente lê. */
+function calcularMrpMaterial(material, disponivel, demandas, recebimentos, hoje) {
+  var p = parametrosMrpMaterial(material);
+  var hojeIso = String(hoje || '').slice(0, 10);
+  var saldo = parseFloat(disponivel) || 0;
+
+  var comData = [], semData = [];
+  (demandas || []).forEach(function(d) {
+    var q = parseFloat(d && d.qtd) || 0;
+    if (q <= 0) return;
+    if (d.data && baldeSemanaMrp(d.data)) comData.push(d); else semData.push(d);
+  });
+
+  /* Balde EM ATRASO: tudo que já venceu colapsa numa coluna só, na frente.
+
+     Sem isso a grade abre com semanas de julho e agosto espalhadas — medido
+     com o dado real: 26 dos 86 materiais do plano têm demanda programada no
+     passado, porque a OP foi programada e não rodou. Uma coluna por semana
+     vencida empurra o futuro pra fora da tela e não muda nenhuma decisão: o
+     que venceu, venceu, e a ação é a mesma para tudo.
+
+     É como SAP e Oracle apresentam ("past due"), e pela mesma razão. */
+  var semanaHoje = baldeSemanaMrp(hojeIso);
+  var ATRASO = '0000-00-00';   // sentinela: ordena antes de qualquer data real
+  var chaveBalde = function(dataIso) {
+    var b = baldeSemanaMrp(dataIso);
+    if (!b) return null;
+    return (semanaHoje && b < semanaHoje) ? ATRASO : b;
+  };
+
+  var chaves = {};
+  comData.forEach(function(d) { chaves[chaveBalde(d.data)] = true; });
+  (recebimentos || []).forEach(function(r) {
+    var b = chaveBalde(r && r.data);
+    if (b) chaves[b] = true;
+  });
+  var semanas = Object.keys(chaves).sort();
+
+  var baldes = semanas.map(function(sem) {
+    var bruta = comData.filter(function(d) { return chaveBalde(d.data) === sem; })
+      .reduce(function(s, d) { return s + (parseFloat(d.qtd) || 0); }, 0);
+    var receb = (recebimentos || []).filter(function(r) { return chaveBalde(r.data) === sem; })
+      .reduce(function(s, r) { return s + (parseFloat(r.qtd) || 0); }, 0);
+    return {
+      semana: sem,
+      atrasado: sem === ATRASO,
+      bruta: Math.round(bruta * 1000) / 1000,
+      recebimentos: Math.round(receb * 1000) / 1000
+    };
+  });
+
+  // Passagem cronológica: o saldo projetado de uma semana é a entrada da
+  // seguinte. É o que faz um recebimento da semana 2 cobrir a demanda da
+  // semana 3 sem mandar comprar de novo.
+  var excecoes = [];
+  baldes.forEach(function(b) {
+    var antes = saldo;
+    saldo = antes + b.recebimentos - b.bruta;
+    b.saldoProjetado = Math.round(saldo * 1000) / 1000;
+    // Necessidade líquida: o quanto o saldo projetado fura o estoque de
+    // segurança. É AQUI que a segurança entra -- ela não é demanda, é piso.
+    var falta = p.estoqueSeguranca - saldo;
+    b.liquida = falta > 0 ? Math.round(falta * 1000) / 1000 : 0;
+    b.ordemPlanejada = b.liquida > 0 ? aplicarLoteamento(b.liquida, p) : 0;
+    if (b.ordemPlanejada > 0) {
+      // A ordem planejada repõe o saldo -- senão toda semana seguinte pediria
+      // a mesma coisa de novo, e o plano viraria uma pilha de compras
+      // duplicadas.
+      saldo += b.ordemPlanejada;
+      b.saldoProjetado = Math.round(saldo * 1000) / 1000;
+      // Recuo do lead time: a data de COLOCAR o pedido. É a informação que
+      // transforma "falta material" em "compre hoje".
+      // No balde EM ATRASO nao ha data pra recuar: a necessidade ja venceu.
+      // Forcar um calculo aqui produziria uma data de 1899.
+      b.colocarEm = b.atrasado ? null : somarDiasIso(b.semana, -p.leadTimeDias);
+      b.atrasadoParaComprar = b.atrasado || !!(b.colocarEm && b.colocarEm < hojeIso);
+      excecoes.push({
+        tipo: b.atrasadoParaComprar ? 'COMPRAR_ATRASADO' : 'COMPRAR',
+        semana: b.semana, colocarEm: b.colocarEm, qtd: b.ordemPlanejada
+      });
+    }
+  });
+
+  // Backlog sem data: não entra na projeção (não dá pra fasear o que não tem
+  // data), mas não pode sumir -- é demanda real, só não programada.
+  var brutaBacklog = semData.reduce(function(s, d) { return s + (parseFloat(d.qtd) || 0); }, 0);
+  var liquidaBacklog = 0;
+  if (brutaBacklog > 0) {
+    var sobra = saldo - p.estoqueSeguranca;
+    var falta2 = brutaBacklog - (sobra > 0 ? sobra : 0);
+    liquidaBacklog = falta2 > 0 ? aplicarLoteamento(falta2, p) : 0;
+    if (liquidaBacklog > 0) {
+      excecoes.push({ tipo: 'BACKLOG', qtd: liquidaBacklog, semana: null, colocarEm: null });
+    }
+  }
+
+  /* Exceções sobre os PEDIDOS JÁ COLOCADOS -- a parte que quase nenhum
+     controle caseiro tem, e que é metade do valor do MRP:
+       ANTECIPAR: o material chega depois da semana em que é preciso;
+       ADIAR:     chega numa semana sem demanda nenhuma pela frente.
+     Sem isso o comprador só descobre o atraso quando a linha para. */
+  // A referência é o primeiro balde que FICOU FALTANDO (liquida > 0), não o
+  // primeiro com demanda. Olhar `saldoProjetado < 0` aqui não funciona: a
+  // ordem planejada já repôs o saldo alguns passos acima, e o furo que
+  // justifica a antecipação some antes de ser lido.
+  var primeiraFalta = baldes.filter(function(b) { return b.liquida > 0; })[0];
+  var temDemanda = baldes.some(function(b) { return b.bruta > 0; });
+  (recebimentos || []).forEach(function(r) {
+    var bR = baldeSemanaMrp(r.data);
+    if (!bR) return;
+    if (primeiraFalta && bR > primeiraFalta.semana) {
+      // Já existe material comprado, só chega tarde. Antecipar é mais barato
+      // e mais rápido que comprar de novo -- e é a checagem que quase nenhum
+      // controle caseiro faz.
+      excecoes.push({ tipo: 'ANTECIPAR', pedido: r.pedido, refNome: r.refNome,
+        de: bR, para: primeiraFalta.semana, qtd: parseFloat(r.qtd) || 0 });
+    } else if (!temDemanda) {
+      excecoes.push({ tipo: 'ADIAR', pedido: r.pedido, refNome: r.refNome,
+        de: bR, para: null, qtd: parseFloat(r.qtd) || 0 });
+    }
+  });
+
+  return {
+    mpCodigo: (material || {}).mpCodigo || '',
+    mpNome: (material || {}).mpNome || '',
+    unidade: (material || {}).unidade || '',
+    params: p,
+    disponivelInicial: Math.round((parseFloat(disponivel) || 0) * 1000) / 1000,
+    baldes: baldes,
+    backlog: {
+      bruta: Math.round(brutaBacklog * 1000) / 1000,
+      liquida: liquidaBacklog,
+      itens: semData.length
+    },
+    excecoes: excecoes,
+    // Ordena a lista da tela: quem tem ação atrasada primeiro. O MRP existe
+    // pra dizer o que fazer HOJE.
+    prioridade: excecoes.some(function(e) { return e.tipo === 'COMPRAR_ATRASADO'; }) ? 3
+              : excecoes.some(function(e) { return e.tipo === 'ANTECIPAR'; }) ? 2
+              : excecoes.some(function(e) { return e.tipo === 'COMPRAR'; }) ? 1
+              : excecoes.length ? 0 : -1
+  };
+}
+
+/* Função PURA. Rótulo e explicação de cada exceção, num lugar só.
+   A frase é metade do produto: "COMPRAR_ATRASADO" não diz nada a quem opera;
+   "Comprar hoje — o prazo do fornecedor já não cobre a data" diz tudo. */
+// Rotulo legivel de um balde. O balde vencido usa a sentinela 0000-00-00 pra
+// ordenar na frente -- mostrar isso na tela seria vazar valor interno.
+function rotuloSemanaMrp(sem) {
+  if (!sem) return 'sem data';
+  if (sem === '0000-00-00') return 'em atraso';
+  var p = String(sem).split('-');
+  return 'semana de ' + p[2] + '/' + p[1];
+}
+function rotuloExcecaoMrp(e, fmtQtd) {
+  var q = fmtQtd ? fmtQtd(e.qtd) : String(e.qtd);
+  switch (e.tipo) {
+    case 'COMPRAR_ATRASADO':
+      return { nivel: 'critico', icone: '🔴', titulo: 'Comprar agora — já atrasado',
+        texto: 'Precisa de ' + q + ' ' + rotuloSemanaMrp(e.semana) +
+               (e.colocarEm ? '. Com o lead time deste material, o pedido deveria ter sido colocado em ' + e.colocarEm + '.' : '. A data já venceu — a produção estava programada e não rodou.') };
+    case 'COMPRAR':
+      return { nivel: 'acao', icone: '🟠', titulo: 'Comprar até ' + e.colocarEm,
+        texto: 'Precisa de ' + q + ' ' + rotuloSemanaMrp(e.semana) + '. Colocando o pedido até ' + e.colocarEm + ', chega a tempo.' };
+    case 'ANTECIPAR':
+      return { nivel: 'acao', icone: '⏩', titulo: 'Antecipar pedido ' + (e.refNome || e.pedido || ''),
+        texto: q + ' chega ' + rotuloSemanaMrp(e.de) + ', mas a necessidade é ' + rotuloSemanaMrp(e.para) + '. Cobrar antecipação.' };
+    case 'ADIAR':
+      return { nivel: 'info', icone: '⏸', titulo: 'Adiar pedido ' + (e.refNome || e.pedido || ''),
+        texto: q + ' chega ' + rotuloSemanaMrp(e.de) + ' e não há demanda programada. Vale adiar e não ocupar espaço nem capital.' };
+    case 'BACKLOG':
+      return { nivel: 'info', icone: '📋', titulo: 'Backlog sem data',
+        texto: q + ' de demanda em pedidos que ninguém programou ainda. Não dá pra dizer QUANDO comprar até a produção entrar na grade.' };
+    default:
+      return { nivel: 'info', icone: '•', titulo: e.tipo, texto: '' };
+  }
+}
