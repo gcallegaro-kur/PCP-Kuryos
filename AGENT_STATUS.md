@@ -114,12 +114,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Escopo atual — módulo de Custos (arquitetura, 2026-09-14).** Sessão de
-  desenho, nada implementado. Decisões registradas em `PLANO_CUSTOS.md` (novo).
-  Resumo: custo de conversão pelo **custo do dia de operação** (folha do RH +
-  custos fixos ÷ dias úteis ÷ horas/dia), evoluindo para taxa por setor via
-  `rh_cargos.setor`; preço de material por hierarquia PAGO → COTADO → ALVO →
-  `SEM_CUSTO` (**nunca zero**, mesma disciplina do balde BACKLOG do MRP).
+- **Escopo atual — Controladoria/Custos (arquitetura, 2026-09-14).** Sessão de
+  desenho, nada implementado. Decisões em `PLANO_CUSTOS.md`, reescrito depois de
+  **medir a base de produção** (4 sondas somente-leitura). Resumo: não construir
+  financeiro transacional (comprar); construir controladoria com razão de custos
+  append-only; **começar pela conversão, não pelo material**; absorção por
+  horas-padrão (`produzido ÷ prodHoraRef`), nunca por duração de OP; custo de
+  fórmula por kg, desacoplado da densidade; `SEM_CUSTO` nunca vira zero.
+- **⚠ Três premissas da v1 do plano morreram na medição** — registro aqui porque
+  qualquer um de nós repetiria os mesmos erros: (1) o RH **não tem folha**
+  (`rh_colaboradores` = 0 registros), (2) as fontes de preço COTADO/ALVO estão
+  **vazias** (0 de 911 materiais com fornecedor homologado ou custo target; só
+  2 PCs no total), (3) duração de OP (`dataInicioReal→dataFimReal`) **não é
+  ocupação** — é calendário, e dá 123–243%. O que a base tem de bom: 167 de 169
+  fórmulas fechando 100%, 841 itens de fórmula com código e **todos existindo no
+  cadastro**, `prodHoraRef` em 321 de 377 produtos, 1.267 OPs com datas reais.
 - **Arquivos ativos:** `PLANO_CUSTOS.md` e `AGENT_STATUS.md`. Nada mais — a
   implementação ainda não começou. Quando começar, serão
   `public/shared/custos.js` (novo) e a aba de Custos em `public/insumos.html`.

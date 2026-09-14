@@ -144,12 +144,18 @@ antes de fechar.
   planejamento sobre o pipeline `alocacoes_planejamento` existente, changeover por linha,
   ML adiado. Sequência: apontamento de manipulação → popular `dataInicioPlanejada/Fim` →
   travar apontamento na OP programada → paradas na ETA → telas → conclusão gated → etc.
-- `PLANO_CUSTOS.md` — arquitetura do módulo de Custos (sessão de 2026-09-14, nada
-  implementado). Decisões travadas: conversão pelo **custo do dia de operação** (folha +
-  custos fixos ÷ dias úteis ÷ horas/dia), evoluindo para taxa por setor; preço de material
-  por hierarquia PAGO → COTADO → ALVO → `SEM_CUSTO`, que **nunca vira zero**; taxa
-  agregada por competência porque salário é restrito a `rh`/`admin`. A única parte urgente
-  é a **Fase 0**: gravar custo no lote no recebimento enquanto `estoque_lotes` está vazio.
+- `PLANO_CUSTOS.md` — controladoria: custos, margem e o que **não** construir (2026-09-14,
+  nada implementado). Números medidos contra a base, não estimados. Decisões travadas:
+  **não construir financeiro transacional** (comprar, integrar por uma fronteira só) e sim
+  controladoria; começar pela **conversão**, não pelo material, porque preço de compra
+  (2 PCs), preço de venda (0 de 411 itens) e folha (0 colaboradores) estão vazios enquanto
+  fórmula/BOM/`prodHoraRef`/OPs são bons; absorção por **horas-padrão**
+  (`produzido ÷ prodHoraRef`), **nunca** por duração de OP — medido, dá 123–243% e é tempo
+  de calendário; custo de fórmula **por kg**, desacoplado da densidade (só 6 de 377
+  produtos a têm); fila de preço por exposição — **83 materiais cobrem 80%**, não 911;
+  `SEM_CUSTO` nunca vira zero. **Ocupação média medida: 40%** — ~60% da capacidade paga não
+  vira produto, e isso tem que aparecer como linha do custo. Fase 0 urgente: gravar custo
+  no lote no recebimento enquanto `estoque_lotes` está vazio.
 - `AUDITORIA_INTEGRACAO.md` — os 9 elos entre setores, com evidência no código. 4 foram
   fechados em 2026-09-08.
 - `public/manuais.html` — manuais operacionais. Cada passagem que ainda depende de
