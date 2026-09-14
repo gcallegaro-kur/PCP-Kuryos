@@ -114,6 +114,49 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Cotação: copiar texto e incluir fornecedor (2026-09-14).**
+  `885bbc0` no `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
+  (`Documents/Codex/deploy-cotacao-texto-885bbc0`). Só `public/compras.html` e
+  `run_cotacao_texto_test.js` entraram no commit.
+  (1) Cada convidado ganhou **"📋 Copiar texto"** no cabeçalho da proposta, na
+  aba Cotações — o botão da aba Solicitações sumia justamente quando o convite
+  já existia. O texto sai **só com os materiais do escopo do convidado** e **não
+  leva código nem descrição interna da Kuryos**: usa `codigoFornecedor` /
+  `nomeComercial` da homologação (`materiais/{k}/fornecedores/{fKey}`) quando
+  existem; senão, descrição + `especificacoesTecnicas`. Convite por similar
+  resolve a nomenclatura pelo similar.
+  (2) **`＋ Fornecedor` tinha beco sem saída:** a lista só mostrava homologados
+  do material/similar e o CNPJ recusava quem já estava cadastrado ("use o
+  fornecedor cadastrado acima" — que não estava acima). Fornecedor cadastrado
+  depois da cotação aberta, ou não homologado para a MP, não tinha caminho.
+  Agora há a seção "Outros fornecedores da base" (busca na base inteira,
+  inclusão marcada fora da homologação) e o CNPJ já cadastrado inclui o
+  fornecedor da base.
+- **⚠ Compatibilidade que quase passou batido, vale para quem mexer em cotação:**
+  o escopo de um convidado é `escopoDoConvidado` (`public/shared/utils.js:4098`),
+  **não** `convidado.itens` direto — convidado sem o campo vem de cotação
+  anterior ao escopo por item e cota o **processo inteiro**. Ler o campo direto
+  fazia as duas cotações hoje abertas mostrarem o botão e copiarem vazio. Pela
+  mesma raiz, `gravarFornecedorNaCotacao` passou a **materializar** o escopo do
+  convidado legado antes de somar itens novos: sem isso, ampliar o convite de um
+  fornecedor antigo o **encolhia** de "todos os materiais" para os poucos
+  marcados na hora. Esse segundo defeito já existia antes desta sessão.
+- **Validação:** `run_cotacao_texto_test.js` (carrega o `escopoDoConvidado` real
+  do `utils.js` — copiar a regra no teste esconderia a divergência); regressões
+  `run_rotas_pc_test.js`, `run_recebimento_qualidade_test.js`,
+  `run_lote_interno_test.js`, `run_descarte_test.js` e
+  `run_conferencia_pa_test.js` aprovadas; sintaxe dos scripts inline e
+  `git diff --check` limpos.
+- **Verificação no ar (2026-09-14):** `compras.html` HTTP 200 e **SHA256 idêntico
+  ao commit**; `cot-copiar-texto` e `caf-add-fora` presentes; zero ocorrência da
+  recusa de CNPJ. Firebase reportou `uploading new files [0/1]` — um arquivo só.
+- **⚠ Codex — seu trabalho NÃO subiu junto, de novo por worktree destacado.**
+  `shared/contatos-cliente.js` e `contatos-cliente-ui.js` respondem **HTTP 404**
+  no ar; `cadastros.html`, `comercial.html`, `expedicao.html` e `logistica.html`
+  seguem HTTP 200 na versão anterior. Seus 12 modificados e 4 novos continuam
+  intactos e sem commit na árvore de trabalho — não toquei em nenhum.
+- **Arquivos ativos:** nenhum. `public/compras.html` liberado.
+
 - **Escopo atual — Controladoria/Custos (arquitetura, 2026-09-14).** Sessão de
   desenho, nada implementado. Decisões em `PLANO_CUSTOS.md`, reescrito depois de
   **medir a base de produção** (4 sondas somente-leitura). Resumo: não construir
