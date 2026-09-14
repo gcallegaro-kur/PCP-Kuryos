@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/custos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -180,6 +181,37 @@
       color: var(--text);
     }
     
+    /* ── CUSTOS ── */
+    .cst-sec { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+    .cst-sec h3 { margin:0 0 4px; font-size:14.5px; }
+    .cst-sec .cst-sub { font-size:12px; color:var(--muted); margin-bottom:12px; }
+    .cst-barra { height:9px; border-radius:6px; background:color-mix(in srgb, var(--text) 10%, var(--card)); overflow:hidden; margin:8px 0 4px; }
+    .cst-barra i { display:block; height:100%; background:var(--primary); border-radius:6px; transition:width .3s; }
+    .cst-tab-wrap { overflow-x:auto; }
+    .cst-tab { border-collapse:collapse; width:100%; font-size:12.5px; min-width:720px; }
+    .cst-tab th, .cst-tab td { border-bottom:1px solid var(--border); padding:6px 9px; text-align:left; white-space:nowrap; }
+    .cst-tab th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:600; }
+    .cst-tab td.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .cst-tab tr.pago { opacity:.55; }
+    .cst-preco { width:96px; padding:4px 7px; border:1px solid var(--border); border-radius:6px; background:var(--bg);
+      color:var(--text); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; }
+    .cst-preco:focus { outline:none; border-color:var(--primary); }
+    .cst-preco.salvo { border-color:#059669; }
+    .cst-nat { display:inline-block; font-size:10.5px; padding:1px 6px; border-radius:4px;
+      background:color-mix(in srgb, var(--text) 9%, var(--card)); color:var(--muted); }
+    .cst-fonte { font-size:10.5px; padding:1px 6px; border-radius:4px; font-weight:600; }
+    .cst-fonte.PAGO { background:color-mix(in srgb, #059669 18%, var(--card)); color:#059669; }
+    .cst-fonte.COTADO { background:color-mix(in srgb, var(--warning) 20%, var(--card)); color:var(--warning); }
+    .cst-fonte.MANUAL { background:color-mix(in srgb, var(--text) 10%, var(--card)); color:var(--muted); }
+    .cst-fonte.SEM_CUSTO { background:color-mix(in srgb, var(--danger) 14%, var(--card)); color:var(--danger); }
+    .cst-ficha-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:12px 0; }
+    .cst-box { border:1px solid var(--border); border-radius:10px; padding:10px 13px; }
+    .cst-box b { display:block; font-size:21px; font-variant-numeric:tabular-nums; color:var(--primary); line-height:1.15; }
+    .cst-box b.vazio { color:var(--muted); font-size:15px; }
+    .cst-box span { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+    .cst-box.total { border-color:var(--primary); }
+    @media (max-width:760px) { .cst-sec { padding:12px 13px; } }
+
     /* ── MRP ── */
     .mrp-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
     .mrp-kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px 18px; min-width:132px; }
@@ -874,6 +906,7 @@
   <!-- Tab navigation -->
   <div class="top-tabs">
     <button class="top-tab" id="tabBtnMrp" onclick="switchTab('mrp')">🧮 MRP — Necessidade de Materiais</button>
+    <button class="top-tab" id="tabBtnCustos" onclick="switchTab('custos')">💰 Custo do Produto</button>
     <button class="top-tab active" id="tabBtnMatriz" onclick="switchTab('matriz')">📋 Visão Geral (Matriz)</button>
     <button class="top-tab" id="tabBtnDetalhes" onclick="switchTab('detalhes')">🔍 Detalhes do Pedido</button>
   </div>
@@ -881,6 +914,11 @@
   <!-- TAB: MRP -->
   <div class="tab-content" id="panelMrp">
     <div id="mrpConteudo"><div class="no-sel" style="padding:40px">Calculando o plano...</div></div>
+  </div>
+
+  <!-- TAB: CUSTO DO PRODUTO -->
+  <div class="tab-content" id="panelCustos">
+    <div id="custosConteudo"><div class="no-sel" style="padding:40px">Carregando custos...</div></div>
   </div>
 
   <!-- TAB: MATRIZ DE INSUMOS -->
@@ -1221,6 +1259,7 @@
   // ── Tab Management ────────────────────────────────────────────────
   var ABAS_INSUMOS = {
     mrp:      { btn: 'tabBtnMrp',      panel: 'panelMrp',      aoAbrir: function() { renderMrp(); } },
+    custos:   { btn: 'tabBtnCustos',   panel: 'panelCustos',   aoAbrir: function() { abrirCustos(); } },
     matriz:   { btn: 'tabBtnMatriz',   panel: 'panelMatriz',   aoAbrir: function() { renderMatriz(); } },
     detalhes: { btn: 'tabBtnDetalhes', panel: 'panelDetalhes', aoAbrir: null }
   };
@@ -2852,6 +2891,353 @@ function solicitarDoMrp(cod) {
   document.getElementById('solCompraSave').disabled = false;
   document.getElementById('solCompraModalBg').classList.add('open');
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ABA CUSTO DO PRODUTO
+   ═══════════════════════════════════════════════════════════════════════
+   A conta inteira mora em shared/custos.js (funções puras, 97 asserções em
+   run_custos_test.js + ensaio contra a base real em run_custos_ensaio.js).
+   Aqui só há leitura de banco, gravação de preço e HTML.
+
+   Duas telas em uma, porque são os dois lados do mesmo problema:
+   1. A FILA -- em que ordem digitar preço para fechar ficha mais rápido.
+      Ordenada por volume desbloqueado por preço, não por exposição: medido
+      na base, a fila por exposição fecha 9 SKUs com 83 preços, e o plano
+      por SKU fecha metade do volume com 66.
+   2. A FICHA -- o custo de um SKU, aberto em granel/embalagem/conversão,
+      com procedência por linha e o buraco explícito quando falta preço.
+
+   O que esta tela NÃO faz, de propósito: exibir custo total de ficha
+   incompleta. Preço faltando não vira zero -- viraria uma margem alta,
+   errada e convincente. */
+
+var custosPrecos = {};          // nó custos_precos, por key de material
+var custosOps = null;           // histórico de OPs, lido uma vez (volume)
+var custosCarregando = false;
+var custosSkuSel = '';
+
+function abrirCustos() {
+  // OPs só são lidas quando a aba abre pela primeira vez: são ~1.350
+  // registros que as outras abas não usam, e carregar isso na abertura da
+  // página penalizaria quem nunca entra em Custos.
+  if (custosOps === null && !custosCarregando) {
+    custosCarregando = true;
+    document.getElementById('custosConteudo').innerHTML =
+      '<div class="no-sel" style="padding:40px">Lendo o histórico de produção...</div>';
+    db.ref('ops').once('value').then(function(snap) {
+      custosOps = snap.val() || {};
+      custosCarregando = false;
+      renderCustos();
+    }).catch(function(err) {
+      custosCarregando = false;
+      custosOps = {};
+      console.error('Custos: falha ao ler ops', err);
+      renderCustos();
+    });
+    return;
+  }
+  renderCustos();
+}
+
+function custosNorm(c) { return String(c == null ? '' : c).trim().toUpperCase(); }
+
+/* Monta os índices que o motor espera. Fórmula: a de MAIOR versão por
+   produto -- a base tem 172 fórmulas para 169 produtos, então há versão
+   repetida e pegar "a primeira" daria custo de uma receita antiga. */
+function custosContexto() {
+  var idx = Custos.indexarMateriais(allMateriaisIns);
+  var formulaPorSku = {}, bomPorSku = {};
+  Object.keys(allFormulasIns).forEach(function(k) {
+    var f = allFormulasIns[k];
+    var sku = custosNorm(f && f.codProduto);
+    if (!sku || !f.itens) return;
+    var atual = formulaPorSku[sku];
+    if (!atual || Number(f.versao || 0) >= Number(atual.versao || 0)) formulaPorSku[sku] = f;
+  });
+  Object.keys(allBomIns).forEach(function(k) {
+    var b = allBomIns[k];
+    var sku = custosNorm(String(k).split(/[|_]/)[0]);
+    if (sku && b && b.itens) bomPorSku[sku] = b;
+  });
+
+  // Volume dos últimos 12 meses -- é o peso que define a ordem da fila.
+  var corte = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  var volumePorSku = {};
+  Object.keys(custosOps || {}).forEach(function(k) {
+    var o = custosOps[k];
+    if (!o || !o.dataInicioReal || String(o.dataInicioReal) < corte) return;
+    var q = Number(o.produzido) || 0;
+    var sku = custosNorm(o.sku);
+    if (q > 0 && sku) volumePorSku[sku] = (volumePorSku[sku] || 0) + q;
+  });
+
+  // Produto por SKU, indexado UMA vez. Sem isto a tela varria os 377
+  // cadastros dentro de dois laços sobre ~200 SKUs.
+  var produtoPorSku = {};
+  Object.keys(allProdutosIns).forEach(function(k) {
+    var p = allProdutosIns[k];
+    var sku = custosNorm((p && p.sku) || k);
+    if (sku && !produtoPorSku[sku]) produtoPorSku[sku] = p;
+  });
+
+  return { idx: idx, formulaPorSku: formulaPorSku, bomPorSku: bomPorSku,
+    volumePorSku: volumePorSku, produtoPorSku: produtoPorSku };
+}
+
+function custosMoeda(v, casas) {
+  if (v == null || !isFinite(v)) return '—';
+  return 'R$ ' + Number(v).toLocaleString('pt-BR', {
+    minimumFractionDigits: casas == null ? 2 : casas, maximumFractionDigits: casas == null ? 2 : casas });
+}
+
+function renderCustos() {
+  var box = document.getElementById('custosConteudo');
+  if (!box || typeof Custos === 'undefined') return;
+  var ctx = custosContexto();
+
+  var plano = Custos.planoCadastroPorSku({
+    volumePorSku: ctx.volumePorSku, formulaPorSku: ctx.formulaPorSku,
+    bomPorSku: ctx.bomPorSku, idxMateriais: ctx.idx, precos: custosPrecos
+  });
+  var fila = Custos.filaPrecosPorExposicao({
+    volumePorSku: ctx.volumePorSku, formulaPorSku: ctx.formulaPorSku,
+    bomPorSku: ctx.bomPorSku, idxMateriais: ctx.idx, precos: custosPrecos
+  });
+
+  // Quantos SKUs já têm a estrutura de material inteira precificada, e que
+  // fatia do volume isso representa. É o indicador que realmente mede
+  // progresso -- "N preços cadastrados" não mede nada, porque ficha só
+  // fecha com TODOS os materiais do SKU.
+  var volTotal = 0, volFechado = 0, skusFechados = 0, skusComEstrutura = 0;
+  Object.keys(ctx.volumePorSku).forEach(function(sku) {
+    var q = ctx.volumePorSku[sku];
+    volTotal += q;
+    var f = ctx.formulaPorSku[sku], b = ctx.bomPorSku[sku];
+    if (!f && !b) return;
+    skusComEstrutura++;
+    var ficha = Custos.fichaCustoProduto({
+      produto: { sku: sku }, formula: f, bom: b, idxMateriais: ctx.idx, precos: custosPrecos
+    });
+    if (ficha.granel.completo && ficha.embalagem.completo) { skusFechados++; volFechado += q; }
+  });
+  var pctVol = volTotal > 0 ? (volFechado / volTotal) * 100 : 0;
+
+  var html = '';
+
+  html += '<div class="mrp-kpis">' +
+    '<div class="mrp-kpi"><b>' + fmtNum(fila.comPreco) + '</b><span>materiais com preço</span></div>' +
+    '<div class="mrp-kpi' + (skusFechados === 0 ? ' critico' : '') + '"><b>' + fmtNum(skusFechados) + '</b><span>SKUs com ficha fechada</span></div>' +
+    '<div class="mrp-kpi"><b>' + pctVol.toFixed(1) + '%</b><span>do volume custeado</span></div>' +
+    '<div class="mrp-kpi"><b>' + fmtNum(plano.precosNecessarios) + '</b><span>preços ainda faltando</span></div>' +
+    '</div>';
+
+  if (!fila.comPreco) {
+    html += '<div class="mrp-aviso">💰 <b>Nenhum material tem preço ainda.</b> ' +
+      'Sem preço não existe custo — e material sem preço <b>não vale zero</b> aqui: ' +
+      'a ficha fica marcada como incompleta em vez de sair barata e errada. ' +
+      'A lista abaixo está na ordem que fecha ficha mais rápido.</div>';
+  }
+
+  // Densidade: o gargalo do custo POR UNIDADE. O custo por kg de fórmula
+  // não depende dela, então a tela precisa separar as duas coisas em vez de
+  // dizer "não dá pra custear".
+  var semDensidade = 0, volSemDensidade = 0;
+  Object.keys(ctx.volumePorSku).forEach(function(sku) {
+    if (!ctx.formulaPorSku[sku]) return;
+    var prod = ctx.produtoPorSku[sku];
+    if (!prod) return;
+    if (!Custos.massaGranelPorPeca(prod).ok) { semDensidade++; volSemDensidade += ctx.volumePorSku[sku]; }
+  });
+  if (semDensidade) {
+    html += '<div class="mrp-aviso">🧪 <b>' + semDensidade + ' SKU(s) sem densidade de granel</b> (' +
+      fmtNum(Math.round(volSemDensidade)) + ' un produzidas). ' +
+      'O custo do <b>quilo de fórmula</b> sai normalmente; o que não dá pra calcular é o custo por unidade envasada, ' +
+      'porque falta converter kg em ml. A Qualidade já mede densidade no ensaio — falta guardar no cadastro do produto.</div>';
+  }
+  if (plano.bloqueadosPorCadastro.length) {
+    html += '<div class="mrp-aviso">🔗 <b>' + plano.bloqueadosPorCadastro.length +
+      ' SKU(s) com material fora do cadastro.</b> Nesses, preço não resolve — falta cadastrar o material. ' +
+      escHtml(plano.bloqueadosPorCadastro.slice(0, 3).map(function(b) { return b.sku; }).join(', ')) +
+      (plano.bloqueadosPorCadastro.length > 3 ? '…' : '') + '</div>';
+  }
+
+  // ── Seção 1: fila de cadastro ──
+  html += '<div class="cst-sec">' +
+    '<h3>Fila de cadastro de preço</h3>' +
+    '<div class="cst-sub">Ordenada por <b>volume desbloqueado por preço digitado</b>, não por quanto o material pesa. ' +
+    'Ficha só fecha quando todos os materiais daquele SKU têm preço, então perseguir o material mais usado ' +
+    'cadastraria muito e fecharia pouco.</div>' +
+    '<div class="cst-barra"><i style="width:' + pctVol.toFixed(1) + '%"></i></div>' +
+    '<div style="font-size:11.5px;color:var(--muted)">' +
+      fmtNum(skusFechados) + ' de ' + fmtNum(skusComEstrutura) + ' SKUs com estrutura fechada · ' +
+      pctVol.toFixed(1) + '% do volume dos últimos 12 meses';
+  // Só o PRÓXIMO marco. Listar 50/75/90 de uma vez vira parede de número e
+  // some com a única informação acionável, que é "quanto falta pro próximo".
+  var proxAlvo = [25, 50, 75, 90].find(function(alvo) { return pctVol < alvo; });
+  if (proxAlvo) {
+    html += ' · faltam <b>' + Custos.precosParaVolume(plano.marcos, proxAlvo) + '</b> preços para chegar a ' + proxAlvo + '%';
+  }
+  html += '</div>';
+
+  var proximos = plano.sequencia.slice(0, 40);
+  if (!proximos.length) {
+    html += '<div class="no-sel" style="padding:24px">Todos os materiais dos SKUs produzidos já têm preço.</div>';
+  } else {
+    html += '<div class="cst-tab-wrap"><table class="cst-tab"><thead><tr>' +
+      '<th style="width:34px">#</th><th>Código</th><th>Material</th><th>Natureza</th>' +
+      '<th style="width:52px">Un.</th><th style="width:120px">Preço por unidade</th><th>Desbloqueia</th>' +
+      '</tr></thead><tbody>';
+    proximos.forEach(function(s, i) {
+      var p = custosPrecos[s.key];
+      var valor = (p && Number(p.valor) > 0) ? p.valor : '';
+      html += '<tr' + (valor !== '' ? ' class="pago"' : '') + '>' +
+        '<td class="num">' + (i + 1) + '</td>' +
+        '<td><code style="font-size:11.5px">' + escHtml(s.codigo) + '</code></td>' +
+        '<td title="' + escHtml(s.nome || '') + '">' + escHtml(String(s.nome || '—').slice(0, 42)) + '</td>' +
+        '<td><span class="cst-nat">' + escHtml(String(s.natureza || '').replace(/_/g, ' ').toLowerCase()) + '</span></td>' +
+        '<td>' + escHtml(s.unidade || '—') + '</td>' +
+        '<td><input type="number" class="cst-preco" step="any" min="0" value="' + valor + '" ' +
+          'id="cstP-' + escHtml(s.key) + '" ' +
+          'onkeydown="if(event.key===\'Enter\'){this.blur();}" ' +
+          'onchange="salvarPrecoCusto(\'' + escHtml(s.key) + '\',\'' + escHtml(s.codigo) + '\',this)"></td>' +
+        '<td style="font-size:11.5px;color:var(--muted)">' + escHtml(s.desbloqueouSku || '') + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    if (plano.sequencia.length > proximos.length) {
+      html += '<div style="font-size:11.5px;color:var(--muted);margin-top:8px">Mostrando os 40 primeiros de ' +
+        fmtNum(plano.sequencia.length) + '. Cadastre estes e a fila recalcula sozinha.</div>';
+    }
+  }
+  html += '</div>';
+
+  // ── Seção 2: ficha de custo ──
+  var skusOrdenados = Object.keys(ctx.volumePorSku).sort(function(a, b) {
+    return ctx.volumePorSku[b] - ctx.volumePorSku[a];
+  });
+  html += '<div class="cst-sec"><h3>Ficha de custo</h3>' +
+    '<div class="cst-sub">SKUs ordenados por volume produzido nos últimos 12 meses.</div>' +
+    '<select id="cstSkuSel" onchange="custosSkuSel=this.value; renderCustos();" ' +
+    'style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;max-width:100%">' +
+    '<option value="">Selecione um SKU...</option>';
+  skusOrdenados.forEach(function(sku) {
+    html += '<option value="' + escHtml(sku) + '"' + (sku === custosSkuSel ? ' selected' : '') + '>' +
+      escHtml(sku) + ' — ' + fmtNum(Math.round(ctx.volumePorSku[sku])) + ' un</option>';
+  });
+  html += '</select>';
+  html += renderFichaCusto(ctx);
+  html += '</div>';
+
+  box.innerHTML = html;
+}
+
+function renderFichaCusto(ctx) {
+  if (!custosSkuSel) return '';
+  var sku = custosNorm(custosSkuSel);
+  var produto = ctx.produtoPorSku[sku];
+  if (!produto) return '<div class="mrp-aviso" style="margin-top:12px">SKU sem cadastro de produto.</div>';
+
+  var ficha = Custos.fichaCustoProduto({
+    produto: produto, formula: ctx.formulaPorSku[sku], bom: ctx.bomPorSku[sku],
+    idxMateriais: ctx.idx, precos: custosPrecos
+    // taxaConversao fica de fora nesta fase: o rateio de custo fixo ainda
+    // não existe. A ficha diz "custo de material", não "custo do produto",
+    // e o motor devolve custoUnitario null de propósito.
+  });
+
+  var h = '<div class="cst-ficha-grid">' +
+    '<div class="cst-box"><b' + (ficha.granel.custoPorKg == null ? ' class="vazio"' : '') + '>' +
+      (ficha.granel.custoPorKg == null ? 'sem preço' : custosMoeda(ficha.granel.custoPorKg, 2)) +
+      '</b><span>custo do kg de fórmula</span></div>' +
+    '<div class="cst-box"><b' + (ficha.granel.custoPorPeca == null ? ' class="vazio"' : '') + '>' +
+      (ficha.granel.custoPorPeca == null ? 'sem densidade' : custosMoeda(ficha.granel.custoPorPeca, 4)) +
+      '</b><span>granel por unidade</span></div>' +
+    '<div class="cst-box"><b' + (ficha.embalagem.custoPorPeca == null ? ' class="vazio"' : '') + '>' +
+      (ficha.embalagem.custoPorPeca == null ? 'sem BOM' : custosMoeda(ficha.embalagem.custoPorPeca, 4)) +
+      '</b><span>embalagem por unidade</span></div>' +
+    '<div class="cst-box total"><b' + (ficha.custoMaterialPorPeca == null ? ' class="vazio"' : '') + '>' +
+      (ficha.custoMaterialPorPeca == null ? 'incompleto' : custosMoeda(ficha.custoMaterialPorPeca, 4)) +
+      '</b><span>material por unidade</span></div>' +
+    '</div>';
+
+  if (!ficha.materialCompleto) {
+    h += '<div class="mrp-aviso">⚠️ <b>Ficha incompleta.</b> ' +
+      (ficha.semCusto.length ? ficha.semCusto.length + ' material(is) sem preço: <code>' +
+        escHtml(ficha.semCusto.slice(0, 6).join(', ')) + '</code>' + (ficha.semCusto.length > 6 ? '…' : '') + '. ' : '') +
+      'O total de material não é exibido enquanto faltar preço — somar tratando o que falta como zero ' +
+      'daria um custo menor e uma margem falsa.</div>';
+  }
+  ficha.avisos.forEach(function(a) { h += '<div class="mrp-aviso">ℹ️ ' + escHtml(a) + '</div>'; });
+  h += '<div class="mrp-aviso">🏭 <b>Falta o custo de conversão.</b> Isto é o custo de <b>material</b>, ' +
+    'não o custo do produto: mão de obra e custo fixo rateado ainda não entram. Por isso não há margem aqui.</div>';
+
+  function tabelaLinhas(titulo, linhas, colQtd, casas) {
+    if (!linhas.length) return '';
+    var t = '<div style="font-size:12.5px;font-weight:600;margin:14px 0 6px">' + titulo + '</div>' +
+      '<div class="cst-tab-wrap"><table class="cst-tab"><thead><tr>' +
+      '<th>Código</th><th>Material</th><th class="num">' + colQtd + '</th>' +
+      '<th class="num">Preço</th><th class="num">Custo</th><th>Fonte</th></tr></thead><tbody>';
+    linhas.forEach(function(l) {
+      var qtd = l.percentualMM != null ? l.percentualMM.toFixed(2) + '%' : fmtNum(l.qtdPorPeca);
+      var preco = l.precoPorKg != null ? l.precoPorKg : l.precoUnitario;
+      var custo = l.custoNoKg != null ? l.custoNoKg : l.custoNaPeca;
+      t += '<tr><td><code style="font-size:11.5px">' + escHtml(l.codigo) + '</code></td>' +
+        '<td title="' + escHtml(l.nome || '') + '">' + escHtml(String(l.nome || '—').slice(0, 36)) + '</td>' +
+        '<td class="num">' + qtd + '</td>' +
+        '<td class="num">' + (preco != null ? custosMoeda(preco, 4) : '—') + '</td>' +
+        '<td class="num">' + (custo != null ? custosMoeda(custo, casas) : '—') + '</td>' +
+        '<td><span class="cst-fonte ' + escHtml(l.fonte) + '">' + escHtml(l.fonte) + '</span>' +
+        (l.motivo ? '<div style="font-size:10.5px;color:var(--muted);margin-top:2px">' + escHtml(l.motivo) + '</div>' : '') +
+        '</td></tr>';
+    });
+    return t + '</tbody></table></div>';
+  }
+  h += tabelaLinhas('Fórmula — custo de 1 kg de granel (' +
+    ficha.granel.pctCobertoMM.toFixed(0) + '% do m/m precificado)', ficha.granel.linhas, '% m/m', 4);
+  h += tabelaLinhas('BOM — embalagem por unidade', ficha.embalagem.linhas, 'Qtd/peça', 4);
+  return h;
+}
+
+/* Grava um preço. O nó é chaveado pela MESMA key do cadastro de materiais --
+   não pelo mpCodigo -- porque a key é o que não muda quando alguém corrige
+   o código do material. */
+function salvarPrecoCusto(key, codigo, input) {
+  var bruto = String(input.value || '').trim();
+  var mat = (allMateriaisIns || {})[key] || {};
+  if (bruto === '') {
+    db.ref('custos_precos/' + key).remove().then(function() {
+      showAlert('Preço de ' + codigo + ' removido.', 'success');
+    }).catch(function(err) { showAlert('Não consegui remover: ' + err.message, 'danger'); });
+    return;
+  }
+  var valor = parseFloat(bruto.replace(',', '.'));
+  if (!(valor > 0)) {
+    showAlert('Preço precisa ser maior que zero. Deixe vazio para remover.', 'danger');
+    input.value = '';
+    return;
+  }
+  db.ref('custos_precos/' + key).set({
+    valor: valor,
+    // A unidade viaja junto com o preço porque o motor RECUSA converter o
+    // que não dá pra converter sem supor. Sem ela, um preço por milheiro
+    // seria multiplicado como se fosse por unidade.
+    unidade: String(mat.unidade || '').trim().toUpperCase() || null,
+    materialCodigo: mat.mpCodigo || codigo,
+    fonte: 'MANUAL',
+    por: (window.currentUser && window.currentUser.nome) || 'Sistema',
+    em: new Date().toISOString()
+  }).then(function() {
+    input.classList.add('salvo');
+    showAlert('Preço de ' + codigo + ' salvo.', 'success');
+  }).catch(function(err) {
+    showAlert('Não consegui salvar: ' + err.message, 'danger');
+  });
+}
+
+dbOnValue(db.ref('custos_precos'), function(snap) {
+  custosPrecos = snap.val() || {};
+  if (currentTab === 'custos' && custosOps !== null) renderCustos();
+});
 
 </script>
 </body>

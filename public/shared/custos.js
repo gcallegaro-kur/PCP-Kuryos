@@ -149,10 +149,18 @@
     });
 
     return {
-      // `custoPorKg` é sempre o custo da PARTE conhecida. Nunca é o custo
-      // total quando falta preço -- por isso vem sempre junto de `completo` e
-      // de `pctCobertoMM`, e a tela não pode exibir um sem o outro.
-      custoPorKg: itens.length ? custo : null,
+      // `custoPorKg` é o custo da PARTE conhecida, e por isso vem sempre
+      // junto de `completo` e de `pctCobertoMM` -- a tela não pode exibir um
+      // sem os outros.
+      //
+      // NULL, e não 0, quando NADA foi precificado. Devolver 0 aqui foi um
+      // bug real, pego pelo harness da tela contra a base de produção: com a
+      // base sem nenhum preço, granel 0 + embalagem 0 davam um
+      // `custoMaterialPorPeca` de R$ 0,00 que a ficha exibia como total. É
+      // exatamente o "sem preço virou zero" que este módulo existe para
+      // impedir, e os testes sintéticos não pegaram porque toda fixture
+      // parcial tinha pelo menos um item com preço.
+      custoPorKg: (itens.length && pctComPreco > 0) ? custo : null,
       completo: itens.length > 0 && semCusto.length === 0 && incompativeis.length === 0,
       pctCobertoMM: pctTotal > 0 ? (pctComPreco / pctTotal) * 100 : 0,
       somaPercentual: pctTotal,
@@ -198,7 +206,7 @@
   function custoEmbalagemPorPeca(bomVersao, idx, precos) {
     var itens = Object.keys(((bomVersao || {}).itens) || {}).map(function(k) { return bomVersao.itens[k]; });
     var linhas = [], semCusto = [], incompativeis = [];
-    var custo = 0;
+    var custo = 0, custeadas = 0;
 
     itens.forEach(function(it) {
       var qtd = num(it.qtdPorPeca);
@@ -218,14 +226,17 @@
               : 'BOM sem quantidade por peça'))
       };
       linhas.push(linha);
-      if (linha.custoNaPeca != null) custo += linha.custoNaPeca;
+      if (linha.custoNaPeca != null) { custo += linha.custoNaPeca; custeadas++; }
       else if (preco.valor != null) incompativeis.push(linha);
       else semCusto.push(linha);
     });
 
     return {
-      custoPorPeca: itens.length ? custo : null,
+      // Mesma regra do granel: null quando nenhuma linha foi custeada. Zero
+      // aqui vira "embalagem de graça" somada a um total plausível.
+      custoPorPeca: (itens.length && custeadas > 0) ? custo : null,
       completo: itens.length > 0 && semCusto.length === 0 && incompativeis.length === 0,
+      linhasCusteadas: custeadas,
       linhas: linhas, semCusto: semCusto, incompativeis: incompativeis
     };
   }
@@ -279,7 +290,13 @@
     }
 
     var materialCompleto = granelKg.completo && embalagem.completo && massa.ok;
-    var custoMaterialPorPeca = (granelPorPeca != null && embalagem.custoPorPeca != null)
+    // TOTAL só existe quando NADA falta. Somar granel parcial com embalagem
+    // parcial produz um número que parece total, é sempre menor que o
+    // verdadeiro, e vira margem alta e falsa -- o erro mais caro que uma
+    // ficha de custo pode cometer. As partes seguem disponíveis em
+    // `granel.custoPorPeca` e `embalagem.custoPorPeca` para quem quiser
+    // mostrar o parcial COM o aviso de incompleto ao lado.
+    var custoMaterialPorPeca = materialCompleto
       ? granelPorPeca + embalagem.custoPorPeca : null;
     var custoUnitario = (custoMaterialPorPeca != null && conversao)
       ? custoMaterialPorPeca + conversao.custoPorPeca : null;

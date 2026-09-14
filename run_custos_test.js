@@ -91,6 +91,16 @@ eq(kgFalta.semCusto.length, 1, 'o material faltante é listado, não engolido');
 eq(kgFalta.semCusto[0].codigo, 'ES-00001', 'listado pelo código, pra ir direto pro cadastro');
 ok(kgFalta.custoPorKg < kg.custoPorKg, 'ficha incompleta é MENOR -- é exatamente por isso que não se exibe o total dela');
 
+// ── O bug que os sintéticos não pegaram ────────────────────────────────────
+// Toda fixture parcial acima tem PELO MENOS UM item com preço. Com a base de
+// produção sem preço nenhum, a soma dava 0 e 0 não é null: a ficha exibia
+// R$ 0,00 como total de material. Achado pelo harness da tela, não por aqui.
+const kgZero = C.custoPorKgFormula(formulaOk, idx, {});
+eq(kgZero.custoPorKg, null, 'NENHUM item com preço -> custoPorKg é null, JAMAIS 0');
+eq(kgZero.completo, false, 'e a fórmula não é completa');
+perto(kgZero.pctCobertoMM, 0, 'cobertura zero');
+eq(kgZero.semCusto.length, 3, 'os três itens entram como sem custo');
+
 // Unidade não conversível entra em incompativeis, não em semCusto
 const formulaIncompat = { itens: { i1: { mpCodigo: 'MPGR-00005', percentualMM: 100 } } };
 const kgIncompat = C.custoPorKgFormula(formulaIncompat, idx, precos);
@@ -129,6 +139,12 @@ const bomOk = { itens: {
 const emb = C.custoEmbalagemPorPeca(bomOk, idx, precos);
 perto(emb.custoPorPeca, 1.5 + 0.4 + 0.2, 'embalagem multiplica qtd por peça pelo preço unitário');
 ok(emb.completo, 'BOM com todos os preços é completo');
+
+// Mesmo bug do granel, do lado da embalagem
+const embZero = C.custoEmbalagemPorPeca(bomOk, idx, {});
+eq(embZero.custoPorPeca, null, 'BOM sem preço nenhum -> custoPorPeca é null, não 0');
+eq(embZero.linhasCusteadas, 0, 'e nenhuma linha foi custeada');
+eq(embZero.completo, false, 'e não se declara completo');
 
 const bomFalta = { itens: {
   b1: { materialCodigo: 'EP-00001', qtdPorPeca: 1 },
@@ -189,6 +205,25 @@ const fichaFalta = C.fichaCustoProduto({
 });
 eq(fichaFalta.completo, false, 'ficha com material faltando não é completa');
 ok(fichaFalta.semCusto.includes('ES-00001'), 'e entrega a lista de códigos a cadastrar');
+// A regra mais importante do módulo, agora travada em teste:
+eq(fichaFalta.custoMaterialPorPeca, null,
+  'TOTAL de material é null quando falta preço — somar granel parcial com embalagem parcial ' +
+  'produz um número menor que o verdadeiro com cara de total');
+eq(fichaFalta.custoUnitario, null, 'e o unitário também');
+ok(fichaFalta.granel.custoPorPeca != null,
+  'mas a PARTE conhecida continua acessível, para a tela mostrar parcial com o aviso ao lado');
+
+// Ficha de uma base sem preço nenhum: nada pode ter valor
+const fichaZero = C.fichaCustoProduto({
+  produto: prod, formula: formulaOk, bom: bomOk, idxMateriais: idx, precos: {},
+  taxaConversao: { custoHoraPadrao: 500 }
+});
+eq(fichaZero.granel.custoPorKg, null, 'base sem preço: custo do kg é null');
+eq(fichaZero.granel.custoPorPeca, null, 'base sem preço: granel por peça é null');
+eq(fichaZero.embalagem.custoPorPeca, null, 'base sem preço: embalagem é null');
+eq(fichaZero.custoMaterialPorPeca, null, 'base sem preço: material por peça é null — NUNCA R$ 0,00');
+eq(fichaZero.custoUnitario, null, 'base sem preço: unitário é null');
+eq(fichaZero.materialCompleto, false, 'e nada se declara completo');
 
 // ── 8. Fila de preços por exposição ────────────────────────────────────────
 const volumePorSku = { SKU1: 100000, SKU2: 10000 };

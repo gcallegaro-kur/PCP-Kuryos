@@ -85,7 +85,7 @@ function checa(cond, msg) { if (!cond) falhas.push(msg); }
       f.embalagem.custoPorPeca, f.custoMaterialPorPeca, f.custoUnitario];
   }
   function rodarTodas(precos, taxa) {
-    let invalidos = 0, comTotal = 0, comKg = 0, comPeca = 0, completas = 0;
+    let invalidos = 0, comTotal = 0, comKg = 0, comPeca = 0, completas = 0, comMaterial = 0;
     const motivos = {};
     Object.entries(produtos).forEach(([key, p]) => {
       const sku = norm(p.sku || key);
@@ -97,6 +97,7 @@ function checa(cond, msg) { if (!cond) falhas.push(msg); }
         if (v != null && (!Number.isFinite(v) || v < 0)) invalidos++;
       });
       if (f.custoUnitario != null) comTotal++;
+      if (f.custoMaterialPorPeca != null) comMaterial++;
       if (f.granel.custoPorKg != null) comKg++;
       if (f.granel.custoPorPeca != null) comPeca++;
       if (f.materialCompleto) completas++;
@@ -105,7 +106,7 @@ function checa(cond, msg) { if (!cond) falhas.push(msg); }
         motivos[m] = (motivos[m] || 0) + 1;
       });
     });
-    return { invalidos, comTotal, comKg, comPeca, completas, motivos };
+    return { invalidos, comTotal, comMaterial, comKg, comPeca, completas, motivos };
   }
 
   // ── 1. Base como está: sem preço nenhum, nada pode ter total ──
@@ -113,11 +114,20 @@ function checa(cond, msg) { if (!cond) falhas.push(msg); }
   const r1 = rodarTodas(precosReais, null);
   console.log('  números inválidos (NaN/Infinity/negativo): ' + r1.invalidos);
   console.log('  fichas com custo unitário: ' + r1.comTotal);
+  console.log('  fichas com total de MATERIAL: ' + r1.comMaterial);
   console.log('  fichas com custo do kg de fórmula: ' + r1.comKg);
   checa(r1.invalidos === 0, 'Cenário 1 produziu ' + r1.invalidos + ' números inválidos');
   if (n(precosReais) === 0) {
     checa(r1.comTotal === 0, 'Sem preço cadastrado nenhuma ficha pode ter custo unitário, e ' +
       r1.comTotal + ' tiveram — é o bug de "sem preço virou zero"');
+    // Este é o cheque que FALTAVA. A versão anterior olhava só custoUnitario,
+    // que estava null por falta de taxa de conversão -- e isso mascarou o bug
+    // real: granel 0 + embalagem 0 davam custoMaterialPorPeca = R$ 0,00, que
+    // a tela exibia como total. Quem pegou foi o harness da tela.
+    checa(r1.comMaterial === 0, 'Sem preço cadastrado nenhuma ficha pode ter total de material, e ' +
+      r1.comMaterial + ' tiveram — R$ 0,00 exibido como custo é o bug mais caro deste módulo');
+    checa(r1.comKg === 0, 'Sem preço cadastrado nenhuma fórmula pode ter custo por kg, e ' +
+      r1.comKg + ' tiveram');
   }
 
   // ── 2. Preço sintético em tudo: exercita a conta em todos os produtos ──
