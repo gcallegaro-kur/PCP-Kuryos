@@ -62,6 +62,7 @@ código do Kuryos ERP — lá só dá para verificar pelo navegador.
 | WMS Fase 2 (separação guiada FEFO, `separacao_materiais.html`) | em produção desde 2026-09-03 |
 | Qualidade Fase 2 (`qualidade.html`, papel `qualidade`) | no ar; Fases 3-4 bloqueadas por Ordem de Manipulação, anexo de arquivo e Tarefas Pendentes, que não existem |
 | Planejamento/apontamento (`PLANO_PLANEJAMENTO_PCP.md`) | plano fechado, **nada implementado** |
+| MRP (aba em `insumos.html`) | motor completo em produção desde 2026-09-13; **parâmetros de planejamento vazios nos 906 materiais** |
 | Estoque | ver "Dia D" abaixo |
 
 **O saldo de estoque ainda não serve para decidir.** Dos 906 materiais cadastrados, só 37
@@ -73,6 +74,31 @@ abertura. Até lá: não use saldo como base de compra ou de emissão de OP, e n
 saldo ao lado do item na tela de Compras — saldo errado parece confiável e é pior que
 saldo nenhum. Pendência operacional, não de código: `estoque_lotes` segue vazio em
 produção e ninguém tem o papel `qualidade` ainda.
+
+**O MRP está pronto e cru ao mesmo tempo.** `insumos.html` tem duas abas: a antiga
+("Insumos por Pedido", checklist de um pedido) e a nova (**MRP — Necessidade de**
+**Materiais**). O motor vive em `public/shared/utils.js` (`calcularMrpMaterial` e
+vizinhas, funções puras, 46 asserções em `run_mrp_test.js`): agrega a demanda de todos
+os pedidos abertos, faseia por semana, desconta PC em trânsito, aplica lote
+mínimo/múltiplo e recua o lead time. Gera exceções COMPRAR / COMPRAR_ATRASADO /
+ANTECIPAR / ADIAR / BACKLOG, com balde "em atraso" colapsado na frente (padrão
+SAP/Oracle).
+
+Duas restrições que **não são bugs** e precisam ser respeitadas por quem mexer nele:
+
+- **Só 39 dos 84 pedidos abertos têm data**, e ela vem da grade de `programacao`, não
+  do pedido. O resto cai no balde BACKLOG de propósito — inventar data produziria um
+  plano preciso e falso.
+- **Nenhum dos 906 materiais tem lead time / estoque de segurança / lote mínimo /
+  múltiplo.** Os campos nascem em `materiais/{key}` e são editáveis no card do MRP.
+  Com lead time zero o plano manda comprar tudo para ontem, e a tela avisa isso.
+  Preencher uns 20 materiais de maior giro é o próximo passo de valor — é operação,
+  não código.
+
+Lição do MRP que vale para qualquer cálculo novo: **o ensaio com dados reais achou dois
+defeitos que 46 asserções sintéticas não pegaram** (semanas vencidas espalhadas pela
+grade e uma sentinela interna vazando no texto da tela). Rode o motor contra a base
+antes de fechar.
 
 ## Armadilhas confirmadas (todas já custaram caro)
 
