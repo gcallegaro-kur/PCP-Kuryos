@@ -114,6 +114,42 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Recebimento alinhado ao formulário de entrada (2026-09-14).**
+  `701ad16` no `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
+  (`Documents/Codex/deploy-recebimento-701ad16`). Fonte da verdade: o
+  **Formulário de entrada de materiais** em `forms.cloud.microsoft/r/HDwua0LnV1`,
+  lido nesta sessão. Das 14 perguntas, **13 já existiam** na tela e as escalas
+  1–5 batem com as estrelas do Forms. Faltavam duas:
+  (1) **Fornecedor** (pergunta 7) não era campo — só texto no cabeçalho do
+  modal. Virou campo travado, do Pedido de Compra. O dado já ia no payload
+  (`fornecedorKey`/`fornecedorNome`); quem preenchia é que não via.
+  (2) **Quantidade de amostragem** (pergunta 10) era digitada. Agora é
+  **`√(quantidade recebida do lote) + 1`, arredondado para cima**, campo
+  travado — decisão do usuário: a regra vale sempre, ninguém digita. A dica
+  abaixo do campo mostra a conta e como destrinchar a coleta entre os volumes
+  daquele lote.
+- **Detalhe que importa se alguém mexer:** o valor gravado é **recalculado** em
+  `lerItensRecebimentoDaTela` (`qtdAmostragem: amostragemDoLote(qtd)`), não lido
+  do input. O campo é só espelho — DOM desatualizado não vira número errado na
+  fila da Qualidade.
+- **Validação:** `run_recebimento_amostragem_test.js` (fórmula com quadrados
+  perfeitos sem arredondar a mais, monotonicidade até 3000, quantidade
+  fracionada, zero/negativo/lixo; paridade com as 14 perguntas; gatilhos de
+  recálculo); regressões `run_recebimento_qualidade_test.js`,
+  `run_lote_interno_test.js`, `run_rotas_pc_test.js`, `run_descarte_test.js`,
+  `run_conferencia_pa_test.js` e `run_cotacao_texto_test.js` aprovadas.
+- **Verificação no ar (2026-09-14):** `logistica.html` HTTP 200 e **SHA256
+  idêntico ao commit**; `rcFornecedor` e `amostragemDoLote` presentes.
+- **⚠ Codex — `public/logistica.html` é arquivo ativo seu e eu editei.** Só a
+  região do modal de recebimento; o commit levou **apenas os meus 6 hunks**
+  (`git apply --cached` de patch filtrado). **Sua tag de script de
+  `contatos-cliente` no `<head>` continua sem commit na árvore de trabalho** e
+  não subiu: `shared/contatos-cliente.js` segue **HTTP 404** no ar e a
+  `logistica.html` publicada não tem a referência. Se você commitar o arquivo
+  inteiro agora, leva junto o recebimento já publicado — sem problema, é o
+  mesmo conteúdo.
+- **Arquivos ativos:** nenhum. `public/logistica.html` devolvido.
+
 - **Entrega publicada — Cotação: copiar texto e incluir fornecedor (2026-09-14).**
   `885bbc0` no `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
   (`Documents/Codex/deploy-cotacao-texto-885bbc0`). Só `public/compras.html` e
