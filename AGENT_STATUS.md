@@ -121,8 +121,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   append-only; **começar pela conversão, não pelo material**; absorção por
   horas-padrão (`produzido ÷ prodHoraRef`), nunca por duração de OP; custo de
   fórmula por kg, desacoplado da densidade; `SEM_CUSTO` nunca vira zero.
-- **Entrega publicada — aba Custo do Produto.** `ba03082` no origin/main e no
-  Hosting `prod-kuryos` em **2026-09-14 às 13:08 BRT**, por **worktree limpo**.
+- **⚠ Tema Custos ENCERRADO neste app.** A aba foi **removida de produção** em
+  `bb245a0` (Hosting `prod-kuryos`, 2026-09-14, por worktree limpo; conferido
+  no ar: zero referências a `custos.js` ou à aba em `insumos.html`, que segue
+  HTTP 200). Decisão do usuário: o módulo vai direto no **Kuryos ERP**, onde o
+  custo tem origem nativa — o P&D aponta custo por item ao fechar a amostra e
+  Compras atualiza depois com o custo da cotação. A spec está em
+  `PROMPT_CUSTOS_ERP.md`. Ficaram no repo, como referência: `shared/custos.js`,
+  `run_custos_test.js`, `run_custos_ensaio.js`, `PLANO_CUSTOS.md` e a regra de
+  `custos_precos` (nó vazio, inofensiva). **Não reconstrua a aba aqui.**
+
+- **Entrega publicada e depois revertida — aba Custo do Produto.** `ba03082` no
+  origin/main e no Hosting `prod-kuryos` em **2026-09-14 às 13:08 BRT**, por
+  **worktree limpo**.
   Motor em `public/shared/custos.js` (novo), aba em `public/insumos.html`, nó
   `custos_precos` liberado em `database.rules.json`, testes em
   `run_custos_test.js` (113 asserções) e `run_custos_ensaio.js` (ensaio contra

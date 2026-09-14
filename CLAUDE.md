@@ -144,6 +144,12 @@ antes de fechar.
   planejamento sobre o pipeline `alocacoes_planejamento` existente, changeover por linha,
   ML adiado. Sequência: apontamento de manipulação → popular `dataInicioPlanejada/Fim` →
   travar apontamento na OP programada → paradas na ETA → telas → conclusão gated → etc.
+- `PROMPT_CUSTOS_ERP.md` — **a entrega viva do tema Custos.** Spec para o dev construir o
+  módulo no Kuryos ERP, onde o custo tem origem nativa que aqui não existe: o P&D aponta
+  custo por item ao fechar a amostra, e Compras substitui depois pelo custo da cotação
+  (`ESTIMADO_PD` → `COTADO` → `PAGO`, sem apagar histórico). A aba construída aqui foi
+  **removida de produção** em `bb245a0`; o motor, os testes e o ensaio ficaram no repo
+  como referência de lógica. Se o tema voltar, comece por este arquivo.
 - `PLANO_CUSTOS.md` — controladoria: custos, margem e o que **não** construir (2026-09-14,
   nada implementado). Números medidos contra a base, não estimados. Decisões travadas:
   **não construir financeiro transacional** (comprar, integrar por uma fronteira só) e sim
