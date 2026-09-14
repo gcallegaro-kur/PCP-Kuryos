@@ -223,6 +223,11 @@
       <div class="rc-intro"><b>Entrada de materiais e envio ao Controle de Qualidade</b><br>Os dados abaixo substituem o formulário externo. Cada item recebido será endereçado no WMS com status <b>Quarentena</b> e aparecerá automaticamente na fila da Qualidade.</div>
       <div class="form-grid" style="margin-bottom:14px">
         <div class="form-group">
+          <label>Fornecedor</label>
+          <input type="text" id="rcFornecedor" class="rc-readonly" readonly>
+          <div class="field-hint">Vem do Pedido de Compra.</div>
+        </div>
+        <div class="form-group">
           <label>Data do recebimento *</label>
           <input type="date" id="rcData">
         </div>
@@ -821,6 +826,35 @@ function codigoFornecedorRecebimento(material, fornecedorKey) {
 function opcoesAvaliacaoRecebimento() {
   return '<option value="">Selecione…</option><option value="5">5 — Ótimo</option><option value="4">4 — Bom</option><option value="3">3 — Regular</option><option value="2">2 — Ruim</option><option value="1">1 — Péssimo</option>';
 }
+/* Amostragem por atributos: √n + 1 sobre a QUANTIDADE RECEBIDA do lote,
+   arredondado para cima. Decisão do usuário (2026-09-14): a regra vale
+   sempre, então o campo é calculado e travado -- mesmo tratamento do lote
+   interno e do SKU interno. A coleta é destrinchada entre os volumes do
+   lote: o total sai de uma amostra por volume até fechar a conta, e é isso
+   que a dica embaixo do campo mostra.
+   O valor gravado é recalculado na leitura da tela (lerItensRecebimentoDaTela),
+   não lido do input -- o campo é só o espelho, e assim um DOM desatualizado
+   nunca vira número errado na fila da Qualidade. */
+function amostragemDoLote(qtd) {
+  var n = Number(qtd);
+  if (!isFinite(n) || n <= 0) return 0;
+  return Math.ceil(Math.sqrt(n) + 1);
+}
+function atualizarAmostragemLote(row) {
+  if (!row) return;
+  var campoQtd = row.querySelector('.rc-qtd'), campoVol = row.querySelector('.rc-volumes');
+  var qtd = Number((campoQtd && campoQtd.value) || 0);
+  var volumes = Math.max(1, Math.floor(Number((campoVol && campoVol.value) || 1)) || 1);
+  var total = amostragemDoLote(qtd);
+  var campo = row.querySelector('.rc-amostragem');
+  if (campo) campo.value = String(total);
+  var hint = row.querySelector('.rc-amostragem-hint');
+  if (!hint) return;
+  hint.textContent = total > 0
+    ? '√' + fmtNum(qtd) + ' + 1 → ' + fmtNum(total) + ' (arredondado para cima). Colete de todos os ' +
+      fmtNum(volumes) + ' volume(s), cerca de ' + fmtNum(Math.ceil(total / volumes)) + ' de cada.'
+    : 'Informe a quantidade recebida para calcular.';
+}
 function htmlLoteRecebimento(qtd, unidade, removivel) {
   return '<div class="rc-lote-row">' +
     (removivel ? '<button type="button" class="rc-lote-remove" title="Remover este lote">Remover</button>' : '') +
@@ -829,7 +863,7 @@ function htmlLoteRecebimento(qtd, unidade, removivel) {
       '<div class="form-group"><label>Lote interno</label><div class="rc-auto-lote">Gerado automaticamente ao confirmar</div></div>' +
       '<div class="form-group"><label>Quantidade deste lote *</label><input type="number" class="rc-qtd" min="0" step="any" value="' + escapeAttr(String(qtd || 0)) + '"><div class="field-hint">' + escapeHtml(unidade || '') + '</div></div>' +
       '<div class="form-group"><label>Volumes / embalagens *</label><input type="number" class="rc-volumes" min="1" step="1" value="1"><div class="field-hint">Gera uma etiqueta por volume.</div></div>' +
-      '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-amostragem" type="number" min="0" step="any" value="0"></div>' +
+      '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-readonly rc-amostragem" type="number" readonly value="0"><div class="field-hint rc-amostragem-hint">Informe a quantidade recebida para calcular.</div></div>' +
       '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
       '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
       '<div class="form-group"><label>Validade</label><input type="date" class="rc-validade"></div>' +
@@ -842,6 +876,10 @@ function openModalReceber(key) {
   var p = allPedidosCompra[key];
   if (!p) return;
   document.getElementById('receberPcInfo').textContent = p.numeroFormatado + ' — ' + (p.fornecedorNome || p.origemNome || 'Origem não informada');
+  // Pergunta 7 do formulário de entrada. Já ia no dado (fornecedorKey/Nome no
+  // payload), mas não existia como campo na tela -- quem preenchia não via o
+  // que estava confirmando.
+  document.getElementById('rcFornecedor').value = p.fornecedorNome || p.origemNome || '';
   document.getElementById('rcData').value = new Date().toISOString().slice(0, 10);
   document.getElementById('rcNotaFiscal').value = '';
   document.getElementById('rcCondVeiculo').value = '';
@@ -872,11 +910,20 @@ function openModalReceber(key) {
     btn.addEventListener('click', function() {
       var card = btn.closest('.rc-item-card');
       card.querySelector('.rc-lotes').insertAdjacentHTML('beforeend', htmlLoteRecebimento(0, (p.itens[card.getAttribute('data-item')] || {}).unidade || '', true));
+      atualizarAmostragemLote(card.querySelector('.rc-lotes').lastElementChild);
     });
   });
   lista.onclick = function(e) {
     if (e.target.classList.contains('rc-lote-remove')) e.target.closest('.rc-lote-row').remove();
   };
+  // oninput (não addEventListener) de propósito: openModalReceber roda a cada
+  // abertura do modal e listeners empilhariam.
+  lista.oninput = function(e) {
+    if (e.target.classList.contains('rc-qtd') || e.target.classList.contains('rc-volumes')) {
+      atualizarAmostragemLote(e.target.closest('.rc-lote-row'));
+    }
+  };
+  lista.querySelectorAll('.rc-lote-row').forEach(atualizarAmostragemLote);
   document.getElementById('modalReceber').classList.add('open');
 }
 
@@ -911,7 +958,7 @@ function lerItensRecebimentoDaTela() {
       linhas.push(Object.assign({}, comum, {
         loteOrigem: row.querySelector('.rc-lote').value.trim(), qtdRecebida: qtd,
         qtdVolumes: Number(row.querySelector('.rc-volumes').value),
-        qtdAmostragem: Number(row.querySelector('.rc-amostragem').value),
+        qtdAmostragem: amostragemDoLote(qtd),
         certificadoFornecedor: row.querySelector('.rc-certificado').value,
         condicoesEmbalagem: Number(row.querySelector('.rc-cond-embalagem').value),
         dataValidade: row.querySelector('.rc-validade').value || null,
