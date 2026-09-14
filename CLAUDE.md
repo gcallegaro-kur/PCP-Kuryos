@@ -144,6 +144,12 @@ antes de fechar.
   planejamento sobre o pipeline `alocacoes_planejamento` existente, changeover por linha,
   ML adiado. Sequência: apontamento de manipulação → popular `dataInicioPlanejada/Fim` →
   travar apontamento na OP programada → paradas na ETA → telas → conclusão gated → etc.
+- `PLANO_CUSTOS.md` — arquitetura do módulo de Custos (sessão de 2026-09-14, nada
+  implementado). Decisões travadas: conversão pelo **custo do dia de operação** (folha +
+  custos fixos ÷ dias úteis ÷ horas/dia), evoluindo para taxa por setor; preço de material
+  por hierarquia PAGO → COTADO → ALVO → `SEM_CUSTO`, que **nunca vira zero**; taxa
+  agregada por competência porque salário é restrito a `rh`/`admin`. A única parte urgente
+  é a **Fase 0**: gravar custo no lote no recebimento enquanto `estoque_lotes` está vazio.
 - `AUDITORIA_INTEGRACAO.md` — os 9 elos entre setores, com evidência no código. 4 foram
   fechados em 2026-09-08.
 - `public/manuais.html` — manuais operacionais. Cada passagem que ainda depende de

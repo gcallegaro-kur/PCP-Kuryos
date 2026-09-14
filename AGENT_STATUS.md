@@ -114,6 +114,31 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Escopo atual — módulo de Custos (arquitetura, 2026-09-14).** Sessão de
+  desenho, nada implementado. Decisões registradas em `PLANO_CUSTOS.md` (novo).
+  Resumo: custo de conversão pelo **custo do dia de operação** (folha do RH +
+  custos fixos ÷ dias úteis ÷ horas/dia), evoluindo para taxa por setor via
+  `rh_cargos.setor`; preço de material por hierarquia PAGO → COTADO → ALVO →
+  `SEM_CUSTO` (**nunca zero**, mesma disciplina do balde BACKLOG do MRP).
+- **Arquivos ativos:** `PLANO_CUSTOS.md` e `AGENT_STATUS.md`. Nada mais — a
+  implementação ainda não começou. Quando começar, serão
+  `public/shared/custos.js` (novo) e a aba de Custos em `public/insumos.html`.
+- **Restrição que definiu a arquitetura:** `database.rules.json:220` libera
+  `rh_colaboradores` só para `rh`/`admin`. O motor **não pode** somar folha no
+  cliente — a taxa vira artefato de competência, agregada com privilégio e
+  gravada sem dado individual em `custos_taxas/{competencia}`.
+
+- **⚠ Para o Codex — Fase 0, e é a única parte urgente do módulo de Custos:**
+  o recebimento grava `estoque_lotes` (`functions/index.js:1520`) e
+  `movimentos_estoque` (`:1532`) **sem nenhum valor**. Sem isso não existe
+  valoração de estoque, custo médio nem custo real de OP — e não dá pra
+  reconstruir depois, porque o dado não é gravado na hora. São ~20 linhas:
+  copiar `custoUnitarioNaDecisao` do item do PC (+ frete rateado) para dentro
+  do lote e do movimento. **A hora é agora porque `estoque_lotes` está vazio
+  em produção** — hoje custa zero e a base nasce valorizada; depois do Dia D,
+  cada lote sem preço vira buraco permanente. `functions/index.js` é seu, não
+  toquei. Detalhe do campo em `PLANO_CUSTOS.md`, seção 5.
+
 - **Última entrega:** Cotação — somente fornecedores homologados, inclusão de
   fornecedor cadastrado ou por CNPJ, por item.
 - **Commit:** `586bbc5`.
