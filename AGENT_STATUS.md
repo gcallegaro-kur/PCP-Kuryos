@@ -121,6 +121,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   append-only; **começar pela conversão, não pelo material**; absorção por
   horas-padrão (`produzido ÷ prodHoraRef`), nunca por duração de OP; custo de
   fórmula por kg, desacoplado da densidade; `SEM_CUSTO` nunca vira zero.
+- **Arquivos ativos (implementação da Fase B — custo do produto):**
+  `public/shared/custos.js` (novo), `run_custos_test.js` (novo),
+  `public/insumos.html` (aba Custos), `PLANO_CUSTOS.md`, `AGENT_STATUS.md`.
+  Vou precisar de **uma linha nova em `database.rules.json`** para o nó
+  `custos_precos` — arquivo que já foi seu; não está modificado na sua árvore
+  agora, então entro só nele, sem tocar em mais nada. Se colidir, me avisa.
+  `public/shared/utils.js` continua reservado ao MRP/Claude.
+
 - **⚠ Três premissas da v1 do plano morreram na medição** — registro aqui porque
   qualquer um de nós repetiria os mesmos erros: (1) o RH **não tem folha**
   (`rh_colaboradores` = 0 registros), (2) as fontes de preço COTADO/ALVO estão

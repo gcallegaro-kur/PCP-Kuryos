@@ -206,28 +206,56 @@ faixa de massa e por equipamento/tanque** — uma tabela pequena, preenchida uma
 marcada como *estimativa declarada* na ficha. Vira medição real só com a Fase 1 do
 `PLANO_PLANEJAMENTO_PCP.md` (apontamento de manipulação).
 
-### Quantos preços precisam ser digitados: 83, não 911
+### Quantos preços precisam ser digitados — e em que ordem
 
-Pareto medido sobre o que foi **efetivamente produzido nos últimos 12 meses** (198 SKUs,
-2,37 milhões de unidades, 474 materiais alcançados):
+**Correção importante, achada pelo ensaio do motor contra a base real.** A primeira
+resposta foi "83 materiais cobrem 80% da exposição". O número está certo e **a métrica
+está errada**: uma ficha só fecha quando **todos** os materiais daquele SKU têm preço, e
+cada SKU tem uma cauda de material raro que mora no fim da fila por exposição. Medido:
 
 ```
- 21 materiais cobrem 50% da exposição
- 83 materiais cobrem 80%
-138 materiais cobrem 90%
-201 materiais cobrem 95%
+Fila por EXPOSIÇÃO (a métrica errada):
+   83 preços →  9 SKUs fechados → 29,5% do volume
+  201 preços → 25 SKUs fechados → 49,6% do volume
 ```
 
-Top 15 por exposição: `MPGR-00132`, `MPGR-00066`, `MPGR-00127`, `MPGR-00008`, `EP-00012`,
-`ET-00018`, `MPGR-00012`, `ES-00014`, `ET-00032`, `ET-00003`, `EP-00106`, `EP-00009`,
-`EP-00015`, `ET-00051`, `MPGR-00086`.
+A ordenação certa é gulosa por **volume desbloqueado por preço digitado** — a cada
+rodada, o SKU com melhor razão volume ÷ preços faltantes, sendo que os preços já pagos
+barateiam os SKUs seguintes (é um *set cover*). Mesma base, mesmo esforço, outro
+resultado:
 
-Isso transforma "projeto de cadastro impossível" em uma tarde de trabalho. E a tela deve
-apresentar exatamente essa fila, ordenada por exposição, com o quanto de cobertura cada
-preço digitado adiciona.
+```
+Plano por FICHA FECHADA (a métrica certa):
+   29 preços →  11 SKUs → 25,9% do volume
+   71 preços →  ~30 SKUs → 50,0% do volume
+  101 preços →  41 SKUs → 63,1% do volume
+  141 preços →  ~55 SKUs → 75,0% do volume
+  153 preços →  61 SKUs → 78,7% do volume
+```
 
-**Cobertura resultante:** 92 SKUs têm estrutura 100% ligada, o que corresponde a
-**1.601.918 de 2.372.927 unidades — 68% do volume produzido.**
+**71 preços fecham metade do volume produzido. 101 fecham quase dois terços.** Os doze
+primeiros, na ordem: `MPGR-00127` (álcool 96°GL), `MPGR-00132` (água), `MPES-00138`
+(essência), `MPGR-00066` (conservante), `ES-00160`, `EP-00099`, `ES-00018`, `EP-00005`,
+`ET-00033`, `ES-00147`, `EP-00009`, `EP-00101`.
+
+Implementado em `planoCadastroPorSku()`; a fila por exposição continua exposta em
+`filaPrecosPorExposicao()` porque ainda serve para responder "qual material mais pesa",
+que é outra pergunta.
+
+**Nenhum SKU está bloqueado por material órfão** — o vínculo fórmula/BOM → cadastro está
+limpo nos 179 SKUs planejáveis.
+
+### As densidades que faltam, quantificadas
+
+**137 dos 142 SKUs com fórmula e produção não convertem kg → peça**, afetando 1.799.085
+unidades. É o gargalo do custo *por unidade* — o custo *por kg* de fórmula sai sem ele.
+São ~137 produtos, e o `config.tiposEnsaio` já tem **DENSIDADE** como ensaio de CQ: o
+número é medido, só não é guardado no cadastro do produto.
+
+O ensaio também recusou 91 linhas por unidade incompatível, e a distribuição diz onde
+está o cadastro furado: **32** itens de BOM sem `qtdPorPeca`, **30** itens de fórmula
+apontando para material cadastrado em `UN` (uma fórmula % m/m não tem item em unidades),
+**29** materiais de fórmula cadastrados em litro sem densidade própria.
 
 ---
 
@@ -352,6 +380,26 @@ produz a informação mais nova da lista.
 Rodar o motor **contra a base real**. Os dois defeitos do MRP passaram por 46 asserções
 sintéticas e só apareceram com dado de produção. Esta sessão é a prova: três premissas da
 v1 deste documento sobreviveram à revisão de código e morreram na primeira medição.
+
+## 8b. Estado da implementação
+
+- **`public/shared/custos.js`** — motor entregue. Funções puras, padrão UMD (roda no
+  navegador e em Node). `custoPorKgFormula`, `massaGranelPorPeca`,
+  `custoEmbalagemPorPeca`, `fichaCustoProduto`, `filaPrecosPorExposicao`,
+  `planoCadastroPorSku`, `precosParaVolume`, `naturezaDoMaterial`.
+- **`run_custos_test.js`** — 97 asserções. Cobrem o que faz custo sair plausível e
+  errado: preço ausente virando zero, conversão de unidade suposta, total exibido sobre
+  ficha incompleta, densidade `-1` de importação, material órfão, preço compartilhado
+  entre SKUs contado duas vezes.
+- **Ensaio contra a base real** (378 produtos, 169 fórmulas, 210 BOMs): **zero números
+  inválidos** em todos os cenários; zero fichas com total sem preço cadastrado; soma de
+  exposições e acumulado fecham exatos em 100%. O ensaio é o que achou o erro de métrica
+  da fila de cadastro — os testes sintéticos passavam.
+- **Conversão entra como camada plugável.** `fichaCustoProduto` aceita `taxaConversao`
+  opcional; sem ela devolve `custoMaterialPorPeca` válido e `custoUnitario: null`. É
+  assim que o rateio de custo fixo entra depois **sem reescrever a ficha**.
+- Falta: a tela (aba Custos em `insumos.html`), o nó `custos_precos` em
+  `database.rules.json`, e a camada de conversão.
 
 ## 9. O que este documento decidiu
 
