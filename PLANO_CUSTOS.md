@@ -398,8 +398,46 @@ v1 deste documento sobreviveram à revisão de código e morreram na primeira me
 - **Conversão entra como camada plugável.** `fichaCustoProduto` aceita `taxaConversao`
   opcional; sem ela devolve `custoMaterialPorPeca` válido e `custoUnitario: null`. É
   assim que o rateio de custo fixo entra depois **sem reescrever a ficha**.
-- Falta: a tela (aba Custos em `insumos.html`), o nó `custos_precos` em
-  `database.rules.json`, e a camada de conversão.
+- **`public/insumos.html` — aba "Custo do Produto" entregue e publicada**
+  (`ba03082`, Hosting `prod-kuryos`, 2026-09-14 13:08 BRT, por worktree limpo).
+  Fila de cadastro de preço na ordem que fecha ficha mais rápido, com barra de
+  progresso e "faltam N preços para X% do volume"; ficha por SKU com granel por
+  kg, granel por unidade, embalagem, total de material e as tabelas de fórmula e
+  BOM com procedência por linha. Grava em `custos_precos/{materialKey}` —
+  chaveado pela key do cadastro, não pelo `mpCodigo`, porque a key é o que não
+  muda quando alguém corrige o código.
+- **`database.rules.json`** — nó `custos_precos` liberado: leitura autenticada,
+  escrita para `admin`/`pcp` e para quem tem módulo `compras` ou `pedidos`.
+- Falta: a camada de conversão (rateio de custo fixo).
+
+### O bug que só a tela contra a base real achou
+
+Vale registrar porque é a terceira vez que este padrão aparece neste repo. O
+motor passava em 97 asserções e o ensaio passava também. Um harness rodando **a
+tela** contra a base de produção — que não tem preço nenhum — mostrou
+`custoMaterialPorPeca` = **R$ 0,00** exibido como total.
+
+Causa: `custoPorKg` somava `0` quando nenhum item tinha preço, e `0` não é
+`null`. Granel 0 + embalagem 0 = um "total" de zero. É literalmente o
+"sem preço virou zero" que o módulo inteiro existe para impedir.
+
+Por que os testes não pegaram: **toda fixture parcial tinha pelo menos um item
+com preço.** O caso "zero itens precificados" — que é exatamente o estado real
+da base hoje — não existia em nenhum teste.
+
+Por que o ensaio não pegou: ele checava `custoUnitario`, que estava `null` por
+falta de taxa de conversão. O erro estava um nível abaixo, em
+`custoMaterialPorPeca`, e ficou mascarado.
+
+Corrigido em três pontos: `custoPorKgFormula` e `custoEmbalagemPorPeca`
+devolvem `null` quando nenhuma linha foi custeada; `custoMaterialPorPeca` só
+existe quando `materialCompleto`. As partes seguem acessíveis para a tela
+mostrar parcial **com** o aviso de incompleto ao lado. Testes: 113 asserções.
+Ensaio: agora checa `custoMaterialPorPeca` e `custoPorKg`, não só o unitário.
+
+**Lição para a camada de conversão e para a de margem:** o teste que falta é
+sempre o do estado vazio, porque é o estado em que o sistema realmente está
+quando entra no ar.
 
 ## 9. O que este documento decidiu
 

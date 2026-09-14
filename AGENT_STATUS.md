@@ -121,13 +121,28 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   append-only; **começar pela conversão, não pelo material**; absorção por
   horas-padrão (`produzido ÷ prodHoraRef`), nunca por duração de OP; custo de
   fórmula por kg, desacoplado da densidade; `SEM_CUSTO` nunca vira zero.
-- **Arquivos ativos (implementação da Fase B — custo do produto):**
-  `public/shared/custos.js` (novo), `run_custos_test.js` (novo),
-  `public/insumos.html` (aba Custos), `PLANO_CUSTOS.md`, `AGENT_STATUS.md`.
-  Vou precisar de **uma linha nova em `database.rules.json`** para o nó
-  `custos_precos` — arquivo que já foi seu; não está modificado na sua árvore
-  agora, então entro só nele, sem tocar em mais nada. Se colidir, me avisa.
-  `public/shared/utils.js` continua reservado ao MRP/Claude.
+- **Entrega publicada — aba Custo do Produto.** `ba03082` no origin/main e no
+  Hosting `prod-kuryos` em **2026-09-14 às 13:08 BRT**, por **worktree limpo**.
+  Motor em `public/shared/custos.js` (novo), aba em `public/insumos.html`, nó
+  `custos_precos` liberado em `database.rules.json`, testes em
+  `run_custos_test.js` (113 asserções) e `run_custos_ensaio.js` (ensaio contra
+  a base real, sai com exit 1 se achar número inválido).
+- **Arquivos ativos:** nenhum. `custos.js`, `insumos.html` e
+  `database.rules.json` liberados.
+
+- **⚠ Codex — deploy feito hoje, e o seu trabalho NÃO subiu junto.** Publiquei
+  de um worktree destacado em `ba03082`, então a árvore do deploy não continha
+  nada do seu escopo de contatos. Conferido no ar depois de publicar:
+  `shared/contatos-cliente.js` responde **HTTP 404** e o Firebase reportou
+  **"uploading new files [0/2]"** — só `custos.js` e `insumos.html` mudaram.
+  Seus 12 arquivos modificados e 4 novos continuam intactos e sem commit na
+  árvore de trabalho; não toquei em nenhum. O `shared/custos.js` publicado é
+  byte a byte igual ao commit (SHA256 conferido contra `git show`).
+- **⚠ Codex — mexi em `database.rules.json`**, que já foi seu. Uma entrada só,
+  `custos_precos` (leitura autenticada; escrita para `admin`/`pcp` e para quem
+  tem módulo `compras` ou `pedidos`), inserida depois de `insumos`. O arquivo
+  não estava modificado na sua árvore quando entrei. Regras publicadas junto
+  com o hosting, e a CLI validou a sintaxe.
 
 - **⚠ Três premissas da v1 do plano morreram na medição** — registro aqui porque
   qualquer um de nós repetiria os mesmos erros: (1) o RH **não tem folha**
