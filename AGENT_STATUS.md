@@ -114,20 +114,43 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Escopo atual — propriedade do estoque por cliente (2026-09-15).** PC define
-  proprietário (Kuryos/cliente) e, por item, cliente + pedido(s) obrigatórios;
-  recebimento grava dono/destino no lote e parte o saldo agregado por dono
-  (`estoque/{m}/porCliente/{c}`); consumo do apontamento, FEFO/separação e MRP
-  só usam material do cliente para demanda dele; Estoque com vistas
-  "propriedade do cliente" e "destinado ao cliente". **Arquivos ativos:**
-  `public/shared/propriedade-estoque.js` (novo) + cópia
-  `functions/propriedade_estoque.js`, `public/compras.html`,
-  `functions/index.js` (só registrar/cancelar/devolver recebimento),
-  `public/shared/utils.js`, `public/form.html`, `public/separacao_materiais.html`,
-  `public/estoque.html`, `public/shared/conteudo-posicao.js`,
-  `public/insumos.html`, testes novos e `AGENT_STATUS.md`.
-  **⚠ Codex:** `public/logistica.html` (seu) vai receber só a exibição do
-  dono/destino no modal de recebimento; integro por cima, sem levar seus hunks.
+- **Entrega publicada — propriedade do estoque por cliente (2026-09-15).**
+  `6fd8285` no `origin/main`; por **worktree limpo** às 15:01 BRT: Hosting (11
+  arquivos, SHA256 idênticos ao commit) + Functions `registrarRecebimento`,
+  `cancelarRecebimento`, `registrarDevolucaoRecebimento` (sem login 401;
+  `contatos-cliente.js` segue 404).
+  **Regras do usuário:** o cadastro do material é amplo, então o dono vem do PC.
+  Compra da Kuryos = Kuryos (estoque geral, serve a qualquer OP, mesmo comprada
+  para pedido de outro cliente); remessa do cliente = cliente (só produtos/
+  pedidos/demandas dele); remessa de terceiro = Compras escolhe. Cliente e
+  pedido(s) por item, obrigatórios, vários pedidos. Estoque com duas vistas:
+  propriedade do cliente × destinado ao cliente (posse Kuryos).
+  **Onde:** `shared/propriedade-estoque.js` (puro; `functions/propriedade_estoque.js`
+  é cópia byte a byte, o teste falha se divergirem). PC ganha `propriedade` e
+  `itens/{i}/vinculo`; lote ganha `propriedade`/`destino`; agregado ganha
+  `estoque/{m}/porCliente/{c}/saldoAtual` (`saldoAtual` segue total físico).
+  Recebimento no servidor **recusa PC sem dono/vínculo**; cancelamento e
+  devolução desfazem na parte do cliente. Apontamento (consumo e perda), FEFO,
+  separação guiada, Insumos por Pedido/Solicitar Compra e MRP respeitam o dono.
+  `separarParcialLoteEndereco` passou a copiar dono, destino e `loteInterno`
+  (antes separar uma válvula de cliente a tornava da Kuryos).
+  **Ensaio na base:** 364 linhas de pedido e 80 OPs ativas resolvem cliente
+  (pedido 26 via nome curto dos produtos). Os 4 PCs existentes estão sem
+  vínculo — PC-0003, PC-0005 e o saldo do PC-0004 ficam **bloqueados no
+  recebimento** até Compras preencher 🔗 Cliente/pedido.
+  **Testes:** `run_propriedade_estoque_test.js` (22, inclui o `index.js` real) e
+  `run_propriedade_estoque_ui_test.js` (9); suíte 39/39. Adiados em
+  `MELHORIAS_FUTURAS.md` (MRP ignora data da remessa, empenho sem dono, mapa sem
+  filtro, devolução ao cliente).
+- **⚠ Codex — três toques em arquivos seus:** (1) `public/logistica.html`: só
+  exibição de dono/destino e trava no modal de recebimento; commit com **apenas
+  os meus 5 hunks** (`git apply --cached`), sua linha de `contatos-cliente` no
+  `<head>` segue sem commit e intacta. (2) `run_apontamento_encerramento_test.js`
+  passou a carregar `clienteKeyDaOp` e o módulo real e confere que o consumo leva
+  o cliente da OP — `baixarEstoqueConsumo` agora depende dele. (3) Republicar
+  as três Functions de recebimento a partir de commit **anterior** a `6fd8285`
+  tira a trava e grava lote sem dono.
+- **Arquivos ativos:** nenhum.
 
 - **Entrega publicada — Histórico de apontamentos: início/término e visão
   condensada por OP (2026-09-15).** `bc904a0` no `origin/main`; Hosting por

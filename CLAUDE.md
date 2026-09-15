@@ -137,6 +137,15 @@ antes de fechar.
 - **WMS e Estoque ficam desacoplados de propósito.** "Ajustar Estoque" corrige
   quantidade e nunca exige endereço; a aba "Endereçamento" é puramente aditiva a
   `estoque_lotes` e nunca escreve em `estoque/{key}`. Não acople os dois.
+- **Estoque tem dono (2026-09-15).** De quem é o material vem do Pedido de Compra,
+  nunca do cadastro nem da doca (`shared/propriedade-estoque.js`, cópia byte a byte
+  em `functions/`). `estoque/{m}/saldoAtual` segue sendo o **total físico**; a parte
+  de cada cliente fica em `porCliente/{c}` e o geral da Kuryos é total − partes.
+  Quem baixa saldo de OP passa o cliente (`clienteKeyConsumidor` em `ajustarEstoque`,
+  `{clienteKey}` em `sugerirAlocacaoFefo`/`baixarLotesFefo`); **sem cliente, lote de
+  cliente fica de fora** — padrão seguro, não é bug. Todo código que cria lote novo
+  a partir de outro copia `propriedade`, `destino` e `loteInterno`. Cliente de
+  pedido/OP sai do SKU (`clienteKeyDoSku`): pedido e OP guardam só o nome.
 - Separação/transferência só **move** endereço, nunca decrementa saldo — a baixa real
   continua no apontamento.
 
