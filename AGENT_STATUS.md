@@ -114,6 +114,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — detalhe da posição em popup (2026-09-15).** `ff2d7c2`
+  no `origin/main`; Hosting por worktree limpo, `estoque.html` idêntico ao
+  commit. O conteúdo do palete abre em modal (X, clique fora, Esc) em vez de
+  card no fim da tela. **Mudança que afeta todos os modais de `estoque.html`:**
+  `.modal-bg` subiu de z-index 500 para **10000** — o menu lateral do
+  `auth_check` (9999) cobria o lado esquerdo de todo popup no desktop. O seletor
+  de endereço segue acima (10050). Se criar modal novo em outra tela, confira
+  o mesmo conflito com o menu.
+- **Registrado, fora do escopo:** no celular, `estoque.html` já tem 1.136 px de
+  largura com popup fechado (barra de abas), igual na versão anterior.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — conteúdo da posição no mapa do WMS (2026-09-15).**
   `7ae4959` no `origin/main`; Hosting por worktree limpo, conferido
   (`estoque.html`, `shared/conteudo-posicao.js`, `shared/expedicao-grade.js`
