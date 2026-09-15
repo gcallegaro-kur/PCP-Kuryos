@@ -203,6 +203,8 @@ def main():
     vistos = set()
     cargas = collections.defaultdict(lambda: {"itens": {}, "meta": None})
 
+    # ── Fase 1: ler cada linha ─────────────────────────────────────────────
+    regs = []
     for linha in linhas:
         sku = texto(linha[C_SKU])
         lote_planilha = texto(linha[C_LOTE])
@@ -238,64 +240,147 @@ def main():
         contagem[tipo] += 1
         contagem["com_pedido" if not motivo else "sem_pedido"] += 1
 
-        relatorio.append({
+        rel = {
             "status_planilha": texto(linha[C_STATUS]), "tipo": tipo,
             "cliente": texto(linha[C_CLIENTE]), "sku": sku,
             "produto": texto(linha[C_PRODUTO]), "lote": lote_planilha,
             "caixas": caixas, "multiplo": multiplo, "unidades": unidades,
             "nf": texto(linha[C_NF]), "data_expedicao": data_iso(linha[C_DATA_EXP]),
             "pedido": pedido_key or "", "vinculo_pendente": "SIM" if motivo else "",
-            "motivo": motivo, "chave": sufixo,
-        })
+            "motivo": motivo, "chave": sufixo, "caixa_parcial": "",
+        }
+        relatorio.append(rel)
 
         if unidades is None or unidades <= 0:
             contagem["ignoradas_sem_unidades"] += 1
             continue
 
+        regs.append({
+            "linha": linha, "sku": sku, "lote": lote_planilha, "op_key": op_key,
+            "spk": spk, "pedido_key": pedido_key, "pedido": pedido, "motivo": motivo,
+            "tipo": tipo, "sufixo": sufixo, "unidades": unidades, "caixas": caixas,
+            "multiplo": multiplo, "rel": rel, "parcial": None, "anexada_a": None,
+            "avulsa": False, "multiplo_op": None,
+        })
+
+    # ── Fase 2: caixa parcial vai para o palete ────────────────────────────
+    # A planilha registra a caixa parcial como LINHA PROPRIA (1 cx cujo
+    # "multiplo" e a quantidade solta: '1 cx x 10' ao lado de '88 cx x 24'),
+    # e cada linha virava um palete. Fisicamente a parcial fica NO palete.
+    # Regras decididas pelo usuario em 2026-09-14:
+    #   - parcial = 1 caixa com multiplo MENOR que o da OP; mais de 1 caixa
+    #     com multiplo menor e mudanca de formato, fica como palete proprio;
+    #   - vai para o palete da mesma OP com o mesmo status, data de expedicao
+    #     e NF -- o que nao saiu junto nao e juntado;
+    #   - com 2+ candidatos, vai para o de MENOS caixas (o palete incompleto,
+    #     que e onde a sobra fica); desempate pela chave, que e estavel;
+    #   - sem candidato, fica como linha propria marcada caixa parcial avulsa;
+    #   - vale para estoque e para o historico expedido.
+    por_op = collections.defaultdict(list)
+    for r in regs:
+        if r["op_key"] and r["op_key"] != "-":
+            por_op[(r["op_key"], r["sku"])].append(r)
+    for grupo_op in por_op.values():
+        mults = [r["multiplo"] for r in grupo_op if r["multiplo"]]
+        if not mults:
+            continue
+        mx = max(mults)
+        for r in grupo_op:
+            r["multiplo_op"] = mx
+        parciais = [r for r in grupo_op if r["multiplo"] and r["multiplo"] < mx and r["caixas"] == 1]
+        inteiros = [r for r in grupo_op if r not in parciais]
+        for p in sorted(parciais, key=lambda x: x["sufixo"]):
+            def mesma_saida(h):
+                return (texto(h["linha"][C_STATUS]) == texto(p["linha"][C_STATUS])
+                        and data_iso(h["linha"][C_DATA_EXP]) == data_iso(p["linha"][C_DATA_EXP])
+                        and texto(h["linha"][C_NF]) == texto(p["linha"][C_NF]))
+            candidatos = sorted((h for h in inteiros if mesma_saida(h) and h["parcial"] is None),
+                                key=lambda h: (h["caixas"] or 0, h["sufixo"]))
+            if candidatos:
+                host = candidatos[0]
+                host["parcial"] = p
+                p["anexada_a"] = host
+                p["rel"]["caixa_parcial"] = "SOMADA AO PALETE " + host["sufixo"]
+                host["rel"]["caixa_parcial"] = "RECEBEU PARCIAL " + p["sufixo"]
+                contagem["parciais_somadas"] += 1
+            else:
+                p["avulsa"] = True
+                p["rel"]["caixa_parcial"] = "AVULSA"
+                contagem["parciais_avulsas"] += 1
+
+    # ── Fase 3: montar o que grava ─────────────────────────────────────────
+    remover = {}  # caminho -> None: registro de parcial gravado por carga anterior
+    for r in regs:
+        if r["anexada_a"] is not None:
+            # A parcial agora mora no palete. O registro proprio que uma carga
+            # ANTERIOR criou para ela precisa sair, senao a unidade conta duas
+            # vezes. Carga com NF e regravada inteira (o item some sozinho);
+            # sem NF, a parcial tinha carga avulsa propria.
+            if r["tipo"] == "ESTOQUE":
+                remover["estoque_lotes/%s/LEG_%s" % (chave_item(r["sku"]), r["sufixo"])] = None
+            elif not texto(r["linha"][C_NF]):
+                remover["expedicoes_comerciais/LEG_AVULSA_" + r["sufixo"]] = None
+            continue
+
+        linha, p = r["linha"], r["parcial"]
+        caixas, multiplo, unidades = r["caixas"], r["multiplo"], r["unidades"]
+        parcial_un = None
+        peso = numero(linha[C_CARGA])
+        if p is not None:
+            parcial_un = p["unidades"]
+            unidades = unidades + parcial_un
+            peso_p = numero(p["linha"][C_CARGA])
+            peso = (peso or 0) + (peso_p or 0) if (peso is not None or peso_p is not None) else None
+        elif r["avulsa"]:
+            # Uma caixa incompleta sozinha: zero fechadas, a quantidade solta
+            # como parcial e o multiplo real da caixa da OP.
+            caixas, multiplo, parcial_un = 0, r["multiplo_op"], unidades
+
         comum = {
             "legado": True, "origemTipo": "legado_planilha", "origemRef": ORIGEM,
-            "itemCodigo": sku, "itemNome": texto(linha[C_PRODUTO]) or None, "unidade": "un",
+            "itemCodigo": r["sku"], "itemNome": texto(linha[C_PRODUTO]) or None, "unidade": "un",
             "cliente": texto(linha[C_CLIENTE]) or None,
-            "opKey": op_key or None, "opLote": lote_planilha or None,
-            "loteOrigem": lote_planilha or None,
+            "opKey": r["op_key"] or None, "opLote": r["lote"] or None,
+            "loteOrigem": r["lote"] or None,
             # skuPedidoKey guarda a chave RECONSTRUIDA (a que existe em
-            # /pedidos), porque e assim que ExpedicaoPA.analisar procura o
-            # pedido -- sem normalizar. Gravar a crua da OP ('19__GLMKAM04',
-            # sem zero a esquerda) fazia todo palete cair em "Pedido de origem
-            # ausente". A crua fica em skuPedidoKeyOrigem, que e o que o
+            # /pedidos). A crua da OP fica em skuPedidoKeyOrigem, que e o que o
             # portao de "vinculo mudou" compara contra a OP.
-            "skuPedidoKey": pedido_key or spk or None,
-            "skuPedidoKeyOrigem": spk or None, "pedidoKey": pedido_key,
-            "pedidoId": pedido.get("parentPedidoId") or pedido.get("id"),
-            "vinculoPendente": bool(motivo), "vinculoMotivo": motivo or None,
+            "skuPedidoKey": r["pedido_key"] or r["spk"] or None,
+            "skuPedidoKeyOrigem": r["spk"] or None, "pedidoKey": r["pedido_key"],
+            "pedidoId": r["pedido"].get("parentPedidoId") or r["pedido"].get("id"),
+            "vinculoPendente": bool(r["motivo"]), "vinculoMotivo": r["motivo"] or None,
             "caixasFechadas": caixas, "unidadesPorCaixa": multiplo,
+            "unidadesCaixaParcial": parcial_un,
+            "caixaParcialAvulsa": True if r["avulsa"] else None,
+            # Rastro da linha da planilha que virou a parcial deste palete.
+            "parcialDaPlanilha": ({"chave": p["sufixo"], "unidades": p["unidades"],
+                                   "pesoKg": numero(p["linha"][C_CARGA])} if p is not None else None),
             # Peso vale para os DOIS lados, nao so para o palete em estoque:
             # o relatorio gerencial soma carga por cliente e por transportadora.
-            "pesoPorCaixaKg": numero(linha[C_KG_CX]), "pesoTotalKg": numero(linha[C_CARGA]),
+            "pesoPorCaixaKg": numero(linha[C_KG_CX]), "pesoTotalKg": peso,
             "dataFabricacao": data_iso(linha[C_DATA_FAB]),
-            "importadoEm": None,  # preenchido abaixo, igual para toda a carga
+            "importadoEm": None,
         }
+        sufixo, tipo, op_key = r["sufixo"], r["tipo"], r["op_key"]
+        rotulo_id = "LEG-%s-%s%s" % (r["lote"] or "SEMLOTE", "PARC-" if r["avulsa"] else "", sufixo[:6])
 
         if tipo == "ESTOQUE" and op_key in em_conferencia:
             contagem["estoque_pulado_em_conferencia"] += 1
-            relatorio[-1]["motivo"] = (relatorio[-1]["motivo"] + " | " if relatorio[-1]["motivo"] else "") + \
+            r["rel"]["motivo"] = (r["rel"]["motivo"] + " | " if r["rel"]["motivo"] else "") + \
                 "Palete NAO importado: OP %s tem conferencia de PA em andamento" % op_key
             continue
 
         if tipo == "ESTOQUE":
-            item_key = chave_item(sku)
-            lote_key = "LEG_" + sufixo
             palete = dict(comum)
             palete.update({
                 "itemTipo": "produto", "status": "LEGADO_ESTOQUE",
-                "identificadorPalete": "LEG-%s-%s" % (lote_planilha or "SEMLOTE", sufixo[:6]),
-                "unidadesCaixaParcial": None,
+                "identificadorPalete": rotulo_id,
                 "saldoLote": unidades, "qtdOriginal": unidades,
                 "enderecoKey": ENDERECO_LEGADO, "enderecoCodigo": ENDERECO_LEGADO,
                 "dataEntradaEstoque": data_iso(linha[C_DATA_STK]),
                 "conferencia": None, "qualidade": None, "validade": None,
             })
-            updates["estoque_lotes/%s/%s" % (item_key, lote_key)] = palete
+            updates["estoque_lotes/%s/LEG_%s" % (chave_item(r["sku"]), sufixo)] = palete
             contagem["paletes_legado"] += 1
         else:
             # Uma carga por (NF, data, cliente). Sem NF, a propria linha vira
@@ -306,10 +391,10 @@ def main():
             carga = cargas[grupo]
             item = dict(comum)
             item.update({"qtd": unidades, "descricao": texto(linha[C_PRODUTO]),
-                         "sku": sku, "identificadorPalete": "LEG-%s" % sufixo[:8],
+                         "sku": r["sku"], "identificadorPalete": "LEG-%s%s" % ("PARC-" if r["avulsa"] else "", sufixo[:8]),
                          "paleteOrigem": {"saldoLote": unidades, "caixasFechadas": caixas,
-                                          "unidadesPorCaixa": multiplo, "unidadesCaixaParcial": None},
-                         "pedidoNumero": (pedido.get("id") or pedido_key or "")})
+                                          "unidadesPorCaixa": multiplo, "unidadesCaixaParcial": parcial_un},
+                         "pedidoNumero": (r["pedido"].get("id") or r["pedido_key"] or "")})
             carga["itens"]["LEG_" + sufixo] = item
             if carga["meta"] is None:
                 carga["meta"] = {
@@ -345,6 +430,11 @@ def main():
             "criadoEm": m["data"], "criadoPor": "Importacao da planilha de Expedicao",
         }
     contagem["cargas_historico"] = len(cargas)
+    # Uma remocao nunca pode apagar o que esta carga acabou de escrever.
+    for caminho in remover:
+        if caminho not in updates:
+            updates[caminho] = None
+    contagem["registros_de_parcial_removidos"] = sum(1 for c in remover if c in updates)
 
     # Endereco unico do legado. Criado aqui para a importacao nao depender de
     # alguem lembrar de cadastrar antes -- sem ele, todo palete cairia em
@@ -356,16 +446,57 @@ def main():
         "criadoPor": "Importacao da planilha de Expedicao",
     }
 
+    # Estado ATUAL dos caminhos que esta carga toca. Serve a duas coisas:
+    #   1. palete legado que ja foi mexido no sistema (reenderecado, expedido,
+    #      saldo alterado) NAO e sobrescrito nem apagado -- regravar zeraria o
+    #      que a operacao fez. Se o palete que recebe uma parcial foi mexido,
+    #      a parcial antiga tambem fica onde esta, para nao sumir unidade;
+    #   2. o rollback vira BACKUP de verdade: restaura o valor anterior de cada
+    #      caminho, inclusive o registro de parcial que esta carga remove.
+    #      Null nos caminhos gravados nao bastava depois que passou a haver
+    #      remocao.
+    atual_lotes = ler_no("estoque_lotes")
+    atual_cargas = ler_no("expedicoes_comerciais")
+
+    def valor_atual(caminho):
+        partes = caminho.split("/")
+        if partes[0] == "estoque_lotes" and len(partes) == 3:
+            return ((atual_lotes or {}).get(partes[1]) or {}).get(partes[2])
+        if partes[0] == "expedicoes_comerciais" and len(partes) == 2:
+            return (atual_cargas or {}).get(partes[1])
+        return None
+
+    def mexido(v):
+        return bool(v) and bool(v.get("legado")) and (
+            bool(v.get("expedicaoId")) or v.get("status") != "LEGADO_ESTOQUE"
+            or v.get("enderecoKey") != ENDERECO_LEGADO
+            or v.get("saldoLote") != v.get("qtdOriginal"))
+
+    preservados = []
+    for caminho in [c for c in updates if c.startswith("estoque_lotes/")]:
+        if mexido(valor_atual(caminho)):
+            preservados.append(caminho)
+            del updates[caminho]
+    for r in regs:
+        host = r["anexada_a"]
+        if host is not None and r["tipo"] == "ESTOQUE":
+            caminho_host = "estoque_lotes/%s/LEG_%s" % (chave_item(host["sku"]), host["sufixo"])
+            caminho_parcial = "estoque_lotes/%s/LEG_%s" % (chave_item(r["sku"]), r["sufixo"])
+            if caminho_host in preservados and updates.get(caminho_parcial, 0) is None:
+                del updates[caminho_parcial]
+    contagem["preservados_mexidos_no_sistema"] = len(preservados)
+    for c in preservados:
+        print("  PRESERVADO (ja mexido no sistema): %s" % c)
+
     caminho_payload = os.path.join(args.saida, "payload.json")
     with open(caminho_payload, "w", encoding="utf-8") as f:
         json.dump(updates, f, ensure_ascii=False, indent=1)
-    # Desfazer: as chaves sao deterministicas, entao apagar e so mandar null
-    # nos mesmos caminhos. O endereco HISTORICO fica de fora do rollback --
-    # se algum palete ja tiver sido reenderecado ou expedido, apagar o
-    # endereco quebraria registro legitimo.
+    # O endereco HISTORICO fica de fora do backup: se algum palete ja tiver
+    # sido reenderecado ou expedido, apagar o endereco quebraria registro
+    # legitimo.
     caminho_rollback = os.path.join(args.saida, "rollback.json")
     with open(caminho_rollback, "w", encoding="utf-8") as f:
-        json.dump({k: None for k in updates if not k.startswith("enderecos_estoque/")},
+        json.dump({k: valor_atual(k) for k in updates if not k.startswith("enderecos_estoque/")},
                   f, ensure_ascii=False, indent=1)
 
     caminho_rel = os.path.join(args.saida, "relatorio.csv")
@@ -382,6 +513,12 @@ def main():
     print("  %-22s %5d" % ("vinculo pendente", contagem["sem_pedido"]))
     print("  %-22s %5d" % ("paletes legado", contagem["paletes_legado"]))
     print("  %-22s %5d" % ("cargas de historico", contagem["cargas_historico"]))
+    print("  %-22s %5d  (somadas ao palete da mesma OP e saida)" % ("parciais somadas", contagem["parciais_somadas"]))
+    print("  %-22s %5d  (sem palete correspondente; linha propria)" % ("parciais avulsas", contagem["parciais_avulsas"]))
+    print("  %-22s %5d  (registro proprio de parcial de carga anterior)" % ("removidos", contagem["registros_de_parcial_removidos"]))
+    if contagem["preservados_mexidos_no_sistema"]:
+        print("  %-22s %5d  (paletes ja mexidos no sistema, nao regravados)"
+              % ("preservados", contagem["preservados_mexidos_no_sistema"]))
     if contagem["ignoradas_sem_unidades"]:
         print("  %-22s %5d" % ("sem unidades (fora)", contagem["ignoradas_sem_unidades"]))
     if contagem["estoque_pulado_em_conferencia"]:

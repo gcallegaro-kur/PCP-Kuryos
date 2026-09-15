@@ -180,9 +180,15 @@ function achatar() {
     Object.keys(itens).forEach(function(itemKey) {
       var i = itens[itemKey] || {};
       var po = i.paleteOrigem || {};
-      var caixas = num(i.caixasFechadas || po.caixasFechadas);
+      var fechadas = num(i.caixasFechadas || po.caixasFechadas);
+      // A caixa parcial conta como uma caixa, como a planilha sempre contou
+      // ("1 cx × 10"). Ela passou a morar DENTRO do palete (unidadesCaixaParcial)
+      // em vez de ser linha própria; sem isto o total de caixas cairia uma
+      // por palete com parcial, sem nada ter mudado no físico.
+      var parcial = num(i.unidadesCaixaParcial != null ? i.unidadesCaixaParcial : po.unidadesCaixaParcial);
+      var caixas = fechadas + (parcial > 0 ? 1 : 0);
       var peso = num(i.pesoTotalKg);
-      if (!peso && i.pesoPorCaixaKg) peso = num(i.pesoPorCaixaKg) * caixas;
+      if (!peso && i.pesoPorCaixaKg) peso = num(i.pesoPorCaixaKg) * fechadas;
       out.push({
         cargaKey: cargaKey, itemKey: itemKey,
         // Carga do fluxo novo não tem `status` textual; é sempre saída confirmada.
