@@ -1,6 +1,6 @@
 const {onRequest, onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
-const {onValueCreated} = require("firebase-functions/v2/database");
+const {onValueCreated, onValueWritten} = require("firebase-functions/v2/database");
 const {defineSecret} = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
@@ -8,6 +8,7 @@ const {prepararFinalizacao} = require("./conferencia_pa");
 const {prepararSaida} = require("./expedicao");
 const {prepararAgenda} = require("./agenda_expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
+const OpEncerrada = require("./op_encerrada");
 
 admin.initializeApp();
 const db = admin.database();
@@ -1314,6 +1315,57 @@ exports.onTurnoEncerrado = onValueCreated(
       </div>
     `;
     await sendMailViaGraph(destinatarios, assunto, corpo, {html: true});
+  },
+);
+
+// E-mail ao PCP quando a produção encerra uma OP (pedido do usuário,
+// 2026-09-15): "para que o PCP se mobilize para confirmar a OP". Regras e
+// texto em op_encerrada.js. Gatilho na TRANSIÇÃO de ops/{op}/status para
+// "Aguardando Confirmação" -- um e-mail por OP encerrada, não por apontamento.
+//
+// Deduplicação: o gatilho pode ser entregue mais de uma vez com o mesmo
+// event.id. A marca em notificacoes_op_encerrada/{op}/{eventId} é reservada
+// por transaction ANTES de enviar; a segunda entrega encontra a marca e sai.
+// A marca também é o histórico consultável: ENVIADO / ERRO / IGNORADO.
+exports.onOpEncerrada = onValueWritten(
+  {
+    ref: "/ops/{opKey}/status",
+    instance: "prod-kuryos-default-rtdb",
+    secrets: [MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_SENDER_EMAIL],
+  },
+  async (event) => {
+    const antes = event.data.before.val();
+    const depois = event.data.after.val();
+    if (!OpEncerrada.deveNotificar(antes, depois)) return;
+    const opKey = event.params.opKey;
+    const marcaRef = db.ref(`notificacoes_op_encerrada/${opKey}/${sanitizeKey(event.id)}`);
+    const reserva = await marcaRef.transaction((atual) => {
+      if (atual) return; // já processado por outra entrega do mesmo evento
+      return {status: "ENVIANDO", em: new Date().toISOString(), statusAnterior: antes || null};
+    });
+    if (!reserva.committed) return;
+    try {
+      const [opSnap, configSnap] = await Promise.all([db.ref("ops/" + opKey).once("value"), db.ref("config").once("value")]);
+      const op = opSnap.val() || {};
+      if (op.status !== OpEncerrada.STATUS_ENCERRADA) {
+        // PCP confirmou (ou alguém mudou) antes do envio: não há o que cobrar.
+        await marcaRef.update({status: "IGNORADO", motivo: "status já era " + (op.status || "—") + " no envio"});
+        return;
+      }
+      const dias = [...new Set([OpEncerrada.dataLocal(op.dataFimReal), OpEncerrada.dataLocal()].filter(Boolean))];
+      const registrosPorDia = await Promise.all(dias.map((d) => db.ref("registros/" + d).once("value")));
+      const fechamento = registrosPorDia
+          .map((snap) => OpEncerrada.fechamentoDaOp(snap.val(), op.lote))
+          .filter(Boolean)
+          .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))[0] || null;
+      const destinatarios = OpEncerrada.destinatarios(configSnap.val() || {});
+      const email = OpEncerrada.montarEmail(op, opKey, fechamento);
+      await sendMailViaGraph(destinatarios, email.assunto, email.corpo, {html: true});
+      await marcaRef.update({status: "ENVIADO", enviadoEm: new Date().toISOString(), destinatarios, assunto: email.assunto});
+    } catch (e) {
+      await marcaRef.update({status: "ERRO", erro: String(e.message || e).slice(0, 500), erroEm: new Date().toISOString()}).catch(() => null);
+      throw e;
+    }
   },
 );
 
