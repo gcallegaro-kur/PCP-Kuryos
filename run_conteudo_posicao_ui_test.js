@@ -75,7 +75,10 @@ function dados() {
 
     // ── 1. Palete com PA e material: resumo e linha a linha ──────────────
     await page.click('#mapaVisualGrid-end .mapa-cell[data-endereco-key="FAB-1-1-1"]');
-    await page.waitForSelector('#mapaDetalheCard-end', {state: 'visible'});
+    // abre como POPUP sobre o mapa (pedido do usuário), não card no fim da tela
+    await page.waitForSelector('#mapaDetalheModal-end.open', {state: 'visible'});
+    const caixa = await page.locator('#mapaDetalheModal-end .modal').boundingBox();
+    assert.ok(caixa && caixa.y >= 0 && caixa.y < 1100, 'o popup aparece dentro da janela visível');
     assert.match(await page.textContent('#mapaDetalheTitulo-end'), /FAB-1\.1\.1 · FÁBRICA — 2 itens/);
     const resumo = await page.innerText('#mapaDetalheResumo-end');
     assert.match(resumo, /2\s*itens no palete/);
@@ -91,8 +94,13 @@ function dados() {
     assert.match(mp, /31\/12\/2026/, 'validade no dia certo: data pura não pode voltar um dia pelo fuso');
     assert.match(pa, /PA-26251-15-P1[\s\S]*OP 26251\/15 · AFEER OF ARABIAN[\s\S]*157 cx × 12 \+ 1 parcial com 11[\s\S]*1\.895 un[\s\S]*268,6[\s\S]*kg\/cx do cadastro/);
 
+    // fechar pelo X
+    await page.click('#mapaDetalheFechar-end');
+    assert.equal(await page.locator('#mapaDetalheModal-end.open').count(), 0, 'X fecha o popup');
+
     // ── 2. Material com saída parcial: peso pelo cadastro, aviso de volumes ─
     await page.click('#mapaVisualGrid-end .mapa-cell[data-endereco-key="FAB-1-1-2"]');
+    await page.waitForSelector('#mapaDetalheModal-end.open');
     await page.waitForFunction(() => /FAB-1\.1\.2/.test(document.getElementById('mapaDetalheTitulo-end').textContent));
     const l2 = await page.innerText('#mapaDetalheBody-end');
     assert.match(l2, /3 volumes no recebimento \(parte do lote já saiu\)/);
@@ -100,11 +108,24 @@ function dados() {
     assert.match(l2, /\b20\b[\s\S]*peso unitário do cadastro/, '1.000 × 20 g = 20 kg');
     assert.match(await page.innerText('#mapaDetalheResumo-end'), /20 kg\s*peso total/);
 
+    // fechar com Esc
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#mapaDetalheModal-end.open').count(), 0, 'Esc fecha o popup');
+
     // ── 3. Posição livre ──────────────────────────────────────────────────
     await page.click('#mapaVisualGrid-end .mapa-cell[data-endereco-key="FAB-1-1-3"]');
+    await page.waitForSelector('#mapaDetalheModal-end.open');
     await page.waitForFunction(() => /posição livre/.test(document.getElementById('mapaDetalheTitulo-end').textContent));
     assert.match(await page.textContent('#mapaDetalheBody-end'), /Posição livre/);
     assert.equal((await page.textContent('#mapaDetalheResumo-end')).trim(), '');
+
+    // fechar clicando fora da janela; clicar dentro não fecha
+    await page.click('#mapaDetalheResumo-end', {force: true});
+    assert.equal(await page.locator('#mapaDetalheModal-end.open').count(), 1, 'clicar dentro do popup não fecha');
+    // o canto da tela é o menu lateral; o fundo do popup é logo abaixo da janela
+    const janela = await page.locator('#mapaDetalheModal-end .modal').boundingBox();
+    await page.mouse.click(janela.x + janela.width / 2, Math.min(janela.y + janela.height + 30, 1090));
+    assert.equal(await page.locator('#mapaDetalheModal-end.open').count(), 0, 'clicar fora fecha o popup');
 
     assert.deepEqual(errors, [], 'erros de página: ' + errors.join(' | '));
     console.log('OK WMS: detalhe da posição com itens, volumes, peso, quantidades, origem e posição livre.');

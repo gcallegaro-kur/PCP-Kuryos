@@ -74,7 +74,10 @@
     .row-lotes{background:var(--surface-2)}
     .row-lotes td{padding:0}
     .row-lotes-inner{padding:8px 20px 12px 40px}
-    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+    /* z-index acima do menu lateral do auth_check (9999): com 500 o menu cobria
+       o lado esquerdo de todo popup no desktop. Abaixo do seletor de endereço
+       (10050), que abre por cima do Transferir. */
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
     .modal-bg.open{display:flex}
     .modal{background:var(--card);border-radius:14px;width:100%;max-width:560px;margin:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
     .modal-header{background:linear-gradient(135deg,#065f46,var(--success));color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
@@ -358,14 +361,20 @@
            baixa por nível (as duas mostram posição, só que de ângulos
            diferentes). Um card só, escondido a cada troca de visão pra nunca
            deixar detalhe velho de outro modo na tela. -->
-      <div class="card" id="mapaDetalheCard-end" style="display:none;margin-top:14px">
-        <div class="card-title" id="mapaDetalheTitulo-end">Detalhe</div>
-        <div id="mapaDetalheResumo-end" class="posicao-resumo"></div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Item</th><th>Lote</th><th>Origem</th><th>Volumes / composição</th><th style="text-align:right">Quantidade</th><th style="text-align:right">Peso (kg)</th><th>Validade</th><th>Status</th></tr></thead>
-            <tbody id="mapaDetalheBody-end"></tbody>
-          </table>
+      <!-- Popup, não card no fim da tela (pedido do usuário, 2026-09-15): o
+           mapa pode ser comprido e o detalhe ficava fora da vista. -->
+      <div class="modal-bg" id="mapaDetalheModal-end" role="dialog" aria-modal="true" aria-labelledby="mapaDetalheTitulo-end">
+        <div class="modal" style="max-width:1100px">
+          <div class="modal-header blue"><h2 id="mapaDetalheTitulo-end">Detalhe</h2><button type="button" class="modal-close" id="mapaDetalheFechar-end" title="Fechar" aria-label="Fechar">×</button></div>
+          <div class="modal-body" style="padding:16px 0 8px">
+            <div id="mapaDetalheResumo-end" class="posicao-resumo"></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>Lote</th><th>Origem</th><th>Volumes / composição</th><th style="text-align:right">Quantidade</th><th style="text-align:right">Peso (kg)</th><th>Validade</th><th>Status</th></tr></thead>
+                <tbody id="mapaDetalheBody-end"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2172,7 +2181,7 @@ function trocarVisaoPosicoes(visao) {
   // O card de detalhe é compartilhado pelos 2 modos visuais -- esconde na
   // troca, senão fica detalhe de uma posição do mapa pendurado embaixo da
   // planta (ou da lista), sem nada selecionado explicando de onde veio.
-  document.getElementById('mapaDetalheCard-end').style.display = 'none';
+  fecharDetalheEndereco();
   if (visao === 'mapa') renderMapaVisual();
   if (visao === 'planta') renderPlantaBaixa();
 }
@@ -2358,8 +2367,13 @@ function mostrarDetalheEndereco(enderecoKey, codigo) {
       '</tr>';
     }).join('');
   }
-  document.getElementById('mapaDetalheCard-end').style.display = 'block';
+  document.getElementById('mapaDetalheModal-end').classList.add('open');
 }
+// Fecha pelo X, clicando fora da janela ou com Esc.
+function fecharDetalheEndereco() { document.getElementById('mapaDetalheModal-end').classList.remove('open'); }
+document.getElementById('mapaDetalheFechar-end').addEventListener('click', fecharDetalheEndereco);
+document.getElementById('mapaDetalheModal-end').addEventListener('click', function(ev) { if (ev.target === this) fecharDetalheEndereco(); });
+document.addEventListener('keydown', function(ev) { if (ev.key === 'Escape' && document.getElementById('mapaDetalheModal-end').classList.contains('open')) fecharDetalheEndereco(); });
 
 function refreshFiltroRuaSelect() {
   var sel = document.getElementById('filterRua-end');
@@ -2469,7 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('btnVerPlanta-end').addEventListener('click', function() { trocarVisaoPosicoes('planta'); });
   document.getElementById('plantaNivel-end').addEventListener('change', function() {
     nivelPlantaSelecionado = Number(this.value) || 0;
-    document.getElementById('mapaDetalheCard-end').style.display = 'none'; // detalhe da posição do nível anterior não vale mais
+    fecharDetalheEndereco(); // detalhe da posição do nível anterior não vale mais
     renderPlantaBaixa();
   });
   document.getElementById('btnEditarPlanta-end').addEventListener('click', ativarEdicaoPlanta);
