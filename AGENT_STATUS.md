@@ -114,6 +114,40 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **⚠⚠ Correção publicada — a Conferência de PA NUNCA conseguiu finalizar
+  (2026-09-14).** `019cb52` no `origin/main`; `finalizarConferenciaPA`
+  republicada no `prod-kuryos` por worktree limpo. Callable no ar responde 401
+  sem login, como esperado.
+  **Sintoma:** "Outra sessão já está finalizando esta OP" na conciliação, com a
+  base **sem lock nenhum** (`finalizacaoStatus`, `finalizandoEm` e
+  `finalizacaoToken` ausentes nas duas conferências).
+  **Causa:** `if (!atual) return;` dentro do `confRef.transaction`
+  (`functions/index.js`). O SDK chama o callback com o **cache local** primeiro
+  e, depois do `.once()` do `lerContexto`, o cache já esfriou — a primeira
+  passada vem `null`. Devolver `undefined` **aborta a transação** sem nunca
+  falar com o servidor, e o código caía no `!lock.committed`.
+  **Medido no emulador** (firebase-admin 12.7.0, mesmo padrão `.once()` +
+  `.transaction()`): `return;` → passadas `[null]`, `committed=false`;
+  `return atual;` → passadas `[null, dado]`, `committed=true`.
+  Era **determinístico**: explica `estoque_lotes` não ter um único palete de
+  produto acabado desde o deploy do fluxo em 2026-09-10.
+- **A regra, para não repetir:** transação do RTDB devolve **o próprio valor**
+  (`return atual;`), nunca `return;`. As outras três transações do
+  `functions/index.js` (linhas 25, 55 e 1793) já faziam certo — foi deslize
+  isolado de uma linha. `run_transacoes_null_test.js` novo **varre todas as
+  transações de `functions/`** atrás do mesmo padrão, além de provar a
+  semântica num fake fiel ao SDK e travar o site específico.
+- **Buraco de cobertura que permitiu isso:** `run_conferencia_pa_server_test.js`
+  só exercita as funções puras de `functions/conferencia_pa.js`. A transação e
+  o lock, que vivem no `functions/index.js`, não tinham teste nenhum.
+- **Também corrigido:** nó inexistente deixou de ser reportado como disputa de
+  sessão; agora responde "Não há Conferência de PA registrada para esta OP".
+- **Ainda aberto, agora do lado da operação:** 26247/06 está em
+  `DIVERGENCIA_RECONTAGEM` com 1 contagem (a regra pede três) e 26251/15 em
+  `AGUARDANDO_CONCILIACAO` com 3 contagens sem consenso. Com a correção no ar,
+  a conciliação deve concluir.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — Relatório de Expedição (2026-09-14).** `c24fce8` no
   `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
   (`Documents/Codex/deploy-relatorio-c24fce8`). Conferido no ar:
