@@ -114,6 +114,33 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — CEP automático e endereços da Kuryos na rota do PC
+  (2026-09-15).** `d3d1fd7` no `origin/main` (integrado sobre `ec6149b`, da
+  sessão do Descarte); Hosting por **worktree limpo**, conferido
+  (`compras.html`, `shared/rotas-pc.js`, `shared/utils.js` SHA256 idênticos ao
+  commit; `contatos-cliente.js` segue 404).
+  **O que mudou:** o editor de rota é o MESMO no PC direto (`pcd`) e no PC
+  tradicional (`pcEdit`), então vale para os dois. (1) CEP com 8 dígitos
+  preenche logradouro/bairro/cidade/UF via `buscarEnderecoPorCep`, nunca
+  número/complemento. (2) Atalhos 🏭 Fábrica / 📦 Galpão em Origem e Destino;
+  "Entregar em" do PC tradicional preenche o destino inteiro; PC gerado da
+  cotação com local de entrega nasce com destino preenchido. Preencher nunca
+  confirma: todo portão segue exigindo `statusConfirmacao === 'CONFIRMADA'`.
+  (3) **Cadastro editável** em `config/locaisKuryos/{FABRICA|GALPAO}` (botão
+  "Endereços da Kuryos" só para admin/pcp/módulo config, a regra de `/config`).
+  Até alguém salvar, vale `RotasPC.LOCAIS_KURYOS_PADRAO`. **Nada gravado na base.**
+  **API nova em `rotas-pc.js`:** `localKuryos(chave, cadastro)`,
+  `CHAVES_LOCAIS_KURYOS`, `LOCAIS_KURYOS_PADRAO`; `rotaInicial` ganhou 3º
+  parâmetro opcional `locaisKuryos`.
+- **⚠ Codex — `logistica.html` não foi tocado**, mas a chamada de lá a
+  `RotasPC.rotaInicial(p, null)` agora devolve destino preenchido quando o PC
+  sem rota tem `localEntrega` GALPAO/FABRICA. Para usar o cadastro vivo,
+  passe `allConfig.locaisKuryos` como 3º argumento.
+- **A conferir com o usuário:** pelos Correios o nº 1130 da Rua Lagoa Tai
+  Grande é CEP **08290-425** (Vila Carmosina); o **08290-500** informado é
+  Itaquera, até o 548. CNPJ do Galpão não informado (vazio no padrão).
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — transaction abortando no null, lado cliente (2026-09-15).**
   `9f30bbd` no `origin/main`; Hosting por **worktree limpo** às 00:31 BRT
   (3 arquivos enviados; `shared/utils.js`, `compras.html`, `historico.html`,
