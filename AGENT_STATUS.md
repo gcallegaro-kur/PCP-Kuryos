@@ -114,6 +114,35 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — seletor visual de endereço e Doca (2026-09-15).**
+  `6518040` no `origin/main`; Hosting por **worktree limpo**, conferido
+  (`estoque.html`, `logistica.html`, `shared/seletor-endereco.js`, `utils.js` e
+  os dois manuais idênticos ao commit; `contatos-cliente.js` segue 404).
+  **Fluxo (decisões do usuário):** recebimento entra na **Doca** (área `DOCA`,
+  posição `DOC-1.1.1`, cadastrada pelo usuário); guardar a qualquer momento;
+  PA pode ir de posição para a Doca para agilizar expedição; **uma posição = um
+  palete, que pode ter mais de um produto** (ocupada não bloqueia, pede
+  "Colocar no mesmo palete").
+  **Componente:** `public/shared/seletor-endereco.js` — primeiro o local,
+  depois o mapa rua × prédio × nível; campo com `<input hidden>` da classe que a
+  tela já lê (`rc-endereco`, `cpa-endereco`). Endereço `legado` e dimensão >60
+  ficam fora do mapa (o `HISTORICO` 999×999 travaria a tela). Entrou no
+  recebimento (Logística, padrão Doca), Transferir (+ "Levar para a Doca"),
+  formulário de Endereçamento, Conferência de PA e card **"Na Doca"** em
+  Estoque › Endereçamento.
+  **Regra mudada em `utils.js` (`registrarLaudoQualidade`):** a liberação
+  **não grava mais `aguardandoEnderecoDefinitivo`**. "Aguardando guardar" = lote
+  de material numa posição da área DOCA (calculado em `estoque.html`). A marca
+  antiga segue respeitada e é limpa por `transferirLoteEndereco`.
+- **⚠ Codex — efeito na sua regra de Expedição:** palete de PA liberado pela
+  Qualidade **deixa de nascer bloqueado** em "Aguardando endereço definitivo
+  ativo" (a marca não é mais gravada na liberação). O portão continua em
+  `ExpedicaoPA.analisar` para marca antiga. E `logistica.html` (arquivo seu)
+  recebeu o seletor e um listener de `estoque_lotes`; sua tag de scripts de
+  contatos no `<head>` foi reaplicada por cima sem conflito (diff seu idêntico;
+  suíte combinada 31/31).
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — Expedição: peso da carga, peso teórico e selecionar
   todos (2026-09-15).** `932aa88` no `origin/main`; Hosting por **worktree
   limpo** (`.claude/worktrees/expedicao-peso`, sobre `a007ec1`), conferido:
