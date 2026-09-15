@@ -114,6 +114,58 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Expedição: histórico e estoque legado da planilha (2026-09-14).**
+  `31674b6` no `origin/main`; Hosting + `confirmarExpedicaoPA` +
+  `salvarAgendamentoExpedicaoPA` publicados no `prod-kuryos` por **worktree
+  limpo** (`Documents/Codex/deploy-legado-31674b6`).
+  **Carga de dados já aplicada em produção:** 26 paletes legado, 338 cargas de
+  histórico e o endereço `HISTORICO`. Na grade: **19 paletes disponíveis,
+  20.818 unidades** (MISS ROSE e Glow Make Up); 7 pendentes com motivo à vista.
+- **Regra nova:** `ExpedicaoPA.analisar` aceita `origemTipo: 'legado_planilha'`
+  com `legado: true` e dispensa **apenas** dois portões — liberação/laudo da
+  Qualidade e Conferência de PA finalizada. Eles nunca existiram no sistema, e
+  exigi-los obrigaria a **forjar** registro de Qualidade na importação. Todos os
+  outros portões seguem valendo. Status novo `LEGADO_ESTOQUE` (cinza, não o
+  verde de "liberado pela Qualidade") e identificador com prefixo `LEG-`.
+- **⚠ `functions/expedicao_regras.js` é cópia byte a byte de
+  `public/shared/expedicao.js`** e `run_expedicao_test.js` falha se divergirem.
+  Mudou um, copie no outro e **redeploy das Functions** — senão a UI libera o
+  palete e o callable recusa. Foi exatamente o que o teste pegou aqui.
+- **⚠ Achado que vale para o sistema todo, não só para isto:** o `skuPedidoKey`
+  gravado nas OPs usa o número do pedido **sem zero à esquerda**
+  (`19__GLMKAM04`) e `/pedidos` guarda **com** (`0019__GLMKAM04`). Só essa
+  diferença deixava **66 vínculos OP→pedido órfãos**; normalizar recupera 51
+  deles e leva a cobertura de 81,2% para **95,7%**. Não migrei o nó `ops` — é
+  dado do PCP e fora do escopo pedido —, mas **a migração vale a pena** e
+  destravaria vínculo em outras telas. O palete legado contorna gravando a
+  chave reconstruída em `skuPedidoKey` e a crua em `skuPedidoKeyOrigem`, que é
+  o campo que o portão de "vínculo mudou" passa a comparar.
+- **Importador:** `scripts/importar_expedicao_legado.py`, **simulação por
+  padrão** (`--aplicar` grava). Chaves determinísticas por hash do conteúdo da
+  linha, não da posição — o usuário vai **repetir a carga** com dados mais
+  novos, e reordenar a planilha não pode duplicar. Gera `payload.json`,
+  `rollback.json` e `relatorio.csv` em `importacao_legado/` (gitignored).
+  **Pula palete de OP com conferência em andamento**: `conferencia_pa.js:102`
+  bloqueia a finalização se já existirem paletes da OP no WMS, então importar
+  travaria a conferência de vez (foi o caso da 26247/06).
+- **Ainda pendente do lado do PCP, aparece na grade com o motivo:** 26244/11
+  (pedido `23__HDR-MISS-0008` não existe em `/pedidos`); 26247/03, 26251/08 e
+  26253/03 (OPs em `Aguardando Confirmação`).
+- **Validação:** `run_expedicao_legado_test.js` novo — a dispensa não vaza para
+  quem só finge ser legado, e todos os outros portões seguem bloqueando.
+  **Os 20 testes do repo passam**, inclusive os dois de UI com playwright
+  (que não estava instalado nesta máquina; instalei).
+- **⚠ Operacional:** a CLI avisou que o **runtime Node.js 20 das Functions foi
+  descontinuado em 2026-04-30 e será desativado em 2026-10-30**. Depois disso
+  não dá mais deploy sem atualizar.
+- **⚠ Codex — mexi em `public/shared/expedicao.js` e
+  `functions/expedicao_regras.js`**, que são a base da sua grade de Expedição.
+  A mudança é aditiva (uma origem nova); `run_expedicao_test.js`,
+  `run_expedicao_grade_test.js`, `run_expedicao_ui_test.js` e
+  `run_agenda_expedicao_ui_test.js` passam. Seus 16 arquivos continuam
+  intactos e sem commit; `shared/contatos-cliente.js` segue **HTTP 404**.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — Recebimento alinhado ao formulário de entrada (2026-09-14).**
   `701ad16` no `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
   (`Documents/Codex/deploy-recebimento-701ad16`). Fonte da verdade: o

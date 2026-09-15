@@ -392,7 +392,7 @@ def main():
 
     print("\nGravando no Firebase...")
     p = subprocess.run(["firebase", "database:update", "/", caminho_payload,
-                        "--project", "prod-kuryos", "--confirm"],
+                        "--project", "prod-kuryos", "--force"],
                        capture_output=True, text=True, encoding="utf-8", shell=True)
     print((p.stdout or "") + (p.stderr or ""))
     if p.returncode != 0:
