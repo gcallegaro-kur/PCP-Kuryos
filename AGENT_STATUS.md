@@ -114,6 +114,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Escopo atual — propriedade do estoque por cliente (2026-09-15).** PC define
+  proprietário (Kuryos/cliente) e, por item, cliente + pedido(s) obrigatórios;
+  recebimento grava dono/destino no lote e parte o saldo agregado por dono
+  (`estoque/{m}/porCliente/{c}`); consumo do apontamento, FEFO/separação e MRP
+  só usam material do cliente para demanda dele; Estoque com vistas
+  "propriedade do cliente" e "destinado ao cliente". **Arquivos ativos:**
+  `public/shared/propriedade-estoque.js` (novo) + cópia
+  `functions/propriedade_estoque.js`, `public/compras.html`,
+  `functions/index.js` (só registrar/cancelar/devolver recebimento),
+  `public/shared/utils.js`, `public/form.html`, `public/separacao_materiais.html`,
+  `public/estoque.html`, `public/shared/conteudo-posicao.js`,
+  `public/insumos.html`, testes novos e `AGENT_STATUS.md`.
+  **⚠ Codex:** `public/logistica.html` (seu) vai receber só a exibição do
+  dono/destino no modal de recebimento; integro por cima, sem levar seus hunks.
+
 - **Entrega publicada — Histórico de apontamentos: início/término e visão
   condensada por OP (2026-09-15).** `bc904a0` no `origin/main`; Hosting por
   **worktree limpo** às 10:37 BRT (2 arquivos enviados; `historico.html`,
