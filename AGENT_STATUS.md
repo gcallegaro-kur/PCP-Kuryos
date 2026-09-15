@@ -114,6 +114,30 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — caixa parcial dentro do palete no legado (2026-09-14).**
+  `b0f7c72` no `origin/main`; Hosting (`relatorio_expedicao.html`) por
+  **worktree limpo**, conferido idêntico ao commit. **Carga reaplicada em
+  produção** com autorização explícita do usuário, primeiro só a OP 26244/16
+  (conferida), depois o restante.
+  **Causa:** a aba EXPEDIÇÃO registra a parcial como linha própria ("1 cx × 10"),
+  e o importador fazia um palete por linha. Paletes da Conferência de PA já
+  nascem certos; era só o legado.
+  **Regra (decidida pelo usuário):** parcial = 1 cx com múltiplo menor que o da
+  OP; vai para o palete da mesma OP com mesmo status/data/NF, o de **menos
+  caixas**; sem candidato, linha própria com `caixaParcialAvulsa`. Vale para
+  estoque e histórico.
+  **Conferido em produção após a carga:** paletes legado 26 → 21, linhas de
+  histórico 1.722 → 1.422, **unidades idênticas** por OP e por carga, zero
+  composição inválida no estoque; Expedição com as mesmas 20.818 un disponíveis
+  (15 paletes, 4 com parcial); lotes não legado e cargas do fluxo novo
+  **intocados** (comparação byte a byte com o backup).
+  **Relatório:** a parcial conta como 1 caixa (senão cairia de 67.125 para
+  66.796 caixas). `run_relatorio_caixa_parcial_test.js` novo.
+  **Importador:** remove o registro próprio que a carga anterior criou para a
+  parcial, preserva palete legado já mexido no sistema e grava
+  `rollback.json` com o **valor anterior** de cada caminho (backup real).
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — chave do pedido com/sem zero na Expedição + un/cx na
   Conferência de PA (2026-09-14).** `35242a8` no `origin/main`; Hosting +
   `confirmarExpedicaoPA` + `salvarAgendamentoExpedicaoPA` no `prod-kuryos` por
