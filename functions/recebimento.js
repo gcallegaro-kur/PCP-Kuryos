@@ -87,7 +87,10 @@ function validarEPrepararLinhas(payload, pedido, enderecos) {
   return {data, notaFiscal, condicoesVeiculo, linhas: preparadas, totais};
 }
 
-function statusPedidoApos(itens, deltas) {
+// `statusAtual` CANCELADO é terminal: estorno ou devolução de um recebimento
+// feito antes do cancelamento mexe nas quantidades, mas não pode reabrir o
+// pedido (voltaria para ENVIADO e reapareceria na fila da Logística e no MRP).
+function statusPedidoApos(itens, deltas, statusAtual) {
   let algum = false;
   let completo = true;
   const novosTotais = {};
@@ -98,6 +101,7 @@ function statusPedidoApos(itens, deltas) {
     if (recebido > 0.0001) algum = true;
     if (recebido < qtd - 0.0001) completo = false;
   }
+  if (statusAtual === "CANCELADO") return {status: "CANCELADO", novosTotais};
   return {status: completo ? "RECEBIDO_TOTAL" : (algum ? "RECEBIDO_PARCIAL" : "ENVIADO"), novosTotais};
 }
 

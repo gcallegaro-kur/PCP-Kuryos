@@ -1487,7 +1487,7 @@ exports.registrarRecebimento = onCall(async (request) => {
     const recKey = "REC-" + idempotencyKey;
     const deltas = {};
     Object.entries(entrada.totais).forEach(([key, qtd]) => { deltas[key] = qtd; });
-    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const apos = statusPedidoApos(pedido.itens || {}, deltas, pedido.status);
     const updates = {};
     const itensRecebidos = {};
     const lotesResultado = [];
@@ -1601,7 +1601,7 @@ exports.cancelarRecebimento = onCall(async (request) => {
     });
     const deltas = {};
     linhas.forEach((linha) => { deltas[linha.itemKey] = (deltas[linha.itemKey] || 0) - (Number(linha.qtdRecebidaAgora) || 0); });
-    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const apos = statusPedidoApos(pedido.itens || {}, deltas, pedido.status);
     const agora = new Date().toISOString();
     const updates = {};
     Object.entries(apos.novosTotais).forEach(([key, qtd]) => { updates[`pedidos_compra/${pedidoKey}/itens/${key}/qtdRecebida`] = qtd; });
@@ -1670,7 +1670,7 @@ exports.registrarDevolucaoRecebimento = onCall(async (request) => {
     const agora = new Date().toISOString();
     const itemAtual = pedido.itens && pedido.itens[linha.itemKey] || {};
     const deltas = {[linha.itemKey]: -qtd};
-    const apos = statusPedidoApos(pedido.itens || {}, deltas);
+    const apos = statusPedidoApos(pedido.itens || {}, deltas, pedido.status);
     const novoSaldo = Math.max(0, saldo - qtd);
     const movKey = db.ref(`movimentos_estoque/${materialKey}`).push().key;
     const eventoKey = db.ref(`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/devolucoes`).push().key;

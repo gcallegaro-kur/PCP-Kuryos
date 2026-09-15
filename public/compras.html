@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/rotas-pc.js"></script>
+  <script src="shared/cancelamento-pc.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -267,7 +268,12 @@
         <input type="text" class="kt-select" id="pcFilterFornecedorBusca" placeholder="Todos os fornecedores" autocomplete="off" style="min-width:220px;cursor:text">
         <input type="hidden" id="pcFilterFornecedor">
       </span>
-      <select class="kt-select" id="pcSort">
+      <select class="kt-select" id="pcFilterStatus" style="width:auto" title="Pedidos cancelados ficam fora da lista padrão">
+        <option value="ativos">Em andamento e recebidos</option>
+        <option value="cancelados">Cancelados</option>
+        <option value="todos">Todos</option>
+      </select>
+      <select class="kt-select" id="pcSort" style="width:auto">
         <option value="recente">Mais recentes primeiro</option>
         <option value="antigo">Mais antigos primeiro</option>
       </select>
@@ -629,6 +635,30 @@
   </div>
 </div>
 
+<!-- MODAL: cancelar Pedido de Compra (só ADM) — ver shared/cancelamento-pc.js -->
+<div class="modal-bg" id="modalCancelarPC">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header" style="background:linear-gradient(135deg,#7f1d1d,var(--danger))">
+      <div><h2 id="pcCancTitulo">Cancelar pedido</h2><div style="font-size:11.5px;opacity:.85" id="pcCancSub"></div></div>
+      <button class="modal-close" id="modalCancelarPCClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-note" id="pcCancAviso" style="margin-bottom:14px"></div>
+      <div id="pcCancSaldo" style="margin-bottom:14px"></div>
+      <label class="form-label" for="pcCancMotivo" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:4px">Motivo do cancelamento *</label>
+      <textarea id="pcCancMotivo" rows="3" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font:inherit" placeholder="Ex.: fornecedor não consegue entregar no prazo; pedido emitido com quantidade errada — refeito no PC-0007"></textarea>
+      <label id="pcCancReabrirBox" style="display:none;margin-top:12px;font-size:12.5px;align-items:flex-start;gap:8px">
+        <input type="checkbox" id="pcCancReabrir" checked style="margin-top:2px">
+        <span id="pcCancReabrirTexto"></span>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pcCancVoltar">Voltar</button>
+      <button class="btn btn-danger-ghost" id="pcCancConfirmar" style="background:var(--danger);color:#fff;border-color:var(--danger)">Cancelar pedido</button>
+    </div>
+  </div>
+</div>
+
 <!-- Documento do Pedido de Compra pro fornecedor (ver imprimirPedidoCompra) -->
 <div id="printArea"></div>
 
@@ -854,6 +884,7 @@ function homologadosDoMaterial(materialCodigo) {
 function ultimoPrecoDoMaterial(materialCodigo) {
   var achado = null;
   Object.values(allPedidosCompra).forEach(function(pc) {
+    if (!CancelamentoPC.contaComoCompra(pc)) return; // pedido desfeito não é referência de preço
     Object.values(pc.itens || {}).forEach(function(it) {
       if (it.materialCodigo !== materialCodigo || it.precoUnit == null || it.precoUnit === '') return;
       var data = pc.dataEmissao || pc.dataCriacao || '';
@@ -1574,6 +1605,7 @@ var phSortable = makeSortableTable(document.getElementById('phThead'), 'data', '
 function historicoPrecosLinhas() {
   var linhas = [];
   Object.values(allPedidosCompra).forEach(function(pc) {
+    if (!CancelamentoPC.contaComoCompra(pc)) return; // PC cancelado fica fora do histórico
     Object.values(pc.itens || {}).forEach(function(it) {
       if (it.precoUnit == null || it.precoUnit === '') return; // só itens com preço negociado
       linhas.push({
@@ -1631,7 +1663,7 @@ function analiseFornecedoresLinhas() {
   var porFornecedor = {};
   Object.values(allPedidosCompra).forEach(function(pc) {
     var fKey = pc.fornecedorKey;
-    if (!fKey) return;
+    if (!fKey || !CancelamentoPC.contaComoCompra(pc)) return; // cancelado não conta volume nem prazo
     if (!porFornecedor[fKey]) porFornecedor[fKey] = { nome: pc.fornecedorNome || fKey, totalPCs: 0, valorTotal: 0, prazoOk: 0, prazoTotal: 0, etiquetaOk: 0, etiquetaTotal: 0 };
     var agg = porFornecedor[fKey];
     agg.totalPCs++;
@@ -1895,9 +1927,11 @@ function refreshPcFornecedorFilter() {
 function renderPedidos() {
   var filtFornecedor = document.getElementById('pcFilterFornecedor').value;
   var sortMode = document.getElementById('pcSort').value;
+  var filtStatus = document.getElementById('pcFilterStatus').value;
 
   var rows = Object.entries(allPedidosCompra).filter(function(entry) {
     if (filtFornecedor && entry[1].fornecedorKey !== filtFornecedor) return false;
+    if (!CancelamentoPC.passaFiltroStatus(entry[1], filtStatus)) return false;
     return true;
   }).sort(function(a, b) {
     var cmp = (a[1].dataCriacao || '').localeCompare(b[1].dataCriacao || '');
@@ -1909,7 +1943,7 @@ function renderPedidos() {
   var tbody = document.getElementById('pcBody');
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allPedidosCompra).length
-      ? 'Nenhum pedido de compra encontrado com esse filtro.'
+      ? (filtStatus === 'cancelados' ? 'Nenhum pedido de compra cancelado.' : 'Nenhum pedido de compra encontrado com esse filtro.')
       : 'Nenhum pedido de compra ainda. Consolide uma solicitação aprovada pra criar o primeiro.') + '</td></tr>';
     return;
   }
@@ -1925,6 +1959,29 @@ function renderPedidos() {
       RECEBIDO_TOTAL: '<span class="badge badge-green">Recebido total</span>',
       CANCELADO: '<span class="badge badge-red">Cancelado</span>'
     }[p.status] || '<span class="badge badge-gray">' + escapeHtml(p.status || '—') + '</span>';
+    if (p.status === 'CANCELADO' && p.cancelamento) {
+      var c = p.cancelamento;
+      statusBadge += '<div style="font-size:11px;color:var(--muted);margin-top:4px;max-width:260px;line-height:1.4">' +
+        'por ' + escapeHtml(c.canceladoPor || '—') + ' em ' + fmtData(c.canceladoEm) +
+        (c.statusAnterior ? ' · estava ' + escapeHtml(String(c.statusAnterior).replace(/_/g, ' ').toLowerCase()) : '') +
+        '<br><span style="color:var(--text)">' + escapeHtml(c.motivo || '') + '</span></div>';
+    }
+    var cancelavel = CancelamentoPC.avaliarCancelamento(p, window.currentUser && window.currentUser.role).pode;
+    var botaoCancelar = cancelavel
+      ? ' <button class="btn btn-danger-ghost btn-sm pc-cancelar" data-key="' + escapeAttr(key) + '" title="Cancelar o pedido (só administrador). O registro fica em Cancelados.">✖ Cancelar</button>'
+      : '';
+    if (p.status === 'CANCELADO') {
+      // Cancelado: sem Enviar/Etiquetas. Fica só a consulta do documento, que
+      // sai com a faixa de cancelamento (serve de aviso ao fornecedor).
+      return '<tr style="opacity:.8">' +
+        '<td class="code-cell">' + escapeHtml(p.numeroFormatado || '—') + '</td>' +
+        '<td>' + escapeHtml(p.fornecedorNome || '—') + '</td>' +
+        '<td style="font-size:12px">' + fmtData(p.dataCriacao) + '</td>' +
+        '<td style="font-size:12.5px">' + (itensResumo || '—') + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm pc-imprimir" data-key="' + escapeAttr(key) + '" title="Documento com a faixa de cancelamento">🖨 Ver documento</button></td>' +
+      '</tr>';
+    }
     var acoes = (p.status === 'ABERTO'
       ? (podeEditarPC(p)
           ? '<button class="btn btn-ghost btn-sm pc-editar" data-key="' + escapeAttr(key) + '" title="Corrigir itens e condições antes de enviar ao fornecedor">✏️ Editar</button> '
@@ -1932,7 +1989,8 @@ function renderPedidos() {
         '<button class="btn btn-ghost btn-sm pc-enviar" data-key="' + escapeAttr(key) + '">Marcar Enviado</button> '
       : '') +
       '<button class="btn btn-primary btn-sm pc-imprimir" data-key="' + escapeAttr(key) + '" title="Abre o pedido formatado pra imprimir ou salvar em PDF, com o padrão de etiqueta de cada item">🖨 Enviar ao fornecedor</button> ' +
-      '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>';
+      '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>' +
+      botaoCancelar;
     // Selo de PC criado por fora da cotação. Visível na lista de propósito:
     // é o que deixa perceptível, no dia a dia, se o caminho curto virou o
     // caminho padrão. O title carrega o motivo declarado.
@@ -1961,6 +2019,107 @@ function renderPedidos() {
   });
   document.querySelectorAll('.pc-editar').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirModalEditarPC(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.pc-cancelar').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalCancelarPC(btn.getAttribute('data-key')); });
+  });
+}
+
+/* ── Cancelamento de Pedido de Compra ──
+   Regras em shared/cancelamento-pc.js. Aqui só a ligação: modal, transaction
+   no PC e, opcionalmente, devolver as solicitações de origem para APROVADA. */
+var pcCancKey = null;
+function abrirModalCancelarPC(key) {
+  var pc = allPedidosCompra[key];
+  var av = CancelamentoPC.avaliarCancelamento(pc, window.currentUser && window.currentUser.role);
+  if (!av.pode) { showAlert(av.motivo, 'danger'); return; }
+  pcCancKey = key;
+  document.getElementById('pcCancTitulo').textContent = 'Cancelar ' + (pc.numeroFormatado || '');
+  document.getElementById('pcCancSub').textContent = (pc.fornecedorNome || '') + ' · criado em ' + fmtData(pc.dataCriacao);
+  var recebeu = CancelamentoPC.recebeuAlgo(pc);
+  var aviso = recebeu
+    ? 'Este pedido já teve <b>recebimento parcial</b>. O que entrou continua recebido e no estoque; o cancelamento encerra só o <b>saldo que ainda não veio</b>.'
+    : (pc.status === 'ENVIADO'
+        ? 'Este pedido já foi <b>enviado ao fornecedor</b>. Avise o fornecedor do cancelamento — o documento impresso passa a sair com a faixa "CANCELADO".'
+        : 'O pedido ainda não foi enviado ao fornecedor.');
+  if (pc.agendamento) aviso += ' Havia <b>agendamento de coleta/entrega</b> na Logística: ele sai da fila da Logística junto com o pedido.';
+  aviso += ' O pedido não é apagado: fica em <b>Cancelados</b> com o motivo, e não pode ser reaberto.';
+  document.getElementById('pcCancAviso').innerHTML = aviso;
+  var saldo = CancelamentoPC.saldoPendentePorItem(pc);
+  document.getElementById('pcCancSaldo').innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:4px">Saldo que deixa de vir</div>' +
+    '<table style="width:100%;font-size:12px"><thead><tr><th style="text-align:left">Item</th><th style="text-align:right">Pedido</th><th style="text-align:right">Recebido</th><th style="text-align:right">Cancelado</th></tr></thead><tbody>' +
+    Object.values(saldo).map(function(s) {
+      return '<tr><td>' + escapeHtml(s.materialCodigo || '—') + (s.materialNome ? ' — ' + escapeHtml(s.materialNome) : '') + '</td>' +
+        '<td style="text-align:right">' + fmtNum(s.qtdPedida) + '</td><td style="text-align:right">' + fmtNum(s.qtdRecebida) + '</td>' +
+        '<td style="text-align:right;font-weight:700">' + fmtNum(s.saldoCancelado) + ' ' + escapeHtml(s.unidade || '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  var scs = CancelamentoPC.solicitacoesParaReabrir(pc, allSolicitacoes);
+  var boxReabrir = document.getElementById('pcCancReabrirBox');
+  boxReabrir.style.display = scs.length ? 'flex' : 'none';
+  document.getElementById('pcCancReabrir').checked = true;
+  document.getElementById('pcCancReabrirTexto').innerHTML = 'Devolver ' +
+    scs.map(function(k) { return '<b>' + escapeHtml((allSolicitacoes[k] || {}).numeroFormatado || k) + '</b>'; }).join(', ') +
+    ' para <b>Aprovada</b>, para a necessidade poder ser comprada de novo. Desmarque se ela deixou de existir.';
+  document.getElementById('pcCancMotivo').value = '';
+  document.getElementById('pcCancConfirmar').disabled = false;
+  document.getElementById('modalCancelarPC').classList.add('open');
+  document.getElementById('pcCancMotivo').focus();
+}
+function fecharModalCancelarPC() {
+  document.getElementById('modalCancelarPC').classList.remove('open');
+  pcCancKey = null;
+}
+function confirmarCancelamentoPC() {
+  var key = pcCancKey;
+  if (!key) return;
+  var pcLocal = allPedidosCompra[key] || {};
+  var motivo = document.getElementById('pcCancMotivo').value;
+  if (String(motivo).trim().length < CancelamentoPC.MOTIVO_MINIMO) {
+    showAlert('Descreva o motivo do cancelamento (mínimo ' + CancelamentoPC.MOTIVO_MINIMO + ' caracteres).', 'danger');
+    return;
+  }
+  var reabrir = document.getElementById('pcCancReabrirBox').style.display !== 'none' && document.getElementById('pcCancReabrir').checked;
+  var scsReabrir = reabrir ? CancelamentoPC.solicitacoesParaReabrir(pcLocal, allSolicitacoes) : [];
+  if (!confirm('Cancelar ' + (pcLocal.numeroFormatado || 'este pedido') + '? Não dá para reabrir depois.')) return;
+  var btn = document.getElementById('pcCancConfirmar');
+  btn.disabled = true;
+  var dados = { papel: window.currentUser && window.currentUser.role, motivo: motivo, autor: currentUserNome(),
+    reabrirSolicitacoes: reabrir, agora: new Date().toISOString() };
+  var recusa = null;
+  // `if (!atual) return atual;` -- a 1ª passada vem do cache local e pode ser
+  // null; abortar ali recusaria um PC válido (ver run_transacoes_null_test.js).
+  db.ref('pedidos_compra/' + key).transaction(function(atual) {
+    recusa = null;
+    if (!atual) return atual;
+    var r = CancelamentoPC.aplicarCancelamento(atual, dados);
+    if (r.erro) { recusa = r.erro; return; }
+    return r.pc;
+  }).then(function(res) {
+    if (!res.committed) throw new Error(recusa || 'O pedido mudou enquanto você cancelava. Atualize e tente de novo.');
+    if (!res.snapshot.exists()) throw new Error('Pedido não encontrado.');
+    var reabertas = (res.snapshot.val().cancelamento || {}).solicitacoesReabertas ? scsReabrir : [];
+    return Promise.all(reabertas.map(function(scKey) {
+      return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) {
+        if (atual === null) return atual;
+        if (atual !== 'CONSOLIDADA') return; // outra ação já mexeu -- não reabre
+        return 'APROVADA';
+      }).then(function(r) {
+        if (!r.committed || r.snapshot.val() !== 'APROVADA') return null;
+        return db.ref('solicitacoes_compra/' + scKey + '/reaberturaPorCancelamentoPC').set({
+          pedidoCompraKey: key, pedidoCompraNumero: pcLocal.numeroFormatado || null,
+          por: dados.autor, em: dados.agora
+        }).then(function() { return scKey; });
+      });
+    }));
+  }).then(function(reabertas) {
+    fecharModalCancelarPC();
+    var nums = (reabertas || []).filter(Boolean).map(function(k) { return (allSolicitacoes[k] || {}).numeroFormatado || k; });
+    showAlert((pcLocal.numeroFormatado || 'Pedido') + ' cancelado.' +
+      (nums.length ? ' ' + nums.join(', ') + ' voltou para Aprovada.' : '') +
+      ' Consulte em Status → Cancelados.', 'success');
+  }).catch(function(err) {
+    btn.disabled = false;
+    showAlert('Não foi possível cancelar: ' + err.message, 'danger');
   });
 }
 
@@ -2006,8 +2165,19 @@ function blocoRotaDocumentoPC(pc) {
     ' por ' + escapeHtml(rota.confirmadaPor || '—') + '.</div>';
 }
 
+function faixaCancelamentoDocumentoPC(pc) {
+  var c = pc && pc.status === 'CANCELADO' ? (pc.cancelamento || {}) : null;
+  if (!c) return '';
+  return '<div style="border:3px solid #b91c1c;color:#b91c1c;padding:10px 14px;margin:0 0 12px;font-family:Arial,sans-serif">' +
+    '<div style="font-size:20px;font-weight:800;letter-spacing:.06em">PEDIDO CANCELADO — NÃO ATENDER</div>' +
+    '<div style="font-size:11px;margin-top:4px;color:#1d1d1f">Cancelado em ' + escapeHtml(c.canceladoEm ? new Date(c.canceladoEm).toLocaleString('pt-BR') : '—') +
+    ' por ' + escapeHtml(c.canceladoPor || '—') + '. Motivo: ' + escapeHtml(c.motivo || '—') + '</div></div>';
+}
 function montarDocumentoPedidoCompraComRota(pc, fornecedor) {
   var html = montarDocumentoPedidoCompra(pc, fornecedor), bloco = blocoRotaDocumentoPC(pc);
+  var faixa = faixaCancelamentoDocumentoPC(pc);
+  // A faixa entra logo depois do <style> inicial, no topo da 1ª página.
+  if (faixa) html = html.replace('</style>', '</style>' + faixa);
   if (!bloco) return html;
   var ancora = '<div class="pcdoc-aviso" style="margin-top:14px">';
   return html.replace(ancora, bloco + ancora);
@@ -3409,6 +3579,9 @@ function salvarFiscal() {
 document.getElementById('modalEditarPCClose').addEventListener('click', fecharModalEditarPC);
 document.getElementById('pcEditCancelar').addEventListener('click', fecharModalEditarPC);
 document.getElementById('pcEditSalvar').addEventListener('click', salvarEdicaoPC);
+document.getElementById('modalCancelarPCClose').addEventListener('click', fecharModalCancelarPC);
+document.getElementById('pcCancVoltar').addEventListener('click', fecharModalCancelarPC);
+document.getElementById('pcCancConfirmar').addEventListener('click', confirmarCancelamentoPC);
 document.getElementById('modalEditarPC').addEventListener('click', function(ev) { if (ev.target === this) fecharModalEditarPC(); });
 document.getElementById('pcEditFreteTipo').addEventListener('change', function() {
   var cb = document.getElementById('pcEditRotaConfirmada'); if (cb) cb.checked = false;
@@ -4722,6 +4895,7 @@ document.addEventListener('DOMContentLoaded', function() {
     this.value = achado ? achado.label : '';
   });
   document.getElementById('pcSort').addEventListener('change', renderPedidos);
+  document.getElementById('pcFilterStatus').addEventListener('change', renderPedidos);
 
   var _tph = null;
   document.getElementById('phSearch').addEventListener('input', function() { clearTimeout(_tph); _tph = setTimeout(renderHistoricoPrecos, 200); });

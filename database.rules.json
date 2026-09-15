@@ -83,7 +83,12 @@
     },
     "pedidos_compra": {
       ".read": "auth != null",
-      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('compras').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))"
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('compras').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))",
+      "$pedidoKey": {
+        "status": {
+          ".validate": "newData.val() == data.val() || (newData.val() != 'CANCELADO' && data.val() != 'CANCELADO') || root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+        }
+      }
     },
     "estoque": {
       ".read": "auth != null",
