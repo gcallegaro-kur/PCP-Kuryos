@@ -114,6 +114,44 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — chave do pedido com/sem zero na Expedição + un/cx na
+  Conferência de PA (2026-09-14).** `35242a8` no `origin/main`; Hosting +
+  `confirmarExpedicaoPA` + `salvarAgendamentoExpedicaoPA` no `prod-kuryos` por
+  **worktree limpo** (`Documents/Codex/deploy-chave-pedido-35242a8`). Conferido
+  no ar: `shared/expedicao.js` e `estoque.html` HTTP 200 e **SHA256 idêntico ao
+  commit**; callables 401 sem login; `shared/contatos-cliente.js` segue **404**
+  (nada do Codex subiu).
+- **Chave do pedido:** `/pedidos` tem **os dois formatos de verdade** — 174 OPs
+  gravam `17__X` para pedido que existe como `0017__X`, e 17 pedidos reais
+  existem só sem zero, sem gêmeo. Por isso **não migrar as OPs "pondo zero"**.
+  `ExpedicaoPA.analisar` agora resolve a chave contra o que existe
+  (`resolverChavePedido`: exata, senão a única equivalente; ambíguo não escolhe)
+  e compara vínculo com `normalizarChavePedido` (ignora só o zero; número/SKU
+  diferente segue bloqueando). Ambas exportadas — use-as para qualquer junção
+  pedido×OP×expedição.
+  **Ensaio na base (27 paletes):** nenhum motivo mudou, 19 disponíveis seguem
+  19; só a 26251/15 passou a resolver a chave (estava armada para cair em
+  "Pedido de origem ausente" quando a Qualidade liberasse). Com as OPs
+  migradas: regra antiga 0 disponíveis, nova 19.
+- **Un/cx na Conferência de PA:** campo segue digitado, **sem pré-preencher**
+  (decisão do usuário: formato de caixa muda sem o cadastro). Mostra o `unCx`
+  do produto, fica vermelho ao divergir e salvar pede confirmação indicando
+  ajustar o cadastro; a contagem grava `unidadesPorCaixaCadastro` e
+  `formatoCaixaDivergente`. O consenso compara só `total`.
+- **Estado das conferências abertas:** 26251/15 **finalizou** às 22h20 de
+  14/09 (RNC −1, palete `pa_26251-15_p1` em quarentena). **26247/06 precisa de
+  recontagem física**: contada com 48 un/cx, cadastro e as 10 OPs irmãs são de
+  24 (2.618 × 1.661 apontados); não mexi no dado.
+- **⚠ Codex — mexi em `public/shared/expedicao.js` e
+  `functions/expedicao_regras.js`** (base da sua grade). Aditivo: a chave
+  devolvida por `analisar` agora é a **resolvida**; grade, agenda e callable
+  comparam `skuPedidoKey` entre duas chamadas da mesma regra, então seguem
+  consistentes. Republicar `confirmarExpedicaoPA`/`salvarAgendamentoExpedicaoPA`
+  a partir de um commit **anterior** a `35242a8` desfaz a correção.
+  `run_expedicao_chave_pedido_test.js` e `run_conferencia_pa_uncx_test.js`
+  novos; os 23 testes do repo passam.
+- **Arquivos ativos:** nenhum.
+
 - **⚠⚠ Correção publicada — a Conferência de PA NUNCA conseguiu finalizar
   (2026-09-14).** `019cb52` no `origin/main`; `finalizarConferenciaPA`
   republicada no `prod-kuryos` por worktree limpo. Callable no ar responde 401
