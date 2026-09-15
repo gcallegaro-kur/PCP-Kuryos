@@ -114,6 +114,29 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — transaction abortando no null, lado cliente (2026-09-15).**
+  `9f30bbd` no `origin/main`; Hosting por **worktree limpo** às 00:31 BRT
+  (3 arquivos enviados; `shared/utils.js`, `compras.html`, `historico.html`,
+  `descarte.html` SHA256 idênticos ao commit).
+  **Causa:** mesmo defeito de `019cb52`, agora no cliente — callback de
+  `.transaction()` devolvendo `undefined` quando a 1ª passada (cache local)
+  vem null aborta sem consultar o servidor. **Pontos:** Descarte
+  (solicitar, desfazer, confirmar), `ajustarProduzidoOp`, Compras (aprovar,
+  rejeitar, convite na cotação, reserva CONSOLIDADA ×2) e
+  `historico.html adjustPedidoProduzido`. **Alcance:** mascarado em produção
+  — as quatro telas mantêm listener na raiz do nó. Medido com SDK web compat
+  10.7.0 no emulador: código antigo com cache frio reproduz "Não foi possível
+  confirmar a saída deste lote."; com cache quente passa; código novo passa
+  nos dois e reporta "Lote não encontrado" sem gravar nada.
+  **Regra para quem escrever transaction:** `if (!atual) return atual;` antes
+  da regra de negócio; nó inexistente se detecta por `snapshot.exists()` /
+  valor final; zere variáveis de fechamento a cada passada.
+  **Guarda:** `run_transacoes_null_test.js` agora varre `functions/`,
+  `public/shared/` e `<script>` de `public/*.html` com parser de callback
+  (43 callbacks, conferidos contra a contagem bruta) e ensaia as funções
+  reais com fake fiel ao SDK. Suíte 25/25.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — Pedidos: colunas Expedido e Conferência (2026-09-15).**
   `f5974e2` no `origin/main`; Hosting por **worktree limpo**, conferido
   (`pedidos.html`, `shared/conciliacao-pedidos.js`, `shared/expedicao.js`

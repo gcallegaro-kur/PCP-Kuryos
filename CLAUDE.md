@@ -118,6 +118,12 @@ antes de fechar.
   `estoque_lotes` tinha `.write` só para `admin|pcp`, mas quem aponta é
   `production`/`rotulagem` — a baixa retornava PERMISSION_DENIED, o `.catch()` engolia,
   e o bug parecia resolvido.
+- **`.transaction()` nunca aborta no null.** O SDK chama o callback primeiro com o
+  cache local; sem listener no nó ele vem null, e `return;` aborta sem consultar o
+  servidor — travou toda Conferência de PA (`019cb52`) e estava latente no Descarte,
+  Compras e Histórico (`9f30bbd`), mascarado só porque as telas mantêm listener.
+  Use `if (!atual) return atual;`, detecte nó inexistente por `snapshot.exists()` e
+  zere variáveis de fechamento a cada passada. `run_transacoes_null_test.js` varre o repo.
 - **`.catch()` não protege contra throw síncrono** (cache velho após deploy quebrava
   consumo e perdas) — envolva com `Promise.resolve().then(...)`.
 - **Buscar `db.ref` por regex não acha escrita mediada por função** (`ajustarEstoque`,
