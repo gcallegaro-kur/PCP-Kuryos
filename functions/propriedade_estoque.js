@@ -17,6 +17,10 @@
      menos um pedido, podendo ser vários. Na compra é só vínculo: o álcool
      comprado para um pedido continua sendo estoque geral e atende qualquer
      cliente ("o estoque no fim é nosso").
+     Exceção só na compra da Kuryos: destino GERAL, sem cliente nem pedido,
+     para uso e consumo / estoque geral (caso real: PC-0003, etiqueta térmica
+     comprada sem cliente nem pedido de venda). Remessa nunca é GERAL: o
+     material é do cliente e precisa dizer de qual.
 
    Regras de uso decididas pelo usuário:
    - Material da Kuryos pode ser usado por qualquer OP (estoque geral), mesmo
@@ -80,25 +84,38 @@
     return t === KURYOS || t === CLIENTE ? t : proprietarioPadraoDaNatureza(natureza);
   }
 
+  // Cliente + ao menos um pedido.
   function vinculoValido(v) {
     return !!(v && v.clienteKey && Array.isArray(v.pedidos) && v.pedidos.some(function(p) { return p && String(p).trim(); }));
   }
 
+  // Destino "sem cliente — uso e consumo / estoque geral".
+  function vinculoGeral(v) {
+    return !!(v && v.geral === true && !v.clienteKey);
+  }
+
+  // O item está resolvido para este dono? Geral só vale para material da Kuryos.
+  function vinculoAceito(v, tipoDono) {
+    return vinculoValido(v) || (tipoDono === KURYOS && vinculoGeral(v));
+  }
+
   /* O PC está pronto para ser recebido? Proprietário definido e cada item com
-     cliente + pedido. Devolve pendências legíveis (a Logística mostra; o
-     servidor recusa o recebimento com a mesma lista). */
+     cliente + pedido (ou, na compra, destino geral). Devolve pendências
+     legíveis (a Logística mostra; o servidor recusa com a mesma lista). */
   function validarVinculoPC(pc) {
     var pendencias = [];
     if (!pc) return {ok: false, pendencias: ['Pedido de Compra não encontrado.']};
-    if (!propriedadeDoPC(pc)) pendencias.push('Defina de quem é o material (Kuryos ou cliente).');
+    var tipo = propriedadeDoPC(pc);
+    if (!tipo) pendencias.push('Defina de quem é o material (Kuryos ou cliente).');
     var itens = pc.itens || {};
     var chaves = Object.keys(itens);
     if (!chaves.length) pendencias.push('O pedido não tem itens.');
     chaves.forEach(function(k) {
       var it = itens[k] || {};
-      if (!vinculoValido(it.vinculo)) {
-        pendencias.push('Item ' + (it.materialCodigo || k) + ': informe o cliente e ao menos um pedido.');
-      }
+      if (vinculoAceito(it.vinculo, tipo)) return;
+      pendencias.push('Item ' + (it.materialCodigo || k) + (vinculoGeral(it.vinculo)
+        ? ': material do cliente não pode ir para uso e consumo — informe o cliente e o pedido.'
+        : ': informe o cliente e ao menos um pedido' + (tipo === KURYOS ? ' (ou marque uso e consumo / estoque geral).' : '.')));
     });
     return {ok: pendencias.length === 0, pendencias: pendencias};
   }
@@ -115,7 +132,9 @@
         clienteKey: tipo === CLIENTE ? (v.clienteKey || null) : null,
         clienteNome: tipo === CLIENTE ? (v.clienteNome || null) : null
       },
-      destino: {clienteKey: v.clienteKey || null, clienteNome: v.clienteNome || null, pedidos: pedidos}
+      destino: vinculoGeral(v)
+        ? {geral: true, clienteKey: null, clienteNome: null, pedidos: []}
+        : {clienteKey: v.clienteKey || null, clienteNome: v.clienteNome || null, pedidos: pedidos}
     };
   }
 
@@ -353,7 +372,7 @@
   return {
     KURYOS: KURYOS, CLIENTE: CLIENTE, VISTA_PROPRIEDADE: VISTA_PROPRIEDADE, VISTA_DESTINADO: VISTA_DESTINADO,
     proprietarioDaNatureza: proprietarioDaNatureza, proprietarioPadraoDaNatureza: proprietarioPadraoDaNatureza,
-    propriedadeDoPC: propriedadeDoPC, vinculoValido: vinculoValido,
+    propriedadeDoPC: propriedadeDoPC, vinculoValido: vinculoValido, vinculoGeral: vinculoGeral, vinculoAceito: vinculoAceito,
     validarVinculoPC: validarVinculoPC, camposDoLote: camposDoLote, donoDoLote: donoDoLote,
     loteUtilizavelPor: loteUtilizavelPor, prioridadeLote: prioridadeLote, loteNaVista: loteNaVista,
     produtoDoSku: produtoDoSku, clienteKeyDoSku: clienteKeyDoSku, clienteKeyPorNome: clienteKeyPorNome,

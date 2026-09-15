@@ -30,6 +30,8 @@ function dados() {
         itens: {i1: {materialCodigo: 'VAL-1', materialNome: 'VÁLVULA 24/410', qtd: 100, unidade: 'un'}, i2: {materialCodigo: 'FR-1', materialNome: 'FRASCO', qtd: 50, unidade: 'un'}}},
       pc3: {status: 'RECEBIDO_PARCIAL', numeroFormatado: 'PC-0004', naturezaMovimentacao: 'REMESSA_TERCEIRO', origemNome: 'LOMAR PACK', dataCriacao: '2026-09-10T10:00:00Z',
         itens: {i1: {materialCodigo: 'VAL-1', materialNome: 'VÁLVULA 24/410', qtd: 100, qtdRecebida: 40, unidade: 'un'}}},
+      pcGeral: {status: 'ENVIADO', numeroFormatado: 'PC-0003', fornecedorNome: 'FLASH ETIQUETAS', dataCriacao: '2026-09-12T10:00:00Z',
+        itens: {i1: {materialCodigo: 'ET-00064', materialNome: 'ETIQUETA TERMICA', qtd: 48, qtdRecebida: 0, unidade: 'rolo', vinculo: {geral: true, clienteKey: null, clienteNome: null, pedidos: []}}}},
       pcOk: {status: 'ENVIADO', numeroFormatado: 'PC-0008', naturezaMovimentacao: 'REMESSA_CLIENTE', origemNome: 'MISS ROSE', dataCriacao: '2026-09-15T11:00:00Z',
         itens: {i1: {materialCodigo: 'VAL-1', materialNome: 'VÁLVULA 24/410', qtd: 100, qtdRecebida: 0, unidade: 'un', vinculo: vinc}}}
     },
@@ -170,6 +172,33 @@ async function abrir(browser, pagina, host) {
     assert.equal('pedidos_compra/pc1/propriedade' in w.v, false, 'dono fixo pela natureza não é regravado');
     ok('vínculo por item: pedidos do cliente, vários, aplicar a todos e salvar');
 
+    // Uso e consumo: sem cliente nem pedido, só na compra.
+    assert.match(await p.locator('#pcBody tr', {hasText: 'PC-0003'}).innerText(), /🏭 Kuryos · Uso e consumo \/ estoque geral/);
+    assert.doesNotMatch(await p.locator('#pcBody tr', {hasText: 'PC-0003'}).innerText(), /falta cliente/);
+    await p.evaluate(() => abrirModalVinculoPC('pc1'));
+    await p.waitForSelector('#modalVinculoPC.open');
+    const edG = p.locator('#vpcItens .vinc-box[data-item="i2"] .vinc-editor');
+    await edG.locator('.vinc-cliente').selectOption('__GERAL__');
+    assert.match(await edG.locator('.vinc-pedidos').innerText(), /Sem cliente e sem pedido/);
+    const edC = p.locator('#vpcItens .vinc-box[data-item="i1"] .vinc-editor');
+    await edC.locator('.vinc-cliente').selectOption('MRAR');
+    await edC.locator('.vinc-pedido[value="0006"]').check();
+    await p.evaluate(() => { window.__writes = []; });
+    await p.click('#vpcSalvar');
+    const wG = (await p.evaluate(() => window.__writes)).find((x) => x.op === 'update');
+    assert.deepEqual(wG.v['pedidos_compra/pc1/itens/i2/vinculo'], {geral: true, clienteKey: null, clienteNome: null, pedidos: []});
+    assert.deepEqual(wG.v['pedidos_compra/pc1/itens/i1/vinculo'].pedidos, ['0006'], 'no mesmo PC, um item com pedido e outro de uso e consumo');
+    // Remessa (dono cliente) não aceita uso e consumo.
+    await p.evaluate(() => abrirModalVinculoPC('pc3'));
+    await p.waitForSelector('#modalVinculoPC.open');
+    await p.locator('#vpcItens .vinc-box[data-item="i1"] .vinc-cliente').selectOption('__GERAL__');
+    await p.evaluate(() => { window.__writes = []; });
+    await p.click('#vpcSalvar');
+    assert.match(await p.locator('#alertBox').innerText(), /material do cliente não pode ir para uso e consumo/);
+    assert.equal((await p.evaluate(() => window.__writes)).length, 0);
+    await p.click('#vpcCancel');
+    ok('uso e consumo: item sem cliente nem pedido na compra; remessa recusa');
+
     // Pedido cujo SKU não tem produto (26, SEUNOURA): aparece pelo nome curto.
     await p.evaluate(() => abrirModalVinculoPC('pc3'));
     await p.waitForSelector('#modalVinculoPC.open');
@@ -220,6 +249,10 @@ async function abrir(browser, pagina, host) {
     assert.match(await p.locator('#rcPropriedadeBox').innerText(), /Material de propriedade do cliente/);
     assert.equal(await p.locator('#modalReceberSave').isDisabled(), false);
     assert.match(await p.locator('#rcItensBody').innerText(), /Proprietário: MISS ROSE · pedido 0006/);
+    await p.evaluate(() => openModalReceber('pcGeral'));
+    assert.equal(await p.locator('#modalReceberSave').isDisabled(), false);
+    assert.match(await p.locator('#rcPropriedadeBox').innerText(), /Material da Kuryos/);
+    assert.match(await p.locator('#rcItensBody').innerText(), /Destino: uso e consumo \/ estoque geral da Kuryos/);
     ok('recebimento trava PC incompleto e mostra dono/destino');
     assert.deepEqual(l.errors, []);
     await l.context.close();

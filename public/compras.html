@@ -2050,7 +2050,7 @@ function renderPedidos() {
     var vinc = PropriedadeEstoque.validarVinculoPC(p);
     var tipoDono = PropriedadeEstoque.propriedadeDoPC(p);
     var destinos = {};
-    itens.forEach(function(i) { if (PropriedadeEstoque.vinculoValido(i.vinculo)) destinos[resumoVinculoHtml(i.vinculo)] = 1; });
+    itens.forEach(function(i) { if (vinculoPreenchido(i.vinculo)) destinos[resumoVinculoHtml(i.vinculo)] = 1; });
     itensResumo += '<div class="vinc-resumo">' +
       (tipoDono === 'CLIENTE' ? '📦 Material do cliente' : '🏭 Kuryos') +
       (Object.keys(destinos).length ? ' · ' + Object.keys(destinos).join(' | ') : '') +
@@ -4706,7 +4706,12 @@ function vinculoSugeridoDaSolicitacao(scKey) {
   return PropriedadeEstoque.vinculoSugeridoDasChavesPedido(chaves, allPedidos, allProdutosCompras, allClientesCompras);
 }
 
+// Opção do seletor de cliente para o destino sem cliente (só compra da Kuryos).
+var VINCULO_GERAL = '__GERAL__';
+function vinculoPreenchido(v) { return PropriedadeEstoque.vinculoValido(v) || PropriedadeEstoque.vinculoGeral(v); }
+
 function resumoVinculoHtml(v) {
+  if (PropriedadeEstoque.vinculoGeral(v)) return 'Uso e consumo / estoque geral';
   if (!PropriedadeEstoque.vinculoValido(v)) return '<span class="badge badge-orange">⚠ falta cliente/pedido</span>';
   return escapeHtml(v.clienteNome || v.clienteKey) + ' · pedido' + (v.pedidos.length > 1 ? 's ' : ' ') + escapeHtml(v.pedidos.join(', '));
 }
@@ -4718,7 +4723,9 @@ function vinculoEditorHtml(id, vinculo, travado) {
     return '<div class="vinc-editor" data-vinc="' + escapeAttr(id) + '" data-travado="1"><div class="vinc-travado">🔒 ' + resumoVinculoHtml(v) +
       ' — já recebido; os lotes que entraram guardam este vínculo.</div></div>';
   }
-  var opcoes = '<option value="">Selecione o cliente…</option>' + clientesOrdenadosCompras().map(function(c) {
+  var opcoes = '<option value="">Selecione o cliente…</option>' +
+    '<option value="' + VINCULO_GERAL + '"' + (PropriedadeEstoque.vinculoGeral(v) ? ' selected' : '') + '>Sem cliente — uso e consumo / estoque geral (só compra da Kuryos)</option>' +
+    clientesOrdenadosCompras().map(function(c) {
     return '<option value="' + escapeAttr(c.key) + '"' + (c.key === v.clienteKey ? ' selected' : '') + '>' +
       escapeHtml(c.nome) + (c.ativo ? '' : ' (inativo)') + '</option>';
   }).join('');
@@ -4736,6 +4743,10 @@ function renderPedidosDoEditor(ed) {
   var clienteKey = ed.querySelector('.vinc-cliente').value;
   var selecionados = JSON.parse(ed.getAttribute('data-selecionados') || '[]');
   if (!clienteKey) { box.innerHTML = '<span class="vinc-sub">Escolha o cliente para ver os pedidos.</span>'; return; }
+  if (clienteKey === VINCULO_GERAL) {
+    box.innerHTML = '<span class="vinc-sub">Sem cliente e sem pedido: material de uso e consumo ou estoque geral. Fica no estoque da Kuryos e atende qualquer OP. Não vale para remessa — material de cliente precisa do cliente e do pedido.</span>';
+    return;
+  }
   var lista = PropriedadeEstoque.pedidosDoCliente(clienteKey, allPedidos, allProdutosCompras, allClientesCompras,
     { incluirConcluidos: ed.querySelector('.vinc-concluidos').checked });
   // Pedido já marcado que não aparece (concluído, com filtro desligado) continua marcado e visível.
@@ -4771,6 +4782,7 @@ function ligarVinculoEditores(root) {
 function lerVinculoEditor(ed) {
   if (!ed || ed.hasAttribute('data-travado')) return null;
   var clienteKey = ed.querySelector('.vinc-cliente').value;
+  if (clienteKey === VINCULO_GERAL) return { geral: true, clienteKey: null, clienteNome: null, pedidos: [] };
   return {
     clienteKey: clienteKey || null,
     clienteNome: clienteKey ? ((allClientesCompras[clienteKey] || {}).nome || clienteKey) : null,
@@ -4780,7 +4792,7 @@ function lerVinculoEditor(ed) {
 
 function aplicarVinculoNoEditor(ed, v) {
   if (!ed || ed.hasAttribute('data-travado')) return;
-  ed.querySelector('.vinc-cliente').value = v.clienteKey || '';
+  ed.querySelector('.vinc-cliente').value = PropriedadeEstoque.vinculoGeral(v) ? VINCULO_GERAL : (v.clienteKey || '');
   ed.setAttribute('data-selecionados', JSON.stringify(v.pedidos || []));
   renderPedidosDoEditor(ed);
 }
@@ -4820,7 +4832,7 @@ function abrirModalVinculoPC(key) {
   // Item com vínculo e já recebido fica travado: os lotes guardam o vínculo.
   var editaveis = Object.keys(itens).filter(function(ik) {
     var it = itens[ik] || {};
-    return !(PropriedadeEstoque.vinculoValido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0);
+    return !(vinculoPreenchido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0);
   });
   document.getElementById('vpcTodosBox').innerHTML = editaveis.length > 1
     ? '<div class="vinc-box"><div class="vinc-head"><span class="vinc-titulo">Mesmo cliente e pedidos para todos os itens</span>' +
@@ -4829,7 +4841,7 @@ function abrirModalVinculoPC(key) {
   document.getElementById('vpcItens').innerHTML = Object.keys(itens).map(function(ik) {
     var it = itens[ik] || {};
     var travado = editaveis.indexOf(ik) < 0;
-    var semVinculoComRecebimento = !PropriedadeEstoque.vinculoValido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0;
+    var semVinculoComRecebimento = !vinculoPreenchido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0;
     return '<div class="vinc-box" data-item="' + escapeAttr(ik) + '"><div class="vinc-head"><span class="vinc-titulo">' +
       escapeHtml(it.materialCodigo || '') + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') + '</span>' +
       '<span class="vinc-sub">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + (it.qtdRecebida ? ' · recebido ' + fmtNum(it.qtdRecebida) : '') + '</span></div>' +
@@ -4841,7 +4853,7 @@ function abrirModalVinculoPC(key) {
   var btnTodos = document.getElementById('vpcAplicarTodos');
   if (btnTodos) btnTodos.addEventListener('click', function() {
     var v = lerVinculoEditor(document.querySelector('#vpcTodosBox .vinc-editor'));
-    if (!PropriedadeEstoque.vinculoValido(v)) { showAlert('Escolha o cliente e ao menos um pedido para aplicar.', 'danger'); return; }
+    if (!vinculoPreenchido(v)) { showAlert('Escolha o cliente e ao menos um pedido (ou uso e consumo) para aplicar.', 'danger'); return; }
     document.querySelectorAll('#vpcItens .vinc-editor').forEach(function(ed) { aplicarVinculoNoEditor(ed, v); });
   });
   modal.classList.add('open');
@@ -4861,8 +4873,10 @@ function salvarVinculoPC() {
   document.querySelectorAll('#vpcItens .vinc-box[data-item]').forEach(function(box) {
     var v = lerVinculoEditor(box.querySelector('.vinc-editor'));
     if (!v) return;   // travado
-    if (!PropriedadeEstoque.vinculoValido(v) && !erro) {
-      erro = 'Item ' + box.querySelector('.vinc-titulo').textContent + ': escolha o cliente e ao menos um pedido.';
+    if (!PropriedadeEstoque.vinculoAceito(v, sel.value) && !erro) {
+      erro = 'Item ' + box.querySelector('.vinc-titulo').textContent + (PropriedadeEstoque.vinculoGeral(v)
+        ? ': material do cliente não pode ir para uso e consumo — escolha o cliente e o pedido.'
+        : ': escolha o cliente e ao menos um pedido.');
     }
     updates[base + 'itens/' + box.getAttribute('data-item') + '/vinculo'] = v;
   });
@@ -5018,7 +5032,12 @@ function salvarPcDireto() {
   var propriedadePcd = document.getElementById('pcdPropriedade').value;
   if (!propriedadePcd) { showAlert('Defina de quem é o material.', 'danger'); return; }
   var vinculoPcd = lerVinculoEditor(document.querySelector('#pcdVinculo .vinc-editor'));
-  if (!PropriedadeEstoque.vinculoValido(vinculoPcd)) { showAlert('Escolha o cliente e ao menos um pedido a que este material se refere.', 'danger'); return; }
+  if (!PropriedadeEstoque.vinculoAceito(vinculoPcd, propriedadePcd)) {
+    showAlert(PropriedadeEstoque.vinculoGeral(vinculoPcd)
+      ? 'Material do cliente não pode ir para uso e consumo: escolha o cliente e o pedido.'
+      : 'Escolha o cliente e ao menos um pedido a que este material se refere (ou uso e consumo, se for compra da Kuryos).', 'danger');
+    return;
+  }
 
   var btn = document.getElementById('modalPcdSave');
   btn.disabled = true; btn.textContent = 'Criando...';

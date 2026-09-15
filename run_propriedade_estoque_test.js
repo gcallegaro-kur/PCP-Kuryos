@@ -57,6 +57,16 @@ t('PC só é recebível com dono e cliente + pedido em todo item', () => {
   assert.equal(P.validarVinculoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', itens: {a: {vinculo: v}}}).ok, true,
     'terceiro não pede mais escolha de dono: nasce do cliente');
   assert.equal(P.validarVinculoPC({itens: {}}).ok, false);
+  // Uso e consumo sem cliente nem pedido (caso real PC-0003, etiqueta): só na compra.
+  const geral = {geral: true, clienteKey: null, pedidos: []};
+  assert.equal(P.validarVinculoPC({itens: {a: {materialCodigo: 'ET-00064', vinculo: geral}}}).ok, true);
+  const remessaGeral = P.validarVinculoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', itens: {a: {materialCodigo: 'VAL-1', vinculo: geral}}});
+  assert.equal(remessaGeral.ok, false);
+  assert.match(remessaGeral.pendencias[0], /material do cliente não pode ir para uso e consumo/);
+  assert.equal(P.validarVinculoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', propriedade: {tipo: 'KURYOS'}, itens: {a: {vinculo: geral}}}).ok, true,
+    'terceiro marcado como Kuryos pode ir para uso e consumo');
+  assert.equal(P.vinculoGeral({geral: true, clienteKey: 'MRAR'}), false, 'geral com cliente é contradição, não conta');
+  assert.match(P.validarVinculoPC({itens: {a: {materialCodigo: 'X'}}}).pendencias[0], /ou marque uso e consumo/);
   assert.equal(P.vinculoValido({clienteKey: 'X', pedidos: ['  ']}), false, 'pedido em branco não conta');
 });
 
@@ -70,6 +80,10 @@ t('lote recebe snapshot de dono e destino', () => {
     'compra para pedido do cliente continua sendo da Kuryos');
   assert.deepEqual(P.camposDoLote({naturezaMovimentacao: 'REMESSA_TERCEIRO'}, {vinculo: v}).propriedade,
     {tipo: 'CLIENTE', clienteKey: 'MRAR', clienteNome: 'MISS ROSE'}, 'remessa de terceiro sem escolha gravada: lote do cliente');
+  assert.deepEqual(P.camposDoLote({}, {vinculo: {geral: true, pedidos: []}}), {
+    propriedade: {tipo: 'KURYOS', clienteKey: null, clienteNome: null},
+    destino: {geral: true, clienteKey: null, clienteNome: null, pedidos: []}
+  });
 });
 
 t('uso do lote: Kuryos serve a todos, cliente só a ele; lote antigo é da Kuryos', () => {
@@ -373,6 +387,16 @@ assert.ok(ctx.PropriedadeEstoque, 'módulo carregado como global no navegador');
     assert.deepEqual(lote.destino.pedidos, ['0006']);
     assert.equal(dados.estoque['VAL-1'].saldoAtual, 150);
     assert.equal(dados.estoque['VAL-1'].porCliente.MRAR.saldoAtual, 100, 'compra não entra na parte do cliente');
+  });
+
+  await ta('compra de uso e consumo sem cliente nem pedido: recebe, lote da Kuryos com destino geral', async () => {
+    dados.pedidos_compra.PCG = {status: 'ENVIADO', fornecedorNome: 'Flash', itens: {i1: {materialCodigo: 'ET-00064', qtd: 48, qtdRecebida: 0, vinculo: {geral: true, clienteKey: null, clienteNome: null, pedidos: []}}}};
+    const r = await chamar('registrarRecebimento', payload('PCG', 'idem-uso-consumo-0001', [linha('i1', 48, 'ROLO-1')]));
+    const lote = dados.estoque_lotes['ET-00064'][r.lotes[0].loteKey];
+    assert.equal(lote.propriedade.tipo, 'KURYOS');
+    assert.deepEqual(lote.destino, {geral: true, clienteKey: null, clienteNome: null, pedidos: []});
+    assert.equal(dados.estoque['ET-00064'].saldoAtual, 48);
+    assert.equal(dados.estoque['ET-00064'].porCliente, undefined);
   });
 
   await ta('cancelar recebimento do cliente devolve a parte dele; devolução também', async () => {

@@ -900,6 +900,9 @@ function renderPropriedadeRecebimento(p) {
 function destinoItemRecebimentoHtml(vinculoPc, it) {
   if (!vinculoPc || !vinculoPc.ok) return '';
   var v = it.vinculo || {};
+  if (PropriedadeEstoque.vinculoGeral(v)) {
+    return '<div class="field-hint" style="margin:-4px 0 8px">Destino: <b>uso e consumo / estoque geral da Kuryos</b> (sem cliente e sem pedido)</div>';
+  }
   return '<div class="field-hint" style="margin:-4px 0 8px">' +
     (vinculoPc.tipo === PropriedadeEstoque.CLIENTE ? 'Proprietário' : 'Destino') + ': <b>' + escapeHtml(v.clienteNome || v.clienteKey || '—') + '</b>' +
     ' · pedido' + ((v.pedidos || []).length > 1 ? 's' : '') + ' ' + escapeHtml((v.pedidos || []).join(', ')) + '</div>';
