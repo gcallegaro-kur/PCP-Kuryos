@@ -114,6 +114,24 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — e-mail ao PCP quando OP é encerrada (2026-09-15).**
+  `8502d57` no `origin/main`; Function nova `onOpEncerrada` criada em
+  `prod-kuryos` por worktree limpo (listada como
+  `google.firebase.database.ref.v1.written`). Só Functions — sem Hosting/RTDB.
+  **Regra:** transição de `ops/{op}/status` para "Aguardando Confirmação"
+  (operador encerra ou `computeOpStatus` a ~95%) → um e-mail HTML via Graph a
+  pcp@kuryos.com.br; `config/emailConfirmacaoOp` (lista ou texto com `,`/`;`)
+  substitui, mas não há campo em `admin.html` ainda. Não usa
+  `config.emailNotificacoes`. Traz produzido × planejado, justificativa e perdas
+  do `fechamento_op` do dia e link para `ops.html`.
+  **Histórico/dedupe:** `notificacoes_op_encerrada/{op}/{eventId}` reservado por
+  transaction antes do envio → ENVIADO / IGNORADO (PCP confirmou antes) / ERRO.
+  **Não verificado com e-mail real** — o primeiro encerramento de OP em produção
+  é a prova; conferir o nó acima se o PCP disser que não chegou.
+  **Teste:** `run_op_encerrada_email_test.js` carrega o `index.js` real com
+  admin/functions/Graph simulados. Suíte 34/34.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — cancelamento de Pedido de Compra (2026-09-15).**
   `34d3aae` no `origin/main`; por worktree limpo às 10:17 BRT: Functions
   (`registrarRecebimento`, `cancelarRecebimento`,
