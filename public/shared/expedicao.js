@@ -13,24 +13,41 @@
     var comercial = (base.pedidos_comerciais || {})[pedidoId];
     var conf = (base.conferencias_pa || {})[lote.opKey] || {};
     var endereco = (base.enderecos_estoque || {})[lote.enderecoKey];
+    // Palete LEGADO: produto acabado que já estava físico no galpão antes do
+    // WMS existir, importado da planilha "Controle de Entradas, Saidas e
+    // Estoque". A Conferência de PA e o laudo da Qualidade nunca aconteceram
+    // no sistema -- exigi-los aqui obrigaria a FORJAR esses registros na
+    // importação, que é o que não se pode fazer. Então esses dois portões são
+    // dispensados e só para essa origem; todos os outros (saldo, validade,
+    // endereço ativo, OP concluída, vínculo do pedido, cancelamento) continuam
+    // valendo igual. A origem fica à vista: status LEGADO_ESTOQUE e
+    // identificador com prefixo LEG-.
+    var legado = lote.origemTipo === 'legado_planilha' && lote.legado === true;
+    var origemValida = lote.origemTipo === 'conferencia_pa' || legado;
+    var vinculoGravado = legado ? lote.skuPedidoKeyOrigem : lote.skuPedidoKey;
     var motivo = '';
-    if (lote.itemTipo !== 'produto' || lote.origemTipo !== 'conferencia_pa' || !lote.identificadorPalete) motivo = 'Sem palete de PA conferido';
+    if (lote.itemTipo !== 'produto' || !origemValida || !lote.identificadorPalete) motivo = 'Sem palete de PA conferido';
     else if (!Number.isInteger(Number(lote.saldoLote)) || Number(lote.saldoLote) <= 0 || lote.expedicaoId) motivo = 'Sem saldo disponível';
-    else if (!['LIBERADO_EXPEDICAO', 'APROVADO_CONCESSAO'].includes(lote.status)) motivo = 'Aguardando liberação da Qualidade';
-    else if (!lote.qualidade || lote.qualidade.decisao !== lote.status) motivo = 'Laudo da Qualidade ausente ou divergente';
+    else if (!legado && !['LIBERADO_EXPEDICAO', 'APROVADO_CONCESSAO'].includes(lote.status)) motivo = 'Aguardando liberação da Qualidade';
+    else if (!legado && (!lote.qualidade || lote.qualidade.decisao !== lote.status)) motivo = 'Laudo da Qualidade ausente ou divergente';
     else if (lote.validade && String(lote.validade).slice(0, 10) < hoje) motivo = 'Palete vencido';
     else if (!endereco || endereco.ativo === false || lote.aguardandoEnderecoDefinitivo) motivo = 'Aguardando endereço definitivo ativo';
     else if (op.status !== 'Concluído' || op.sku !== lote.itemCodigo || key(op.sku) !== itemKey) motivo = 'OP ou produto inconsistente';
-    else if (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId) motivo = 'Conferência de PA não finalizada';
+    else if (!legado && (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId)) motivo = 'Conferência de PA não finalizada';
     else if (!skuPedidoKey || !pedidoId || demanda.sku !== lote.itemCodigo || !demanda.cliente) motivo = 'Pedido de origem ausente; regularize o vínculo da OP no PCP';
-    else if (lote.skuPedidoKey && op.skuPedidoKey !== lote.skuPedidoKey) motivo = 'Vínculo do pedido mudou após a conferência';
+    // No palete legado, skuPedidoKey guarda a chave RECONSTRUÍDA (a que existe
+    // em /pedidos); a da OP é a antiga, sem zero à esquerda. Comparar as duas
+    // acusaria mudança de vínculo em todo palete importado. O que se compara
+    // então é skuPedidoKeyOrigem, a chave da OP no momento da importação --
+    // a proteção continua valendo, contra o campo certo.
+    else if (vinculoGravado && op.skuPedidoKey !== vinculoGravado) motivo = 'Vínculo do pedido mudou após a conferência';
     else if ([demanda.status, demanda.pedidoComercialStatus, comercial && comercial.status].some(function(s) { return /cancelad/i.test(s || ''); })) motivo = 'Pedido cancelado';
     else if (comercial && !Object.values(comercial.itens || {}).some(function(i) { return i.sku === lote.itemCodigo; })) motivo = 'Produto não consta no pedido comercial';
     var pedido = comercial || demanda;
     return {itemKey: itemKey, loteKey: loteKey, lote: lote, op: op, demanda: demanda, comercial: comercial || null,
       skuPedidoKey: skuPedidoKey, pedidoId: pedidoId, pedidoNumero: pedido.numeroFormatado || demanda.id || pedidoId,
       cliente: pedido.cliente || op.cliente || '', clienteKey: pedido.clienteKey || '',
-      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo};
+      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo, legado: legado};
   }
   function listar(base, hoje) {
     var linhas = [];

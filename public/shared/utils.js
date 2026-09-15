@@ -1952,6 +1952,12 @@ var STATUS_LOTE = {
   LIBERADO:               { rotulo: 'Aprovado',               badge: 'badge-green',  disponivel: true,  aplicaA: 'material' },
   APROVADO_CONCESSAO:     { rotulo: 'Aprovado c/ concessão',  badge: 'badge-purple', disponivel: true,  aplicaA: 'ambos'    },
   LIBERADO_EXPEDICAO:     { rotulo: 'Liberado p/ expedição',  badge: 'badge-green',  disponivel: true,  aplicaA: 'produto'  },
+  // Produto acabado que já existia FÍSICO antes do WMS, importado da planilha
+  // "Controle de Entradas, Saidas e Estoque". Não passou por Conferência de PA
+  // nem por laudo -- e por isso NÃO usa LIBERADO_EXPEDICAO, que significaria
+  // uma decisão da Qualidade que ninguém tomou. Está disponível porque a
+  // mercadoria está no galpão, e o rótulo deixa a origem à vista.
+  LEGADO_ESTOQUE:         { rotulo: 'Estoque legado',         badge: 'badge-gray',   disponivel: true,  aplicaA: 'produto'  },
   REPROVADO:              { rotulo: 'Reprovado',              badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
   RETIDO:                 { rotulo: 'Retido',                 badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
   VENCIDO:                { rotulo: 'Vencido',                badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
