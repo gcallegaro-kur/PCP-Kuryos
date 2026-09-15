@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/seletor-endereco.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -211,7 +212,7 @@
            havia onde ver "o que a Qualidade liberou e ainda não foi guardado
            no lugar certo". -->
       <label class="kt-check" style="display:flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap">
-        <input type="checkbox" id="slSoAguardando"> Só aguardando posição definitiva
+        <input type="checkbox" id="slSoAguardando"> Só aguardando guardar
       </label>
     </div>
     <div id="slAvisoAguardando"></div>
@@ -370,6 +371,16 @@
        ajuste/teste) quanto pro "Dia D" (inventário físico completo,
        alguém percorrendo o galpão em sequência, item após item). ═══ -->
   <div class="tab-panel" id="tab-enderecamento">
+    <div class="card" id="docaCard" style="margin-bottom:14px">
+      <div class="card-title" id="docaTitulo">📦 Na Doca</div>
+      <div class="field-hint" style="padding:0 16px 8px">Tudo que está parado na Doca: recebido aguardando guardar e produto acabado separado para expedir. Guarde a qualquer momento; o que a Qualidade já liberou aparece primeiro.</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Item</th><th>Lote / palete</th><th style="text-align:right">Quantidade</th><th>Situação</th><th>Atualizado</th><th style="width:150px"></th></tr></thead>
+          <tbody id="docaBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
     <div class="section-note">Distribui espacialmente o que já está no estoque -- nunca corrige quantidade (isso continua em "Ajustar Saldo", na aba Saldo Agregado). Busque um item, veja quanto já está endereçado, e registre as posições onde ele está guardado.</div>
     <div class="form-group" style="max-width:420px">
       <label>Item (material ou produto) *</label>
@@ -382,7 +393,7 @@
     <div class="card" id="edCardForm" style="display:none">
       <div class="card-title">Adicionar posição</div>
       <div class="form-grid" style="padding:16px">
-        <div class="form-group"><label>Endereço *</label><select id="edEndereco"></select></div>
+        <div class="form-group"><label>Endereço *</label><div id="edEnderecoCampo"></div></div>
         <div class="form-group"><label>Quantidade *</label><input type="number" id="edQtd" min="0" step="any"></div>
         <div class="form-group"><label>Lote (opcional)</label><input type="text" id="edLote" placeholder="Lote do fornecedor, se souber..."></div>
         <div class="form-group"><label>Validade (opcional)</label><input type="date" id="edValidade"></div>
@@ -631,7 +642,8 @@
       <div id="trLoteInfo" class="field-hint" style="margin-bottom:12px"></div>
       <div class="form-group">
         <label>Novo endereço *</label>
-        <select id="trNovoEndereco"></select>
+        <div id="trNovoEnderecoCampo"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="trParaDoca" style="margin-top:6px">🚚 Levar para a Doca</button>
       </div>
       <div class="form-group">
         <label>Motivo *</label>
@@ -926,15 +938,15 @@ function renderSaldoLotes() {
   var todos = todosOsLotes();
   // Contagem sobre TUDO, não sobre o filtro: o aviso precisa dizer quantos
   // existem, mesmo quando a busca atual esconde a maioria deles.
-  var nAguardando = todos.filter(function(x) { return x.lote.aguardandoEnderecoDefinitivo; }).length;
+  var nAguardando = todos.filter(function(x) { return loteAguardaGuardar(x.lote); }).length;
   document.getElementById('slAvisoAguardando').innerHTML = nAguardando
     ? '<div class="section-note" style="border-left:3px solid var(--warning)">📦 <b>' + nAguardando +
-      ' lote(s) liberado(s) pela Qualidade ainda na posição em que foram recebidos.</b> ' +
-      'Liberar não move o material — transfira para a posição definitiva usando o botão “Transferir” de cada linha.</div>'
+      ' lote(s) na Doca aguardando guardar.</b> ' +
+      'Guarde em Endereçamento › Na Doca, ou pelo botão “Transferir” de cada linha.</div>'
     : '';
 
   var linhas = todos.filter(function(x) {
-    if (soAguardando && !x.lote.aguardandoEnderecoDefinitivo) return false;
+    if (soAguardando && !loteAguardaGuardar(x.lote)) return false;
     if (filtroTipo && x.lote.itemTipo !== filtroTipo) return false;
     if (filtroStatus && (x.lote.status || 'LIBERADO') !== filtroStatus) return false;
     if (search) {
@@ -945,8 +957,8 @@ function renderSaldoLotes() {
   }).sort(function(a, b) {
     // Aguardando posição sobe: é trabalho pendente, e trabalho pendente no
     // fim de uma lista alfabética nunca é feito.
-    var pa = a.lote.aguardandoEnderecoDefinitivo ? 0 : 1;
-    var pb = b.lote.aguardandoEnderecoDefinitivo ? 0 : 1;
+    var pa = loteAguardaGuardar(a.lote) ? 0 : 1;
+    var pb = loteAguardaGuardar(b.lote) ? 0 : 1;
     if (pa !== pb) return pa - pb;
     return norm(a.lote.itemCodigo).localeCompare(norm(b.lote.itemCodigo));
   });
@@ -960,9 +972,9 @@ function renderSaldoLotes() {
   tbody.innerHTML = linhas.map(function(x) {
     var l = x.lote;
     var tipoBadge = l.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span>' : '<span class="badge badge-blue">MP</span>';
-    var pendEndereco = l.aguardandoEnderecoDefinitivo
-      ? ' <span class="badge badge-orange" title="Liberado pela Qualidade e ainda na posição em que foi recebido. Transfira para o endereço definitivo.">📦 guardar</span>'
-      : '';
+    var pendEndereco = loteAguardaGuardar(l)
+      ? ' <span class="badge badge-orange" title="Na Doca, aguardando guardar numa posição de palete.">📦 guardar</span>'
+      : (loteNaDoca(l) ? ' <span class="badge badge-purple" title="Produto acabado separado na Doca para expedir.">🚚 na Doca</span>' : '');
     return '<tr>' +
       '<td>' + tipoBadge + ' ' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + pendEndereco + '</td>' +
       '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
@@ -996,10 +1008,70 @@ function mudarStatusLote(itemKey, loteKey, novoStatus) {
 }
 
 var trAtual = null; // {itemKey, loteKey, lote}
-function opcoesEnderecoModalSelect() {
-  var entries = Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
-    .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
-  return entries.map(function(entry) { return '<option value="' + escapeAttr(entry[0]) + '">' + escapeHtml(entry[1].codigo) + ' (' + escapeHtml(entry[1].area || '') + ')</option>'; }).join('');
+/* ── Seletor visual de endereço e Doca ──────────────────────────────────
+   Doca é área de passagem (área DOCA do cadastro de endereços): recebimento
+   entra nela, e o PA pode voltar para ela para agilizar a expedição. "Na
+   Doca" é calculado pela área do endereço -- não por marca gravada no lote.
+   aguardandoEnderecoDefinitivo continua respeitado para lotes antigos. */
+function fonteEnderecos() { return {enderecos: allEnderecosEstoque, lotes: allEstoqueLotes}; }
+function loteNaDoca(lote) { return !!lote && SeletorEndereco.ehDoca(allEnderecosEstoque[lote.enderecoKey]); }
+// Material parado na Doca (ou marcado pela regra antiga) é trabalho de guardar.
+// PA na Doca está separado para expedir: não é pendência de guarda.
+function loteAguardaGuardar(lote) {
+  return !!lote && (!!lote.aguardandoEnderecoDefinitivo || (loteNaDoca(lote) && lote.itemTipo !== 'produto'));
+}
+function ordemDoca(lote) {
+  if (lote.itemTipo === 'produto') return 2;
+  return /LIBERADO|APROVADO/.test(lote.status || '') ? 0 : 1;
+}
+function renderDoca() {
+  var body = document.getElementById('docaBody');
+  if (!body) return;
+  var temDoca = !!SeletorEndereco.docaPadrao(allEnderecosEstoque);
+  var itens = [];
+  Object.keys(allEstoqueLotes || {}).forEach(function(itemKey) {
+    Object.keys(allEstoqueLotes[itemKey] || {}).forEach(function(loteKey) {
+      var l = allEstoqueLotes[itemKey][loteKey];
+      if (l && Number(l.saldoLote) > 0 && loteNaDoca(l)) itens.push({itemKey: itemKey, loteKey: loteKey, lote: l});
+    });
+  });
+  itens.sort(function(a, b) { return ordemDoca(a.lote) - ordemDoca(b.lote) || String(a.lote.atualizadoEm || a.lote.criadoEm || '').localeCompare(String(b.lote.atualizadoEm || b.lote.criadoEm || '')); });
+  var guardar = itens.filter(function(x) { return x.lote.itemTipo !== 'produto'; }).length;
+  document.getElementById('docaTitulo').textContent = '📦 Na Doca (' + itens.length + ')' + (guardar ? ' · ' + guardar + ' para guardar' : '');
+  if (!temDoca) { body.innerHTML = '<tr><td colspan="6" class="no-data">A área DOCA ainda não tem posição. Cadastre em Estrutura de Ruas.</td></tr>'; return; }
+  body.innerHTML = itens.map(function(x) {
+    var l = x.lote, pa = l.itemTipo === 'produto', liberado = /LIBERADO|APROVADO/.test(l.status || '');
+    var situacao = pa ? '<span class="badge badge-purple">PA · separado para expedir</span>'
+      : liberado ? '<span class="badge badge-green">Liberado · guardar</span>'
+      : '<span class="badge badge-orange">' + escapeHtml(typeof rotuloStatusLote === 'function' ? rotuloStatusLote(l.status || 'QUARENTENA') : (l.status || 'QUARENTENA')) + '</span>';
+    return '<tr>' +
+      '<td>' + (pa ? '<span class="badge badge-purple">PA</span> ' : '<span class="badge badge-blue">MP</span> ') + escapeHtml(l.itemCodigo || x.itemKey) + ' — ' + escapeHtml(l.itemNome || '') + '</td>' +
+      '<td>' + escapeHtml(l.identificadorPalete || l.loteInterno || l.loteOrigem || x.loteKey) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || (pa ? 'un' : '')) + '</td>' +
+      '<td>' + situacao + '</td>' +
+      '<td>' + fmtData(l.atualizadoEm || l.criadoEm || l.dataRecebimento) + '</td>' +
+      '<td><button class="btn ' + (pa ? 'btn-ghost' : 'btn-green') + ' btn-sm doca-guardar" data-item="' + escapeAttr(x.itemKey) + '" data-lote="' + escapeAttr(x.loteKey) + '">' + (pa ? 'Devolver a uma posição' : '📍 Guardar') + '</button></td>' +
+    '</tr>';
+  }).join('') || '<tr><td colspan="6" class="no-data">Doca vazia.</td></tr>';
+  body.querySelectorAll('.doca-guardar').forEach(function(btn) {
+    btn.addEventListener('click', function() { guardarDaDoca(btn.getAttribute('data-item'), btn.getAttribute('data-lote')); });
+  });
+}
+function guardarDaDoca(itemKey, loteKey) {
+  var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
+  if (!lote) return;
+  SeletorEndereco.abrir({
+    fonte: fonteEnderecos, valor: lote.enderecoKey, ignorar: {itemKey: itemKey, loteKey: loteKey}, preferirPosicao: true,
+    titulo: lote.itemTipo === 'produto' ? 'Devolver palete a uma posição' : 'Guardar lote',
+    subtitulo: (lote.itemCodigo || itemKey) + ' — ' + (lote.itemNome || '') + ' · ' + fmtNum(lote.saldoLote || 0) + ' ' + (lote.unidade || ''),
+    onEscolher: function(key, sit) {
+      if (key === lote.enderecoKey) return;
+      transferirLoteEndereco(db, lote.itemTipo, lote.itemCodigo || itemKey, loteKey, key,
+        sit.tipo === 'OCUPADA' ? 'GUARDADO DA DOCA (MESMO PALETE)' : 'GUARDADO DA DOCA', currentUserNome())
+        .then(function() { showAlert('Guardado em ' + ((allEnderecosEstoque[key] || {}).codigo || key) + '.', 'success'); })
+        .catch(function(err) { showAlert('Erro ao guardar: ' + err.message, 'danger'); });
+    }
+  });
 }
 function opcoesMotivoSelect() {
   return motivosMovEstoqueAtivos.map(function(m) { return '<option value="' + escapeAttr(m.nome) + '">' + escapeHtml(m.nome) + '</option>'; }).join('');
@@ -1009,7 +1081,7 @@ function abrirModalTransferir(itemKey, loteKey) {
   if (!lote) return;
   trAtual = { itemKey: itemKey, loteKey: loteKey, lote: lote };
   document.getElementById('trLoteInfo').textContent = escapeHtml(lote.itemCodigo) + ' — ' + escapeHtml(lote.itemNome || '') + ' · lote ' + escapeHtml(lote.loteOrigem || '—') + ' · atualmente em ' + escapeHtml(lote.enderecoCodigo || '—');
-  document.getElementById('trNovoEndereco').innerHTML = opcoesEnderecoModalSelect();
+  document.getElementById('trNovoEnderecoCampo').innerHTML = SeletorEndereco.campoHtml('tr-endereco', '', allEnderecosEstoque, {id: 'trNovoEndereco', titulo: 'Transferir lote'});
   document.getElementById('trMotivo').innerHTML = opcoesMotivoSelect();
   // Pré-seleciona "Transferência entre Endereços" se existir na lista, sem travar se o nome mudou
   var selMotivo = document.getElementById('trMotivo');
@@ -1029,6 +1101,18 @@ function salvarTransferir() {
     .catch(function(err) { showAlert('Erro ao transferir: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalTransferirSave').disabled = false; });
 }
+
+SeletorEndereco.ligar(document.getElementById('modalTransferir'), {
+  fonte: fonteEnderecos,
+  ignorar: function() { return trAtual ? {itemKey: trAtual.itemKey, loteKey: trAtual.loteKey} : null; },
+  subtitulo: function() { return trAtual ? (trAtual.lote.itemCodigo || '') + ' — ' + (trAtual.lote.itemNome || '') + ' · hoje em ' + (trAtual.lote.enderecoCodigo || '—') : ''; }
+});
+SeletorEndereco.ligar(document.getElementById('edCardForm'), {fonte: fonteEnderecos});
+document.getElementById('trParaDoca').addEventListener('click', function() {
+  var doca = SeletorEndereco.docaPadrao(allEnderecosEstoque), input = document.getElementById('trNovoEndereco');
+  if (!doca) { showAlert('A área DOCA ainda não tem posição cadastrada.', 'danger'); return; }
+  if (input) SeletorEndereco.atualizarCampo(input, doca, allEnderecosEstoque);
+});
 
 var saAtual = null;
 function abrirModalSaida(itemKey, loteKey) {
@@ -1199,7 +1283,7 @@ function edSelecionarItem(it) {
   document.getElementById('edItemKey').value = it.key;
   document.getElementById('edItemTipo').value = it.tipo;
   document.getElementById('edCardForm').style.display = 'block';
-  document.getElementById('edEndereco').innerHTML = opcoesEnderecoModalSelect();
+  document.getElementById('edEnderecoCampo').innerHTML = SeletorEndereco.campoHtml('ed-endereco', '', allEnderecosEstoque, {id: 'edEndereco', titulo: 'Endereçar ' + (it.codigo || '')});
   document.getElementById('edQtd').value = '';
   document.getElementById('edLote').value = '';
   document.getElementById('edValidade').value = '';
@@ -1233,7 +1317,7 @@ function edAdicionarPosicao() {
     document.getElementById('edQtd').value = '';
     document.getElementById('edLote').value = '';
     document.getElementById('edValidade').value = '';
-    document.getElementById('edEndereco').focus();
+    var btnEnd = document.querySelector('#edEnderecoCampo .se-btn'); if (btnEnd) btnEnd.focus();
     renderHistoricoSessaoEnderecamento();
     // renderResumoEnderecamento roda de novo sozinho quando o listener de
     // estoque_lotes disparar com o novo lote -- não precisa chamar aqui.
@@ -1562,11 +1646,6 @@ function renderConferenciaPA() {
   tbody.querySelectorAll('[data-cpa-op]').forEach(function(btn) { btn.addEventListener('click', function() { abrirConferenciaPAModal(btn.getAttribute('data-cpa-op')); }); });
 }
 
-function opcoesEnderecoPA() {
-  return Object.entries(allEnderecosEstoque || {}).filter(function(e) { return e[1] && e[1].ativo !== false; })
-    .sort(function(a,b) { return String(a[1].codigo || a[0]).localeCompare(String(b[1].codigo || b[0])); })
-    .map(function(e) { return '<option value="' + escapeAttr(e[0]) + '">' + escapeHtml(e[1].codigo || e[0]) + (e[1].area ? ' · ' + escapeHtml(e[1].area) : '') + '</option>'; }).join('');
-}
 // Unidades por caixa do CADASTRO do produto (produtos/{sku}.unCx). Só
 // referência, nunca pré-preenche: o formato da caixa muda sem o cadastro
 // acompanhar, e um valor já digitado passa batido. A 26247/06 foi contada
@@ -1588,7 +1667,7 @@ function linhaPaletePA(numero, unCxCad) {
       '<div class="field-hint cpa-uncx-hint">' + (unCxCad ? 'Cadastro: ' + unCxCad + ' un/cx' : 'Produto sem un/cx no cadastro') + '</div></div>' +
     '<div class="form-group"><label>Unid. caixa parcial</label><input class="cpa-parcial" type="number" min="0" step="1" value="0"></div>' +
     '<div class="form-group"><label>Total conferido *</label><input class="cpa-total" type="number" min="0" step="1" placeholder="unidades"></div>' +
-    '<div class="form-group"><label>Endereço físico *</label><select class="cpa-endereco"><option value="">Selecione…</option>' + opcoesEnderecoPA() + '</select></div></div></div>';
+    '<div class="form-group"><label>Endereço físico *</label>' + SeletorEndereco.campoHtml('cpa-endereco', '', allEnderecosEstoque, {titulo: 'Endereço do palete ' + numero}) + '</div></div></div>';
 }
 function recalcularLinhaPaletePA(linha) {
   var caixas = parseFloat(linha.querySelector('.cpa-caixas').value) || 0, multiplo = parseFloat(linha.querySelector('.cpa-multiplo').value) || 0, parcial = parseFloat(linha.querySelector('.cpa-parcial').value) || 0;
@@ -1622,6 +1701,7 @@ function abrirConferenciaPAModal(opKey) {
     '<div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn" id="cpaAdicionar">+ Adicionar palete</button><span id="cpaResumo" class="field-hint" style="align-self:center"></span></div>' +
     '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button type="button" class="btn btn-green" id="cpaSalvar">Registrar ' + estado.etapa + 'ª contagem</button></div>';
   overlay.appendChild(box); document.body.appendChild(overlay);
+  SeletorEndereco.ligar(box, {fonte: fonteEnderecos});
   var lista = box.querySelector('#cpaPaletes');
   var unCxCad = unCxCadastroPA(op.sku);
   function adicionar() { lista.insertAdjacentHTML('beforeend', linhaPaletePA(lista.children.length + 1, unCxCad)); ligarLinhas(); atualizar(); }
@@ -2408,6 +2488,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderSaldoLotes();
       renderLotesVencendo();
       renderResumoEnderecamento();
+      renderDoca();
       // Aba Endereços: mesmo cálculo de ocupantes-por-endereço já usado em
       // cadastros.html -- estoque_lotes é keyed por itemKey, cada um com
       // vários pushKeys de lote; conta POR ENDEREÇO, nunca assume 1 item
@@ -2428,6 +2509,7 @@ document.addEventListener('DOMContentLoaded', function() {
       allEnderecosEstoque = snap.val() || {};
       renderSaldoLotes();
       renderLotesVencendo();
+      renderDoca();
       // Aba Endereços usa sua própria cópia local (enderecosEstoque) --
       // mesmo padrão de seções isoladas já usado em cadastros.html.
       enderecosEstoque = snap.val() || {};

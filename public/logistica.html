@@ -13,6 +13,7 @@
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/rotas-pc.js"></script>
+  <script src="shared/seletor-endereco.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -296,7 +297,8 @@ var functionsInstance = firebase.functions();
 var allPedidosCompra = {};
 var allTransportadoras = {};
 var allMateriais = {};
-var allEnderecosEstoque = {}; // WMS Fase 1 -- popula o <select> de endereço de destino no recebimento
+var allEnderecosEstoque = {}; // WMS -- destinos do seletor visual de endereço no recebimento
+var allEstoqueLotes = {};     // só leitura: ocupação das posições no seletor
 var agendandoKey = null;
 var recebendoKey = null;
 var recebimentoIdempotencyKey = null;
@@ -867,7 +869,7 @@ function htmlLoteRecebimento(qtd, unidade, removivel) {
       '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
       '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
       '<div class="form-group"><label>Validade</label><input type="date" class="rc-validade"></div>' +
-      '<div class="form-group"><label>Endereço físico de entrada *</label><select class="rc-endereco">' + opcoesEnderecoSelect() + '</select><div class="field-hint">Quarentena é status, não endereço.</div></div>' +
+      '<div class="form-group"><label>Endereço físico de entrada *</label>' + SeletorEndereco.campoHtml('rc-endereco', SeletorEndereco.docaPadrao(allEnderecosEstoque), allEnderecosEstoque, {titulo: 'Endereço de entrada do lote'}) + '<div class="field-hint">Padrão: Doca. Guarde depois em Estoque › Endereçamento, ou escolha a posição agora. Quarentena é status, não endereço.</div></div>' +
     '</div></div>';
 }
 function openModalReceber(key) {
@@ -885,6 +887,7 @@ function openModalReceber(key) {
   document.getElementById('rcCondVeiculo').value = '';
   document.getElementById('rcObservacoes').value = '';
 
+  SeletorEndereco.ligar(document.getElementById('modalReceber'), {fonte: fonteEnderecosRecebimento});
   var lista = document.getElementById('rcItensBody');
   var itens = Object.entries(p.itens || {});
   lista.innerHTML = itens.map(function(entry) {
@@ -932,16 +935,7 @@ function openModalReceber(key) {
 // fácil de achar (1.1.1, 1.1.2, 1.1.3...). O vazio força uma escolha
 // consciente. Quarentena é status, não endereço: a Logística registra a
 // posição física real onde o material ficará.
-function opcoesEnderecoSelect() {
-  var entries = Object.entries(allEnderecosEstoque).filter(function(e) { return e[1].ativo !== false; })
-    .sort(function(a, b) { return (a[1].rua - b[1].rua) || (a[1].nivel - b[1].nivel) || (a[1].predio - b[1].predio); });
-  var opts = '<option value="">Selecione o endereço…</option>';
-  entries.forEach(function(entry) {
-    var key = entry[0], e = entry[1];
-    opts += '<option value="' + escapeAttr(key) + '">' + escapeHtml(e.codigo) + ' (' + escapeHtml(e.area || '') + ')</option>';
-  });
-  return opts;
-}
+function fonteEnderecosRecebimento() { return {enderecos: allEnderecosEstoque, lotes: allEstoqueLotes}; }
 function closeModalReceber() { document.getElementById('modalReceber').classList.remove('open'); recebendoKey = null; }
 function lerItensRecebimentoDaTela() {
   var linhas = [];
@@ -1339,6 +1333,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       allEnderecosEstoque = snap.val() || {};
+    });
+    dbOnValue(db.ref('estoque_lotes'), function(snap) {
+      allEstoqueLotes = snap.val() || {};
     });
   } catch (err) {
     setStatus(false, 'Erro');

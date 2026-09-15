@@ -41,6 +41,8 @@ const ctx = {
   currentUserNome: () => 'Logística Teste',
   showAlert: () => {}, document: {body: {removeChild: () => {}}},
   abrirConciliacaoPAModal: () => {},
+  // O endereço do palete agora é o seletor visual (shared/seletor-endereco.js).
+  SeletorEndereco: require('./public/shared/seletor-endereco.js'),
   db: {ref: () => ({
     child: () => ({push: () => ({key: 'k' + transacoes.length})}),
     transaction: fn => { const r = fn(null); transacoes.push(r); return Promise.resolve({committed: true, snapshot: {val: () => r}}); }
@@ -48,7 +50,7 @@ const ctx = {
 };
 vm.createContext(ctx);
 ['qtdApontadaPA', 'arredondarQtdPA', 'contagensDaConferenciaPA', 'analisarTriplaConferenciaPA', 'validarPaletesContagemPA',
- 'unCxCadastroPA', 'paletesFormatoCaixaDivergentePA', 'linhaPaletePA', 'opcoesEnderecoPA', 'recalcularLinhaPaletePA', 'salvarContagemConferenciaPA']
+ 'unCxCadastroPA', 'paletesFormatoCaixaDivergentePA', 'linhaPaletePA', 'recalcularLinhaPaletePA', 'salvarContagemConferenciaPA']
   .forEach(name => vm.runInContext(extractFunction(name), ctx));
 
 (async function () {

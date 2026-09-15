@@ -2089,13 +2089,13 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
     // descarregado. Se aquilo era área de retenção ou posição de passagem, o
     // material ficava liberado no sistema e no lugar errado no chão.
     //
-    // A marca só faz sentido pra lote LIBERADO que está em alguma posição:
-    // reprovado não se move pra estoque bom, e lote sem endereço não tem de
-    // onde sair. Ela é limpa em transferirLoteEndereco, quando a Logística
-    // de fato move.
-    var liberou = laudo.decisao === 'LIBERADO' || laudo.decisao === 'LIBERADO_EXPEDICAO' ||
-                  laudo.decisao === 'APROVADO_CONCESSAO';
-    atual.aguardandoEnderecoDefinitivo = (liberou && atual.enderecoKey) ? true : null;
+    // 2026-09-15: a liberação NÃO grava mais a marca. O recebimento passou a
+    // entrar na Doca (área DOCA), e "aguardando guardar" virou "está na Doca"
+    // -- calculado pela área do endereço em estoque.html. Gravar a marca na
+    // liberação acusava pendência em lote que já estava na posição definitiva
+    // e, no PA, BLOQUEAVA a Expedição ("Aguardando endereço definitivo ativo")
+    // de palete que a Conferência já tinha posto no lugar certo. A marca antiga
+    // continua respeitada onde existir e é limpa em transferirLoteEndereco.
     atual.atualizadoEm = agora;
     return atual;
   }).then(function(res) {
