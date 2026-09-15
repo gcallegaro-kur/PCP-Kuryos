@@ -1752,7 +1752,16 @@ exports.finalizarConferenciaPA = onCall(async (request) => {
   const reservaEm = new Date().toISOString();
   let erroTransacao = null;
   const lock = await confRef.transaction((atual) => {
-    if (!atual) return;
+    // `return atual` (null), NUNCA `return;`. O SDK chama este callback com o
+    // valor do CACHE LOCAL primeiro, e depois do .once() do lerContexto o cache
+    // já esfriou -- a primeira passada vem null. Devolver undefined ABORTA a
+    // transação ali mesmo, sem nunca falar com o servidor, e o código abaixo
+    // reporta "Outra sessão já está finalizando" para uma OP sem lock nenhum.
+    // Era isso que impedia QUALQUER conferência de PA de finalizar.
+    // Medido no emulador: `return;` -> passadas [null], committed=false;
+    // `return atual;` -> passadas [null, dado], committed=true. As demais
+    // transações deste arquivo já usam a forma certa.
+    if (!atual) return atual;
     if (atual.finalizadoEm) return atual;
     const inicioLock = Date.parse(atual.finalizandoEm || "");
     const lockVigente = atual.finalizacaoStatus === "FINALIZANDO" && Number.isFinite(inicioLock) && Date.now() - inicioLock < 120000;
@@ -1779,6 +1788,12 @@ exports.finalizarConferenciaPA = onCall(async (request) => {
   }
   if (!lock.committed || reservado.finalizacaoToken !== token) {
     if (erroTransacao) throw new HttpsError(erroTransacao.code || "failed-precondition", erroTransacao.message);
+    // Nó inexistente também chega aqui, mas não é disputa de sessão -- dizer
+    // "outra sessão está finalizando" mandaria a pessoa esperar por algo que
+    // nunca vai acontecer.
+    if (!lock.snapshot || !lock.snapshot.exists()) {
+      throw new HttpsError("not-found", "Não há Conferência de PA registrada para esta OP. Faça a contagem antes de conciliar.");
+    }
     throw new HttpsError("aborted", "Outra sessão já está finalizando esta OP. Aguarde alguns segundos e atualize a tela.");
   }
 
