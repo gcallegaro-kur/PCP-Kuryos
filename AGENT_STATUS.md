@@ -114,6 +114,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — uso e consumo sem cliente/pedido (2026-09-15).**
+  `ed29f4b` no `origin/main`; por worktree limpo às 16:27 BRT: Hosting (5
+  arquivos idênticos ao commit) + as três Functions de recebimento.
+  **Caso real do usuário:** PC-0003 é etiqueta térmica (ET-00064) de uso e
+  consumo, sem cliente nem pedido de venda. Item de **compra da Kuryos** pode ter
+  destino geral (`vinculo = {geral: true}`, opção "Sem cliente — uso e consumo /
+  estoque geral" no seletor de cliente); lote nasce da Kuryos com
+  `destino.geral`. **Remessa recusa** esse destino (navegador e servidor).
+  API nova: `vinculoGeral`, `vinculoAceito(v, tipoDono)`.
+  **⚠ Codex:** `public/logistica.html` recebeu mais 3 linhas na exibição do
+  destino do recebimento; commit só com o meu hunk, sua linha do `<head>` segue
+  intacta e sem commit.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — remessa é do cliente por padrão (2026-09-15).**
   `22a901a` no `origin/main`; por worktree limpo às 15:21 BRT: Hosting
   (`compras.html`, `manual_compras.html`, `shared/propriedade-estoque.js`
