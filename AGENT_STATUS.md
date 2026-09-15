@@ -114,6 +114,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — conteúdo da posição no mapa do WMS (2026-09-15).**
+  `7ae4959` no `origin/main`; Hosting por worktree limpo, conferido
+  (`estoque.html`, `shared/conteudo-posicao.js`, `shared/expedicao-grade.js`
+  idênticos ao commit). Clique numa posição (Mapa por rua ou Planta baixa por
+  nível) mostra resumo do palete (itens, quantidade por unidade, volumes, peso,
+  situação) e linha a linha (lote, origem, volumes/composição, quantidade, peso
+  com fonte, validade, status). Regras em `shared/conteudo-posicao.js`: PA pela
+  composição e `ExpedicaoGrade.pesoPalete`; material com volumes do recebimento
+  e peso por KG / L×densidade / `pesoUnitario` (gramas). Sem dado = desconhecido.
+  `estoque.html` passou a carregar `shared/expedicao-grade.js`.
+- **Correção junto:** `fmtData` de `estoque.html` exibia data pura um dia antes
+  (UTC). **Mesmo defeito em cadastros, compras, formulas, logistica, qualidade
+  e separacao_materiais** — aberto como tarefa separada; cadastros/logistica são
+  arquivos ativos do Codex.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — seletor visual de endereço e Doca (2026-09-15).**
   `6518040` no `origin/main`; Hosting por **worktree limpo**, conferido
   (`estoque.html`, `logistica.html`, `shared/seletor-endereco.js`, `utils.js` e
