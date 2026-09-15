@@ -17,6 +17,32 @@
     ['entidadeKey', 'localKey', 'fonte', 'confirmadoEm', 'confirmadoPor'].forEach(function(c) { if (src[c] != null && src[c] !== '') out[c] = src[c]; });
     return out;
   }
+  // Locais da própria Kuryos. O endereço é conhecido e era redigitado inteiro
+  // em todo PC -- e digitado de dois jeitos (PC-0004 e PC-0005 com CEP e
+  // bairro diferentes para o mesmo lugar). O valor VIVO mora em
+  // config/locaisKuryos/{FABRICA|GALPAO}, editável em Compras, porque a
+  // Kuryos vai mudar de endereço; este padrão só vale até alguém salvar lá.
+  // Mudar o cadastro não altera PC já emitido: a rota fica congelada no PC.
+  var CHAVES_LOCAIS_KURYOS = ['FABRICA', 'GALPAO'];
+  var LOCAIS_KURYOS_PADRAO = {
+    FABRICA: { nome: 'Fábrica Kuryos', cnpj: '00.767.554/0001-19',
+      endereco: { cep: '08290-500', logradouro: 'Rua Lagoa Tai Grande', numero: '1130', complemento: '', bairro: 'Vila Carmosina', cidade: 'São Paulo', uf: 'SP', pais: 'BR' } },
+    GALPAO: { nome: 'Galpão Kuryos', cnpj: '',
+      endereco: { cep: '08295-010', logradouro: 'Rua Benedito Coelho Netto', numero: '211', complemento: '', bairro: 'Itaquera', cidade: 'São Paulo', uf: 'SP', pais: 'BR' } }
+  };
+  // Local pronto para a rota: o cadastro salvo por cima do padrão, campo a
+  // campo (um cadastro salvo pela metade não apaga o que o padrão sabe).
+  function localKuryos(chave, cadastro) {
+    var padrao = LOCAIS_KURYOS_PADRAO[chave];
+    if (!padrao) return null;
+    var base = normalizarLocal(padrao), c = cadastro ? normalizarLocal(cadastro) : null;
+    if (c) {
+      CAMPOS_LOCAL.forEach(function(campo) { if (c[campo]) base[campo] = c[campo]; });
+      CAMPOS_ENDERECO.forEach(function(campo) { if (c.endereco[campo]) base.endereco[campo] = c.endereco[campo]; });
+    }
+    base.entidadeTipo = 'KURYOS'; base.localKey = chave; base.fonte = 'KURYOS_CADASTRO';
+    return base;
+  }
   function origemFornecedor(fornecedor, fornecedorKey, fallbackNome) {
     var f = fornecedor || {}, local = localVazio('FORNECEDOR', texto(f.nomeFantasia || f.razaoSocial || fallbackNome));
     local.entidadeKey = fornecedorKey || null; local.cnpj = texto(f.cnpj);
@@ -30,7 +56,9 @@
     var r = rota || {}, natureza = r.natureza || 'COMPRA_KURYOS';
     return { versao: Number(r.versao) || 1, natureza: natureza, responsavelTransporte: r.responsavelTransporte || '', incoterm: natureza === 'COMPRA_KURYOS' ? (r.incoterm || null) : null, origem: normalizarLocal(r.origem), destino: normalizarLocal(r.destino), statusConfirmacao: r.statusConfirmacao || (r.confirmadaEm ? 'CONFIRMADA' : 'PENDENTE'), confirmadaEm: r.confirmadaEm || null, confirmadaPor: r.confirmadaPor || null };
   }
-  function rotaInicial(pc, fornecedor) {
+  // `locaisKuryos` (opcional) = config/locaisKuryos. Com localEntrega
+  // GALPAO/FABRICA o destino já nasce com o endereço conhecido.
+  function rotaInicial(pc, fornecedor, locaisKuryos) {
     var p = pc || {};
     if (p.rota) return normalizarRota(p.rota);
     var natureza = p.naturezaMovimentacao || 'COMPRA_KURYOS';
@@ -42,8 +70,9 @@
       if (texto(p.coleta.endereco)) origem.instrucoes = 'Endereço informado na cotação: ' + texto(p.coleta.endereco);
       origem.fonte = 'COTACAO_SUGERIDA';
     }
-    var local = p.localEntrega || '', destino = localVazio('KURYOS', local === 'GALPAO' ? 'Galpão Kuryos' : local === 'FABRICA' ? 'Fábrica Kuryos' : 'Kuryos');
-    destino.localKey = local || null;
+    var local = p.localEntrega || '', destino = localKuryos(local, (locaisKuryos || {})[local]);
+    if (destino) destino.fonte = 'KURYOS_CADASTRO_SUGERIDO';
+    else { destino = localVazio('KURYOS', 'Kuryos'); destino.localKey = local || null; }
     var tipoFrete = ((p.frete || {}).tipo || '').toUpperCase();
     var responsavel = (p.transporte || {}).responsavel || (tipoFrete === 'FOB' ? 'KURYOS' : (tipoFrete === 'CIF' ? 'REMETENTE' : ''));
     return normalizarRota({ versao: 1, natureza: natureza, responsavelTransporte: responsavel, incoterm: natureza === 'COMPRA_KURYOS' ? (tipoFrete || null) : null, origem: origem, destino: destino, statusConfirmacao: 'PENDENTE' });
@@ -98,7 +127,7 @@
     CAMPOS_ENDERECO.forEach(function(c) { var el = document.getElementById(map[c]); if (el) l.endereco[c] = texto(el.value); });
     l.endereco.uf = l.endereco.uf.toUpperCase().slice(0, 2); return l;
   }
-  var api = { enderecoVazio: enderecoVazio, localVazio: localVazio, normalizarLocal: normalizarLocal, origemFornecedor: origemFornecedor, rotaInicial: rotaInicial, normalizarRota: normalizarRota, faltasLocal: faltasLocal, validarRota: validarRota, formatarEndereco: formatarEndereco, resumoLocal: resumoLocal, rotasIguais: rotasIguais, urlMapa: urlMapa, preencherEditor: preencherEditor, lerEditor: lerEditor };
+  var api = { CHAVES_LOCAIS_KURYOS: CHAVES_LOCAIS_KURYOS, LOCAIS_KURYOS_PADRAO: LOCAIS_KURYOS_PADRAO, localKuryos: localKuryos, enderecoVazio: enderecoVazio, localVazio: localVazio, normalizarLocal: normalizarLocal, origemFornecedor: origemFornecedor, rotaInicial: rotaInicial, normalizarRota: normalizarRota, faltasLocal: faltasLocal, validarRota: validarRota, formatarEndereco: formatarEndereco, resumoLocal: resumoLocal, rotasIguais: rotasIguais, urlMapa: urlMapa, preencherEditor: preencherEditor, lerEditor: lerEditor };
   root.RotasPC = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

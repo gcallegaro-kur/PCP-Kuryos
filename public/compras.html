@@ -2091,14 +2091,97 @@ var pcEditKey = null;
 var pcEditRotaBase = null;
 var pcdRotaBase = null;
 
-function camposLocalRotaHtml(prefix, titulo, dica) {
+/* ── Locais da Kuryos e CEP automático no editor de rota ─────────────────
+   O endereço da Fábrica e do Galpão é conhecido e era redigitado inteiro em
+   todo PC (e digitado de dois jeitos: PC-0004 e PC-0005 com CEP e bairro
+   diferentes para o mesmo lugar). Agora um clique preenche. O cadastro vivo
+   fica em config/locaisKuryos -- a Kuryos vai mudar de endereço -- e o
+   padrão em RotasPC só vale até alguém salvar. Mudar o cadastro NÃO altera
+   PC já emitido: a rota fica congelada em cada pedido. */
+function locaisKuryosCadastro() { return (allConfig && allConfig.locaisKuryos) || {}; }
+function localKuryosAtual(chave) { return RotasPC.localKuryos(chave, locaisKuryosCadastro()[chave]); }
+// Mesma condição da regra de escrita em /config (database.rules.json): sem
+// ela o botão salvaria e o banco devolveria PERMISSION_DENIED.
+function podeEditarLocaisKuryos() {
+  var u = window.currentUser || {};
+  return u.role === 'admin' || u.role === 'pcp' || !!(u.modulos && u.modulos.config === true);
+}
+// Identidade do local em edição (quem é, de onde veio). Os inputs só guardam
+// texto; sem isto, escolher "Fábrica Kuryos" e salvar gravaria um local
+// "digitado" sem saber que é a Fábrica.
+var rotaEditorMeta = {};
+function lembrarLocalDoEditor(prefixLocal, local) {
+  var l = RotasPC.normalizarLocal(local);
+  rotaEditorMeta[prefixLocal] = {entidadeTipo: l.entidadeTipo, localKey: l.localKey || null, fonte: l.fonte || null, entidadeKey: l.entidadeKey || null};
+  marcarAtalhoRota(prefixLocal, l.entidadeTipo === 'KURYOS' ? l.localKey : null);
+}
+function marcarAtalhoRota(prefixLocal, chave) {
+  document.querySelectorAll('.rota-atalho[data-local="' + prefixLocal + '"]').forEach(function(b) {
+    var ativo = b.getAttribute('data-chave') === chave;
+    b.classList.toggle('btn-primary', ativo);
+    b.classList.toggle('btn-ghost', !ativo);
+    b.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+  });
+}
+function aplicarLocalKuryosNoEditor(prefixLocal, chave) {
+  var local = localKuryosAtual(chave);
+  if (!local) return;
+  RotasPC.preencherEditor(prefixLocal, local);
+  lembrarLocalDoEditor(prefixLocal, local);
+  var hint = document.getElementById(prefixLocal + 'CepHint');
+  if (hint) { hint.textContent = 'Endereço do cadastro da Kuryos. Confira antes de confirmar a rota.'; hint.style.color = 'var(--success)'; }
+}
+// CEP com 8 dígitos preenche logradouro, bairro, cidade e UF (o que o CEP
+// define). Número e complemento nunca são tocados. A busca é opcional: se o
+// ViaCEP estiver fora, os campos continuam editáveis à mão.
+function ligarCepAutomatico(prefixLocal, aoPreencher) {
+  var cepEl = document.getElementById(prefixLocal + 'Cep');
+  if (!cepEl) return;
+  var ultimo = '';
+  function dica(texto, cor) {
+    var h = document.getElementById(prefixLocal + 'CepHint');
+    if (h) { h.textContent = texto; h.style.color = cor || ''; }
+  }
+  function buscar() {
+    var limpo = normalizarCep(cepEl.value);
+    if (!limpo || limpo === ultimo) return;
+    ultimo = limpo;
+    dica('Buscando endereço pelo CEP...');
+    buscarEnderecoPorCep(limpo).then(function(r) {
+      if (normalizarCep(cepEl.value) !== limpo) return; // digitou outro CEP enquanto buscava
+      if (!r.ok) { dica(r.erro, 'var(--warning)'); return; }
+      var e = r.endereco;
+      [['logradouro', 'Logradouro'], ['bairro', 'Bairro'], ['cidade', 'Cidade'], ['uf', 'Uf']].forEach(function(par) {
+        var el = document.getElementById(prefixLocal + par[1]);
+        if (el && e[par[0]]) el.value = e[par[0]];
+      });
+      cepEl.value = formatarCep(e.cep);
+      var num = document.getElementById(prefixLocal + 'Numero');
+      dica('Endereço preenchido pelo CEP.' + (num && !num.value.trim() ? ' Falta o número.' : ' Confira o número.'), 'var(--success)');
+      if (num && !num.value.trim()) num.focus();
+      if (aoPreencher) aoPreencher();
+    });
+  }
+  cepEl.addEventListener('input', function() { if (normalizarCep(cepEl.value)) buscar(); });
+  cepEl.addEventListener('blur', buscar);
+}
+
+function camposLocalRotaHtml(prefix, titulo, dica, opts) {
+  opts = opts || {};
+  var atalhos = opts.semAtalhos ? '' :
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">' +
+      '<button type="button" class="btn btn-ghost btn-sm rota-atalho" data-local="' + prefix + '" data-chave="FABRICA" aria-pressed="false">🏭 Fábrica Kuryos</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm rota-atalho" data-local="' + prefix + '" data-chave="GALPAO" aria-pressed="false">📦 Galpão Kuryos</button>' +
+      (podeEditarLocaisKuryos() ? '<button type="button" class="btn btn-ghost btn-sm rota-locais-editar" title="Editar os endereços da Fábrica e do Galpão usados nestes atalhos">⚙ Endereços da Kuryos</button>' : '') +
+    '</div>';
   return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)">' +
     '<div style="font-weight:800;font-size:13px;margin-bottom:2px">' + escapeHtml(titulo) + '</div>' +
     '<div class="field-hint" style="margin-bottom:9px">' + escapeHtml(dica) + '</div>' +
+    atalhos +
     '<div class="form-grid">' +
       '<div class="form-group"><label>Local / empresa *</label><input id="' + prefix + 'Nome" type="text"></div>' +
       '<div class="form-group"><label>CNPJ</label><input id="' + prefix + 'Cnpj" type="text" placeholder="00.000.000/0000-00"></div>' +
-      '<div class="form-group"><label>CEP *</label><input id="' + prefix + 'Cep" type="text" maxlength="9" placeholder="00000-000"></div>' +
+      '<div class="form-group"><label>CEP *</label><input id="' + prefix + 'Cep" type="text" maxlength="9" placeholder="00000-000" inputmode="numeric"><div class="field-hint" id="' + prefix + 'CepHint">Digite o CEP para preencher o endereço.</div></div>' +
       '<div class="form-group"><label>Logradouro *</label><input id="' + prefix + 'Logradouro" type="text"></div>' +
       '<div class="form-group"><label>Número *</label><input id="' + prefix + 'Numero" type="text" placeholder="ou S/N"></div>' +
       '<div class="form-group"><label>Complemento</label><input id="' + prefix + 'Complemento" type="text"></div>' +
@@ -2125,21 +2208,93 @@ function editorRotaHtml(prefix) {
     '<div id="' + prefix + 'RotaHint" class="field-hint" style="margin-top:5px"></div>';
 }
 
+// Cadastro dos endereços da Fábrica e do Galpão (config/locaisKuryos). Mesmo
+// formulário da rota, com CEP automático e a mesma validação de campos.
+function abrirEditorLocaisKuryos() {
+  if (!podeEditarLocaisKuryos()) { showAlert('Só administrador, PCP ou quem tem o módulo Configurações pode alterar os endereços da Kuryos.', 'danger'); return; }
+  var chaves = RotasPC.CHAVES_LOCAIS_KURYOS;
+  var overlay = document.createElement('div'); overlay.className = 'modal-bg open';
+  var box = document.createElement('div'); box.className = 'modal'; box.style.maxWidth = '980px';
+  box.innerHTML = '<div class="modal-header"><h2>Endereços da Kuryos</h2><button class="modal-close" type="button" aria-label="Fechar">×</button></div><div class="modal-body">' +
+    '<div class="section-note">Usados pelos atalhos 🏭 Fábrica e 📦 Galpão na rota dos Pedidos de Compra. Alterar aqui <b>não muda PCs já emitidos</b>: a rota fica congelada em cada pedido.</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-top:10px">' +
+      camposLocalRotaHtml('lkFABRICA', 'Fábrica', 'Endereço de recebimento e remessa da fábrica.', {semAtalhos: true}) +
+      camposLocalRotaHtml('lkGALPAO', 'Galpão', 'Endereço de recebimento e remessa do galpão.', {semAtalhos: true}) +
+    '</div>' +
+    '<div class="field-hint" id="lkInfo" style="margin-top:8px"></div>' +
+    '<div class="modal-actions"><button type="button" class="btn btn-ghost lk-fechar">Cancelar</button><button type="button" class="btn btn-primary" id="lkSalvar">Salvar endereços</button></div></div>';
+  overlay.appendChild(box); document.body.appendChild(overlay);
+  function fechar() { if (overlay.parentNode) document.body.removeChild(overlay); }
+  chaves.forEach(function(chave) {
+    RotasPC.preencherEditor('lk' + chave, localKuryosAtual(chave));
+    ligarCepAutomatico('lk' + chave);
+  });
+  var cad = locaisKuryosCadastro();
+  box.querySelector('#lkInfo').textContent = chaves.map(function(chave) {
+    var c = cad[chave];
+    return (chave === 'FABRICA' ? 'Fábrica' : 'Galpão') + ': ' + (c && c.atualizadoEm ? 'salvo por ' + (c.atualizadoPor || '—') + ' em ' + fmtData(c.atualizadoEm) : 'ainda usando o endereço padrão do sistema');
+  }).join(' · ');
+  box.querySelector('.modal-close').onclick = fechar;
+  box.querySelector('.lk-fechar').onclick = fechar;
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) fechar(); });
+  box.querySelector('#lkSalvar').onclick = function() {
+    var payload = {}, agora = new Date().toISOString(), por = currentUserNome(), faltas = [];
+    chaves.forEach(function(chave) {
+      var l = RotasPC.lerEditor('lk' + chave, localKuryosAtual(chave));
+      RotasPC.faltasLocal(l, false).forEach(function(f) { faltas.push((chave === 'FABRICA' ? 'Fábrica' : 'Galpão') + ': ' + f); });
+      payload[chave] = {
+        nome: l.nome, cnpj: l.cnpj || null, endereco: l.endereco,
+        contatoNome: l.contatoNome || null, contatoTelefone: l.contatoTelefone || null,
+        horarioAtendimento: l.horarioAtendimento || null, referencia: l.referencia || null, instrucoes: l.instrucoes || null,
+        atualizadoEm: agora, atualizadoPor: por
+      };
+    });
+    if (faltas.length) { showAlert('Complete antes de salvar: ' + faltas.join('; ') + '.', 'danger'); return; }
+    var btn = box.querySelector('#lkSalvar'); btn.disabled = true;
+    db.ref('config/locaisKuryos').update(payload).then(function() {
+      fechar();
+      showAlert('Endereços da Kuryos salvos. Os próximos Pedidos de Compra já usam o endereço novo.', 'success');
+    }).catch(function(e) { btn.disabled = false; showAlert('Erro ao salvar: ' + e.message, 'danger'); });
+  };
+}
+
 function prepararEditorRota(prefix) {
   var box = document.getElementById(prefix + 'RotaEditor');
   box.innerHTML = editorRotaHtml(prefix);
+  // Qualquer mudança de dado -- digitada, vinda do CEP ou de um atalho --
+  // derruba a confirmação: quem confirmou conferiu OUTRA rota.
+  function rotaAlterada() {
+    document.getElementById(prefix + 'RotaConfirmada').checked = false;
+    document.getElementById(prefix + 'RotaHint').textContent = 'Dados alterados — confira e marque a confirmação novamente.';
+  }
   box.querySelectorAll('input, textarea').forEach(function(el) {
     if (el.id === prefix + 'RotaConfirmada') return;
     el.addEventListener('input', function() {
-      document.getElementById(prefix + 'RotaConfirmada').checked = false;
-      document.getElementById(prefix + 'RotaHint').textContent = 'Dados alterados — confira e marque a confirmação novamente.';
+      rotaAlterada();
+      // Mexeu num local que veio do cadastro da Kuryos: continua sendo a
+      // Fábrica/Galpão, mas o registro diz que foi ajustado à mão.
+      ['Origem', 'Destino'].forEach(function(lado) {
+        var meta = rotaEditorMeta[prefix + lado];
+        if (meta && meta.entidadeTipo === 'KURYOS' && el.id.indexOf(prefix + lado) === 0) meta.fonte = 'KURYOS_AJUSTADO';
+      });
     });
   });
+  box.querySelectorAll('.rota-atalho').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      aplicarLocalKuryosNoEditor(btn.getAttribute('data-local'), btn.getAttribute('data-chave'));
+      rotaAlterada();
+    });
+  });
+  box.querySelectorAll('.rota-locais-editar').forEach(function(btn) { btn.addEventListener('click', abrirEditorLocaisKuryos); });
+  ligarCepAutomatico(prefix + 'Origem', rotaAlterada);
+  ligarCepAutomatico(prefix + 'Destino', rotaAlterada);
 }
 
 function preencherEditorRota(prefix, rota) {
   RotasPC.preencherEditor(prefix + 'Origem', rota.origem);
   RotasPC.preencherEditor(prefix + 'Destino', rota.destino);
+  lembrarLocalDoEditor(prefix + 'Origem', rota.origem);
+  lembrarLocalDoEditor(prefix + 'Destino', rota.destino);
 }
 
 function lerRotaEditor(prefix, base, natureza, responsavel, incoterm) {
@@ -2149,6 +2304,16 @@ function lerRotaEditor(prefix, base, natureza, responsavel, incoterm) {
   rota.incoterm = natureza === 'COMPRA_KURYOS' ? incoterm : null;
   rota.origem = RotasPC.lerEditor(prefix + 'Origem', rota.origem);
   rota.destino = RotasPC.lerEditor(prefix + 'Destino', rota.destino);
+  [['Origem', 'origem'], ['Destino', 'destino']].forEach(function(par) {
+    var meta = rotaEditorMeta[prefix + par[0]], local = rota[par[1]];
+    if (!meta) return;
+    local.entidadeTipo = meta.entidadeTipo || local.entidadeTipo;
+    if (meta.localKey) local.localKey = meta.localKey; else delete local.localKey;
+    if (meta.fonte) local.fonte = meta.fonte;
+    // Local da Kuryos não é o fornecedor: o vínculo com o cadastro de
+    // fornecedor não pode seguir junto quando a origem vira a Fábrica.
+    if (meta.entidadeKey && meta.entidadeTipo !== 'KURYOS') local.entidadeKey = meta.entidadeKey; else delete local.entidadeKey;
+  });
   return rota;
 }
 
@@ -2191,7 +2356,7 @@ function abrirModalEditarPC(key) {
   document.getElementById('pcEditFreteValor').value = (pc.frete && pc.frete.valor != null) ? pc.frete.valor : '';
 
   prepararEditorRota('pcEdit');
-  pcEditRotaBase = RotasPC.rotaInicial(pc, allFornecedores[pc.fornecedorKey]);
+  pcEditRotaBase = RotasPC.rotaInicial(pc, allFornecedores[pc.fornecedorKey], locaisKuryosCadastro());
   preencherEditorRota('pcEdit', pcEditRotaBase);
   var rotaJaConfirmada = pcEditRotaBase.statusConfirmacao === 'CONFIRMADA' && RotasPC.validarRota(pcEditRotaBase).pronto;
   document.getElementById('pcEditRotaConfirmada').checked = rotaJaConfirmada;
@@ -3248,10 +3413,17 @@ document.getElementById('modalEditarPC').addEventListener('click', function(ev) 
 document.getElementById('pcEditFreteTipo').addEventListener('change', function() {
   var cb = document.getElementById('pcEditRotaConfirmada'); if (cb) cb.checked = false;
 });
+// Entregar em Galpão/Fábrica preenche o destino inteiro com o endereço
+// cadastrado -- antes trocava só o nome e o endereço ficava para digitar.
 document.getElementById('pcEditLocal').addEventListener('change', function() {
-  var nome = document.getElementById('pcEditDestinoNome');
-  if (nome && (!nome.value || /Kuryos$/i.test(nome.value))) nome.value = this.value === 'GALPAO' ? 'Galpão Kuryos' : this.value === 'FABRICA' ? 'Fábrica Kuryos' : 'Kuryos';
+  if (this.value === 'GALPAO' || this.value === 'FABRICA') {
+    aplicarLocalKuryosNoEditor('pcEditDestino', this.value);
+  } else {
+    var nome = document.getElementById('pcEditDestinoNome');
+    if (nome && (!nome.value || /Kuryos$/i.test(nome.value))) nome.value = 'Kuryos';
+  }
   var cb = document.getElementById('pcEditRotaConfirmada'); if (cb) cb.checked = false;
+  var hint = document.getElementById('pcEditRotaHint'); if (hint) hint.textContent = 'Dados alterados — confira e marque a confirmação novamente.';
 });
 
 document.getElementById('modalFiscalClose').addEventListener('click', fecharModalFiscal);
@@ -4054,7 +4226,7 @@ function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) 
       naturezaMovimentacao: 'COMPRA_KURYOS', fornecedorKey: convidado.fornecedorKey,
       fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial || '', frete: convidado.frete || null,
       coleta: convidado.coleta || null, localEntrega: convidado.localEntrega || null
-    }, fornecedor);
+    }, fornecedor, locaisKuryosCadastro());
     return db.ref('pedidos_compra/' + pcKey).set({
       numero: seq.numero, numeroFormatado: seq.formatado, status: 'ABERTO',
       fornecedorKey: convidado.fornecedorKey, fornecedorNome: fornecedor.nomeFantasia || fornecedor.razaoSocial || '',
@@ -4230,7 +4402,7 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
         naturezaMovimentacao: 'COMPRA_KURYOS', fornecedorKey: convidado.fornecedorKey,
         fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '', frete: convidado.frete || null,
         coleta: convidado.coleta || null, localEntrega: convidado.localEntrega || null
-      }, fornecedor);
+      }, fornecedor, locaisKuryosCadastro());
       return db.ref('pedidos_compra/' + pcKey).set({
         numero: seq.numero, numeroFormatado: seq.formatado, status: 'ABERTO',
         fornecedorKey: convidado.fornecedorKey,
@@ -4345,7 +4517,7 @@ function openModalPcDireto() {
   document.getElementById('pcdMotivo').value = '';
   document.getElementById('pcdObs').value = '';
   prepararEditorRota('pcd');
-  pcdRotaBase = RotasPC.rotaInicial({ naturezaMovimentacao: 'COMPRA_KURYOS', transporte: { responsavel: 'REMETENTE' }, frete: { tipo: 'CIF' } }, null);
+  pcdRotaBase = RotasPC.rotaInicial({ naturezaMovimentacao: 'COMPRA_KURYOS', transporte: { responsavel: 'REMETENTE' }, frete: { tipo: 'CIF' } }, null, locaisKuryosCadastro());
   preencherEditorRota('pcd', pcdRotaBase);
   document.getElementById('pcdRotaConfirmada').checked = false;
   document.getElementById('pcdRotaHint').textContent = 'Informe e confira a rota antes de liberar o recebimento.';

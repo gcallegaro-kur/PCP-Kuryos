@@ -19,7 +19,37 @@ const sugerida = RotasPC.rotaInicial({naturezaMovimentacao:'COMPRA_KURYOS',forne
 assert.equal(sugerida.origem.fonte, 'CADASTRO_SUGERIDO');
 assert.equal(sugerida.statusConfirmacao, 'PENDENTE');
 assert.equal(sugerida.responsavelTransporte, 'KURYOS');
-assert.ok(!RotasPC.validarRota(sugerida).pronto, 'destino ainda precisa ser confirmado');
+// Com localEntrega FABRICA o destino já nasce com o endereço conhecido da
+// Kuryos, então os campos ficam completos -- mas a rota continua PENDENTE:
+// todo portão (enviar PC, agendar) exige statusConfirmacao CONFIRMADA, e só a
+// confirmação explícita no editor grava isso.
+assert.ok(RotasPC.validarRota(sugerida).pronto, 'destino Kuryos vem preenchido do cadastro');
+assert.equal(sugerida.destino.localKey, 'FABRICA');
+assert.equal(sugerida.destino.fonte, 'KURYOS_CADASTRO_SUGERIDO');
+assert.notEqual(sugerida.statusConfirmacao, 'CONFIRMADA', 'preencher não é confirmar');
+const semLocal = RotasPC.rotaInicial({naturezaMovimentacao:'COMPRA_KURYOS',fornecedorKey:'f1',frete:{tipo:'FOB'}}, fornecedor);
+assert.ok(!RotasPC.validarRota(semLocal).pronto, 'sem local de entrega o destino ainda precisa ser informado');
+
+// ── Locais da Kuryos: padrão, cadastro editável por cima e escopo ──────
+const fabricaPadrao = RotasPC.localKuryos('FABRICA');
+assert.equal(fabricaPadrao.endereco.logradouro, 'Rua Lagoa Tai Grande');
+assert.equal(fabricaPadrao.endereco.numero, '1130');
+assert.equal(fabricaPadrao.cnpj, '00.767.554/0001-19');
+assert.equal(fabricaPadrao.entidadeTipo, 'KURYOS');
+assert.equal(RotasPC.localKuryos('GALPAO').endereco.logradouro, 'Rua Benedito Coelho Netto');
+assert.equal(RotasPC.localKuryos('GALPAO').endereco.numero, '211');
+assert.equal(RotasPC.localKuryos('OUTRO'), null);
+// Mudança de endereço: o cadastro salvo vence o padrão, campo a campo.
+const mudou = RotasPC.localKuryos('FABRICA', {nome: 'Fábrica Kuryos (nova)', endereco: {cep: '01310-100', logradouro: 'Av. Paulista', numero: '1000', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP'}, contatoNome: 'Portaria'});
+assert.equal(mudou.endereco.logradouro, 'Av. Paulista');
+assert.equal(mudou.nome, 'Fábrica Kuryos (nova)');
+assert.equal(mudou.contatoNome, 'Portaria');
+assert.equal(mudou.cnpj, '00.767.554/0001-19', 'campo não salvo no cadastro mantém o padrão');
+const rotaComCadastro = RotasPC.rotaInicial({localEntrega: 'FABRICA', frete: {tipo: 'CIF'}}, fornecedor, {FABRICA: {endereco: {logradouro: 'Av. Paulista', numero: '1000', cep: '01310-100', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP'}}});
+assert.equal(rotaComCadastro.destino.endereco.logradouro, 'Av. Paulista', 'rotaInicial usa o cadastro vivo');
+// O padrão não é contaminado por quem altera o local devolvido.
+fabricaPadrao.endereco.numero = 'X';
+assert.equal(RotasPC.localKuryos('FABRICA').endereco.numero, '1130');
 
 const fob = RotasPC.normalizarRota({natureza:'COMPRA_KURYOS',responsavelTransporte:'KURYOS',incoterm:'FOB',origem:local('Fornecedor'),destino:local('Fábrica')});
 assert.ok(RotasPC.validarRota(fob).pronto);
