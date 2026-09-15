@@ -269,6 +269,9 @@ def main():
             "pedidoId": pedido.get("parentPedidoId") or pedido.get("id"),
             "vinculoPendente": bool(motivo), "vinculoMotivo": motivo or None,
             "caixasFechadas": caixas, "unidadesPorCaixa": multiplo,
+            # Peso vale para os DOIS lados, nao so para o palete em estoque:
+            # o relatorio gerencial soma carga por cliente e por transportadora.
+            "pesoPorCaixaKg": numero(linha[C_KG_CX]), "pesoTotalKg": numero(linha[C_CARGA]),
             "dataFabricacao": data_iso(linha[C_DATA_FAB]),
             "importadoEm": None,  # preenchido abaixo, igual para toda a carga
         }
@@ -289,7 +292,6 @@ def main():
                 "unidadesCaixaParcial": None,
                 "saldoLote": unidades, "qtdOriginal": unidades,
                 "enderecoKey": ENDERECO_LEGADO, "enderecoCodigo": ENDERECO_LEGADO,
-                "pesoPorCaixaKg": numero(linha[C_KG_CX]), "pesoTotalKg": numero(linha[C_CARGA]),
                 "dataEntradaEstoque": data_iso(linha[C_DATA_STK]),
                 "conferencia": None, "qualidade": None, "validade": None,
             })
@@ -319,8 +321,10 @@ def main():
                 }
 
     agora = None
+    # Rotulo aparece na tela e nos filtros do relatorio: acentuado, como a
+    # pessoa escreveria ao procurar.
     ROTULO = {"EXPEDIDO": "Expedido (legado)", "FURTO": "Furto (legado)",
-              "DEVOLUCAO": "Devolucao (legado)", "RETRABALHO": "Retrabalho (legado)",
+              "DEVOLUCAO": "Devolução (legado)", "RETRABALHO": "Retrabalho (legado)",
               "SEM_STATUS": "Sem status (legado)"}
     for grupo, carga in cargas.items():
         m = carga["meta"]

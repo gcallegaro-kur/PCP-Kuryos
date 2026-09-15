@@ -92,7 +92,7 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html'] },
+                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
@@ -610,6 +610,7 @@ function renderUnifiedNavbar(user) {
   const logisticaGroup = grupo('Logística', [
     temMod('logistica') && ktLink('logistica.html', 'truck', 'Agendamentos', activePage),
     temMod('logistica') && ktLink('expedicao.html', 'truck', 'Expedição de Vendas', activePage),
+    temMod('logistica') && ktLink('relatorio_expedicao.html', 'clipboard', 'Relatório de Expedição', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=conferenciapa', 'clipboard', 'Conferência de PA', activePage),

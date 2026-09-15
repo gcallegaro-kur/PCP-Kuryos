@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório de Expedição</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script><script src="auth_check.js"></script><link rel="stylesheet" href="shared/theme.css">
+<style>
+  body{margin:0;background:var(--bg,#f5f6fa);font-family:var(--font-ui);color:var(--text,#182230)}
+  .wrap{max-width:1420px;margin:auto;padding:22px 18px 60px}
+  h1{margin:0;font-size:24px}
+  .sub{font-size:13px;color:var(--muted,#667085);margin-top:5px}
+  .card{background:var(--card,#fff);border-radius:14px;padding:16px;margin-top:14px;border:1px solid var(--border,#e4e7ec)}
+  .card h2{font-size:15px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted,#667085)}
+  /* Filtros: grade que colapsa em coluna no celular. A pessoa do PCP usa isto
+     no desktop, mas consulta pelo celular no galpão. */
+  .filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+  .campo{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .campo label{font-size:11.5px;font-weight:700;color:var(--muted,#667085);text-transform:uppercase;letter-spacing:.4px}
+  .campo input,.campo select{padding:8px 10px;border:1.5px solid var(--border,#e4e7ec);border-radius:8px;font:inherit;font-size:13px;background:var(--card,#fff);color:inherit;min-width:0}
+  .campo .dica{font-size:11px;color:var(--muted,#667085)}
+  select[multiple]{min-height:104px}
+  .acoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  .btn{padding:9px 15px;border-radius:8px;border:1.5px solid var(--border,#e4e7ec);background:var(--card,#fff);color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.primario{background:#3b5bdb;border-color:#3b5bdb;color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .chip{font-size:11.5px;background:var(--tint-gray-bg,#f1f3f7);border-radius:999px;padding:3px 10px;color:var(--muted,#667085)}
+  /* Totais: a resposta de gerência tem que aparecer antes da tabela. */
+  .totais{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .total{background:var(--tint-gray-bg,#f7f8fb);border-radius:11px;padding:12px 14px;border:1px solid var(--border,#e4e7ec)}
+  .total .rot{font-size:11.5px;color:var(--muted,#667085);text-transform:uppercase;letter-spacing:.4px}
+  .total .val{font-size:22px;font-weight:700;margin-top:3px;line-height:1.15}
+  .total .obs{font-size:11px;color:var(--muted,#667085);margin-top:2px}
+  .tabela-wrap{overflow-x:auto;max-height:620px;overflow-y:auto;border:1px solid var(--border,#e4e7ec);border-radius:10px}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--border,#eef0f4);white-space:nowrap}
+  thead th{position:sticky;top:0;background:var(--card,#fff);z-index:1;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted,#667085);cursor:pointer;user-select:none}
+  thead th .seta{opacity:.4;font-size:9px}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr:hover{background:var(--tint-gray-bg,#f7f8fb)}
+  .produto{white-space:normal;min-width:220px}
+  .menor{font-size:11px;color:var(--muted,#667085)}
+  .aviso{font-size:12px;color:var(--muted,#667085);padding:16px;text-align:center}
+  .badge{font-size:11px;border-radius:999px;padding:2px 8px;font-weight:600}
+  .b-cinza{background:var(--tint-gray-bg,#f1f3f7);color:var(--muted,#667085)}
+  .b-verm{background:#fdecec;color:#b42318}
+  .b-lar{background:#fff4e6;color:#b54708}
+  /* Gráfico: barras em SVG, sem biblioteca. O CSP do sistema não carrega CDN. */
+  .graf{width:100%;height:190px;display:block}
+  .graf .barra{fill:#3b5bdb}
+  .graf .rotulo{font-size:9.5px;fill:var(--muted,#667085)}
+  @media(max-width:700px){.wrap{padding:14px 10px 40px}.total .val{font-size:18px}}
+</style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="wrap">
+  <h1>Relatório de Expedição</h1>
+  <div class="sub">Tudo que saiu, com os recortes cruzados. Use para responder perguntas do tipo “o que expedi da Afeer, dos itens X, Y e Z, entre duas datas”.</div>
+
+  <div class="card">
+    <h2>Filtros</h2>
+    <div class="filtros">
+      <div class="campo"><label for="fDe">Data de</label><input type="date" id="fDe"></div>
+      <div class="campo"><label for="fAte">Data até</label><input type="date" id="fAte"></div>
+      <div class="campo"><label for="fCliente">Cliente</label><select id="fCliente" multiple></select><span class="dica">Ctrl/⌘ para marcar vários. Nada marcado = todos.</span></div>
+      <div class="campo"><label for="fSku">Item / SKU</label><input type="search" id="fSkuBusca" placeholder="filtrar a lista…"><select id="fSku" multiple></select></div>
+      <div class="campo"><label for="fStatus">Situação</label><select id="fStatus" multiple></select></div>
+      <div class="campo"><label for="fTransp">Transportadora</label><select id="fTransp" multiple></select></div>
+      <div class="campo"><label for="fPedido">Pedido</label><input type="search" id="fPedido" placeholder="ex.: 0019"></div>
+      <div class="campo"><label for="fOp">OP / lote</label><input type="search" id="fOp" placeholder="ex.: 26244/16"></div>
+      <div class="campo"><label for="fNf">Nota fiscal</label><input type="search" id="fNf" placeholder="nº da NF"></div>
+      <div class="campo"><label for="fLivre">Busca livre</label><input type="search" id="fLivre" placeholder="qualquer campo"></div>
+      <div class="campo"><label for="fAgrupar">Agrupar por</label>
+        <select id="fAgrupar">
+          <option value="">Detalhado (linha a linha)</option>
+          <option value="cliente">Cliente</option>
+          <option value="sku">Item / SKU</option>
+          <option value="mes">Mês</option>
+          <option value="pedido">Pedido</option>
+          <option value="op">OP / lote</option>
+          <option value="transportadora">Transportadora</option>
+          <option value="status">Situação</option>
+        </select></div>
+    </div>
+    <div class="acoes">
+      <button class="btn" id="btnLimpar">Limpar filtros</button>
+      <button class="btn primario" id="btnCsv">⬇ Exportar CSV</button>
+      <span class="menor" id="periodoInfo"></span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="card">
+    <h2>Totais do recorte</h2>
+    <div class="totais" id="totais"></div>
+  </div>
+
+  <div class="card" id="cardGraf">
+    <h2 id="tituloGraf">Evolução por mês</h2>
+    <svg class="graf" id="graf" role="img" aria-label="Unidades expedidas por mês"></svg>
+  </div>
+
+  <div class="card">
+    <h2 id="tituloTabela">Resultado</h2>
+    <div class="tabela-wrap"><table>
+      <thead><tr id="cabecalho"></tr></thead>
+      <tbody id="corpo"><tr><td class="aviso">Carregando…</td></tr></tbody>
+    </table></div>
+    <div class="menor" id="rodape" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<script>
+/* ── Relatório de Expedição ───────────────────────────────────────────
+   Pedido do usuário: "saber tudo que expedi da Afeer, do item x, y e z,
+   entre as datas p e q" -- e que isso seja tão rápido quanto no Excel.
+
+   Tela SEPARADA da Expedição de propósito: a Expedição é operação (montar
+   carga), isto é consulta. Também evita disputar arquivo com o Codex, que
+   está com expedicao.html e expedicao-grade-tela.js abertos.
+
+   A fonte é `expedicoes_comerciais`, que guarda tanto a carga do fluxo novo
+   (versao 2) quanto o histórico importado da planilha (legado). Cada linha
+   do relatório é um ITEM de uma carga -- é esse o grão que responde "do item
+   x", e é o mesmo grão da planilha que o PCP já usa. */
+'use strict';
+var db = firebase.database();
+var cargas = {}, linhas = [], filtradas = [];
+var ordem = {campo: 'data', desc: true};
+
+function txt(v) { return v === null || v === undefined ? '' : String(v); }
+function num(v) { return Number(v) || 0; }
+function fmt(v, casas) {
+  return Number(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: casas || 0, maximumFractionDigits: casas || 0});
+}
+function dataValida(v) {
+  var s = txt(v).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+}
+function dataBR(iso) {
+  var s = txt(iso).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : (s || '—');
+}
+function esc(s) {
+  return txt(s).replace(/[&<>"']/g, function(c) {
+    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+  });
+}
+// Busca sem acento e sem caixa -- "afeer" tem que achar "AFEER", e
+// "devolucao" tem que achar "Devolução".
+function normalizar(s) {
+  return txt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/* Achata cargas -> itens. Cada item herda os dados da carga (cliente, data,
+   NF, transporte) porque é assim que a pergunta é feita: "o que saiu do item
+   X para o cliente Y", não "quais cargas tiveram o item X". */
+function achatar() {
+  var out = [];
+  Object.keys(cargas).forEach(function(cargaKey) {
+    var c = cargas[cargaKey] || {};
+    var itens = c.itens || {};
+    Object.keys(itens).forEach(function(itemKey) {
+      var i = itens[itemKey] || {};
+      var po = i.paleteOrigem || {};
+      var caixas = num(i.caixasFechadas || po.caixasFechadas);
+      var peso = num(i.pesoTotalKg);
+      if (!peso && i.pesoPorCaixaKg) peso = num(i.pesoPorCaixaKg) * caixas;
+      out.push({
+        cargaKey: cargaKey, itemKey: itemKey,
+        // Carga do fluxo novo não tem `status` textual; é sempre saída confirmada.
+        status: txt(c.status || (c.versao === 2 ? 'Expedido' : 'Legado')),
+        legado: !!c.legado,
+        // Só vale como data o que tem forma de data. A planilha traz lixo em
+        // algumas linhas ("-", vazio) e, sem esse filtro, esse lixo virava o
+        // início do período e entrava nas comparações de de/até.
+        data: dataValida(c.data) || dataValida(c.criadoEm) || '',
+        cliente: txt(c.cliente || i.cliente),
+        nf: txt(c.nf), numero: txt(c.numero || cargaKey),
+        transportadora: txt(c.transportadora), motorista: txt(c.motorista), placa: txt(c.placa),
+        sku: txt(i.sku || i.itemCodigo),
+        produto: txt(i.descricao || i.itemNome),
+        pedido: txt(i.pedidoNumero || i.pedidoId),
+        op: txt(i.opLote || i.loteOrigem),
+        palete: txt(i.identificadorPalete),
+        unidades: num(i.qtd), caixas: caixas,
+        multiplo: num(i.unidadesPorCaixa || po.unidadesPorCaixa),
+        peso: peso,
+        vinculoPendente: !!i.vinculoPendente, vinculoMotivo: txt(i.vinculoMotivo),
+        dataFabricacao: txt(i.dataFabricacao).slice(0, 10),
+        observacoes: txt(c.observacoes)
+      });
+    });
+  });
+  return out;
+}
+
+function marcados(id) {
+  return Array.prototype.slice.call(document.getElementById(id).selectedOptions).map(function(o) { return o.value; });
+}
+function preencherSelect(id, valores, preservar) {
+  var el = document.getElementById(id);
+  var antes = preservar ? marcados(id) : [];
+  el.innerHTML = valores.map(function(v) {
+    return '<option value="' + esc(v) + '"' + (antes.indexOf(v) !== -1 ? ' selected' : '') + '>' + esc(v) + '</option>';
+  }).join('');
+}
+function distintos(campo) {
+  var vistos = {};
+  linhas.forEach(function(l) {
+    var v = l[campo];
+    // A planilha usa "-" e "—" como "não informado". Virar opção de filtro
+    // só suja a lista: quem quer esses casos usa a busca livre.
+    if (v && !/^[-–—.\s]+$/.test(v)) vistos[v] = 1;
+  });
+  return Object.keys(vistos).sort(function(a, b) { return a.localeCompare(b, 'pt-BR'); });
+}
+
+function aplicarFiltros() {
+  var de = document.getElementById('fDe').value;
+  var ate = document.getElementById('fAte').value;
+  var cli = marcados('fCliente'), sku = marcados('fSku');
+  var sts = marcados('fStatus'), tra = marcados('fTransp');
+  var ped = normalizar(document.getElementById('fPedido').value.trim());
+  var op = normalizar(document.getElementById('fOp').value.trim());
+  var nf = normalizar(document.getElementById('fNf').value.trim());
+  var livre = normalizar(document.getElementById('fLivre').value.trim());
+
+  filtradas = linhas.filter(function(l) {
+    // Linha sem data só some quando existe recorte de período -- senão ela
+    // sumiria calada do total, e são 3 linhas reais da planilha.
+    if (de && (!l.data || l.data < de)) return false;
+    if (ate && (!l.data || l.data > ate)) return false;
+    if (cli.length && cli.indexOf(l.cliente) === -1) return false;
+    if (sku.length && sku.indexOf(l.sku) === -1) return false;
+    if (sts.length && sts.indexOf(l.status) === -1) return false;
+    if (tra.length && tra.indexOf(l.transportadora) === -1) return false;
+    if (ped && normalizar(l.pedido).indexOf(ped) === -1) return false;
+    if (op && normalizar(l.op).indexOf(op) === -1) return false;
+    if (nf && normalizar(l.nf).indexOf(nf) === -1) return false;
+    if (livre) {
+      var tudo = normalizar([l.cliente, l.sku, l.produto, l.pedido, l.op, l.nf,
+        l.transportadora, l.motorista, l.placa, l.palete, l.status, l.observacoes].join(' '));
+      if (tudo.indexOf(livre) === -1) return false;
+    }
+    return true;
+  });
+  render();
+}
+
+function agrupar(chaveDe, rotulo) {
+  var mapa = {};
+  filtradas.forEach(function(l) {
+    var k = chaveDe(l) || '(sem informação)';
+    if (!mapa[k]) mapa[k] = {chave: k, unidades: 0, caixas: 0, peso: 0, linhas: 0, cargas: {}, clientes: {}, skus: {}};
+    var g = mapa[k];
+    g.unidades += l.unidades; g.caixas += l.caixas; g.peso += l.peso; g.linhas++;
+    g.cargas[l.cargaKey] = 1;
+    if (l.cliente) g.clientes[l.cliente] = 1;
+    if (l.sku) g.skus[l.sku] = 1;
+  });
+  return {rotulo: rotulo, itens: Object.keys(mapa).map(function(k) { return mapa[k]; })};
+}
+
+var COLUNAS = [
+  {campo: 'data', rot: 'Data', fmt: function(l) { return dataBR(l.data); }},
+  {campo: 'status', rot: 'Situação', fmt: function(l) {
+    var cls = /furto/i.test(l.status) ? 'b-verm' : /devolu|retrab/i.test(l.status) ? 'b-lar' : 'b-cinza';
+    return '<span class="badge ' + cls + '">' + esc(l.status) + '</span>';
+  }},
+  {campo: 'cliente', rot: 'Cliente'},
+  {campo: 'sku', rot: 'Item', fmt: function(l) {
+    return '<div class="produto"><b>' + esc(l.sku) + '</b><div class="menor">' + esc(l.produto) + '</div></div>';
+  }},
+  {campo: 'pedido', rot: 'Pedido', fmt: function(l) {
+    return esc(l.pedido || '—') + (l.vinculoPendente ? '<div class="menor" title="' + esc(l.vinculoMotivo) + '">vínculo pendente</div>' : '');
+  }},
+  {campo: 'op', rot: 'OP / lote'},
+  {campo: 'nf', rot: 'NF', fmt: function(l) { return esc(l.nf || '—'); }},
+  {campo: 'caixas', rot: 'Caixas', num: true, fmt: function(l) {
+    return fmt(l.caixas) + (l.multiplo ? '<span class="menor"> ×' + fmt(l.multiplo) + '</span>' : '');
+  }},
+  {campo: 'unidades', rot: 'Unidades', num: true, fmt: function(l) { return fmt(l.unidades); }},
+  {campo: 'peso', rot: 'Peso (kg)', num: true, fmt: function(l) { return l.peso ? fmt(l.peso, 1) : '—'; }},
+  {campo: 'transportadora', rot: 'Transportadora', fmt: function(l) {
+    return esc(l.transportadora || '—') + (l.placa ? '<div class="menor">' + esc(l.placa) + '</div>' : '');
+  }}
+];
+
+function render() {
+  var agruparPor = document.getElementById('fAgrupar').value;
+  renderTotais();
+  renderGrafico();
+  if (agruparPor) renderAgrupado(agruparPor); else renderDetalhado();
+  renderChips();
+}
+
+function renderTotais() {
+  var uni = 0, cx = 0, kg = 0, cargasSet = {}, clientesSet = {}, skusSet = {}, pendentes = 0;
+  filtradas.forEach(function(l) {
+    uni += l.unidades; cx += l.caixas; kg += l.peso;
+    cargasSet[l.cargaKey] = 1;
+    if (l.cliente) clientesSet[l.cliente] = 1;
+    if (l.sku) skusSet[l.sku] = 1;
+    if (l.vinculoPendente) pendentes++;
+  });
+  function bloco(rot, val, obs) {
+    return '<div class="total"><div class="rot">' + rot + '</div><div class="val">' + val + '</div>' +
+      (obs ? '<div class="obs">' + obs + '</div>' : '') + '</div>';
+  }
+  document.getElementById('totais').innerHTML =
+    bloco('Unidades', fmt(uni)) +
+    bloco('Caixas', fmt(cx)) +
+    bloco('Peso', kg ? fmt(kg, 1) + ' kg' : '—', kg ? '' : 'sem peso no recorte') +
+    bloco('Linhas', fmt(filtradas.length), Object.keys(cargasSet).length + ' carga(s)') +
+    bloco('Clientes', fmt(Object.keys(clientesSet).length)) +
+    bloco('Itens', fmt(Object.keys(skusSet).length)) +
+    (pendentes ? bloco('Sem pedido', fmt(pendentes), 'vínculo a regularizar') : '');
+}
+
+/* Barras por mês, SVG puro: o sistema não carrega biblioteca de fora. */
+function renderGrafico() {
+  var porMes = {};
+  filtradas.forEach(function(l) {
+    if (!l.data) return;
+    var m = l.data.slice(0, 7);
+    porMes[m] = (porMes[m] || 0) + l.unidades;
+  });
+  var meses = Object.keys(porMes).sort();
+  var svg = document.getElementById('graf');
+  if (meses.length < 2) {
+    document.getElementById('cardGraf').style.display = 'none';
+    return;
+  }
+  document.getElementById('cardGraf').style.display = '';
+  // Só os 24 meses mais recentes cabem legíveis.
+  if (meses.length > 24) meses = meses.slice(-24);
+  var max = Math.max.apply(null, meses.map(function(m) { return porMes[m]; })) || 1;
+  var larg = 1000, alt = 190, base = alt - 26, passo = larg / meses.length;
+  var corpo = meses.map(function(m, i) {
+    var h = Math.max(2, (porMes[m] / max) * (base - 14));
+    var x = i * passo + passo * 0.15, w = passo * 0.7;
+    return '<rect class="barra" x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + w.toFixed(1) +
+      '" height="' + h.toFixed(1) + '" rx="2"><title>' + esc(m) + ': ' + fmt(porMes[m]) + ' un</title></rect>' +
+      '<text class="rotulo" x="' + (i * passo + passo / 2).toFixed(1) + '" y="' + (alt - 9) +
+      '" text-anchor="middle">' + esc(m.slice(5) + '/' + m.slice(2, 4)) + '</text>';
+  }).join('');
+  svg.setAttribute('viewBox', '0 0 ' + larg + ' ' + alt);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = corpo;
+  document.getElementById('tituloGraf').textContent =
+    'Unidades por mês — ' + meses.length + ' mês(es) no recorte';
+}
+
+function ordenar(lista, campo, desc) {
+  return lista.slice().sort(function(a, b) {
+    var x = a[campo], y = b[campo], r;
+    if (typeof x === 'number' && typeof y === 'number') r = x - y;
+    else r = txt(x).localeCompare(txt(y), 'pt-BR');
+    return desc ? -r : r;
+  });
+}
+
+function renderDetalhado() {
+  document.getElementById('tituloTabela').textContent = 'Resultado — linha a linha';
+  document.getElementById('cabecalho').innerHTML = COLUNAS.map(function(c) {
+    var seta = ordem.campo === c.campo ? '<span class="seta">' + (ordem.desc ? '▼' : '▲') + '</span>' : '';
+    return '<th class="' + (c.num ? 'num' : '') + '" data-campo="' + c.campo + '">' + c.rot + ' ' + seta + '</th>';
+  }).join('');
+  var dados = ordenar(filtradas, ordem.campo, ordem.desc);
+  // 600 linhas cobrem qualquer recorte útil sem travar a tela; o CSV leva tudo.
+  var corte = dados.slice(0, 600);
+  document.getElementById('corpo').innerHTML = corte.length
+    ? corte.map(function(l) {
+        return '<tr>' + COLUNAS.map(function(c) {
+          return '<td class="' + (c.num ? 'num' : '') + '">' + (c.fmt ? c.fmt(l) : esc(l[c.campo] || '—')) + '</td>';
+        }).join('') + '</tr>';
+      }).join('')
+    : '<tr><td class="aviso" colspan="' + COLUNAS.length + '">Nenhuma saída com esses filtros.</td></tr>';
+  document.getElementById('rodape').textContent = dados.length > corte.length
+    ? 'Mostrando as ' + fmt(corte.length) + ' primeiras de ' + fmt(dados.length) + ' linhas. O CSV exporta todas.'
+    : fmt(dados.length) + ' linha(s).';
+  ligarOrdenacao();
+}
+
+var AGRUPADORES = {
+  cliente: [function(l) { return l.cliente; }, 'Cliente'],
+  sku: [function(l) { return l.sku + (l.produto ? ' — ' + l.produto : ''); }, 'Item'],
+  mes: [function(l) { return l.data ? l.data.slice(0, 7) : ''; }, 'Mês'],
+  pedido: [function(l) { return l.pedido; }, 'Pedido'],
+  op: [function(l) { return l.op; }, 'OP / lote'],
+  transportadora: [function(l) { return l.transportadora; }, 'Transportadora'],
+  status: [function(l) { return l.status; }, 'Situação']
+};
+
+function renderAgrupado(tipo) {
+  var cfg = AGRUPADORES[tipo];
+  var g = agrupar(cfg[0], cfg[1]);
+  document.getElementById('tituloTabela').textContent = 'Resultado — agrupado por ' + cfg[1].toLowerCase();
+  var cols = [{campo: 'chave', rot: cfg[1]}, {campo: 'unidades', rot: 'Unidades', num: true},
+    {campo: 'caixas', rot: 'Caixas', num: true}, {campo: 'peso', rot: 'Peso (kg)', num: true},
+    {campo: 'linhas', rot: 'Linhas', num: true}, {campo: 'cargas', rot: 'Cargas', num: true},
+    {campo: 'clientes', rot: 'Clientes', num: true}, {campo: 'skus', rot: 'Itens', num: true}];
+  var dados = g.itens.map(function(x) {
+    return {chave: x.chave, unidades: x.unidades, caixas: x.caixas, peso: x.peso, linhas: x.linhas,
+      cargas: Object.keys(x.cargas).length, clientes: Object.keys(x.clientes).length, skus: Object.keys(x.skus).length};
+  });
+  var campo = ordem.campo, temCampo = cols.some(function(c) { return c.campo === campo; });
+  dados = ordenar(dados, temCampo ? campo : 'unidades', temCampo ? ordem.desc : true);
+  document.getElementById('cabecalho').innerHTML = cols.map(function(c) {
+    var seta = ordem.campo === c.campo ? '<span class="seta">' + (ordem.desc ? '▼' : '▲') + '</span>' : '';
+    return '<th class="' + (c.num ? 'num' : '') + '" data-campo="' + c.campo + '">' + c.rot + ' ' + seta + '</th>';
+  }).join('');
+  document.getElementById('corpo').innerHTML = dados.length
+    ? dados.map(function(r) {
+        return '<tr>' + cols.map(function(c) {
+          var v = r[c.campo];
+          return '<td class="' + (c.num ? 'num' : '') + '">' +
+            (c.num ? fmt(v, c.campo === 'peso' ? 1 : 0) : esc(v)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('')
+    : '<tr><td class="aviso" colspan="' + cols.length + '">Nenhuma saída com esses filtros.</td></tr>';
+  document.getElementById('rodape').textContent = fmt(dados.length) + ' grupo(s).';
+  ligarOrdenacao();
+}
+
+function ligarOrdenacao() {
+  document.querySelectorAll('#cabecalho th[data-campo]').forEach(function(th) {
+    th.onclick = function() {
+      var campo = th.getAttribute('data-campo');
+      if (ordem.campo === campo) ordem.desc = !ordem.desc;
+      else { ordem.campo = campo; ordem.desc = true; }
+      render();
+    };
+  });
+}
+
+function renderChips() {
+  var partes = [];
+  var de = document.getElementById('fDe').value, ate = document.getElementById('fAte').value;
+  if (de || ate) partes.push('período ' + (de ? dataBR(de) : 'início') + ' → ' + (ate ? dataBR(ate) : 'hoje'));
+  [['fCliente', 'cliente'], ['fSku', 'item'], ['fStatus', 'situação'], ['fTransp', 'transportadora']].forEach(function(p) {
+    var m = marcados(p[0]);
+    if (m.length) partes.push(p[1] + ': ' + (m.length <= 3 ? m.join(', ') : m.length + ' selecionados'));
+  });
+  [['fPedido', 'pedido'], ['fOp', 'OP'], ['fNf', 'NF'], ['fLivre', 'busca']].forEach(function(p) {
+    var v = document.getElementById(p[0]).value.trim();
+    if (v) partes.push(p[1] + ': ' + v);
+  });
+  document.getElementById('chips').innerHTML = partes.length
+    ? partes.map(function(t) { return '<span class="chip">' + esc(t) + '</span>'; }).join('')
+    : '<span class="chip">sem filtro — todo o histórico</span>';
+}
+
+function exportarCsv() {
+  var agruparPor = document.getElementById('fAgrupar').value;
+  var cabec, corpo;
+  if (agruparPor) {
+    var cfg = AGRUPADORES[agruparPor];
+    var g = agrupar(cfg[0], cfg[1]);
+    cabec = [cfg[1], 'Unidades', 'Caixas', 'Peso (kg)', 'Linhas', 'Cargas', 'Clientes', 'Itens'];
+    corpo = ordenar(g.itens, 'unidades', true).map(function(x) {
+      return [x.chave, x.unidades, x.caixas, x.peso, x.linhas,
+        Object.keys(x.cargas).length, Object.keys(x.clientes).length, Object.keys(x.skus).length];
+    });
+  } else {
+    cabec = ['Data', 'Situacao', 'Cliente', 'SKU', 'Produto', 'Pedido', 'OP/Lote', 'NF',
+      'Caixas', 'Multiplo', 'Unidades', 'Peso (kg)', 'Transportadora', 'Motorista', 'Placa',
+      'Palete', 'Data fabricacao', 'Vinculo pendente', 'Observacoes'];
+    corpo = ordenar(filtradas, ordem.campo, ordem.desc).map(function(l) {
+      return [l.data, l.status, l.cliente, l.sku, l.produto, l.pedido, l.op, l.nf,
+        l.caixas, l.multiplo, l.unidades, l.peso, l.transportadora, l.motorista, l.placa,
+        l.palete, l.dataFabricacao, l.vinculoPendente ? 'SIM' : '', l.observacoes];
+    });
+  }
+  // ; como separador e vírgula decimal: é o que o Excel em pt-BR abre direto,
+  // sem passar pelo assistente de importação.
+  function celula(v) {
+    if (typeof v === 'number') return String(v).replace('.', ',');
+    return '"' + txt(v).replace(/"/g, '""') + '"';
+  }
+  var csv = [cabec.map(celula).join(';')].concat(corpo.map(function(l) { return l.map(celula).join(';'); })).join('\r\n');
+  var blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'expedicao_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+function limpar() {
+  ['fDe', 'fAte', 'fPedido', 'fOp', 'fNf', 'fLivre', 'fSkuBusca'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  ['fCliente', 'fSku', 'fStatus', 'fTransp'].forEach(function(id) {
+    Array.prototype.forEach.call(document.getElementById(id).options, function(o) { o.selected = false; });
+  });
+  document.getElementById('fAgrupar').value = '';
+  ordem = {campo: 'data', desc: true};
+  preencherSelect('fSku', distintos('sku'), false);
+  aplicarFiltros();
+}
+
+function montarListas() {
+  preencherSelect('fCliente', distintos('cliente'), true);
+  preencherSelect('fStatus', distintos('status'), true);
+  preencherSelect('fTransp', distintos('transportadora'), true);
+  var busca = normalizar(document.getElementById('fSkuBusca').value.trim());
+  var skus = distintos('sku');
+  if (busca) {
+    var descricao = {};
+    linhas.forEach(function(l) { if (l.sku && !descricao[l.sku]) descricao[l.sku] = l.produto; });
+    skus = skus.filter(function(s) { return normalizar(s + ' ' + (descricao[s] || '')).indexOf(busca) !== -1; });
+  }
+  preencherSelect('fSku', skus, true);
+  var datas = linhas.map(function(l) { return l.data; }).filter(Boolean).sort();
+  document.getElementById('periodoInfo').textContent = datas.length
+    ? 'Histórico de ' + dataBR(datas[0]) + ' a ' + dataBR(datas[datas.length - 1]) + ' · ' + fmt(linhas.length) + ' linhas'
+    : '';
+}
+
+['fDe', 'fAte', 'fPedido', 'fOp', 'fNf', 'fLivre'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', aplicarFiltros);
+});
+['fCliente', 'fSku', 'fStatus', 'fTransp', 'fAgrupar'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', aplicarFiltros);
+});
+document.getElementById('fSkuBusca').addEventListener('input', function() { montarListas(); aplicarFiltros(); });
+document.getElementById('btnLimpar').addEventListener('click', limpar);
+document.getElementById('btnCsv').addEventListener('click', exportarCsv);
+
+dbOnValue(db.ref('expedicoes_comerciais'), function(snap) {
+  cargas = snap.val() || {};
+  linhas = achatar();
+  montarListas();
+  aplicarFiltros();
+});
+</script>
+</body></html>
