@@ -114,6 +114,31 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — cancelamento de Pedido de Compra (2026-09-15).**
+  `34d3aae` no `origin/main`; por worktree limpo às 10:17 BRT: Functions
+  (`registrarRecebimento`, `cancelarRecebimento`,
+  `registrarDevolucaoRecebimento`), regras RTDB e Hosting (`compras.html`,
+  `shared/cancelamento-pc.js`, `manual_compras.html` e `estoque.html`
+  idênticos ao commit; callable sem login 401).
+  **Regras:** só admin cancela PC ABERTO/ENVIADO/RECEBIDO_PARCIAL; motivo
+  obrigatório; PC vira CANCELADO (nunca apagado, nunca reaberto) com
+  `cancelamento` {motivo, canceladoPor/Em, statusAnterior, saldoPorItem,
+  solicitacoesReabertas}. Parcial cancela só o saldo. SC de origem pode voltar a
+  APROVADA (só sem recebimento) com `reaberturaPorCancelamentoPC`. Filtro
+  Cancelados/Todos na aba; faixa “PEDIDO CANCELADO — NÃO ATENDER” no documento;
+  cancelado fora de preço/histórico/análise de fornecedor. Editar segue só em
+  ABERTO; PC enviado errado = cancelar e emitir novo.
+  **Travas:** `database.rules.json` `pedidos_compra/$pedidoKey/status` só
+  entra/sai de CANCELADO com role admin; `statusPedidoApos(itens, deltas,
+  statusAtual)` mantém CANCELADO em estorno/devolução. Logística e MRP não
+  mudaram (já filtram ENVIADO/RECEBIDO_PARCIAL).
+  **Validação:** `run_cancelamento_pc_test.js`; ensaio nos emuladores Auth +
+  Database + Hosting com cópia dos 4 PCs de produção. **Atenção:** o emulador
+  NÃO carrega `database.rules.json` no ns `prod-kuryos` que as telas usam (sobe
+  aberto) — carregue com `PUT /.settings/rules.json?ns=prod-kuryos`, senão
+  teste de permissão passa falso. Suíte 31/31.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — detalhe da posição em popup (2026-09-15).** `ff2d7c2`
   no `origin/main`; Hosting por worktree limpo, `estoque.html` idêntico ao
   commit. O conteúdo do palete abre em modal (X, clique fora, Esc) em vez de
