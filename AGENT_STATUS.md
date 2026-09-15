@@ -114,6 +114,38 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Histórico de apontamentos: início/término e visão
+  condensada por OP (2026-09-15).** `bc904a0` no `origin/main`; Hosting por
+  **worktree limpo** às 10:37 BRT (2 arquivos enviados; `historico.html`,
+  `shared/historico-apontamentos.js` e `utils.js` SHA256 idênticos ao commit;
+  `contatos-cliente.js` segue 404).
+  **Causa do "só hora":** `loadRegistros` montava a linha campo a campo e nunca
+  levava `periodoInicio/periodoFim`; `fmtRegistroRange` caía sempre na hora
+  cheia + 1h. **Regras do usuário:** coluna com data e hora de início e de
+  término; sem término = `?` (registro antigo), nunca presumido; editar início e
+  término; condensar os apontamentos de cada OP para conferir; horas
+  trabalhadas e un/h da OP.
+  **Motor:** `shared/historico-apontamentos.js` (puro). Condensa por lote +
+  setor; un/h só com a quantidade dos registros com horas conhecidas.
+  Conferência: acumulado do checkpoint × soma até ele, total da OP × soma
+  (soma maior = erro; menor = aviso, pode ser registro fora do período),
+  sobreposição na mesma linha, apontamento > 12h, registros sem término.
+  **Edição:** sem mexer nos campos não reescreve horário; com término grava
+  período e recalcula `horasTrabalhadas` mantendo a pausa descontada; não
+  deixa apagar término; registro fica no dia dele se o dia estiver no período.
+  **Corrigido junto:** mudar a data na edição apagava período, horas, fonte e
+  timestamp (nó novo só com os campos do modal); Por Pedido lia `horasUteis`
+  (não existe) e mostrava a quantidade inteira como "/h"; aba Por OP não
+  redesenhava ao Carregar.
+  **Ensaio na base (482 registros, jun–set):** 35% sem término; 66 OP/setor
+  com apontamento > 12h (retroativo de 24h/dia, linha aberta no fim de
+  semana). **Pendente de autorização do usuário (dado):** 26219/03 tem +144
+  e 26217/03 −144 (checkpoints 4.416 × 4.272 trocados) — não mexi.
+  Testes: `run_historico_apontamentos_test.js` (20) e
+  `run_historico_apontamentos_ui_test.js` (10, cai para o Edge se o Chromium
+  do Playwright não estiver baixado). Suíte 35/35.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — e-mail ao PCP quando OP é encerrada (2026-09-15).**
   `8502d57` no `origin/main`; Function nova `onOpEncerrada` criada em
   `prod-kuryos` por worktree limpo (listada como
