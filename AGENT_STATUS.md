@@ -114,6 +114,32 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Pedidos: colunas Expedido e Conferência (2026-09-15).**
+  `f5974e2` no `origin/main`; Hosting por **worktree limpo**, conferido
+  (`pedidos.html`, `shared/conciliacao-pedidos.js`, `shared/expedicao.js`
+  SHA256 idênticos ao commit; `contatos-cliente.js` segue 404).
+  **Conta:** Produzido = Expedido + Em estoque, nas tabelas SKUs e Pedidos
+  Comerciais. **Regras do usuário:** só dois destinos; expedido tem motivo
+  (de fato, furto, descarte); retrabalho e devolução voltam ao estoque; só
+  exato é OK, exceto quando a Conferência de PA conciliou divergência (entra
+  na conta); produzido sem registro fica cinza. No pedido comercial a
+  situação é a do **pior item**.
+  **Motor:** `public/shared/conciliacao-pedidos.js` (puro; depende de
+  `shared/expedicao.js` para resolver a chave). Fontes: `pedidos.produzido`,
+  `expedicoes_comerciais`, `estoque_lotes`, `solicitacoes_descarte`,
+  `conferencias_pa`. **Não lê `pedidos/{k}/expedido`** (gravado pelo
+  `confirmarExpedicaoPA`): conta pelas cargas, para não somar duas vezes.
+  **Ensaio na base:** 358 pedidos, 101 OK, 163 com diferença, 66 sem registro;
+  conservação exata das 3.094.141 un. Testes:
+  `run_conciliacao_pedidos_test.js` e `run_pedidos_conciliacao_ui_test.js`
+  (no worktree de deploy, rodar com `PLAYWRIGHT_MODULE` apontando para o
+  `node_modules` do repo).
+- **Pendente de autorização do usuário (dado):** OPs 26243/07 e 26244/11
+  (HDR-MISS-0008, Midnight Honey) apontam para `23__HDR-MISS-0008`, que não
+  existe; o item é do pedido **27** (produzido 2.071 = 260 + 1.811). Correção:
+  `ops/{op}/skuPedidoKey = 27__HDR-MISS-0008` + reaplicar a carga do legado.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — caixa parcial dentro do palete no legado (2026-09-14).**
   `b0f7c72` no `origin/main`; Hosting (`relatorio_expedicao.html`) por
   **worktree limpo**, conferido idêntico ao commit. **Carga reaplicada em
