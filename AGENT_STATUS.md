@@ -114,6 +114,37 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Relatório de Expedição (2026-09-14).** `c24fce8` no
+  `origin/main` e no Hosting `prod-kuryos`, por **worktree limpo**
+  (`Documents/Codex/deploy-relatorio-c24fce8`). Conferido no ar:
+  `relatorio_expedicao.html` e `auth_check.js` HTTP 200 e **SHA256 idêntico ao
+  commit**.
+  Tela nova `public/relatorio_expedicao.html`, no menu de Logística e no mesmo
+  módulo de acesso. **Deliberadamente fora de `expedicao.html`:** Expedição é
+  operação (montar carga), isto é consulta — e aquele arquivo é do Codex.
+  **O grão é o ITEM de uma carga**, não a carga: é como a pergunta é feita
+  ("o que saiu do item X para o cliente Y") e é o mesmo grão da planilha que o
+  PCP usa para conferir OP e pedido.
+  Filtros que se cruzam: período, cliente e item por seleção múltipla,
+  situação, transportadora, pedido, OP/lote, NF e busca livre sem acento.
+  Agrupamento por cliente, item, mês, pedido, OP, transportadora ou situação.
+  Totais do recorte, gráfico de barras por mês em **SVG puro** (o sistema não
+  carrega biblioteca de fora) e exportação CSV com `;` e vírgula decimal, que
+  o Excel pt-BR abre direto.
+- **Medido contra a base real:** 1.722 linhas, 3.063.149 unidades, 67.125
+  caixas, 587 t, 28 clientes, 166 itens, de 25/04/2025 a 11/09/2026.
+- **Correções junto:** peso passou a ir também para o histórico (antes só no
+  palete em estoque), rótulos de situação ganharam acento, e data inválida
+  (`-`/vazio da planilha) deixou de ser tratada como data — virava o início do
+  período e entrava nas comparações de de/até. Carga reaplicada; **idempotente**,
+  segue em 26 paletes e 338 cargas.
+- **Validação:** `run_relatorio_expedicao_test.js` novo (playwright) cobre o
+  caso do usuário ponta a ponta, peso derivado de kg/caixa, agrupamento,
+  ordenação, CSV filtrado com BOM, busca sem acento e celular. **Os 21 testes
+  do repo passam.**
+- **Arquivos ativos:** nenhum. Só `public/auth_check.js` foi tocado fora da
+  tela nova (uma linha no menu e a página no módulo `logistica`).
+
 - **Entrega publicada — Expedição: histórico e estoque legado da planilha (2026-09-14).**
   `31674b6` no `origin/main`; Hosting + `confirmarExpedicaoPA` +
   `salvarAgendamentoExpedicaoPA` publicados no `prod-kuryos` por **worktree
