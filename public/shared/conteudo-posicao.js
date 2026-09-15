@@ -76,6 +76,13 @@
       item.volumes = volumesMaterial(lote);
       item.peso = pesoMaterial(lote, material);
       item.origem = [receb.fornecedorNome || null, receb.notaFiscal ? 'NF ' + receb.notaFiscal : null].filter(Boolean).join(' · ');
+      // De quem é o material (shared/propriedade-estoque.js). Lote anterior à
+      // regra, sem o campo, é da Kuryos.
+      var p = lote.propriedade || {}, d = lote.destino || {};
+      item.dono = p.tipo === 'CLIENTE' && p.clienteKey
+        ? {tipo: 'CLIENTE', clienteKey: p.clienteKey, nome: p.clienteNome || p.clienteKey}
+        : {tipo: 'KURYOS', clienteKey: null, nome: 'Kuryos'};
+      item.destino = d.clienteKey ? {clienteKey: d.clienteKey, nome: d.clienteNome || d.clienteKey, pedidos: d.pedidos || []} : null;
     }
     return item;
   }

@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -1776,9 +1777,10 @@
       var selo = '';
       if (item.mpCodigo) {
         var estItem = allEstoqueIns[sanitizeKey(item.mpCodigo)];
-        var saldoEst = estItem ? (estItem.saldoAtual || 0) : null;
         var empenhado = estItem ? (estItem.saldoEmpenhado || 0) : 0;
-        var disponivel = saldoEst != null ? saldoEst - empenhado : null;
+        // Geral da Kuryos + a parte do cliente deste pedido; material de outro
+        // cliente não conta (shared/propriedade-estoque.js).
+        var disponivel = estItem ? disponivelParaCliente(estItem, clienteKeyDoPedidoAtual()) : null;
         var falta = (item.qtdNecessaria || 0) - (disponivel || 0);
         var corEstoque = disponivel == null ? 'var(--muted)' : (falta > 0 ? 'var(--danger)' : 'var(--success)');
         var txtEstoque = disponivel == null
@@ -1876,7 +1878,7 @@
 
   function abrirModalSolicitarCompra() {
     if (!currentPedKey) { showAlert('Selecione um pedido primeiro.', 'danger'); return; }
-    var r = faltasParaSolicitacao(insumosData, allEstoqueIns);
+    var r = faltasParaSolicitacao(insumosData, allEstoqueIns, clienteKeyDoPedidoAtual());
     solCompraFaltas = r;
 
     var avisos = [];
@@ -2592,11 +2594,21 @@ function mrpRecebimentosPorMaterial() {
       if (!(falta > 0)) return;
       (out[it.materialCodigo] = out[it.materialCodigo] || []).push({
         data: pc.dataPrevistaEntrega || pc.agendamento && pc.agendamento.dataAgendada || null,
-        qtd: falta, pedido: e[0], refNome: pc.numeroFormatado || e[0]
+        qtd: falta, pedido: e[0], refNome: pc.numeroFormatado || e[0],
+        // Remessa de material do cliente a caminho: só abate a demanda dele.
+        proprietarioClienteKey: (typeof PropriedadeEstoque !== 'undefined' &&
+          PropriedadeEstoque.propriedadeDoPC(pc) === PropriedadeEstoque.CLIENTE && it.vinculo && it.vinculo.clienteKey) || null
       });
     });
   });
   return out;
+}
+
+// Cliente do pedido aberto na aba Insumos por Pedido, pelo produto.
+function clienteKeyDoPedidoAtual() {
+  var p = currentPedKey && pedidosCache[currentPedKey];
+  if (!p || typeof PropriedadeEstoque === 'undefined') return null;
+  return PropriedadeEstoque.clienteKeyDoSku(p.sku, allProdutosIns, null, p.cliente) || null;
 }
 
 /* Monta a demanda de material a partir dos pedidos em aberto.
@@ -2621,13 +2633,17 @@ function mrpDemandaPorMaterial() {
     var bom = allBomIns[chaveVersao(p.sku, formula.versao)] || { itens: {} };
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
     if (!calc.ok) { semFormula.push(p.sku + ' (' + calc.erro + ')'); return; }
+    var clienteKeyPedido = (typeof PropriedadeEstoque !== 'undefined')
+      ? PropriedadeEstoque.clienteKeyDoSku(p.sku, allProdutosIns, null, p.cliente) : null;
 
     calc.itens.forEach(function(it) {
       (out[it.mpCodigo] = out[it.mpCodigo] || []).push({
         data: datas[key] || null,
         qtd: it.quantidade,
         origem: 'pedido',
-        refNome: (p.id || key) + ' · ' + p.sku
+        refNome: (p.id || key) + ' · ' + p.sku,
+        // Material do cliente só cobre a demanda dele (repartirMrpPorDono).
+        clienteKey: clienteKeyPedido
       });
     });
   });
@@ -2650,8 +2666,12 @@ function calcularMrpCompleto() {
     // Disponível = o que existe menos o que já está comprometido com OP
     // emitida. Usar o saldo bruto faria o MRP achar que tem material que já
     // tem dono.
-    var disponivel = est ? ((parseFloat(est.saldoAtual) || 0) - (parseFloat(est.saldoEmpenhado) || 0)) : 0;
-    var r = calcularMrpMaterial(mat, disponivel, d.demanda[cod] || [], recebs[cod] || [], hoje);
+    // Propriedade do estoque: material de cliente (em estoque ou a caminho)
+    // cobre só a demanda dele; o resto vai para o plano geral, contra o
+    // estoque da Kuryos. Sem material de cliente, é a conta de sempre.
+    var rep = PropriedadeEstoque.repartirMrpPorDono(est || {}, est ? est.saldoEmpenhado : 0, d.demanda[cod] || [], recebs[cod] || []);
+    var r = calcularMrpMaterial(mat, rep.disponivelGeral, rep.demandasGerais, rep.recebimentosGerais, hoje);
+    r.coberturaCliente = rep.cobertura.filter(function(c) { return c.demanda > 0 || c.estoque > 0 || c.transito > 0; });
     r.semRegistroEstoque = !est;
     return r;
   });
@@ -2777,6 +2797,11 @@ function mrpCardMaterial(l) {
       '<div><b>' + escHtml(l.mpCodigo) + '</b> — ' + escHtml(l.mpNome) +
         '<div class="mrp-sub">Disponível: <b>' + fmtNum(l.disponivelInicial) + ' ' + escHtml(l.unidade) + '</b>' +
         (l.semRegistroEstoque ? ' <span class="mrp-tag">sem registro de estoque</span>' : '') +
+        ((l.coberturaCliente || []).length ? '<div style="margin-top:3px">' + l.coberturaCliente.map(function(c) {
+          var nome = (((allEstoqueIns[sanitizeKey(l.mpCodigo)] || {}).porCliente || {})[c.clienteKey] || {}).clienteNome || c.clienteKey;
+          return '📦 Material do cliente <b>' + escHtml(nome) + '</b>: ' + fmtNum(c.estoque) + (c.transito ? ' + ' + fmtNum(c.transito) + ' a caminho' : '') +
+            ' · cobre ' + fmtNum(c.coberto) + ' de ' + fmtNum(c.demanda) + ' da demanda dele' + (c.sobra ? ' · sobra ' + fmtNum(c.sobra) + ' (não serve a outros)' : '');
+        }).join('<br>') + ' <span class="mrp-tag">disponível acima é só o geral da Kuryos</span></div>' : '') +
         (l.disponivelInicial < 0 ? ' <span class="mrp-tag alerta">saldo negativo</span>' : '') +
         (!p.configurado ? ' <span class="mrp-tag alerta">sem parâmetros</span>' : '') +
         '</div>' +

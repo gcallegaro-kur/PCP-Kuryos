@@ -8,6 +8,7 @@ const {prepararFinalizacao} = require("./conferencia_pa");
 const {prepararSaida} = require("./expedicao");
 const {prepararAgenda} = require("./agenda_expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
+const PropriedadeEstoque = require("./propriedade_estoque");
 const OpEncerrada = require("./op_encerrada");
 
 admin.initializeApp();
@@ -1522,6 +1523,12 @@ exports.registrarRecebimento = onCall(async (request) => {
     const pedido = pedidoSnap.val();
     if (!pedido) throw Object.assign(new Error("Pedido de Compra não encontrado."), {code: "not-found"});
     if (["CANCELADO"].includes(pedido.status)) throw Object.assign(new Error("O Pedido de Compra está cancelado."), {code: "failed-precondition"});
+    // De quem é o material e para qual cliente/pedido: definido no PC, nunca
+    // na doca (a Logística não sabe). Sem isso o lote nasceria sem dono.
+    const vinculo = PropriedadeEstoque.validarVinculoPC(pedido);
+    if (!vinculo.ok) {
+      throw Object.assign(new Error("Compras precisa completar o Pedido de Compra antes do recebimento: " + vinculo.pendencias.join(" ")), {code: "failed-precondition"});
+    }
     const entrada = validarEPrepararLinhas(data, pedido, enderecosSnap.val() || {});
     const ano = Number(entrada.data.slice(0, 4));
     const contadorRef = db.ref("contadores_lote_interno/" + ano);
@@ -1553,6 +1560,7 @@ exports.registrarRecebimento = onCall(async (request) => {
       const materialKey = sanitizeKey(materialCodigo);
       const linhaKey = `L${String(indice + 1).padStart(3, "0")}`;
       const loteKey = sanitizeKey(loteInterno);
+      const donoDestino = PropriedadeEstoque.camposDoLote(pedido, (pedido.itens || {})[linha.itemKey]);
       const recebimento = {
         tipoMaterial: linha.tipoMaterial, identificacaoMaterial: linha.identificacaoMaterial,
         skuInterno: materialCodigo, skuFornecedor: linha.skuFornecedor,
@@ -1562,6 +1570,7 @@ exports.registrarRecebimento = onCall(async (request) => {
         condicoesVeiculo: entrada.condicoesVeiculo, condicoesEmbalagem: linha.condicoesEmbalagem,
         fornecedorKey: pedido.fornecedorKey || null,
         fornecedorNome: pedido.fornecedorNome || pedido.origemNome || null,
+        propriedade: donoDestino.propriedade, destino: donoDestino.destino,
         recebidoPor: identidade.autor, recebidoEm: agora,
       };
       itensRecebidos[linhaKey] = {
@@ -1576,6 +1585,7 @@ exports.registrarRecebimento = onCall(async (request) => {
         enderecoKey: linha.enderecoKey, enderecoCodigo: linha.enderecoCodigo,
         origemTipo: "recebimento_pc", origemRef: pedidoKey, recebimentoKey: recKey,
         recebimentoLinhaKey: linhaKey, pedidoItemKey: linha.itemKey, recebimento,
+        propriedade: donoDestino.propriedade, destino: donoDestino.destino,
         status: "QUARENTENA", criadoPor: identidade.autor, criadoEm: agora, atualizadoEm: agora,
       };
       updates[`lotes_internos/${loteKey}`] = {loteInterno, materialKey, loteKey, pedidoKey, recebimentoKey: recKey,
@@ -1585,9 +1595,15 @@ exports.registrarRecebimento = onCall(async (request) => {
         tipo: "recebimento_pc", motivo: "RECEBIMENTO", qtd: linha.qtdRecebida, saldoApos: null,
         ref: pedidoKey, loteKey, enderecoKey: linha.enderecoKey, itemTipo: "material",
         itemCodigo: materialCodigo, itemNome: materialNome, unidade, autor: identidade.autor, em: agora,
+        propriedade: donoDestino.propriedade,
       };
-      estoqueSomado[materialKey] = estoqueSomado[materialKey] || {qtd: 0, materialCodigo, materialNome, unidade};
+      estoqueSomado[materialKey] = estoqueSomado[materialKey] || {qtd: 0, materialCodigo, materialNome, unidade, porCliente: {}};
       estoqueSomado[materialKey].qtd += linha.qtdRecebida;
+      if (donoDestino.propriedade.tipo === PropriedadeEstoque.CLIENTE && donoDestino.propriedade.clienteKey) {
+        const c = donoDestino.propriedade.clienteKey;
+        const parte = estoqueSomado[materialKey].porCliente[c] = estoqueSomado[materialKey].porCliente[c] || {qtd: 0, nome: donoDestino.propriedade.clienteNome};
+        parte.qtd += linha.qtdRecebida;
+      }
       lotesResultado.push({loteInterno, loteOrigem: linha.loteOrigem, loteKey, materialKey, materialCodigo, materialNome,
         quantidade: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, unidade, enderecoCodigo: linha.enderecoCodigo, dataRecebimento: entrada.data,
         dataValidade: linha.dataValidade, fornecedorNome: pedido.fornecedorNome || pedido.origemNome || null,
@@ -1608,6 +1624,12 @@ exports.registrarRecebimento = onCall(async (request) => {
       updates[`estoque/${key}/unidade`] = info.unidade;
       updates[`estoque/${key}/ultimaAtualizacao`] = agora;
       updates[`estoque/${key}/ultimaMovimentacao`] = {tipo: "recebimento_pc", qtd: info.qtd, ref: pedidoKey, em: agora};
+      // saldoAtual segue sendo o TOTAL físico; a parte do cliente dono fica
+      // separada (ver shared/propriedade-estoque.js).
+      Object.entries(info.porCliente).forEach(([c, parte]) => {
+        updates[`estoque/${key}/porCliente/${c}/saldoAtual`] = admin.database.ServerValue.increment(parte.qtd);
+        if (parte.nome) updates[`estoque/${key}/porCliente/${c}/clienteNome`] = parte.nome;
+      });
     });
     const resultado = {ok: true, pedidoKey, recebimentoKey: recKey, statusPedido: apos.status, lotes: lotesResultado};
     updates[`recebimentos_operacoes/${identidade.uid}/${idempotencyKey}`] = {status: "CONCLUIDO", pedidoKey, concluidoEm: agora, autor: identidade.autor, resultado};
@@ -1661,10 +1683,17 @@ exports.cancelarRecebimento = onCall(async (request) => {
     updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/status`] = "CANCELADO";
     updates[`pedidos_compra/${pedidoKey}/recebimentos/${recebimentoKey}/cancelamento`] = {motivo, por: identidade.autor, em: agora};
     const estoqueCancelado = {};
+    const clienteCancelado = {};
     linhas.forEach((linha, i) => {
       const qtd = Number(linha.qtdRecebidaAgora) || 0;
       const materialKey = sanitizeKey(linha.materialCodigo);
       estoqueCancelado[materialKey] = (estoqueCancelado[materialKey] || 0) + qtd;
+      // Lote de cliente devolve a parte dele; lote anterior à regra é da Kuryos.
+      const dono = PropriedadeEstoque.donoDoLote(lotes[i].val());
+      if (dono.tipo === PropriedadeEstoque.CLIENTE) {
+        const chave = `${materialKey}/porCliente/${dono.clienteKey}/saldoAtual`;
+        clienteCancelado[chave] = (clienteCancelado[chave] || 0) + qtd;
+      }
       updates[`estoque_lotes/${materialKey}/${linha.loteKey}/saldoLote`] = 0;
       updates[`estoque_lotes/${materialKey}/${linha.loteKey}/status`] = "CANCELADO";
       updates[`estoque_lotes/${materialKey}/${linha.loteKey}/cancelamento`] = {motivo, por: identidade.autor, em: agora};
@@ -1678,6 +1707,9 @@ exports.cancelarRecebimento = onCall(async (request) => {
       updates[`estoque/${materialKey}/saldoAtual`] = admin.database.ServerValue.increment(-qtd);
       updates[`estoque/${materialKey}/ultimaAtualizacao`] = agora;
       updates[`estoque/${materialKey}/ultimaMovimentacao`] = {tipo: "cancelamento_recebimento", qtd: -qtd, ref: pedidoKey, em: agora};
+    });
+    Object.entries(clienteCancelado).forEach(([caminho, qtd]) => {
+      updates[`estoque/${caminho}`] = admin.database.ServerValue.increment(-qtd);
     });
     updates[`recebimentos_locks/${pedidoKey}`] = null;
     await db.ref().update(updates);
@@ -1734,6 +1766,10 @@ exports.registrarDevolucaoRecebimento = onCall(async (request) => {
     updates[`estoque/${materialKey}/saldoAtual`] = admin.database.ServerValue.increment(-qtd);
     updates[`estoque/${materialKey}/ultimaAtualizacao`] = agora;
     updates[`estoque/${materialKey}/ultimaMovimentacao`] = {tipo: "devolucao_fornecedor", qtd: -qtd, ref: pedidoKey, em: agora};
+    const donoDevolvido = PropriedadeEstoque.donoDoLote(lote);
+    if (donoDevolvido.tipo === PropriedadeEstoque.CLIENTE) {
+      updates[`estoque/${materialKey}/porCliente/${donoDevolvido.clienteKey}/saldoAtual`] = admin.database.ServerValue.increment(-qtd);
+    }
     updates[`estoque_lotes/${materialKey}/${linha.loteKey}/saldoLote`] = novoSaldo;
     updates[`estoque_lotes/${materialKey}/${linha.loteKey}/qtdDevolvida`] = (Number(lote.qtdDevolvida) || 0) + qtd;
     updates[`estoque_lotes/${materialKey}/${linha.loteKey}/status`] = novoSaldo <= 0.0001 ? "DEVOLVIDO" : lote.status;

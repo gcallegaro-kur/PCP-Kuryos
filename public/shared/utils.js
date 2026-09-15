@@ -1153,13 +1153,31 @@ function motivoPadraoPorTipoMovimentacao(tipo) {
   return MOTIVO_POR_TIPO_MOVIMENTACAO[tipo] || 'OUTRO';
 }
 
+// Propriedade do estoque (shared/propriedade-estoque.js). extras aceita:
+//   clienteKeyConsumidor  -- consumo/perda de OP: sai primeiro da parte desse
+//                            cliente em estoque/{m}/porCliente, depois do geral
+//   proprietarioClienteKey -- entrada/estorno de material do cliente
+// Sem nenhum dos dois, só o total (= geral da Kuryos), como sempre foi.
 function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, extras) {
   if (!materialCodigo || !delta) return Promise.resolve();
   extras = extras || {};
   var key = sanitizeKey(materialCodigo);
+  var PE = (typeof PropriedadeEstoque !== 'undefined') ? PropriedadeEstoque : null;
+  var usaDono = !!(extras.clienteKeyConsumidor || extras.proprietarioClienteKey);
+  if (usaDono && !PE) console.warn('ajustarEstoque: shared/propriedade-estoque.js não carregado nesta tela; movimento sem separar o dono.');
+  var repartido = null;
   return dbRef.ref('estoque/' + key).transaction(function(atual) {
     atual = atual || { saldoAtual: 0 };
-    atual.saldoAtual = (atual.saldoAtual || 0) + delta;
+    repartido = null;
+    if (usaDono && PE) {
+      repartido = PE.aplicarMovimentoAgregado(atual, delta, {
+        clienteKeyConsumidor: extras.clienteKeyConsumidor || null,
+        proprietarioClienteKey: extras.proprietarioClienteKey || null,
+        clienteNome: extras.clienteNome || null
+      });
+    } else {
+      atual.saldoAtual = (atual.saldoAtual || 0) + delta;
+    }
     atual.materialCodigo = materialCodigo;
     if (extras.materialNome) atual.materialNome = extras.materialNome;
     if (extras.unidade) atual.unidade = extras.unidade;
@@ -1182,6 +1200,8 @@ function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, ext
       qtd: delta, saldoApos: novoSaldo, ref: ref || null,
       itemTipo: 'material', itemCodigo: materialCodigo,
       itemNome: extras.materialNome || null, unidade: extras.unidade || null,
+      // Quanto saiu/entrou da parte do cliente e quanto do geral.
+      propriedade: (repartido && repartido.clienteKey) ? repartido : null,
       autor: extras.autor || null, em: new Date().toISOString()
     }).catch(function(err) { console.error('Falha ao gravar log de movimentação de estoque:', err); });
     return resultado;
@@ -1781,6 +1801,12 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
       // o fracionamento preserva a posição do lote na fila FEFO, que é o
       // comportamento correto: os dois pedaços vieram do mesmo recebimento.
       dataRecebimento: lote.dataRecebimento || null,
+      // Dono e destino seguem o pedaço: sem isso, separar uma válvula do
+      // cliente a transformava em estoque geral da Kuryos. O lote interno
+      // (AK-...) é o mesmo material, mesma rastreabilidade.
+      loteInterno: lote.loteInterno || null,
+      propriedade: lote.propriedade || null,
+      destino: lote.destino || null,
       status: lote.status || 'LIBERADO',
       enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
       saldoLote: abatidoReal, qtdOriginal: abatidoReal,
@@ -1852,7 +1878,9 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
 // mas sozinho deixava o restante sem escorrer pro próximo lote mesmo havendo
 // saldo sobrando. Refaz o plano com dado fresco até zerar ou não sobrar
 // candidato, com teto de tentativas.
-function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origemRef) {
+// `opcoes.clienteKey`: cliente da OP -- repassado ao FEFO (material de cliente
+// só para o próprio cliente). Ver sugerirAlocacaoFefo.
+function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origemRef, opcoes) {
   if (!itemCodigo || !qtd || qtd <= 0) return Promise.resolve({ baixado: 0, faltante: 0, lotes: [] });
   var itemKey = sanitizeKey(itemCodigo);
   var TENTATIVAS_MAX = 3;
@@ -1877,7 +1905,7 @@ function baixarLotesFefo(dbRef, itemTipo, itemCodigo, qtd, motivo, autor, origem
       Object.keys(enderecos).forEach(function(k) {
         if (enderecos[k] && enderecos[k].ativo === false) bloqueados[k] = true;
       });
-      var plano = sugerirAlocacaoFefo(itemCodigo, restante, lotesDoItem, bloqueados);
+      var plano = sugerirAlocacaoFefo(itemCodigo, restante, lotesDoItem, bloqueados, opcoes);
       if (!plano.alocacoes.length) {
         return {
           baixado: Math.round(acumuladoBaixado * 1000) / 1000,
@@ -2691,7 +2719,24 @@ function classificarQualidadeFornecedor(bucket) {
 // lugar nenhum -- e ninguém confia num número que não consegue conferir.
 //
 // `insumos` = insumosData do pedido; `estoque` = nó estoque inteiro.
-function faltasParaSolicitacao(insumos, estoque) {
+// Disponível de um material para a demanda de UM cliente: estoque geral da
+// Kuryos (total − partes de todos os clientes) − empenho + a parte desse
+// cliente. Material de outro cliente nunca entra. Sem partes de cliente no nó,
+// é o mesmo total − empenho de sempre. Mesma conta de
+// PropriedadeEstoque.saldoPorDono (run_propriedade_estoque_test.js confere).
+function disponivelParaCliente(est, clienteKey) {
+  if (!est) return null;
+  var soma = 0, parte = 0;
+  Object.keys(est.porCliente || {}).forEach(function(k) {
+    var s = parseFloat(est.porCliente[k] && est.porCliente[k].saldoAtual) || 0;
+    soma += s;
+    if (clienteKey && k === clienteKey) parte = Math.max(0, s);
+  });
+  return Math.round(((parseFloat(est.saldoAtual) || 0) - soma - (parseFloat(est.saldoEmpenhado) || 0) + parte) * 1000) / 1000;
+}
+
+// `clienteKey` (opcional): cliente do pedido -- ver disponivelParaCliente.
+function faltasParaSolicitacao(insumos, estoque, clienteKey) {
   var out = { itens: [], semCodigo: [], semEstoque: 0 };
   Object.keys(insumos || {}).forEach(function(k) {
     var it = insumos[k] || {};
@@ -2703,7 +2748,7 @@ function faltasParaSolicitacao(insumos, estoque) {
     if (!it.mpCodigo) { out.semCodigo.push(it.nome || k); return; }
     var est = (estoque || {})[sanitizeKey(it.mpCodigo)];
     var temRegistro = !!est;
-    var disponivel = temRegistro ? ((est.saldoAtual || 0) - (est.saldoEmpenhado || 0)) : 0;
+    var disponivel = temRegistro ? disponivelParaCliente(est, clienteKey) : 0;
     if (!temRegistro) out.semEstoque++;
     // Saldo negativo (existem em produção) não vira "falta maior": o que ele
     // significa é que a base está errada, não que se precisa comprar mais.
@@ -2974,8 +3019,17 @@ function aplicarAjusteInventario(dbRef, contagem, autor) {
 // Se isso deixar faltando quantidade, o `faltante` já existente avisa na
 // tela -- é melhor avisar do que rotear o separador pra uma posição
 // interditada.
-function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBloqueados) {
+// `opcoes.clienteKey` (opcional): cliente da OP que vai consumir. Lote de
+// propriedade de um cliente só serve a ESSE cliente, e vem antes dos lotes da
+// Kuryos. Sem clienteKey, lote de cliente fica de fora -- o padrão seguro: uma
+// tela que esquecer de informar o cliente nunca entrega material alheio.
+function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBloqueados, opcoes) {
   var bloqueados = enderecosBloqueados || {};
+  var consumidor = (opcoes && opcoes.clienteKey) || null;
+  var donoCliente = function(lote) {
+    var p = lote && lote.propriedade;
+    return (p && p.tipo === 'CLIENTE' && p.clienteKey) ? p.clienteKey : null;
+  };
   var candidatos = Object.entries(lotesDoItem || {})
     .filter(function(entry) {
       var lote = entry[1];
@@ -2986,10 +3040,16 @@ function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBl
       // invisível pra separação, consumo e expedição ao mesmo tempo.
       if (!lote || lote.itemCodigo !== itemCodigo || !loteDisponivel(lote.status) || (lote.saldoLote || 0) <= 0) return false;
       if (lote.enderecoKey && bloqueados[lote.enderecoKey]) return false;
+      var dono = donoCliente(lote);
+      if (dono && dono !== consumidor) return false;
       return true;
     })
     .map(function(entry) { return { loteKey: entry[0], lote: entry[1] }; })
     .sort(function(a, b) {
+      // Material do próprio cliente primeiro; FEFO dentro de cada grupo.
+      var pa = consumidor && donoCliente(a.lote) === consumidor ? 0 : 1;
+      var pb = consumidor && donoCliente(b.lote) === consumidor ? 0 : 1;
+      if (pa !== pb) return pa - pb;
       var va = a.lote.dataValidade || null, vb = b.lote.dataValidade || null;
       if (va && vb && va !== vb) return va < vb ? -1 : 1; // mais próximo de vencer primeiro
       if (va && !vb) return -1; // tem validade conhecida vem antes de quem não tem
@@ -3008,7 +3068,8 @@ function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBl
     if (qtdAlocada <= 0) return;
     alocacoes.push({
       loteKey: c.loteKey, enderecoKey: c.lote.enderecoKey || null, enderecoCodigo: c.lote.enderecoCodigo || null,
-      qtdSugerida: Math.round(qtdAlocada * 1000) / 1000, dataValidade: c.lote.dataValidade || null
+      qtdSugerida: Math.round(qtdAlocada * 1000) / 1000, dataValidade: c.lote.dataValidade || null,
+      doCliente: donoCliente(c.lote)
     });
     restante = Math.round((restante - qtdAlocada) * 1000) / 1000;
   });

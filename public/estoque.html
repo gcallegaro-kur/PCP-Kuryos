@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/seletor-endereco.js"></script>
   <script src="shared/expedicao-grade.js"></script>
   <script src="shared/conteudo-posicao.js"></script>
@@ -142,6 +143,12 @@
        revisar esta página pra Fase 2, mesma lacuna já corrigida noutras
        telas -- o componente só cria a div, quem inclui precisa trazer o
        visual). */
+    /* Filtro por cliente: propriedade x destino (shared/propriedade-estoque.js) */
+    .prop-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .prop-bar .prop-label{font-size:12.5px;font-weight:700;white-space:nowrap}
+    .prop-bar .field-hint{margin:0;flex-basis:100%}
+    .prop-dono{font-size:12px;line-height:1.4}
+    .prop-dono .field-hint{margin:0}
     .kt-ac-list{display:none;position:fixed;z-index:10000;background:var(--card);border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
     .kt-ac-list.open{display:block}
     .kt-ac-item{padding:12px 14px;font-size:14px;color:var(--text);cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center;border-bottom:1px solid color-mix(in srgb, var(--border) 60%, transparent)}
@@ -175,6 +182,18 @@
   <button class="tab" data-tab="qualidade">🔬 Liberação de Qualidade</button>
 </div>
 
+<div class="main" id="propBarWrap" style="padding-bottom:0">
+  <div class="kt-toolbar prop-bar">
+    <span class="prop-label">👤 Cliente</span>
+    <select class="kt-select" id="propCliente"><option value="">Todos os clientes (sem filtro)</option></select>
+    <select class="kt-select" id="propVista">
+      <option value="PROPRIEDADE">Estoque de propriedade do cliente</option>
+      <option value="DESTINADO">Destinado ao cliente (posse da Kuryos)</option>
+    </select>
+    <div class="field-hint" id="propHint">Vale para Saldo Agregado, Saldo por Lote/Endereço e Posições.</div>
+  </div>
+</div>
+
 <div class="main" id="mainPanelsEstoque">
 
   <!-- ═══ Aba: Saldo Agregado (MP/Embalagem) ═══ -->
@@ -197,6 +216,17 @@
             <th style="min-width:130px">Ações</th>
           </tr></thead>
           <tbody id="esBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" id="esCardCliente" style="display:none">
+      <div class="card-title" id="esCountCliente">Estoque do cliente</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Material</th><th style="text-align:right" id="esClienteColSaldo">Saldo</th><th>Pedidos</th><th style="text-align:right">Lotes</th><th style="min-width:110px">Ações</th>
+          </tr></thead>
+          <tbody id="esBodyCliente"></tbody>
         </table>
       </div>
     </div>
@@ -233,10 +263,10 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Status</th>
+            <th>Item</th><th>Lote</th><th>Dono / destino</th><th>Endereço</th><th>Validade</th><th>Status</th>
             <th style="text-align:right">Saldo</th><th style="min-width:170px">Ações</th>
           </tr></thead>
-          <tbody id="slBody"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="slBody"><tr><td colspan="8" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -635,6 +665,11 @@
         <input type="text" id="aeMaterial" placeholder="Buscar por código, nome ou fornecedor..." autocomplete="off">
         <input type="hidden" id="aeMaterialKey">
       </div>
+      <div class="form-group">
+        <label>De quem é o saldo contado? *</label>
+        <select id="aeDono"><option value="">Kuryos (estoque geral)</option></select>
+        <div class="field-hint">Material de cliente é contado separado: o total do material soma a parte da Kuryos e a de cada cliente.</div>
+      </div>
       <div class="field-hint" id="aeSaldoAtualHint" style="margin:8px 0"></div>
       <div class="form-group">
         <label>Novo saldo (quantidade real, contada agora) *</label>
@@ -762,6 +797,7 @@ function ativarAbaEstoque(target, pushUrl) {
   if (!ABAS_ESTOQUE_VALIDAS[target]) return;
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
   document.querySelectorAll('#mainPanelsEstoque > .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
+  document.getElementById('propBarWrap').style.display = ['agregado', 'lotes', 'posicoes'].indexOf(target) >= 0 ? '' : 'none';
   if (pushUrl) {
     var url = new URL(location.href);
     url.searchParams.set('tab', target);
@@ -793,6 +829,10 @@ var expandedKeys = {}; // materialKey -> true, drill-down da aba Saldo Agregado
    ═══════════════════════════════════════════════════════════════════ */
 var esSortable = makeSortableTable(document.getElementById('esThead'), 'materialCodigo', 'asc');
 function renderEstoqueAgregado() {
+  var comCliente = !!propClienteAtual();
+  document.getElementById('esCardCliente').style.display = comCliente ? '' : 'none';
+  document.getElementById('esCount').parentNode.style.display = comCliente ? 'none' : '';
+  if (comCliente) { renderEstoqueAgregadoCliente(); return; }
   var search = norm(document.getElementById('esSearch').value);
   var rows = Object.entries(allEstoque).filter(function(e) {
     if (!search) return true;
@@ -815,7 +855,7 @@ function renderEstoqueAgregado() {
     var disponivel = (e.saldoAtual || 0) - empenhado;
     var linhas = '<tr>' +
       '<td><button class="btn btn-ghost btn-sm es-expandir" data-key="' + escapeAttr(key) + '" title="Ver lotes/endereços">' + (expandedKeys[key] ? '▾' : '▸') + '</button> ' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') + '</td>' +
-      '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
+      '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + partesDonoHtml(e) + '</td>' +
       '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
       '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
       '<td style="font-size:12px">' + fmtData(e.ultimaAtualizacao) + '</td>' +
@@ -845,7 +885,7 @@ function renderLotesDrillDownHtml(materialKey) {
     lotes.map(function(entry) {
       var l = entry[1];
       return '<tr>' +
-        '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+        '<td>' + escapeHtml(l.loteInterno || l.loteOrigem || '—') + '<div class="prop-dono">' + donoDestinoHtml(l) + '</div></td>' +
         '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
         '<td>' + fmtData(l.dataValidade) + '</td>' +
         '<td>' + statusBadge(l.status) + '</td>' +
@@ -871,15 +911,34 @@ function refreshAeItems() {
       return { key: sanitizeKey(m.mpCodigo), value: label, label: label };
     });
 }
+function preencherAeDono(estoqueKey) {
+  var sel = document.getElementById('aeDono');
+  var partes = PropriedadeEstoque.saldoPorDono(allEstoque[estoqueKey] || {}).porCliente;
+  sel.innerHTML = '<option value="">Kuryos (estoque geral)</option>' + clientesOrdenadosEstoque().map(function(c) {
+    return '<option value="' + escapeAttr(c.key) + '">' + escapeHtml(c.nome) + (partes[c.key] ? ' — tem ' + fmtNum(partes[c.key]) : '') + '</option>';
+  }).join('');
+  sel.value = '';
+}
+function atualizarAeSaldoHint() {
+  var key = document.getElementById('aeMaterialKey').value;
+  var dono = document.getElementById('aeDono').value;
+  var e = allEstoque[key] || {};
+  if (!key) { document.getElementById('aeSaldoAtualHint').textContent = ''; return; }
+  var s = PropriedadeEstoque.saldoPorDono(e);
+  var atual = dono ? (s.porCliente[dono] || 0) : s.geral;
+  document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual ' + (dono ? 'do cliente ' + nomeClienteEstoque(dono) : 'da Kuryos (geral)') +
+    ': ' + fmtNum(atual) + ' ' + (e.unidade || '') + ' · total do material: ' + fmtNum(s.total) + ' ' + (e.unidade || '');
+  document.getElementById('aeNovoSaldo').value = e.saldoAtual != null || dono ? atual : '';
+}
 function abrirModalAjusteEstoque(estoqueKey) {
   refreshAeItems();
+  preencherAeDono(estoqueKey);
   document.getElementById('aeJustificativa').value = '';
   if (estoqueKey) {
     var e = allEstoque[estoqueKey] || {};
     document.getElementById('aeMaterial').value = (e.materialCodigo || estoqueKey) + ' — ' + (e.materialNome || '');
     document.getElementById('aeMaterialKey').value = estoqueKey;
-    document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e.saldoAtual || 0) + ' ' + (e.unidade || '');
-    document.getElementById('aeNovoSaldo').value = e.saldoAtual != null ? e.saldoAtual : '';
+    atualizarAeSaldoHint();
   } else {
     document.getElementById('aeMaterial').value = '';
     document.getElementById('aeMaterialKey').value = '';
@@ -900,23 +959,35 @@ function salvarAjusteEstoque() {
   if (!justificativa) { showAlert('Justificativa é obrigatória pra ajuste manual de estoque.', 'danger'); return; }
 
   var mat = allMateriais[key];
+  var donoAjuste = document.getElementById('aeDono').value || null;
   document.getElementById('modalAjusteEstoqueSave').disabled = true;
 
+  // O saldo informado é o da parte escolhida (Kuryos ou um cliente); o total
+  // do material se recompõe somando as partes. Kuryos: total = novo + clientes.
+  var anteriorParte = 0;
   db.ref('estoque/' + key).transaction(function(atual) {
-    var saldoAnterior = (atual && atual.saldoAtual) || 0;
     atual = atual || {};
-    atual.saldoAtual = novoSaldo;
+    var partes = PropriedadeEstoque.saldoPorDono(atual);
+    anteriorParte = donoAjuste ? (partes.porCliente[donoAjuste] || 0) : partes.geral;
+    var saldoAnterior = partes.total;
+    if (donoAjuste) {
+      atual.porCliente = atual.porCliente || {};
+      atual.porCliente[donoAjuste] = { saldoAtual: novoSaldo, clienteNome: nomeClienteEstoque(donoAjuste) };
+    }
+    atual.saldoAtual = Math.round((saldoAnterior - anteriorParte + novoSaldo) * 1000) / 1000;
     atual.materialCodigo = mat ? mat.mpCodigo : (atual.materialCodigo || key);
     atual.materialNome = mat ? mat.mpNome : (atual.materialNome || '');
     atual.unidade = mat ? mat.unidade : (atual.unidade || '');
     atual.ultimaAtualizacao = new Date().toISOString();
-    atual.ultimaMovimentacao = { tipo: 'ajuste_manual', qtd: novoSaldo - saldoAnterior, ref: justificativa, em: new Date().toISOString() };
+    atual.ultimaMovimentacao = { tipo: 'ajuste_manual', qtd: novoSaldo - anteriorParte, ref: justificativa, em: new Date().toISOString() };
     return atual;
   }).then(function(result) {
     if (!result.committed) { showAlert('Não foi possível salvar o ajuste. Tente de novo.', 'danger'); return; }
-    var saldoAnterior = (result.snapshot.val().saldoAtual || 0) - (result.snapshot.val().ultimaMovimentacao.qtd || 0);
+    var saldoAnterior = anteriorParte;
+    var propriedadeAjuste = donoAjuste ? { clienteKey: donoAjuste, clienteNome: nomeClienteEstoque(donoAjuste) } : null;
     return Promise.all([
       db.ref('estoque/' + key + '/ajustes').push({
+        propriedade: propriedadeAjuste,
         saldoAnterior: saldoAnterior, saldoNovo: novoSaldo, justificativa: justificativa,
         ajustadoPor: currentUserNome(), ajustadoEm: new Date().toISOString()
       }),
@@ -926,7 +997,7 @@ function salvarAjusteEstoque() {
       // movimentos_estoque (o log de ajustes/ acima continua intacto).
       db.ref('movimentos_estoque/' + key).push({
         tipo: 'ajuste_manual', motivo: 'AJUSTE DE INVENTÁRIO',
-        qtd: novoSaldo - saldoAnterior, saldoApos: novoSaldo, ref: justificativa,
+        qtd: novoSaldo - saldoAnterior, saldoApos: result.snapshot.val().saldoAtual, ref: justificativa, propriedade: propriedadeAjuste,
         itemTipo: 'material', itemCodigo: mat ? mat.mpCodigo : (result.snapshot.val().materialCodigo || key),
         itemNome: mat ? mat.mpNome : (result.snapshot.val().materialNome || null), unidade: mat ? mat.unidade : (result.snapshot.val().unidade || null),
         autor: currentUserNome(), em: new Date().toISOString()
@@ -938,6 +1009,134 @@ function salvarAjusteEstoque() {
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
     .finally(function() { document.getElementById('modalAjusteEstoqueSave').disabled = false; });
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Filtro por cliente -- propriedade x destino (pedido do usuário,
+   2026-09-15). Regras em shared/propriedade-estoque.js.
+   - Propriedade do cliente: material que o cliente remeteu (é dele).
+   - Destinado ao cliente: da Kuryos, comprado para pedido dele, e o
+     produto acabado dos pedidos dele.
+   ═══════════════════════════════════════════════════════════════════ */
+var allClientesEstoque = {};
+function clientesOrdenadosEstoque() {
+  return Object.keys(allClientesEstoque).map(function(k) { return { key: k, nome: (allClientesEstoque[k] || {}).nome || k }; })
+    .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+}
+function nomeClienteEstoque(k) { return (allClientesEstoque[k] || {}).nome || k || ''; }
+function propClienteAtual() { var el = document.getElementById('propCliente'); return el ? el.value : ''; }
+function propVistaAtual() { return document.getElementById('propVista').value || PropriedadeEstoque.VISTA_PROPRIEDADE; }
+function preencherFiltroCliente() {
+  var sel = document.getElementById('propCliente'), atual = sel.value;
+  sel.innerHTML = '<option value="">Todos os clientes (sem filtro)</option>' + clientesOrdenadosEstoque().map(function(c) {
+    return '<option value="' + escapeAttr(c.key) + '">' + escapeHtml(c.nome) + '</option>';
+  }).join('');
+  sel.value = atual;
+}
+function clienteDoPalete(lote) {
+  return PropriedadeEstoque.clienteKeyDoSku(lote.itemCodigo, allProdutos, allClientesEstoque, lote.cliente);
+}
+// Um lote entra no filtro atual? Sem cliente escolhido, sempre.
+function loteNoFiltroCliente(lote) {
+  var c = propClienteAtual();
+  if (!c || !lote) return true;
+  if (lote.itemTipo === 'produto') return propVistaAtual() === PropriedadeEstoque.VISTA_DESTINADO && clienteDoPalete(lote) === c;
+  return PropriedadeEstoque.loteNaVista(lote, c, propVistaAtual());
+}
+function posicaoNoFiltroCliente(enderecoKey) {
+  return Object.keys(allEstoqueLotes).some(function(itemKey) {
+    return Object.values(allEstoqueLotes[itemKey] || {}).some(function(l) {
+      return l && l.enderecoKey === enderecoKey && (l.saldoLote || 0) > 0 && loteNoFiltroCliente(l);
+    });
+  });
+}
+function donoDestinoHtml(l) {
+  if (!l) return '';
+  if (l.itemTipo === 'produto') {
+    return l.cliente ? '<span class="field-hint">→ ' + escapeHtml(l.cliente) + (l.pedidoId ? ' · pedido ' + escapeHtml(l.pedidoId) : '') + '</span>' : '';
+  }
+  var dono = PropriedadeEstoque.donoDoLote(l), d = l.destino || {};
+  return (dono.tipo === PropriedadeEstoque.CLIENTE
+      ? '<span class="badge badge-purple" title="Material de propriedade do cliente: só para os pedidos dele">do cliente</span> ' + escapeHtml(dono.clienteNome || nomeClienteEstoque(dono.clienteKey))
+      : '<span class="badge badge-gray">Kuryos</span>') +
+    (d.clienteKey ? '<div class="field-hint">→ ' + escapeHtml(d.clienteNome || nomeClienteEstoque(d.clienteKey)) +
+      ((d.pedidos || []).length ? ' · pedido' + (d.pedidos.length > 1 ? 's ' : ' ') + escapeHtml(d.pedidos.join(', ')) : '') + '</div>' : '');
+}
+// Partes de clientes dentro do total de um material (Saldo Agregado sem filtro).
+function partesDonoHtml(e) {
+  var s = PropriedadeEstoque.saldoPorDono(e);
+  var clientes = Object.keys(s.porCliente);
+  if (!clientes.length) return '';
+  return '<div class="field-hint" style="margin:0;font-weight:400">Kuryos ' + fmtNum(s.geral) + ' · ' +
+    clientes.map(function(c) { return escapeHtml(nomeClienteEstoque(c)) + ' ' + fmtNum(s.porCliente[c]); }).join(' · ') + '</div>';
+}
+function renderEstoqueAgregadoCliente() {
+  var c = propClienteAtual(), vista = propVistaAtual();
+  var search = norm(document.getElementById('esSearch').value);
+  var destinado = vista === PropriedadeEstoque.VISTA_DESTINADO;
+  var linhas = {};
+  // Lotes que entram na vista: dão pedidos e contagem; no destino, dão o saldo.
+  Object.keys(allEstoqueLotes).forEach(function(itemKey) {
+    Object.values(allEstoqueLotes[itemKey] || {}).forEach(function(l) {
+      if (!l || !((l.saldoLote || 0) > 0) || !loteNoFiltroCliente(l)) return;
+      var ln = linhas[itemKey] = linhas[itemKey] || { key: itemKey, codigo: l.itemCodigo, nome: l.itemNome || '', unidade: l.unidade || '', saldo: 0, lotes: 0, pedidos: {}, pa: l.itemTipo === 'produto' };
+      ln.lotes++;
+      if (destinado) ln.saldo += Number(l.saldoLote) || 0;
+      ((l.destino && l.destino.pedidos) || (l.pedidoId ? [l.pedidoId] : [])).forEach(function(p) { ln.pedidos[p] = 1; });
+    });
+  });
+  if (!destinado) {
+    // Propriedade: o saldo é o agregado da parte do cliente (já com consumo).
+    Object.keys(linhas).forEach(function(k) { linhas[k].saldo = 0; });
+    Object.entries(allEstoque).forEach(function(entry) {
+      var parte = PropriedadeEstoque.saldoPorDono(entry[1]).porCliente[c];
+      if (!parte) return;
+      var e = entry[1];
+      var ln = linhas[entry[0]] = linhas[entry[0]] || { key: entry[0], codigo: e.materialCodigo, nome: e.materialNome || '', unidade: e.unidade || '', saldo: 0, lotes: 0, pedidos: {} };
+      ln.saldo = parte;
+    });
+  }
+  var rows = Object.values(linhas).filter(function(ln) {
+    return !search || (norm(ln.codigo) + ' ' + norm(ln.nome)).indexOf(search) !== -1;
+  }).sort(function(a, b) { return norm(a.codigo).localeCompare(norm(b.codigo)); });
+  document.getElementById('esClienteColSaldo').textContent = destinado ? 'Saldo destinado (lotes)' : 'Saldo do cliente';
+  document.getElementById('esCountCliente').textContent = (destinado ? 'Destinado a ' : 'Propriedade de ') + nomeClienteEstoque(c) +
+    ' (' + rows.length + ' item(ns))';
+  var tbody = document.getElementById('esBodyCliente');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">' + (destinado
+      ? 'Nada da Kuryos destinado a este cliente em estoque.'
+      : 'Nenhum material de propriedade deste cliente em estoque.') + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(ln) {
+    return '<tr>' +
+      '<td>' + (ln.pa ? '<span class="badge badge-purple">PA</span> ' : '') + escapeHtml(ln.codigo || ln.key) + ' — ' + escapeHtml(ln.nome) + '</td>' +
+      '<td style="text-align:right;font-weight:700' + (ln.saldo < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(ln.saldo) + ' ' + escapeHtml(ln.unidade) + '</td>' +
+      '<td style="font-size:12px">' + (Object.keys(ln.pedidos).length ? escapeHtml(Object.keys(ln.pedidos).join(', ')) : '—') + '</td>' +
+      '<td style="text-align:right">' + ln.lotes + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm es-cli-lotes" data-codigo="' + escapeAttr(ln.codigo || '') + '">Ver lotes</button></td>' +
+    '</tr>';
+  }).join('');
+  tbody.querySelectorAll('.es-cli-lotes').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.getElementById('slSearch').value = btn.getAttribute('data-codigo');
+      ativarAbaEstoque('lotes', true);
+      renderSaldoLotes();
+    });
+  });
+}
+['propCliente', 'propVista'].forEach(function(id) {
+  document.getElementById(id).addEventListener('change', function() {
+    document.getElementById('propHint').textContent = !propClienteAtual()
+      ? 'Vale para Saldo Agregado, Saldo por Lote/Endereço e Posições.'
+      : (propVistaAtual() === PropriedadeEstoque.VISTA_DESTINADO
+          ? 'Da Kuryos, comprado para pedidos deste cliente, e o produto acabado dos pedidos dele. É estoque geral: pode ser usado para outros.'
+          : 'Material que este cliente remeteu. Só pode ser usado nos produtos e pedidos dele.');
+    renderEstoqueAgregado();
+    renderSaldoLotes();
+    renderPosicoesTableEnd();
+  });
+});
 
 /* ═══════════════════════════════════════════════════════════════════
    Aba: Saldo por Lote/Endereço
@@ -972,8 +1171,9 @@ function renderSaldoLotes() {
     if (soAguardando && !loteAguardaGuardar(x.lote)) return false;
     if (filtroTipo && x.lote.itemTipo !== filtroTipo) return false;
     if (filtroStatus && (x.lote.status || 'LIBERADO') !== filtroStatus) return false;
+    if (!loteNoFiltroCliente(x.lote)) return false;
     if (search) {
-      var hay = norm(x.lote.itemCodigo) + ' ' + norm(x.lote.itemNome) + ' ' + norm(x.lote.loteOrigem);
+      var hay = norm(x.lote.itemCodigo) + ' ' + norm(x.lote.itemNome) + ' ' + norm(x.lote.loteOrigem) + ' ' + norm(x.lote.loteInterno);
       if (hay.indexOf(search) === -1) return false;
     }
     return true;
@@ -989,7 +1189,7 @@ function renderSaldoLotes() {
   document.getElementById('slCount').textContent = 'Lotes em estoque (' + linhas.length + ')';
   var tbody = document.getElementById('slBody');
   if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum lote encontrado com esse filtro.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nenhum lote encontrado com esse filtro.</td></tr>';
     return;
   }
   tbody.innerHTML = linhas.map(function(x) {
@@ -1000,7 +1200,8 @@ function renderSaldoLotes() {
       : (loteNaDoca(l) ? ' <span class="badge badge-purple" title="Produto acabado separado na Doca para expedir.">🚚 na Doca</span>' : '');
     return '<tr>' +
       '<td>' + tipoBadge + ' ' + escapeHtml(l.itemCodigo) + ' — ' + escapeHtml(l.itemNome || '') + pendEndereco + '</td>' +
-      '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+      '<td>' + escapeHtml(l.loteInterno || l.loteOrigem || '—') + (l.loteInterno && l.loteOrigem && l.loteOrigem !== l.loteInterno ? '<div class="field-hint" style="margin:0">fornecedor: ' + escapeHtml(l.loteOrigem) + '</div>' : '') + '</td>' +
+      '<td class="prop-dono">' + donoDestinoHtml(l) + '</td>' +
       '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
       '<td>' + fmtData(l.dataValidade) + '</td>' +
       '<td><select class="sl-status" data-item="' + escapeAttr(x.itemKey) + '" data-lote="' + escapeAttr(x.loteKey) + '">' +
@@ -1500,6 +1701,7 @@ function renderPosicoesTableEnd() {
     if (filtroOcupacao === 'ocupadas' && ocupantes === 0) return false;
     if (filtroOcupacao === 'livres' && ocupantes > 0) return false;
     if (filtroOcupacao === 'bloqueadas' && e.ativo !== false) return false;
+    if (propClienteAtual() && !posicaoNoFiltroCliente(entry[0])) return false;
     return true;
   }).sort(function(a, b) {
     var ea = a[1], eb = b[1];
@@ -2358,7 +2560,8 @@ function mostrarDetalheEndereco(enderecoKey, codigo) {
       return '<tr>' +
         '<td><span class="badge ' + (i.tipo === 'PA' ? 'badge-purple' : 'badge-blue') + '">' + i.tipo + '</span> <b>' + escapeHtml(i.codigo) + '</b><div class="field-hint" style="margin:0">' + escapeHtml(i.nome) + '</div></td>' +
         '<td>' + escapeHtml(i.lote) + (i.loteFornecedor ? '<div class="field-hint" style="margin:0">fornecedor: ' + escapeHtml(i.loteFornecedor) + '</div>' : '') + '</td>' +
-        '<td>' + (escapeHtml(i.origem) || '—') + (i.entrada ? '<div class="field-hint" style="margin:0">entrada ' + fmtData(i.entrada) + '</div>' : '') + '</td>' +
+        '<td>' + (escapeHtml(i.origem) || '—') + (i.entrada ? '<div class="field-hint" style="margin:0">entrada ' + fmtData(i.entrada) + '</div>' : '') +
+          (i.dono ? '<div class="prop-dono">' + donoDestinoHtml((allEstoqueLotes[i.itemKey] || {})[i.loteKey] || {}) + '</div>' : '') + '</td>' +
         '<td>' + vol + '</td>' +
         '<td style="text-align:right"><b>' + fmtNum(i.saldo) + '</b> ' + escapeHtml(i.unidade) + (i.original && i.original !== i.saldo ? '<div class="field-hint" style="margin:0">de ' + fmtNum(i.original) + '</div>' : '') + '</td>' +
         '<td style="text-align:right">' + pesoCel + '</td>' +
@@ -2415,11 +2618,11 @@ document.addEventListener('DOMContentLoaded', function() {
   attachAutocomplete(document.getElementById('aeMaterial'), function() { return aeItems; }, {
     onSelect: function(it) {
       document.getElementById('aeMaterialKey').value = it.key;
-      var e = allEstoque[it.key];
-      document.getElementById('aeSaldoAtualHint').textContent = 'Saldo atual no sistema: ' + fmtNum(e ? (e.saldoAtual || 0) : 0) + ' ' + (e ? (e.unidade || '') : '');
-      document.getElementById('aeNovoSaldo').value = e && e.saldoAtual != null ? e.saldoAtual : 0;
+      preencherAeDono(it.key);
+      atualizarAeSaldoHint();
     }
   });
+  document.getElementById('aeDono').addEventListener('change', atualizarAeSaldoHint);
   document.getElementById('aeMaterial').addEventListener('input', function() {
     document.getElementById('aeMaterialKey').value = '';
     document.getElementById('aeSaldoAtualHint').textContent = '';
@@ -2530,6 +2733,12 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('conferencias_pa'), function(snap) {
       allConferenciasPA = snap.val() || {};
       renderConferenciaPA();
+    });
+    dbOnValue(db.ref('clientes'), function(snap) {
+      allClientesEstoque = snap.val() || {};
+      preencherFiltroCliente();
+      renderEstoqueAgregado();
+      renderSaldoLotes();
     });
     dbOnValue(db.ref('fornecedores'), function(snap) {
       allFornecedores = snap.val() || {};

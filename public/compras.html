@@ -13,6 +13,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/cancelamento-pc.js"></script>
+  <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -169,6 +170,17 @@
     .section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
     .section-label:first-child{margin-top:0}
     .item-row{display:grid;grid-template-columns:1.8fr 1.3fr .8fr .6fr 1.2fr auto;gap:8px;align-items:center;margin-bottom:8px}
+    /* Cliente e pedidos do PC (propriedade do estoque) */
+    .vinc-box{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--card)}
+    .vinc-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .vinc-titulo{font-weight:700;font-size:13px}
+    .vinc-grid{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;gap:10px;align-items:start}
+    .vinc-pedidos{display:flex;flex-direction:column;gap:3px;max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px}
+    .vinc-pedidos label{display:flex;gap:6px;align-items:flex-start;cursor:pointer;line-height:1.35}
+    .vinc-pedidos .vinc-sub{color:var(--muted);font-size:11px}
+    .vinc-travado{font-size:12px;color:var(--muted)}
+    .vinc-resumo{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+    @media(max-width:700px){.vinc-grid{grid-template-columns:1fr}}
     .item-row-head{display:grid;grid-template-columns:1.8fr 1.3fr .8fr .6fr 1.2fr auto;gap:8px;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
     .chk-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--tint-gray-bg)}
     .chk-row input{width:auto;margin-top:3px}
@@ -416,6 +428,14 @@
           </select>
         </div>
         <div class="form-group">
+          <label>De quem é o material? *</label>
+          <select id="pcdPropriedade">
+            <option value="KURYOS">Kuryos (estoque geral)</option>
+            <option value="CLIENTE">Cliente (só para os pedidos dele)</option>
+          </select>
+          <div class="field-hint" id="pcdPropriedadeHint"></div>
+        </div>
+        <div class="form-group">
           <label>Quem coordena o transporte? *</label>
           <select id="pcdResponsavelTransporte">
             <option value="REMETENTE">Remetente agenda a entrega</option>
@@ -438,6 +458,10 @@
       <div id="pcdItensBuilder"></div>
       <button class="btn btn-ghost btn-sm" id="btnAddPcdItem">+ Item</button>
 
+      <div class="section-label">Cliente e pedidos *</div>
+      <div class="field-hint" style="margin-bottom:6px">Vale para todos os itens. Itens de clientes ou pedidos diferentes: crie e ajuste depois em <b>🔗 Cliente/pedido</b> na lista.</div>
+      <div id="pcdVinculo"></div>
+
       <div class="section-label">Por que entrou direto *</div>
       <div class="form-group full">
         <select id="pcdMotivo">
@@ -458,6 +482,34 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalPcdCancel">Cancelar</button>
       <button class="btn btn-green" id="modalPcdSave">Criar e liberar pra recebimento</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cliente e pedidos do PC (propriedade do estoque) -->
+<div class="modal-bg" id="modalVinculoPC">
+  <div class="modal" style="max-width:820px">
+    <div class="modal-header"><h2 id="vpcTitulo">Cliente e pedidos</h2><button class="modal-close" id="vpcClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div class="section-note">Aqui se define <b>de quem é o material</b> e <b>para qual cliente e pedido</b> ele vem. A Logística só vê e confirma — sem isso o pedido não pode ser recebido.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>De quem é o material? *</label>
+          <select id="vpcPropriedade">
+            <option value="">Selecione…</option>
+            <option value="KURYOS">Kuryos (estoque geral)</option>
+            <option value="CLIENTE">Cliente (só para os pedidos dele)</option>
+          </select>
+          <div class="field-hint" id="vpcPropriedadeHint"></div>
+        </div>
+      </div>
+      <div id="vpcTodosBox"></div>
+      <div class="section-label">Itens</div>
+      <div id="vpcItens"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="vpcCancel">Cancelar</button>
+      <button class="btn btn-green" id="vpcSalvar">Salvar</button>
     </div>
   </div>
 </div>
@@ -789,6 +841,7 @@ var allProcessosCotacao = {};
 var allMateriais = {};
 var allPedidos = {};      // backlog de pedidos comerciais -- só pra "Gerar de Pedido"
 var allProdutosCompras = {};
+var allClientesCompras = {};  // cadastro de clientes -- cliente e pedido de cada item do PC
 var allFormulasCompras = {};
 var allBomCompras = {};
 var skuHistoricoCompras = {};
@@ -1990,7 +2043,20 @@ function renderPedidos() {
       : '') +
       '<button class="btn btn-primary btn-sm pc-imprimir" data-key="' + escapeAttr(key) + '" title="Abre o pedido formatado pra imprimir ou salvar em PDF, com o padrão de etiqueta de cada item">🖨 Enviar ao fornecedor</button> ' +
       '<button class="btn btn-ghost btn-sm pc-etiquetas" data-key="' + escapeAttr(key) + '">🏷️ Etiquetas</button>' +
+      (['ABERTO', 'ENVIADO', 'RECEBIDO_PARCIAL'].indexOf(p.status) >= 0
+        ? ' <button class="btn btn-ghost btn-sm pc-vinculo" data-key="' + escapeAttr(key) + '" title="De quem é o material e para qual cliente e pedido">🔗 Cliente/pedido</button>'
+        : '') +
       botaoCancelar;
+    // De quem é e para quem: o que a Logística vai ver no recebimento.
+    var vinc = PropriedadeEstoque.validarVinculoPC(p);
+    var tipoDono = PropriedadeEstoque.propriedadeDoPC(p);
+    var destinos = {};
+    itens.forEach(function(i) { if (PropriedadeEstoque.vinculoValido(i.vinculo)) destinos[resumoVinculoHtml(i.vinculo)] = 1; });
+    itensResumo += '<div class="vinc-resumo">' +
+      (tipoDono === 'CLIENTE' ? '📦 Material do cliente' : (tipoDono === 'KURYOS' ? '🏭 Kuryos' : '❔ Dono não definido')) +
+      (Object.keys(destinos).length ? ' · ' + Object.keys(destinos).join(' | ') : '') +
+      (vinc.ok ? '' : ' <span class="badge badge-orange" title="' + escapeAttr(vinc.pendencias.join(' ')) + '">⚠ falta cliente/pedido — não pode ser recebido</span>') +
+      '</div>';
     // Selo de PC criado por fora da cotação. Visível na lista de propósito:
     // é o que deixa perceptível, no dia a dia, se o caminho curto virou o
     // caminho padrão. O title carrega o motivo declarado.
@@ -2013,6 +2079,9 @@ function renderPedidos() {
   });
   document.querySelectorAll('.pc-etiquetas').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirModalEtiquetaPC(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.pc-vinculo').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalVinculoPC(btn.getAttribute('data-key')); });
   });
   document.querySelectorAll('.pc-imprimir').forEach(function(btn) {
     btn.addEventListener('click', function() { imprimirPedidoCompra(btn.getAttribute('data-key')); });
@@ -2782,6 +2851,12 @@ function marcarPedidoEnviado(key) {
   var validacao = RotasPC.validarRota(pc && pc.rota);
   if (!pc || !pc.rota || pc.rota.statusConfirmacao !== 'CONFIRMADA' || !validacao.pronto) {
     showAlert('Antes de marcar como enviado, abra Editar e confirme a rota completa do Pedido de Compra' + (validacao.faltando.length ? ': ' + validacao.faltando.join(', ') : '') + '.', 'danger');
+    return;
+  }
+  var vinculo = PropriedadeEstoque.validarVinculoPC(pc);
+  if (!vinculo.ok) {
+    showAlert('Antes de enviar, defina de quem é o material e o cliente/pedido de cada item. ' + vinculo.pendencias.join(' '), 'danger');
+    abrirModalVinculoPC(key);
     return;
   }
   if (!confirm('Marcar esse pedido como enviado ao fornecedor?')) return;
@@ -4382,7 +4457,8 @@ function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) 
       pctIss: resp.pctIss != null ? resp.pctIss : null, descontoPct: resp.descontoPct != null ? resp.descontoPct : null,
       custoUnitarioNaDecisao: calc.custoUnitario != null ? Math.round(calc.custoUnitario * 10000) / 10000 : null,
       custoTotalNaDecisao: calc.custoTotal != null ? Math.round(calc.custoTotal * 100) / 100 : null,
-      obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey
+      obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey,
+      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey)
     };
     totalPedido += calc.custoTotal || 0;
     var prazo = parseFloat(resp.prazoEntregaDias);
@@ -4546,7 +4622,8 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
       // intacto. Só uma homologação posterior pode alterar o cadastro/BOM.
       materialSimilarCotado: (convidado.materialSimilarPorItem || {})[origItemKey] || null,
       especificacaoTecnicaCotada: resp.especificacaoTecnica || null,
-      obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey
+      obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey,
+      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey)
       };
     });
     var prazoVencedor = parsePrazoPagamento(convidado.condicaoPagamento || '');
@@ -4609,6 +4686,206 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
   }).then(function() {
     showAlert('Pedido de Compra criado a partir da cotação!', 'success');
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+/* ══════════════ Cliente e pedidos do PC ══════════════
+   Regras em shared/propriedade-estoque.js. De quem é o material é do PC
+   inteiro; cliente e pedido(s) são por item, obrigatórios, vários pedidos
+   permitidos. O cliente do pedido sai do produto (o pedido guarda só o nome).
+   ═══════════════════════════════════════════════════════ */
+function clientesOrdenadosCompras() {
+  return Object.keys(allClientesCompras || {})
+    .map(function(k) { return { key: k, nome: (allClientesCompras[k] || {}).nome || k, ativo: (allClientesCompras[k] || {}).ativo !== false }; })
+    .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+}
+
+// Item de PC nascido de Solicitação gerada a partir de pedido(s).
+function vinculoSugeridoDaSolicitacao(scKey) {
+  var sc = scKey && allSolicitacoes[scKey];
+  if (!sc || typeof PropriedadeEstoque === 'undefined') return null;
+  var chaves = (sc.pedidoKeys && sc.pedidoKeys.length) ? sc.pedidoKeys : (sc.pedidoOrigemKey ? [sc.pedidoOrigemKey] : []);
+  return PropriedadeEstoque.vinculoSugeridoDasChavesPedido(chaves, allPedidos, allProdutosCompras, allClientesCompras);
+}
+
+function resumoVinculoHtml(v) {
+  if (!PropriedadeEstoque.vinculoValido(v)) return '<span class="badge badge-orange">⚠ falta cliente/pedido</span>';
+  return escapeHtml(v.clienteNome || v.clienteKey) + ' · pedido' + (v.pedidos.length > 1 ? 's ' : ' ') + escapeHtml(v.pedidos.join(', '));
+}
+
+// Editor de cliente + pedidos. `travado` mostra só o texto (item já recebido).
+function vinculoEditorHtml(id, vinculo, travado) {
+  var v = vinculo || {};
+  if (travado) {
+    return '<div class="vinc-editor" data-vinc="' + escapeAttr(id) + '" data-travado="1"><div class="vinc-travado">🔒 ' + resumoVinculoHtml(v) +
+      ' — já recebido; os lotes que entraram guardam este vínculo.</div></div>';
+  }
+  var opcoes = '<option value="">Selecione o cliente…</option>' + clientesOrdenadosCompras().map(function(c) {
+    return '<option value="' + escapeAttr(c.key) + '"' + (c.key === v.clienteKey ? ' selected' : '') + '>' +
+      escapeHtml(c.nome) + (c.ativo ? '' : ' (inativo)') + '</option>';
+  }).join('');
+  return '<div class="vinc-editor" data-vinc="' + escapeAttr(id) + '" data-selecionados="' + escapeAttr(JSON.stringify(v.pedidos || [])) + '">' +
+    '<div class="vinc-grid">' +
+      '<div><select class="vinc-cliente">' + opcoes + '</select>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="vinc-concluidos"> mostrar pedidos concluídos</label></div>' +
+      '<div class="vinc-pedidos"></div>' +
+    '</div></div>';
+}
+
+function renderPedidosDoEditor(ed) {
+  var box = ed.querySelector('.vinc-pedidos');
+  if (!box) return;
+  var clienteKey = ed.querySelector('.vinc-cliente').value;
+  var selecionados = JSON.parse(ed.getAttribute('data-selecionados') || '[]');
+  if (!clienteKey) { box.innerHTML = '<span class="vinc-sub">Escolha o cliente para ver os pedidos.</span>'; return; }
+  var lista = PropriedadeEstoque.pedidosDoCliente(clienteKey, allPedidos, allProdutosCompras, allClientesCompras,
+    { incluirConcluidos: ed.querySelector('.vinc-concluidos').checked });
+  // Pedido já marcado que não aparece (concluído, com filtro desligado) continua marcado e visível.
+  var ids = lista.map(function(g) { return PropriedadeEstoque.normPedidoId(g.id); });
+  selecionados.forEach(function(id) {
+    if (ids.indexOf(PropriedadeEstoque.normPedidoId(id)) < 0) lista.push({ id: id, linhas: [], aberto: false });
+  });
+  if (!lista.length) { box.innerHTML = '<span class="vinc-sub">Nenhum pedido aberto deste cliente. Marque "mostrar pedidos concluídos" se for o caso.</span>'; return; }
+  box.innerHTML = lista.map(function(g) {
+    var marcado = selecionados.some(function(id) { return PropriedadeEstoque.normPedidoId(id) === PropriedadeEstoque.normPedidoId(g.id); });
+    var skus = g.linhas.map(function(l) { return l.sku; }).join(', ');
+    return '<label><input type="checkbox" class="vinc-pedido" value="' + escapeAttr(g.id) + '"' + (marcado ? ' checked' : '') + '>' +
+      '<span><b>#' + escapeHtml(g.id) + '</b>' + (g.aberto ? '' : ' <span class="vinc-sub">(concluído)</span>') +
+      (skus ? '<br><span class="vinc-sub">' + escapeHtml(skus) + '</span>' : '') + '</span></label>';
+  }).join('');
+}
+
+function ligarVinculoEditores(root) {
+  root.querySelectorAll('.vinc-editor:not([data-travado])').forEach(function(ed) {
+    renderPedidosDoEditor(ed);
+    ed.querySelector('.vinc-cliente').addEventListener('change', function() {
+      ed.setAttribute('data-selecionados', '[]');   // trocar de cliente limpa os pedidos do anterior
+      renderPedidosDoEditor(ed);
+    });
+    ed.querySelector('.vinc-concluidos').addEventListener('change', function() { renderPedidosDoEditor(ed); });
+    ed.querySelector('.vinc-pedidos').addEventListener('change', function() {
+      var marcados = Array.prototype.map.call(ed.querySelectorAll('.vinc-pedido:checked'), function(el) { return el.value; });
+      ed.setAttribute('data-selecionados', JSON.stringify(marcados));
+    });
+  });
+}
+
+function lerVinculoEditor(ed) {
+  if (!ed || ed.hasAttribute('data-travado')) return null;
+  var clienteKey = ed.querySelector('.vinc-cliente').value;
+  return {
+    clienteKey: clienteKey || null,
+    clienteNome: clienteKey ? ((allClientesCompras[clienteKey] || {}).nome || clienteKey) : null,
+    pedidos: JSON.parse(ed.getAttribute('data-selecionados') || '[]')
+  };
+}
+
+function aplicarVinculoNoEditor(ed, v) {
+  if (!ed || ed.hasAttribute('data-travado')) return;
+  ed.querySelector('.vinc-cliente').value = v.clienteKey || '';
+  ed.setAttribute('data-selecionados', JSON.stringify(v.pedidos || []));
+  renderPedidosDoEditor(ed);
+}
+
+function textoPropriedadeFixa(natureza) {
+  var fixo = PropriedadeEstoque.proprietarioDaNatureza(natureza);
+  if (fixo === 'KURYOS') return 'Compra da Kuryos: o material é sempre da Kuryos (estoque geral).';
+  if (fixo === 'CLIENTE') return 'Remessa do cliente: o material é sempre do cliente.';
+  return 'Remessa de terceiro: escolha de quem é o material.';
+}
+
+var vpcKey = null;
+function abrirModalVinculoPC(key) {
+  var pc = allPedidosCompra[key];
+  if (!pc) return;
+  if (['ABERTO', 'ENVIADO', 'RECEBIDO_PARCIAL'].indexOf(pc.status) < 0) {
+    showAlert('Cliente e pedido só podem ser definidos enquanto o pedido está aberto ou aguardando recebimento.', 'danger');
+    return;
+  }
+  vpcKey = key;
+  var itens = pc.itens || {};
+  var recebeuAlgo = Object.values(itens).some(function(it) { return (parseFloat(it && it.qtdRecebida) || 0) > 0; });
+  var fixo = PropriedadeEstoque.proprietarioDaNatureza(pc.naturezaMovimentacao);
+  var atual = PropriedadeEstoque.propriedadeDoPC(pc);
+  var sel = document.getElementById('vpcPropriedade');
+  sel.value = atual || '';
+  // Fixa pela natureza, ou já definida e com material recebido: os lotes que
+  // entraram carregam o dono, então ele não muda mais.
+  var travarDono = !!fixo || (!!atual && recebeuAlgo);
+  sel.disabled = travarDono;
+  document.getElementById('vpcPropriedadeHint').textContent = (!fixo && travarDono)
+    ? 'Já houve recebimento: o dono do material não pode mais mudar.'
+    : textoPropriedadeFixa(pc.naturezaMovimentacao);
+  document.getElementById('vpcTitulo').textContent = 'Cliente e pedidos — ' + (pc.numeroFormatado || '');
+
+  // Item com vínculo e já recebido fica travado: os lotes guardam o vínculo.
+  var editaveis = Object.keys(itens).filter(function(ik) {
+    var it = itens[ik] || {};
+    return !(PropriedadeEstoque.vinculoValido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0);
+  });
+  document.getElementById('vpcTodosBox').innerHTML = editaveis.length > 1
+    ? '<div class="vinc-box"><div class="vinc-head"><span class="vinc-titulo">Mesmo cliente e pedidos para todos os itens</span>' +
+      '<button class="btn btn-ghost btn-sm" id="vpcAplicarTodos">Aplicar a todos os itens</button></div>' + vinculoEditorHtml('todos', null, false) + '</div>'
+    : '';
+  document.getElementById('vpcItens').innerHTML = Object.keys(itens).map(function(ik) {
+    var it = itens[ik] || {};
+    var travado = editaveis.indexOf(ik) < 0;
+    var semVinculoComRecebimento = !PropriedadeEstoque.vinculoValido(it.vinculo) && (parseFloat(it.qtdRecebida) || 0) > 0;
+    return '<div class="vinc-box" data-item="' + escapeAttr(ik) + '"><div class="vinc-head"><span class="vinc-titulo">' +
+      escapeHtml(it.materialCodigo || '') + (it.materialNome ? ' — ' + escapeHtml(it.materialNome) : '') + '</span>' +
+      '<span class="vinc-sub">' + fmtNum(it.qtd) + ' ' + escapeHtml(it.unidade || '') + (it.qtdRecebida ? ' · recebido ' + fmtNum(it.qtdRecebida) : '') + '</span></div>' +
+      (semVinculoComRecebimento ? '<div class="field-hint" style="margin-bottom:6px">Parte já entrou antes desta regra: esses lotes seguem como estoque da Kuryos. O vínculo vale para o que ainda chegar.</div>' : '') +
+      vinculoEditorHtml('item-' + ik, it.vinculo, travado) + '</div>';
+  }).join('');
+  var modal = document.getElementById('modalVinculoPC');
+  ligarVinculoEditores(modal);
+  var btnTodos = document.getElementById('vpcAplicarTodos');
+  if (btnTodos) btnTodos.addEventListener('click', function() {
+    var v = lerVinculoEditor(document.querySelector('#vpcTodosBox .vinc-editor'));
+    if (!PropriedadeEstoque.vinculoValido(v)) { showAlert('Escolha o cliente e ao menos um pedido para aplicar.', 'danger'); return; }
+    document.querySelectorAll('#vpcItens .vinc-editor').forEach(function(ed) { aplicarVinculoNoEditor(ed, v); });
+  });
+  modal.classList.add('open');
+}
+function fecharModalVinculoPC() { document.getElementById('modalVinculoPC').classList.remove('open'); vpcKey = null; }
+
+function salvarVinculoPC() {
+  var key = vpcKey, pc = key && allPedidosCompra[key];
+  if (!pc) return;
+  var updates = {}, base = 'pedidos_compra/' + key + '/';
+  var sel = document.getElementById('vpcPropriedade');
+  if (!sel.disabled) {
+    if (!sel.value) { showAlert('Defina de quem é o material.', 'danger'); return; }
+    updates[base + 'propriedade'] = { tipo: sel.value, definidaPor: currentUserNome(), definidaEm: new Date().toISOString() };
+  }
+  var erro = null;
+  document.querySelectorAll('#vpcItens .vinc-box[data-item]').forEach(function(box) {
+    var v = lerVinculoEditor(box.querySelector('.vinc-editor'));
+    if (!v) return;   // travado
+    if (!PropriedadeEstoque.vinculoValido(v) && !erro) {
+      erro = 'Item ' + box.querySelector('.vinc-titulo').textContent + ': escolha o cliente e ao menos um pedido.';
+    }
+    updates[base + 'itens/' + box.getAttribute('data-item') + '/vinculo'] = v;
+  });
+  if (erro) { showAlert(erro, 'danger'); return; }
+  updates[base + 'vinculoAtualizadoPor'] = currentUserNome();
+  updates[base + 'vinculoAtualizadoEm'] = new Date().toISOString();
+  var btn = document.getElementById('vpcSalvar');
+  btn.disabled = true;
+  db.ref().update(updates).then(function() {
+    fecharModalVinculoPC();
+    showAlert('Cliente e pedidos salvos em ' + (pc.numeroFormatado || 'pedido') + '.', 'success');
+  }).catch(function(err) { showAlert('Erro ao salvar: ' + err.message, 'danger'); })
+    .finally(function() { btn.disabled = false; });
+}
+
+// PC direto: dono pela natureza (terceiro escolhe) e um vínculo para todos os itens.
+function atualizarPcdPropriedade() {
+  var natureza = document.getElementById('pcdNatureza').value;
+  var fixo = PropriedadeEstoque.proprietarioDaNatureza(natureza);
+  var sel = document.getElementById('pcdPropriedade');
+  if (fixo) sel.value = fixo;
+  sel.disabled = !!fixo;
+  document.getElementById('pcdPropriedadeHint').textContent = textoPropriedadeFixa(natureza);
 }
 
 /* ══════════════ Pedido de Compra DIRETO ══════════════
@@ -4696,6 +4973,9 @@ function openModalPcDireto() {
   document.getElementById('pcdRotaHint').textContent = 'Informe e confira a rota antes de liberar o recebimento.';
   atualizarPcdNatureza();
   renderPcdItensBuilder();
+  var boxVinculo = document.getElementById('pcdVinculo');
+  boxVinculo.innerHTML = vinculoEditorHtml('pcd', null, false);
+  ligarVinculoEditores(boxVinculo);
   document.getElementById('modalPcDireto').classList.add('open');
 }
 function closeModalPcDireto() { document.getElementById('modalPcDireto').classList.remove('open'); }
@@ -4706,6 +4986,7 @@ function closeModalPcDireto() { document.getElementById('modalPcDireto').classLi
 function atualizarPcdNatureza() {
   var natureza = document.getElementById('pcdNatureza').value;
   var compra = natureza === 'COMPRA_KURYOS';
+  atualizarPcdPropriedade();
   var coletaKuryos = document.getElementById('pcdResponsavelTransporte').value === 'KURYOS';
   document.getElementById('pcdTitulo').textContent = compra ? 'Pedido de Compra Direto' : 'Entrada Direta de Material';
   document.getElementById('pcdOrigemLabel').textContent = compra ? 'Fornecedor' : 'Remetente';
@@ -4730,6 +5011,12 @@ function salvarPcDireto() {
 
   var itensValidos = pcdItensBuilder.filter(function(it) { return it.materialCodigo && it.qtd > 0; });
   if (!itensValidos.length) { showAlert('Adicione ao menos um item com material e quantidade válidos.', 'danger'); return; }
+  // De quem é o material e para qual cliente/pedido: o PC direto nasce pronto
+  // para receber, então nasce com isso definido.
+  var propriedadePcd = document.getElementById('pcdPropriedade').value;
+  if (!propriedadePcd) { showAlert('Defina de quem é o material.', 'danger'); return; }
+  var vinculoPcd = lerVinculoEditor(document.querySelector('#pcdVinculo .vinc-editor'));
+  if (!PropriedadeEstoque.vinculoValido(vinculoPcd)) { showAlert('Escolha o cliente e ao menos um pedido a que este material se refere.', 'danger'); return; }
 
   var btn = document.getElementById('modalPcdSave');
   btn.disabled = true; btn.textContent = 'Criando...';
@@ -4756,7 +5043,8 @@ function salvarPcDireto() {
       qtdRecebida: 0,
       // sem solicitação de origem, por definição -- é o que diferencia do
       // PC nascido de cotação
-      origemSolicitacaoKey: null
+      origemSolicitacaoKey: null,
+      vinculo: vinculoPcd
     };
   });
 
@@ -4772,7 +5060,8 @@ function salvarPcDireto() {
       fornecedorKey: fornecedorKey || null,
       fornecedorNome: fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '',
       naturezaMovimentacao: natureza,
-      origemNome: compra ? (fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '') : origemNomeDigitado,
+      propriedade: { tipo: propriedadePcd, definidaPor: currentUserNome(), definidaEm: new Date().toISOString() },
+      origemNome: compra ?(fornecedor ? (fornecedor.nomeFantasia || fornecedor.razaoSocial) : '') : origemNomeDigitado,
       origemTipo: compra ? 'FORNECEDOR' : (natureza === 'REMESSA_CLIENTE' ? 'CLIENTE' : 'TERCEIRO'),
       transporte: {
         responsavel: responsavelTransporte,
@@ -4806,6 +5095,9 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('modalPcdClose').addEventListener('click', closeModalPcDireto);
   document.getElementById('modalPcdCancel').addEventListener('click', closeModalPcDireto);
   document.getElementById('modalPcdSave').addEventListener('click', salvarPcDireto);
+  document.getElementById('vpcClose').addEventListener('click', fecharModalVinculoPC);
+  document.getElementById('vpcCancel').addEventListener('click', fecharModalVinculoPC);
+  document.getElementById('vpcSalvar').addEventListener('click', salvarVinculoPC);
   document.getElementById('pcdNatureza').addEventListener('change', atualizarPcdNatureza);
   document.getElementById('pcdResponsavelTransporte').addEventListener('change', atualizarPcdNatureza);
   ['pcdNatureza', 'pcdResponsavelTransporte'].forEach(function(id) {
@@ -4977,6 +5269,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('pedidos'), function(snap) { allPedidos = snap.val() || {}; });
     dbOnValue(db.ref('produtos'), function(snap) { allProdutosCompras = snap.val() || {}; });
+    dbOnValue(db.ref('clientes'), function(snap) { allClientesCompras = snap.val() || {}; });
     dbOnValue(db.ref('formulas'), function(snap) { allFormulasCompras = snap.val() || {}; });
     dbOnValue(db.ref('bom'), function(snap) { allBomCompras = snap.val() || {}; });
     dbOnValue(db.ref('sku_historico'), function(snap) { skuHistoricoCompras = snap.val() || {}; });

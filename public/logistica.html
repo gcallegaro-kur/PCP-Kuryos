@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/seletor-endereco.js"></script>
   <script src="auth_check.js"></script>
@@ -221,6 +222,7 @@
     <div class="modal-header"><h2>Registrar Recebimento</h2><button class="modal-close" id="modalReceberClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="receberPcInfo" class="field-hint" style="margin-bottom:12px"></div>
+      <div id="rcPropriedadeBox"></div>
       <div class="rc-intro"><b>Entrada de materiais e envio ao Controle de Qualidade</b><br>Os dados abaixo substituem o formulário externo. Cada item recebido será endereçado no WMS com status <b>Quarentena</b> e aparecerá automaticamente na fila da Qualidade.</div>
       <div class="form-grid" style="margin-bottom:14px">
         <div class="form-group">
@@ -872,6 +874,37 @@ function htmlLoteRecebimento(qtd, unidade, removivel) {
       '<div class="form-group"><label>Endereço físico de entrada *</label>' + SeletorEndereco.campoHtml('rc-endereco', SeletorEndereco.docaPadrao(allEnderecosEstoque), allEnderecosEstoque, {titulo: 'Endereço de entrada do lote'}) + '<div class="field-hint">Padrão: Doca. Guarde depois em Estoque › Endereçamento, ou escolha a posição agora. Quarentena é status, não endereço.</div></div>' +
     '</div></div>';
 }
+/* De quem é o material e para qual cliente/pedido -- definido em Compras, só
+   exibido aqui (a doca não sabe). PC incompleto não pode ser recebido: o
+   servidor recusa, e a tela já avisa e trava o botão antes. */
+function renderPropriedadeRecebimento(p) {
+  var box = document.getElementById('rcPropriedadeBox');
+  var btn = document.getElementById('modalReceberSave');
+  if (typeof PropriedadeEstoque === 'undefined') { box.innerHTML = ''; return null; }
+  var v = PropriedadeEstoque.validarVinculoPC(p);
+  var tipo = PropriedadeEstoque.propriedadeDoPC(p);
+  if (!v.ok) {
+    box.innerHTML = '<div class="rc-intro" style="border-color:var(--danger);background:color-mix(in srgb, var(--danger) 8%, var(--card))">' +
+      '<b>⚠ Este pedido ainda não pode ser recebido.</b> Compras precisa definir de quem é o material e o cliente/pedido de cada item:' +
+      '<ul style="margin:6px 0 0 18px">' + v.pendencias.map(function(t) { return '<li>' + escapeHtml(t) + '</li>'; }).join('') + '</ul></div>';
+    btn.disabled = true;
+    return {ok: false, tipo: tipo};
+  }
+  btn.disabled = false;
+  box.innerHTML = '<div class="rc-intro"><b>' + (tipo === PropriedadeEstoque.CLIENTE
+    ? '📦 Material de propriedade do cliente'
+    : '🏭 Material da Kuryos (estoque geral)') + '</b> — definido no Pedido de Compra. ' +
+    (tipo === PropriedadeEstoque.CLIENTE ? 'Só pode ser usado nos produtos e pedidos desse cliente.' : 'O cliente e o pedido abaixo são o destino da compra.') + '</div>';
+  return {ok: true, tipo: tipo};
+}
+function destinoItemRecebimentoHtml(vinculoPc, it) {
+  if (!vinculoPc || !vinculoPc.ok) return '';
+  var v = it.vinculo || {};
+  return '<div class="field-hint" style="margin:-4px 0 8px">' +
+    (vinculoPc.tipo === PropriedadeEstoque.CLIENTE ? 'Proprietário' : 'Destino') + ': <b>' + escapeHtml(v.clienteNome || v.clienteKey || '—') + '</b>' +
+    ' · pedido' + ((v.pedidos || []).length > 1 ? 's' : '') + ' ' + escapeHtml((v.pedidos || []).join(', ')) + '</div>';
+}
+
 function openModalReceber(key) {
   recebendoKey = key;
   recebimentoIdempotencyKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : db.ref('recebimentos_operacoes').push().key.replace(/[^A-Za-z0-9_-]/g, '');
@@ -888,6 +921,7 @@ function openModalReceber(key) {
   document.getElementById('rcObservacoes').value = '';
 
   SeletorEndereco.ligar(document.getElementById('modalReceber'), {fonte: fonteEnderecosRecebimento});
+  var vinculoPc = renderPropriedadeRecebimento(p);
   var lista = document.getElementById('rcItensBody');
   var itens = Object.entries(p.itens || {});
   lista.innerHTML = itens.map(function(entry) {
@@ -901,6 +935,7 @@ function openModalReceber(key) {
     return '<div class="rc-item-card" data-item="' + escapeAttr(itemKey) + '">' +
       '<div class="rc-item-head"><div class="rc-item-title">' + escapeHtml(it.materialCodigo) + ' — ' + escapeHtml(it.materialNome || '') + '</div>' +
       '<div class="rc-item-progress">Pedido: ' + fmtNum(qtd) + ' ' + escapeHtml(it.unidade || '') + '<br>Já recebido: ' + fmtNum(qtdRec) + ' ' + escapeHtml(it.unidade || '') + '</div></div>' +
+      destinoItemRecebimentoHtml(vinculoPc, it) +
       '<div class="rc-form-grid">' +
         '<div class="form-group"><label>Tipo de material *</label><select class="rc-tipo"><option value="">Selecione…</option><option value="EMBALAGEM"' + (tipo === 'EMBALAGEM' ? ' selected' : '') + '>Embalagem</option><option value="MATERIA_PRIMA"' + (tipo === 'MATERIA_PRIMA' ? ' selected' : '') + '>Matéria-prima</option></select></div>' +
         '<div class="form-group span-2"><label>Identificação do material *</label><input class="rc-identificacao" type="text" value="' + escapeAttr(it.materialNome || '') + '" placeholder="Descrição conferida na etiqueta"></div>' +

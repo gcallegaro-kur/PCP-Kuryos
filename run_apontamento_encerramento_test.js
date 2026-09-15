@@ -104,6 +104,7 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   if (data.pedidos['0019__GLMKAM01'].status !== 'Concluído') throw new Error('Pedido que atingiu o total não foi concluído');
 
   const ajustes = [];
+  const baixasWms = [];
   const consumptionCtx = {
     console, Promise, Math, parseFloat, Object,
     allFormulasForm: { f1: { codProduto: 'GLMKAM01', versao: 'v1', status: 'RASCUNHO', itens: { agua: { mpCodigo: 'MPGR-00132', percentualMM: 97.38 } } } },
@@ -112,20 +113,28 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
       tampa: { materialCodigo: 'EP-00069', materialNome: 'Tampa', qtdPorPeca: 1 },
       caixa: { materialCodigo: 'ET-00012', materialNome: 'Caixa', qtdPorPeca: 0.041666 }
     } } },
-    allProdutosForm: { GLMKAM01: { sku: 'GLMKAM01', densidadeGranel: -1, volume: 325, unidadeVolume: 'ml' } },
+    allProdutosForm: { GLMKAM01: { sku: 'GLMKAM01', densidadeGranel: -1, volume: 325, unidadeVolume: 'ml', clienteKey: 'GLMK' } },
+    // Propriedade do estoque: o consumo leva o cliente da OP (material de
+    // cliente só serve a ele). Módulo real, não imitação.
+    PropriedadeEstoque: require('./public/shared/propriedade-estoque.js'),
     allMateriaisForm: {},
     melhorFormulaDoProduto: () => ({ registro: consumptionCtx.allFormulasForm.f1 }),
     chaveVersao: (sku, versao) => sku + '__' + versao,
     sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),
     explodirMateriaisNecessarios: () => { throw new Error('Não deveria explodir fórmula com densidade -1'); },
-    ajustarEstoque: (db, codigo, delta) => { ajustes.push({ codigo, delta }); return Promise.resolve(); },
-    baixarEmpenho: () => Promise.resolve(), baixaWmsSegura: () => Promise.resolve(),
+    ajustarEstoque: (db, codigo, delta, tipo, ref, extras) => { ajustes.push({ codigo, delta, cliente: extras && extras.clienteKeyConsumidor }); return Promise.resolve(); },
+    baixarEmpenho: () => Promise.resolve(),
+    baixaWmsSegura: (tipo, codigo, qtd, motivo, autor, ref, clienteKey) => { baixasWms.push(clienteKey); return Promise.resolve(); },
     db: {}, window: { currentUser: { nome: 'Teste' } }
   };
   vm.createContext(consumptionCtx);
+  vm.runInContext(extractFunction('clienteKeyDaOp'), consumptionCtx);
   vm.runInContext(extractFunction('baixarEstoqueConsumo'), consumptionCtx);
   await consumptionCtx.baixarEstoqueConsumo({ sku: 'GLMKAM01', lote: '26247/06' }, 797, 'consumo_producao', '26247/06');
   if (ajustes.length !== 3) throw new Error('Densidade inválida deveria baixar somente os 3 itens do BOM');
+  if (!ajustes.every(a => a.cliente === 'GLMK') || !baixasWms.every(c => c === 'GLMK') || baixasWms.length !== 3) {
+    throw new Error('Consumo precisa levar o cliente da OP ao saldo agregado e ao FEFO (propriedade do estoque)');
+  }
   const deltas = Object.fromEntries(ajustes.map(a => [a.codigo, a.delta]));
   if (deltas['EP-00092'] !== -797 || deltas['EP-00069'] !== -797 || deltas['ET-00012'] !== -33.208) throw new Error('Consumo do BOM ficou incorreto');
   if ('MPGR-00132' in deltas) throw new Error('Fórmula com densidade -1 não pode movimentar estoque');

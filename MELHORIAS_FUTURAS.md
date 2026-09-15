@@ -630,6 +630,38 @@ deriva do BOM, grava `mpCodigo`, mostra saldo disponível por item). Falta:
   agora em `insumos.html`, mas nenhum cálculo de compra usa o disponível
   real. O dado está pronto e não é consumido.
 
+## Propriedade do estoque por cliente — o que ficou de fora (2026-09-15)
+
+Entregue: o PC define de quem é o material e o cliente/pedido de cada item;
+o lote nasce com `propriedade`/`destino`; o agregado separa
+`estoque/{m}/porCliente/{c}`; apontamento, FEFO/separação, "Insumos por
+Pedido" e MRP só usam material do cliente para a demanda dele. Regras em
+`public/shared/propriedade-estoque.js`. Adiado de propósito:
+
+- **Remessa do cliente a caminho no MRP ignora a data.** `repartirMrpPorDono`
+  abate a demanda do cliente com estoque + trânsito dele sem conferir se a
+  remessa chega antes da data da demanda. Com poucas remessas é aceitável;
+  se virar rotina, fasear a cobertura por semana como o resto do motor.
+- **Empenho não sabe o dono.** `saldoEmpenhado` sai inteiro do geral da Kuryos
+  (conservador: nunca faz a Kuryos parecer ter mais do que tem). Para ficar
+  exato, `empenharMateriais` precisaria reservar primeiro da parte do cliente
+  da OP (a OP resolve o cliente pelo SKU, `clienteKeyDoSku`).
+- **Mapa por rua / Planta baixa não filtram por cliente** — só a lista de
+  Posições, o Saldo Agregado e o Saldo por Lote. O detalhe da posição já
+  mostra dono/destino de cada lote.
+- **Saída manual de lote de cliente** (Registrar Saída, Descarte) só mexe no
+  lote, como sempre foi; não existe fluxo de **devolução de material ao
+  cliente** que baixe também `porCliente`. Hoje isso se corrige com Ajustar
+  Saldo escolhendo o cliente.
+- **Material de cliente parado (sobra)** aparece no MRP como "sobra, não serve
+  a outros", mas não há alerta de material de cliente sem demanda há X dias.
+- **Dado a corrigir na operação:** PC-0003 e PC-0005 (ENVIADOS) e PC-0004
+  (terceiro, parcial — falta receber 4.312 un de EP-00037) precisam de
+  🔗 Cliente/pedido antes do próximo recebimento. O que o PC-0004 já recebeu
+  (7.300 un de EP-00036 e 17.157 un de EP-00037, remessa da LOMAR PACK) entrou
+  antes da regra e segue como estoque da Kuryos; se esse material é de um
+  cliente, corrigir com Ajustar Saldo escolhendo o cliente.
+
 ## Organização / navegação (auditoria geral de 2026-09-05)
 
 - **`horizonte.html` está no limbo** — foi tirado do menu por decisão do
