@@ -1050,13 +1050,22 @@ function updateBtnCotacao() {
 // motivo/aprovação contraditórios, o que venceu por último. `.transaction()`
 // no campo status faz compare-and-swap: só aceita a mudança se o status
 // ainda for o esperado (PENDENTE) no momento da escrita no servidor.
+//
+// `atual === null` NÃO é "outra ação decidiu": o SDK chama o callback primeiro
+// com o CACHE LOCAL, que vem null sem listener no nó, e devolver undefined ali
+// aborta sem consultar o servidor (bug da Conferência de PA, 019cb52). Devolver
+// o próprio null faz o SDK reexecutar com o dado real; se a solicitação não
+// existe mesmo, commita null sobre null e o `.then` detecta pelo valor final.
+// Guarda: run_transacoes_null_test.js.
 function aprovarSolicitacao(key) {
   if (!confirm('Aprovar essa solicitação de compra?')) return;
   db.ref('solicitacoes_compra/' + key + '/status').transaction(function(atual) {
+    if (atual === null) return atual; // cache frio -- o SDK reexecuta com o dado do servidor
     if (atual !== 'PENDENTE') return; // aborta -- outra ação já decidiu essa solicitação
     return 'APROVADA';
   }).then(function(result) {
     if (!result.committed) { showAlert('Essa solicitação já foi decidida por outra ação (aprovada/rejeitada). Atualize a lista.', 'danger'); return; }
+    if (result.snapshot.val() !== 'APROVADA') { showAlert('Solicitação não encontrada (pode ter sido excluída). Atualize a lista.', 'danger'); return; }
     return db.ref('solicitacoes_compra/' + key + '/aprovacao').set({aprovadoPor: currentUserNome(), aprovadoEm: new Date().toISOString()})
       .then(function() { showAlert('Solicitação aprovada.', 'success'); });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
@@ -1065,10 +1074,12 @@ function rejeitarSolicitacao(key) {
   var motivo = prompt('Motivo da rejeição:');
   if (motivo === null) return;
   db.ref('solicitacoes_compra/' + key + '/status').transaction(function(atual) {
+    if (atual === null) return atual; // cache frio -- ver aprovarSolicitacao
     if (atual !== 'PENDENTE') return;
     return 'REJEITADA';
   }).then(function(result) {
     if (!result.committed) { showAlert('Essa solicitação já foi decidida por outra ação (aprovada/rejeitada). Atualize a lista.', 'danger'); return; }
+    if (result.snapshot.val() !== 'REJEITADA') { showAlert('Solicitação não encontrada (pode ter sido excluída). Atualize a lista.', 'danger'); return; }
     return db.ref('solicitacoes_compra/' + key + '/rejeicao').set({rejeitadoPor: currentUserNome(), rejeitadoEm: new Date().toISOString(), motivo: motivo.trim()})
       .then(function() { showAlert('Solicitação rejeitada.', 'success'); });
   }).catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
@@ -3613,7 +3624,9 @@ function gravarFornecedorNaCotacao(procKey, dados, itemKeys) {
   var novoKey = db.ref('processos_cotacao/' + procKey + '/fornecedoresConvidados').push().key;
   var fornecedorKey = dados.fornecedorKey || null, cnpj = dados.cnpjAvulso || null, chaveAlvo = novoKey;
   return db.ref('processos_cotacao/' + procKey).transaction(function(proc) {
-    if (!proc || proc.status !== 'ABERTO') return;
+    chaveAlvo = novoKey; // a função pode rodar várias vezes
+    if (!proc) return proc; // cache frio -- o SDK reexecuta com o dado do servidor
+    if (proc.status !== 'ABERTO') return;
     proc.fornecedoresConvidados = proc.fornecedoresConvidados || {};
     var existente = Object.entries(proc.fornecedoresConvidados).find(function(e) {
       var c = e[1] || {};
@@ -3651,6 +3664,7 @@ function gravarFornecedorNaCotacao(procKey, dados, itemKeys) {
     return proc;
   }).then(function(r) {
     if (!r.committed) throw new Error('A cotação não está mais aberta.');
+    if (!r.snapshot.exists()) throw new Error('Cotação não encontrada.');
     cotacaoFornecedorAtivoPorProcesso[procKey] = chaveAlvo;
     cotacaoVisaoPorProcesso[procKey] = 'preencher';
     return chaveAlvo;
@@ -4083,12 +4097,16 @@ function gerarPedidosDeCotacaoPorItem(procKey, escolhasTela) {
   if (erros.length) { showAlert('Não foi possível gerar: ' + erros.join('; '), 'danger'); return; }
   var scKeys = Object.keys(proc.solicitacoesOrigem || {});
   if (!scKeys.length) { showAlert('Esse processo não tem solicitações de origem.', 'danger'); return; }
-  var reservas = scKeys.map(function(scKey) { return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) { return atual === 'APROVADA' ? 'CONSOLIDADA' : undefined; }); });
+  // `atual === null` devolve o próprio null (cache frio, ver aprovarSolicitacao);
+  // reserva só vale se o valor FINAL for CONSOLIDADA -- commit de null sobre
+  // null é solicitação inexistente, não reserva.
+  var reservas = scKeys.map(function(scKey) { return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) { if (atual === null) return atual; return atual === 'APROVADA' ? 'CONSOLIDADA' : undefined; }); });
   Promise.all(reservas).then(function(results) {
-    var falharam = results.filter(function(r) { return !r.committed; });
+    var reservou = function(r) { return r.committed && r.snapshot.val() === 'CONSOLIDADA'; };
+    var falharam = results.filter(function(r) { return !reservou(r); });
     if (falharam.length) {
       var reverts = {};
-      results.forEach(function(r, i) { if (r.committed) reverts['solicitacoes_compra/' + scKeys[i] + '/status'] = 'APROVADA'; });
+      results.forEach(function(r, i) { if (reservou(r)) reverts['solicitacoes_compra/' + scKeys[i] + '/status'] = 'APROVADA'; });
       return db.ref().update(reverts).then(function() { throw new Error('Uma ou mais solicitações já foram consolidadas ou alteradas por outro processo.'); });
     }
     var cadeia = Promise.resolve(), criados = [];
@@ -4122,6 +4140,7 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
 
   var reservas = scKeys.map(function(scKey) {
     return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) {
+      if (atual === null) return atual; // cache frio -- ver aprovarSolicitacao
       if (atual !== 'APROVADA') return; // aborta -- já foi consolidada/alterada por outra ação
       return 'CONSOLIDADA';
     });
@@ -4129,10 +4148,11 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
 
   Promise.all(reservas).then(function(results) {
     var falharam = [];
-    results.forEach(function(r, idx) { if (!r.committed) falharam.push(scKeys[idx]); });
+    var reservou = function(r) { return r.committed && r.snapshot.val() === 'CONSOLIDADA'; };
+    results.forEach(function(r, idx) { if (!reservou(r)) falharam.push(scKeys[idx]); });
     if (falharam.length) {
       var reverts = {};
-      results.forEach(function(r, idx) { if (r.committed) reverts['solicitacoes_compra/' + scKeys[idx] + '/status'] = 'APROVADA'; });
+      results.forEach(function(r, idx) { if (reservou(r)) reverts['solicitacoes_compra/' + scKeys[idx] + '/status'] = 'APROVADA'; });
       return db.ref().update(reverts).then(function() {
         var nums = falharam.map(function(k) { return (allSolicitacoes[k] || {}).numeroFormatado || k; }).join(', ');
         throw new Error('As solicitações ' + nums + ' já foram consolidadas ou alteradas por outra ação. Cancele esse processo e confira as solicitações atuais.');

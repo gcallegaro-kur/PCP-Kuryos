@@ -1660,7 +1660,12 @@
     var pedKey = findPedidoKey(pedidoId, produto, pedidosCache);
     if (!pedKey) return Promise.resolve({ committed: false });
     return db.ref('pedidos/' + pedKey).transaction(function(p) {
-      if (p === null) return; // abort if not exists/loaded yet
+      // `return p`, não `return;`: a 1ª passada vem do CACHE LOCAL e pode ser
+      // null mesmo com o pedido existindo; abortar ali descartava o ajuste sem
+      // consultar o servidor (bug da Conferência de PA, 019cb52). Devolvendo o
+      // null, o SDK reexecuta com o dado real; pedido inexistente commita null
+      // sobre null e cai no `snapshot.exists()` abaixo.
+      if (p === null) return p;
       p.produzido = (p.produzido || 0) + qtyDiff;
       p.ultimoApontamento = new Date().toISOString();
       return p;

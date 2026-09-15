@@ -509,11 +509,14 @@ function ajustarProduzidoOp(dbRef, lote, tipo, delta) {
   if (!lote || !delta) return Promise.resolve({ ok: true, semEfeito: true });
   var campo = campoProduzido(tipo);
   return dbRef.ref('ops/' + sanitizeKey(lote)).transaction(function(op) {
-    // ABORTA (undefined), não `return op`: quando a OP não existe, `op` é
-    // null, e devolver null numa transaction do RTDB significa APAGAR o nó.
-    // Aqui daria no mesmo por acaso (não há o que apagar), mas é o tipo de
-    // idioma que só precisa de um copy-paste pra virar perda de dado.
-    if (!op) return;
+    // `return op`, NÃO `return;`. O SDK chama isto primeiro com o valor do
+    // CACHE LOCAL, que vem null quando nenhuma tela mantém listener em ops/;
+    // abortar ali devolvia "OP não encontrada" para OP existente, sem nunca
+    // consultar o servidor (mesmo bug da Conferência de PA, 019cb52). Devolver
+    // o próprio null não apaga nada: o SDK busca o dado real e reexecuta, e
+    // o commit só vale se o servidor ainda tiver null. Hoje historico.html e
+    // ops.html mantêm listener em ops/ e mascaram o problema.
+    if (!op) return op;
     var atual = op[campo] != null ? op[campo] : ((campo === 'produzidoLinha') ? (op.produzido || 0) : 0);
     var novo = Math.max(0, Math.round((atual + delta) * 1000) / 1000);
     op[campo] = novo;
@@ -528,8 +531,9 @@ function ajustarProduzidoOp(dbRef, lote, tipo, delta) {
     }
     return op;
   }).then(function(res) {
-    if (!res || !res.committed) return { ok: false, erro: 'OP não encontrada ou alteração não commitada.' };
-    var v = res.snapshot.val() || {};
+    if (!res || !res.committed) return { ok: false, erro: 'Alteração da OP não commitada.' };
+    if (!res.snapshot || !res.snapshot.exists()) return { ok: false, erro: 'OP não encontrada.' };
+    var v = res.snapshot.val();
     return { ok: true, campo: campo, novoTotal: v[campo] };
   });
 }
@@ -1619,6 +1623,17 @@ function darBaixaLoteManual(dbRef, itemTipo, itemCodigo, loteKey, qtd, motivo, a
 // A solicitação só SEGREGA o lote: ela não baixa quantidade. A baixa física
 // ocorre exclusivamente quando a coleta/destinação é confirmada, preservando
 // a diferença entre "solicitei" e "o material saiu da Kuryos".
+//
+// NULL NÃO É RECUSA. O SDK chama o callback da transaction primeiro com o
+// valor do CACHE LOCAL, que vem null se nenhuma tela mantém listener no nó.
+// Devolver undefined ali ABORTA sem nunca consultar o servidor, e o lote
+// válido aparecia como "indisponível" (mesmo bug que travou a Conferência de
+// PA, 019cb52). Por isso: null -> `return atual` (o SDK busca o dado real e
+// reexecuta); só a regra de negócio aborta, e sempre deixa o motivo. Se o nó
+// de fato não existe, a transaction commita null sobre null (não apaga nada)
+// e quem chama detecta pelo `snapshot.exists()`. Hoje descarte.html mantém
+// listener em estoque_lotes e mascara o problema; a função não pode depender
+// disso. Guarda: run_transacoes_null_test.js.
 function solicitarDestinacaoLote(dbRef, itemCodigo, loteKey, dados, autor) {
   if (!itemCodigo || !loteKey || !dados || !dados.quantidade || dados.quantidade <= 0) {
     return Promise.resolve({ ok: false, erro: 'Informe lote e quantidade para a destinação.' });
@@ -1626,10 +1641,16 @@ function solicitarDestinacaoLote(dbRef, itemCodigo, loteKey, dados, autor) {
   var itemKey = sanitizeKey(itemCodigo);
   var solicitacaoKey = dbRef.ref('solicitacoes_descarte').push().key;
   var agora = new Date().toISOString();
-  var anterior = null;
+  var anterior = null, recusa = null;
   return dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey).transaction(function(atual) {
-    if (!atual || !(atual.saldoLote > 0) || atual.destinacao) return;
-    if (Number(dados.quantidade) > Number(atual.saldoLote)) return;
+    // A função pode rodar várias vezes: zera o que a passada anterior deixou.
+    anterior = null; recusa = null;
+    if (!atual) return atual;
+    if (atual.destinacao) { recusa = 'Este lote já está segregado para destinação.'; return; }
+    if (!(atual.saldoLote > 0)) { recusa = 'Este lote não tem saldo para destinar.'; return; }
+    if (Number(dados.quantidade) > Number(atual.saldoLote)) {
+      recusa = 'Quantidade maior que o saldo do lote (' + atual.saldoLote + ').'; return;
+    }
     anterior = atual.status || 'LIBERADO';
     atual.status = 'AGUARDANDO_DESCARTE';
     atual.destinacao = {
@@ -1639,8 +1660,9 @@ function solicitarDestinacaoLote(dbRef, itemCodigo, loteKey, dados, autor) {
     atual.atualizadoEm = agora;
     return atual;
   }).then(function(res) {
-    if (!res || !res.committed) return { ok: false, erro: 'Lote indisponível, já segregado ou com saldo insuficiente.' };
-    var lote = res.snapshot.val() || {};
+    if (!res || !res.committed) return { ok: false, erro: recusa || 'Não foi possível segregar o lote. Tente novamente.' };
+    if (!res.snapshot || !res.snapshot.exists()) return { ok: false, erro: 'Lote não encontrado no estoque.' };
+    var lote = res.snapshot.val();
     var registro = {
       status: 'SOLICITADO', criadoEm: agora, criadoPor: autor || null,
       itemKey: itemKey, itemTipo: lote.itemTipo || null, itemCodigo: itemCodigo,
@@ -1659,7 +1681,8 @@ function solicitarDestinacaoLote(dbRef, itemCodigo, loteKey, dados, autor) {
       // Não deixa lote preso se a gravação da solicitação falhar depois da
       // segregação. Só desfaz se a solicitação ainda for exatamente esta.
       return dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey).transaction(function(atual) {
-        if (!atual || !atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) return;
+        if (!atual) return atual;
+        if (!atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) return;
         atual.status = atual.destinacao.statusAnterior || 'REPROVADO';
         atual.destinacao = null; atual.atualizadoEm = new Date().toISOString();
         return atual;
@@ -1674,18 +1697,24 @@ function confirmarDestinacaoLote(dbRef, solicitacaoKey, autor, comprovante) {
     var s = snap.val();
     if (!s || s.status !== 'SOLICITADO') return { ok: false, erro: 'Esta solicitação não está pendente.' };
     var loteRef = dbRef.ref('estoque_lotes/' + s.itemKey + '/' + s.loteKey);
-    var abatido = 0, agora = new Date().toISOString();
+    var abatido = 0, recusa = null, agora = new Date().toISOString();
     return loteRef.transaction(function(atual) {
-      if (!atual || !atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) return;
+      abatido = 0; recusa = null; // zera o que uma passada anterior deixou
+      if (!atual) return atual; // cache frio: o SDK reexecuta com o dado do servidor
+      if (!atual.destinacao || atual.destinacao.solicitacaoKey !== solicitacaoKey) {
+        recusa = 'O lote não está mais segregado para esta solicitação.'; return;
+      }
       abatido = Math.min(Number(s.quantidade) || 0, Number(atual.saldoLote) || 0);
-      if (!(abatido > 0)) return;
+      if (!(abatido > 0)) { recusa = 'O lote não tem saldo para baixar.'; return; }
       atual.saldoLote = Math.round((Number(atual.saldoLote) - abatido) * 1000) / 1000;
       atual.status = atual.saldoLote === 0 ? 'DESCARTADO' : (atual.destinacao.statusAnterior || 'REPROVADO');
       atual.destinacao = null; atual.atualizadoEm = agora;
       return atual;
     }).then(function(res) {
-      if (!res || !res.committed || !(abatido > 0)) return { ok: false, erro: 'Não foi possível confirmar a saída deste lote.' };
-      var lote = res.snapshot.val() || {};
+      if (!res || !res.committed) return { ok: false, erro: recusa || 'Não foi possível confirmar a saída deste lote. Tente novamente.' };
+      if (!res.snapshot || !res.snapshot.exists()) return { ok: false, erro: 'Lote não encontrado no estoque.' };
+      if (!(abatido > 0)) return { ok: false, erro: 'Não foi possível confirmar a saída deste lote.' };
+      var lote = res.snapshot.val();
       return dbRef.ref('movimentos_estoque/' + s.itemKey).push({
         tipo: 'descarte_logistica_reversa', motivo: s.motivo || 'DESCARTE / LOGÍSTICA REVERSA',
         qtd: -abatido, saldoApos: lote.saldoLote, ref: solicitacaoKey,
