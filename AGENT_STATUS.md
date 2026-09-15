@@ -114,6 +114,38 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — Expedição: peso da carga, peso teórico e selecionar
+  todos (2026-09-15).** `932aa88` no `origin/main`; Hosting por **worktree
+  limpo** (`.claude/worktrees/expedicao-peso`, sobre `a007ec1`), conferido:
+  `expedicao.html`, `shared/expedicao-grade-tela.js`, `shared/expedicao-grade.js`
+  e `.css` SHA256 idênticos ao commit; `contatos-cliente.js` segue 404.
+  **Peso:** colunas Kg/cx e Peso sempre visíveis. Fontes: peso real do palete
+  (planilha) > `pesoPorCaixaKg` do palete > `produtos.kgCaixa`. Convenção da
+  planilha: cada volume, inclusive a parcial, pesa uma caixa cheia. Sem kg/cx =
+  desconhecido, nunca zero. Painel segue cliente/busca: liberado, aguardando
+  Qualidade e **teórico** das OPs sem palete (mesmos critérios e corte de
+  2026-09-10 da fila de `estoque.html`), com lista por OP.
+  **Selecionar todos:** respeita as regras de carga do servidor (mesmo cliente,
+  destino, CIF/FOB compatível, ≤100). API pura nova em `expedicao-grade.js`:
+  `pesoPalete`, `pesoTeoricoOp`, `somaPeso`, `produtoDoSku`, `compativel`,
+  `selecionarTodos`. `base` da grade ganhou `produtos`; `pronto()` passou a
+  contar `Object.keys(base).length` em vez do 6 fixo.
+  **Ensaio na base:** liberado 15 paletes / 6.768,6 kg; Qualidade 1 / 268,6 kg;
+  13 OPs aguardando Conferência/PCP com ~644 kg e **9 sem peso** (faltam kg/cx
+  no cadastro de GLMKAM01/02, BBSJBS05-2, PRF-AFEE-0023, KUBPBA02, PRF-PROP-0001;
+  un/cx no PRF-AFEE-0018) — operação, não código.
+- **⚠ Codex — integrei nos seus arquivos ativos `public/expedicao.html` e
+  `public/shared/expedicao-grade-tela.js`.** O commit NÃO contém o seu contato
+  do cliente na carga; na sua árvore, as suas mudanças foram **reaplicadas por
+  cima** da versão nova (2 conflitos de linha vizinha, resolvidos somando: a
+  linha `clientesContatos/contatoCargaUI` logo após `base`, e o
+  `contatoCargaUI.carregar` antes do `selecaoResumo`). Conferido: seu diff nesses
+  dois arquivos segue com exatamente as suas 8 linhas, os outros 14 arquivos
+  intactos, e a suíte inteira (29, inclusive `run_contatos_cliente_test.js` e os
+  testes de tela da Expedição com o seu código) passa. Backup dos seus dois
+  arquivos originais: scratchpad da sessão Claude de 2026-09-15.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — CEP automático e endereços da Kuryos na rota do PC
   (2026-09-15).** `d3d1fd7` no `origin/main` (integrado sobre `ec6149b`, da
   sessão do Descarte); Hosting por **worktree limpo**, conferido
