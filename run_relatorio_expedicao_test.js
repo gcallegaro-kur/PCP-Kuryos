@@ -45,7 +45,40 @@ const texto = (page, sel) => page.locator(sel).innerText();
     page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript(data => {
       window.fixtureRel = data;
-      window.firebase = {initializeApp() {}, database() { return {ref(path) { return {path}; }}; }};
+      // Stub FIEL ao SDK: database() e auth() só funcionam depois de
+      // initializeApp, exatamente como no navegador. A primeira versão deste
+      // teste devolvia um db pronto sem exigir init, e por isso passou verde
+      // enquanto a tela publicada quebrava com "No Firebase App '[DEFAULT]'"
+      // -- levando a sidebar do auth_check junto.
+      window.__iniciado = false;
+      function exigeInit(qual) {
+        if (!window.__iniciado) throw new Error("No Firebase App '[DEFAULT]' has been created - call initializeApp() first (" + qual + ")");
+      }
+      var perfil = {nome: 'Gustavo', email: 'g@kuryos.com', role: 'admin'};
+      window.firebase = {
+        initializeApp(cfg) {
+          if (!cfg || !cfg.databaseURL) throw new Error('firebaseConfig sem databaseURL');
+          window.__iniciado = true;
+        },
+        auth() {
+          exigeInit('auth');
+          return {
+            onAuthStateChanged(cb) { setTimeout(function() { cb({uid: 'u1', email: perfil.email, displayName: perfil.nome}); }, 0); },
+            signOut() { return Promise.resolve(); }
+          };
+        },
+        database() {
+          exigeInit('database');
+          return {ref(path) {
+            // once() do SDK recebe CALLBACK, não só devolve promessa -- é assim
+            // que o auth_check lê usuarios/{uid}.
+            var snap = {val: function() { return path === 'usuarios/u1' ? perfil : null; }};
+            return {path: path,
+              once(ev, cb) { if (cb) cb(snap); return Promise.resolve(snap); },
+              on(ev, cb) { cb(snap); return cb; }, off() {}};
+          }};
+        }
+      };
       window.kuryosDatabaseURL = x => x;
       window.kuryosConnectEmulatorsIfLocal = () => {};
       window.dbOnValue = (ref, cb) => cb({val: () => structuredClone(data)});
@@ -54,13 +87,33 @@ const texto = (page, sel) => page.locator(sel).innerText();
       const url = new URL(route.request().url());
       if (url.hostname !== 'rel.test') return route.fulfill({body: '', contentType: 'text/javascript'});
       const name = url.pathname.slice(1);
-      if (name === 'auth_check.js' || name === 'shared/utils.js') return route.fulfill({body: '', contentType: 'text/javascript'});
+      // auth_check.js entra DE VERDADE: é ele que desenha o menu lateral, e
+      // foi justamente o menu que sumiu em produção quando a tela esqueceu o
+      // initializeApp. Stubar o auth_check aqui cegaria o teste de novo.
+      if (name === 'shared/utils.js') return route.fulfill({body: '', contentType: 'text/javascript'});
       const file = 'public/' + name;
       if (!fs.existsSync(file)) return route.fulfill({status: 404, body: ''});
       return route.fulfill({body: fs.readFileSync(file),
         contentType: name.endsWith('.html') ? 'text/html' : name.endsWith('.css') ? 'text/css' : 'text/javascript'});
     });
     await page.goto('https://rel.test/relatorio_expedicao.html');
+
+    // ── 0. A tela inicializa o Firebase antes de usar o banco ────────────
+    // Sem isto a página fica em branco e o menu lateral do auth_check some
+    // junto, porque ele também chama firebase.auth(). Foi exatamente o que
+    // aconteceu em produção.
+    assert.equal(await page.evaluate(() => window.__iniciado), true,
+      'a tela precisa chamar firebase.initializeApp antes de firebase.database()');
+    assert.equal(await page.evaluate(() => typeof window.firebaseConfig === 'object'),
+      true, 'firebaseConfig tem que existir na tela');
+
+    // ── 0b. O menu lateral do auth_check desenha, e a página está nele ───
+    await page.waitForSelector('.kt-sidebar', {timeout: 5000});
+    assert.equal(await page.locator('.kt-sidebar').count(), 1, 'menu lateral ausente');
+    assert.equal(await page.locator('.kt-sidebar a[href="relatorio_expedicao.html"]').count(), 1,
+      'a tela precisa estar no menu — exige registro em KURYOS_MODULOS e o link em auth_check.js');
+    assert.ok(page.url().endsWith('relatorio_expedicao.html'),
+      'não pode redirecionar: a página tem que estar liberada no módulo logistica');
 
     // ── 1. Sem filtro: tudo aparece e os totais batem ────────────────────
     // 600+240+1200+1776+24 = 3840 unidades em 5 linhas / 4 cargas.

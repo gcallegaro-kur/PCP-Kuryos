@@ -125,6 +125,22 @@
    do relatório é um ITEM de uma carga -- é esse o grão que responde "do item
    x", e é o mesmo grão da planilha que o PCP já usa. */
 'use strict';
+// Cada tela do sistema inicializa o Firebase por conta própria; o
+// auth_check.js não faz isso. Sem este bloco, `firebase.database()` lança
+// "No Firebase App '[DEFAULT]' has been created" e o auth_check morre junto
+// ao chamar firebase.auth() -- a tela fica em branco E a sidebar some.
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c",
+  measurementId: "G-PTVWKLRHTG"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 var cargas = {}, linhas = [], filtradas = [];
 var ordem = {campo: 'data', desc: true};
