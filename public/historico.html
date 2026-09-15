@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/historico-apontamentos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -46,7 +47,7 @@
        shared/theme.css; aqui só posicionamento e o campo "período" que não
        tem equivalente no componente compartilhado. */
     .kt-toolbar{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:12px 16px;max-width:96%;margin:0 auto 16px}
-    .filter-group{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted)}
+    .filter-group{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);flex-wrap:wrap}
 
     /* Main */
     .main{padding:0 0 40px;max-width:96%;margin:0 auto}
@@ -89,6 +90,24 @@
     .ped-link{color:var(--purple);font-weight:700;font-size:11px;font-family:monospace;text-decoration:none}
     .ped-link:hover{text-decoration:underline}
     .qty-cell{font-weight:700;color:var(--text)}
+    .badge-red{background:#fee2e2;color:#991b1b}
+
+    /* Início → Término */
+    .periodo{display:flex;flex-direction:column;line-height:1.35;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text)}
+    .periodo-fim{color:var(--muted)}
+    .periodo-fim.sem{color:var(--warning);font-weight:700}
+
+    /* Visão condensada por OP */
+    .cond-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);text-transform:none;letter-spacing:0;cursor:pointer}
+    .cond-row{cursor:pointer}
+    .cond-row.erro td:first-child{box-shadow:inset 3px 0 var(--danger)}
+    .cond-row.aberto td{background:color-mix(in srgb, var(--primary) 5%, var(--card))}
+    .cond-sub{font-size:10px;color:var(--muted);font-weight:400;display:block;margin-top:1px}
+    .cond-alertas{display:flex;flex-wrap:wrap;gap:4px;max-width:340px}
+    .cond-alertas .badge{white-space:normal;line-height:1.3}
+    .cond-det > td{background:color-mix(in srgb, var(--text) 2%, var(--card));padding:4px 10px 12px 24px}
+    .cond-det table th{position:static;font-size:10px;padding:5px 8px;cursor:default}
+    .cond-det table td{padding:5px 8px}
 
     /* Tabs */
     .view-tabs{display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border)}
@@ -242,16 +261,37 @@
 
     <!-- ── Tab: Por Registro ── -->
     <div class="tab-panel active" id="panelRegistros">
-      <div class="card-title">
+      <div class="card-title" style="flex-wrap:wrap;gap:8px">
         <span id="tableCount">—</span>
-        <span style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none">Checkpoint mostra o acumulado; fechamento mostra o total da OP. Os totais do sistema usam somente o incremento de cada período.</span>
+        <label class="cond-toggle" title="Junta os apontamentos de cada OP (por setor) numa linha e confere as quantidades e os horários">
+          <input type="checkbox" id="fCondensar"> Condensar por OP
+        </label>
+        <span id="tableNota" style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none">Checkpoint mostra o acumulado; fechamento mostra o total da OP. Os totais do sistema usam somente o incremento de cada período. Término “?” = registro antigo, sem término gravado.</span>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" id="wrapCondensado" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th data-ccol="inicio">Início → Término</th>
+              <th data-ccol="produto">Produto</th>
+              <th data-ccol="setor">Setor / Linha</th>
+              <th data-ccol="quantidade" style="text-align:right">Qtd. (soma)</th>
+              <th data-ccol="lote">Lote</th>
+              <th data-ccol="pedido">Pedido</th>
+              <th data-ccol="registros" style="text-align:right">Apont.</th>
+              <th data-ccol="horas" style="text-align:right">Horas · Ritmo</th>
+              <th data-ccol="conferencia">Conferência</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyCondensado"></tbody>
+        </table>
+      </div>
+      <div class="table-wrap" id="wrapRegistros">
         <table>
           <thead>
             <tr>
               <th data-col="data">Data</th>
-              <th data-col="hora">Hora</th>
+              <th data-col="hora">Início → Término</th>
               <th data-col="produto">Produto</th>
               <th data-col="linha">Linha</th>
               <th data-col="quantidade" style="text-align:right">Qtd.</th>
@@ -329,13 +369,14 @@
       <div class="section-sep">Identificação</div>
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Data *</label>
-          <input type="date" id="eData" class="form-ctrl">
+          <label class="form-label">Início *</label>
+          <input type="datetime-local" id="eInicio" class="form-ctrl">
         </div>
         <div class="form-group">
-          <label class="form-label">Hora *</label>
-          <input type="time" id="eHora" class="form-ctrl">
+          <label class="form-label">Término</label>
+          <input type="datetime-local" id="eTermino" class="form-ctrl">
         </div>
+        <div class="form-group full" id="ePeriodoHint" style="font-size:11px;color:var(--muted)"></div>
         <div class="form-group full">
           <label class="form-label">Produto *</label>
           <input type="text" id="eProduto" class="form-ctrl" placeholder="Descrição do item">
@@ -397,7 +438,7 @@
           <input type="datetime-local" id="eSetupFim" class="form-ctrl">
         </div>
       </div>
-      <div class="section-sep" id="eOpSecaoTitulo">OP vinculada (Início/Término real — este registro é só uma hora dela)</div>
+      <div class="section-sep" id="eOpSecaoTitulo">OP vinculada (Início/Término real da OP — este registro é só um período dela)</div>
       <div class="form-grid" id="eOpSecao">
         <div class="form-group">
           <label class="form-label">Início real da OP</label>
@@ -535,15 +576,20 @@
     var p = s.split('-');
     return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s;
   }
-  function fmtHoraRange(hora) {
-    if (!hora) return '—';
-    var cleanHora = hora.replace('_', ':');
-    var parts = cleanHora.split(':');
-    var h = parseInt(parts[0]);
-    if (isNaN(h)) return hora;
-    var nextH = (h + 1) % 24;
-    var nextHStr = String(nextH).padStart(2, '0') + ':00';
-    return cleanHora + 'h - ' + nextHStr + 'h';
+  // Coluna "Início → Término" (shared/historico-apontamentos.js). Término
+  // ausente aparece como "?": registro antigo, sem término gravado -- não
+  // mais a hora cheia + 1h que fmtHoraRange presumia.
+  var HA = window.HistoricoApontamentos;
+  function periodoCellHtml(r) {
+    var t = HA.periodoTexto(r);
+    return '<div class="periodo"><span>' + escapeHtml(t.inicio) + '</span>' +
+      '<span class="periodo-fim' + (t.semTermino ? ' sem" title="Registro antigo: sem término gravado' : '') + '">→ ' + escapeHtml(t.termino) + '</span></div>';
+  }
+  function fmtHorasBr(h) {
+    if (h == null) return '—';
+    var hh = Math.floor(h + 1e-9), mm = Math.round((h - hh) * 60);
+    if (mm === 60) { hh++; mm = 0; }
+    return hh + 'h' + (mm ? String(mm).padStart(2, '0') : '');
   }
   // fmtNum, sanitizeKey e pedidoFirebaseKey vêm de shared/utils.js
   function showAlert(msg, type) {
@@ -618,6 +664,13 @@
             qtdTotalOP: parseFloat(v.qtdTotalOP) || 0,
             qtdEsperadaOP: parseFloat(v.qtdEsperadaOP) || 0,
             justificativaDivergencia: v.justificativaDivergencia || '',
+            periodoInicio: v.periodoInicio || '',
+            periodoFim: v.periodoFim || '',
+            horasTrabalhadas: parseFloat(v.horasTrabalhadas) || 0,
+            // Registro como está no banco: mudar a data na edição move o nó
+            // inteiro, e sem isto o período, as horas, a fonte e o timestamp
+            // se perdiam na mudança.
+            _raw: v,
             _key: k
           });
         });
@@ -661,21 +714,24 @@
         return (parseFloat(va) - parseFloat(vb)) * sortDir;
       }
       if (sortCol === 'data') {
-        var cmp = (a.data + a.hora).localeCompare(b.data + b.hora);
+        var cmp = a.data.localeCompare(b.data) || (HA.inicioMs(a) - HA.inicioMs(b));
         return cmp * sortDir;
+      }
+      if (sortCol === 'hora') {
+        return (HA.inicioMs(a) - HA.inicioMs(b)) * sortDir;
       }
       return String(va).localeCompare(String(vb)) * sortDir;
     });
   }
 
   // ── Sort on header click ─────────────────────────────────────────
-  document.querySelector('thead').addEventListener('click', function(e) {
+  document.querySelector('#wrapRegistros thead').addEventListener('click', function(e) {
     var th = e.target.closest('th[data-col]');
     if (!th) return;
     var col = th.dataset.col;
     if (col === sortCol) { sortDir *= -1; }
     else { sortCol = col; sortDir = -1; }
-    document.querySelectorAll('thead th').forEach(function(t){ t.classList.remove('sorted-asc','sorted-desc'); });
+    this.querySelectorAll('th').forEach(function(t){ t.classList.remove('sorted-asc','sorted-desc'); });
     th.classList.add(sortDir === 1 ? 'sorted-asc' : 'sorted-desc');
     renderTable(filtered());
   });
@@ -687,6 +743,9 @@
     renderTable(list);
     renderPedidoGroups(list);
     renderMotivosRecorrentes();
+    // A aba Por OP mostra os apontamentos e as horas do período carregado;
+    // sem isto ela só se atualizava quando `ops` mudava no banco.
+    renderOpGroups();
   }
 
   // ── Stats ────────────────────────────────────────────────────────
@@ -715,6 +774,9 @@
 
   // ── Table (Por Registro) ─────────────────────────────────────────
   function renderTable(list) {
+    document.getElementById('wrapRegistros').style.display = condensado ? 'none' : '';
+    document.getElementById('wrapCondensado').style.display = condensado ? '' : 'none';
+    if (condensado) { renderCondensado(list); return; }
     var data = sorted(list);
     document.getElementById('tableCount').textContent = data.length.toLocaleString('pt-BR') + ' registro' + (data.length !== 1 ? 's' : '');
     var tbody = document.getElementById('tableBody');
@@ -772,7 +834,7 @@
 
       return '<tr' + rowStyle + '>' +
         '<td style="white-space:nowrap;font-weight:600">' + fmtDate(r.data) + '</td>' +
-        '<td style="white-space:nowrap;color:var(--muted)">' + fmtRegistroRange(r) + '</td>' +
+        '<td>' + periodoCellHtml(r) + '</td>' +
         '<td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500" title="' + escapeAttr(r.produto) + '">' + prodContent + '</td>' +
         '<td><span class="badge badge-blue">' + escapedLinha + '</span></td>' +
         '<td class="qty-cell" style="text-align:right">' + qtyContent + '</td>' +
@@ -788,6 +850,159 @@
       '</tr>';
     }).join('');
   }
+
+  // ── Visão condensada por OP ──────────────────────────────────────
+  // Uma linha por lote + setor (envase e rotulagem do mesmo lote são etapas
+  // diferentes; somá-las contaria a unidade duas vezes). A regra de
+  // conferência mora em shared/historico-apontamentos.js; aqui só desenha.
+  // Só leitura: condensar não junta nem apaga nada no banco.
+  var condensado = false;
+  var condSortCol = 'inicio', condSortDir = -1;
+  var condAbertos = {};
+  var condGrupos = [];
+
+  function totalOpNoSistema(lote, setor) {
+    var op = opsCache[sanitizeKey(lote)];
+    return op ? getProduzido(op, setor) : null;
+  }
+  function gruposCondensados(list) {
+    return HA.condensarPorOp(list, {setorDe: setorDoRegistro, totalOp: totalOpNoSistema});
+  }
+  function fmtRitmo(v) { return v == null ? '—' : fmtNum(Math.round(v)) + ' un/h'; }
+
+  function ordenarGrupos(grupos) {
+    function chave(g) {
+      switch (condSortCol) {
+        case 'inicio': return g.inicio ? g.inicio.getTime() : 0;
+        case 'quantidade': return g.quantidade;
+        case 'registros': return g.registros.length;
+        case 'horas': return g.horasTrabalhadas || 0;
+        case 'conferencia': return g.alertas.filter(function(a) { return a.nivel !== 'info'; }).length * (g.temErro ? 10 : 1);
+        case 'setor': return g.setorRotulo + ' ' + g.linhas.join(' ');
+        case 'pedido': return g.pedidos.join(' ');
+        default: return String(g[condSortCol] || '');
+      }
+    }
+    return grupos.slice().sort(function(a, b) {
+      var va = chave(a), vb = chave(b);
+      var cmp = (typeof va === 'number') ? va - vb : String(va).localeCompare(String(vb));
+      return cmp * condSortDir;
+    });
+  }
+
+  function alertasHtml(g) {
+    if (g.avulso) return '<span class="badge badge-gray">sem lote</span>';
+    var classe = {erro: 'badge-red', aviso: 'badge-orange', info: 'badge-gray'};
+    var reais = g.alertas.filter(function(a) { return a.nivel !== 'info'; });
+    var html = reais.length ? '' : '<span class="badge badge-green">✓ confere</span>';
+    g.alertas.forEach(function(a) {
+      html += '<span class="badge ' + classe[a.nivel] + '">' + (a.nivel === 'erro' ? '⚠ ' : '') + escapeHtml(a.texto) + '</span>';
+    });
+    return '<div class="cond-alertas">' + html + '</div>';
+  }
+
+  function detalheCondensadoHtml(g) {
+    var tipoRotulo = {fechamento_op: 'Fechamento OP', apontamento_total: 'Checkpoint'};
+    var linhas = g.registros.map(function(r) {
+      var h = HA.horasDoRegistro(r);
+      return '<tr>' +
+        '<td style="white-space:nowrap">' + fmtDate(r.data) + '</td>' +
+        '<td>' + periodoCellHtml(r) + '</td>' +
+        '<td><span class="badge badge-blue">' + escapeHtml(r.linha) + '</span></td>' +
+        '<td style="font-size:11px;color:var(--muted)">' + escapeHtml(tipoRotulo[r.tipo] || 'Apontamento') + '</td>' +
+        '<td style="text-align:right;font-weight:700">' + fmtNum(r.quantidade) + '</td>' +
+        '<td style="text-align:right;color:var(--muted)">' + (r.qtdTotalOP ? fmtNum(r.qtdTotalOP) : '—') + '</td>' +
+        '<td style="text-align:right;color:var(--muted)">' + fmtHorasBr(h) + '</td>' +
+        '<td style="text-align:right;color:var(--muted)">' + (h > 0 ? fmtRitmo(r.quantidade / h) : '—') + '</td>' +
+        '<td style="color:var(--muted)">' + escapeHtml(r.operador || '—') + '</td>' +
+        '<td class="actions-cell"><button class="btn-edit" data-date="' + r.data + '" data-key="' + r._key + '" data-action="edit">Editar</button></td>' +
+      '</tr>';
+    }).join('');
+    return '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>' +
+      ['Data', 'Início → Término', 'Linha', 'Tipo', 'Qtd.', 'Acumulado', 'Horas', 'Un/h', 'Operador', ''].map(function(t, i) {
+        return '<th style="text-align:' + (i >= 4 && i <= 7 ? 'right' : 'left') + '">' + t + '</th>';
+      }).join('') +
+      '</tr></thead><tbody>' + linhas + '</tbody></table>';
+  }
+
+  function renderCondensado(list) {
+    var tbody = document.getElementById('tbodyCondensado');
+    condGrupos = ordenarGrupos(gruposCondensados(list));
+    var comErro = condGrupos.filter(function(g) { return g.temErro; }).length;
+    document.getElementById('tableCount').textContent =
+      condGrupos.length.toLocaleString('pt-BR') + ' OP/setor · ' + list.length.toLocaleString('pt-BR') + ' registros' +
+      (comErro ? ' · ' + comErro + ' com erro' : '');
+
+    if (!condGrupos.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="no-data">Nenhum registro encontrado para o período/filtros selecionados</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = condGrupos.map(function(g, idx) {
+      var aberto = !!condAbertos[g.chave];
+      var periodo = '<div class="periodo"><span>' + (g.inicio ? HA.fmtDataHora(g.inicio) : '?') + '</span>' +
+        '<span class="periodo-fim' + (g.termino ? '' : ' sem" title="Nenhum registro desta OP tem término gravado') + '">→ ' +
+        (g.termino ? HA.fmtDataHora(g.termino) : '?') + '</span></div>';
+      var qtdSub = (g.totalOp != null ? '<span class="cond-sub">Total da OP: ' + fmtNum(g.totalOp) + '</span>' : '') +
+        (g.qtdEsperadaOP ? '<span class="cond-sub">Meta: ' + fmtNum(g.qtdEsperadaOP) + '</span>' : '');
+      var horasTxt = g.horasTrabalhadas != null ? fmtHorasBr(g.horasTrabalhadas) + ' trabalhadas' : 'horas desconhecidas';
+      var horasSub = '<span class="cond-sub">' + fmtRitmo(g.ritmo) + '</span>' +
+        (g.registrosSemHoras && g.horasTrabalhadas != null
+          ? '<span class="cond-sub" title="Registros antigos sem término: horas desconhecidas, fora do cálculo de un/h">sem ' + fmtNum(g.qtdSemHoras) + ' un. de ' + g.registrosSemHoras + ' reg. sem término</span>'
+          : '');
+      var pedidos = g.pedidos.length
+        ? g.pedidos.map(function(p) { return '<span class="ped-link">#' + escapeHtml(p) + '</span>'; }).join(' ')
+        : '<span style="color:var(--muted)">?</span>';
+      return '<tr class="cond-row' + (g.temErro ? ' erro' : '') + (aberto ? ' aberto' : '') + '" data-idx="' + idx + '">' +
+          '<td>' + periodo + '</td>' +
+          '<td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500" title="' + escapeAttr(g.produto) + '">' +
+            (g.fechado ? '<span class="badge badge-purple" style="margin-right:6px">✔ Fechada</span>' : '') + escapeHtml(g.produto) + '</td>' +
+          '<td><span class="badge badge-gray">' + escapeHtml(g.setorRotulo) + '</span> ' +
+            g.linhas.map(function(l) { return '<span class="badge badge-blue">' + escapeHtml(l) + '</span>'; }).join(' ') + '</td>' +
+          '<td class="qty-cell" style="text-align:right">' + fmtNum(g.quantidade) + qtdSub + '</td>' +
+          '<td class="lote-cell">' + escapeHtml(g.lote || '—') + '</td>' +
+          '<td>' + pedidos + '</td>' +
+          '<td style="text-align:right">' + g.registros.length + ' <span class="pg-chevron' + (aberto ? ' open' : '') + '">▶</span></td>' +
+          '<td style="text-align:right;white-space:nowrap">' + horasTxt + horasSub + '</td>' +
+          '<td>' + alertasHtml(g) + '</td>' +
+        '</tr>' +
+        '<tr class="cond-det" data-det="' + idx + '"' + (aberto ? '' : ' style="display:none"') + '><td colspan="9">' + detalheCondensadoHtml(g) + '</td></tr>';
+    }).join('');
+  }
+
+  document.getElementById('fCondensar').addEventListener('change', function() {
+    condensado = this.checked;
+    renderTable(filtered());
+  });
+
+  document.getElementById('tbodyCondensado').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-action]');
+    if (btn) {
+      if (btn.dataset.action === 'edit') openEditModal(btn.dataset.date, btn.dataset.key);
+      return;
+    }
+    var row = e.target.closest('tr.cond-row');
+    if (!row) return;
+    var g = condGrupos[+row.dataset.idx];
+    if (!g) return;
+    condAbertos[g.chave] = !condAbertos[g.chave];
+    var det = this.querySelector('tr[data-det="' + row.dataset.idx + '"]');
+    if (det) det.style.display = condAbertos[g.chave] ? '' : 'none';
+    row.classList.toggle('aberto', !!condAbertos[g.chave]);
+    var chev = row.querySelector('.pg-chevron');
+    if (chev) chev.classList.toggle('open', !!condAbertos[g.chave]);
+  });
+
+  document.querySelector('#wrapCondensado thead').addEventListener('click', function(e) {
+    var th = e.target.closest('th[data-ccol]');
+    if (!th) return;
+    var col = th.dataset.ccol;
+    if (col === condSortCol) condSortDir *= -1;
+    else { condSortCol = col; condSortDir = -1; }
+    this.querySelectorAll('th').forEach(function(t) { t.classList.remove('sorted-asc', 'sorted-desc'); });
+    th.classList.add(condSortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+    renderCondensado(filtered());
+  });
 
   // ── View: Por Pedido ─────────────────────────────────────────────
   function renderPedidoGroups(list) {
@@ -839,22 +1054,21 @@
 
       var rowId = 'grp-' + sanitizeKey(pedidoId);
 
-      var regsHtml = regs.slice().sort(function(a,b){ return (a.data+a.hora).localeCompare(b.data+b.hora); }).map(function(r) {
+      var regsHtml = regs.slice().sort(function(a,b){ return HA.inicioMs(a) - HA.inicioMs(b); }).map(function(r) {
         var totalLoteCell = r.qtdTotalLote > 0
           ? '<strong>' + fmtNum(r.qtdTotalLote) + '</strong>'
           : '<span style="color:var(--muted)">—</span>';
-        var horasCell = r.horasUteis > 0
-          ? r.horasUteis.toFixed(2) + 'h'
+        // Horas do período real (úteis gravadas ou duração). O campo
+        // `horasUteis` lido aqui antes não existe nos registros, e a média
+        // mostrava a quantidade inteira como "/h" mesmo num período de 19h.
+        var horasReg = HA.horasDoRegistro(r);
+        var horasCell = horasReg > 0
+          ? fmtHorasBr(horasReg)
           : '<span style="color:var(--muted)">—</span>';
-        
-        var mediaCell;
-        if (r.tipo === 'fechamento_op') {
-          mediaCell = '<span style="color:#7c3aed;font-weight:700">' + fmtNum(r.quantidade) + ' un</span>';
-        } else {
-          mediaCell = r.quantidade > 0
-            ? '<span style="color:var(--success);font-weight:700">' + fmtNum(r.quantidade) + ' /h</span>'
-            : '<span style="color:var(--muted)">—</span>';
-        }
+
+        var mediaCell = (horasReg > 0 && r.quantidade > 0)
+          ? '<span style="color:' + (r.tipo === 'fechamento_op' ? '#7c3aed' : 'var(--success)') + ';font-weight:700">' + fmtRitmo(r.quantidade / horasReg) + '</span>'
+          : '<span style="color:var(--muted)">—</span>';
 
         var escapedRProd = escapeHtml(r.produto);
         var escapedRLote = escapeHtml(r.lote || '?');
@@ -871,7 +1085,7 @@
 
         return '<tr>' +
           '<td>' + fmtDate(r.data) + '</td>' +
-          '<td style="color:var(--muted)">' + fmtRegistroRange(r) + '</td>' +
+          '<td>' + periodoCellHtml(r) + '</td>' +
           '<td style="color:var(--muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + escapeAttr(r.produto) + '">' + prodContent + '</td>' +
           '<td><span class="badge badge-blue" style="font-size:10px">' + escapedRLinha + '</span></td>' +
           '<td class="lote-cell">' + escapedRLote + '</td>' +
@@ -902,7 +1116,7 @@
           '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
             '<thead><tr>' +
               '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Data</th>' +
-              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Hora</th>' +
+              '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Início → Término</th>' +
               '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Produto</th>' +
               '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Linha</th>' +
               '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">Lote</th>' +
@@ -948,6 +1162,8 @@
     skuBenchmarks = computeSkuBenchmarks();
     renderOpGroups();
     renderMotivosRecorrentes();
+    // A conferência condensada compara com o total da OP: redesenha quando ele muda.
+    if (condensado && allRegistros.length) renderCondensado(filtered());
   });
   // Perdas lancadas pelo formulario (fechamento de lote) — formato novo,
   // prioridade sobre o que veio do Excel em ops.perdas (que fica só de fallback
@@ -1304,6 +1520,31 @@
     var totalPerdas = perdaEntries.reduce(function(s, k) { return s + (perdasObj[k] || 0); }, 0);
     var gap = opGapNaoExplicado(op);
 
+    var apontamentosDoLote = op.lote ? allRegistros.filter(function(r) { return r.lote === op.lote; }) : [];
+
+    // Horas trabalhadas e produção por hora da OP, pelos apontamentos de
+    // envase carregados -- a OP não grava horas, e `mediaPorHora` é só o
+    // ritmo do último apontamento. Mesma conta da visão condensada.
+    var resumoEnvase = HA.condensarPorOp(apontamentosDoLote.filter(function(r) { return setorDoRegistro(r) === 'linha'; }),
+      {setorDe: setorDoRegistro, totalOp: totalOpNoSistema})[0] || null;
+    var horasOpTxt = '—', ritmoOpTxt = '—', periodoApontTxt = '—';
+    if (resumoEnvase) {
+      periodoApontTxt = (resumoEnvase.inicio ? HA.fmtDataHora(resumoEnvase.inicio) : '?') + ' → ' +
+        (resumoEnvase.termino ? HA.fmtDataHora(resumoEnvase.termino) : '?');
+      if (resumoEnvase.horasTrabalhadas != null) {
+        horasOpTxt = '<strong>' + fmtHorasBr(resumoEnvase.horasTrabalhadas) + '</strong> em ' + resumoEnvase.registros.length +
+          ' apontamento' + (resumoEnvase.registros.length !== 1 ? 's' : '');
+        ritmoOpTxt = '<strong>' + fmtRitmo(resumoEnvase.ritmo) + '</strong>';
+      } else {
+        horasOpTxt = '<span style="color:var(--muted)">desconhecidas — nenhum apontamento com término</span>';
+      }
+      if (resumoEnvase.registrosSemHoras && resumoEnvase.horasTrabalhadas != null) {
+        var avisoSem = ' <span style="color:var(--muted)">(fora da conta: ' + resumoEnvase.registrosSemHoras + ' registro' +
+          (resumoEnvase.registrosSemHoras !== 1 ? 's' : '') + ' sem término, ' + fmtNum(resumoEnvase.qtdSemHoras) + ' un.)</span>';
+        horasOpTxt += avisoSem;
+      }
+    }
+
     function infoRow(label, value) {
       return '<tr>' +
         '<td style="padding:6px 10px;color:var(--muted);font-size:11px;white-space:nowrap">' + label + '</td>' +
@@ -1320,7 +1561,10 @@
         : '—') +
       infoRow('Início real', fmtDateTime(op.dataInicioReal) + (op.dataInicioPlanejada ? ' <span style="color:var(--muted)">(planejado: ' + fmtDateTime(op.dataInicioPlanejada) + ')</span>' : '')) +
       infoRow('Conclusão real', fmtDateTime(op.dataFimReal) + (op.dataFimPlanejada ? ' <span style="color:var(--muted)">(planejado: ' + fmtDateTime(op.dataFimPlanejada) + ')</span>' : '')) +
-      infoRow('Produção média (envase)', op.mediaPorHora ? fmtNum(op.mediaPorHora) + ' un/h' : '—') +
+      infoRow('Apontamentos (envase)', periodoApontTxt + ' <span style="color:var(--muted)">· do período carregado</span>') +
+      infoRow('Horas trabalhadas (envase)', horasOpTxt) +
+      infoRow('Produção por hora (envase)', ritmoOpTxt +
+        (op.mediaPorHora ? ' <span style="color:var(--muted)">· último ritmo gravado na OP: ' + fmtNum(op.mediaPorHora) + ' un/h</span>' : '')) +
       infoRow('Paradas', pStop ? pStop.count + ' parada' + (pStop.count !== 1 ? 's' : '') + ' · ' + pStop.totalMin + ' min' : '—') +
       infoRow('Perdas declaradas', perdaEntries.length ? perdaEntries.map(function(k) { return (PERDA_LABELS[k] || k) + ': ' + fmtNum(perdasObj[k]); }).join(', ') : '<span style="color:var(--muted)">nenhuma perda lançada</span>');
 
@@ -1359,24 +1603,26 @@
     // (De/até + Carregar) -- Realtime DB indexa registros por data, não por
     // lote, então não dá pra buscar globalmente sem varrer tudo; por isso
     // reaproveita o que já foi carregado pra aba Por Registro.
-    var apontamentosDoLote = op.lote ? allRegistros.filter(function(r) { return r.lote === op.lote; }) : [];
     var apontHtml;
     if (!apontamentosDoLote.length) {
       apontHtml = '<div style="padding:8px 10px;font-size:11px;color:var(--muted)">Nenhum apontamento individual carregado pra esse lote no período selecionado acima (De/até). Amplie o período e clique em Carregar pra ver hora a hora.</div>';
     } else {
       apontHtml = '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:6px">' +
         '<thead><tr>' +
-          ['Data','Hora','Setor','Qtd.','Operador'].map(function(h) {
+          ['Data','Início → Término','Setor','Qtd.','Horas','Un/h','Operador'].map(function(h) {
             return '<th style="background:color-mix(in srgb, var(--text) 4%, var(--card));padding:5px 8px;text-align:left;font-size:10px;font-weight:700;color:var(--muted)">' + h + '</th>';
           }).join('') +
         '</tr></thead><tbody>' +
-        apontamentosDoLote.slice().sort(function(a, b) { return (a.data + a.hora).localeCompare(b.data + b.hora); }).map(function(r) {
+        apontamentosDoLote.slice().sort(function(a, b) { return HA.inicioMs(a) - HA.inicioMs(b); }).map(function(r) {
           var envase = isLinhaEnvase(r.linha);
+          var hReg = HA.horasDoRegistro(r);
           return '<tr' + (envase ? '' : ' style="opacity:.65"') + '>' +
             '<td style="padding:5px 8px">' + fmtDate(r.data) + '</td>' +
-            '<td style="padding:5px 8px;color:var(--muted)">' + fmtRegistroRange(r) + '</td>' +
+            '<td style="padding:5px 8px">' + periodoCellHtml(r) + '</td>' +
             '<td style="padding:5px 8px"><span class="badge ' + (envase ? 'badge-blue' : 'badge-gray') + '">' + escapeHtml(r.linha || '—') + (envase ? '' : ' (não conta)') + '</span></td>' +
             '<td style="padding:5px 8px;text-align:right;font-weight:600">' + fmtNum(r.quantidade) + '</td>' +
+            '<td style="padding:5px 8px;text-align:right;color:var(--muted)">' + fmtHorasBr(hReg) + '</td>' +
+            '<td style="padding:5px 8px;text-align:right;color:var(--muted)">' + (hReg > 0 ? fmtRitmo(r.quantidade / hReg) : '—') + '</td>' +
             '<td style="padding:5px 8px;color:var(--muted)">' + escapeHtml(r.operador || '—') + '</td>' +
           '</tr>';
         }).join('') +
@@ -1387,7 +1633,9 @@
       '<div class="ped-group-header" data-toggle="' + rowId + '">' +
         '<span class="pg-id">Lote ' + escapeHtml(op.lote || op.key) + '</span>' +
         '<span class="badge ' + statusBadgeClass + '" style="margin-right:4px">' + escapeHtml(op.status || '—') + '</span>' +
-        '<span class="pg-meta"><strong>' + fmtNum(produced) + '</strong>' + (planned ? ' / ' + fmtNum(planned) + ' un.' : ' un.') + (totalPerdas ? ' · perdas: ' + fmtNum(totalPerdas) : '') + '</span>' +
+        '<span class="pg-meta"><strong>' + fmtNum(produced) + '</strong>' + (planned ? ' / ' + fmtNum(planned) + ' un.' : ' un.') + (totalPerdas ? ' · perdas: ' + fmtNum(totalPerdas) : '') +
+          (resumoEnvase && resumoEnvase.horasTrabalhadas != null
+            ? ' · ' + fmtHorasBr(resumoEnvase.horasTrabalhadas) + ' trabalhadas · ' + fmtRitmo(resumoEnvase.ritmo) : '') + '</span>' +
         barHtml +
         pctLabel +
         '<span class="pg-chevron" id="chev-' + rowId + '">▶</span>' +
@@ -1412,14 +1660,35 @@
   document.getElementById('btnExportCSV').addEventListener('click', function() {
     var data = sorted(filtered());
     if (!data.length) { showAlert('Nenhum registro carregado para exportar.', 'danger'); return; }
+    function csvTexto(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    function csvDecimal(v) { return v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','); }
+    var sufixo = '';
 
     var csvContent = "\uFEFF"; // UTF-8 BOM para garantir acentuação correta no Excel
-    csvContent += "Data;Hora;Produto;Linha;Quantidade;Lote;Pedido;Colaboradores;Turno;Observação;Tipo;Qtd Total OP;Qtd Esperada OP;Justificativa Desvio\n";
+    if (condensado) {
+      // Exporta o que está na tela: uma linha por OP/setor.
+      sufixo = '_por_op';
+      csvContent += "Início;Término;Produto;Setor;Linhas;Qtd (soma);Total OP no sistema;Meta;Lote;Pedidos;Apontamentos;Horas trabalhadas;Un/h;Registros sem término;Conferência\n";
+      ordenarGrupos(gruposCondensados(data)).forEach(function(g) {
+        csvContent += [
+          g.inicio ? HA.fmtDataHora(g.inicio) : '?',
+          g.termino ? HA.fmtDataHora(g.termino) : '?',
+          csvTexto(g.produto), g.setorRotulo, csvTexto(g.linhas.join(', ')),
+          g.quantidade, g.totalOp == null ? '' : g.totalOp, g.qtdEsperadaOP || '',
+          g.lote, csvTexto(g.pedidos.join(', ')), g.registros.length,
+          csvDecimal(g.horasTrabalhadas), g.ritmo == null ? '' : Math.round(g.ritmo), g.semTermino,
+          csvTexto(g.alertas.filter(function(a) { return a.nivel !== 'info'; }).map(function(a) { return a.texto; }).join(' | ') || 'confere')
+        ].join(';') + "\n";
+      });
+    } else {
+    csvContent += "Data;Início;Término;Produto;Linha;Quantidade;Lote;Pedido;Colaboradores;Turno;Observação;Tipo;Qtd Total OP;Qtd Esperada OP;Justificativa Desvio;Horas trabalhadas\n";
 
     data.forEach(function(r) {
+      var per = HA.periodoTexto(r);
       var row = [
         fmtDate(r.data),
-        r.hora,
+        per.inicio,
+        per.termino,
         '"' + (r.produto || '').replace(/"/g, '""') + '"',
         r.linha,
         r.quantidade,
@@ -1431,10 +1700,12 @@
         r.tipo || 'registro',
         r.qtdTotalOP || '',
         r.qtdEsperadaOP || '',
-        '"' + (r.justificativaDivergencia || '').replace(/"/g, '""') + '"'
+        '"' + (r.justificativaDivergencia || '').replace(/"/g, '""') + '"',
+        csvDecimal(HA.horasDoRegistro(r))
       ];
       csvContent += row.join(';') + "\n";
     });
+    }
 
     var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
@@ -1442,7 +1713,7 @@
     link.setAttribute("href", url);
     var ini = document.getElementById('fDataIni').value;
     var fim = document.getElementById('fDataFim').value;
-    link.setAttribute("download", "historico_producao_" + ini + "_a_" + fim + ".csv");
+    link.setAttribute("download", "historico_producao_" + ini + "_a_" + fim + sufixo + ".csv");
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -1583,12 +1854,12 @@
     if (!r) return;
     editingDate = date; editingKey = key;
     document.getElementById('editModalTitle').textContent = 'Editar Registro · ' + fmtDate(date);
-    document.getElementById('eData').value = date;
-    // <input type="time"> exige HH:MM — normaliza o formato legado com
-    // underscore (ex: "14_00") em vez de deixar o campo vazio e depois
-    // gravar '—' por cima do horário original ao salvar.
-    var horaNormalizada = (r.hora && r.hora !== '—') ? String(r.hora).replace('_', ':') : '';
-    document.getElementById('eHora').value = horaNormalizada;
+    // Início/término do apontamento. Registro antigo sem término abre com o
+    // campo vazio; salvar sem mexer nos dois não reescreve data/hora/período.
+    var iniciais = HA.valoresIniciaisEdicao(r._raw ? Object.assign({data: date}, r._raw) : r);
+    document.getElementById('eInicio').value = iniciais.inicio;
+    document.getElementById('eTermino').value = iniciais.termino;
+    atualizarHintPeriodo();
     document.getElementById('eProduto').value = r.produto;
     fillEditLinhaSelect(r.linha !== '—' ? r.linha : '');
     fillEditTurnoSelect(r.turno || '');
@@ -1623,6 +1894,38 @@
     document.getElementById('editModalBg').classList.remove('open');
     editingDate = null; editingKey = null;
   }
+
+  function registroEmEdicao() {
+    var r = allRegistros.find(function(x) { return x.data === editingDate && x._key === editingKey; });
+    if (!r) return null;
+    // O registro cru nem sempre tem `data` (fica na chave do nó).
+    return r._raw ? Object.assign({data: r.data}, r._raw) : r;
+  }
+
+  function atualizarHintPeriodo() {
+    var el = document.getElementById('ePeriodoHint');
+    var orig = registroEmEdicao();
+    if (!orig) { el.textContent = ''; return; }
+    var ini = document.getElementById('eInicio').value;
+    var fim = document.getElementById('eTermino').value;
+    var plano = HA.planoEdicaoPeriodo(orig, editingDate, ini, fim);
+    if (plano.erro) {
+      el.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(plano.erro) + '</span>';
+      return;
+    }
+    var partes = [];
+    if (!fim) partes.push('Sem término: aparece com “?” no histórico, como registro antigo.');
+    else {
+      var dur = (new Date(fim) - new Date(ini)) / 3600000;
+      if (dur > 0) partes.push('Duração ' + fmtHorasBr(dur) + (plano.periodo && plano.periodo.horasTrabalhadas != null && Math.abs(plano.periodo.horasTrabalhadas - dur) > 0.005
+        ? ' · ' + fmtHorasBr(plano.periodo.horasTrabalhadas) + ' trabalhadas (mantém a pausa já descontada)' : '') + '.');
+      if (dur > HA.LIMITE_PERIODO_LONGO_H) partes.push('⚠ Mais de ' + HA.LIMITE_PERIODO_LONGO_H + 'h seguidas num apontamento só.');
+    }
+    partes.push('Conta nos totais do dia ' + fmtDate(plano.data) + (plano.data !== editingDate ? ' (sai de ' + fmtDate(editingDate) + ')' : '') + '.');
+    el.textContent = partes.join(' ');
+  }
+  document.getElementById('eInicio').addEventListener('input', atualizarHintPeriodo);
+  document.getElementById('eTermino').addEventListener('input', atualizarHintPeriodo);
 
   // Watch pedidoId field → show warning
   document.getElementById('ePedidoId').addEventListener('input', function() {
@@ -1683,16 +1986,18 @@
   }
   // ── Save edit ────────────────────────────────────────────────────
   document.getElementById('editBtnSave').addEventListener('click', function() {
-    var newDate = document.getElementById('eData').value;
-    var hora    = document.getElementById('eHora').value;
     var produto = document.getElementById('eProduto').value.trim();
     var qtd     = parseInt(document.getElementById('eQtd').value) || 0;
-    if (!newDate) { showEditAlert('Informe a data.'); return; }
+    var origPeriodo = registroEmEdicao();
+    if (!origPeriodo) { showEditAlert('Registro não encontrado. Recarregue o período.'); return; }
+    var plano = HA.planoEdicaoPeriodo(origPeriodo, editingDate,
+      document.getElementById('eInicio').value, document.getElementById('eTermino').value);
+    if (plano.erro) { showEditAlert(plano.erro); return; }
     if (!produto) { showEditAlert('Informe o produto.'); return; }
+    var newDate = plano.data;
 
     var data = {
       data: newDate,
-      hora: hora || '—',
       linha: document.getElementById('eLinha').value || '—',
       produto: produto,
       quantidade: qtd,
@@ -1709,6 +2014,16 @@
     var setupFimIso = localInputToIso(document.getElementById('eSetupFim').value);
     if (setupIniIso) data.setupInicio = setupIniIso; else data.setupInicio = null;
     if (setupFimIso) data.setupFim = setupFimIso; else data.setupFim = null;
+    // Início/término: só grava quando algum dos dois mudou (ver
+    // HistoricoApontamentos.planoEdicaoPeriodo).
+    if (plano.mudou) {
+      data.hora = plano.hora;
+      if (plano.periodo) {
+        data.periodoInicio = plano.periodo.periodoInicio;
+        data.periodoFim = plano.periodo.periodoFim;
+        if (plano.periodo.horasTrabalhadas != null) data.horasTrabalhadas = plano.periodo.horasTrabalhadas;
+      }
+    }
 
     var btn = document.getElementById('editBtnSave');
     btn.disabled = true; btn.textContent = 'Salvando...';
@@ -1749,7 +2064,13 @@
           var _novaKey = db.ref('registros/' + newDate).push().key;
           var _mov = {};
           _mov['registros/' + editingDate + '/' + editingKey] = null;
-          _mov['registros/' + newDate + '/' + _novaKey] = data;
+          // Parte do registro original: o nó novo substitui o antigo inteiro,
+          // e só `data` perderia período, horas, fonte, timestamp e sku.
+          var _base = (orig && orig._raw) ? JSON.parse(JSON.stringify(orig._raw)) : {};
+          Object.keys(data).forEach(function(c) {
+            if (data[c] === null) delete _base[c]; else _base[c] = data[c];
+          });
+          _mov['registros/' + newDate + '/' + _novaKey] = _base;
           tasks.push(db.ref().update(_mov));
         } else {
           tasks.push(db.ref('registros/' + editingDate + '/' + editingKey).update(data));
