@@ -10,6 +10,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/expedicao.js"></script>
+  <script src="shared/conciliacao-pedidos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -194,6 +196,13 @@
     <option value="Linha 2">Linha 2</option>
     <option value="Linha 3">Linha 3</option>
   </select>
+  <select class="kt-select" id="filterConferencia" title="Produzido = Expedido + Em estoque">
+    <option value="">Conferência: todas</option>
+    <option value="DIVERGENTE">Com diferença</option>
+    <option value="OK">OK</option>
+    <option value="OK_APONTADA">OK com divergência apontada</option>
+    <option value="SEM_REGISTRO">Sem registro de saída</option>
+  </select>
   <select class="kt-select" id="groupBySel">
     <option value="">Não agrupar</option>
     <option value="linha">Agrupar por Linha</option>
@@ -251,13 +260,15 @@
             <th style="min-width:70px;text-align:right" data-col="qtdTotal">Qtd Total</th>
             <th style="min-width:70px;text-align:right" data-col="produzido">Produzido</th>
             <th style="min-width:130px" data-col="pct">Progresso</th>
+            <th style="min-width:130px" data-col="expedido" title="Expedido (de fato, furto ou descarte) sobre a quantidade do pedido">Expedido</th>
+            <th style="min-width:130px" data-col="conferencia" title="Produzido = Expedido + Em estoque. Passe o mouse no selo para ver a conta.">Conferência</th>
             <th style="min-width:110px" data-col="status">Status</th>
             <th style="min-width:80px">Insumos</th>
             <th style="min-width:80px"></th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="12" class="no-data">Carregando...</td></tr>
+          <tr><td colspan="15" class="no-data">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -302,12 +313,14 @@
               <th style="text-align:right" data-col="qtdPedida">Qtd. Pedida</th>
               <th style="text-align:right" data-col="produzido">Produzido (OPs vinculadas)</th>
               <th style="min-width:150px" data-col="pct">Progresso</th>
+              <th style="min-width:140px" data-col="expedido" title="Expedido (de fato, furto ou descarte) somado dos itens, sobre a quantidade pedida">Expedido</th>
+              <th style="min-width:130px" data-col="conferencia" title="Produzido = Expedido + Em estoque, somado dos itens. A situação é a do pior item.">Conferência</th>
               <th style="min-width:88px" data-col="data">Data do pedido</th>
               <th style="min-width:100px" data-col="diasAberto" title="Dias corridos desde a data do pedido">Em aberto há</th>
             </tr>
           </thead>
           <tbody id="pcTableBody">
-            <tr><td colspan="8" class="no-data">Carregando...</td></tr>
+            <tr><td colspan="10" class="no-data">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -593,7 +606,7 @@
 
     var ids = Object.keys(pedidosComerciaisCache);
     if (!ids.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
       document.getElementById('pcStatTotal').textContent = '0';
       document.getElementById('pcStatAberto').textContent = '0';
       document.getElementById('pcStatParcial').textContent = '0';
@@ -621,13 +634,16 @@
       }
 
       // Soma produzido de todas as OPs (pedidos/) vinculadas a este pedido comercial
-      var produzido = 0;
+      var produzido = 0, conciliacaoItens = [];
       Object.keys(allPedidos).forEach(function(k) {
         var op = allPedidos[k];
         if (op && String(op.parentPedidoId || '') === String(id)) {
           produzido += (op.produzido || 0);
+          conciliacaoItens.push(conciliacaoDoPedido(k));
         }
       });
+      // Soma dos itens; a situação é a do PIOR item (ver agregar).
+      var conciliacaoPc = conciliacao ? ConciliacaoPedidos.agregar(conciliacaoItens) : null;
 
       // Um SKU encerrado/concluído (pedidoStatus) conta como atendido mesmo
       // que produzido < qtdTotal (ex: quantidade final aceita menor que a
@@ -685,6 +701,9 @@
         produzidoTitle: produzidoTitle,
         pct: pct,
         pctTitle: pctTitle,
+        conciliacao: conciliacaoPc,
+        expedido: conciliacaoPc ? conciliacaoPc.expedido.total : -1,
+        conferencia: ordemConferencia(conciliacaoPc),
         data: pc.dataPedido || '',
         diasAberto: diasDesde(pc.dataPedido),
         categoria: categoria
@@ -695,7 +714,7 @@
     if (pcSortCol) {
       var col = pcSortCol;
       rows.sort(function(a, b) {
-        if (col === 'itensCount' || col === 'qtdPedida' || col === 'produzido' || col === 'pct' || col === 'diasAberto') {
+        if (col === 'itensCount' || col === 'qtdPedida' || col === 'produzido' || col === 'pct' || col === 'diasAberto' || col === 'expedido' || col === 'conferencia') {
           return (a[col] - b[col]) * pcSortDir;
         }
         return String(a[col] || '').localeCompare(String(b[col] || ''), undefined, {numeric:true}) * pcSortDir;
@@ -714,12 +733,14 @@
         '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.qtdPedidaTitle) + '">' + fmtNum(r.qtdPedida) + '</td>' +
         '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.produzidoTitle) + '">' + fmtNum(r.produzido) + '</td>' +
         '<td style="cursor:help" title="' + escapeAttr(r.pctTitle) + '"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:' + barColor + '"></div></div><span style="font-size:11px;font-weight:700">' + r.pct + '%</span></div></td>' +
+        '<td>' + celulaExpedido(r.conciliacao, r.qtdPedida) + '</td>' +
+        '<td>' + celulaConferencia(r.conciliacao) + '</td>' +
         '<td>' + escapeHtml(fmtDate(r.data) || '-') + '</td>' +
         '<td>' + fmtDiasAberto(r) + '</td>' +
       '</tr>';
     }).join('');
 
-    tbody.innerHTML = html || '<tr><td colspan="8" class="no-data">Nenhum pedido comercial nesse filtro.</td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="10" class="no-data">Nenhum pedido comercial nesse filtro.</td></tr>';
     document.getElementById('pcTableCount').textContent = rows.length + ' de ' + ids.length + ' Pedido(s) Comercial(is)';
     document.getElementById('pcStatTotal').textContent = fmtNum(ids.length);
     document.getElementById('pcStatAberto').textContent = fmtNum(nAberto);
@@ -806,7 +827,60 @@
     }
     renderTable();
     renderPedidosComerciais(); // progresso agregado depende de allPedidos (OPs)
+    recalcularConciliacao();
   });
+
+  // ── Conciliação: Produzido = Expedido + Em estoque ───────────────
+  // Regra inteira em shared/conciliacao-pedidos.js (funções puras, testadas
+  // em run_conciliacao_pedidos_test.js). Aqui só carrega as fontes e desenha.
+  // Enquanto qualquer fonte não chegou, as colunas mostram "carregando" em vez
+  // de um zero que pareceria divergência.
+  var conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, ops: null, conferencias_pa: null, solicitacoes_descarte: null};
+  var conciliacao = null;
+  var _conciliacaoT = null;
+  function recalcularConciliacao() {
+    clearTimeout(_conciliacaoT);
+    _conciliacaoT = setTimeout(function() {
+      if (Object.keys(conciliacaoFontes).some(function(k) { return conciliacaoFontes[k] === null; })) return;
+      try {
+        conciliacao = ConciliacaoPedidos.calcular(Object.assign({pedidos: allPedidos}, conciliacaoFontes));
+      } catch (e) {
+        console.error('Falha na conciliação de pedidos:', e);
+        conciliacao = null;
+      }
+      renderTable();
+      renderPedidosComerciais();
+    }, 150);
+  }
+  Object.keys(conciliacaoFontes).forEach(function(no) {
+    dbOnValue(db.ref(no), function(snap) { conciliacaoFontes[no] = snap.val() || {}; recalcularConciliacao(); });
+  });
+  function conciliacaoDoPedido(key) { return conciliacao ? (conciliacao.porPedido[key] || null) : null; }
+  var CONFERENCIA_ORDEM = {DIVERGENTE: 0, SEM_REGISTRO: 1, OK_APONTADA: 2, OK: 3, SEM_PRODUCAO: 4};
+  function ordemConferencia(r) { return r ? CONFERENCIA_ORDEM[r.situacao] * 1e9 - Math.abs(r.diferenca) : 5e9; }
+  var CARREGANDO_CONCILIACAO = '<span style="color:var(--muted);font-size:11px">carregando…</span>';
+
+  function celulaExpedido(r, qtdTotal) {
+    if (!conciliacao) return CARREGANDO_CONCILIACAO;
+    if (!r) return '<span style="color:var(--muted)">—</span>';
+    var exp = r.expedido.total, qtd = qtdTotal || 0;
+    var pctExp = qtd > 0 ? Math.round(exp / qtd * 100) : 0;
+    var motivos = Object.keys(ConciliacaoPedidos.MOTIVOS_EXPEDIDO).filter(function(m) { return r.expedido.motivos[m]; })
+      .map(function(m) { return ConciliacaoPedidos.MOTIVOS_EXPEDIDO[m] + ': ' + fmtNum(r.expedido.motivos[m]); });
+    var titulo = 'Expedido: ' + fmtNum(exp) + ' de ' + fmtNum(qtd) + (motivos.length ? '\n' + motivos.join('\n') : '');
+    var fill = pctExp >= 100 ? 'fill-green' : 'fill-orange';
+    return '<div class="prog-wrap" style="cursor:help" title="' + escapeAttr(titulo) + '">' +
+      '<div class="prog-label"><span>' + fmtNum(exp) + ' / ' + fmtNum(qtd) + '</span><span class="pct">' + pctExp + '%</span></div>' +
+      '<div class="prog-bar"><div class="prog-fill ' + fill + '" style="width:' + Math.min(pctExp, 100) + '%"></div></div></div>';
+  }
+  function celulaConferencia(r) {
+    if (!conciliacao) return CARREGANDO_CONCILIACAO;
+    if (!r || r.situacao === 'SEM_PRODUCAO') return '<span style="color:var(--muted)">—</span>';
+    var d = ConciliacaoPedidos.descrever(r);
+    var visual = {OK: ['badge-green', '✓ '], OK_APONTADA: ['badge-green', '✓ '], DIVERGENTE: ['badge-red', '⚠ '], SEM_REGISTRO: ['badge-gray', '']}[r.situacao];
+    return '<span class="badge ' + visual[0] + '" style="cursor:help" title="' + escapeAttr(d.detalhe) + '">' + escapeHtml(visual[1] + d.rotulo) + '</span>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:2px">Em estoque: ' + fmtNum(r.estoque.total) + '</div>';
+  }
 
   // ── Render ───────────────────────────────────────────────────────
   var opsSortCol = null, opsSortDir = 1;
@@ -868,6 +942,8 @@
           '<div class="prog-bar"><div class="prog-fill ' + fillClass + '" style="width:' + Math.min(pc,100) + '%"></div></div>' +
         '</div>' +
       '</td>' +
+      '<td>' + celulaExpedido(conciliacaoDoPedido(p._key), p.qtdTotal) + '</td>' +
+      '<td>' + celulaConferencia(conciliacaoDoPedido(p._key)) + '</td>' +
       '<td>' + statusBadge + '</td>' +
       '<td>' + insBadge + '</td>' +
       '<td><div class="actions-cell">' +
@@ -882,11 +958,16 @@
     var filterStatus = document.getElementById('filterStatus').value;
     var filterLinha = document.getElementById('filterLinha').value;
     var groupBy = document.getElementById('groupBySel').value;
+    var filterConferencia = document.getElementById('filterConferencia').value;
 
     var list = Object.values(allPedidos).filter(function(p) {
       var st = pedidoStatus(p);
       if (filterStatus && st !== filterStatus) return false;
       if (filterLinha && p.linha !== filterLinha) return false;
+      if (filterConferencia) {
+        var rc = conciliacaoDoPedido(p._key);
+        if (!rc || rc.situacao !== filterConferencia) return false;
+      }
       if (search) {
         var hay = ((p.id||'') + ' ' + (p.produto||'') + ' ' + (p.cliente||'')).toLowerCase();
         if (hay.indexOf(search) === -1) return false;
@@ -902,6 +983,12 @@
         if (col === 'pct') return (pct(a) - pct(b)) * opsSortDir;
         if (col === 'status') return String(pedidoStatus(a)).localeCompare(pedidoStatus(b)) * opsSortDir;
         if (col === 'qtdTotal' || col === 'produzido') return ((a[col]||0) - (b[col]||0)) * opsSortDir;
+        if (col === 'expedido') {
+          var ea = conciliacaoDoPedido(a._key), eb = conciliacaoDoPedido(b._key);
+          return ((ea ? ea.expedido.total : -1) - (eb ? eb.expedido.total : -1)) * opsSortDir;
+        }
+        // Crescente = o que pede atenção primeiro: diferença maior no topo.
+        if (col === 'conferencia') return (ordemConferencia(conciliacaoDoPedido(a._key)) - ordemConferencia(conciliacaoDoPedido(b._key))) * opsSortDir;
         if (col === 'dataProd') return String(a.dataProd||'').localeCompare(String(b.dataProd||'')) * opsSortDir;
         if (col === 'dataPedido') return String(opDataPedido(a)).localeCompare(String(opDataPedido(b))) * opsSortDir;
         if (col === 'diasAberto') return (diasDesde(opDataPedido(a)) - diasDesde(opDataPedido(b))) * opsSortDir;
@@ -932,7 +1019,7 @@
 
     var tbody = document.getElementById('tableBody');
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="12" class="no-data">Nenhum pedido encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="15" class="no-data">Nenhum pedido encontrado</td></tr>';
       return;
     }
 
@@ -953,7 +1040,7 @@
     groupOrder.sort(function(a, b) { return a.localeCompare(b, undefined, {numeric:true}); });
     var html = '';
     groupOrder.forEach(function(g) {
-      html += '<tr class="group-header"><td colspan="13">' + escapeHtml(g) + ' (' + groups[g].length + ')</td></tr>';
+      html += '<tr class="group-header"><td colspan="15">' + escapeHtml(g) + ' (' + groups[g].length + ')</td></tr>';
       html += groups[g].map(renderOpRow).join('');
     });
     tbody.innerHTML = html;
@@ -980,6 +1067,7 @@
   });
   document.getElementById('filterStatus').addEventListener('change', renderTable);
   document.getElementById('filterLinha').addEventListener('change', renderTable);
+  document.getElementById('filterConferencia').addEventListener('change', renderTable);
   document.getElementById('filterStatusComercial').addEventListener('change', renderPedidosComerciais);
 
   // ── Table actions (edit / delete) via delegation ─────────────────
