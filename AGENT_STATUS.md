@@ -114,6 +114,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — remessa é do cliente por padrão (2026-09-15).**
+  `22a901a` no `origin/main`; por worktree limpo às 15:21 BRT: Hosting
+  (`compras.html`, `manual_compras.html`, `shared/propriedade-estoque.js`
+  idênticos ao commit) + as três Functions de recebimento.
+  **Decisão do usuário:** compra é sempre da Kuryos — cliente/pedido é só
+  vínculo, e material de uso geral (álcool, glicerina, uso e consumo) atende
+  qualquer cliente; **remessa é do cliente** ("quase 100% das vezes").
+  Remessa de terceiro deixou de pedir escolha: nasce CLIENTE
+  (`proprietarioPadraoDaNatureza`), Kuryos só como exceção gravada em Compras.
+  A trava do dono vale só com escolha gravada + recebimento. **Descartado:**
+  o destino "Estoque geral sem cliente" proposto nesta sessão — o usuário
+  prefere vincular a um pedido e manter o estoque da Kuryos.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — propriedade do estoque por cliente (2026-09-15).**
   `6fd8285` no `origin/main`; por **worktree limpo** às 15:01 BRT: Hosting (11
   arquivos, SHA256 idênticos ao commit) + Functions `registrarRecebimento`,
