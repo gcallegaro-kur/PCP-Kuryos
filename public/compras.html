@@ -496,7 +496,6 @@
         <div class="form-group">
           <label>De quem é o material? *</label>
           <select id="vpcPropriedade">
-            <option value="">Selecione…</option>
             <option value="KURYOS">Kuryos (estoque geral)</option>
             <option value="CLIENTE">Cliente (só para os pedidos dele)</option>
           </select>
@@ -2053,7 +2052,7 @@ function renderPedidos() {
     var destinos = {};
     itens.forEach(function(i) { if (PropriedadeEstoque.vinculoValido(i.vinculo)) destinos[resumoVinculoHtml(i.vinculo)] = 1; });
     itensResumo += '<div class="vinc-resumo">' +
-      (tipoDono === 'CLIENTE' ? '📦 Material do cliente' : (tipoDono === 'KURYOS' ? '🏭 Kuryos' : '❔ Dono não definido')) +
+      (tipoDono === 'CLIENTE' ? '📦 Material do cliente' : '🏭 Kuryos') +
       (Object.keys(destinos).length ? ' · ' + Object.keys(destinos).join(' | ') : '') +
       (vinc.ok ? '' : ' <span class="badge badge-orange" title="' + escapeAttr(vinc.pendencias.join(' ')) + '">⚠ falta cliente/pedido — não pode ser recebido</span>') +
       '</div>';
@@ -4790,7 +4789,7 @@ function textoPropriedadeFixa(natureza) {
   var fixo = PropriedadeEstoque.proprietarioDaNatureza(natureza);
   if (fixo === 'KURYOS') return 'Compra da Kuryos: o material é sempre da Kuryos (estoque geral).';
   if (fixo === 'CLIENTE') return 'Remessa do cliente: o material é sempre do cliente.';
-  return 'Remessa de terceiro: escolha de quem é o material.';
+  return 'Remessa: o material é do cliente. Marque Kuryos só na exceção em que a Kuryos comprou e o terceiro apenas entregou.';
 }
 
 var vpcKey = null;
@@ -4807,10 +4806,11 @@ function abrirModalVinculoPC(key) {
   var fixo = PropriedadeEstoque.proprietarioDaNatureza(pc.naturezaMovimentacao);
   var atual = PropriedadeEstoque.propriedadeDoPC(pc);
   var sel = document.getElementById('vpcPropriedade');
-  sel.value = atual || '';
-  // Fixa pela natureza, ou já definida e com material recebido: os lotes que
-  // entraram carregam o dono, então ele não muda mais.
-  var travarDono = !!fixo || (!!atual && recebeuAlgo);
+  sel.value = atual;
+  // Fixa pela natureza, ou escolhida e gravada no PC com material já recebido:
+  // os lotes que entraram carregam o dono, então ele não muda mais. O padrão
+  // (remessa = cliente) sem escolha gravada continua editável.
+  var travarDono = !!fixo || (recebeuAlgo && !!(pc.propriedade && pc.propriedade.tipo));
   sel.disabled = travarDono;
   document.getElementById('vpcPropriedadeHint').textContent = (!fixo && travarDono)
     ? 'Já houve recebimento: o dono do material não pode mais mudar.'
@@ -4878,12 +4878,14 @@ function salvarVinculoPC() {
     .finally(function() { btn.disabled = false; });
 }
 
-// PC direto: dono pela natureza (terceiro escolhe) e um vínculo para todos os itens.
+// PC direto: dono pela natureza (remessa de terceiro nasce do cliente, com
+// exceção possível) e um vínculo para todos os itens.
 function atualizarPcdPropriedade() {
   var natureza = document.getElementById('pcdNatureza').value;
   var fixo = PropriedadeEstoque.proprietarioDaNatureza(natureza);
   var sel = document.getElementById('pcdPropriedade');
-  if (fixo) sel.value = fixo;
+  if (fixo || sel.getAttribute('data-natureza') !== natureza) sel.value = PropriedadeEstoque.proprietarioPadraoDaNatureza(natureza);
+  sel.setAttribute('data-natureza', natureza);
   sel.disabled = !!fixo;
   document.getElementById('pcdPropriedadeHint').textContent = textoPropriedadeFixa(natureza);
 }

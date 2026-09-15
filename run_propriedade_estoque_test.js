@@ -36,13 +36,15 @@ const pedidos = {
 };
 
 // ── 1. Regras ────────────────────────────────────────────────────────
-t('dono pela natureza: compra é Kuryos, remessa do cliente é do cliente, terceiro escolhe', () => {
+t('dono pela natureza: compra é sempre Kuryos; remessa (cliente ou terceiro) é do cliente', () => {
   assert.equal(P.proprietarioDaNatureza('COMPRA_KURYOS'), 'KURYOS');
   assert.equal(P.proprietarioDaNatureza(undefined), 'KURYOS', 'PC de cotação não grava natureza');
   assert.equal(P.proprietarioDaNatureza('REMESSA_CLIENTE'), 'CLIENTE');
   assert.equal(P.proprietarioDaNatureza('REMESSA_TERCEIRO'), null);
-  assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO'}), null);
-  assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', propriedade: {tipo: 'CLIENTE'}}), 'CLIENTE');
+  assert.equal(P.proprietarioPadraoDaNatureza('REMESSA_TERCEIRO'), 'CLIENTE');
+  assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO'}), 'CLIENTE', '"se é remessa, o estoque é do cliente"');
+  assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', propriedade: {tipo: 'KURYOS'}}), 'KURYOS', 'exceção marcada por Compras');
+  assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'REMESSA_CLIENTE', propriedade: {tipo: 'KURYOS'}}), 'CLIENTE', 'remessa do próprio cliente não tem exceção');
   assert.equal(P.propriedadeDoPC({naturezaMovimentacao: 'COMPRA_KURYOS', propriedade: {tipo: 'CLIENTE'}}), 'KURYOS', 'compra nunca vira do cliente');
 });
 
@@ -52,8 +54,8 @@ t('PC só é recebível com dono e cliente + pedido em todo item', () => {
   const semPedido = P.validarVinculoPC({itens: {a: {materialCodigo: 'VAL-1', vinculo: {clienteKey: 'MRAR', pedidos: []}}}});
   assert.equal(semPedido.ok, false);
   assert.match(semPedido.pendencias[0], /VAL-1: informe o cliente e ao menos um pedido/);
-  const terceiro = P.validarVinculoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', itens: {a: {vinculo: v}}});
-  assert.match(terceiro.pendencias.join(' '), /Defina de quem é o material/);
+  assert.equal(P.validarVinculoPC({naturezaMovimentacao: 'REMESSA_TERCEIRO', itens: {a: {vinculo: v}}}).ok, true,
+    'terceiro não pede mais escolha de dono: nasce do cliente');
   assert.equal(P.validarVinculoPC({itens: {}}).ok, false);
   assert.equal(P.vinculoValido({clienteKey: 'X', pedidos: ['  ']}), false, 'pedido em branco não conta');
 });
@@ -66,6 +68,8 @@ t('lote recebe snapshot de dono e destino', () => {
   });
   assert.deepEqual(P.camposDoLote({}, {vinculo: v}).propriedade, {tipo: 'KURYOS', clienteKey: null, clienteNome: null},
     'compra para pedido do cliente continua sendo da Kuryos');
+  assert.deepEqual(P.camposDoLote({naturezaMovimentacao: 'REMESSA_TERCEIRO'}, {vinculo: v}).propriedade,
+    {tipo: 'CLIENTE', clienteKey: 'MRAR', clienteNome: 'MISS ROSE'}, 'remessa de terceiro sem escolha gravada: lote do cliente');
 });
 
 t('uso do lote: Kuryos serve a todos, cliente só a ele; lote antigo é da Kuryos', () => {
@@ -75,6 +79,8 @@ t('uso do lote: Kuryos serve a todos, cliente só a ele; lote antigo é da Kuryo
   assert.equal(P.loteUtilizavelPor(doCliente, null), false, 'OP sem cliente conhecido não usa material de cliente');
   assert.equal(P.loteUtilizavelPor({}, 'SEUNO'), true);
   assert.equal(P.loteUtilizavelPor({propriedade: {tipo: 'KURYOS'}}, null), true);
+  // Álcool comprado pela Kuryos vinculado ao pedido 0006 da Miss Rose atende a OP de qualquer cliente.
+  assert.equal(P.loteUtilizavelPor({propriedade: {tipo: 'KURYOS'}, destino: {clienteKey: 'MRAR', pedidos: ['0006']}}, 'SEUNO'), true);
   assert.equal(P.prioridadeLote(doCliente, 'MRAR'), 0);
   assert.equal(P.prioridadeLote({}, 'MRAR'), 1);
 });

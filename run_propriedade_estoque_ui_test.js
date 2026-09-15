@@ -128,7 +128,7 @@ async function abrir(browser, pagina, host) {
     assert.match(await linhaPc1.innerText(), /🏭 Kuryos/);
     assert.match(await linhaPc1.innerText(), /falta cliente\/pedido — não pode ser recebido/);
     assert.match(await p.locator('#pcBody tr', {hasText: 'PC-0008'}).innerText(), /📦 Material do cliente · MISS ROSE · pedido 0006/);
-    assert.match(await p.locator('#pcBody tr', {hasText: 'PC-0004'}).innerText(), /❔ Dono não definido/);
+    assert.match(await p.locator('#pcBody tr', {hasText: 'PC-0004'}).innerText(), /📦 Material do cliente/);
     ok('lista de PCs mostra de quem é, destino e o que falta');
 
     // Marcar Enviado com rota confirmada mas sem vínculo: barra e abre o modal.
@@ -173,7 +173,8 @@ async function abrir(browser, pagina, host) {
     // Pedido cujo SKU não tem produto (26, SEUNOURA): aparece pelo nome curto.
     await p.evaluate(() => abrirModalVinculoPC('pc3'));
     await p.waitForSelector('#modalVinculoPC.open');
-    assert.equal(await p.locator('#vpcPropriedade').isDisabled(), false, 'terceiro: quem compra escolhe');
+    assert.equal(await p.inputValue('#vpcPropriedade'), 'CLIENTE', 'remessa de terceiro nasce do cliente');
+    assert.equal(await p.locator('#vpcPropriedade').isDisabled(), false, 'exceção possível: sem escolha gravada, não trava');
     const ed3 = p.locator('#vpcItens .vinc-box[data-item="i1"]');
     assert.match(await ed3.innerText(), /Parte já entrou antes desta regra/);
     await ed3.locator('.vinc-cliente').selectOption('SEUNO');
@@ -181,13 +182,15 @@ async function abrir(browser, pagina, host) {
     await ed3.locator('.vinc-pedido[value="26"]').check();
     await p.evaluate(() => { window.__writes = []; });
     await p.click('#vpcSalvar');
-    assert.match(await p.locator('#alertBox').innerText(), /Defina de quem é o material/);
-    await p.selectOption('#vpcPropriedade', 'CLIENTE');
-    await p.click('#vpcSalvar');
     const w3 = (await p.evaluate(() => window.__writes)).find((x) => x.op === 'update');
     assert.equal(w3.v['pedidos_compra/pc3/propriedade'].tipo, 'CLIENTE');
     assert.deepEqual(w3.v['pedidos_compra/pc3/itens/i1/vinculo'].pedidos, ['26']);
-    ok('remessa de terceiro: escolhe o dono; pedido sem produto aparece pelo nome');
+    ok('remessa de terceiro: do cliente por padrão; pedido sem produto aparece pelo nome');
+    // Escolha gravada + recebimento: o dono trava.
+    await p.evaluate(() => { allPedidosCompra.pc3.propriedade = {tipo: 'CLIENTE'}; abrirModalVinculoPC('pc3'); });
+    assert.equal(await p.locator('#vpcPropriedade').isDisabled(), true);
+    assert.match(await p.locator('#vpcPropriedadeHint').innerText(), /Já houve recebimento/);
+    await p.click('#vpcCancel');
 
     // PC direto: dono pela natureza e editor de cliente/pedido.
     await p.evaluate(() => openModalPcDireto());
@@ -196,8 +199,12 @@ async function abrir(browser, pagina, host) {
     assert.equal(await p.locator('#pcdPropriedade').isDisabled(), true);
     await p.selectOption('#pcdNatureza', 'REMESSA_CLIENTE');
     assert.equal(await p.inputValue('#pcdPropriedade'), 'CLIENTE');
+    await p.selectOption('#pcdNatureza', 'COMPRA_KURYOS');
     await p.selectOption('#pcdNatureza', 'REMESSA_TERCEIRO');
+    assert.equal(await p.inputValue('#pcdPropriedade'), 'CLIENTE', 'vindo da compra, terceiro volta ao padrão do cliente');
     assert.equal(await p.locator('#pcdPropriedade').isDisabled(), false);
+    await p.selectOption('#pcdPropriedade', 'KURYOS');
+    assert.match(await p.locator('#pcdPropriedadeHint').innerText(), /exceção/);
     ok('PC direto: dono pela natureza e cliente/pedido no formulário');
     assert.deepEqual(c.errors, []);
     await c.context.close();

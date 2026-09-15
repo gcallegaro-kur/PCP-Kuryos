@@ -9,9 +9,14 @@
    - PROPRIEDADE (de quem é): definida no PC.
        Compra da Kuryos        -> KURYOS, sempre.
        Remessa do cliente      -> CLIENTE, sempre.
-       Remessa de terceiro     -> quem compra escolhe.
+       Remessa de terceiro     -> CLIENTE por padrão. Palavras do usuário:
+                                  "se é remessa, quase 100% das vezes o estoque
+                                  é do cliente". Kuryos só se Compras marcar a
+                                  exceção.
    - DESTINO (para quem/qual pedido): por item do PC, cliente obrigatório e ao
-     menos um pedido, podendo ser vários.
+     menos um pedido, podendo ser vários. Na compra é só vínculo: o álcool
+     comprado para um pedido continua sendo estoque geral e atende qualquer
+     cliente ("o estoque no fim é nosso").
 
    Regras de uso decididas pelo usuário:
    - Material da Kuryos pode ser usado por qualquer OP (estoque geral), mesmo
@@ -52,8 +57,8 @@
   }
 
   // ── Proprietário ────────────────────────────────────────────────────
-  // Natureza -> proprietário fixo, ou null quando precisa ser escolhido.
-  // PC sem natureza é compra (todo PC de cotação nasce assim).
+  // Natureza -> proprietário FIXO (não se escolhe), ou null quando admite
+  // exceção. PC sem natureza é compra (todo PC de cotação nasce assim).
   function proprietarioDaNatureza(natureza) {
     var n = natureza || 'COMPRA_KURYOS';
     if (n === 'COMPRA_KURYOS') return KURYOS;
@@ -61,11 +66,18 @@
     return null;
   }
 
+  // Proprietário quando ninguém escolheu: compra é da Kuryos; toda remessa,
+  // inclusive a de terceiro, é do cliente.
+  function proprietarioPadraoDaNatureza(natureza) {
+    return proprietarioDaNatureza(natureza) || CLIENTE;
+  }
+
   function propriedadeDoPC(pc) {
-    var fixo = proprietarioDaNatureza(pc && pc.naturezaMovimentacao);
+    var natureza = pc && pc.naturezaMovimentacao;
+    var fixo = proprietarioDaNatureza(natureza);
     if (fixo) return fixo;
     var t = pc && pc.propriedade && pc.propriedade.tipo;
-    return t === KURYOS || t === CLIENTE ? t : null;
+    return t === KURYOS || t === CLIENTE ? t : proprietarioPadraoDaNatureza(natureza);
   }
 
   function vinculoValido(v) {
@@ -340,7 +352,8 @@
 
   return {
     KURYOS: KURYOS, CLIENTE: CLIENTE, VISTA_PROPRIEDADE: VISTA_PROPRIEDADE, VISTA_DESTINADO: VISTA_DESTINADO,
-    proprietarioDaNatureza: proprietarioDaNatureza, propriedadeDoPC: propriedadeDoPC, vinculoValido: vinculoValido,
+    proprietarioDaNatureza: proprietarioDaNatureza, proprietarioPadraoDaNatureza: proprietarioPadraoDaNatureza,
+    propriedadeDoPC: propriedadeDoPC, vinculoValido: vinculoValido,
     validarVinculoPC: validarVinculoPC, camposDoLote: camposDoLote, donoDoLote: donoDoLote,
     loteUtilizavelPor: loteUtilizavelPor, prioridadeLote: prioridadeLote, loteNaVista: loteNaVista,
     produtoDoSku: produtoDoSku, clienteKeyDoSku: clienteKeyDoSku, clienteKeyPorNome: clienteKeyPorNome,
