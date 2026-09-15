@@ -1567,17 +1567,37 @@ function opcoesEnderecoPA() {
     .sort(function(a,b) { return String(a[1].codigo || a[0]).localeCompare(String(b[1].codigo || b[0])); })
     .map(function(e) { return '<option value="' + escapeAttr(e[0]) + '">' + escapeHtml(e[1].codigo || e[0]) + (e[1].area ? ' · ' + escapeHtml(e[1].area) : '') + '</option>'; }).join('');
 }
-function linhaPaletePA(numero) {
+// Unidades por caixa do CADASTRO do produto (produtos/{sku}.unCx). Só
+// referência, nunca pré-preenche: o formato da caixa muda sem o cadastro
+// acompanhar, e um valor já digitado passa batido. A 26247/06 foi contada
+// com 48 un/cx num produto de 24 e virou +957 de divergência.
+function unCxCadastroPA(sku) {
+  var p = (allProdutos || {})[sanitizeKey(sku)] || Object.values(allProdutos || {}).find(function(x) { return x && x.sku === sku; }) || {};
+  var n = parseInt(p.unCx, 10);
+  return n > 0 ? n : null;
+}
+function paletesFormatoCaixaDivergentePA(paletes, unCxCad) {
+  if (!unCxCad) return [];
+  return (paletes || []).filter(function(p) { return p.unidadesPorCaixa && p.unidadesPorCaixa !== unCxCad; });
+}
+function linhaPaletePA(numero, unCxCad) {
   return '<div class="cpa-palete" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:10px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Palete ' + numero + '</b><button type="button" class="btn btn-sm cpa-remover" style="color:var(--danger)">Remover</button></div>' +
     '<div class="form-grid"><div class="form-group"><label>Caixas fechadas</label><input class="cpa-caixas" type="number" min="0" step="1" value="0"></div>' +
-    '<div class="form-group"><label>Unid. por caixa</label><input class="cpa-multiplo" type="number" min="1" step="1" placeholder="se aplicável"></div>' +
+    '<div class="form-group"><label>Unid. por caixa</label><input class="cpa-multiplo" type="number" min="1" step="1" placeholder="se aplicável" data-uncx-cadastro="' + (unCxCad || '') + '">' +
+      '<div class="field-hint cpa-uncx-hint">' + (unCxCad ? 'Cadastro: ' + unCxCad + ' un/cx' : 'Produto sem un/cx no cadastro') + '</div></div>' +
     '<div class="form-group"><label>Unid. caixa parcial</label><input class="cpa-parcial" type="number" min="0" step="1" value="0"></div>' +
     '<div class="form-group"><label>Total conferido *</label><input class="cpa-total" type="number" min="0" step="1" placeholder="unidades"></div>' +
     '<div class="form-group"><label>Endereço físico *</label><select class="cpa-endereco"><option value="">Selecione…</option>' + opcoesEnderecoPA() + '</select></div></div></div>';
 }
 function recalcularLinhaPaletePA(linha) {
   var caixas = parseFloat(linha.querySelector('.cpa-caixas').value) || 0, multiplo = parseFloat(linha.querySelector('.cpa-multiplo').value) || 0, parcial = parseFloat(linha.querySelector('.cpa-parcial').value) || 0;
+  var campoMultiplo = linha.querySelector('.cpa-multiplo'), hintUnCx = linha.querySelector('.cpa-uncx-hint'), unCxCad = parseInt(campoMultiplo.getAttribute('data-uncx-cadastro'), 10) || null;
+  if (hintUnCx && unCxCad) {
+    var diverge = multiplo > 0 && multiplo !== unCxCad;
+    hintUnCx.innerHTML = diverge ? '<b style="color:var(--danger)">⚠ Diferente do cadastro (' + unCxCad + ' un/cx). Confira a caixa.</b>' : 'Cadastro: ' + unCxCad + ' un/cx';
+    campoMultiplo.style.borderColor = diverge ? 'var(--danger)' : '';
+  }
   if (multiplo > 0) linha.querySelector('.cpa-total').value = caixas * multiplo + parcial;
 }
 function abrirConferenciaPAModal(opKey) {
@@ -1603,7 +1623,8 @@ function abrirConferenciaPAModal(opKey) {
     '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button type="button" class="btn btn-green" id="cpaSalvar">Registrar ' + estado.etapa + 'ª contagem</button></div>';
   overlay.appendChild(box); document.body.appendChild(overlay);
   var lista = box.querySelector('#cpaPaletes');
-  function adicionar() { lista.insertAdjacentHTML('beforeend', linhaPaletePA(lista.children.length + 1)); ligarLinhas(); atualizar(); }
+  var unCxCad = unCxCadastroPA(op.sku);
+  function adicionar() { lista.insertAdjacentHTML('beforeend', linhaPaletePA(lista.children.length + 1, unCxCad)); ligarLinhas(); atualizar(); }
   function ligarLinhas() { lista.querySelectorAll('.cpa-palete').forEach(function(l) { l.querySelectorAll('.cpa-caixas,.cpa-multiplo,.cpa-parcial').forEach(function(i) { i.oninput = function() { recalcularLinhaPaletePA(l); atualizar(); }; }); l.querySelector('.cpa-total').oninput = atualizar; l.querySelector('.cpa-remover').onclick = function() { if (lista.children.length > 1) { l.remove(); atualizar(); } }; }); }
   function atualizar() { var total = Array.from(lista.querySelectorAll('.cpa-total')).reduce(function(s, i) { return s + (parseFloat(i.value) || 0); }, 0); var dif = arredondarQtdPA(total - apontada); box.querySelector('#cpaResumo').innerHTML = '<b>Total: ' + fmtNum(total) + ' un.</b> · Diferença: <span style="color:' + (dif === 0 ? 'var(--success)' : 'var(--danger)') + '">' + (dif > 0 ? '+' : '') + fmtNum(dif) + '</span>'; }
   adicionar();
@@ -1630,6 +1651,21 @@ function validarPaletesContagemPA(paletes) {
 function salvarContagemConferenciaPA(opKey, op, lista, box, overlay) {
   var paletes = lerPaletesFormularioPA(lista), erro = validarPaletesContagemPA(paletes);
   if (erro) { showAlert(erro, 'danger'); return; }
+  // Formato de caixa diferente do cadastro: não bloqueia (a caixa pode ter
+  // mudado de verdade), mas exige confirmação explícita e fica registrado na
+  // contagem -- quem lê a conferência depois vê que o formato foi assumido.
+  var unCxCad = unCxCadastroPA(op.sku), divergentes = paletesFormatoCaixaDivergentePA(paletes, unCxCad);
+  if (divergentes.length) {
+    var detalhe = divergentes.map(function(p) { return 'Palete ' + p.numero + ': ' + p.unidadesPorCaixa + ' un/cx'; }).join('\n');
+    if (!confirm('O cadastro de ' + op.sku + ' diz ' + unCxCad + ' unidades por caixa, mas foi informado:\n\n' + detalhe +
+      '\n\nA caixa deste lote é mesmo diferente? Confira fisicamente uma caixa antes de confirmar.' +
+      '\n\nOK = o formato mudou, registrar assim. Depois ajuste o un/cx do produto em Cadastros › Produtos, senão a próxima conferência cai no mesmo aviso.' +
+      '\nCancelar = voltar e corrigir a contagem.')) return;
+  }
+  paletes.forEach(function(p) {
+    if (unCxCad) p.unidadesPorCaixaCadastro = unCxCad;
+    if (divergentes.indexOf(p) !== -1) p.formatoCaixaDivergente = true;
+  });
   var btn = box.querySelector('#cpaSalvar'); btn.disabled = true;
   var apontada = qtdApontadaPA(op), total = arredondarQtdPA(paletes.reduce(function(s,p) { return s + p.qtdUnidades; }, 0));
   var agora = new Date().toISOString(), confRef = db.ref('conferencias_pa/' + opKey), countKey = confRef.child('contagens').push().key;

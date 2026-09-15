@@ -4,10 +4,34 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
   function key(v) { return String(v || '').trim().replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').slice(0, 60); }
+  // Chave de /pedidos é "<número>__<sku>", e o número aparece nos DOIS
+  // formatos na base: 174 OPs gravam '17__PRF-AFEE-0014' para um pedido que
+  // existe como '0017__PRF-AFEE-0014', e 17 pedidos reais existem só sem zero
+  // (medido em 2026-09-14, nenhum com gêmeo). Por isso não se "põe zero em
+  // tudo": resolve-se a chave contra o que existe. Comparar exato fazia o
+  // palete da Conferência de PA nascer com "Pedido de origem ausente", e
+  // migrar as OPs faria os 24 paletes legado acusarem "vínculo mudou".
+  // Mesma regra do apontamento (resolvePedidoKeyBySkuKey, utils.js).
+  function normalizarChavePedido(k) {
+    var partes = String(k || '').split('__');
+    if (partes.length < 2) return String(k || '');
+    if (/^\d+$/.test(partes[0])) partes[0] = String(parseInt(partes[0], 10));
+    return partes.join('__');
+  }
+  // Exata primeiro; senão a ÚNICA chave equivalente sem/com zero. Nenhuma ou
+  // mais de uma devolve a própria chave, e o portão de pedido ausente decide.
+  function resolverChavePedido(pedidos, k) {
+    if (!k) return '';
+    pedidos = pedidos || {};
+    if (pedidos[k]) return k;
+    var alvo = normalizarChavePedido(k);
+    var achadas = Object.keys(pedidos).filter(function(c) { return normalizarChavePedido(c) === alvo; });
+    return achadas.length === 1 ? achadas[0] : k;
+  }
   function analisar(base, itemKey, loteKey, hoje) {
     var lote = (base.estoque_lotes[itemKey] || {})[loteKey] || {};
     var op = (base.ops || {})[lote.opKey] || {};
-    var skuPedidoKey = lote.skuPedidoKey || op.skuPedidoKey || '';
+    var skuPedidoKey = resolverChavePedido(base.pedidos, lote.skuPedidoKey || op.skuPedidoKey || '');
     var demanda = (base.pedidos || {})[skuPedidoKey] || {};
     var pedidoId = demanda.parentPedidoId || key(demanda.id);
     var comercial = (base.pedidos_comerciais || {})[pedidoId];
@@ -39,8 +63,9 @@
     // em /pedidos); a da OP é a antiga, sem zero à esquerda. Comparar as duas
     // acusaria mudança de vínculo em todo palete importado. O que se compara
     // então é skuPedidoKeyOrigem, a chave da OP no momento da importação --
-    // a proteção continua valendo, contra o campo certo.
-    else if (vinculoGravado && op.skuPedidoKey !== vinculoGravado) motivo = 'Vínculo do pedido mudou após a conferência';
+    // a proteção continua valendo, contra o campo certo. A comparação ignora
+    // só o zero à esquerda: número ou SKU diferente continua sendo mudança.
+    else if (vinculoGravado && normalizarChavePedido(op.skuPedidoKey) !== normalizarChavePedido(vinculoGravado)) motivo = 'Vínculo do pedido mudou após a conferência';
     else if ([demanda.status, demanda.pedidoComercialStatus, comercial && comercial.status].some(function(s) { return /cancelad/i.test(s || ''); })) motivo = 'Pedido cancelado';
     else if (comercial && !Object.values(comercial.itens || {}).some(function(i) { return i.sku === lote.itemCodigo; })) motivo = 'Produto não consta no pedido comercial';
     var pedido = comercial || demanda;
@@ -58,5 +83,5 @@
     });
     return linhas.sort(function(a, b) { return Number(b.disponivel) - Number(a.disponivel) || String(a.lote.validade || '9999').localeCompare(String(b.lote.validade || '9999')) || String(a.lote.identificadorPalete).localeCompare(String(b.lote.identificadorPalete)); });
   }
-  return {analisar: analisar, listar: listar};
+  return {analisar: analisar, listar: listar, normalizarChavePedido: normalizarChavePedido, resolverChavePedido: resolverChavePedido};
 });
