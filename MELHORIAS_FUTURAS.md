@@ -161,6 +161,22 @@ correção da lista, apesar de ser a mais fácil.
 - **2 produtos do xlsm sem cadastro em `produtos/`** (`SRM-SEUN-0002`,
   `HDR-MISS-0008`) — ficaram de fora da importação de Fórmula/BOM por não
   terem produto correspondente.
+- **Histórico de alterações do cadastro de produtos** (pedido do usuário em
+  2026-09-16). Os SKUs HDR-MISS-*, MRARBS05, MRARBS10 e MRARBS12 estavam
+  inativos com pedido e OP abertos, e não há como saber quem inativou:
+  materiais gravam `historico_materiais/{key}` (campo, antes, depois, quem,
+  quando; ver `renderHistoricoMaterial` em `cadastros.html`), produtos não.
+  Replicar no save de produto de `cadastros.html` (~linha 3848).
+
+## Pedidos — clareza da tela (pedido do usuário em 2026-09-16)
+
+- **Número do pedido do cliente ao lado do nosso.** O cliente fala pelo
+  número dele ("pedido 34"), o PCP pelo nosso ("0014"), e a conciliação de
+  16/09 com Miss Rose e Wike Make travou nisso. O campo já existe
+  (`pedidos_comerciais/{id}.numeroPedidoCliente`, preenchido em
+  `comercial.html`), mas nenhum pedido da base o tinha e `pedidos.html` não o
+  mostra. Exibir "0014 / cliente 34" nas duas tabelas e na busca.
+- **SKU / código interno ao lado do nome do produto** nas mesmas tabelas.
 
 ## Fórmulas / BOM / Especificações
 
