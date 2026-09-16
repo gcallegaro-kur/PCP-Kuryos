@@ -7,6 +7,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Codex — Dev 3 11/09
 
+- **Retomada em 16/09 — contatos por área:** assumida a conclusão do escopo de contatos do Dev 2, cuja última execução falhou por limite semanal (tarefa atualmente inativa). Preservar e integrar as alterações salvas de Cadastro, Comercial, agenda/Expedição e módulos/testes de contatos. Validar, corrigir pendências, commit/push/deploy isolado. Nenhuma execução simultânea identificada nos arquivos reservados abaixo.
+
+- **Conclusão dos contatos em 16/09:** cadastro com múltiplos contatos/áreas e principal por área; seleção no Comercial e recebimento do cliente na agenda/Expedição. Legado preservado; pedido, agenda, saída e histórico guardam o contato escolhido. Corrigido carregamento tardio sem sobrescrever ajustes manuais. Testes de dados, gravação do pedido/PCP e navegador (duas telas, revisão, parciais, reload e celular) aprovados; revisão visual concluída. Publicação em preparação.
+
 - **Escopo:** grade de Expedição baseada na planilha, composição compacta de caixas parciais e agenda de transporte PA compartilhada com Logística.
 - **Coordenação:** base do Dev 2 publicada em `3d7a60f` e integrada. Arquivos ativos: nenhum; entrega encerrada. MRP/Claude preservado.
 - **Entrega pronta:** grade por palete com filtros/ordenação, caixas completas e parcial na mesma linha, totais e histórico. Agenda PA acessível pela Expedição e Logística; transporte compartilhado com revisão/histórico, sem baixa ao agendar, sem palete em duas agendas, cancelamento com motivo. Confirmação encerra agenda e baixa estoque/pedidos atomicamente, preservando transporte agendado e efetivo.

@@ -189,7 +189,7 @@
     .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
     .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
-<script src="shared/cliente-comercial.js"></script>
+<script src="shared/contatos-cliente.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script>
 </head>
 <body class="kuryos-theme has-sidebar">
 
@@ -1049,37 +1049,9 @@
               <input type="text" id="fCnpj-cli" placeholder="00.000.000/0000-00">
             </div>
           </div>
-          <div class="section-label">Contato Comercial</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Nome do contato</label>
-              <input type="text" id="fContatoComNome-cli" class="uc">
-            </div>
-            <div class="form-group">
-              <label>Telefone</label>
-              <input type="text" id="fContatoComTelefone-cli">
-            </div>
-            <div class="form-group full">
-              <label>E-mail</label>
-              <input type="text" id="fContatoComEmail-cli" placeholder="comercial@cliente.com.br">
-            </div>
-          </div>
-          <div class="section-label">Contato Técnico / Desenvolvimento</div>
-          <div class="field-hint" style="margin-bottom:8px">Quem aprova fórmula, embalagem e arte -- geralmente uma pessoa diferente de quem negocia.</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Nome do contato</label>
-              <input type="text" id="fContatoTecNome-cli" class="uc">
-            </div>
-            <div class="form-group">
-              <label>Telefone</label>
-              <input type="text" id="fContatoTecTelefone-cli">
-            </div>
-            <div class="form-group full">
-              <label>E-mail</label>
-              <input type="text" id="fContatoTecEmail-cli" placeholder="desenvolvimento@cliente.com.br">
-            </div>
-          </div>
+          <div class="section-label">Contatos por área</div>
+          <div class="field-hint">Adicione as pessoas necessárias. Uma pessoa pode atender várias áreas; cada área pode ter um contato principal.</div>
+          <div id="contatosClienteEditor"></div>
           <div class="section-label">Localização</div>
           <div class="form-grid">
             <div class="form-group">
@@ -2482,7 +2454,7 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td>' + escapeHtml(c.nome || '—') + vinculoBadges + '</td>' +
         '<td>' + escapeHtml(c.cnpj || '—') + '</td>' +
         '<td>' + escapeHtml(local || '—') + '</td>' +
-        '<td>' + escapeHtml(c.contatoComNome || '—') + '</td>' +
+        '<td>' + escapeHtml((ContatosCliente.sugerir(c,['COMERCIAL','COMPRAS']) || {}).nome || '—') + '</td>' +
         '<td>' + preenchimentoBadgeHtml(pct) + '</td>' +
         '<td>' + (ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm btn-edit-cli" data-key="' + key + '" title="Editar cliente" aria-label="Editar cliente">✏</button></td>' +
@@ -2510,12 +2482,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mesmo padrão já usado em Materiais (fTipo.disabled = !!key).
     document.getElementById('fCodigo-cli').disabled = !!key;
     document.getElementById('fCnpj-cli').value = c.cnpj || '';
-    document.getElementById('fContatoComNome-cli').value = c.contatoComNome || '';
-    document.getElementById('fContatoComTelefone-cli').value = c.contatoComTelefone || '';
-    document.getElementById('fContatoComEmail-cli').value = c.contatoComEmail || '';
-    document.getElementById('fContatoTecNome-cli').value = c.contatoTecNome || '';
-    document.getElementById('fContatoTecTelefone-cli').value = c.contatoTecTelefone || '';
-    document.getElementById('fContatoTecEmail-cli').value = c.contatoTecEmail || '';
+    if (!editorContatosCliente) editorContatosCliente = ContatosClienteUI.editor(document.getElementById('contatosClienteEditor'));
+    editorContatosCliente.carregar(c);
     document.getElementById('fEnderecoEntrega-cli').value = ClienteComercial.dados(c).pEntrega;
     document.getElementById('fEnderecoFaturamento-cli').value = ClienteComercial.dados(c).pFaturamento;
     document.getElementById('fCidade-cli').value = c.cidade || '';
@@ -2536,6 +2504,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('modalBg-cli').classList.add('open');
   }
+  var editorContatosCliente;
   function closeModal() {
     document.getElementById('modalBg-cli').classList.remove('open');
     editingKey = null;
@@ -2555,12 +2524,6 @@ document.addEventListener('DOMContentLoaded', function() {
       nome: nome,
       codigo: codigo,
       cnpj: document.getElementById('fCnpj-cli').value.trim(),
-      contatoComNome: document.getElementById('fContatoComNome-cli').value.trim(),
-      contatoComTelefone: document.getElementById('fContatoComTelefone-cli').value.trim(),
-      contatoComEmail: document.getElementById('fContatoComEmail-cli').value.trim(),
-      contatoTecNome: document.getElementById('fContatoTecNome-cli').value.trim(),
-      contatoTecTelefone: document.getElementById('fContatoTecTelefone-cli').value.trim(),
-      contatoTecEmail: document.getElementById('fContatoTecEmail-cli').value.trim(),
       enderecoEntrega: document.getElementById('fEnderecoEntrega-cli').value.trim(),
       enderecoFaturamento: document.getElementById('fEnderecoFaturamento-cli').value.trim(),
       cidade: document.getElementById('fCidade-cli').value.trim(),
@@ -2572,6 +2535,7 @@ document.addEventListener('DOMContentLoaded', function() {
       matrizKey: document.getElementById('cliMatrizKey-cli').value || null,
       fornecedorVinculadoKey: document.getElementById('cliFornecedorVinculadoKey-cli').value || null
     };
+    try { Object.assign(data, editorContatosCliente.dados()); } catch(err) { showAlert(err.message, 'danger'); return; }
     document.getElementById('modalSaveBtn-cli').disabled = true;
 
     var promise;

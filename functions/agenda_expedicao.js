@@ -3,6 +3,12 @@ const {analisar} = require('./expedicao_regras');
 function falhar(message, code = 'failed-precondition') { throw Object.assign(new Error(message), {code}); }
 function chave(v) { return typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v); }
 function texto(v, limite = 200) { return String(v || '').trim().slice(0, limite); }
+function snapshotContato(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  return {id: texto(v.id, 128) || null, nome: texto(v.nome), email: texto(v.email), telefone: texto(v.telefone, 60),
+    areas: Array.isArray(v.areas) ? [...new Set(v.areas.filter(a => ['COMERCIAL','COMPRAS','TECNICO','LOGISTICA','FINANCEIRO','OUTRA'].includes(a)))] : [],
+    outraArea: texto(v.outraArea), observacoes: texto(v.observacoes, 2000)};
+}
 function dataValida(v) { return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v; }
 function referencias(paletes) { return (paletes || []).map(p => p.itemKey + '/' + p.loteKey).sort().join('|'); }
 function prepararAgenda(base, dados, autor, uid, agora) {
@@ -52,12 +58,13 @@ function prepararAgenda(base, dados, autor, uid, agora) {
     if (k !== dados.agendaKey && agenda.status === 'AGENDADO' && (agenda.paletes || []).some(p => vistos.has(p.itemKey + '/' + p.loteKey))) falhar('Um palete já está em outra carga agendada. Abra essa agenda ou cancele-a antes de reagendar.');
   }
   const transporte = {transportadora: texto(dados.transportadora), motorista: texto(dados.motorista), contatoMotorista: texto(dados.contatoMotorista, 60), placa: texto(dados.placa, 20).toUpperCase()};
+  const contatoCliente = snapshotContato(dados.contatoCliente === undefined ? anterior && anterior.contatoCliente : dados.contatoCliente);
   const revisao = anterior ? anterior.revisao + 1 : 1;
   const historico = {...(anterior && anterior.historico || {})};
-  historico['r' + revisao] = {em: agora, por: autor, dataAgendada: dados.dataAgendada, janela: texto(dados.janela, 80), ...transporte};
+  historico['r' + revisao] = {em: agora, por: autor, dataAgendada: dados.dataAgendada, janela: texto(dados.janela, 80), ...transporte, contatoCliente};
   return {agendaKey: dados.agendaKey, status: 'AGENDADO', revisao, cliente, clienteKey: clienteKey || '',
     enderecoEntrega: destino || '', pedidos, paletes: lista, tipo: dados.tipo, dataAgendada: dados.dataAgendada,
-    janela: texto(dados.janela, 80), ...transporte, observacoes: texto(dados.observacoes, 2000), historico,
+    janela: texto(dados.janela, 80), ...transporte, contatoCliente, observacoes: texto(dados.observacoes, 2000), historico,
     criadoEm: anterior ? anterior.criadoEm : agora, criadoPor: anterior ? anterior.criadoPor : autor,
     criadoPorUid: anterior ? anterior.criadoPorUid : uid, atualizadoEm: agora, atualizadoPor: autor};
 }
@@ -75,4 +82,4 @@ function agendaDaSaida(base, dados) {
   if (referencias(agenda.paletes) !== referencias(dados.paletes)) falhar('Confirme todos os paletes agendados. Para mudar a composição, cancele a agenda e monte outra.');
   return agenda;
 }
-module.exports = {prepararAgenda, agendaDaSaida};
+module.exports = {prepararAgenda, agendaDaSaida, snapshotContato};

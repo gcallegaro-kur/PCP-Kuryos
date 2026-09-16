@@ -8,9 +8,11 @@ function fixture(){return {estoque_lotes:{SKU:{p1:{itemTipo:'produto',origemTipo
   enderecos_estoque:{a:{ativo:true,codigo:'PA-A1'}},pedidos:{PED__SKU:{parentPedidoId:'PED',id:'PED',sku:'SKU',cliente:'Cliente'}}};}
 const paletes=[{itemKey:'SKU',loteKey:'p1',quantidade:7,enderecoKey:'a',skuPedidoKey:'PED__SKU'}];
 const dados={agendaKey:'agenda_001',revisao:0,dataAgendada:'2026-09-20',tipo:'ENTREGA',paletes,transportadora:'Transporte A',motorista:'João',placa:'abc1d23'};
+dados.contatoCliente={id:'logistica',nome:'Lia',email:'lia@cliente.com',telefone:'1199',areas:['LOGISTICA'],observacoes:'Recebe de manhã'};
 const salvar=(b,d=dados)=>prepararAgenda(b,d,'Logística','u1',agora);
 const b=fixture(), agenda=salvar(b);
 assert.equal(agenda.revisao,1);assert.equal(agenda.placa,'ABC1D23');assert.equal(agenda.paletes[0].quantidade,7);
+assert.equal(agenda.contatoCliente.nome,'Lia');assert.equal(agenda.historico.r1.contatoCliente.observacoes,'Recebe de manhã');
 assert.equal(b.estoque_lotes.SKU.p1.saldoLote,7,'Agendar não baixa nem reserva estoque físico');
 b.agendamentos_expedicao={agenda_001:agenda};
 assert.throws(()=>salvar(b),/mudou/);

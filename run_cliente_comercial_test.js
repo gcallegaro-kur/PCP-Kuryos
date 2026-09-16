@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict'), fs=require('node:fs'), vm=require('node:vm');
 const ClienteComercial=require('./public/shared/cliente-comercial');
+const ContatosCliente=require('./public/shared/contatos-cliente');
 const html=fs.readFileSync('public/comercial.html','utf8');
 const cadastro=fs.readFileSync('public/cadastros.html','utf8');
 for(const file of ['public/comercial.html','public/cadastros.html']) {
@@ -13,9 +14,9 @@ assert.equal(ClienteComercial.dados({contato:'Legado',email:'antigo@teste.com'})
 assert.equal(ClienteComercial.dados({cidade:'São Paulo',uf:'SP'}).pEntrega,'','Cidade/UF não são endereço completo');
 assert.equal(ClienteComercial.dados({endereco:{logradouro:'Rua A',numero:10,cidade:'Santos',uf:'SP'}}).pFaturamento,'Rua A, 10, Santos / SP');
 const campos={};
-for(const id of ['pCliente','pContato','pTelefone','pEmail','pEntrega','pFaturamento','pPagamento','pNF','pFrete','pPrazo','pData','pPO','pPrevisao','pObs','saveP'])campos[id]={value:'',disabled:false};
+for(const id of ['pContatoEscolha','pCliente','pContato','pTelefone','pEmail','pEntrega','pFaturamento','pPagamento','pNF','pFrete','pPrazo','pData','pPO','pPrevisao','pObs','saveP'])campos[id]={value:'',disabled:false};
 let gravado;
-const ctx={ClienteComercial,clientes:{a:cliente,b:{nome:'Cliente B'}},produtos:{p1:{sku:'SKU-1',descricao:'Produto'}},pItens:[{key:'p1',qtd:3,valor:10}],
+const ctx={ClienteComercial,ContatosCliente,E:String,clientes:{a:cliente,b:{nome:'Cliente B'}},produtos:{p1:{sku:'SKU-1',descricao:'Produto'}},pItens:[{key:'p1',qtd:3,valor:10}],
  document:{getElementById:id=>campos[id],querySelectorAll:()=>Object.entries(campos).filter(([id])=>!['pCliente','pNF','pFrete','pData','saveP'].includes(id)).map(([,v])=>v)},
  nextSequential:async()=>({numero:1,formatado:'PED-0001'}),db:{ref:()=>({update:async u=>{gravado=JSON.parse(JSON.stringify(u));}})},
  iso:()=> '2026-09-11T18:00:00Z',me:()=> 'Teste',evento:()=>({tipo:'LIBERADO_PCP'}),sanitizeKey:s=>s,renderPItens:()=>{},alertar:(m,erro)=>{if(erro)throw Error(m);}};
@@ -34,11 +35,12 @@ setImmediate(()=>{
  try {
   const p=gravado['pedidos_comerciais/PED-0001'];
   assert.equal(p.contato,'Contato desta venda');assert.equal(p.telefone,'1199999');assert.equal(p.email,'novo@teste.com');
+  assert.equal(p.contatoSelecionado.nome,'Contato desta venda');assert.deepEqual(p.contatoSelecionado.areas,['COMERCIAL']);
   assert.equal(p.frete.enderecoEntrega,'Entrega excepcional');assert.equal(p.enderecoFaturamento,'Rua Fiscal, 20');assert.equal(p.prazoPagamento,'28 dias');
   assert.equal(gravado['pedidos/PED-0001__SKU-1'].frete.enderecoEntrega,'Entrega excepcional');
   assert.equal(cliente.enderecoEntrega,'Rua Entrega, 10','Pedido não deve alterar cadastro');
   assert.equal(campos.pEntrega.value,'Rua Entrega, 10','Novo pedido deve recuperar padrão cadastrado');
-  cliente.enderecoFaturamento='Alteração posterior';assert.equal(p.enderecoFaturamento,'Rua Fiscal, 20');
+  cliente.enderecoFaturamento='Alteração posterior';cliente.contatoComNome='Outra pessoa';assert.equal(p.enderecoFaturamento,'Rua Fiscal, 20');assert.equal(p.contatoSelecionado.nome,'Contato desta venda');
   for(const id of ['fEnderecoEntrega-cli','fEnderecoFaturamento-cli'])assert.equal((cadastro.match(new RegExp('id="'+id+'"','g'))||[]).length,1);
   assert.ok(cadastro.includes("enderecoEntrega: document.getElementById('fEnderecoEntrega-cli').value.trim()"));
   assert.ok(cadastro.includes("document.getElementById('fEnderecoFaturamento-cli').value = ClienteComercial.dados(c).pFaturamento"));

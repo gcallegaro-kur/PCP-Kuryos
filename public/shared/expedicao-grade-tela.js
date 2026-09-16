@@ -1,6 +1,7 @@
 'use strict';
 var db=firebase.database(), fn=firebase.functions();
 var base={estoque_lotes:{},ops:{},pedidos:{},pedidos_comerciais:{},conferencias_pa:{},enderecos_estoque:{},produtos:{}};
+var clientesContatos={}, contatoCargaUI=ContatosClienteUI.seletor(document.getElementById('contatoClienteCarga'),['LOGISTICA']);
 var selecionados={}, cargas={}, agendas={}, carregados=new Set(), agendaPronta=false;
 var enviando=false, tentativa=null, agendaKey=null, agendaRevisao=null, novaAgendaKey=null;
 var agendaURL=new URLSearchParams(location.search).get('agenda'), selecionaveisVisiveis=[];
@@ -18,7 +19,7 @@ function pronto(){return carregados.size===Object.keys(base).length&&agendaPront
 function agendaDoPalete(k){return Object.entries(agendas).find(function(x){return x[1].status==='AGENDADO'&&(x[1].paletes||[]).some(function(p){return idLinha(p)===k;});});}
 function agendaCompleta(){var a=agendas[agendaKey];return !agendaKey||a&&a.status==='AGENDADO'&&a.revisao===agendaRevisao&&(a.paletes||[]).length===Object.keys(selecionados).length&&a.paletes.every(function(p){return !!selecionados[idLinha(p)];});}
 function refsSelecionadas(){return Object.values(selecionados).map(function(l){return {itemKey:l.itemKey,loteKey:l.loteKey,quantidade:Number(l.lote.saldoLote),enderecoKey:l.lote.enderecoKey,skuPedidoKey:l.skuPedidoKey};});}
-function transporte(){return {transportadora:el('transportadora').value.trim(),motorista:el('motorista').value.trim(),contatoMotorista:el('contatoMotorista').value.trim(),placa:el('placa').value.trim(),observacoes:el('obs').value.trim()};}
+function transporte(){return {contatoCliente:contatoCargaUI.valor(),transportadora:el('transportadora').value.trim(),motorista:el('motorista').value.trim(),contatoMotorista:el('contatoMotorista').value.trim(),placa:el('placa').value.trim(),observacoes:el('obs').value.trim()};}
 function composicaoHTML(p){var c=ExpedicaoGrade.composicao(p);if(!c.valida)return '<span class="warning">'+e(c.texto)+'</span>';return (c.caixas?num(c.caixas)+' cx × '+num(c.multiplo):'')+(c.caixas&&c.parcial?' + ':'')+(c.parcial?'<span class="partial">1 parcial · '+num(c.parcial)+' un</span>':'');}
 function kg(v){return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});}
 function produtoDaLinha(l){return ExpedicaoGrade.produtoDoSku(base.produtos,l.lote.itemCodigo);}
@@ -59,6 +60,7 @@ function renderPesoResumo(linhas,pendentesOp){
 }
 function resumo(){
   var ls=Object.values(selecionados), t=ExpedicaoGrade.totais(ls.map(function(l){return l.lote;}));
+  if(!tentativa){var clienteDaCarga=ls[0];contatoCargaUI.carregar(clienteDaCarga?clientesContatos[clienteDaCarga.clienteKey]||{}:{},clienteDaCarga?(clienteDaCarga.clienteKey||clienteDaCarga.cliente):'');}
   el('selecaoResumo').textContent=t.paletes?num(t.paletes)+' palete(s) · '+num(t.unidades)+' un · '+num(t.caixasFechadas)+' cx completas + '+num(t.caixasParciais)+' parciais'+(t.composicoesPendentes?' · composição pendente':'')+' · '+textoPeso(ExpedicaoGrade.somaPeso(ls.map(pesoDaLinha))):'Nenhum palete selecionado';
   el('resumo').innerHTML=ls.length?'<b>'+e(ls[0].cliente)+'</b><br>Pedido(s): '+e(Array.from(new Set(ls.map(function(l){return l.pedidoNumero;}))).join(', '))+'<br>Destino: '+e(ls[0].frete.enderecoEntrega||'Não informado no pedido')+'<br>Peso da carga: <b>'+e(textoPeso(ExpedicaoGrade.somaPeso(ls.map(pesoDaLinha))))+'</b>':'Selecione os paletes na grade.';
   var invalida=!agendaCompleta();
@@ -118,7 +120,7 @@ function renderCargas(){
   var q=el('buscaHistorico').value.toLocaleLowerCase('pt-BR'), rows=[];
   Object.entries(cargas).sort(function(a,b){return String(b[1].criadoEm||'').localeCompare(String(a[1].criadoEm||''));}).forEach(function(entry){var c=entry[1];
     Object.values(c.itens||{}).forEach(function(l){if(![c.nf,c.cliente,c.numero,l.sku,l.pedidoNumero,l.opLote,l.identificadorPalete,c.transportadora,c.motorista,c.placa].join(' ').toLocaleLowerCase('pt-BR').includes(q))return;
-      rows.push('<tr><td>'+e(c.nf||'Pendente')+'<div class="sub">'+e(c.numero||entry[0])+'</div></td><td>'+e(c.versao===2?'Expedido':c.status||'Legado')+'</td><td>'+e(c.cliente)+'</td><td>'+e(l.pedidoNumero||l.pedidoId||c.pedidoId)+'</td><td class="product">'+e(l.sku)+'<div class="sub">'+e(l.descricao)+'</div></td><td>'+e(l.opLote||'—')+'<div class="sub">'+e(l.identificadorPalete||'Registro anterior aos paletes')+'</div></td><td>'+composicaoHTML(l.paleteOrigem||{saldoLote:l.qtd})+'</td><td class="numeric">'+num(l.qtd)+'</td><td>'+dataBR(c.data)+'</td><td>'+e(c.transportadora||'—')+'</td><td>'+e(c.motorista||c.veiculo||'—')+'<div class="sub">'+e(c.contatoMotorista||'')+'</div></td><td>'+e(c.placa||'—')+'</td><td class="product">'+e(c.observacoes||'')+'</td></tr>');
+      rows.push('<tr><td>'+e(c.nf||'Pendente')+'<div class="sub">'+e(c.numero||entry[0])+'</div></td><td>'+e(c.versao===2?'Expedido':c.status||'Legado')+'</td><td>'+e(c.cliente)+'</td><td>'+e(l.pedidoNumero||l.pedidoId||c.pedidoId)+'</td><td class="product">'+e(l.sku)+'<div class="sub">'+e(l.descricao)+'</div></td><td>'+e(l.opLote||'—')+'<div class="sub">'+e(l.identificadorPalete||'Registro anterior aos paletes')+'</div></td><td>'+composicaoHTML(l.paleteOrigem||{saldoLote:l.qtd})+'</td><td class="numeric">'+num(l.qtd)+'</td><td>'+dataBR(c.data)+'</td><td>'+e(c.transportadora||'—')+'</td><td>'+e(c.motorista||c.veiculo||'—')+'<div class="sub">'+e(c.contatoMotorista||'')+'</div></td><td>'+e(c.placa||'—')+'</td><td class="product">'+e(c.observacoes||'')+'<div class="sub">'+e(c.contatoCliente?[c.contatoCliente.nome,c.contatoCliente.telefone,c.contatoCliente.email].filter(Boolean).join(' · '):'')+'</div></td></tr>');
     });
   });
   el('lista').innerHTML=rows.join('')||'<tr><td colspan="13">Nenhuma saída neste filtro.</td></tr>';
@@ -128,6 +130,7 @@ function abrirAgenda(k,a){
   if(!pronto()||!a||a.status!=='AGENDADO')return aviso('Agenda indisponível. Aguarde o carregamento ou atualize a página.',true);
   selecionados={};agendaKey=k;agendaRevisao=a.revisao;
   var faltas=[];(a.paletes||[]).forEach(function(p){var l=ExpedicaoPA.analisar(base,p.itemKey,p.loteKey,hoje());if(l.disponivel&&Number(l.lote.saldoLote)===Number(p.quantidade))selecionados[idLinha(l)]=l;else faltas.push(p.identificadorPalete||p.loteKey);});
+  contatoCargaUI.carregar(clientesContatos[a.clienteKey]||{},a.clienteKey||a.cliente,a.contatoCliente||null);
   ['transportadora','motorista','contatoMotorista','placa','tipo','dataAgendada','janela'].forEach(function(f){el(f).value=a[f]||'';});el('obs').value=a.observacoes||'';
   aviso(faltas.length?'Paletes indisponíveis ou com saldo alterado: '+faltas.join(', ')+'. Regularize antes de confirmar.':'Agendamento carregado. Revise o transporte e confirme quando a carga sair.',!!faltas.length);
   renderPaletes();el('formCarga').scrollIntoView({behavior:'smooth',block:'start'});
@@ -174,4 +177,5 @@ el('buscaHistorico').oninput=renderCargas;el('data').value=hoje();el('data').max
 try{tentativa=JSON.parse(sessionStorage.getItem('expedicaoPA-tentativa')||'null');}catch(ignore){}
 Object.keys(base).forEach(function(no){dbOnValue(db.ref(no),function(s){base[no]=s.val()||{};carregados.add(no);renderPaletes();if(tentativa&&!enviando)aviso('Há uma confirmação pendente. Use Verificar / repetir confirmação para recuperar o resultado.',true);});});
 dbOnValue(db.ref('expedicoes_comerciais'),function(s){cargas=s.val()||{};renderCargas();});
+dbOnValue(db.ref('clientes'),function(s){clientesContatos=s.val()||{};renderPaletes();});
 AgendaPAUI.iniciar({container:el('agendaPA'),db:db,fn:fn,onAbrir:abrirAgenda,onErro:function(msg){aviso(msg,true);},onAtualizar:function(a){agendas=a;agendaPronta=true;renderPaletes();}});

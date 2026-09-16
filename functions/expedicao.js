@@ -1,7 +1,7 @@
 'use strict';
 
 const {analisar} = require('./expedicao_regras');
-const {agendaDaSaida} = require('./agenda_expedicao');
+const {agendaDaSaida, snapshotContato} = require('./agenda_expedicao');
 function erro(code, message) { throw Object.assign(new Error(message), {code}); }
 function chave(v) { return typeof v === 'string' && v.length > 0 && v.length <= 128 && !/[.#$[\]/]/.test(v); }
 function texto(v, max = 500) { return String(v || '').trim().slice(0, max); }
@@ -80,6 +80,7 @@ function prepararSaida(base, data, autor, uid, agora) {
     statusFiscal: data.nf ? 'NF_EXTERNA_INFORMADA' : 'PENDENTE', valorFaturado: valor,
     transportadora: texto(data.transportadora), motorista: texto(data.motorista), contatoMotorista: texto(data.contatoMotorista, 60), placa: texto(data.placa, 20).toUpperCase(),
     veiculo: texto(data.veiculo || [data.motorista, data.placa].filter(Boolean).join(' / '), 100), observacoes: texto(data.observacoes, 2000),
+    contatoCliente: snapshotContato(data.contatoCliente === undefined ? agenda && agenda.contatoCliente : data.contatoCliente),
     agendaKey: agenda ? data.agendaKey : null, agendamento: agenda ? JSON.parse(JSON.stringify(agenda)) : null,
     itens, totalPaletes: itens.length, totalUnidades: itens.reduce((s, l) => s + l.qtd, 0), criadoEm: agora, criadoPor: autor, criadoPorUid: uid};
   updates['expedicoes_comerciais/' + cargaKey] = carga;
@@ -90,9 +91,10 @@ function prepararSaida(base, data, autor, uid, agora) {
     updates[agPath + 'revisao'] = agenda.revisao + 1;
     updates[agPath + 'atualizadoEm'] = agora;
     updates[agPath + 'atualizadoPor'] = autor;
+    updates[agPath + 'contatoCliente'] = carga.contatoCliente;
     ['transportadora', 'motorista', 'contatoMotorista', 'placa'].forEach(k => { updates[agPath + k] = carga[k]; });
     updates[agPath + 'historico/r' + (agenda.revisao + 1)] = {tipo: 'SAIDA_CONFIRMADA', em: agora, por: autor,
-      transportadora: carga.transportadora, motorista: carga.motorista, contatoMotorista: carga.contatoMotorista, placa: carga.placa};
+      transportadora: carga.transportadora, motorista: carga.motorista, contatoMotorista: carga.contatoMotorista, placa: carga.placa, contatoCliente: carga.contatoCliente};
   }
   return {cargaKey, carga, updates, repetida: false};
 }
