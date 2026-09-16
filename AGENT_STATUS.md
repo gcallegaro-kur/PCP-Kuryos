@@ -118,6 +118,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — pedidos sem divergência de acento (2026-09-16).**
+  `8390907` no `origin/main`; Hosting por worktree limpo às 15:33 BRT
+  (`pedidos.html` idêntico ao commit). Agrupar por cliente/linha usa
+  `normalizeSearch` como chave ("Briá"/"Bria", "Miss Rose"/"Miss Rôse" num grupo
+  só, título = grafia mais usada); as duas buscas da tela ignoram acento. Só
+  exibição — os nomes gravados nos pedidos não foram alterados.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — uso e consumo sem cliente/pedido (2026-09-15).**
   `ed29f4b` no `origin/main`; por worktree limpo às 16:27 BRT: Hosting (5
   arquivos idênticos ao commit) + as três Functions de recebimento.
