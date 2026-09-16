@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/qrcode-lib.js"></script>
+  <script src="shared/transferencia-op.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <style>
@@ -707,20 +708,6 @@
     return foundKey ? pedidosGlobal[foundKey] : null;
   }
 
-  // Opções do select de vínculo com o Pedido Comercial que essa OP atende
-  // (parentPedidoId). op_watcher.py não sabe fazer esse vínculo sozinho porque
-  // a numeração de OP e a de Pedido são espaços diferentes — por isso é manual.
-  function pedidosComerciaisOptionsHtml(currentValue) {
-    var ids = Object.keys(pedidosComerciaisGlobal).sort(function(a, b) { return Number(b) - Number(a); });
-    var html = '<option value="">Sem vínculo</option>';
-    ids.forEach(function(id) {
-      var pc = pedidosComerciaisGlobal[id] || {};
-      var sel = String(currentValue || '') === String(id) ? 'selected' : '';
-      html += '<option value="' + escapeAttr(id) + '" ' + sel + '>#' + escapeHtml(id) + ' — ' + escapeHtml(pc.cliente || '') + '</option>';
-    });
-    return html;
-  }
-
   // Filtro de status + busca (achado do usuário: OP cancelada por engano
   // ficava invisível em TODA a tela, sem forma de investigar). "Ativas"
   // sem busca é o modo padrão -- comportamento 100% igual ao de sempre,
@@ -1352,8 +1339,7 @@
       ${isAdmin ? `<button type="button" class="btn-edit-inline" title="Programar início/fim planejados" onclick="showProgramacaoEdit('${escapedKeyAttr}')">✏️</button>` : ``}
     </div>`;
   }
-  // Mesmo padrão de "clique no lápis pra editar" de showPedidoSelect logo
-  // abaixo -- grava direto via updateOpField (já valida admin e trata
+  // Clique no lápis pra editar -- grava direto via updateOpField (já valida admin e trata
   // erro), o listener de listenToActiveOps re-renderiza a linha sozinho
   // depois da escrita confirmar, sem precisar de um botão de "fechar".
   function showProgramacaoEdit(opKey) {
@@ -1426,10 +1412,10 @@
         <td id="pedidoCell-${escapedKeyAttr}">
           <div class="pedido-cell">
             ${derivedParentId
-              ? `<span class="badge-pedido">#${escapeHtml(String(derivedParentId))}</span>`
+              ? `<span class="badge-pedido" title="${escapeAttr(historicoTransferenciaTexto(op))}">#${escapeHtml(String(derivedParentId))}${TransferenciaOP.transferenciaPendente(op) ? ' ⚠️' : ''}</span>`
               : `<span class="badge-pedido is-vazio">Sem vínculo</span>`}
-            ${isAdmin
-              ? `<button type="button" class="btn-edit-inline" title="Alterar vínculo com pedido comercial" onclick="showPedidoSelect('${escapedKeyAttr}')">✏️</button>`
+            ${isAdmin && !isCancelada
+              ? `<button type="button" class="btn-edit-inline" title="Transferir OP para outro pedido" onclick="abrirTransferenciaOp('${escapedKeyAttr}')">✏️</button>`
               : ``}
           </div>
         </td>
@@ -1521,21 +1507,167 @@
     window.print();
   }
 
-  // O vínculo com pedido comercial agora vem preenchido sozinho (derivado do
-  // skuPedidoKey) na maioria dos casos -- deixar um <select> sempre visível
-  // parecia pedir pra usuário escolher algo que já estava certo. Troca pra
-  // um badge compacto (não corta o texto do id) com edição sob demanda: só
-  // vira dropdown quando alguém clica no lápis.
-  function showPedidoSelect(opKey) {
+  // Transferência de OP entre pedidos (shared/transferencia-op.js). Antes o
+  // lápis trocava só ops/{lote}.parentPedidoId -- o número mostrado --,
+  // enquanto apontamento, conciliação, expedição e planejamento seguem o
+  // skuPedidoKey, e o produzido continuava no pedido antigo.
+  function historicoTransferenciaTexto(op) {
+    const t = (op && op.transferenciasPedido) || {};
+    const linhas = Object.keys(t).map(k => t[k]).filter(Boolean)
+      .sort((a, b) => String(a.em || '').localeCompare(String(b.em || '')))
+      .map(x => (x.status === 'EM_ANDAMENTO' ? 'NÃO CONCLUÍDA: ' : '') + 'de ' + (x.origem || x.origemAnterior || 'sem pedido') +
+        ' para ' + x.destino + ' em ' + (x.em ? new Date(x.em).toLocaleString('pt-BR') : '?') + ' por ' + (x.por || '?') +
+        (x.motivo ? ' — ' + x.motivo : ''));
+    return linhas.length ? 'Transferências: ' + linhas.join(' | ') : '';
+  }
+
+  function rotuloPedido(key) {
+    const p = pedidosGlobal[key];
+    if (!p) return key || 'sem pedido';
+    const saldo = Math.max((p.qtdTotal || 0) - (p.produzido || 0), 0);
+    return '#' + (p.id || key) + ' — ' + fmtNum(p.produzido || 0) + ' de ' + fmtNum(p.qtdTotal || 0) + ' produzidos (falta ' + fmtNum(saldo) + ')';
+  }
+
+  function abrirTransferenciaOp(opKey) {
+    if (!window.currentUser || (window.currentUser.role !== 'admin' && window.currentUser.role !== 'pcp')) {
+      alert('Acesso Negado: Apenas administradores ou PCP podem transferir OPs.');
+      return;
+    }
     const op = opsGlobal[opKey];
     if (!op) return;
-    const linkedPedido = pedidoBySkuKey(op.skuPedidoKey);
-    const derivedParentId = op.parentPedidoId || (linkedPedido && linkedPedido.parentPedidoId) || '';
-    const cell = document.getElementById('pedidoCell-' + escapeAttr(opKey));
-    if (!cell) return;
-    cell.innerHTML = `<select onchange="updateOpField('${escapeAttr(opKey)}', 'parentPedidoId', this.value)">${pedidosComerciaisOptionsHtml(derivedParentId)}</select>`;
-    const sel = cell.querySelector('select');
-    if (sel) sel.focus();
+    const pend = TransferenciaOP.transferenciaPendente(op);
+    const origemKey = pend ? pend.origem : TransferenciaOP.resolverChave(pedidosGlobal, op.skuPedidoKey);
+    const candidatos = pend ? [pend.destino] : TransferenciaOP.candidatosDestino({ops: opsGlobal, pedidos: pedidosGlobal}, opKey);
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--card);color:var(--text);border-radius:16px;padding:22px;max-width:520px;width:100%;max-height:92vh;overflow:auto;box-shadow:var(--shadow)';
+    const campo = 'width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)';
+    box.innerHTML = `
+      <div style="font-weight:800;font-size:16px;margin-bottom:4px">${pend ? 'Concluir transferência da OP' : 'Transferir OP para outro pedido'}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Lote ${escapeHtml(op.lote || opKey)} — ${escapeHtml(op.produto || '')} (${escapeHtml(op.sku || 'sem SKU')})</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:2px">Pedido atual</div>
+      <div style="font-size:13px;margin-bottom:12px">${escapeHtml(origemKey ? rotuloPedido(origemKey) : (op.skuPedidoKey ? op.skuPedidoKey + ' (não existe mais)' : 'Sem pedido'))}</div>
+      ${pend ? `<div style="font-size:13px;background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;margin-bottom:12px">Uma transferência começou em ${escapeHtml(pend.em ? new Date(pend.em).toLocaleString('pt-BR') : '?')} e não terminou. Concluir repete só o que falta, sem somar duas vezes.</div>` : ''}
+      <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">${pend ? 'Destino' : 'Novo pedido'}</label>
+      ${candidatos.length
+        ? `<select id="trOpDestino" style="${campo};margin-bottom:12px" ${pend ? 'disabled' : ''}>${pend ? '' : '<option value="">Selecione...</option>'}${candidatos.map(k => `<option value="${escapeAttr(k)}">${escapeHtml(rotuloPedido(k))}</option>`).join('')}</select>`
+        : `<div style="font-size:13px;color:var(--danger);margin-bottom:12px">Nenhum pedido aberto do SKU ${escapeHtml(op.sku || '')}. Digite o pedido novo antes de transferir.</div>`}
+      <div id="trOpResumo" style="font-size:13px;margin-bottom:12px"></div>
+      ${pend ? '' : `<label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
+      <textarea id="trOpMotivo" rows="2" style="${campo};margin-bottom:12px;resize:vertical" placeholder="Ex.: conciliação de pedidos com o cliente em 16/09"></textarea>`}
+      <div id="trOpErro" style="color:var(--danger);font-size:12px;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="trOpVoltar" class="btn-sync" style="background:var(--card);color:var(--text);border:1.5px solid var(--border)">Voltar</button>
+        <button type="button" id="trOpConfirmar" class="btn-sync" disabled>${pend ? 'Concluir transferência' : 'Transferir'}</button>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const fechar = () => { if (overlay.parentNode) document.body.removeChild(overlay); };
+    document.getElementById('trOpVoltar').onclick = fechar;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) fechar(); });
+
+    const sel = document.getElementById('trOpDestino');
+    const resumoEl = document.getElementById('trOpResumo');
+    const btn = document.getElementById('trOpConfirmar');
+    let estoqueLotes = null;
+    let planoAtual = null;
+
+    const atualizarResumo = () => {
+      planoAtual = null;
+      btn.disabled = true;
+      const destinoKey = sel ? sel.value : '';
+      if (!destinoKey) { resumoEl.innerHTML = ''; return; }
+      if (estoqueLotes === null) { resumoEl.textContent = 'Carregando paletes...'; return; }
+      const plano = TransferenciaOP.planejar({ops: opsGlobal, pedidos: pedidosGlobal, estoque_lotes: estoqueLotes}, opKey, destinoKey, pend);
+      const itens = [];
+      itens.push('<b>Produção que vai junto:</b> ' + fmtNum(plano.qtd || 0) + ' un' +
+        (plano.qtdSemRegistro ? ' (' + fmtNum(plano.qtdRegistrada) + ' por apontamento registrado + ' + fmtNum(plano.qtdSemRegistro) + ' pelo envase da OP)' : ''));
+      itens.push('<b>Paletes em estoque que mudam de pedido:</b> ' + (plano.paletes ? plano.paletes.length : 0) +
+        (plano.saldoPaletes ? ' (' + fmtNum(plano.saldoPaletes) + ' un)' : ''));
+      const avisos = (plano.avisos || []).map(a => '<li>' + escapeHtml(a) + '</li>').join('');
+      const erros = (plano.erros || []).map(a => '<li>' + escapeHtml(a) + '</li>').join('');
+      resumoEl.innerHTML = itens.map(i => '<div style="margin-bottom:4px">' + i + '</div>').join('') +
+        (avisos ? '<ul style="margin:8px 0 0 18px;padding:0;color:#92400e">' + avisos + '</ul>' : '') +
+        (erros ? '<ul style="margin:8px 0 0 18px;padding:0;color:var(--danger)">' + erros + '</ul>' : '');
+      if (!plano.erros.length) { planoAtual = plano; btn.disabled = false; }
+    };
+    if (sel) sel.onchange = atualizarResumo;
+    database.ref('estoque_lotes').once('value').then(snap => { estoqueLotes = snap.val() || {}; atualizarResumo(); })
+      .catch(() => { resumoEl.textContent = 'Não foi possível ler os paletes. Tente de novo.'; });
+
+    btn.onclick = () => {
+      const erroEl = document.getElementById('trOpErro');
+      erroEl.style.display = 'none';
+      const motivoEl = document.getElementById('trOpMotivo');
+      const motivo = motivoEl ? motivoEl.value.trim() : '';
+      if (!planoAtual) return;
+      if (!pend && !motivo) { erroEl.textContent = 'Informe o motivo.'; erroEl.style.display = 'block'; return; }
+      if (!pend && !confirm('Transferir a OP ' + (op.lote || opKey) + ' para o pedido ' + rotuloPedido(planoAtual.destinoKey) + '?')) return;
+      btn.disabled = true; btn.textContent = 'Transferindo...';
+      executarTransferenciaOp(opKey, planoAtual.destinoKey, motivo, pend)
+        .then(qtd => { fechar(); showToast('OP transferida (' + fmtNum(qtd) + ' un de produção junto).'); })
+        .catch(err => {
+          console.error(err);
+          btn.disabled = false; btn.textContent = pend ? 'Concluir transferência' : 'Transferir';
+          erroEl.textContent = 'Erro: ' + err.message + ' Se a transferência já tinha começado, abra de novo e use "Concluir".';
+          erroEl.style.display = 'block';
+        });
+    };
+  }
+
+  // Ordem pensada pra falha no meio: 1) vínculo da OP + registro EM_ANDAMENTO
+  // (novos apontamentos já vão pro destino); 2) saída e 3) entrada do
+  // produzido, em transactions idempotentes pelo id; 4) paletes, programação
+  // e alocações; 5) CONCLUIDA. Retomar repete com o mesmo id.
+  async function executarTransferenciaOp(opKey, destinoKey, motivo, pend) {
+    const [opSnap, pedSnap, lotesSnap] = await Promise.all([
+      database.ref('ops/' + opKey).once('value'),
+      database.ref('pedidos').once('value'),
+      database.ref('estoque_lotes').once('value')
+    ]);
+    const op = opSnap.val();
+    const base = {ops: {[opKey]: op}, pedidos: pedSnap.val() || {}, estoque_lotes: lotesSnap.val() || {}};
+    const pendente = pend ? TransferenciaOP.transferenciaPendente(op) : null;
+    const plano = TransferenciaOP.planejar(base, opKey, destinoKey, pendente);
+    if (plano.erros.length) throw new Error(plano.erros.join(' '));
+
+    const em = new Date().toISOString();
+    const por = window.currentUser.nome || window.currentUser.email || 'desconhecido';
+    const id = pendente ? pendente.id : database.ref('ops/' + opKey + '/transferenciasPedido').push().key;
+    if (!pendente) {
+      await database.ref('ops/' + opKey).update({
+        skuPedidoKey: plano.destinoKey,
+        parentPedidoId: plano.parentDestino || null,
+        ['transferenciasPedido/' + id]: {
+          status: 'EM_ANDAMENTO', origem: plano.origemKey || null, origemAnterior: op.skuPedidoKey || null,
+          destino: plano.destinoKey, qtdPrevista: plano.qtd, paletes: plano.paletes.length, motivo: motivo, em: em, por: por
+        }
+      });
+    }
+
+    const ctx = {id: id, lote: plano.lote, qtdSemRegistro: plano.qtdSemRegistro, origemKey: plano.origemKey, destinoKey: plano.destinoKey, em: em, por: por};
+    if (plano.origemKey) await database.ref('pedidos/' + plano.origemKey).transaction(p => TransferenciaOP.aplicarSaida(p, ctx));
+    else ctx.movido = {aplicacoes: {}, qtd: 0};
+    await database.ref('pedidos/' + plano.destinoKey).transaction(p => TransferenciaOP.aplicarEntrada(p, ctx));
+
+    const [progSnap, alocSnap] = await Promise.all([
+      database.ref('programacao').orderByKey().startAt(todayLocal()).once('value'),
+      database.ref('alocacoes_planejamento').once('value')
+    ]);
+    plano.em = em;
+    const updates = Object.assign({},
+      TransferenciaOP.atualizacoesPaletes(plano),
+      TransferenciaOP.atualizacoesProgramacao(progSnap.val() || {}, plano, todayLocal(), new Date().getHours()),
+      TransferenciaOP.atualizacoesAlocacoes(alocSnap.val() || {}, plano.lote, sanitizeKey));
+    const reg = 'ops/' + opKey + '/transferenciasPedido/' + id + '/';
+    updates[reg + 'status'] = 'CONCLUIDA';
+    updates[reg + 'qtd'] = ctx.movido ? ctx.movido.qtd : 0;
+    updates[reg + 'concluidaEm'] = new Date().toISOString();
+    await database.ref().update(updates);
+    return ctx.movido ? ctx.movido.qtd : 0;
   }
 
   function renderPendingRow(p) {

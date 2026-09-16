@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/transferencia-op.js"></script>
   <script src="shared/expedicao.js"></script>
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="auth_check.js"></script>
@@ -1361,6 +1362,15 @@
     btn.textContent = 'Salvando...';
 
     var doSave = function(preservedData) {
+      // O formulário só mostra parte do registro. Gravar só `data` apagava
+      // o resto: apontamentosAplicados (dedupe do apontamento e base da
+      // transferência de OP), transferenciasOP, status, mediaPorHora, e os
+      // dados do Comercial (dataPedido, valorUnitario, frete). Parte do que
+      // já existe e sobrepõe só o que o formulário edita.
+      if (preservedData) {
+        data = Object.assign({}, preservedData, data);
+        if (!statusManual) data.statusManual = null; // "automático" reabre
+      }
       // Merge: preserve ultimoApontamento and produzido if not changed by user
       if (preservedData) {
         if (!document.getElementById('fProduzido').value && preservedData.produzido) {
@@ -1417,6 +1427,21 @@
       }
 
             shiftsUpdates['pedidos/' + newKey] = data;
+      // pedidos_comerciais/{id}.itens é um snapshot próprio: sem isto a aba
+      // Pedidos Comerciais seguia com a quantidade antiga.
+      if (isComercial && preservedData && Number(preservedData.qtdTotal) !== qtdTotal) {
+        var pcAtual = pedidosComerciaisCache[existing.parentPedidoId];
+        var itensPc = pcAtual && pcAtual.itens;
+        if (itensPc) {
+          var idxItem = Object.keys(itensPc).filter(function(i) { return itensPc[i] && itensPc[i].sku === existing.sku; });
+          if (idxItem.length === 1) {
+            var totalPc = 0;
+            Object.keys(itensPc).forEach(function(i) { totalPc += i === idxItem[0] ? qtdTotal : (Number(itensPc[i] && itensPc[i].qtd) || 0); });
+            shiftsUpdates['pedidos_comerciais/' + existing.parentPedidoId + '/itens/' + idxItem[0] + '/qtd'] = qtdTotal;
+            shiftsUpdates['pedidos_comerciais/' + existing.parentPedidoId + '/total_qtd'] = totalPc;
+          }
+        }
+      }
       if (keyChanged) {
         shiftsUpdates['pedidos/' + oldKey] = null;
       }
@@ -1482,6 +1507,16 @@
   function openDelete(key) {
     var p = allPedidos[key];
     if (!p) return;
+    if (conciliacaoFontes.ops === null) { showAlert('Aguarde carregar as OPs antes de excluir.', 'danger'); return; }
+    var alvo = TransferenciaOP.normalizarChave(key);
+    var opsDoItem = Object.keys(conciliacaoFontes.ops).map(function(k) { return conciliacaoFontes.ops[k]; }).filter(function(o) {
+      return o && o.status !== 'Cancelado' && TransferenciaOP.normalizarChave(o.skuPedidoKey) === alvo;
+    });
+    if (opsDoItem.length) {
+      showAlert('Este item tem OP (' + opsDoItem.map(function(o) { return o.lote; }).join(', ') +
+        '). Excluir deixaria a OP sem pedido e apagaria o produzido. Transfira a OP em OPs, cancele-a, ou use Encerrar.', 'danger');
+      return;
+    }
     deleteKey = key;
     document.getElementById('delPedidoInfo').textContent = '#' + (p.id||key) + ' — ' + (p.produto||'');
     document.getElementById('delModalBg').classList.add('open');
