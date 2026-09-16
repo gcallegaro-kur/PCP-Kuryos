@@ -118,6 +118,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — transferência de OP entre pedidos (2026-09-16).** Base
+  para a conciliação de pedidos Miss Rose/Wike Make/Habibi com o cliente. A OP
+  passa a ser movida de pedido levando `skuPedidoKey`, o produzido do pedido
+  (por `apontamentosAplicados` do lote) e os paletes do WMS. Corrige também
+  excluir item com OP e editar quantidade sem refletir no pedido comercial.
+  **Nenhum dado de produção será alterado sem aprovação do usuário.**
+- **Arquivos ativos:** `public/ops.html`, `public/pedidos.html`, novo
+  `public/shared/transferencia-op.js`, novo `run_transferencia_op_test.js`,
+  `AGENT_STATUS.md`.
+
 - **Entrega publicada — pedidos sem divergência de acento (2026-09-16).**
   `8390907` no `origin/main`; Hosting por worktree limpo às 15:33 BRT
   (`pedidos.html` idêntico ao commit). Agrupar por cliente/linha usa
