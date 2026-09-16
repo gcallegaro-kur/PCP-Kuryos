@@ -615,7 +615,7 @@
     }
 
     var statusFilter = document.getElementById('filterStatusComercial').value;
-    var search = document.getElementById('searchInput').value.toLowerCase().trim();
+    var search = normalizeSearch(document.getElementById('searchInput').value);
     var nAberto = 0, nParcial = 0, nCompleto = 0;
 
     // 1) Monta as linhas com os valores já calculados (separado do HTML,
@@ -629,7 +629,7 @@
       // Busca casa com ID ou cliente — assim um pedido completo escondido
       // pelo filtro padrão ainda aparece se alguém procurar por ele direto.
       if (search) {
-        var haystack = (id + ' ' + (pc.cliente || '')).toLowerCase();
+        var haystack = normalizeSearch(id + ' ' + (pc.cliente || ''));
         if (haystack.indexOf(search) === -1) return;
       }
 
@@ -954,7 +954,7 @@
   }
 
   function renderTable() {
-    var search = document.getElementById('searchInput').value.toLowerCase().trim();
+    var search = normalizeSearch(document.getElementById('searchInput').value);
     var filterStatus = document.getElementById('filterStatus').value;
     var filterLinha = document.getElementById('filterLinha').value;
     var groupBy = document.getElementById('groupBySel').value;
@@ -969,7 +969,7 @@
         if (!rc || rc.situacao !== filterConferencia) return false;
       }
       if (search) {
-        var hay = ((p.id||'') + ' ' + (p.produto||'') + ' ' + (p.cliente||'')).toLowerCase();
+        var hay = normalizeSearch((p.id||'') + ' ' + (p.produto||'') + ' ' + (p.cliente||''));
         if (hay.indexOf(search) === -1) return false;
       }
       return true;
@@ -1030,18 +1030,29 @@
 
     // Agrupado: mantém a ordem já calculada acima dentro de cada grupo,
     // só particiona em seções por Linha ou Cliente.
+    // Achado do usuário: "Briá"/"Bria" e "Miss Rose"/"Miss Rôse" viravam
+    // grupos separados. A chave ignora acento, caixa e espaço repetido; o
+    // título mostra a grafia mais usada entre os pedidos do grupo.
     var groups = {};
     var groupOrder = [];
     list.forEach(function(p) {
-      var g = (groupBy === 'linha' ? p.linha : p.cliente) || '—';
-      if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
-      groups[g].push(p);
+      var nome = String((groupBy === 'linha' ? p.linha : p.cliente) || '').replace(/\s+/g, ' ').trim() || '—';
+      var g = normalizeSearch(nome);
+      if (!groups[g]) { groups[g] = { itens: [], grafias: {} }; groupOrder.push(g); }
+      groups[g].itens.push(p);
+      groups[g].grafias[nome] = (groups[g].grafias[nome] || 0) + 1;
     });
-    groupOrder.sort(function(a, b) { return a.localeCompare(b, undefined, {numeric:true}); });
+    groupOrder.forEach(function(g) {
+      var grafias = groups[g].grafias;
+      groups[g].titulo = Object.keys(grafias).reduce(function(melhor, nome) {
+        return grafias[nome] > grafias[melhor] ? nome : melhor;
+      });
+    });
+    groupOrder.sort(function(a, b) { return groups[a].titulo.localeCompare(groups[b].titulo, 'pt-BR', {numeric:true, sensitivity:'base'}); });
     var html = '';
     groupOrder.forEach(function(g) {
-      html += '<tr class="group-header"><td colspan="15">' + escapeHtml(g) + ' (' + groups[g].length + ')</td></tr>';
-      html += groups[g].map(renderOpRow).join('');
+      html += '<tr class="group-header"><td colspan="15">' + escapeHtml(groups[g].titulo) + ' (' + groups[g].itens.length + ')</td></tr>';
+      html += groups[g].itens.map(renderOpRow).join('');
     });
     tbody.innerHTML = html;
   }
