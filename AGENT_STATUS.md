@@ -118,21 +118,28 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — faturamento e carga parcial na Expedição de PA
-  (2026-09-17).** Pedido do usuário: carga faturada que não coube no frete
-  (cubagem/peso) segue em outra viagem com a mesma NF. Escopo: solicitar
-  faturamento pela agenda (e-mail ao Financeiro com cópia à diretoria + PDF),
-  registrar NF(s) na agenda, saída física por palete inteiro/parcial (caixas)
-  /não carregado, saldo reservado à NF até a próxima viagem
-  (`EXPEDIDO_PARCIAL`). Mantém as garantias do fluxo do Codex (transação na
-  raiz, idempotência, revisão da agenda, revalidação de CQ).
-- **Arquivos ativos:** `functions/agenda_expedicao.js`, `functions/expedicao.js`,
-  novo `functions/faturamento_carga.js`, `functions/index.js`,
-  `public/shared/agenda-pa-tela.js`, `public/shared/agenda-pa.css`,
-  `public/shared/expedicao-grade-tela.js`, `public/expedicao.html`,
-  `public/gestao_comercial.html` (e-mail do Financeiro),
-  `run_agenda_expedicao_test.js`, `run_expedicao_test.js`, novos testes de
-  carga parcial/faturamento, `AGENT_STATUS.md`.
+- **Entrega publicada — faturamento e carga parcial na Expedição de PA
+  (2026-09-17).** `511edd8` no `origin/main`; por worktree limpo às 00:36 BRT:
+  Hosting (`expedicao.html`, `shared/expedicao-grade-tela.js`,
+  `shared/agenda-pa-tela.js`, `gestao_comercial.html` idênticos ao commit) +
+  Functions `faturamentoCargaPA` (nova), `onSolicitacaoFaturamentoPA` (nova),
+  `confirmarExpedicaoPA` e `salvarAgendamentoExpedicaoPA` (atualizadas).
+  **Para o Codex:** a agenda ganhou o estado `EXPEDIDO_PARCIAL` (ativa, saldo
+  reservado), `paletes[i].embarcado`, `viagens/vN`, `expedicoes/{carga}`,
+  `aguardandoEmbarqueDesde` e `faturamento` (`SOLICITADO`/`FATURADO`,
+  `solicitacoes/{id}` com e-mail, `nfs/{id}`). `confirmarExpedicaoPA` aceita
+  `paletes[].carregar` = `{modo: INTEIRO|PARCIAL|NAO_CARREGADO, caixas,
+  caixaParcial}` só em carga agendada; sem `carregar` o comportamento é o de
+  antes. A carga (`expedicoes_comerciais`) ganhou `viagem`, `complementar`,
+  `naoCarregados` e itens com `parcial`/`saldoRestante`; NF da agenda vale para
+  todas as viagens e `valorFaturado` só entra na 1ª. E-mail em
+  `config/emailFinanceiro` (vazio = não envia), cópia `config/emailDiretoria`.
+  Testes novos `run_carga_parcial_test.js` e `run_carga_parcial_ui_test.js`;
+  regressões de expedição/agenda/grade/legado/peso/chave/transações OK.
+  **Aviso:** `run_agenda_expedicao_ui_test.js` já estourava tempo no commit
+  anterior (`56bac03`, conferido em worktree limpo): o callable simulado demora
+  mais que a espera; com 3 s de pausa passa inteiro com este código.
+- **Arquivos ativos:** nenhum.
 
 - **Operação de dados — importação da pasta 02. Comercial (2026-09-17).**
   Sem código. 751 caminhos planos, cópia antes em
