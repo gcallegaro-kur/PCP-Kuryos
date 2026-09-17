@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão Comercial</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/expedicao.js"></script>
+  <script src="shared/conciliacao-pedidos.js"></script>
+  <script src="shared/gestao-comercial.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--serie-a:#2e4fc0;--serie-b:#12967d}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --serie-a:#5b7ae0; --serie-b:#28a186 } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-blue-bg:rgba(94,131,234,.18); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --serie-a:#5b7ae0; --serie-b:#28a186 }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:12px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .tabs{display:flex;gap:2px;max-width:96%;margin:10px auto 14px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+    .tab{padding:10px 16px;font-size:13.5px;font-weight:700;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none}
+    .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    .search{flex:1;min-width:200px}
+    input[type=text],input[type=number],input[type=date],select,textarea{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--card);font-family:inherit}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)}
+    .btn{padding:8px 14px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .btn-sm{padding:4px 9px;font-size:12px}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-bottom:14px;padding:16px}
+    .card h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .card h3 small{font-weight:500;text-transform:none;letter-spacing:0}
+    .nota{font-size:12px;color:var(--muted);line-height:1.5}
+    .grid-kpi{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;min-height:92px}
+    .kpi-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:600}
+    .kpi-val{font-size:24px;font-weight:700;margin-top:4px;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+    .kpi-sub{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+    .grid-2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px}
+    @media(max-width:1000px){.grid-2{grid-template-columns:1fr}}
+    .chart-wrap{position:relative;height:280px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap;margin:1px 2px 1px 0}
+    .b-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .b-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .b-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .b-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .b-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 9px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+    thead th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+    td{padding:7px 9px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    tr.clicavel{cursor:pointer}
+    tr.clicavel:hover td{background:color-mix(in srgb, var(--primary) 5%, transparent)}
+    tr.detalhe td{background:var(--surface-2)}
+    .vazio{text-align:center;padding:30px;color:var(--muted)}
+    .muted{color:var(--muted)}
+    .alerta{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--tint-gray-bg);font-size:13px;line-height:1.4}
+    .alerta:last-child{border-bottom:none}
+    .aging-row{display:grid;grid-template-columns:80px 1fr 150px;gap:10px;align-items:center;font-size:12.5px;padding:5px 0}
+    .aging-bar{height:12px;border-radius:0 4px 4px 0;background:var(--serie-a);min-width:2px}
+    .aging-track{background:var(--tint-gray-bg);border-radius:4px;overflow:hidden}
+    .cobertura{font-size:12px;border-radius:10px;padding:9px 12px;background:var(--tint-orange-bg);color:var(--tint-orange-fg);margin-bottom:12px;line-height:1.45}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:16px}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:16px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:20px;max-height:92vh;overflow:auto}
+    .modal h2{font-size:17px;margin-bottom:4px}
+    .form-row{margin-bottom:12px}
+    .form-row label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    .form-row input,.form-row textarea{width:100%}
+    .erro{color:var(--danger);font-size:12px;margin-bottom:8px;display:none}
+    .legenda{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+    .legenda i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+    @media(max-width:980px){.header{padding-top:66px}}
+    @media(max-width:640px){.header{flex-direction:column}.kpi-val{font-size:21px}.aging-row{grid-template-columns:64px 1fr 110px}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Gestão Comercial</h1>
+    <div class="header-sub">Carteira, clientes, prazos, faturamento e tabela de preços</div>
+  </div>
+  <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Carregando dados...</span></div>
+</div>
+
+<div class="tabs" id="abas">
+  <button class="tab active" data-tab="geral">Visão geral</button>
+  <button class="tab" data-tab="carteira">Carteira</button>
+  <button class="tab" data-tab="clientes">Clientes</button>
+  <button class="tab" data-tab="prazos">Prazos</button>
+  <button class="tab" data-tab="faturamento">Faturamento</button>
+  <button class="tab" data-tab="precos">Tabela de preços</button>
+</div>
+
+<div class="main">
+  <!-- ═════════ VISÃO GERAL ═════════ -->
+  <div class="tab-panel active" id="tab-geral">
+    <div class="grid-kpi" id="kpis"></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Pedidos × expedição — últimos 12 meses <small>unidades</small></h3>
+        <div class="chart-wrap"><canvas id="chartMensal" aria-label="Unidades pedidas e expedidas por mês"></canvas></div>
+        <div class="legenda"><span><i style="background:var(--serie-a)"></i>Pedido</span><span><i style="background:var(--serie-b)"></i>Expedido</span></div>
+      </div>
+      <div class="card">
+        <h3>O que pede atenção <small id="nAlertas"></small></h3>
+        <div id="alertas"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Idade da carteira <small>saldo a entregar pela data do pedido</small></h3>
+      <div id="aging"></div>
+    </div>
+    <p class="nota" id="notaDados"></p>
+  </div>
+
+  <!-- ═════════ CARTEIRA ═════════ -->
+  <div class="tab-panel" id="tab-carteira">
+    <div class="toolbar">
+      <input type="text" class="search" id="cartBusca" placeholder="Buscar pedido, nº do cliente, cliente ou produto...">
+      <select id="cartEstado">
+        <option value="ABERTO">Abertos</option>
+        <option value="ATRASADO">Atrasados</option>
+        <option value="PARADO">Parados (revisar)</option>
+        <option value="A_CONFERIR">A conferir (sem baixa)</option>
+        <option value="ATENDIDO">Atendidos</option>
+        <option value="FECHADO">Encerrados</option>
+        <option value="">Todos</option>
+      </select>
+      <select id="cartCliente"><option value="">Todos os clientes</option></select>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap"><table id="tabCarteira"></table></div>
+    </div>
+  </div>
+
+  <!-- ═════════ CLIENTES ═════════ -->
+  <div class="tab-panel" id="tab-clientes">
+    <div class="toolbar">
+      <input type="text" class="search" id="cliBusca" placeholder="Buscar cliente...">
+      <select id="cliRecompra">
+        <option value="">Toda a base</option>
+        <option value="ATIVOS">Com pedido em 12 meses</option>
+        <option value="ATRASADA">Recompra atrasada</option>
+        <option value="ATENCAO">Recompra em atenção</option>
+      </select>
+    </div>
+    <p class="nota" style="margin-bottom:10px">Classe ABC por volume pedido em 12 meses (A = clientes que somam os primeiros 80%). Recompra compara os dias desde o último pedido com o intervalo mediano entre pedidos do cliente (precisa de 3 pedidos ou mais). Tendência: volume dos últimos 180 dias contra os 180 anteriores. Clique no cliente para detalhar.</p>
+    <div class="card" style="padding:0">
+      <div class="table-wrap"><table id="tabClientes"></table></div>
+    </div>
+    <div id="cliDetalhe"></div>
+  </div>
+
+  <!-- ═════════ PRAZOS ═════════ -->
+  <div class="tab-panel" id="tab-prazos">
+    <div class="grid-kpi" id="kpisPrazo"></div>
+    <p class="nota" style="margin-bottom:10px">Prazos contados da data do pedido. Pedido com data posterior à primeira OP ou saída (cadastrado depois de já produzido) fica fora das medianas e aparece marcado. "No prazo" só existe para pedido com previsão de entrega.</p>
+    <div class="toolbar">
+      <input type="text" class="search" id="przBusca" placeholder="Buscar pedido ou cliente...">
+      <select id="przCliente"><option value="">Todos os clientes</option></select>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap"><table id="tabPrazos"></table></div>
+    </div>
+  </div>
+
+  <!-- ═════════ FATURAMENTO ═════════ -->
+  <div class="tab-panel" id="tab-faturamento">
+    <div id="fatCobertura"></div>
+    <div class="grid-kpi" id="kpisFat"></div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Valor pedido por mês <small>só pedidos com preço</small></h3>
+        <div class="chart-wrap"><canvas id="chartValor" aria-label="Valor pedido por mês"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Preço praticado × tabela <small>itens de pedidos com as duas referências</small></h3>
+        <div class="table-wrap"><table id="tabDesvio"></table></div>
+      </div>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap"><table id="tabFatCliente"></table></div>
+    </div>
+  </div>
+
+  <!-- ═════════ PREÇOS ═════════ -->
+  <div class="tab-panel" id="tab-precos">
+    <p class="nota" style="margin-bottom:10px">Preço por SKU com vigência: um reajuste cria um preço novo a partir de uma data e o anterior fica no histórico. O pedido guarda o preço negociado; a tabela preenche o item sem preço e serve de régua para o desvio.</p>
+    <div class="toolbar">
+      <input type="text" class="search" id="prcBusca" placeholder="Buscar SKU, produto ou cliente...">
+      <select id="prcCliente"><option value="">Todos os clientes</option></select>
+      <select id="prcFiltro">
+        <option value="">Todos os SKUs ativos</option>
+        <option value="SEM">Sem preço</option>
+        <option value="COM">Com preço</option>
+      </select>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap"><table id="tabPrecos"></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalPreco">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mpTitulo">
+    <h2 id="mpTitulo">Novo preço</h2>
+    <div class="nota" id="mpProduto" style="margin-bottom:14px"></div>
+    <div class="form-row"><label for="mpPreco">Preço unitário (R$)</label><input type="number" id="mpPreco" min="0" step="0.0001"></div>
+    <div class="form-row"><label for="mpInicio">Vale a partir de</label><input type="date" id="mpInicio"></div>
+    <div class="form-row"><label for="mpMotivo">Motivo</label><textarea id="mpMotivo" rows="2" placeholder="Ex.: reajuste anual, negociação do pedido 34"></textarea></div>
+    <div class="erro" id="mpErro"></div>
+    <div id="mpHistorico" class="nota" style="margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="mpCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="mpSalvar">Salvar preço</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+// ── Formatação ───────────────────────────────────────────────────────
+var BRL = new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'});
+var BRL0 = new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL', maximumFractionDigits: 0});
+function un(v) { return v == null ? '—' : Math.round(v).toLocaleString('pt-BR'); }
+function unCurto(v) {
+  if (v == null) return '—';
+  var a = Math.abs(v);
+  if (a >= 1e6) return (v / 1e6).toLocaleString('pt-BR', {maximumFractionDigits: 2}) + ' mi';
+  if (a >= 1e4) return (v / 1e3).toLocaleString('pt-BR', {maximumFractionDigits: 0}) + ' mil';
+  return Math.round(v).toLocaleString('pt-BR');
+}
+function reais(v, curto) { return v == null ? '—' : (curto ? BRL0 : BRL).format(v); }
+function pct(v, casas) { return v == null ? '—' : (v * 100).toLocaleString('pt-BR', {maximumFractionDigits: casas == null ? 0 : casas}) + '%'; }
+function data(d) { return d ? d.split('-').reverse().join('/') : '—'; }
+function diasTxt(v) { return v == null ? '—' : Math.round(v) + (Math.round(v) === 1 ? ' dia' : ' dias'); }
+function esc(s) { return escapeHtml(s == null ? '' : String(s)); }
+function hojeLocal() { return todayLocal(); }
+function setStatus(on, txt) { document.getElementById('sDot').classList.toggle('on', !!on); document.getElementById('sTxt').textContent = txt; }
+
+// ── Dados ────────────────────────────────────────────────────────────
+var NOS = ['pedidos_comerciais', 'pedidos', 'ops', 'expedicoes_comerciais', 'estoque_lotes', 'conferencias_pa',
+  'solicitacoes_descarte', 'clientes', 'produtos', 'precos_venda'];
+var raw = {};
+NOS.forEach(function(no) { raw[no] = null; });
+var analise = null, tabelaPrecos = [];
+var _recalc = null;
+function recalcular() {
+  clearTimeout(_recalc);
+  _recalc = setTimeout(function() {
+    var faltam = NOS.filter(function(no) { return raw[no] === null; });
+    if (faltam.length) { setStatus(false, 'Carregando ' + faltam.length + ' fonte(s)...'); return; }
+    try {
+      analise = GestaoComercial.calcular(raw, hojeLocal());
+      tabelaPrecos = GestaoComercial.tabelaPrecos(raw, hojeLocal(), analise);
+    } catch (e) {
+      console.error('Falha no cálculo da Gestão Comercial:', e);
+      setStatus(false, 'Erro no cálculo');
+      return;
+    }
+    setStatus(true, 'Atualizado ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
+    preencherFiltrosCliente();
+    renderTudo();
+  }, 250);
+}
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) return;
+  NOS.forEach(function(no) {
+    dbOnValue(db.ref(no), function(snap) { raw[no] = snap.val() || {}; recalcular(); });
+  });
+});
+
+// ── Abas ─────────────────────────────────────────────────────────────
+var abaAtual = 'geral';
+document.querySelectorAll('#abas .tab').forEach(function(b) {
+  b.addEventListener('click', function() { abrirAba(b.dataset.tab); });
+});
+function abrirAba(tab) {
+  abaAtual = tab;
+  document.querySelectorAll('#abas .tab').forEach(function(x) { x.classList.toggle('active', x.dataset.tab === tab); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + tab); });
+  try { history.replaceState(null, '', '?tab=' + tab); } catch (e) {}
+  renderTudo();
+}
+(function() {
+  var t = new URLSearchParams(location.search).get('tab');
+  if (t && document.getElementById('tab-' + t)) abrirAba(t);
+})();
+
+function renderTudo() {
+  if (!analise) return;
+  if (abaAtual === 'geral') renderGeral();
+  if (abaAtual === 'carteira') renderCarteira();
+  if (abaAtual === 'clientes') renderClientes();
+  if (abaAtual === 'prazos') renderPrazos();
+  if (abaAtual === 'faturamento') renderFaturamento();
+  if (abaAtual === 'precos') renderPrecos();
+}
+
+function preencherFiltrosCliente() {
+  var opcoes = analise.clientes.slice().sort(function(a, b) { return a.cliente.localeCompare(b.cliente); })
+    .map(function(c) { return '<option value="' + esc(c.clienteKey) + '">' + esc(c.cliente) + '</option>'; }).join('');
+  ['cartCliente', 'przCliente', 'prcCliente'].forEach(function(id) {
+    var el = document.getElementById(id), atual = el.value;
+    el.innerHTML = '<option value="">Todos os clientes</option>' + opcoes;
+    el.value = atual;
+  });
+}
+
+function kpi(rotulo, valor, sub, titulo) {
+  return '<div class="kpi"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '><div class="kpi-lbl">' + esc(rotulo) +
+    '</div><div class="kpi-val">' + valor + '</div>' + (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') + '</div>';
+}
+function variacao(atual, base) {
+  if (!base) return '';
+  var v = atual / base - 1;
+  return (v >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(v)) + ' vs. média de 6 meses';
+}
+
+// ── Gráficos (Chart.js, cores dos tokens do tema) ────────────────────
+var charts = {};
+function cssVar(nome) { return getComputedStyle(document.documentElement).getPropertyValue(nome).trim(); }
+function desenharLinhas(id, labels, series, formato) {
+  if (typeof Chart === 'undefined') return;
+  var el = document.getElementById(id);
+  if (!el || !el.offsetParent) return;
+  if (charts[id]) charts[id].destroy();
+  var grade = cssVar('--border'), texto = cssVar('--muted'), superficie = cssVar('--card');
+  charts[id] = new Chart(el, {
+    type: 'line',
+    data: {labels: labels, datasets: series.map(function(s) {
+      return {label: s.rotulo, data: s.dados, borderColor: s.cor, backgroundColor: s.cor, borderWidth: 2, tension: 0,
+        pointRadius: 4, pointHoverRadius: 6, pointBorderColor: superficie, pointBorderWidth: 2};
+    })},
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {display: false}, tooltip: {callbacks: {label: function(c) { return c.dataset.label + ': ' + formato(c.parsed.y); }}}},
+      scales: {
+        x: {grid: {display: false}, ticks: {color: texto}, border: {color: grade}},
+        y: {beginAtZero: true, grid: {color: grade}, border: {display: false}, ticks: {color: texto, callback: function(v) { return formato(v, true); }}}
+      }
+    }
+  });
+}
+function rotuloMes(m) { var nomes = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']; return nomes[+m.slice(5, 7) - 1] + '/' + m.slice(2, 4); }
+try {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() { renderTudo(); });
+} catch (e) {}
+
+// ── VISÃO GERAL ──────────────────────────────────────────────────────
+function renderGeral() {
+  var k = analise.kpis, m = k.mesAtual;
+  document.getElementById('kpis').innerHTML = [
+    kpi('Carteira a entregar', unCurto(k.carteiraUn) + ' un',
+      k.pedidosAbertos + ' pedidos abertos' + (k.carteiraValor != null ? ' · ' + reais(k.carteiraValor, true) + ' em ' + pct(k.carteiraCoberturaPreco) + ' do volume com preço' : ' · sem preço cadastrado'),
+      'Saldo = quantidade pedida − expedida, só de itens abertos. Não inclui itens "a conferir".'),
+    kpi('A produzir', unCurto(k.aProduzirUn) + ' un', 'Pronto aguardando saída: ' + unCurto(k.prontoUn) + ' un'),
+    kpi('Pedidos atrasados', String(k.atrasados), k.atrasados ? unCurto(k.atrasadosUn) + ' un passaram da previsão' : (k.semPrevisao + ' abertos sem previsão de entrega')),
+    kpi('Idade da carteira', diasTxt(k.idadeMediaCarteira), 'Média ponderada pelo saldo', 'Dias desde a data do pedido, pesados pelas unidades a entregar.'),
+    kpi('Carteira parada', unCurto(k.paradoUn) + ' un', k.paradoPedidos + ' pedidos há +' + GestaoComercial.IDADE_MIN_PARADO + ' dias sem movimento em ' + GestaoComercial.DIAS_PARADO,
+      'Sem OP, apontamento ou saída recente. Confirmar com o cliente se ainda valem.'),
+    kpi('A conferir', unCurto(k.aConferirUn) + ' un', k.aConferirItens + ' itens produzidos sem saída registrada — fora da carteira',
+      'Produzido ≥95% há mais de ' + GestaoComercial.DIAS_A_CONFERIR + ' dias e nenhuma saída ligada ao pedido.'),
+    kpi('Pedidos no mês', m.pedidos + ' · ' + unCurto(m.pedidoUn) + ' un', variacao(m.pedidoUn, k.mediaPedidoUn6m)),
+    kpi('Expedido no mês', unCurto(m.expedidoUn) + ' un', variacao(m.expedidoUn, k.mediaExpedidoUn6m)),
+    kpi('Book-to-bill 90 dias', k.bookToBill90d == null ? '—' : k.bookToBill90d.toLocaleString('pt-BR', {minimumFractionDigits: 2}),
+      unCurto(k.pedidos90dUn) + ' pedidas ÷ ' + unCurto(k.expedido90dUn) + ' expedidas. Acima de 1: carteira crescendo.'),
+    kpi('Pedido até a 1ª entrega', diasTxt(k.leadTime1SaidaMediano), 'Mediana 12 meses · até a 1ª OP: ' + diasTxt(k.leadTime1OpMediano)),
+    kpi('Entregue no prazo', pct(k.pctNoPrazo), k.pedidosComPrevisaoAvaliados ? k.pedidosComPrevisaoAvaliados + ' pedidos com previsão avaliados' : 'Nenhum pedido com previsão de entrega ainda'),
+    kpi('Concentração', pct(k.concentracaoTop3), '3 maiores clientes no volume de 12 meses · ' + k.clientesAtivos12m + ' clientes ativos')
+  ].join('');
+
+  desenharLinhas('chartMensal', analise.serie.map(function(s) { return rotuloMes(s.mes); }), [
+    {rotulo: 'Pedido', dados: analise.serie.map(function(s) { return s.pedidoUn; }), cor: cssVar('--serie-a')},
+    {rotulo: 'Expedido', dados: analise.serie.map(function(s) { return s.expedidoUn; }), cor: cssVar('--serie-b')}
+  ], function(v, curto) { return curto ? unCurto(v) : un(v) + ' un'; });
+
+  var icones = {alta: '<span class="badge b-red">Alta</span>', media: '<span class="badge b-orange">Média</span>', baixa: '<span class="badge b-gray">Info</span>'};
+  document.getElementById('nAlertas').textContent = analise.alertas.length ? analise.alertas.length + ' item(ns)' : '';
+  document.getElementById('alertas').innerHTML = analise.alertas.length
+    ? analise.alertas.slice(0, 12).map(function(a) { return '<div class="alerta">' + (icones[a.gravidade] || '') + '<div>' + esc(a.texto) + '</div></div>'; }).join('') +
+      (analise.alertas.length > 12 ? '<div class="nota" style="padding-top:8px">+ ' + (analise.alertas.length - 12) + ' outros</div>' : '')
+    : '<div class="vazio">Nada fora do normal.</div>';
+
+  var maior = Math.max.apply(null, k.aging.map(function(a) { return a.un; }).concat([1]));
+  document.getElementById('aging').innerHTML = k.aging.map(function(a) {
+    return '<div class="aging-row" title="' + esc(a.pedidos + ' pedido(s), ' + un(a.un) + ' un') + '"><div>' + esc(a.rotulo) + '</div>' +
+      '<div class="aging-track"><div class="aging-bar" style="width:' + (a.un / maior * 100).toFixed(1) + '%"></div></div>' +
+      '<div class="num">' + unCurto(a.un) + ' un · ' + a.pedidos + ' ped.</div></div>';
+  }).join('');
+
+  document.getElementById('notaDados').textContent = 'Base de cálculo: ' + analise.pedidos.length + ' pedidos, ' + analise.clientes.length +
+    ' clientes. Valores em R$ só existem para itens com preço no pedido ou na tabela (' + k.skusComPreco + ' de ' + k.skusAtivos +
+    ' SKUs ativos com preço vigente). ' + (k.datasInconsistentes ? k.datasInconsistentes + ' pedido(s) com data posterior à produção ficaram fora dos prazos.' : '');
+}
+
+// ── CARTEIRA ─────────────────────────────────────────────────────────
+var cartAberto = null;
+['cartBusca', 'cartEstado', 'cartCliente'].forEach(function(id) {
+  document.getElementById(id).addEventListener(id === 'cartBusca' ? 'input' : 'change', renderCarteira);
+});
+function badgesPedido(p) {
+  var b = [];
+  var mapa = {ABERTO: ['b-blue', 'Aberto'], ATENDIDO: ['b-green', 'Atendido'], FECHADO: ['b-gray', 'Encerrado'], A_CONFERIR: ['b-orange', 'A conferir']};
+  var e = mapa[p.estado] || ['b-gray', p.estado];
+  b.push('<span class="badge ' + e[0] + '">' + e[1] + '</span>');
+  if (p.atrasado) b.push('<span class="badge b-red">Atrasado ' + p.diasAtraso + 'd</span>');
+  if (p.parado) b.push('<span class="badge b-orange" title="Sem OP, apontamento ou saída nos últimos ' + GestaoComercial.DIAS_PARADO + ' dias">Parado</span>');
+  if (p.semOpHaDias != null && p.semOpHaDias > 15) b.push('<span class="badge b-orange">Sem OP ' + p.semOpHaDias + 'd</span>');
+  if (p.dataInconsistente) b.push('<span class="badge b-gray" title="Data do pedido posterior à produção">Data?</span>');
+  return b.join('');
+}
+function renderCarteira() {
+  if (!analise) return;
+  var busca = normalizeSearch(document.getElementById('cartBusca').value);
+  var estado = document.getElementById('cartEstado').value;
+  var cliente = document.getElementById('cartCliente').value;
+  var lista = analise.pedidos.filter(function(p) {
+    if (cliente && p.clienteKey !== cliente) return false;
+    if (estado === 'ATRASADO' && !p.atrasado) return false;
+    if (estado === 'PARADO' && !p.parado) return false;
+    if (estado && ['ATRASADO', 'PARADO'].indexOf(estado) === -1 && p.estado !== estado) return false;
+    if (busca) {
+      var hay = normalizeSearch([p.numero, p.numeroCliente, p.cliente].concat(p.itens.map(function(i) { return i.sku + ' ' + i.descricao; })).join(' '));
+      if (hay.indexOf(busca) === -1) return false;
+    }
+    return true;
+  });
+  var tot = lista.reduce(function(a, p) { a.q += p.qtd; a.e += p.expedido; a.s += p.saldoEntregar; a.v += p.valorSaldo || 0; return a; }, {q: 0, e: 0, s: 0, v: 0});
+  var html = '<thead><tr><th>Pedido</th><th>Nº cliente</th><th>Cliente</th><th>Data</th><th class="num">Idade</th><th>Previsão</th>' +
+    '<th class="num">Pedido</th><th class="num">Produzido</th><th class="num">Expedido</th><th class="num">A entregar</th><th class="num">R$ a entregar</th><th>Condição</th><th>Situação</th></tr></thead><tbody>';
+  if (!lista.length) html += '<tr><td colspan="13" class="vazio">Nenhum pedido neste filtro.</td></tr>';
+  lista.forEach(function(p) {
+    html += '<tr class="clicavel" data-id="' + esc(p.id) + '"><td><b>' + esc(p.numero) + '</b>' + (p.versao > 1 ? ' <span class="muted">v' + p.versao + '</span>' : '') + '</td>' +
+      '<td>' + esc(p.numeroCliente || '—') + '</td><td>' + esc(p.cliente) + '</td><td>' + data(p.dataPedido) + '</td>' +
+      '<td class="num">' + (p.idadeDias == null ? '—' : p.idadeDias + 'd') + '</td><td>' + data(p.previsao) + '</td>' +
+      '<td class="num">' + un(p.qtd) + '</td><td class="num">' + un(p.produzido) + '</td><td class="num">' + un(p.expedido) + '</td>' +
+      '<td class="num"><b>' + un(p.saldoEntregar) + '</b></td><td class="num">' + (p.valorSaldo != null ? reais(p.valorSaldo, true) : '<span class="muted">sem preço</span>') + '</td>' +
+      '<td>' + esc(p.condicaoPagamento || '—') + (p.frete ? '<div class="muted">' + esc(p.frete) + '</div>' : '') + '</td><td>' + badgesPedido(p) + '</td></tr>';
+    if (cartAberto === p.id) html += detalhePedido(p);
+  });
+  if (lista.length) html += '<tr><td colspan="6"><b>' + lista.length + ' pedido(s)</b></td><td class="num"><b>' + un(tot.q) + '</b></td><td></td><td class="num"><b>' + un(tot.e) + '</b></td><td class="num"><b>' + un(tot.s) + '</b></td><td class="num"><b>' + (tot.v ? reais(tot.v, true) : '—') + '</b></td><td colspan="2"></td></tr>';
+  var tab = document.getElementById('tabCarteira');
+  tab.innerHTML = html + '</tbody>';
+  tab.querySelectorAll('tr.clicavel').forEach(function(tr) {
+    tr.addEventListener('click', function() { cartAberto = cartAberto === tr.dataset.id ? null : tr.dataset.id; renderCarteira(); });
+  });
+}
+function detalhePedido(p) {
+  var estados = {ABERTO: 'Aberto', ATENDIDO: 'Atendido', FECHADO: 'Encerrado', A_CONFERIR: 'A conferir'};
+  var linhas = p.itens.map(function(i) {
+    var preco = i.preco != null ? reais(i.preco) + ' <span class="muted">(' + (i.fontePreco === 'PEDIDO' ? 'pedido' : 'tabela') + ')</span>' : '<span class="muted">—</span>';
+    var desvio = i.desvioTabela != null ? ' <span class="badge ' + (i.desvioTabela < -0.05 ? 'b-red' : 'b-gray') + '">' + (i.desvioTabela >= 0 ? '+' : '') + pct(i.desvioTabela, 1) + ' tabela</span>' : '';
+    return '<tr><td>' + esc(i.sku) + '</td><td>' + esc(i.descricao) + '</td><td>' + esc(estados[i.estado] || i.estado) + '</td>' +
+      '<td class="num">' + un(i.qtd) + '</td><td class="num">' + un(i.produzido) + '</td><td class="num">' + un(i.expedido) + '</td>' +
+      '<td class="num">' + un(i.estoqueWms) + '</td><td class="num">' + un(i.saldoProduzir) + '</td><td class="num">' + preco + desvio + '</td>' +
+      '<td>' + data(i.primeiraOp) + '</td><td>' + data(i.ultimaSaida) + (i.cargas ? ' <span class="muted">(' + i.cargas + ' cargas)</span>' : '') + '</td></tr>';
+  }).join('');
+  return '<tr class="detalhe"><td colspan="13"><table><thead><tr><th>SKU</th><th>Produto</th><th>Situação</th><th class="num">Pedido</th><th class="num">Produzido</th>' +
+    '<th class="num">Expedido</th><th class="num">Em estoque (WMS)</th><th class="num">A produzir</th><th class="num">Preço</th><th>1ª OP</th><th>Última saída</th></tr></thead><tbody>' +
+    linhas + '</tbody></table>' +
+    '<div class="nota" style="margin-top:6px">Criado por ' + esc(p.criadoPor || '—') + (p.percentualNF != null ? ' · NF ' + p.percentualNF + '%' : '') +
+    (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</div></td></tr>';
+}
+
+// ── CLIENTES ─────────────────────────────────────────────────────────
+var cliSelecionado = null;
+['cliBusca', 'cliRecompra'].forEach(function(id) {
+  document.getElementById(id).addEventListener(id === 'cliBusca' ? 'input' : 'change', renderClientes);
+});
+function badgeRecompra(c) {
+  var m = {EM_DIA: ['b-green', 'Em dia'], ATENCAO: ['b-orange', 'Atenção'], ATRASADA: ['b-red', 'Atrasada'], POUCO_HISTORICO: ['b-gray', 'Pouco histórico']};
+  var x = m[c.recompra] || ['b-gray', c.recompra];
+  return '<span class="badge ' + x[0] + '"' + (c.proximoPedidoPrevisto ? ' title="Próximo pedido esperado por volta de ' + data(c.proximoPedidoPrevisto) + '"' : '') + '>' + x[1] + '</span>';
+}
+function tendenciaTxt(c) {
+  if (c.tendencia == null) return c.volume180d > 0 ? '<span class="muted">novo</span>' : '<span class="muted">—</span>';
+  var cls = c.tendencia >= 0.1 ? 'b-green' : c.tendencia <= -0.1 ? 'b-red' : 'b-gray';
+  return '<span class="badge ' + cls + '">' + (c.tendencia >= 0 ? '▲ ' : '▼ ') + pct(Math.abs(c.tendencia)) + '</span>';
+}
+function renderClientes() {
+  if (!analise) return;
+  var busca = normalizeSearch(document.getElementById('cliBusca').value);
+  var filtro = document.getElementById('cliRecompra').value;
+  var lista = analise.clientes.filter(function(c) {
+    if (busca && normalizeSearch(c.cliente + ' ' + c.codigo).indexOf(busca) === -1) return false;
+    if (filtro === 'ATIVOS' && !c.volume12m) return false;
+    if ((filtro === 'ATRASADA' || filtro === 'ATENCAO') && c.recompra !== filtro) return false;
+    return true;
+  });
+  var html = '<thead><tr><th>ABC</th><th>Cliente</th><th class="num">Pedidos 12m</th><th class="num">Volume 12m</th><th class="num">Part.</th><th>Tendência</th>' +
+    '<th class="num">Intervalo</th><th>Último pedido</th><th>Recompra</th><th class="num">Carteira</th><th class="num">1ª entrega</th><th class="num">No prazo</th>' +
+    '<th class="num">R$ 12m</th><th class="num">Ticket</th><th>Condição</th><th class="num">Furto/devol. 12m</th></tr></thead><tbody>';
+  if (!lista.length) html += '<tr><td colspan="16" class="vazio">Nenhum cliente neste filtro.</td></tr>';
+  lista.forEach(function(c) {
+    html += '<tr class="clicavel" data-k="' + esc(c.clienteKey) + '"><td><span class="badge ' + (c.classe === 'A' ? 'b-blue' : 'b-gray') + '">' + esc(c.classe) + '</span></td>' +
+      '<td><b>' + esc(c.cliente) + '</b>' + (c.cadastrado ? '' : ' <span class="badge b-orange" title="Nome do pedido não bate com nenhum cliente cadastrado">sem cadastro</span>') + '</td>' +
+      '<td class="num">' + c.pedidos12m + '</td><td class="num">' + unCurto(c.volume12m) + '</td><td class="num">' + pct(c.participacao, 1) + '</td>' +
+      '<td>' + tendenciaTxt(c) + '</td><td class="num">' + diasTxt(c.intervaloMedio) + '</td>' +
+      '<td>' + data(c.ultimoPedido) + (c.diasDesdeUltimo != null ? ' <span class="muted">(' + c.diasDesdeUltimo + 'd)</span>' : '') + '</td>' +
+      '<td>' + badgeRecompra(c) + '</td><td class="num">' + unCurto(c.carteiraUn) + (c.atrasados ? ' <span class="badge b-red">' + c.atrasados + ' atras.</span>' : '') + '</td>' +
+      '<td class="num">' + diasTxt(c.leadTimeMediano) + '</td><td class="num">' + pct(c.pctNoPrazo) + '</td>' +
+      '<td class="num">' + (c.valor12m != null ? reais(c.valor12m, true) : '—') + '</td><td class="num">' + (c.ticketMedio != null ? reais(c.ticketMedio, true) : '—') + '</td>' +
+      '<td>' + esc(c.condicaoPagamento || '—') + '</td><td class="num">' + ((c.furto12m + c.devolucao12m) ? un(c.furto12m) + ' / ' + un(c.devolucao12m) : '—') + '</td></tr>';
+  });
+  var tab = document.getElementById('tabClientes');
+  tab.innerHTML = html + '</tbody>';
+  tab.querySelectorAll('tr.clicavel').forEach(function(tr) {
+    tr.addEventListener('click', function() { cliSelecionado = tr.dataset.k; renderDetalheCliente(); document.getElementById('cliDetalhe').scrollIntoView({behavior: 'smooth', block: 'start'}); });
+  });
+  renderDetalheCliente();
+}
+function renderDetalheCliente() {
+  var alvo = document.getElementById('cliDetalhe');
+  var c = cliSelecionado && analise.clientes.find(function(x) { return x.clienteKey === cliSelecionado; });
+  if (!c) { alvo.innerHTML = ''; return; }
+  var ps = analise.pedidos.filter(function(p) { return p.clienteKey === c.clienteKey; });
+  alvo.innerHTML = '<div class="card"><h3>' + esc(c.cliente) + ' <button class="btn btn-ghost btn-sm" id="cliFechar">Fechar</button></h3>' +
+    '<div class="grid-kpi">' +
+      kpi('Carteira', unCurto(c.carteiraUn) + ' un', 'A produzir ' + unCurto(c.carteiraProduzir) + ' · pronto ' + unCurto(c.carteiraPronto) + (c.carteiraValor != null ? ' · ' + reais(c.carteiraValor, true) : '')) +
+      kpi('Volume médio por pedido', unCurto(c.volumeMedioPedido) + ' un', c.pedidos12m + ' pedidos em 12 meses · ' + c.skus12m + ' SKUs') +
+      kpi('Cliente desde', data(c.primeiroPedido), c.pedidosTotal + ' pedidos no sistema') +
+      kpi('Próximo pedido esperado', data(c.proximoPedidoPrevisto), c.intervaloMedio ? 'Intervalo mediano de ' + diasTxt(c.intervaloMedio) : 'Precisa de 3 pedidos para estimar') +
+      kpi('Pedido até completar', diasTxt(c.diasAteCompletoMediano), 'Mediana dos pedidos atendidos') +
+      kpi('A conferir', unCurto(c.aConferirUn) + ' un', 'Produzido sem saída registrada') +
+    '</div>' +
+    '<div class="grid-2"><div><div class="chart-wrap"><canvas id="chartCliente" aria-label="Pedido e expedido por mês do cliente"></canvas></div>' +
+    '<div class="legenda"><span><i style="background:var(--serie-a)"></i>Pedido</span><span><i style="background:var(--serie-b)"></i>Expedido</span></div></div>' +
+    '<div><b style="font-size:12px">Produtos mais pedidos (12 meses)</b><table><tbody>' +
+    (c.topSkus.length ? c.topSkus.map(function(s) {
+      var prod = tabelaPrecos.find(function(t) { return t.sku === s.sku; });
+      return '<tr><td>' + esc(s.sku) + '</td><td>' + esc(prod ? prod.descricao : '') + '</td><td class="num">' + un(s.qtd) + '</td></tr>';
+    }).join('') : '<tr><td class="vazio">Sem pedidos em 12 meses</td></tr>') +
+    '</tbody></table><div class="nota" style="margin-top:8px">Condição de pagamento cadastrada: ' + esc(c.condicaoPagamento || '—') +
+    (c.cidade ? ' · ' + esc(c.cidade) + '/' + esc(c.uf) : '') + '</div></div></div>' +
+    '<table style="margin-top:12px"><thead><tr><th>Pedido</th><th>Nº cliente</th><th>Data</th><th class="num">Pedido</th><th class="num">Expedido</th><th class="num">A entregar</th><th>Situação</th></tr></thead><tbody>' +
+    ps.map(function(p) {
+      return '<tr><td>' + esc(p.numero) + '</td><td>' + esc(p.numeroCliente || '—') + '</td><td>' + data(p.dataPedido) + '</td><td class="num">' + un(p.qtd) +
+        '</td><td class="num">' + un(p.expedido) + '</td><td class="num">' + un(p.saldoEntregar) + '</td><td>' + badgesPedido(p) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  document.getElementById('cliFechar').onclick = function() { cliSelecionado = null; renderDetalheCliente(); };
+  desenharLinhas('chartCliente', c.serieMensal.map(function(s) { return rotuloMes(s.mes); }), [
+    {rotulo: 'Pedido', dados: c.serieMensal.map(function(s) { return s.pedidoUn; }), cor: cssVar('--serie-a')},
+    {rotulo: 'Expedido', dados: c.serieMensal.map(function(s) { return s.expedidoUn; }), cor: cssVar('--serie-b')}
+  ], function(v, curto) { return curto ? unCurto(v) : un(v) + ' un'; });
+}
+
+// ── PRAZOS ───────────────────────────────────────────────────────────
+['przBusca', 'przCliente'].forEach(function(id) {
+  document.getElementById(id).addEventListener(id === 'przBusca' ? 'input' : 'change', renderPrazos);
+});
+function renderPrazos() {
+  if (!analise) return;
+  var k = analise.kpis;
+  var busca = normalizeSearch(document.getElementById('przBusca').value);
+  var cliente = document.getElementById('przCliente').value;
+  var lista = analise.pedidos.filter(function(p) {
+    if (cliente && p.clienteKey !== cliente) return false;
+    if (busca && normalizeSearch(p.numero + ' ' + p.numeroCliente + ' ' + p.cliente).indexOf(busca) === -1) return false;
+    return p.estado !== 'FECHADO' || p.primeiraSaida;
+  });
+  var med = function(campo) { return GestaoComercial.mediana(lista.map(function(p) { return p[campo]; })); };
+  var comPrazo = lista.filter(function(p) { return p.noPrazo != null; });
+  document.getElementById('kpisPrazo').innerHTML = [
+    kpi('Pedido até a 1ª OP', diasTxt(cliente || busca ? med('diasAte1Op') : k.leadTime1OpMediano), 'Mediana' + (cliente || busca ? ' do filtro' : ' dos pedidos de 12 meses')),
+    kpi('Pedido até a 1ª entrega', diasTxt(cliente || busca ? med('diasAte1Saida') : k.leadTime1SaidaMediano), 'Mediana'),
+    kpi('Pedido até completar', diasTxt(cliente || busca ? med('diasAteCompleto') : k.leadTimeCompletoMediano), 'Mediana dos atendidos (95% expedido)'),
+    kpi('Entregue no prazo', pct(comPrazo.length ? comPrazo.filter(function(p) { return p.noPrazo; }).length / comPrazo.length : null), comPrazo.length + ' pedidos com previsão avaliados'),
+    kpi('Cargas por pedido', (function() { var c = lista.filter(function(p) { return p.cargas; }); return c.length ? (c.reduce(function(s, p) { return s + p.cargas; }, 0) / c.length).toLocaleString('pt-BR', {maximumFractionDigits: 1}) : '—'; })(), 'Média de saídas até agora (entrega parcial)')
+  ].join('');
+  var html = '<thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>1ª OP</th><th class="num">Dias</th><th>1ª saída</th><th class="num">Dias</th>' +
+    '<th>Completo</th><th class="num">Dias</th><th>Previsão</th><th>No prazo</th><th class="num">Cargas</th><th>Situação</th></tr></thead><tbody>';
+  if (!lista.length) html += '<tr><td colspan="13" class="vazio">Nenhum pedido neste filtro.</td></tr>';
+  lista.forEach(function(p) {
+    html += '<tr><td><b>' + esc(p.numero) + '</b></td><td>' + esc(p.cliente) + '</td><td>' + data(p.dataPedido) + '</td>' +
+      '<td>' + data(p.primeiraOp) + '</td><td class="num">' + (p.diasAte1Op == null ? '—' : p.diasAte1Op) + '</td>' +
+      '<td>' + data(p.primeiraSaida) + '</td><td class="num">' + (p.diasAte1Saida == null ? '—' : p.diasAte1Saida) + '</td>' +
+      '<td>' + data(p.dataCompleto) + '</td><td class="num">' + (p.diasAteCompleto == null ? '—' : p.diasAteCompleto) + '</td>' +
+      '<td>' + data(p.previsao) + '</td><td>' + (p.noPrazo == null ? '—' : p.noPrazo ? '<span class="badge b-green">Sim</span>' : '<span class="badge b-red">Não</span>') + '</td>' +
+      '<td class="num">' + (p.cargas || '—') + '</td><td>' + badgesPedido(p) + '</td></tr>';
+  });
+  document.getElementById('tabPrazos').innerHTML = html + '</tbody>';
+}
+
+// ── FATURAMENTO ──────────────────────────────────────────────────────
+function renderFaturamento() {
+  if (!analise) return;
+  var k = analise.kpis;
+  var comValor = analise.pedidos.filter(function(p) { return p.valor != null; });
+  var inicio12 = analise.serie[0].mes;
+  var em12 = comValor.filter(function(p) { return p.dataPedido && p.dataPedido.slice(0, 7) >= inicio12; });
+  var total12 = em12.reduce(function(s, p) { return s + p.valor; }, 0);
+  var volume12 = analise.pedidos.filter(function(p) { return p.dataPedido && p.dataPedido.slice(0, 7) >= inicio12; }).reduce(function(s, p) { return s + p.qtd; }, 0);
+  var volumeComPreco12 = em12.reduce(function(s, p) { return s + p.qtd * p.coberturaPreco; }, 0);
+  var cobertura = volume12 ? volumeComPreco12 / volume12 : 0;
+  var descontos = em12.reduce(function(s, p) { return s + p.itens.reduce(function(t, i) { return t + (i.desconto || 0); }, 0); }, 0);
+  var bruto = em12.reduce(function(s, p) { return s + p.itens.reduce(function(t, i) { return t + (i.preco != null ? i.qtd * i.preco : 0); }, 0); }, 0);
+
+  document.getElementById('fatCobertura').innerHTML = cobertura < 0.9
+    ? '<div class="cobertura"><b>Só ' + pct(cobertura) + ' do volume pedido em 12 meses tem preço.</b> Os valores abaixo representam essa parte, não o faturamento total. ' +
+      'Cadastre os preços em <a href="?tab=precos" style="color:inherit">Tabela de preços</a> (' + (k.skusAtivos - k.skusComPreco) + ' SKUs ativos sem preço) e informe o preço nos pedidos novos.</div>'
+    : '';
+  document.getElementById('kpisFat').innerHTML = [
+    kpi('Valor pedido 12 meses', reais(total12, true), em12.length + ' pedidos com preço'),
+    kpi('Ticket médio', em12.length ? reais(total12 / em12.length, true) : '—', 'Por pedido com preço'),
+    kpi('Preço médio por unidade', volumeComPreco12 ? reais(total12 / volumeComPreco12) : '—', 'Valor ÷ unidades com preço'),
+    kpi('Descontos concedidos', reais(descontos, true), bruto ? pct(descontos / bruto, 1) + ' do valor bruto' : ''),
+    kpi('Carteira em R$', reais(k.carteiraValor, true), pct(k.carteiraCoberturaPreco) + ' do saldo com preço'),
+    kpi('Itens abertos sem preço', String(k.itensAbertosSemPreco), 'Na carteira atual')
+  ].join('');
+
+  desenharLinhas('chartValor', analise.serie.map(function(s) { return rotuloMes(s.mes); }), [
+    {rotulo: 'Valor pedido', dados: analise.serie.map(function(s) { return s.pedidoValor; }), cor: cssVar('--serie-a')}
+  ], function(v, curto) { return reais(v, true); });
+
+  var desvios = [];
+  analise.pedidos.forEach(function(p) { p.itens.forEach(function(i) { if (i.desvioTabela != null) desvios.push({p: p, i: i}); }); });
+  desvios.sort(function(a, b) { return a.i.desvioTabela - b.i.desvioTabela; });
+  document.getElementById('tabDesvio').innerHTML = '<thead><tr><th>Pedido</th><th>Produto</th><th class="num">Praticado</th><th class="num">Tabela</th><th class="num">Desvio</th></tr></thead><tbody>' +
+    (desvios.length ? desvios.slice(0, 30).map(function(x) {
+      return '<tr><td>' + esc(x.p.numero) + '<div class="muted">' + esc(x.p.cliente) + '</div></td><td>' + esc(x.i.descricao) + '</td><td class="num">' + reais(x.i.precoPedido) +
+        '</td><td class="num">' + reais(x.i.precoTabela) + '</td><td class="num"><span class="badge ' + (x.i.desvioTabela < -0.05 ? 'b-red' : x.i.desvioTabela > 0.05 ? 'b-green' : 'b-gray') + '">' +
+        (x.i.desvioTabela >= 0 ? '+' : '') + pct(x.i.desvioTabela, 1) + '</span></td></tr>';
+    }).join('') : '<tr><td colspan="5" class="vazio">Nenhum item com preço no pedido e na tabela ao mesmo tempo.</td></tr>') + '</tbody>';
+
+  var porCliente = analise.clientes.filter(function(c) { return c.valor12m != null || c.carteiraValor != null; })
+    .sort(function(a, b) { return (b.valor12m || 0) - (a.valor12m || 0); });
+  document.getElementById('tabFatCliente').innerHTML = '<thead><tr><th>Cliente</th><th class="num">R$ pedido 12m</th><th class="num">Pedidos com preço</th><th class="num">Ticket</th><th class="num">Carteira R$</th><th>Condição de pagamento</th></tr></thead><tbody>' +
+    (porCliente.length ? porCliente.map(function(c) {
+      return '<tr><td><b>' + esc(c.cliente) + '</b></td><td class="num">' + reais(c.valor12m, true) + '</td><td class="num">' + c.pedidosComValor12m + ' de ' + c.pedidos12m +
+        '</td><td class="num">' + reais(c.ticketMedio, true) + '</td><td class="num">' + reais(c.carteiraValor, true) + '</td><td>' + esc(c.condicaoPagamento || '—') + '</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="vazio">Nenhum cliente com pedido precificado ainda.</td></tr>') + '</tbody>';
+}
+
+// ── TABELA DE PREÇOS ─────────────────────────────────────────────────
+['prcBusca', 'prcCliente', 'prcFiltro'].forEach(function(id) {
+  document.getElementById(id).addEventListener(id === 'prcBusca' ? 'input' : 'change', renderPrecos);
+});
+function podeEditarPreco() {
+  var u = window.currentUser;
+  if (!u) return false;
+  if (u.role === 'admin' || u.role === 'pcp') return true;
+  return !!(u.modulos && u.modulos.comercial);
+}
+function renderPrecos() {
+  if (!analise) return;
+  var busca = normalizeSearch(document.getElementById('prcBusca').value);
+  var clienteSel = document.getElementById('prcCliente').value;
+  var clienteNome = clienteSel ? (analise.clientes.find(function(c) { return c.clienteKey === clienteSel; }) || {}).cliente : '';
+  var filtro = document.getElementById('prcFiltro').value;
+  var lista = tabelaPrecos.filter(function(t) {
+    if (clienteSel && t.clienteKey !== clienteSel && GestaoComercial.norm(t.cliente) !== GestaoComercial.norm(clienteNome)) return false;
+    if (filtro === 'SEM' && t.precoVigente != null) return false;
+    if (filtro === 'COM' && t.precoVigente == null) return false;
+    if (busca && normalizeSearch(t.sku + ' ' + t.descricao + ' ' + t.cliente).indexOf(busca) === -1) return false;
+    return true;
+  });
+  var editar = podeEditarPreco();
+  var html = '<thead><tr><th>Cliente</th><th>SKU</th><th>Produto</th><th class="num">Preço vigente</th><th>Desde</th><th>Próximo reajuste</th>' +
+    '<th class="num">Último praticado</th><th class="num">Desvio</th><th></th></tr></thead><tbody>';
+  if (!lista.length) html += '<tr><td colspan="9" class="vazio">Nenhum SKU neste filtro.</td></tr>';
+  lista.forEach(function(t) {
+    html += '<tr><td>' + esc(t.cliente) + '</td><td>' + esc(t.sku) + '</td><td>' + esc(t.descricao) + '</td>' +
+      '<td class="num">' + (t.precoVigente != null ? '<b>' + reais(t.precoVigente) + '</b>' : '<span class="badge b-orange">sem preço</span>') + '</td>' +
+      '<td>' + data(t.desde) + (t.vigencias.length > 1 ? ' <span class="muted">(' + t.vigencias.length + ' vigências)</span>' : '') + '</td>' +
+      '<td>' + (t.proxima ? reais(t.proxima.preco) + ' em ' + data(t.proxima.inicio) : '—') + '</td>' +
+      '<td class="num">' + (t.ultimoPraticado ? reais(t.ultimoPraticado.preco) + '<div class="muted">' + esc(t.ultimoPraticado.pedido) + ' · ' + data(t.ultimoPraticado.data) + '</div>' : '—') + '</td>' +
+      '<td class="num">' + (t.desvioPraticado != null ? (t.desvioPraticado >= 0 ? '+' : '') + pct(t.desvioPraticado, 1) : '—') + '</td>' +
+      '<td>' + (editar ? '<button class="btn btn-ghost btn-sm" data-sku="' + esc(t.sku) + '">' + (t.precoVigente != null ? 'Reajustar' : 'Definir preço') + '</button>' : '') + '</td></tr>';
+  });
+  var tab = document.getElementById('tabPrecos');
+  tab.innerHTML = html + '</tbody>';
+  tab.querySelectorAll('button[data-sku]').forEach(function(b) { b.addEventListener('click', function() { abrirPreco(b.dataset.sku); }); });
+}
+
+var precoSku = null;
+function abrirPreco(sku) {
+  var t = tabelaPrecos.find(function(x) { return x.sku === sku; });
+  if (!t) return;
+  precoSku = sku;
+  document.getElementById('mpTitulo').textContent = t.precoVigente != null ? 'Reajustar preço' : 'Definir preço';
+  document.getElementById('mpProduto').textContent = t.sku + ' — ' + t.descricao + ' (' + t.cliente + ')';
+  document.getElementById('mpPreco').value = t.precoVigente != null ? t.precoVigente : (t.ultimoPraticado ? t.ultimoPraticado.preco : '');
+  document.getElementById('mpInicio').value = hojeLocal();
+  document.getElementById('mpMotivo').value = '';
+  document.getElementById('mpErro').style.display = 'none';
+  document.getElementById('mpHistorico').innerHTML = t.vigencias.length
+    ? '<b>Histórico</b><br>' + t.vigencias.map(function(v) { return reais(v.preco) + ' desde ' + data(v.inicio) + ' — ' + esc(v.criadoPor || '?') + (v.motivo ? ' (' + esc(v.motivo) + ')' : ''); }).join('<br>')
+    : (t.ultimoPraticado ? 'Sugestão: último preço praticado no ' + esc(t.ultimoPraticado.pedido) + '.' : '');
+  document.getElementById('modalPreco').classList.add('open');
+  document.getElementById('mpPreco').focus();
+}
+function fecharPreco() { document.getElementById('modalPreco').classList.remove('open'); precoSku = null; }
+document.getElementById('mpCancelar').addEventListener('click', fecharPreco);
+document.getElementById('modalPreco').addEventListener('click', function(e) { if (e.target === this) fecharPreco(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') fecharPreco(); });
+document.getElementById('mpSalvar').addEventListener('click', function() {
+  var erroEl = document.getElementById('mpErro');
+  var preco = Number(document.getElementById('mpPreco').value);
+  var inicio = document.getElementById('mpInicio').value;
+  var motivo = document.getElementById('mpMotivo').value.trim();
+  var erros = GestaoComercial.validarVigencia(raw.precos_venda, precoSku, preco, inicio);
+  if (!motivo) erros.push('Informe o motivo.');
+  if (erros.length) { erroEl.textContent = erros.join(' '); erroEl.style.display = 'block'; return; }
+  var btn = this;
+  btn.disabled = true;
+  var t = tabelaPrecos.find(function(x) { return x.sku === precoSku; }) || {};
+  var chave = GestaoComercial.sanitizeKey(precoSku);
+  var id = db.ref('precos_venda/' + chave + '/vigencias').push().key;
+  var u = {};
+  u['precos_venda/' + chave + '/sku'] = precoSku;
+  u['precos_venda/' + chave + '/descricao'] = t.descricao || '';
+  u['precos_venda/' + chave + '/cliente'] = t.cliente || '';
+  u['precos_venda/' + chave + '/vigencias/' + id] = {preco: Math.round(preco * 10000) / 10000, inicio: inicio, motivo: motivo,
+    criadoEm: new Date().toISOString(), criadoPor: (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser || {}).email || 'desconhecido'};
+  db.ref().update(u).then(function() { fecharPreco(); })
+    .catch(function(e) { erroEl.textContent = 'Erro ao salvar: ' + e.message; erroEl.style.display = 'block'; })
+    .finally(function() { btn.disabled = false; });
+});
+</script>
+</body>
+</html>

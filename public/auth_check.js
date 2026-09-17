@@ -84,7 +84,7 @@ const KURYOS_MODULOS = {
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
-                  paginas: ['comercial.html'] },
+                  paginas: ['comercial.html', 'gestao_comercial.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
                   paginas: ['pedidos.html', 'insumos.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
@@ -571,7 +571,8 @@ function renderUnifiedNavbar(user) {
   ]);
 
   const comercialGroup = grupo('Comercial', [
-    temMod('comercial') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage)
+    temMod('comercial') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage),
+    temMod('comercial') && ktLink('gestao_comercial.html', 'chart', 'Gestão Comercial', activePage)
   ]);
 
   const pcpGroup = grupo('PCP', [
