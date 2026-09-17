@@ -118,6 +118,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — faturamento e carga parcial na Expedição de PA
+  (2026-09-17).** Pedido do usuário: carga faturada que não coube no frete
+  (cubagem/peso) segue em outra viagem com a mesma NF. Escopo: solicitar
+  faturamento pela agenda (e-mail ao Financeiro com cópia à diretoria + PDF),
+  registrar NF(s) na agenda, saída física por palete inteiro/parcial (caixas)
+  /não carregado, saldo reservado à NF até a próxima viagem
+  (`EXPEDIDO_PARCIAL`). Mantém as garantias do fluxo do Codex (transação na
+  raiz, idempotência, revisão da agenda, revalidação de CQ).
+- **Arquivos ativos:** `functions/agenda_expedicao.js`, `functions/expedicao.js`,
+  novo `functions/faturamento_carga.js`, `functions/index.js`,
+  `public/shared/agenda-pa-tela.js`, `public/shared/agenda-pa.css`,
+  `public/shared/expedicao-grade-tela.js`, `public/expedicao.html`,
+  `public/gestao_comercial.html` (e-mail do Financeiro),
+  `run_agenda_expedicao_test.js`, `run_expedicao_test.js`, novos testes de
+  carga parcial/faturamento, `AGENT_STATUS.md`.
+
 - **Operação de dados — importação da pasta 02. Comercial (2026-09-17).**
   Sem código. 751 caminhos planos, cópia antes em
   `../backups/2026-09-17_importacao_comercial/`, teste em 1 registro e
