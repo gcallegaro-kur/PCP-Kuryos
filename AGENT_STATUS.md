@@ -118,15 +118,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — Gestão Comercial (2026-09-16).** Tela gerencial nova
-  (carteira, clientes, prazos, faturamento/KPIs), tabela de preços de venda
-  com vigência, edição de pedido com versões e travas, PDF do pedido por
-  e-mail à diretoria (Function + Graph). Não altera `comercial.html`.
-- **Arquivos ativos:** novos `public/gestao_comercial.html`,
-  `public/shared/gestao-comercial.js`, `functions/pedido_diretoria.js`,
-  `run_gestao_comercial*_test.js`; alterados `public/auth_check.js` (módulo
-  comercial + menu), `database.rules.json` (nó `precos_venda`),
-  `functions/index.js` (export), `functions/package.json`, `AGENT_STATUS.md`.
+- **Entrega publicada — Gestão Comercial (2026-09-16).** Três commits, todos
+  por worktree limpo: `bca729a` (22:25, Hosting + RTDB: tela
+  `gestao_comercial.html` no módulo comercial, motor
+  `shared/gestao-comercial.js`, nó `precos_venda` com vigência), `b4023a5`
+  (22:35, Hosting: edição de pedido com versão/travas,
+  `shared/pedido-edicao.js`), `ae20f67` (22:45, Hosting + Functions
+  **só** `onPedidoComercialCriado` e `onPedidoComercialVersao`: PDF pdfkit por
+  e-mail à diretoria; `sendMailViaGraph` ganhou anexos, demais Functions não
+  foram republicadas). Destinatários em `config/emailDiretoria` (vazio =
+  não envia). Testes: `run_gestao_comercial_test.js`,
+  `run_gestao_comercial_ui_test.js`, `run_pedido_edicao_test.js`,
+  `run_pedido_diretoria_test.js`.
+- **Em andamento — correção pequena em `public/comercial.html`:** data de hoje
+  em UTC (após 21h saía o dia seguinte) e lista de Documentos sem ordem.
+- **Arquivos ativos:** `public/comercial.html`, `AGENT_STATUS.md`.
 
 - **Entrega publicada — transferência de OP entre pedidos (2026-09-16).**
   `b282582` no `origin/main`; Hosting por worktree limpo às 18:32 BRT
