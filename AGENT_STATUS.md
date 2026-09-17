@@ -130,12 +130,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   Nó novo `parametros_pa` com regra igual à de `nao_conformidades`.
   Testes: `run_inspecao_pa_test.js`, `run_inspecao_pa_ui_test.js` + regressões
   de recebimento/CQ, conferência PA, expedição, descarte e transações.
-- **Em andamento — parte 2: manipulação como fase do lote da OP.** Lote da OM =
-  lote da OP (confirmado pelo usuário). Vai separar **pesagem (operador)** de
-  **conferência/manipulação (manipulador)**, com assépsia, consumo de MP por
-  lote e liberação do granel antes do envase.
-- **Arquivos ativos:** nenhum na parte 1; a parte 2 declarará `public/form.html`,
-  `public/ops.html` e módulos novos quando começar.
+- **Entrega publicada — manipulação como fase do lote (2026-09-17).**
+  `50b5e46` no `origin/main`; Hosting por worktree limpo às 20:58 BRT (6 arquivos
+  idênticos ao commit). Lote da manipulação = lote da OP, então a fase vive em
+  `ops/{lote}/manipulacao` (sem numeração nova). Tela nova `manipulacao.html`:
+  pesagem (previsto × pesado, lote da MP, perda, justificativa fora de 2%),
+  **conferência por outra pessoa** (quem pesou não confere; divergência trava),
+  manipulação com tempos/perdas/rendimento, envio à Qualidade. Baixa de estoque
+  na **pesagem**, com tipo `consumo_manipulacao` novo em `utils.js`. Qualidade
+  ganhou a fila de granel (usa `especificacoes`, reprovar abre RNC). `form.html`:
+  não aloca OP com granel não liberado (OP sem a fase segue livre) e não baixa a
+  fórmula de novo quando a pesagem já baixou. Menu/acesso: `manipulacao.html` no
+  módulo `apontamento`. Testes: `run_manipulacao_test.js`,
+  `run_manipulacao_ui_test.js` (3 telas, 3 usuários) + regressões de apontamento,
+  CQ, conferência PA e transações.
+- **Arquivos ativos:** nenhum.
 
 - **Entrega publicada — Calendário de agendamentos na Logística (2026-09-17).**
   Aba **Calendário** em `logistica.html` + motor `shared/calendario-logistica.js`
