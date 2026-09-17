@@ -118,17 +118,24 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — Qualidade: inspeção de PA (CK-7) e fase de manipulação
-  (2026-09-17).** A fila de PA usava a especificação de GRANEL (aspecto, pH,
-  densidade) para liberar palete. Parte 1: checklist de produto acabado com
-  amostragem √N+1, pesagem individual (limite −3%), bloqueio por defeito
-  crítico e RNC automática. Parte 2: manipulação como FASE do mesmo lote da OP
-  (lote da OM = lote da OP, confirmado pelo usuário), com assépsia, consumo de
-  MP e liberação do granel antes do envase.
-- **Arquivos ativos:** `public/qualidade.html`, novos
-  `public/shared/inspecao-pa.js` e `run_inspecao_pa*_test.js`,
-  `database.rules.json` (nós `parametros_pa`/`planos_pa`), `AGENT_STATUS.md`.
-  Parte 2 declarará `public/form.html` e `public/ops.html` quando começar.
+- **Entrega publicada — CK-7, inspeção de produto acabado (2026-09-17).**
+  `457d010` no `origin/main`; Hosting + regras por worktree limpo às 19:35 BRT
+  (`qualidade.html`, `shared/inspecao-pa.js`, `shared/utils.js` idênticos ao
+  commit). A fila de PA usava o plano de GRANEL para liberar palete. Agora usa
+  checklist próprio: seções com severidade, amostragem √N+1 das caixas, pesagem
+  individual (média, mínimo, −3% INMETRO), retenção validade+1 ano e laudo
+  externo. Crítico ou peso fora **bloqueiam** a liberação. Torque só com
+  `parametros_pa/{sku}.torqueAtivo` (a Qualidade não usa torquímetro).
+  `utils.js`: `registrarLaudoQualidade` passou a gravar `ck7`/`resumoCk7`.
+  Nó novo `parametros_pa` com regra igual à de `nao_conformidades`.
+  Testes: `run_inspecao_pa_test.js`, `run_inspecao_pa_ui_test.js` + regressões
+  de recebimento/CQ, conferência PA, expedição, descarte e transações.
+- **Em andamento — parte 2: manipulação como fase do lote da OP.** Lote da OM =
+  lote da OP (confirmado pelo usuário). Vai separar **pesagem (operador)** de
+  **conferência/manipulação (manipulador)**, com assépsia, consumo de MP por
+  lote e liberação do granel antes do envase.
+- **Arquivos ativos:** nenhum na parte 1; a parte 2 declarará `public/form.html`,
+  `public/ops.html` e módulos novos quando começar.
 
 - **Entrega publicada — Calendário de agendamentos na Logística (2026-09-17).**
   Aba **Calendário** em `logistica.html` + motor `shared/calendario-logistica.js`
