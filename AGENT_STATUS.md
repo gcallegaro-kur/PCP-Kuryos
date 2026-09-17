@@ -130,9 +130,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   não envia). Testes: `run_gestao_comercial_test.js`,
   `run_gestao_comercial_ui_test.js`, `run_pedido_edicao_test.js`,
   `run_pedido_diretoria_test.js`.
-- **Em andamento — correção pequena em `public/comercial.html`:** data de hoje
-  em UTC (após 21h saía o dia seguinte) e lista de Documentos sem ordem.
-- **Arquivos ativos:** `public/comercial.html`, `AGENT_STATUS.md`.
+- **Correção publicada em `public/comercial.html`:** data de hoje no fuso
+  local (após 21h saía o dia seguinte) e Documentos do mais novo ao mais
+  antigo. Hosting por worktree limpo; regressões de cliente comercial e
+  contatos aprovadas.
+- **Arquivos ativos:** nenhum.
 
 - **Entrega publicada — transferência de OP entre pedidos (2026-09-16).**
   `b282582` no `origin/main`; Hosting por worktree limpo às 18:32 BRT
