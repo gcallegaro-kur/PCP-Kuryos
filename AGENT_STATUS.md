@@ -118,6 +118,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — Calendário de agendamentos na Logística (2026-09-17).**
+  Aba nova em `logistica.html` juntando entradas (PC: `agendamento` e
+  previsão de Compras) e saídas de PA (`agendamentos_expedicao`), vistas mês
+  e semana, filtros e detalhe com ações existentes. Não muda regra de agenda.
+- **Arquivos ativos:** `public/logistica.html`, novo
+  `public/shared/calendario-logistica.js`, novos testes
+  `run_calendario_logistica*_test.js`, `AGENT_STATUS.md`.
+
 - **Entrega publicada — faturamento e carga parcial na Expedição de PA
   (2026-09-17).** `511edd8` no `origin/main`; por worktree limpo às 00:36 BRT:
   Hosting (`expedicao.html`, `shared/expedicao-grade-tela.js`,
