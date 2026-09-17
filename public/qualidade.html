@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/inspecao-pa.js"></script>
+  <script src="shared/manipulacao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -152,6 +153,19 @@
       <div class="stat"><div class="stat-val" id="qStatLiberados" style="color:var(--tint-green-fg)">—</div><div class="stat-lbl">Liberados (30 dias)</div></div>
       <div class="stat"><div class="stat-val" id="qStatReprovados" style="color:var(--danger)">—</div><div class="stat-lbl">Reprovados (30 dias)</div></div>
       <div class="stat"><div class="stat-val" id="qStatRncAbertas" style="color:var(--danger)">—</div><div class="stat-lbl">RNCs abertas</div></div>
+    </div>
+
+    <!-- Granel: a análise que antes aparecia (errada) no palete. Ela pertence
+         à fase de manipulação do lote, antes do envase. -->
+    <div class="card" id="qCardGranel" style="display:none;border-left-color:var(--purple)">
+      <div class="card-header">
+        <h3>Granel aguardando análise</h3>
+        <span class="field-hint" id="qGranelResumo"></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Lote</th><th>Produto</th><th>Manipulado por</th><th style="text-align:right">Rendimento</th><th>Fechado em</th><th></th></tr></thead>
+        <tbody id="qGranelBody"></tbody>
+      </table></div>
     </div>
 
     <div class="card">
@@ -329,6 +343,32 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════ MODAL: Laudo do granel ══════════ -->
+<div class="modal-bg" id="modalGranelBg">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h2 id="modalGranelTitle">Análise do granel</h2><button class="modal-close" id="modalGranelClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="qGranelInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div class="plano-wrap">
+        <div class="plano-head"><span id="qGranelPlanoTitulo">Ensaios do granel</span><span id="qGranelPlanoResumo"></span></div>
+        <div class="plano-scroll"><table class="plano-tabela"><tbody id="qGranelPlanoBody"></tbody></table></div>
+      </div>
+      <div id="qGranelSemPlano" class="field-hint" style="display:none;margin-bottom:12px">
+        Este produto não tem especificação cadastrada — a decisão fica pela observação.
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="qGranelObs" rows="2" placeholder="Resultado, ajuste realizado, motivo da reprovação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="qGranelCancelar">Cancelar</button>
+      <button class="btn btn-danger" id="qGranelReprovar">Reprovar granel</button>
+      <button class="btn btn-green" id="qGranelLiberar">Liberar para envase</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ MODAL: Laudo ══════════
@@ -720,6 +760,9 @@ function nomeItem(codigo) {
    ══════════════════════════════════════════════════════════════════════ */
 var laudoAtual = null; // { itemCodigo, loteKey, lote, itemTipo, plano, resultados }
 var allParametrosPa = {};
+var allOpsQualidade = {};
+var granelAtual = null; // {opKey, op, espec, resultados}
+dbOnValue(db.ref('ops'), function(snap) { allOpsQualidade = snap.val() || {}; renderFilaGranel(); });
 dbOnValue(db.ref('parametros_pa'), function(snap) { allParametrosPa = snap.val() || {}; });
 
 function renderFila() {
@@ -847,6 +890,152 @@ function renderFila() {
   }
 }
 document.getElementById('qFiltroTipo').addEventListener('change', renderFila);
+
+/* ─────────── Granel (fase de manipulação do lote) ─────────── */
+function opsGranelPendentes() {
+  return Object.keys(allOpsQualidade)
+    .map(function(k) { return Object.assign({key: k}, allOpsQualidade[k]); })
+    .filter(function(o) { return o && Manipulacao.estado(o) === 'AGUARDANDO_CQ'; })
+    .sort(function(a, b) { return String((a.manipulacao.manipulacao || {}).fim || '').localeCompare(String((b.manipulacao.manipulacao || {}).fim || '')); });
+}
+
+function renderFilaGranel() {
+  var lista = opsGranelPendentes();
+  document.getElementById('qCardGranel').style.display = lista.length ? '' : 'none';
+  document.getElementById('qGranelResumo').textContent = lista.length + ' lote(s)';
+  document.getElementById('qGranelBody').innerHTML = lista.map(function(o) {
+    var man = (o.manipulacao && o.manipulacao.manipulacao) || {};
+    return '<tr><td><b>' + escapeHtml(o.lote || o.key) + '</b></td>' +
+      '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
+      '<td>' + escapeHtml(man.por || '—') + '</td>' +
+      '<td style="text-align:right">' + (man.rendimento != null ? fmtNum(man.rendimento) + ' kg' : '—') + '</td>' +
+      '<td>' + fmtDataHora(man.fim) + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-granel="' + escapeAttr(o.key) + '">🧪 Analisar granel</button></td></tr>';
+  }).join('');
+  document.getElementById('qGranelBody').querySelectorAll('[data-granel]').forEach(function(b) {
+    b.addEventListener('click', function() { abrirLaudoGranel(b.getAttribute('data-granel')); });
+  });
+}
+
+function abrirLaudoGranel(opKey) {
+  var op = allOpsQualidade[opKey];
+  if (!op) return;
+  granelAtual = {opKey: opKey, op: op, espec: especificacaoVigente(allEspecificacoes, op.sku), resultados: {}};
+  var f = op.manipulacao || {};
+  var resumo = Manipulacao.resumoManipulacao(f.previstos || {}, f);
+  document.getElementById('modalGranelTitle').textContent = 'Análise do granel — lote ' + (op.lote || opKey);
+  document.getElementById('qGranelInfo').innerHTML =
+    '<b>' + escapeHtml(op.produto || op.sku || '') + '</b><br>' +
+    'Pesado ' + fmtNum(resumo.pesadoTotal) + ' kg · rendimento ' + (resumo.rendimento != null ? fmtNum(resumo.rendimento) + ' kg' : '—') +
+    (resumo.perdaProcessoPct != null ? ' · perda de processo ' + resumo.perdaProcessoPct + '%' : '') + '<br>' +
+    'Pesagem por ' + escapeHtml((f.pesagem || {}).por || '—') + ' · conferida por ' + escapeHtml((f.conferencia || {}).por || '—') +
+    ' · manipulada por ' + escapeHtml((f.manipulacao || {}).por || '—');
+  document.getElementById('qGranelObs').value = '';
+  renderPlanoGranel();
+  document.getElementById('modalGranelBg').classList.add('open');
+}
+
+function renderPlanoGranel() {
+  var itens = granelAtual && granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens;
+  var vazio = document.getElementById('qGranelSemPlano');
+  var corpo = document.getElementById('qGranelPlanoBody');
+  if (!itens || !Object.keys(itens).length) {
+    vazio.style.display = '';
+    corpo.innerHTML = '';
+    document.getElementById('qGranelPlanoResumo').textContent = '';
+    return;
+  }
+  vazio.style.display = 'none';
+  var aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
+  document.getElementById('qGranelPlanoTitulo').textContent = 'Ensaios do granel — ' + granelAtual.espec.key.replace('__v', ' · versão ');
+  document.getElementById('qGranelPlanoResumo').innerHTML =
+    '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
+    '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
+    '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>';
+  corpo.innerHTML = aval.linhas.map(function(l) {
+    var icone = l.conforme === true ? '<span style="color:var(--success)">✓</span>'
+      : l.conforme === false ? '<span style="color:var(--danger)">✕</span>' : '<span style="color:var(--muted)">·</span>';
+    return '<tr' + (l.conforme === false ? ' class="row-nc"' : '') + '>' +
+      '<td><span class="plano-ensaio">' + escapeHtml(l.ensaio || '—') + '</span>' +
+        (l.critico ? ' <span class="badge badge-red">crítico</span>' : '') +
+        '<div class="plano-espec">' + escapeHtml(l.especificacaoTexto || '') + (l.metodo ? ' · ' + escapeHtml(l.metodo) : '') + '</div></td>' +
+      '<td><input type="number" step="any" class="plano-val" data-granel-valor="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '"' + (l.faixa ? '' : ' disabled') + '></td>' +
+      '<td><select class="plano-cnc" data-granel-cnc="' + escapeAttr(l.itemKey) + '">' +
+        '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
+        '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
+        '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option>' +
+      '</select></td><td class="plano-res">' + icone + '</td></tr>';
+  }).join('');
+  corpo.querySelectorAll('[data-granel-valor]').forEach(function(inp) {
+    inp.addEventListener('change', function() {
+      var k = inp.getAttribute('data-granel-valor');
+      granelAtual.resultados[k] = granelAtual.resultados[k] || {};
+      granelAtual.resultados[k].valor = inp.value;
+      renderPlanoGranel();
+    });
+  });
+  corpo.querySelectorAll('[data-granel-cnc]').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var k = sel.getAttribute('data-granel-cnc');
+      granelAtual.resultados[k] = granelAtual.resultados[k] || {};
+      granelAtual.resultados[k].cnc = sel.value;
+      renderPlanoGranel();
+    });
+  });
+}
+
+function fecharModalGranel() {
+  document.getElementById('modalGranelBg').classList.remove('open');
+  granelAtual = null;
+}
+document.getElementById('modalGranelClose').addEventListener('click', fecharModalGranel);
+document.getElementById('qGranelCancelar').addEventListener('click', fecharModalGranel);
+
+function decidirGranel(decisao) {
+  if (!granelAtual) return;
+  var obs = document.getElementById('qGranelObs').value.trim();
+  if (decisao === 'REPROVAR' && !obs) {
+    showAlert('Descreva o motivo — ele vira a descrição da não conformidade.', 'danger');
+    return;
+  }
+  var itens = granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens;
+  var ensaios = null, aval = null;
+  if (itens && Object.keys(itens).length) {
+    aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
+    ensaios = {};
+    aval.linhas.forEach(function(l) {
+      ensaios[l.itemKey] = {ensaio: l.ensaio, especificacaoTexto: l.especificacaoTexto || null, metodo: l.metodo || null,
+        critico: l.critico, faixa: l.faixa || null, valor: l.valor != null ? l.valor : null, cnc: l.cnc || null, conforme: l.conforme};
+    });
+  }
+  if (decisao === 'LIBERAR' && aval && aval.bloqueia &&
+      !confirm('⚠ Há ensaio CRÍTICO fora da especificação neste granel.\n\nLiberar assim mesmo?')) return;
+
+  var t = Manipulacao.transicao(decisao, {quem: currentUserNome()});
+  t['analise/ensaios'] = ensaios;
+  t['analise/especificacaoKey'] = granelAtual.espec ? granelAtual.espec.key : null;
+  t['analise/observacao'] = obs || null;
+  var u = {};
+  Object.keys(t).forEach(function(k) { u['ops/' + granelAtual.opKey + '/manipulacao/' + k] = t[k]; });
+  var op = granelAtual.op;
+  db.ref().update(u).then(function() {
+    if (decisao !== 'REPROVAR') return null;
+    return abrirRnc(db, {
+      classificacao: 'MAIOR', origem: 'PRODUCAO',
+      descricao: 'Granel do lote ' + (op.lote || granelAtual.opKey) + ' reprovado: ' + obs,
+      itemTipo: 'produto', itemCodigo: op.sku || null, itemNome: op.produto || null,
+      opLote: op.lote || null, acaoImediata: 'Envase bloqueado para este lote.', automatica: true
+    }, currentUserNome()).catch(function(e) { return {ok: false, erro: e.message}; });
+  }).then(function(rnc) {
+    fecharModalGranel();
+    showAlert(decisao === 'LIBERAR'
+      ? 'Granel liberado. O envase deste lote já pode ser alocado.'
+      : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + ' aberta.' : ''),
+      decisao === 'LIBERAR' ? 'success' : 'danger');
+  }).catch(function(e) { showAlert('Erro ao registrar a análise: ' + e.message, 'danger'); });
+}
+document.getElementById('qGranelLiberar').addEventListener('click', function() { decidirGranel('LIBERAR'); });
+document.getElementById('qGranelReprovar').addEventListener('click', function() { decidirGranel('REPROVAR'); });
 
 /* ─────────── Laudo ─────────── */
 function abrirLaudo(itemCodigo, loteKey) {

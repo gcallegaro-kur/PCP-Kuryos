@@ -78,7 +78,7 @@ const KURYOS_MODULOS = {
   analytics:    { rotulo: 'Dashboards',            desc: 'Dashboard Diário e Dashboard Geral',
                   paginas: ['dashboard.html', 'dashboard_analise.html'] },
   apontamento:  { rotulo: 'Apontamento Diário',    desc: 'Registro de produção no chão de fábrica',
-                  paginas: ['form.html'] },
+                  paginas: ['form.html', 'manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
                   paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
@@ -629,6 +629,7 @@ function renderUnifiedNavbar(user) {
 
   const producaoGroup = grupo('Produção', [
     temMod('apontamento') && ktLink('form.html', 'pencil', 'Apontamento Diário', activePage),
+    temMod('apontamento') && ktLink('manipulacao.html', 'flask', 'Manipulação (granel)', activePage),
     temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
   ]);
 

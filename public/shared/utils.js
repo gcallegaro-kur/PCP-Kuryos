@@ -1146,6 +1146,10 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
 var MOTIVO_POR_TIPO_MOVIMENTACAO = {
   recebimento_pc: 'RECEBIMENTO',
   consumo_producao: 'CONSUMO DE PRODUÇÃO',
+  // Granel: a MP sai do estoque na PESAGEM (manipulacao.html), antes do
+  // envase. Tipo próprio para o movimento não se confundir com o consumo
+  // do envase, que baixa só a embalagem quando a fase de granel existe.
+  consumo_manipulacao: 'CONSUMO DE MANIPULAÇÃO',
   perda: 'PERDA',
   ajuste_manual: 'AJUSTE DE INVENTÁRIO'
 };

@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/manipulacao.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -2945,9 +2946,19 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
     };
   }
   if (!calc.ok || !calc.itens.length) return Promise.resolve();
+  // Decisão do usuário (17/09): a matéria-prima do granel sai do estoque na
+  // PESAGEM (manipulacao.html). Quando a OP tem essa fase com baixa aplicada,
+  // o envase consome só a embalagem (BOM) -- senão a mesma MP sairia duas
+  // vezes do estoque.
+  var faseGranel = (typeof Manipulacao !== 'undefined') ? Manipulacao.fase(op) : null;
+  var granelJaBaixado = !!(faseGranel && faseGranel.pesagem && faseGranel.pesagem.baixaAplicada);
+  var itensConsumo = granelJaBaixado
+    ? calc.itens.filter(function(it) { return it.origem !== 'formula'; })
+    : calc.itens;
+  if (!itensConsumo.length) return Promise.resolve();
   var autorConsumo = (window.currentUser && window.currentUser.nome) || null;
   var clienteConsumo = clienteKeyDaOp(op);
-  return Promise.all(calc.itens.map(function(it) {
+  return Promise.all(itensConsumo.map(function(it) {
     return Promise.all([
       ajustarEstoque(db, it.mpCodigo, -it.quantidade, tipoMovimentacao, ref, { materialNome: it.mpNome, unidade: it.unidade, clienteKeyConsumidor: clienteConsumo }),
       baixarEmpenho(db, ref, it.mpCodigo, it.quantidade),
@@ -4433,6 +4444,7 @@ function renderTurnoGridPostos() {
 // seleção real só muda com um clique num card (setSelecaoAlocarOp), que é
 // o único lugar que escreve em #alocarOpLote.
 var alocarOpLivresAtual = [];
+var alocarOpBloqueadasAtual = [];
 
 // Achado do usuário: "na alocação de OP, ele não esta puxando pela
 // programação, indicando qual a proxima OP deve entrar na linha em
@@ -4492,7 +4504,12 @@ function updatePedidosDatalistTurno(tipo) {
     if (pa !== pb) return pa - pb;
     return String(a.lote).localeCompare(String(b.lote), undefined, {numeric: true});
   });
-  alocarOpLivresAtual = livres;
+  /* Portão do granel (decisão do usuário em 17/09: "envase não pode alocar a
+     OP até a qualidade liberar o material — já é o que acontece hoje na
+     prática"). OP sem a fase de granel continua livre: o histórico inteiro é
+     assim, e travar tudo de uma vez pararia a fábrica. */
+  alocarOpBloqueadasAtual = livres.filter(function(o) { return !Manipulacao.podeEnvasar(o).ok; });
+  alocarOpLivresAtual = livres.filter(function(o) { return Manipulacao.podeEnvasar(o).ok; });
 }
 
 function renderAlocarOpLista(filtroTexto) {
@@ -4503,8 +4520,15 @@ function renderAlocarOpLista(filtroTexto) {
     var alvo = normalizeSearch(String(o.lote) + ' ' + (o.produto || '') + ' ' + (o.sku || ''));
     return alvo.indexOf(termo) !== -1;
   });
+  var avisoGranel = alocarOpBloqueadasAtual.length
+    ? '<div class="alocar-op-empty" style="text-align:left">⏸ ' + alocarOpBloqueadasAtual.length +
+      ' OP(s) com granel não liberado pela Qualidade: ' +
+      alocarOpBloqueadasAtual.slice(0, 4).map(function(o) {
+        return escapeHtml(String(o.lote)) + ' (' + escapeHtml(Manipulacao.rotulo(Manipulacao.estado(o)).toLowerCase()) + ')';
+      }).join(', ') + (alocarOpBloqueadasAtual.length > 4 ? ' e outras' : '') + '.</div>'
+    : '';
   if (!itens.length) {
-    cont.innerHTML = '<div class="alocar-op-empty">' + (alocarOpLivresAtual.length ? 'Nenhuma OP corresponde ao filtro.' : 'Nenhuma OP disponível pra alocar aqui no momento.') + '</div>';
+    cont.innerHTML = '<div class="alocar-op-empty">' + (alocarOpLivresAtual.length ? 'Nenhuma OP corresponde ao filtro.' : 'Nenhuma OP disponível pra alocar aqui no momento.') + '</div>' + avisoGranel;
     return;
   }
   var loteSelecionado = document.getElementById('alocarOpLote').value;
@@ -4556,7 +4580,7 @@ function renderAlocarOpLista(filtroTexto) {
       '<div class="alocar-op-card-prod">' + escapeHtml(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escapeHtml(o.sku) + ']</span>' : '') + '</div>' +
       '<div class="alocar-op-card-sub">Saldo: ' + fmtNum(saldo) + '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + avisoGranel;
 }
 
 function setSelecaoAlocarOp(lote) {

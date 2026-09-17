@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manipulação</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/propriedade-estoque.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--purple:#7c3aed;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--purple:#a78bfa;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18)}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--purple:#a78bfa;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--text) 6%,transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:var(--success)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .section-note{font-size:12px;color:var(--muted);margin:0 auto 12px;line-height:1.5}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    .alert.show{display:block}
+    .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .alert-warn{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .card-body{padding:14px 16px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+    .btn-primary{background:var(--primary);color:#fff}.btn-green{background:var(--success);color:#fff}
+    .btn-danger{background:var(--danger);color:#fff}.btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:14px}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}.badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}.badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}.badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    .field-hint{font-size:11px;color:var(--muted);margin-top:3px}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px}
+    .etapas{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+    .etapa{padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;background:var(--tint-gray-bg);color:var(--muted)}
+    .etapa.feita{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .etapa.atual{background:var(--primary);color:#fff}
+    .val{width:96px}.lote{width:150px}
+    .linha-alerta{background:var(--tint-orange-bg)}
+    @media(max-width:700px){.val,.lote{width:100%}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Manipulação</h1>
+    <div class="header-sub">Pesagem, conferência e manipulação do granel — mesma numeração de lote da OP</div>
+  </div>
+  <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div class="alert" id="alertBox"></div>
+  <div class="section-note">
+    O granel é a primeira fase do lote. Quem <b>pesa</b> registra o que saiu do estoque; quem <b>manipula</b> confere
+    antes de usar — e não pode ser a mesma pessoa. A baixa de estoque acontece na pesagem. O envase só é liberado
+    depois que a Qualidade aprovar o granel.
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Lotes em produção</h3>
+      <span class="field-hint" id="mListaResumo"></span>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Lote / OP</th><th>Produto</th><th>Cliente</th><th style="text-align:right">Planejado</th><th>Fase do granel</th><th></th></tr></thead>
+      <tbody id="mListaBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div class="card" id="mPainel" style="display:none">
+    <div class="card-header">
+      <h3 id="mPainelTitulo">Fase de granel</h3>
+      <button class="btn btn-ghost btn-sm" id="mFechar">Fechar</button>
+    </div>
+    <div class="card-body">
+      <div class="etapas" id="mEtapas"></div>
+      <div id="mResumoTempos" class="field-hint" style="margin-bottom:10px"></div>
+
+      <!-- 1. Pesagem -->
+      <div id="mBlocoPesagem">
+        <h4 style="font-size:13px;margin-bottom:8px">1 · Pesagem <span class="field-hint" id="mPesagemQuem"></span></h4>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Matéria-prima</th><th style="text-align:right">Previsto</th><th>Pesado</th><th>Lote usado</th><th>Perda</th><th>Justificativa</th><th style="text-align:right">Desvio</th></tr></thead>
+          <tbody id="mPesagemBody"></tbody>
+        </table></div>
+        <div id="mPesagemErros" class="alert alert-danger" style="margin-top:10px"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="mBtnIniciarPesagem">Iniciar pesagem</button>
+          <button class="btn btn-green" id="mBtnFecharPesagem">Fechar pesagem e baixar estoque</button>
+        </div>
+      </div>
+
+      <!-- 2. Conferência -->
+      <div id="mBlocoConferencia" style="margin-top:18px">
+        <h4 style="font-size:13px;margin-bottom:8px">2 · Conferência do manipulador</h4>
+        <div class="field-hint" style="margin-bottom:8px">Confere item a item o que foi pesado. Quem confere não pode ser quem pesou.</div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Matéria-prima</th><th style="text-align:right">Pesado</th><th>Lote</th><th>Confere?</th><th>Observação</th></tr></thead>
+          <tbody id="mConferenciaBody"></tbody>
+        </table></div>
+        <div id="mConferenciaErros" class="alert alert-danger" style="margin-top:10px"></div>
+        <div style="margin-top:10px"><button class="btn btn-primary" id="mBtnConferir">Confirmar conferência</button></div>
+      </div>
+
+      <!-- 3. Manipulação -->
+      <div id="mBlocoManipulacao" style="margin-top:18px">
+        <h4 style="font-size:13px;margin-bottom:8px">3 · Manipulação</h4>
+        <div class="form-grid">
+          <div><label>Rendimento obtido (kg)</label><input type="number" step="any" min="0" id="mRendimento"></div>
+          <div><label>Perda — resíduo de tacho (kg)</label><input type="number" step="any" min="0" id="mPerdaResiduo"></div>
+          <div><label>Perda — amostra/análise (kg)</label><input type="number" step="any" min="0" id="mPerdaAmostra"></div>
+          <div><label>Perda — outra (kg)</label><input type="number" step="any" min="0" id="mPerdaOutra"></div>
+        </div>
+        <div><label>Observação da manipulação</label><textarea id="mObsManipulacao" rows="2" placeholder="Ajustes, intercorrências, equipamento usado..."></textarea></div>
+        <div id="mManipulacaoResumo" class="field-hint" style="margin-top:8px"></div>
+        <div id="mManipulacaoErros" class="alert alert-danger" style="margin-top:10px"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="mBtnIniciarManipulacao">Iniciar manipulação</button>
+          <button class="btn btn-green" id="mBtnFecharManipulacao">Fechar e enviar para a Qualidade</button>
+        </div>
+      </div>
+
+      <div id="mBlocoCq" class="alert alert-warn" style="margin-top:18px">
+        Granel aguardando análise da Qualidade. O envase deste lote fica travado até a liberação.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allOps = {}, allProdutos = {}, allFormulas = {}, allBom = {}, allMateriais = {};
+var opAtual = null;   // chave em ops/
+var previstos = {};   // itemKey -> {mpCodigo, mpNome, unidade, previsto}
+var rascunho = {};    // pesagem digitada antes de fechar
+var conferencia = {}; // itemKey -> {ok, obs}
+
+function setStatus(on, txt) {
+  document.getElementById('sDot').classList.toggle('on', !!on);
+  document.getElementById('sTxt').textContent = txt;
+}
+function showAlert(msg, tipo) {
+  var box = document.getElementById('alertBox');
+  box.textContent = msg;
+  box.className = 'alert alert-' + (tipo || 'success') + ' show';
+  setTimeout(function() { box.classList.remove('show'); }, 7000);
+}
+function eu() {
+  return (window.currentUser && (window.currentUser.nome || window.currentUser.email)) ||
+    (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+}
+
+dbOnValue(db.ref('ops'), function(snap) { allOps = snap.val() || {}; setStatus(true, 'Conectado'); render(); });
+dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; render(); });
+dbOnValue(db.ref('formulas'), function(snap) { allFormulas = snap.val() || {}; render(); });
+dbOnValue(db.ref('bom'), function(snap) { allBom = snap.val() || {}; render(); });
+dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; render(); });
+
+/* Previstos da fórmula (o granel). O BOM de embalagem não entra aqui: ele é
+   consumido no envase, não na manipulação. */
+function calcularPrevistos(op) {
+  var produto = allProdutos[sanitizeKey(op.sku)] || Object.values(allProdutos).find(function(p) { return p && p.sku === op.sku; });
+  var achado = produto ? melhorFormulaDoProduto(produto.sku || op.sku, allFormulas) : null;
+  if (!produto || !achado) return {};
+  var formula = achado.registro;
+  var bom = allBom[chaveVersao(produto.sku || op.sku, formula.versao)] || {itens: {}};
+  var calc = explodirMateriaisNecessarios(produto, Number(op.qtdPlanejada) || 0, formula, bom, allMateriais);
+  if (!calc || !calc.ok) return {};
+  var out = {};
+  (calc.itens || []).filter(function(it) { return it.origem === 'formula'; }).forEach(function(it) {
+    out[sanitizeKey(it.mpCodigo)] = {mpCodigo: it.mpCodigo, mpNome: it.mpNome, unidade: it.unidade || 'kg', previsto: it.quantidade};
+  });
+  return out;
+}
+
+function opsAtivas() {
+  return Object.keys(allOps).map(function(k) { return Object.assign({key: k}, allOps[k]); })
+    .filter(function(o) { return o && o.lote && o.status !== 'Cancelado' && o.status !== 'Concluído'; })
+    .sort(function(a, b) { return String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')); })
+    .slice(0, 60);
+}
+
+function render() {
+  var lista = opsAtivas();
+  document.getElementById('mListaResumo').textContent = lista.length + ' OP(s) ativas';
+  var tb = document.getElementById('mListaBody');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP ativa.</td></tr>'; return; }
+  tb.innerHTML = lista.map(function(o) {
+    var st = Manipulacao.estado(o);
+    var badge = !st ? '<span class="badge badge-gray">sem fase</span>'
+      : st === 'LIBERADO' ? '<span class="badge badge-green">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
+      : st === 'REPROVADO' ? '<span class="badge badge-red">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
+      : '<span class="badge badge-orange">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>';
+    return '<tr><td><b>' + escapeHtml(o.lote) + '</b></td>' +
+      '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
+      '<td>' + escapeHtml(o.cliente || '—') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(o.qtdPlanejada || 0) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-abrir="' + escapeAttr(o.key) + '">Abrir granel</button></td></tr>';
+  }).join('');
+  tb.querySelectorAll('[data-abrir]').forEach(function(b) {
+    b.addEventListener('click', function() { abrirOp(b.getAttribute('data-abrir')); });
+  });
+  if (opAtual) renderPainel();
+}
+
+function abrirOp(key) {
+  opAtual = key;
+  previstos = calcularPrevistos(allOps[key] || {});
+  rascunho = {};
+  conferencia = {};
+  var f = Manipulacao.fase(allOps[key]);
+  if (f && f.pesagem && f.pesagem.itens) rascunho = JSON.parse(JSON.stringify(f.pesagem.itens));
+  if (f && f.conferencia && f.conferencia.itens) conferencia = JSON.parse(JSON.stringify(f.conferencia.itens));
+  document.getElementById('mPainel').style.display = '';
+  renderPainel();
+  document.getElementById('mPainel').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+document.getElementById('mFechar').addEventListener('click', function() {
+  opAtual = null; document.getElementById('mPainel').style.display = 'none';
+});
+
+function faseComRascunho() {
+  var f = JSON.parse(JSON.stringify(Manipulacao.fase(allOps[opAtual]) || {}));
+  f.pesagem = f.pesagem || {};
+  f.pesagem.itens = rascunho;
+  f.conferencia = f.conferencia || {};
+  f.conferencia.itens = conferencia;
+  f.manipulacao = f.manipulacao || {};
+  var r = function(id) { var v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  if (document.getElementById('mRendimento').value !== '') f.manipulacao.rendimento = r('mRendimento');
+  f.manipulacao.perdas = {
+    residuo_tacho: r('mPerdaResiduo') || 0, amostra: r('mPerdaAmostra') || 0, outra: r('mPerdaOutra') || 0
+  };
+  return f;
+}
+
+function renderPainel() {
+  var op = allOps[opAtual];
+  if (!op) { document.getElementById('mPainel').style.display = 'none'; return; }
+  var st = Manipulacao.estado(op);
+  var acoes = Manipulacao.acoesDisponiveis(op);
+  document.getElementById('mPainelTitulo').textContent = 'Granel do lote ' + (op.lote || opAtual) + ' — ' + (op.produto || '');
+
+  var ordem = ['AGUARDANDO_PESAGEM', 'PESADO', 'CONFERIDO', 'EM_MANIPULACAO', 'AGUARDANDO_CQ', 'LIBERADO'];
+  var idx = ordem.indexOf(st);
+  document.getElementById('mEtapas').innerHTML = ['Pesagem', 'Conferência', 'Manipulação', 'Qualidade'].map(function(nome, i) {
+    var limites = [0, 1, 3, 4];
+    var cls = idx < 0 ? '' : (idx > limites[i] ? 'feita' : idx === limites[i] || (i === 2 && idx === 2) ? 'atual' : '');
+    if (st === 'LIBERADO') cls = 'feita';
+    return '<span class="etapa ' + cls + '">' + (i + 1) + ' · ' + nome + '</span>';
+  }).join('') + (st ? '<span class="etapa ' + (st === 'REPROVADO' ? 'atual' : '') + '">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>' : '');
+
+  var f = faseComRascunho();
+  var resumo = Manipulacao.resumoManipulacao(previstos, f);
+  document.getElementById('mResumoTempos').innerHTML =
+    'Previsto ' + fmtNum(resumo.previstoTotal) + ' kg · pesado ' + fmtNum(resumo.pesadoTotal) + ' kg' +
+    (resumo.minutosPesagem != null ? ' · pesagem ' + resumo.minutosPesagem + ' min' : '') +
+    (resumo.minutosManipulacao != null ? ' · manipulação ' + resumo.minutosManipulacao + ' min' : '') +
+    (resumo.rendimento != null ? ' · rendimento ' + fmtNum(resumo.rendimento) + ' kg (' + resumo.rendimentoPct + '%)' : '');
+
+  // ── Pesagem ──
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho});
+  var podeEditarPesagem = !st || st === 'AGUARDANDO_PESAGEM';
+  document.getElementById('mPesagemQuem').textContent = (f.pesagem && f.pesagem.por) ? '— por ' + f.pesagem.por : '';
+  document.getElementById('mPesagemBody').innerHTML = val.linhas.length ? val.linhas.map(function(l) {
+    var r = rascunho[l.itemKey] || {};
+    var dis = podeEditarPesagem ? '' : ' disabled';
+    return '<tr' + (l.foraTolerancia ? ' class="linha-alerta"' : '') + '>' +
+      '<td><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
+      '<td style="text-align:right">' + fmtNum(l.previsto) + ' ' + escapeHtml(l.unidade) + '</td>' +
+      '<td><input type="number" step="any" min="0" class="val" data-peso="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.pesado == null ? '' : r.pesado) + '"' + dis + '></td>' +
+      '<td><input type="text" class="lote" data-lotemat="' + escapeAttr(l.itemKey) + '" placeholder="lote interno" value="' + escapeAttr(r.loteMaterial || '') + '"' + dis + '></td>' +
+      '<td><input type="number" step="any" min="0" class="val" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></td>' +
+      '<td><input type="text" data-just="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.justificativa || '') + '"' + dis + '></td>' +
+      '<td style="text-align:right">' + (l.desvioPct == null ? '—' : l.desvioPct + '%') + '</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="no-data">Fórmula não encontrada para este produto — cadastre em Fórmulas/BOM.</td></tr>';
+
+  var errosPes = document.getElementById('mPesagemErros');
+  errosPes.className = 'alert alert-danger' + (podeEditarPesagem && val.erros.length ? ' show' : '');
+  errosPes.textContent = val.erros.join(' ');
+
+  document.getElementById('mBtnIniciarPesagem').style.display = acoes.indexOf('INICIAR_PESAGEM') >= 0 ? '' : 'none';
+  document.getElementById('mBtnFecharPesagem').style.display = acoes.indexOf('FECHAR_PESAGEM') >= 0 ? '' : 'none';
+  document.getElementById('mBtnFecharPesagem').disabled = !val.ok;
+
+  // ── Conferência ──
+  var mostraConf = st === 'PESADO' || (st && ['CONFERIDO', 'EM_MANIPULACAO', 'AGUARDANDO_CQ', 'LIBERADO', 'REPROVADO'].indexOf(st) >= 0);
+  document.getElementById('mBlocoConferencia').style.display = mostraConf ? '' : 'none';
+  if (mostraConf) {
+    var podeConferir = st === 'PESADO';
+    var linhasConf = Manipulacao.linhasPesagem(previstos, f.pesagem);
+    document.getElementById('mConferenciaBody').innerHTML = linhasConf.map(function(l) {
+      var c = conferencia[l.itemKey] || {};
+      var dis = podeConferir ? '' : ' disabled';
+      return '<tr><td><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
+        '<td style="text-align:right">' + fmtNum(l.pesado || 0) + ' ' + escapeHtml(l.unidade) + '</td>' +
+        '<td>' + escapeHtml(l.loteMaterial || '—') + '</td>' +
+        '<td><select data-conf="' + escapeAttr(l.itemKey) + '"' + dis + '>' +
+          '<option value=""' + (c.ok == null ? ' selected' : '') + '>—</option>' +
+          '<option value="sim"' + (c.ok === true ? ' selected' : '') + '>Confere</option>' +
+          '<option value="nao"' + (c.ok === false ? ' selected' : '') + '>Divergente</option>' +
+        '</select></td>' +
+        '<td><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis + '></td></tr>';
+    }).join('');
+    var valConf = Manipulacao.validarConferencia(previstos, f, eu());
+    var errosConf = document.getElementById('mConferenciaErros');
+    errosConf.className = 'alert alert-danger' + (podeConferir && (valConf.erros.length || valConf.divergencias.length) ? ' show' : '');
+    errosConf.textContent = valConf.erros.concat(valConf.divergencias.map(function(d) { return 'Divergência em ' + d.mpCodigo + ': ' + d.obs; })).join(' ');
+    document.getElementById('mBtnConferir').style.display = podeConferir ? '' : 'none';
+    document.getElementById('mBtnConferir').disabled = !valConf.ok;
+  }
+
+  // ── Manipulação ──
+  var mostraMan = st && ['CONFERIDO', 'EM_MANIPULACAO', 'AGUARDANDO_CQ', 'LIBERADO', 'REPROVADO'].indexOf(st) >= 0;
+  document.getElementById('mBlocoManipulacao').style.display = mostraMan ? '' : 'none';
+  if (mostraMan) {
+    var podeFechar = st === 'EM_MANIPULACAO';
+    ['mRendimento', 'mPerdaResiduo', 'mPerdaAmostra', 'mPerdaOutra', 'mObsManipulacao'].forEach(function(id) {
+      document.getElementById(id).disabled = !podeFechar;
+    });
+    var valMan = Manipulacao.validarFechamentoManipulacao(previstos, f);
+    document.getElementById('mManipulacaoResumo').innerHTML = resumo.rendimento != null
+      ? 'Perda de processo: <b>' + fmtNum(resumo.perdaProcesso) + ' kg</b> (' + resumo.perdaProcessoPct + '%) · perdas declaradas ' + fmtNum(resumo.perdasManipulacao) + ' kg'
+      : 'Informe o rendimento para o sistema calcular a perda de processo.';
+    var errosMan = document.getElementById('mManipulacaoErros');
+    errosMan.className = 'alert alert-danger' + (podeFechar && valMan.erros.length ? ' show' : '');
+    errosMan.textContent = valMan.erros.join(' ') + (valMan.avisos.length ? ' ⚠ ' + valMan.avisos.join(' ') : '');
+    document.getElementById('mBtnIniciarManipulacao').style.display = acoes.indexOf('INICIAR_MANIPULACAO') >= 0 ? '' : 'none';
+    document.getElementById('mBtnFecharManipulacao').style.display = podeFechar ? '' : 'none';
+    document.getElementById('mBtnFecharManipulacao').disabled = !valMan.ok;
+  }
+
+  document.getElementById('mBlocoCq').style.display = st === 'AGUARDANDO_CQ' ? '' : 'none';
+  document.getElementById('mBlocoPesagem').style.display = (st === 'LIBERADO' || st === 'REPROVADO') ? 'none' : '';
+
+  ligarCampos();
+}
+
+function ligarCampos() {
+  var mapa = [['peso', 'pesado', true], ['lotemat', 'loteMaterial', false], ['perda', 'perda', true], ['just', 'justificativa', false]];
+  mapa.forEach(function(m) {
+    document.querySelectorAll('[data-' + m[0] + ']').forEach(function(el) {
+      el.onchange = function() {
+        var k = el.getAttribute('data-' + m[0]);
+        rascunho[k] = rascunho[k] || {};
+        rascunho[k][m[1]] = m[2] ? (el.value === '' ? null : Number(el.value)) : el.value.trim();
+        renderPainel();
+      };
+    });
+  });
+  document.querySelectorAll('[data-conf]').forEach(function(sel) {
+    sel.onchange = function() {
+      var k = sel.getAttribute('data-conf');
+      conferencia[k] = conferencia[k] || {};
+      conferencia[k].ok = sel.value === '' ? null : sel.value === 'sim';
+      renderPainel();
+    };
+  });
+  document.querySelectorAll('[data-confobs]').forEach(function(inp) {
+    inp.onchange = function() {
+      var k = inp.getAttribute('data-confobs');
+      conferencia[k] = conferencia[k] || {};
+      conferencia[k].obs = inp.value.trim();
+      renderPainel();
+    };
+  });
+  ['mRendimento', 'mPerdaResiduo', 'mPerdaAmostra', 'mPerdaOutra'].forEach(function(id) {
+    document.getElementById(id).onchange = renderPainel;
+  });
+}
+
+function gravarFase(updates) {
+  var u = {};
+  Object.keys(updates).forEach(function(k) { u['ops/' + opAtual + '/manipulacao/' + k] = updates[k]; });
+  return db.ref().update(u);
+}
+
+document.getElementById('mBtnIniciarPesagem').addEventListener('click', function() {
+  if (!Object.keys(previstos).length) { showAlert('Sem fórmula cadastrada não há o que pesar.', 'danger'); return; }
+  var t = Manipulacao.transicao('INICIAR_PESAGEM', {quem: eu()});
+  t.previstos = previstos;
+  gravarFase(t).then(function() { showAlert('Pesagem iniciada. O relógio está correndo.', 'success'); })
+    .catch(function(e) { showAlert('Erro ao iniciar: ' + e.message, 'danger'); });
+});
+
+/* Fechar a pesagem é o momento em que a MP sai do estoque: baixa o saldo e o
+   lote endereçado (FEFO), como o apontamento já faz no envase. */
+document.getElementById('mBtnFecharPesagem').addEventListener('click', function() {
+  var op = allOps[opAtual];
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho});
+  if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
+  if (!confirm('Fechar a pesagem do lote ' + op.lote + '?\n\nIsso baixa do estoque o que foi pesado.')) return;
+  var btn = this; btn.disabled = true; btn.textContent = 'Baixando estoque...';
+  var autor = eu();
+  var clienteKey = (typeof PropriedadeEstoque !== 'undefined')
+    ? PropriedadeEstoque.clienteKeyDoSku(op.sku, allProdutos, null, op.cliente) : null;
+  var baixas = val.linhas.map(function(l) {
+    return Promise.resolve()
+      .then(function() {
+        return ajustarEstoque(db, l.mpCodigo, -Math.abs(l.pesado), 'consumo_manipulacao', op.lote,
+          {clienteKeyConsumidor: clienteKey || null});
+      })
+      .then(function() {
+        return baixarLotesFefo(db, 'material', l.mpCodigo, Math.abs(l.pesado), 'CONSUMO DE MANIPULAÇÃO', autor, op.lote, {clienteKey: clienteKey || null});
+      })
+      .catch(function(err) { console.error('Falha na baixa de ' + l.mpCodigo + ':', err); return null; });
+  });
+  Promise.all(baixas).then(function() {
+    var t = Manipulacao.transicao('FECHAR_PESAGEM', {quem: autor});
+    t['pesagem/itens'] = rascunho;
+    t.previstos = previstos;
+    return gravarFase(t);
+  }).then(function() {
+    btn.disabled = false; btn.textContent = 'Fechar pesagem e baixar estoque';
+    showAlert('Pesagem fechada e estoque baixado. Agora outra pessoa precisa conferir.', 'success');
+  }).catch(function(e) {
+    btn.disabled = false; btn.textContent = 'Fechar pesagem e baixar estoque';
+    showAlert('Erro ao fechar a pesagem: ' + e.message, 'danger');
+  });
+});
+
+document.getElementById('mBtnConferir').addEventListener('click', function() {
+  var f = faseComRascunho();
+  var val = Manipulacao.validarConferencia(previstos, f, eu());
+  if (!val.ok) { showAlert(val.erros.concat(val.divergencias.map(function(d) { return 'Divergência em ' + d.mpCodigo; })).join(' '), 'danger'); return; }
+  var t = Manipulacao.transicao('CONFERIR', {quem: eu()});
+  t['conferencia/itens'] = conferencia;
+  gravarFase(t).then(function() { showAlert('Conferência registrada. Pode manipular.', 'success'); })
+    .catch(function(e) { showAlert('Erro ao conferir: ' + e.message, 'danger'); });
+});
+
+document.getElementById('mBtnIniciarManipulacao').addEventListener('click', function() {
+  gravarFase(Manipulacao.transicao('INICIAR_MANIPULACAO', {quem: eu()}))
+    .then(function() { showAlert('Manipulação iniciada.', 'success'); })
+    .catch(function(e) { showAlert('Erro ao iniciar: ' + e.message, 'danger'); });
+});
+
+document.getElementById('mBtnFecharManipulacao').addEventListener('click', function() {
+  var f = faseComRascunho();
+  var val = Manipulacao.validarFechamentoManipulacao(previstos, f);
+  if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
+  var t = Manipulacao.transicao('FECHAR_MANIPULACAO', {quem: eu()});
+  t['manipulacao/rendimento'] = f.manipulacao.rendimento;
+  t['manipulacao/perdas'] = f.manipulacao.perdas;
+  t['manipulacao/observacao'] = document.getElementById('mObsManipulacao').value.trim() || null;
+  gravarFase(t).then(function() {
+    showAlert('Granel fechado e enviado para a Qualidade. O envase continua travado até a liberação.', 'success');
+  }).catch(function(e) { showAlert('Erro ao fechar: ' + e.message, 'danger'); });
+});
+</script>
+</body>
+</html>
