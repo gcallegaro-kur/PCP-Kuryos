@@ -14,6 +14,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/rotas-pc.js"></script>
+  <script src="shared/calendario-logistica.js"></script>
   <script src="shared/seletor-endereco.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -122,6 +123,7 @@
   <button class="tab active" data-tab="receber">A Receber</button>
   <button class="tab" data-tab="historico">Histórico</button>
   <button class="tab" data-tab="agenda-pa">Saídas de PA</button>
+  <button class="tab" data-tab="calendario">Calendário</button>
 </div>
 
 <div class="main">
@@ -130,6 +132,29 @@
   </div>
   <div class="tab-panel" id="tab-historico">
     <div id="historicoList"></div>
+  </div>
+  <div class="tab-panel" id="tab-calendario">
+    <div class="card cal-card">
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button type="button" class="btn btn-ghost btn-sm" id="calAnterior" aria-label="Período anterior">‹</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="calHoje">Hoje</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="calProximo" aria-label="Próximo período">›</button>
+          <h2 class="cal-titulo" id="calTitulo"></h2>
+        </div>
+        <div class="cal-seg" id="calVista" role="group" aria-label="Vista do calendário"><button type="button" data-vista="mes">Mês</button><button type="button" data-vista="semana">Semana</button></div>
+      </div>
+      <div class="cal-filtros">
+        <label><input type="checkbox" id="calF-entradas"> ↓ Entradas (Pedidos de Compra)</label>
+        <label><input type="checkbox" id="calF-saidas"> ↑ Saídas de PA</label>
+        <label><input type="checkbox" id="calF-previstos"> Previsão de Compras sem agendamento</label>
+        <label><input type="checkbox" id="calF-concluidos"> Concluídos</label>
+      </div>
+      <div class="cal-resumo" id="calResumo"></div>
+      <div id="calGrade"></div>
+      <div class="cal-legenda"><span><i style="background:var(--cal-entrada)"></i>↓ Entrada de material</span><span><i style="background:var(--cal-saida)"></i>↑ Saída de PA</span><span><i style="border:1.5px dashed var(--muted)"></i>Previsão de Compras</span><span>M = manhã · T = tarde</span><span style="color:var(--danger)">⚠ atrasado</span><span>◐ parcial</span></div>
+    </div>
+    <dialog class="cal-modal" id="calDetalhe"><div class="cal-corpo"></div><div class="cal-acoes"></div></dialog>
   </div>
   <div class="tab-panel" id="tab-agenda-pa"><div class="card"><h2>Agenda de saídas de PA</h2><p class="field-hint">Transportadora, motorista e placa são compartilhados com a Expedição. Para montar uma nova carga, selecione os paletes na Expedição.</p><div id="agendaPA"></div></div></div>
 </div>
@@ -1367,6 +1392,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('pedidos_compra'), function(snap) {
       allPedidosCompra = snap.val() || {};
       renderReceberList();
+      renderCalendario();
       renderHistoricoList();
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
@@ -1382,6 +1408,206 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <link rel="stylesheet" href="shared/agenda-pa.css">
+<style>
+  /* Calendário de agendamentos: entrada e saída com cor + seta (nunca só cor). */
+  :root{--cal-entrada:#2e4fc0;--cal-saida:#12967d}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--cal-entrada:#5b7ae0;--cal-saida:#28a186}}
+  :root[data-theme="dark"]{--cal-entrada:#5b7ae0;--cal-saida:#28a186}
+  .cal-card{padding:14px 16px}
+  .cal-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .cal-nav{display:flex;gap:6px;align-items:center}
+  .cal-titulo{font-size:18px;font-weight:700;margin:0 8px;min-width:200px}
+  .cal-seg{display:inline-flex;border:1.5px solid var(--border);border-radius:8px;overflow:hidden}
+  .cal-seg button{border:0;background:var(--card);color:var(--text);padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .cal-seg button.ativo{background:var(--primary);color:#fff}
+  .cal-filtros{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--muted);align-items:center}
+  .cal-filtros label{display:inline-flex;gap:5px;align-items:center;cursor:pointer;margin:0;font-weight:600}
+  .cal-resumo{font-size:12.5px;color:var(--muted);margin:2px 0 10px}
+  .cal-mes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--border);border-left:1px solid var(--border)}
+  .cal-cab{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);padding:6px 8px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface-2)}
+  .cal-dia{min-height:112px;padding:5px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:3px;min-width:0}
+  .cal-dia.fora{background:var(--surface-2)}
+  .cal-dia.fora .cal-num{color:var(--muted);opacity:.6}
+  .cal-dia.hoje{box-shadow:inset 0 0 0 2px var(--primary)}
+  .cal-num{font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+  .cal-num small{font-weight:600;color:var(--muted);font-size:10.5px}
+  .cal-ev{display:block;width:100%;text-align:left;border:1px solid transparent;border-left:3px solid var(--cal-entrada);background:color-mix(in srgb,var(--cal-entrada) 9%,var(--card));color:var(--text);border-radius:5px;padding:3px 6px;font-size:11.5px;line-height:1.3;cursor:pointer;min-height:24px}
+  .cal-ev:hover{filter:brightness(.97)}
+  .cal-ev.saida{border-left-color:var(--cal-saida);background:color-mix(in srgb,var(--cal-saida) 10%,var(--card))}
+  .cal-ev.sit-PREVISTO{border-style:dashed;border-left-style:dashed;border-color:color-mix(in srgb,var(--cal-entrada) 50%,transparent);background:var(--card)}
+  .cal-ev.sit-CONCLUIDO{opacity:.55}
+  .cal-ev .t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cal-ev .s{display:block;color:var(--muted);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cal-flag{font-weight:700;font-size:10px;margin-left:3px}
+  .cal-semana .cal-ev .s,.cal-lista .cal-ev .s{white-space:normal}
+  .cal-flag.ATRASADO{color:var(--danger)}.cal-flag.PARCIAL{color:var(--warning)}.cal-flag.CONCLUIDO{color:var(--success)}.cal-flag.PREVISTO{color:var(--muted)}
+  .cal-mais{border:0;background:none;color:var(--primary);font-size:11px;font-weight:700;text-align:left;cursor:pointer;padding:2px 4px}
+  .cal-semana{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+  .cal-col{border:1px solid var(--border);border-radius:10px;padding:6px;min-height:260px;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .cal-col.hoje{box-shadow:inset 0 0 0 2px var(--primary)}
+  .cal-col h4{font-size:12px;margin:0 0 4px;text-transform:capitalize}
+  .cal-faixa{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin:4px 0 1px}
+  .cal-lista .cal-dia-l{border-bottom:1px solid var(--border);padding:8px 0}
+  .cal-lista h4{font-size:13px;margin:0 0 6px;text-transform:capitalize}
+  .cal-lista .cal-ev{margin-bottom:4px;font-size:12.5px}
+  .cal-legenda{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-top:10px}
+  .cal-legenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+  .cal-vazio{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  .cal-modal{width:min(560px,92vw);border:1px solid var(--border);border-radius:14px;padding:20px;color:var(--text);background:var(--card)}
+  .cal-modal::backdrop{background:rgba(0,0,0,.4)}
+  .cal-modal h3{margin:0 0 4px;font-size:17px}
+  .cal-modal dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px;margin:12px 0}
+  .cal-modal dt{color:var(--muted)}
+  .cal-modal dd{margin:0}
+  .cal-acoes{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px}
+  @media(max-width:760px){.cal-titulo{min-width:0;font-size:16px}}
+</style>
+<script>
+/* ══════════════ Calendário de agendamentos (shared/calendario-logistica.js) ══════════════
+   Entradas (PC) e saídas de PA numa vista de mês/semana. Só leitura: as
+   ações abrem os fluxos que já existem nesta tela e na Expedição. */
+var calAgendas = {}, calEventos = [], calEstado = {vista: 'mes', ref: todayLocal(), entradas: true, saidas: true, previstos: true, concluidos: false};
+try { Object.assign(calEstado, JSON.parse(localStorage.getItem('logistica-calendario') || '{}'), {ref: todayLocal()}); } catch (e) {}
+var CAL_SIT = {AGENDADO: '', ATRASADO: '⚠ atrasado', PREVISTO: 'previsão', PARCIAL: '◐ parcial', CONCLUIDO: '✓ concluído'};
+var CAL_SIT_LONGA = {AGENDADO: 'Agendado', ATRASADO: 'Atrasado: a data passou e não foi concluído', PREVISTO: 'Previsão de entrega de Compras (ainda sem agendamento)',
+  PARCIAL: 'Parcial', CONCLUIDO: 'Concluído'};
+function calSalvarEstado() { try { localStorage.setItem('logistica-calendario', JSON.stringify(calEstado)); } catch (e) {} }
+function calDataBR(d) { return d ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : '—'; }
+function calChip(ev, completo) {
+  // No mês só o ícone cabe; o texto completo fica no título (hover) e na semana.
+  var sit = CAL_SIT[ev.situacao] ? '<span class="cal-flag ' + ev.situacao + '">' + (completo ? CAL_SIT[ev.situacao] : (CAL_SIT[ev.situacao].split(' ')[0].length === 1 ? CAL_SIT[ev.situacao].split(' ')[0] : '·')) + '</span>' : '';
+  var seta = ev.tipo === 'ENTRADA' ? '↓' : '↑', faixa = ev.faixa === 'manha' ? 'M · ' : ev.faixa === 'tarde' ? 'T · ' : '';
+  return '<button type="button" class="cal-ev ' + (ev.tipo === 'SAIDA' ? 'saida' : 'entrada') + ' sit-' + ev.situacao + '" data-ev="' + escapeAttr(ev.id) + '" title="' +
+    escapeAttr((ev.tipo === 'ENTRADA' ? 'Entrada' : 'Saída de PA') + ': ' + ev.titulo + ' · ' + ev.subtitulo + (ev.janela ? ' · ' + ev.janela : '') + ' · ' + CAL_SIT_LONGA[ev.situacao]) + '">' +
+    '<span class="t">' + seta + ' ' + faixa + escapeHtml(ev.titulo) + sit + '</span>' +
+    (completo ? '<span class="s">' + escapeHtml(ev.numero + ' · ' + ev.subtitulo) + '</span>' + (ev.detalhes.transportadora ? '<span class="s">🚚 ' + escapeHtml(ev.detalhes.transportadora) + '</span>' : '') : '') + '</button>';
+}
+function calIntervalo() {
+  var r = calEstado.ref;
+  return calEstado.vista === 'semana' ? CalendarioLogistica.gradeSemana(r) : CalendarioLogistica.gradeMes(+r.slice(0, 4), +r.slice(5, 7) - 1);
+}
+function renderCalendario() {
+  var painel = document.getElementById('tab-calendario');
+  if (!painel || !painel.classList.contains('active')) return;
+  var hoje = todayLocal();
+  calEventos = CalendarioLogistica.eventos(allPedidosCompra, calAgendas, {hoje: hoje, incluirPrevistos: calEstado.previstos, incluirConcluidos: calEstado.concluidos, nomeOrigem: nomeOrigemPedido});
+  var lista = CalendarioLogistica.filtrar(calEventos, {entradas: calEstado.entradas, saidas: calEstado.saidas});
+  var dias = CalendarioLogistica.porDia(lista), g = calIntervalo();
+  document.getElementById('calTitulo').textContent = g.titulo.charAt(0).toUpperCase() + g.titulo.slice(1);
+  document.querySelectorAll('#calVista button').forEach(function(b) { b.classList.toggle('ativo', b.dataset.vista === calEstado.vista); b.setAttribute('aria-pressed', b.dataset.vista === calEstado.vista); });
+  ['entradas', 'saidas', 'previstos', 'concluidos'].forEach(function(k) { document.getElementById('calF-' + k).checked = !!calEstado[k]; });
+  var noPeriodo = lista.filter(function(e) { return e.data >= g.inicio && e.data <= g.fim; });
+  var r = CalendarioLogistica.resumo(noPeriodo), atrasadosTotal = lista.filter(function(e) { return e.situacao === 'ATRASADO' && e.data < g.inicio; }).length;
+  document.getElementById('calResumo').innerHTML = r.entradas + ' entrada(s) · ' + r.saidas + ' saída(s) de PA neste período' +
+    (r.atrasados ? ' · <b style="color:var(--danger)">' + r.atrasados + ' atrasada(s)</b>' : '') + (r.parciais ? ' · ' + r.parciais + ' parcial(is)' : '') +
+    (atrasadosTotal ? ' · <b style="color:var(--danger)">+' + atrasadosTotal + ' atrasada(s) antes deste período</b>' : '');
+  var box = document.getElementById('calGrade'), html = '';
+  if (window.innerWidth < 760) {
+    // Celular: lista dos dias com agendamento no período.
+    var datas = Object.keys(dias).filter(function(d) { return d >= g.inicio && d <= g.fim; }).sort();
+    html = '<div class="cal-lista">' + (datas.map(function(d) {
+      return '<div class="cal-dia-l"><h4>' + CalendarioLogistica.DIAS[CalendarioLogistica.diaSemana(d)] + ' ' + calDataBR(d) + (d === hoje ? ' · hoje' : '') + '</h4>' +
+        dias[d].map(function(ev) { return calChip(ev, true); }).join('') + '</div>';
+    }).join('') || '<div class="cal-vazio">Nenhum agendamento neste período.</div>') + '</div>';
+  } else if (calEstado.vista === 'semana') {
+    html = '<div class="cal-semana">' + g.dias.map(function(d) {
+      var evs = dias[d.data] || [];
+      var faixas = ['manha', 'tarde', 'dia_todo'].map(function(f) {
+        var fe = evs.filter(function(e) { return e.faixa === f; });
+        return fe.length ? '<div class="cal-faixa">' + CalendarioLogistica.JANELAS[f] + '</div>' + fe.map(function(ev) { return calChip(ev, true); }).join('') : '';
+      }).join('');
+      return '<div class="cal-col' + (d.data === hoje ? ' hoje' : '') + '"><h4>' + d.rotulo + '</h4>' + (faixas || '<div class="cal-vazio" style="padding:8px 0">—</div>') + '</div>';
+    }).join('') + '</div>';
+  } else {
+    html = '<div class="cal-mes">' + CalendarioLogistica.DIAS.map(function(d) { return '<div class="cal-cab">' + d + '</div>'; }).join('') +
+      g.semanas.map(function(sem) {
+        return sem.map(function(d) {
+          var evs = dias[d.data] || [], ent = evs.filter(function(e) { return e.tipo === 'ENTRADA'; }).length, sai = evs.length - ent;
+          return '<div class="cal-dia' + (d.doMes ? '' : ' fora') + (d.data === hoje ? ' hoje' : '') + '"><div class="cal-num"><span>' + d.dia + '</span>' +
+            (evs.length ? '<small>' + (ent ? ent + '↓' : '') + (ent && sai ? ' ' : '') + (sai ? sai + '↑' : '') + '</small>' : '') + '</div>' +
+            evs.slice(0, 3).map(function(ev) { return calChip(ev, false); }).join('') +
+            (evs.length > 3 ? '<button type="button" class="cal-mais" data-dia="' + d.data + '">+' + (evs.length - 3) + ' mais</button>' : '') + '</div>';
+        }).join('');
+      }).join('') + '</div>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('[data-ev]').forEach(function(b) { b.onclick = function() { calAbrirEvento(b.dataset.ev); }; });
+  box.querySelectorAll('[data-dia]').forEach(function(b) { b.onclick = function() { calAbrirDia(b.dataset.dia); }; });
+}
+function calAbrirDia(data) {
+  var lista = CalendarioLogistica.filtrar(calEventos, {entradas: calEstado.entradas, saidas: calEstado.saidas}).filter(function(e) { return e.data === data; });
+  var dlg = document.getElementById('calDetalhe');
+  dlg.querySelector('.cal-corpo').innerHTML = '<h3>' + CalendarioLogistica.DIAS[CalendarioLogistica.diaSemana(data)] + ' ' + calDataBR(data) + '</h3>' +
+    '<div style="margin-top:10px">' + lista.map(function(ev) { return calChip(ev, true); }).join('') + '</div>';
+  dlg.querySelector('.cal-acoes').innerHTML = '<button type="button" class="btn btn-ghost" data-fechar>Fechar</button>';
+  dlg.querySelectorAll('.cal-corpo [data-ev]').forEach(function(b) { b.onclick = function() { calAbrirEvento(b.dataset.ev); }; });
+  dlg.querySelector('[data-fechar]').onclick = function() { dlg.close(); };
+  if (!dlg.open) dlg.showModal();
+}
+function calAbrirEvento(id) {
+  var ev = calEventos.find(function(e) { return e.id === id; });
+  if (!ev) return;
+  var d = ev.detalhes, dlg = document.getElementById('calDetalhe'), linhas = [];
+  var add = function(r, v) { if (v !== '' && v != null) linhas.push('<dt>' + r + '</dt><dd>' + v + '</dd>'); };
+  add('Data', calDataBR(ev.data) + (ev.janela ? ' · ' + escapeHtml(ev.janela) : ''));
+  add('Situação', escapeHtml(CAL_SIT_LONGA[ev.situacao]));
+  add(ev.tipo === 'ENTRADA' ? 'Pedido de Compra' : 'Pedido(s)', escapeHtml(ev.numero));
+  add('Tipo', escapeHtml(ev.subtitulo));
+  add('Transportadora', escapeHtml(d.transportadora));
+  add('Motorista / placa', escapeHtml([d.motorista, d.placa].filter(Boolean).join(' · ')));
+  if (ev.tipo === 'ENTRADA') {
+    add('Recebido', fmtNum(d.progresso.recebido) + ' de ' + fmtNum(d.progresso.pedido) + ' (' + d.progresso.pct + '%)');
+    if (d.coleta && d.coleta.status) add('Coleta', escapeHtml(rotuloStatusColeta(d.coleta.status)));
+  } else {
+    add('Faturamento', escapeHtml({NAO_SOLICITADO: 'Não solicitado', SOLICITADO: 'Solicitado ao Financeiro', FATURADO: 'Faturado'}[d.faturamento] || d.faturamento) + (d.nfs.length ? ' · NF ' + escapeHtml(d.nfs.join(', ')) : ''));
+    if (d.aguardandoEmbarque) add('Aguardando embarque', '<b style="color:var(--warning)">' + fmtNum(d.aguardandoEmbarque) + ' un</b> · ' + d.viagens + ' viagem(ns) já saíram');
+    add('Destino', escapeHtml(d.enderecoEntrega));
+    if (d.contatoCliente) add('Recebimento', escapeHtml([d.contatoCliente.nome, d.contatoCliente.telefone].filter(Boolean).join(' · ')));
+  }
+  add('Observações', escapeHtml(d.observacoes));
+  dlg.querySelector('.cal-corpo').innerHTML = '<div class="field-hint">' + (ev.tipo === 'ENTRADA' ? '↓ Entrada de material' : '↑ Saída de produto acabado') + '</div>' +
+    '<h3>' + escapeHtml(ev.titulo) + '</h3><dl>' + linhas.join('') + '</dl>';
+  var acoes = '<button type="button" class="btn btn-ghost" data-fechar>Fechar</button>';
+  if (ev.tipo === 'ENTRADA' && ev.situacao !== 'CONCLUIDO') {
+    acoes += '<button type="button" class="btn btn-ghost" data-acao="agendar">📅 ' + (ev.situacao === 'PREVISTO' ? 'Agendar' : 'Reagendar') + '</button>' +
+      '<button type="button" class="btn btn-green" data-acao="receber">📦 Registrar recebimento</button>';
+  }
+  if (ev.tipo === 'SAIDA') {
+    acoes += '<button type="button" class="btn btn-ghost" data-acao="agenda">Ver na agenda de PA</button>' +
+      (ev.situacao !== 'CONCLUIDO' ? '<a class="btn btn-primary" href="expedicao.html?agenda=' + encodeURIComponent(ev.ref) + '">Abrir na Expedição</a>' : '');
+  }
+  dlg.querySelector('.cal-acoes').innerHTML = acoes;
+  dlg.querySelector('[data-fechar]').onclick = function() { dlg.close(); };
+  dlg.querySelectorAll('[data-acao]').forEach(function(b) {
+    b.onclick = function() {
+      dlg.close();
+      if (b.dataset.acao === 'agendar') openModalAgendar(ev.ref);
+      if (b.dataset.acao === 'receber') openModalReceber(ev.ref);
+      if (b.dataset.acao === 'agenda') document.querySelector('.tab[data-tab="agenda-pa"]').click();
+    };
+  });
+  if (!dlg.open) dlg.showModal();
+}
+(function iniciarCalendario() {
+  var mover = function(k) {
+    var r = calEstado.ref;
+    if (calEstado.vista === 'semana') calEstado.ref = CalendarioLogistica.somarDias(r, 7 * k);
+    else { var dt = new Date(Date.UTC(+r.slice(0, 4), +r.slice(5, 7) - 1 + k, 1)); calEstado.ref = dt.toISOString().slice(0, 10); }
+    renderCalendario();
+  };
+  document.getElementById('calAnterior').onclick = function() { mover(-1); };
+  document.getElementById('calProximo').onclick = function() { mover(1); };
+  document.getElementById('calHoje').onclick = function() { calEstado.ref = todayLocal(); renderCalendario(); };
+  document.querySelectorAll('#calVista button').forEach(function(b) { b.onclick = function() { calEstado.vista = b.dataset.vista; calSalvarEstado(); renderCalendario(); }; });
+  ['entradas', 'saidas', 'previstos', 'concluidos'].forEach(function(k) {
+    document.getElementById('calF-' + k).onchange = function() { calEstado[k] = this.checked; calSalvarEstado(); renderCalendario(); };
+  });
+  document.querySelector('.tab[data-tab="calendario"]').addEventListener('click', function() { setTimeout(renderCalendario, 0); });
+  var t; window.addEventListener('resize', function() { clearTimeout(t); t = setTimeout(renderCalendario, 150); });
+  dbOnValue(db.ref('agendamentos_expedicao'), function(snap) { calAgendas = snap.val() || {}; renderCalendario(); });
+  if (new URLSearchParams(location.search).get('tab') === 'calendario') document.querySelector('.tab[data-tab="calendario"]').click();
+})();
+</script>
 <script src="shared/agenda-pa-tela.js"></script>
 <script>AgendaPAUI.iniciar({container:document.getElementById('agendaPA'),db:db,fn:firebase.functions(),onErro:function(msg){showAlert(msg,'danger');}});</script>
 </body>
