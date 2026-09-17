@@ -272,9 +272,10 @@
 
 <div class="modal-bg" id="modalDiretoria">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dirTitulo">
-    <h2 id="dirTitulo">E-mail da diretoria</h2>
-    <p class="nota" style="margin-bottom:12px">Todo pedido novo do Comercial e toda alteração salva aqui geram o PDF do pedido e mandam para estes endereços. Sem endereço, nada é enviado.</p>
-    <div class="form-row"><label for="dirEmails">Endereços (um por linha)</label><textarea id="dirEmails" rows="4" placeholder="diretoria@kuryos.com.br"></textarea></div>
+    <h2 id="dirTitulo">E-mails automáticos</h2>
+    <p class="nota" style="margin-bottom:12px">Sem endereço, nada é enviado.</p>
+    <div class="form-row"><label for="dirEmails">Diretoria: PDF de todo pedido novo e de cada alteração, e cópia das solicitações de faturamento (um por linha)</label><textarea id="dirEmails" rows="3" placeholder="diretoria@kuryos.com.br"></textarea></div>
+    <div class="form-row"><label for="finEmails">Financeiro: solicitações de faturamento de carga feitas pela Logística (um por linha)</label><textarea id="finEmails" rows="3" placeholder="financeiro@kuryos.com.br"></textarea></div>
     <div class="erro" id="dirErro"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-ghost" id="dirCancelar">Cancelar</button>
@@ -327,7 +328,7 @@ function setStatus(on, txt) { document.getElementById('sDot').classList.toggle('
 
 // ── Dados ────────────────────────────────────────────────────────────
 var NOS = ['pedidos_comerciais', 'pedidos', 'ops', 'expedicoes_comerciais', 'estoque_lotes', 'conferencias_pa',
-  'solicitacoes_descarte', 'clientes', 'produtos', 'precos_venda', 'config/emailDiretoria'];
+  'solicitacoes_descarte', 'clientes', 'produtos', 'precos_venda', 'config/emailDiretoria', 'config/emailFinanceiro'];
 var raw = {};
 NOS.forEach(function(no) { raw[no] = null; });
 var analise = null, tabelaPrecos = [];
@@ -567,31 +568,38 @@ function statusEmailPedido(id) {
   var titulo = e.status === 'ENVIADO' ? 'Para ' + (e.destinatarios || []).join(', ') + ' em ' + new Date(e.em).toLocaleString('pt-BR') : (e.erro || '');
   return '<span class="badge ' + m[0] + '" title="' + esc(titulo) + '">' + m[1] + (versao > 1 ? ' (v' + versao + ')' : '') + '</span>';
 }
-function emailsDiretoria() {
-  var v = raw['config/emailDiretoria'];
+function listaEmails(no) {
+  var v = raw[no];
   var lista = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[;,\s]+/) : Object.values(v || {});
   return lista.map(function(x) { return String(x || '').trim().toLowerCase(); }).filter(Boolean);
 }
+function emailsDiretoria() { return listaEmails('config/emailDiretoria'); }
 function renderNotaDiretoria() {
-  var l = emailsDiretoria();
-  document.getElementById('notaDiretoria').innerHTML = l.length
+  var l = emailsDiretoria(), f = listaEmails('config/emailFinanceiro');
+  document.getElementById('notaDiretoria').innerHTML = (l.length
     ? 'PDF de pedido novo e de cada alteração vai para: ' + esc(l.join(', '))
-    : '<span style="color:var(--tint-orange-fg)">Nenhum e-mail da diretoria configurado: os PDFs não estão sendo enviados.</span>';
+    : '<span style="color:var(--tint-orange-fg)">Nenhum e-mail da diretoria configurado: os PDFs não estão sendo enviados.</span>') +
+    (f.length ? '' : ' <span style="color:var(--tint-orange-fg)">Sem e-mail do Financeiro: solicitações de faturamento da Logística não são enviadas.</span>');
   document.getElementById('btnDiretoria').style.display = podeEditarComercial() ? '' : 'none';
+}
+function lerEmails(id) {
+  return document.getElementById(id).value.split(/[;,\s]+/).map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
 }
 document.getElementById('btnDiretoria').addEventListener('click', function() {
   document.getElementById('dirEmails').value = emailsDiretoria().join('\n');
+  document.getElementById('finEmails').value = listaEmails('config/emailFinanceiro').join('\n');
   document.getElementById('dirErro').style.display = 'none';
   document.getElementById('modalDiretoria').classList.add('open');
 });
 document.getElementById('dirCancelar').addEventListener('click', function() { document.getElementById('modalDiretoria').classList.remove('open'); });
 document.getElementById('dirSalvar').addEventListener('click', function() {
-  var brutos = document.getElementById('dirEmails').value.split(/[;,\s]+/).map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
-  var invalidos = brutos.filter(function(x) { return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); });
+  var dir = lerEmails('dirEmails'), fin = lerEmails('finEmails');
+  var invalidos = dir.concat(fin).filter(function(x) { return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); });
   var erro = document.getElementById('dirErro');
   if (invalidos.length) { erro.textContent = 'Endereço inválido: ' + invalidos.join(', '); erro.style.display = 'block'; return; }
-  var lista = brutos.filter(function(x, i) { return brutos.indexOf(x) === i; });
-  db.ref('config/emailDiretoria').set(lista.length ? lista : null).then(function() {
+  var unicos = function(l) { return l.filter(function(x, i) { return l.indexOf(x) === i; }); };
+  dir = unicos(dir); fin = unicos(fin);
+  db.ref('config').update({emailDiretoria: dir.length ? dir : null, emailFinanceiro: fin.length ? fin : null}).then(function() {
     document.getElementById('modalDiretoria').classList.remove('open');
   }).catch(function(e) { erro.textContent = 'Erro ao salvar: ' + e.message; erro.style.display = 'block'; });
 });

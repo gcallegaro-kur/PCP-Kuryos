@@ -11,15 +11,23 @@ function snapshotContato(v) {
 }
 function dataValida(v) { return /^\d{4}-\d{2}-\d{2}$/.test(v || '') && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v; }
 function referencias(paletes) { return (paletes || []).map(p => p.itemKey + '/' + p.loteKey).sort().join('|'); }
+// Carga faturada que não coube no veículo (cubagem/peso) segue em outra viagem
+// com a mesma NF: a agenda fica EXPEDIDO_PARCIAL e o saldo continua reservado.
+const ATIVAS = ['AGENDADO', 'EXPEDIDO_PARCIAL'];
+function ativa(agenda) { return !!agenda && ATIVAS.includes(agenda.status); }
+function pendente(p) { return Math.max(Number(p.quantidade || 0) - Number(p.embarcado || 0), 0); }
+function paletesPendentes(agenda) { return ((agenda && agenda.paletes) || []).filter(p => pendente(p) > 0); }
 function prepararAgenda(base, dados, autor, uid, agora) {
   if (!chave(dados.agendaKey)) falhar('Identificador do agendamento inválido.', 'invalid-argument');
   const anterior = (base.agendamentos_expedicao || {})[dados.agendaKey];
-  if (anterior && anterior.status !== 'AGENDADO') falhar('Esta agenda já foi encerrada.');
+  if (anterior && !ativa(anterior)) falhar('Esta agenda já foi encerrada.');
   if (anterior && Number(dados.revisao) !== anterior.revisao) falhar('O agendamento mudou em outra tela. Reabra antes de salvar.', 'aborted');
   if (!anterior && Number(dados.revisao || 0) !== 0) falhar('Agendamento não encontrado.', 'not-found');
   if (dados.cancelar) {
     if (!anterior) falhar('Agendamento não encontrado.', 'not-found');
     if (texto(dados.motivo).length < 5) falhar('Informe o motivo do cancelamento.');
+    if (anterior.status === 'EXPEDIDO_PARCIAL') falhar('Parte desta carga já saiu. O saldo faturado segue na próxima viagem; não cancele a agenda.');
+    if (anterior.faturamento && anterior.faturamento.status === 'FATURADO') falhar('Carga já faturada. Trate a NF com o Financeiro antes de cancelar a agenda.');
     return {...anterior, status: 'CANCELADO', revisao: anterior.revisao + 1, atualizadoEm: agora, atualizadoPor: autor,
       cancelamento: {motivo: texto(dados.motivo), em: agora, por: autor}};
   }
@@ -55,14 +63,18 @@ function prepararAgenda(base, dados, autor, uid, agora) {
       descricao: l.lote.itemNome || '', pedidoId: l.pedidoId, pedidoNumero: l.pedidoNumero};
   });
   for (const [k, agenda] of Object.entries(base.agendamentos_expedicao || {})) {
-    if (k !== dados.agendaKey && agenda.status === 'AGENDADO' && (agenda.paletes || []).some(p => vistos.has(p.itemKey + '/' + p.loteKey))) falhar('Um palete já está em outra carga agendada. Abra essa agenda ou cancele-a antes de reagendar.');
+    if (k !== dados.agendaKey && ativa(agenda) && paletesPendentes(agenda).some(p => vistos.has(p.itemKey + '/' + p.loteKey))) falhar('Um palete já está em outra carga agendada. Abra essa agenda ou cancele-a antes de reagendar.');
   }
   const transporte = {transportadora: texto(dados.transportadora), motorista: texto(dados.motorista), contatoMotorista: texto(dados.contatoMotorista, 60), placa: texto(dados.placa, 20).toUpperCase()};
   const contatoCliente = snapshotContato(dados.contatoCliente === undefined ? anterior && anterior.contatoCliente : dados.contatoCliente);
   const revisao = anterior ? anterior.revisao + 1 : 1;
   const historico = {...(anterior && anterior.historico || {})};
   historico['r' + revisao] = {em: agora, por: autor, dataAgendada: dados.dataAgendada, janela: texto(dados.janela, 80), ...transporte, contatoCliente};
-  return {agendaKey: dados.agendaKey, status: 'AGENDADO', revisao, cliente, clienteKey: clienteKey || '',
+  // Editar o transporte não pode apagar o que a agenda acumulou: faturamento,
+  // NFs, viagens e o embarcado de cada palete (que vêm de outras operações).
+  const acumulado = {};
+  if (anterior) ['faturamento', 'viagens', 'expedicoes', 'expedicaoId'].forEach(k => { if (anterior[k] !== undefined) acumulado[k] = anterior[k]; });
+  return {...acumulado, agendaKey: dados.agendaKey, status: anterior ? anterior.status : 'AGENDADO', revisao, cliente, clienteKey: clienteKey || '',
     enderecoEntrega: destino || '', pedidos, paletes: lista, tipo: dados.tipo, dataAgendada: dados.dataAgendada,
     janela: texto(dados.janela, 80), ...transporte, contatoCliente, observacoes: texto(dados.observacoes, 2000), historico,
     criadoEm: anterior ? anterior.criadoEm : agora, criadoPor: anterior ? anterior.criadoPor : autor,
@@ -73,13 +85,15 @@ function agendaDaSaida(base, dados) {
   const agendas = base.agendamentos_expedicao || {};
   const selecionados = new Set((dados.paletes || []).map(p => p.itemKey + '/' + p.loteKey));
   for (const [k, ag] of Object.entries(agendas)) {
-    if (ag.status === 'AGENDADO' && k !== dados.agendaKey && (ag.paletes || []).some(p => selecionados.has(p.itemKey + '/' + p.loteKey))) falhar('Palete vinculado a uma carga agendada. Abra o agendamento para confirmar a saída.');
+    if (ativa(ag) && k !== dados.agendaKey && paletesPendentes(ag).some(p => selecionados.has(p.itemKey + '/' + p.loteKey))) falhar('Palete vinculado a uma carga agendada. Abra o agendamento para confirmar a saída.');
   }
   if (!dados.agendaKey) return null;
   const agenda = agendas[dados.agendaKey];
-  if (!agenda || agenda.status !== 'AGENDADO') falhar('Agendamento indisponível ou já encerrado.');
+  if (!ativa(agenda)) falhar('Agendamento indisponível ou já encerrado.');
   if (agenda.revisao !== Number(dados.agendaRevisao)) falhar('Os dados de transporte mudaram em outra tela. Reabra o agendamento.', 'aborted');
-  if (referencias(agenda.paletes) !== referencias(dados.paletes)) falhar('Confirme todos os paletes agendados. Para mudar a composição, cancele a agenda e monte outra.');
+  // Todos os paletes com saldo a embarcar entram na conferência, mesmo os que
+  // não subirem (carregar 0): assim nada some da agenda sem registro.
+  if (referencias(paletesPendentes(agenda)) !== referencias(dados.paletes)) falhar('Confira todos os paletes pendentes da agenda (marque "não carregado" no que ficar). Para mudar a composição, cancele a agenda e monte outra.');
   return agenda;
 }
-module.exports = {prepararAgenda, agendaDaSaida, snapshotContato};
+module.exports = {prepararAgenda, agendaDaSaida, snapshotContato, ATIVAS, ativa, pendente, paletesPendentes};

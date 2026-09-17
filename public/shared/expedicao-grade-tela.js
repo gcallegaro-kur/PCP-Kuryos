@@ -5,6 +5,18 @@ var clientesContatos={}, contatoCargaUI=ContatosClienteUI.seletor(document.getEl
 var selecionados={}, cargas={}, agendas={}, carregados=new Set(), agendaPronta=false;
 var enviando=false, tentativa=null, agendaKey=null, agendaRevisao=null, novaAgendaKey=null;
 var agendaURL=new URLSearchParams(location.search).get('agenda'), selecionaveisVisiveis=[];
+// Carga agendada pode sair em mais de uma viagem (não coube no veículo): cada
+// palete é conferido como inteiro, parcial por caixas ou não carregado.
+var ATIVAS=['AGENDADO','EXPEDIDO_PARCIAL'], carregamento={};
+function pendenteAg(p){return Math.max(Number(p.quantidade||0)-Number(p.embarcado||0),0);}
+function pendentesAgenda(a){return ((a&&a.paletes)||[]).filter(function(p){return pendenteAg(p)>0;});}
+function planoCarga(l){
+  var c=carregamento[idLinha(l)]||{modo:'INTEIRO'}, lote=l.lote, saldo=Number(lote.saldoLote);
+  if(c.modo==='NAO_CARREGADO')return {unidades:0,ficou:saldo};
+  if(c.modo!=='PARCIAL')return {unidades:saldo,ficou:0};
+  var u=Math.min(Math.max(Number(c.caixas)||0,0),Number(lote.caixasFechadas)||0)*(Number(lote.unidadesPorCaixa)||0)+(c.caixaParcial?Number(lote.unidadesCaixaParcial)||0:0);
+  return {unidades:u,ficou:saldo-u};
+}
 // Mesmo corte da fila de Conferência de PA (estoque.html): OP encerrada antes
 // disso nunca passa pela conferência e não pode virar pendência falsa.
 var INICIO_FLUXO_CONFERENCIA_PA='2026-09-10T00:00:00.000Z';
@@ -16,9 +28,34 @@ function dataBR(v){var s=String(v||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.
 function aviso(msg,erro){el('resultado').className='notice'+(erro?' error':'');el('resultado').textContent=msg;}
 function idLinha(l){return l.itemKey+'/'+l.loteKey;}
 function pronto(){return carregados.size===Object.keys(base).length&&agendaPronta;}
-function agendaDoPalete(k){return Object.entries(agendas).find(function(x){return x[1].status==='AGENDADO'&&(x[1].paletes||[]).some(function(p){return idLinha(p)===k;});});}
-function agendaCompleta(){var a=agendas[agendaKey];return !agendaKey||a&&a.status==='AGENDADO'&&a.revisao===agendaRevisao&&(a.paletes||[]).length===Object.keys(selecionados).length&&a.paletes.every(function(p){return !!selecionados[idLinha(p)];});}
-function refsSelecionadas(){return Object.values(selecionados).map(function(l){return {itemKey:l.itemKey,loteKey:l.loteKey,quantidade:Number(l.lote.saldoLote),enderecoKey:l.lote.enderecoKey,skuPedidoKey:l.skuPedidoKey};});}
+function agendaDoPalete(k){return Object.entries(agendas).find(function(x){return ATIVAS.indexOf(x[1].status)!==-1&&pendentesAgenda(x[1]).some(function(p){return idLinha(p)===k;});});}
+function agendaCompleta(){var a=agendas[agendaKey],pend=pendentesAgenda(a);return !agendaKey||a&&ATIVAS.indexOf(a.status)!==-1&&a.revisao===agendaRevisao&&pend.length===Object.keys(selecionados).length&&pend.every(function(p){return !!selecionados[idLinha(p)];});}
+function refsSelecionadas(){return Object.values(selecionados).map(function(l){var r={itemKey:l.itemKey,loteKey:l.loteKey,quantidade:Number(l.lote.saldoLote),enderecoKey:l.lote.enderecoKey,skuPedidoKey:l.skuPedidoKey};if(agendaKey)r.carregar=carregamento[idLinha(l)]||{modo:'INTEIRO'};return r;});}
+function totaisCarga(){return Object.values(selecionados).reduce(function(t,l){var p=planoCarga(l);t.carregado+=p.unidades;t.ficou+=p.ficou;return t;},{carregado:0,ficou:0});}
+function renderCarregamento(){
+  var box=el('carregamento'), a=agendas[agendaKey], ls=Object.values(selecionados);
+  if(!agendaKey||!a||!ls.length){box.hidden=true;box.innerHTML='';return;}
+  box.hidden=false;
+  var bloqueado=enviando||!!tentativa, viagens=Object.keys(a.viagens||{}).length;
+  box.innerHTML='<h3>Conferência do carregamento'+(viagens?' · viagem '+(viagens+1)+' (mesma NF)':'')+'</h3><p class="sub">Marque o que realmente subiu no veículo. O que ficar continua reservado para esta carga e sai na próxima viagem, com a mesma NF.</p>'+
+    '<div class="table-wrap"><table><thead><tr><th>Palete</th><th>SKU</th><th>Composição</th><th>Pendente</th><th>Carregamento</th><th>Caixas</th><th>Carregado</th><th>Fica</th></tr></thead><tbody>'+
+    ls.map(function(l){var k=idLinha(l),c=carregamento[k]||{modo:'INTEIRO'},lote=l.lote,cx=Number(lote.caixasFechadas)||0,temParcial=Number(lote.unidadesCaixaParcial)>0,comp=ExpedicaoGrade.composicao(lote),p=planoCarga(l);
+      return '<tr data-linha="'+e(k)+'"><td>'+e(lote.identificadorPalete||l.loteKey)+'</td><td>'+e(lote.itemCodigo)+'</td><td>'+composicaoHTML(lote)+'</td><td class="numeric">'+num(lote.saldoLote)+'</td>'+
+        '<td><select data-modo="'+e(k)+'"'+(bloqueado?' disabled':'')+'><option value="INTEIRO"'+(c.modo==='INTEIRO'?' selected':'')+'>Inteiro</option>'+(comp.valida?'<option value="PARCIAL"'+(c.modo==='PARCIAL'?' selected':'')+'>Parcial</option>':'')+'<option value="NAO_CARREGADO"'+(c.modo==='NAO_CARREGADO'?' selected':'')+'>Não carregado</option></select></td>'+
+        '<td>'+(c.modo==='PARCIAL'?'<input type="number" min="0" max="'+cx+'" step="1" data-caixas="'+e(k)+'" value="'+e(c.caixas||0)+'" aria-label="Caixas completas carregadas"'+(bloqueado?' disabled':'')+'> de '+num(cx)+(temParcial?'<label class="check"><input type="checkbox" data-parcial="'+e(k)+'"'+(c.caixaParcial?' checked':'')+(bloqueado?' disabled':'')+'>+ caixa parcial ('+num(lote.unidadesCaixaParcial)+' un)</label>':''):'—')+'</td>'+
+        '<td class="numeric" data-carregado="'+e(k)+'">'+num(p.unidades)+'</td><td class="numeric'+(p.ficou?' ficou':'')+'" data-ficou="'+e(k)+'">'+num(p.ficou)+'</td></tr>';
+    }).join('')+'</tbody></table></div><div class="carregamento-total" id="carregamentoTotal"></div>';
+  function totais(){var t=totaisCarga();el('carregamentoTotal').innerHTML='<b>'+num(t.carregado)+' un carregadas</b>'+(t.ficou?' · <span class="ficou">'+num(t.ficou)+' un ficam aguardando embarque</span>':'');}
+  totais();
+  box.querySelectorAll('[data-modo]').forEach(function(s){s.onchange=function(){var k=s.dataset.modo,c=carregamento[k]||{};carregamento[k]={modo:s.value,caixas:s.value==='PARCIAL'?(c.caixas||0):0,caixaParcial:s.value==='PARCIAL'&&!!c.caixaParcial};renderCarregamento();};});
+  box.querySelectorAll('[data-caixas],[data-parcial]').forEach(function(inp){inp.addEventListener(inp.type==='checkbox'?'change':'input',function(){
+    var k=inp.dataset.caixas||inp.dataset.parcial,c=carregamento[k]||{modo:'PARCIAL'};
+    if(inp.dataset.caixas){var max=Number(inp.max)||0,v=Math.floor(Number(inp.value)||0);c.caixas=Math.min(Math.max(v,0),max);}else c.caixaParcial=inp.checked;
+    carregamento[k]=c;var l=selecionados[k],p=planoCarga(l);
+    box.querySelector('[data-carregado="'+CSS.escape(k)+'"]').textContent=num(p.unidades);
+    var f=box.querySelector('[data-ficou="'+CSS.escape(k)+'"]');f.textContent=num(p.ficou);f.className='numeric'+(p.ficou?' ficou':'');totais();
+  });});
+}
 function transporte(){return {contatoCliente:contatoCargaUI.valor(),transportadora:el('transportadora').value.trim(),motorista:el('motorista').value.trim(),contatoMotorista:el('contatoMotorista').value.trim(),placa:el('placa').value.trim(),observacoes:el('obs').value.trim()};}
 function composicaoHTML(p){var c=ExpedicaoGrade.composicao(p);if(!c.valida)return '<span class="warning">'+e(c.texto)+'</span>';return (c.caixas?num(c.caixas)+' cx × '+num(c.multiplo):'')+(c.caixas&&c.parcial?' + ':'')+(c.parcial?'<span class="partial">1 parcial · '+num(c.parcial)+' un</span>':'');}
 function kg(v){return Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:1});}
@@ -66,6 +103,11 @@ function resumo(){
   var invalida=!agendaCompleta();
   el('agendaAtiva').textContent=agendaKey?'Carga agendada · '+(invalida?'A agenda ou os paletes mudaram. Reabra a carga na agenda abaixo.':'Transporte compartilhado com a Logística.'):'';
   el('agendaAtiva').className=invalida?'notice error':'notice';
+  var agAtual=agendaKey&&agendas[agendaKey], nfs=agAtual&&agAtual.faturamento&&agAtual.faturamento.nfs?Object.values(agAtual.faturamento.nfs):[];
+  ['nf','serie','valor'].forEach(function(k){el(k).parentElement.hidden=!!nfs.length;});
+  el('chave').style.display=nfs.length?'none':'';var lblChave=document.querySelector('label[for="chave"]');if(lblChave)lblChave.style.display=nfs.length?'none':'';
+  if(agendaKey&&!invalida){var f=(agAtual&&agAtual.faturamento)||{};el('agendaAtiva').textContent+=nfs.length?' NF '+nfs.map(function(n){return n.numero+(n.serie?'/'+n.serie:'');}).join(', ')+' registrada nesta carga.':f.status==='SOLICITADO'?' Faturamento solicitado; NF ainda não registrada.':' Faturamento ainda não solicitado.';}
+  renderCarregamento();
   el('salvar').disabled=enviando||!pronto()||(!tentativa&&(!ls.length||invalida));
   el('salvar').textContent=enviando?'Processando…':tentativa?'Verificar / repetir confirmação':'Confirmar saída física';
   el('agendar').disabled=enviando||!!tentativa||!pronto()||!ls.length||invalida;
@@ -120,16 +162,16 @@ function renderCargas(){
   var q=el('buscaHistorico').value.toLocaleLowerCase('pt-BR'), rows=[];
   Object.entries(cargas).sort(function(a,b){return String(b[1].criadoEm||'').localeCompare(String(a[1].criadoEm||''));}).forEach(function(entry){var c=entry[1];
     Object.values(c.itens||{}).forEach(function(l){if(![c.nf,c.cliente,c.numero,l.sku,l.pedidoNumero,l.opLote,l.identificadorPalete,c.transportadora,c.motorista,c.placa].join(' ').toLocaleLowerCase('pt-BR').includes(q))return;
-      rows.push('<tr><td>'+e(c.nf||'Pendente')+'<div class="sub">'+e(c.numero||entry[0])+'</div></td><td>'+e(c.versao===2?'Expedido':c.status||'Legado')+'</td><td>'+e(c.cliente)+'</td><td>'+e(l.pedidoNumero||l.pedidoId||c.pedidoId)+'</td><td class="product">'+e(l.sku)+'<div class="sub">'+e(l.descricao)+'</div></td><td>'+e(l.opLote||'—')+'<div class="sub">'+e(l.identificadorPalete||'Registro anterior aos paletes')+'</div></td><td>'+composicaoHTML(l.paleteOrigem||{saldoLote:l.qtd})+'</td><td class="numeric">'+num(l.qtd)+'</td><td>'+dataBR(c.data)+'</td><td>'+e(c.transportadora||'—')+'</td><td>'+e(c.motorista||c.veiculo||'—')+'<div class="sub">'+e(c.contatoMotorista||'')+'</div></td><td>'+e(c.placa||'—')+'</td><td class="product">'+e(c.observacoes||'')+'<div class="sub">'+e(c.contatoCliente?[c.contatoCliente.nome,c.contatoCliente.telefone,c.contatoCliente.email].filter(Boolean).join(' · '):'')+'</div></td></tr>');
+      rows.push('<tr><td>'+e(c.nf||'Pendente')+'<div class="sub">'+e(c.numero||entry[0])+'</div></td><td>'+e(c.versao===2?(c.complementar?'Viagem '+c.viagem+' (mesma NF)':'Expedido'):c.status||'Legado')+(l.parcial?'<div class="sub">parcial · ficou '+num(l.saldoRestante)+' un</div>':'')+'</td><td>'+e(c.cliente)+'</td><td>'+e(l.pedidoNumero||l.pedidoId||c.pedidoId)+'</td><td class="product">'+e(l.sku)+'<div class="sub">'+e(l.descricao)+'</div></td><td>'+e(l.opLote||'—')+'<div class="sub">'+e(l.identificadorPalete||'Registro anterior aos paletes')+'</div></td><td>'+composicaoHTML(l.paleteOrigem||{saldoLote:l.qtd})+'</td><td class="numeric">'+num(l.qtd)+'</td><td>'+dataBR(c.data)+'</td><td>'+e(c.transportadora||'—')+'</td><td>'+e(c.motorista||c.veiculo||'—')+'<div class="sub">'+e(c.contatoMotorista||'')+'</div></td><td>'+e(c.placa||'—')+'</td><td class="product">'+e(c.observacoes||'')+'<div class="sub">'+e(c.contatoCliente?[c.contatoCliente.nome,c.contatoCliente.telefone,c.contatoCliente.email].filter(Boolean).join(' · '):'')+'</div></td></tr>');
     });
   });
   el('lista').innerHTML=rows.join('')||'<tr><td colspan="13">Nenhuma saída neste filtro.</td></tr>';
 }
 function abrirAgenda(k,a){
   if(enviando||tentativa)return aviso('Conclua a confirmação pendente antes de abrir outra carga.',true);
-  if(!pronto()||!a||a.status!=='AGENDADO')return aviso('Agenda indisponível. Aguarde o carregamento ou atualize a página.',true);
-  selecionados={};agendaKey=k;agendaRevisao=a.revisao;
-  var faltas=[];(a.paletes||[]).forEach(function(p){var l=ExpedicaoPA.analisar(base,p.itemKey,p.loteKey,hoje());if(l.disponivel&&Number(l.lote.saldoLote)===Number(p.quantidade))selecionados[idLinha(l)]=l;else faltas.push(p.identificadorPalete||p.loteKey);});
+  if(!pronto()||!a||ATIVAS.indexOf(a.status)===-1)return aviso('Agenda indisponível. Aguarde o carregamento ou atualize a página.',true);
+  selecionados={};carregamento={};agendaKey=k;agendaRevisao=a.revisao;
+  var faltas=[];pendentesAgenda(a).forEach(function(p){var l=ExpedicaoPA.analisar(base,p.itemKey,p.loteKey,hoje());if(l.disponivel&&Number(l.lote.saldoLote)===pendenteAg(p))selecionados[idLinha(l)]=l;else faltas.push(p.identificadorPalete||p.loteKey);});
   contatoCargaUI.carregar(clientesContatos[a.clienteKey]||{},a.clienteKey||a.cliente,a.contatoCliente||null);
   ['transportadora','motorista','contatoMotorista','placa','tipo','dataAgendada','janela'].forEach(function(f){el(f).value=a[f]||'';});el('obs').value=a.observacoes||'';
   aviso(faltas.length?'Paletes indisponíveis ou com saldo alterado: '+faltas.join(', ')+'. Regularize antes de confirmar.':'Agendamento carregado. Revise o transporte e confirme quando a carga sair.',!!faltas.length);
@@ -148,16 +190,18 @@ el('salvar').onclick=async function(){
   if(enviando)return;
   if(!tentativa){
     if(!pronto()||!Object.keys(selecionados).length||!agendaCompleta())return aviso('Confira a seleção e o agendamento antes de confirmar.',true);
-    if(!confirm('Confirmar a saída física de '+Object.keys(selecionados).length+' palete(s)? Esta confirmação baixa os paletes do estoque.'))return;
+    var tc=agendaKey?totaisCarga():null;
+    if(tc&&!tc.carregado)return aviso('Nenhuma unidade marcada como carregada.',true);
+    if(!confirm(tc?'Confirmar a saída física de '+num(tc.carregado)+' un'+(tc.ficou?'? '+num(tc.ficou)+' un ficam reservadas para a próxima viagem, com a mesma NF.':'?')+' Esta confirmação baixa do estoque o que foi carregado.':'Confirmar a saída física de '+Object.keys(selecionados).length+' palete(s)? Esta confirmação baixa os paletes do estoque.'))return;
     tentativa=Object.assign(transporte(),{idempotencyKey:crypto.randomUUID(),data:el('data').value,tipo:el('tipo').value,nf:el('nf').value.trim(),serie:el('serie').value.trim(),chaveNfe:el('chave').value.trim(),valorFaturado:el('valor').value,paletes:refsSelecionadas(),agendaKey:agendaKey,agendaRevisao:agendaRevisao});
     sessionStorage.setItem('expedicaoPA-tentativa',JSON.stringify(tentativa));
   }
   enviando=true;renderPaletes();resumo();
-  try{var r=await fn.httpsCallable('confirmarExpedicaoPA')(tentativa);aviso('Saída confirmada: '+r.data.numero+'. Paletes baixados e pedidos vinculados.');tentativa=null;sessionStorage.removeItem('expedicaoPA-tentativa');selecionados={};agendaKey=null;agendaRevisao=null;['nf','serie','chave','valor','transportadora','motorista','contatoMotorista','placa','obs','janela'].forEach(function(k){el(k).value='';});}
+  try{var r=await fn.httpsCallable('confirmarExpedicaoPA')(tentativa);var ficou=(tentativa.paletes||[]).reduce(function(t,p){var c=p.carregar;if(!c||c.modo==='INTEIRO')return t;var l=selecionados[p.itemKey+'/'+p.loteKey];return t+(l?planoCarga(l).ficou:0);},0);aviso('Saída confirmada: '+r.data.numero+'. '+(ficou?num(ficou)+' un ficaram aguardando embarque, reservadas para a próxima viagem com a mesma NF.':'Paletes baixados e pedidos vinculados.'));tentativa=null;sessionStorage.removeItem('expedicaoPA-tentativa');selecionados={};carregamento={};agendaKey=null;agendaRevisao=null;['nf','serie','chave','valor','transportadora','motorista','contatoMotorista','placa','obs','janela'].forEach(function(k){el(k).value='';});}
   catch(err){var definitivo=['functions/invalid-argument','functions/failed-precondition','functions/permission-denied','functions/unauthenticated','functions/aborted'].includes(err.code);aviso((err.message||'Falha na confirmação.')+(definitivo?'':' Use Verificar / repetir confirmação para recuperar a mesma saída.'),true);if(definitivo){tentativa=null;sessionStorage.removeItem('expedicaoPA-tentativa');}}
   finally{enviando=false;renderPaletes();resumo();}
 };
-el('limpar').onclick=function(){if(enviando||tentativa)return;selecionados={};agendaKey=null;agendaRevisao=null;novaAgendaKey=null;renderPaletes();};
+el('limpar').onclick=function(){if(enviando||tentativa)return;selecionados={};carregamento={};agendaKey=null;agendaRevisao=null;novaAgendaKey=null;renderPaletes();};
 // Selecionar todos os paletes disponíveis do filtro atual que cabem na mesma
 // carga. As regras de compatibilidade são as do servidor (ExpedicaoGrade.selecionarTodos).
 el('selecionarTodos').onclick=function(){

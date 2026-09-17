@@ -125,6 +125,12 @@ async function abrir(browser) {
     await page.click('#dirSalvar');
     await page.waitForFunction(() => /diretoria@kuryos.com.br, financeiro@kuryos.com.br/.test(document.getElementById('notaDiretoria').innerText));
     assert.deepEqual(await page.evaluate(() => window.__db.config.emailDiretoria), ['diretoria@kuryos.com.br', 'financeiro@kuryos.com.br']);
+    assert.equal(await page.evaluate(() => window.__db.config.emailFinanceiro), undefined, 'financeiro vazio não grava');
+    await page.click('#btnDiretoria');
+    await page.fill('#finEmails', 'Fin@kuryos.com.br');
+    await page.click('#dirSalvar');
+    await page.waitForFunction(() => window.__db.config.emailFinanceiro && window.__db.config.emailFinanceiro[0] === 'fin@kuryos.com.br');
+    assert.deepEqual(await page.evaluate(() => window.__db.config.emailDiretoria), ['diretoria@kuryos.com.br', 'financeiro@kuryos.com.br'], 'salvar os dois não apaga a diretoria');
 
     // ── Carteira: editar pedido ─────────────────────────────────────────
     await page.click('#abas .tab[data-tab="carteira"]');

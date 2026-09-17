@@ -11,6 +11,8 @@ const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require(
 const PropriedadeEstoque = require("./propriedade_estoque");
 const OpEncerrada = require("./op_encerrada");
 const PedidoDiretoria = require("./pedido_diretoria");
+const {prepararFaturamento} = require("./faturamento_carga");
+const FaturamentoEmail = require("./faturamento_email");
 
 admin.initializeApp();
 const db = admin.database();
@@ -501,6 +503,7 @@ async function sendMailViaGraph(to, subject, body, opts) {
         subject,
         body: {contentType: (opts && opts.html) ? "HTML" : "Text", content: body},
         toRecipients: to.map((addr) => ({emailAddress: {address: addr}})),
+        ccRecipients: ((opts && opts.cc) || []).map((addr) => ({emailAddress: {address: addr}})),
         // Anexos pequenos (< 3 MB) vão inline; o PDF de pedido tem poucos KB.
         attachments: ((opts && opts.anexos) || []).map((a) => ({
           "@odata.type": "#microsoft.graph.fileAttachment", "name": a.nome, "contentType": a.tipo, "contentBytes": a.conteudo.toString("base64"),
@@ -514,6 +517,70 @@ async function sendMailViaGraph(to, subject, body, opts) {
   console.log("E-mail enviado:", subject);
   return true;
 }
+
+// Faturamento da carga (functions/faturamento_carga.js): solicitar e registrar
+// NF. Mesma transação na raiz da agenda -- revisão e permissão relidas no retry.
+exports.faturamentoCargaPA = onCall({timeoutSeconds: 120, memory: "512MiB"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para faturar a carga.");
+  const uid = request.auth.uid;
+  const permitido = (user) => ["admin", "pcp", "logistica"].includes(user.role) || (user.modulos && user.modulos.logistica === true);
+  const user = (await db.ref("usuarios/" + uid).once("value")).val() || {};
+  if (!permitido(user)) throw new HttpsError("permission-denied", "Seu perfil não pode faturar cargas de PA.");
+  const autor = user.nome || request.auth.token.email || uid;
+  const agora = new Date().toISOString();
+  let plano, falha;
+  await db.ref().once("value");
+  const result = await db.ref().transaction((base) => {
+    falha = null;
+    plano = null;
+    if (!base) return base;
+    try {
+      if (!permitido((base.usuarios || {})[uid] || {})) throw Object.assign(new Error("Permissão de Logística revogada."), {code: "permission-denied"});
+      plano = prepararFaturamento(base, request.data || {}, autor, uid, agora);
+      if (plano.repetida) return;
+      base.agendamentos_expedicao[request.data.agendaKey] = plano.agenda;
+      return base;
+    } catch (e) { falha = e; return; }
+  }, undefined, false);
+  if (falha) throw new HttpsError(falha.code || "failed-precondition", falha.message);
+  if (plano && plano.repetida) return {ok: true, repetida: true, revisao: plano.agenda.revisao, status: (plano.agenda.faturamento || {}).status};
+  if (!result.committed || !plano) throw new HttpsError("aborted", "A carga mudou. Reabra e tente novamente.");
+  return {ok: true, revisao: plano.agenda.revisao, status: plano.agenda.faturamento.status};
+});
+
+// E-mail da solicitação ao Financeiro (cópia à diretoria), com PDF.
+exports.onSolicitacaoFaturamentoPA = onValueCreated(
+  {
+    ref: "/agendamentos_expedicao/{agendaKey}/faturamento/solicitacoes/{sid}",
+    instance: "prod-kuryos-default-rtdb",
+    secrets: [MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_SENDER_EMAIL],
+  },
+  async (event) => {
+    const {agendaKey, sid} = event.params;
+    const statusRef = db.ref("agendamentos_expedicao/" + agendaKey + "/faturamento/solicitacoes/" + sid + "/email");
+    const reserva = await statusRef.transaction((atual) => {
+      if (atual) return; // já processado por outra entrega do mesmo evento
+      return {status: "ENVIANDO", em: new Date().toISOString()};
+    });
+    if (!reserva.committed) return;
+    try {
+      const solicitacao = event.data.val() || {};
+      const config = (await db.ref("config").once("value")).val() || {};
+      const dest = FaturamentoEmail.destinatarios(config);
+      if (!dest.para.length) {
+        await statusRef.set({status: "SEM_DESTINATARIOS", em: new Date().toISOString()});
+        return;
+      }
+      const email = FaturamentoEmail.montarEmail(solicitacao, agendaKey);
+      const pdf = await FaturamentoEmail.gerarPdf(solicitacao, agendaKey);
+      await sendMailViaGraph(dest.para, email.assunto, email.corpo, {html: true, cc: dest.copia, anexos: [{nome: email.arquivo, tipo: "application/pdf", conteudo: pdf}]});
+      await statusRef.set({status: "ENVIADO", em: new Date().toISOString(), para: dest.para, copia: dest.copia, assunto: email.assunto});
+    } catch (e) {
+      await statusRef.set({status: "ERRO", erro: String(e.message || e).slice(0, 500), em: new Date().toISOString()}).catch(() => null);
+      throw e;
+    }
+  },
+);
 
 // ── Compras: rascunho de cotação por e-mail (Fase 4) ───────────────────
 // Chamada pelo botão "Solicitar Cotação" em compras.html. Cria um RASCUNHO
