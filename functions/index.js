@@ -10,6 +10,7 @@ const {prepararAgenda} = require("./agenda_expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
 const PropriedadeEstoque = require("./propriedade_estoque");
 const OpEncerrada = require("./op_encerrada");
+const PedidoDiretoria = require("./pedido_diretoria");
 
 admin.initializeApp();
 const db = admin.database();
@@ -500,6 +501,10 @@ async function sendMailViaGraph(to, subject, body, opts) {
         subject,
         body: {contentType: (opts && opts.html) ? "HTML" : "Text", content: body},
         toRecipients: to.map((addr) => ({emailAddress: {address: addr}})),
+        // Anexos pequenos (< 3 MB) vão inline; o PDF de pedido tem poucos KB.
+        attachments: ((opts && opts.anexos) || []).map((a) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment", "name": a.nome, "contentType": a.tipo, "contentBytes": a.conteudo.toString("base64"),
+        })),
       },
     }),
   });
@@ -1367,6 +1372,68 @@ exports.onOpEncerrada = onValueWritten(
       await marcaRef.update({status: "ERRO", erro: String(e.message || e).slice(0, 500), erroEm: new Date().toISOString()}).catch(() => null);
       throw e;
     }
+  },
+);
+
+// ── PDF do pedido comercial por e-mail à diretoria (2026-09-16) ────────
+// Pedido novo (nó criado) e cada edição (versoes/{v} criada pela Gestão
+// Comercial). Reserva idempotente por pedido+versão em emails_diretoria:
+// reentrega do mesmo evento não manda dois e-mails. O resultado também fica
+// no próprio pedido/versão para a tela mostrar.
+async function enviarPedidoDiretoria(id, versaoNum) {
+  const reservaRef = db.ref("emails_diretoria/" + sanitizeKey(id) + "__v" + versaoNum);
+  const reserva = await reservaRef.transaction((atual) => {
+    if (atual) return; // já processado
+    return {status: "ENVIANDO", pedido: id, versao: versaoNum, em: new Date().toISOString()};
+  });
+  if (!reserva.committed) return;
+  const statusRef = versaoNum > 1 ? db.ref("pedidos_comerciais/" + id + "/versoes/v" + versaoNum + "/email") : db.ref("pedidos_comerciais/" + id + "/emailDiretoria");
+  try {
+    const [pcSnap, configSnap] = await Promise.all([db.ref("pedidos_comerciais/" + id).once("value"), db.ref("config").once("value")]);
+    const pc = pcSnap.val();
+    if (!pc) throw new Error("Pedido não encontrado");
+    const destinatarios = PedidoDiretoria.destinatarios(configSnap.val() || {});
+    if (!destinatarios.length) {
+      const semDest = {status: "SEM_DESTINATARIOS", em: new Date().toISOString()};
+      await Promise.all([reservaRef.update(semDest), statusRef.set(semDest)]);
+      return;
+    }
+    const versao = versaoNum > 1 ? (pc.versoes || {})["v" + versaoNum] : null;
+    const cadastro = pc.clienteKey ? (await db.ref("clientes/" + pc.clienteKey).once("value")).val() : null;
+    const email = PedidoDiretoria.montarEmail(pc, id, versao);
+    const pdf = await PedidoDiretoria.gerarPdf(pc, id, versao, cadastro);
+    await sendMailViaGraph(destinatarios, email.assunto, email.corpo, {html: true, anexos: [{nome: email.arquivo, tipo: "application/pdf", conteudo: pdf}]});
+    const ok = {status: "ENVIADO", em: new Date().toISOString(), destinatarios, assunto: email.assunto};
+    await Promise.all([reservaRef.update(ok), statusRef.set(ok)]);
+  } catch (e) {
+    const erro = {status: "ERRO", erro: String(e.message || e).slice(0, 500), em: new Date().toISOString()};
+    await Promise.all([reservaRef.update(erro), statusRef.set(erro)]).catch(() => null);
+    throw e;
+  }
+}
+
+exports.onPedidoComercialCriado = onValueCreated(
+  {
+    ref: "/pedidos_comerciais/{id}",
+    instance: "prod-kuryos-default-rtdb",
+    secrets: [MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_SENDER_EMAIL],
+  },
+  async (event) => {
+    if (!PedidoDiretoria.deveEnviarCriacao(event.data.val())) return;
+    await enviarPedidoDiretoria(event.params.id, 1);
+  },
+);
+
+exports.onPedidoComercialVersao = onValueCreated(
+  {
+    ref: "/pedidos_comerciais/{id}/versoes/{versao}",
+    instance: "prod-kuryos-default-rtdb",
+    secrets: [MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_SENDER_EMAIL],
+  },
+  async (event) => {
+    const num = Number(String(event.params.versao).replace(/^v/, ""));
+    if (!(num > 1)) return;
+    await enviarPedidoDiretoria(event.params.id, num);
   },
 );
 

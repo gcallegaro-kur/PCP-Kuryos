@@ -21,7 +21,7 @@ function dados() {
     precos_venda: {MRARBS03: {vigencias: {a: {preco: 2.5, inicio: '2026-01-01', criadoPor: 'X'}}}},
     pedidos_comerciais: {
       'PED-0002': {numeroFormatado: 'PED-0002', cliente: 'MISS ROSE', clienteKey: 'MISS', dataPedido: '2026-09-01', numeroPedidoCliente: '28',
-        prazoPagamento: '30/45/60', percentualNF: 50, status: 'LIBERADO_PCP', frete: {tipo: 'FOB', prazo: '3 dias'}, historico: [{tipo: 'LIBERADO_PCP'}],
+        prazoPagamento: '30/45/60', percentualNF: 50, status: 'LIBERADO_PCP', emailDiretoria: {status: 'ENVIADO', destinatarios: ['dir@kuryos.com.br'], em: '2026-09-16T12:00:00Z'}, frete: {tipo: 'FOB', prazo: '3 dias'}, historico: [{tipo: 'LIBERADO_PCP'}],
         itens: [{sku: 'MRARBS04', produtoKey: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR', qtd: 39158, valorUnitario: 2.7, desconto: 0},
           {sku: 'MRARBS03', produtoKey: 'MRARBS03', descricao: 'BODY SPLASH ECLIPSE', qtd: 7411, valorUnitario: 2.7, desconto: 0}]}
     },
@@ -114,9 +114,22 @@ async function abrir(browser) {
     assert.equal(vig.criadoPor, 'Gustavo');
     await page.waitForFunction(() => /R\$\s?2,80/.test(document.getElementById('tabPrecos').innerText));
 
+    // ── E-mail da diretoria: configuração ──────────────────────────────
+    await page.click('#abas .tab[data-tab="carteira"]');
+    assert.match(await page.locator('#notaDiretoria').innerText(), /Nenhum e-mail da diretoria/);
+    await page.click('#btnDiretoria');
+    await page.fill('#dirEmails', ['diretoria@kuryos.com.br', 'errado'].join('\n'));
+    await page.click('#dirSalvar');
+    assert.match(await page.locator('#dirErro').innerText(), /inválido: errado/);
+    await page.fill('#dirEmails', ['Diretoria@kuryos.com.br', 'financeiro@kuryos.com.br', 'diretoria@kuryos.com.br'].join('\n'));
+    await page.click('#dirSalvar');
+    await page.waitForFunction(() => /diretoria@kuryos.com.br, financeiro@kuryos.com.br/.test(document.getElementById('notaDiretoria').innerText));
+    assert.deepEqual(await page.evaluate(() => window.__db.config.emailDiretoria), ['diretoria@kuryos.com.br', 'financeiro@kuryos.com.br']);
+
     // ── Carteira: editar pedido ─────────────────────────────────────────
     await page.click('#abas .tab[data-tab="carteira"]');
     await page.locator('#tabCarteira tr.clicavel', {hasText: 'PED-0002'}).click();
+    assert.match(await page.locator('#tabCarteira').innerText(), /PDF enviado à diretoria/);
     await page.locator('[data-editar="PED-0002"]').click();
     await page.waitForSelector('#modalEdicao.open');
     assert.match(await page.locator('#edItens').innerText(), /mín\. 3\.696/);

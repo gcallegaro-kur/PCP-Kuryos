@@ -161,7 +161,9 @@
         <option value="">Todos</option>
       </select>
       <select id="cartCliente"><option value="">Todos os clientes</option></select>
+      <button class="btn btn-ghost" id="btnDiretoria" title="Quem recebe o PDF de cada pedido novo e de cada alteração">E-mail da diretoria</button>
     </div>
+    <div class="nota" id="notaDiretoria" style="margin:-4px 0 10px"></div>
     <div class="card" style="padding:0">
       <div class="table-wrap"><table id="tabCarteira"></table></div>
     </div>
@@ -268,6 +270,19 @@
   </div>
 </div>
 
+<div class="modal-bg" id="modalDiretoria">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dirTitulo">
+    <h2 id="dirTitulo">E-mail da diretoria</h2>
+    <p class="nota" style="margin-bottom:12px">Todo pedido novo do Comercial e toda alteração salva aqui geram o PDF do pedido e mandam para estes endereços. Sem endereço, nada é enviado.</p>
+    <div class="form-row"><label for="dirEmails">Endereços (um por linha)</label><textarea id="dirEmails" rows="4" placeholder="diretoria@kuryos.com.br"></textarea></div>
+    <div class="erro" id="dirErro"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="dirCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="dirSalvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalVersoes">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="vsTitulo" style="max-width:640px">
     <h2 id="vsTitulo">Versões do pedido</h2>
@@ -312,7 +327,7 @@ function setStatus(on, txt) { document.getElementById('sDot').classList.toggle('
 
 // ── Dados ────────────────────────────────────────────────────────────
 var NOS = ['pedidos_comerciais', 'pedidos', 'ops', 'expedicoes_comerciais', 'estoque_lotes', 'conferencias_pa',
-  'solicitacoes_descarte', 'clientes', 'produtos', 'precos_venda'];
+  'solicitacoes_descarte', 'clientes', 'produtos', 'precos_venda', 'config/emailDiretoria'];
 var raw = {};
 NOS.forEach(function(no) { raw[no] = null; });
 var analise = null, tabelaPrecos = [];
@@ -484,6 +499,7 @@ function badgesPedido(p) {
 }
 function renderCarteira() {
   if (!analise) return;
+  renderNotaDiretoria();
   var busca = normalizeSearch(document.getElementById('cartBusca').value);
   var estado = document.getElementById('cartEstado').value;
   var cliente = document.getElementById('cartCliente').value;
@@ -537,8 +553,48 @@ function detalhePedido(p) {
     (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</span>' +
     (p.temComercial && podeEditarComercial() && !p.cancelado ? '<button class="btn btn-primary btn-sm" data-editar="' + esc(p.id) + '">Editar pedido</button>' : '') +
     (p.versao > 1 ? '<button class="btn btn-ghost btn-sm" data-versoes="' + esc(p.id) + '">Versões (' + p.versao + ')</button>' : '') +
-    (!p.temComercial ? '<span class="muted">Pedido antigo sem cadastro comercial: edite pela tela de Pedidos.</span>' : '') + '</div></td></tr>';
+    (!p.temComercial ? '<span class="muted">Pedido antigo sem cadastro comercial: edite pela tela de Pedidos.</span>' : '') +
+    statusEmailPedido(p.id) + '</div></td></tr>';
 }
+
+var EMAIL_STATUS = {ENVIADO: ['b-green', 'PDF enviado à diretoria'], ENVIANDO: ['b-gray', 'Enviando PDF...'], ERRO: ['b-red', 'Falha no envio do PDF'], SEM_DESTINATARIOS: ['b-orange', 'PDF não enviado: sem e-mail da diretoria']};
+function statusEmailPedido(id) {
+  var pc = (raw.pedidos_comerciais || {})[id] || {};
+  var versao = Number(pc.versao) || 1;
+  var e = versao > 1 ? ((pc.versoes || {})['v' + versao] || {}).email : pc.emailDiretoria;
+  if (!e) return '';
+  var m = EMAIL_STATUS[e.status] || ['b-gray', e.status];
+  var titulo = e.status === 'ENVIADO' ? 'Para ' + (e.destinatarios || []).join(', ') + ' em ' + new Date(e.em).toLocaleString('pt-BR') : (e.erro || '');
+  return '<span class="badge ' + m[0] + '" title="' + esc(titulo) + '">' + m[1] + (versao > 1 ? ' (v' + versao + ')' : '') + '</span>';
+}
+function emailsDiretoria() {
+  var v = raw['config/emailDiretoria'];
+  var lista = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[;,\s]+/) : Object.values(v || {});
+  return lista.map(function(x) { return String(x || '').trim().toLowerCase(); }).filter(Boolean);
+}
+function renderNotaDiretoria() {
+  var l = emailsDiretoria();
+  document.getElementById('notaDiretoria').innerHTML = l.length
+    ? 'PDF de pedido novo e de cada alteração vai para: ' + esc(l.join(', '))
+    : '<span style="color:var(--tint-orange-fg)">Nenhum e-mail da diretoria configurado: os PDFs não estão sendo enviados.</span>';
+  document.getElementById('btnDiretoria').style.display = podeEditarComercial() ? '' : 'none';
+}
+document.getElementById('btnDiretoria').addEventListener('click', function() {
+  document.getElementById('dirEmails').value = emailsDiretoria().join('\n');
+  document.getElementById('dirErro').style.display = 'none';
+  document.getElementById('modalDiretoria').classList.add('open');
+});
+document.getElementById('dirCancelar').addEventListener('click', function() { document.getElementById('modalDiretoria').classList.remove('open'); });
+document.getElementById('dirSalvar').addEventListener('click', function() {
+  var brutos = document.getElementById('dirEmails').value.split(/[;,\s]+/).map(function(x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  var invalidos = brutos.filter(function(x) { return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); });
+  var erro = document.getElementById('dirErro');
+  if (invalidos.length) { erro.textContent = 'Endereço inválido: ' + invalidos.join(', '); erro.style.display = 'block'; return; }
+  var lista = brutos.filter(function(x, i) { return brutos.indexOf(x) === i; });
+  db.ref('config/emailDiretoria').set(lista.length ? lista : null).then(function() {
+    document.getElementById('modalDiretoria').classList.remove('open');
+  }).catch(function(e) { erro.textContent = 'Erro ao salvar: ' + e.message; erro.style.display = 'block'; });
+});
 
 // ── CLIENTES ─────────────────────────────────────────────────────────
 var cliSelecionado = null;
