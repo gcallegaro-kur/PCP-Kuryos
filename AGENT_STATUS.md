@@ -118,13 +118,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — Calendário de agendamentos na Logística (2026-09-17).**
-  Aba nova em `logistica.html` juntando entradas (PC: `agendamento` e
-  previsão de Compras) e saídas de PA (`agendamentos_expedicao`), vistas mês
-  e semana, filtros e detalhe com ações existentes. Não muda regra de agenda.
-- **Arquivos ativos:** `public/logistica.html`, novo
-  `public/shared/calendario-logistica.js`, novos testes
-  `run_calendario_logistica*_test.js`, `AGENT_STATUS.md`.
+- **Entrega publicada — Calendário de agendamentos na Logística (2026-09-17).**
+  Aba **Calendário** em `logistica.html` + motor `shared/calendario-logistica.js`
+  (Hosting, worktree limpo, arquivos idênticos ao commit). Junta entradas de PC
+  (`agendamento`; `dataPrevistaEntrega` como PREVISTO) e saídas de PA
+  (`agendamentos_expedicao`, inclusive `EXPEDIDO_PARCIAL`); mês/semana/lista no
+  celular; detalhe chama `openModalAgendar`/`openModalReceber` e
+  `expedicao.html?agenda=`. Só leitura. Testes `run_calendario_logistica_test.js`
+  e `run_calendario_logistica_ui_test.js`; `run_rotas_pc_test.js` OK.
+- **Arquivos ativos:** nenhum.
 
 - **Entrega publicada — faturamento e carga parcial na Expedição de PA
   (2026-09-17).** `511edd8` no `origin/main`; por worktree limpo às 00:36 BRT:
