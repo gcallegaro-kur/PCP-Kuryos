@@ -118,6 +118,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — Gestão Comercial (2026-09-16).** Tela gerencial nova
+  (carteira, clientes, prazos, faturamento/KPIs), tabela de preços de venda
+  com vigência, edição de pedido com versões e travas, PDF do pedido por
+  e-mail à diretoria (Function + Graph). Não altera `comercial.html`.
+- **Arquivos ativos:** novos `public/gestao_comercial.html`,
+  `public/shared/gestao-comercial.js`, `functions/pedido_diretoria.js`,
+  `run_gestao_comercial*_test.js`; alterados `public/auth_check.js` (módulo
+  comercial + menu), `database.rules.json` (nó `precos_venda`),
+  `functions/index.js` (export), `functions/package.json`, `AGENT_STATUS.md`.
+
 - **Entrega publicada — transferência de OP entre pedidos (2026-09-16).**
   `b282582` no `origin/main`; Hosting por worktree limpo às 18:32 BRT
   (`ops.html`, `pedidos.html`, `shared/transferencia-op.js` idênticos ao
