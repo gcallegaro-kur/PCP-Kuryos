@@ -13,6 +13,7 @@
   <script src="shared/expedicao.js"></script>
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/gestao-comercial.js"></script>
+  <script src="shared/pedido-edicao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -86,6 +87,22 @@
     .erro{color:var(--danger);font-size:12px;margin-bottom:8px;display:none}
     .legenda{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
     .legenda i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+    .modal.largo{max-width:980px}
+    .ed-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 12px;margin-bottom:14px}
+    .ed-grid .full{grid-column:1/-1}
+    .ed-grid label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:3px}
+    .ed-grid input,.ed-grid select,.ed-grid textarea{width:100%}
+    .ed-itens td{vertical-align:middle;padding:5px 6px}
+    .ed-itens input{width:100%;min-width:70px}
+    .ed-itens select{width:100%;min-width:220px}
+    .ed-trava{font-size:11px;color:var(--muted);margin-top:2px}
+    .ed-preview{border-radius:10px;padding:10px 12px;background:var(--surface-2);font-size:12.5px;line-height:1.5;margin:10px 0}
+    .ed-preview ul{margin:4px 0 0 18px}
+    .ed-erros{color:var(--tint-red-fg)}
+    .ed-avisos{color:var(--tint-orange-fg)}
+    .versao{border-bottom:1px solid var(--tint-gray-bg);padding:10px 0;font-size:12.5px;line-height:1.5}
+    .versao:last-child{border-bottom:none}
+    @media(max-width:760px){.ed-grid{grid-template-columns:1fr}}
     @media(max-width:980px){.header{padding-top:66px}}
     @media(max-width:640px){.header{flex-direction:column}.kpi-val{font-size:21px}.aging-row{grid-template-columns:64px 1fr 110px}}
   </style>
@@ -231,6 +248,31 @@
       <button class="btn btn-ghost" id="mpCancelar">Cancelar</button>
       <button class="btn btn-primary" id="mpSalvar">Salvar preço</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalEdicao">
+  <div class="modal largo" role="dialog" aria-modal="true" aria-labelledby="edTitulo">
+    <h2 id="edTitulo">Editar pedido</h2>
+    <div class="nota" id="edSub" style="margin-bottom:14px"></div>
+    <div class="ed-grid" id="edCampos"></div>
+    <b style="font-size:12px">Itens</b>
+    <div class="table-wrap"><table class="ed-itens" id="edItens"></table></div>
+    <button class="btn btn-ghost btn-sm" id="edAddItem" style="margin-top:8px">+ Adicionar item</button>
+    <div class="form-row" style="margin-top:14px"><label for="edMotivo">Motivo da alteração</label><textarea id="edMotivo" rows="2" placeholder="Ex.: conciliação com o cliente em 16/09; cliente aumentou o pedido"></textarea></div>
+    <div id="edPreview"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="edCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="edSalvar" disabled>Salvar nova versão</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalVersoes">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="vsTitulo" style="max-width:640px">
+    <h2 id="vsTitulo">Versões do pedido</h2>
+    <div id="vsLista" style="margin-top:10px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" id="vsFechar">Fechar</button></div>
   </div>
 </div>
 
@@ -475,6 +517,8 @@ function renderCarteira() {
   tab.querySelectorAll('tr.clicavel').forEach(function(tr) {
     tr.addEventListener('click', function() { cartAberto = cartAberto === tr.dataset.id ? null : tr.dataset.id; renderCarteira(); });
   });
+  tab.querySelectorAll('[data-editar]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); abrirEdicao(b.dataset.editar); }); });
+  tab.querySelectorAll('[data-versoes]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); abrirVersoes(b.dataset.versoes); }); });
 }
 function detalhePedido(p) {
   var estados = {ABERTO: 'Aberto', ATENDIDO: 'Atendido', FECHADO: 'Encerrado', A_CONFERIR: 'A conferir'};
@@ -489,8 +533,11 @@ function detalhePedido(p) {
   return '<tr class="detalhe"><td colspan="13"><table><thead><tr><th>SKU</th><th>Produto</th><th>Situação</th><th class="num">Pedido</th><th class="num">Produzido</th>' +
     '<th class="num">Expedido</th><th class="num">Em estoque (WMS)</th><th class="num">A produzir</th><th class="num">Preço</th><th>1ª OP</th><th>Última saída</th></tr></thead><tbody>' +
     linhas + '</tbody></table>' +
-    '<div class="nota" style="margin-top:6px">Criado por ' + esc(p.criadoPor || '—') + (p.percentualNF != null ? ' · NF ' + p.percentualNF + '%' : '') +
-    (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</div></td></tr>';
+    '<div class="nota" style="margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span>Criado por ' + esc(p.criadoPor || '—') + (p.percentualNF != null ? ' · NF ' + p.percentualNF + '%' : '') +
+    (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</span>' +
+    (p.temComercial && podeEditarComercial() && !p.cancelado ? '<button class="btn btn-primary btn-sm" data-editar="' + esc(p.id) + '">Editar pedido</button>' : '') +
+    (p.versao > 1 ? '<button class="btn btn-ghost btn-sm" data-versoes="' + esc(p.id) + '">Versões (' + p.versao + ')</button>' : '') +
+    (!p.temComercial ? '<span class="muted">Pedido antigo sem cadastro comercial: edite pela tela de Pedidos.</span>' : '') + '</div></td></tr>';
 }
 
 // ── CLIENTES ─────────────────────────────────────────────────────────
@@ -666,7 +713,7 @@ function renderFaturamento() {
 ['prcBusca', 'prcCliente', 'prcFiltro'].forEach(function(id) {
   document.getElementById(id).addEventListener(id === 'prcBusca' ? 'input' : 'change', renderPrecos);
 });
-function podeEditarPreco() {
+function podeEditarComercial() {
   var u = window.currentUser;
   if (!u) return false;
   if (u.role === 'admin' || u.role === 'pcp') return true;
@@ -685,7 +732,7 @@ function renderPrecos() {
     if (busca && normalizeSearch(t.sku + ' ' + t.descricao + ' ' + t.cliente).indexOf(busca) === -1) return false;
     return true;
   });
-  var editar = podeEditarPreco();
+  var editar = podeEditarComercial();
   var html = '<thead><tr><th>Cliente</th><th>SKU</th><th>Produto</th><th class="num">Preço vigente</th><th>Desde</th><th>Próximo reajuste</th>' +
     '<th class="num">Último praticado</th><th class="num">Desvio</th><th></th></tr></thead><tbody>';
   if (!lista.length) html += '<tr><td colspan="9" class="vazio">Nenhum SKU neste filtro.</td></tr>';
@@ -747,6 +794,149 @@ document.getElementById('mpSalvar').addEventListener('click', function() {
     .catch(function(e) { erroEl.textContent = 'Erro ao salvar: ' + e.message; erroEl.style.display = 'block'; })
     .finally(function() { btn.disabled = false; });
 });
+
+// ── EDIÇÃO DE PEDIDO (shared/pedido-edicao.js) ───────────────────────
+var ed = null; // {id, pedido (análise), itens: [{sku,qtd,valorUnitario,desconto}]}
+function produtosDoCliente(p) {
+  var alvo = GestaoComercial.norm(p.cliente);
+  var lista = Object.keys(raw.produtos || {}).map(function(k) { return raw.produtos[k]; }).filter(function(x) {
+    return x && x.sku && x.ativo !== 'Inativo' && (x.clienteKey === p.clienteKey || GestaoComercial.norm(x.cliente) === alvo);
+  });
+  p.itens.forEach(function(i) { if (!lista.some(function(x) { return x.sku === i.sku; })) lista.push({sku: i.sku, descricao: i.descricao}); });
+  return lista.sort(function(a, b) { return String(a.descricao || '').localeCompare(String(b.descricao || '')); });
+}
+function abrirEdicao(id) {
+  var p = analise.pedidos.find(function(x) { return x.id === id; });
+  var pc = (raw.pedidos_comerciais || {})[id];
+  if (!p || !pc) return;
+  var itensPc = Array.isArray(pc.itens) ? pc.itens : Object.values(pc.itens || {});
+  ed = {id: id, pedido: p, versaoAberta: Number(pc.versao) || 1, itens: itensPc.filter(Boolean).map(function(i) {
+    return {sku: i.sku, qtd: i.qtd, valorUnitario: Number(i.valorUnitario) > 0 ? i.valorUnitario : '', desconto: i.desconto || 0};
+  })};
+  document.getElementById('edTitulo').textContent = 'Editar ' + p.numero;
+  document.getElementById('edSub').textContent = p.cliente + ' · versão atual ' + (Number(pc.versao) || 1) + '. Quantidade não fica abaixo do já produzido ou expedido; item com OP ou produção não é removido.';
+  var v = function(c) { return c.split('/').reduce(function(o, k) { return o == null ? undefined : o[k]; }, pc); };
+  var campo = function(c, rotulo, tipo, extra) {
+    var val = v(c); val = val == null ? '' : val;
+    if (tipo === 'frete') return '<div><label>' + rotulo + '</label><select data-campo="' + c + '">' + ['', 'FOB', 'CIF'].map(function(o) { return '<option value="' + o + '"' + (o === val ? ' selected' : '') + '>' + (o || '—') + '</option>'; }).join('') + '</select></div>';
+    if (tipo === 'area') return '<div class="full"><label>' + rotulo + '</label><textarea rows="2" data-campo="' + c + '">' + esc(val) + '</textarea></div>';
+    return '<div' + (extra || '') + '><label>' + rotulo + '</label><input type="' + tipo + '" data-campo="' + c + '" value="' + esc(val) + '"' + (tipo === 'number' ? ' min="0" max="100" step="1"' : '') + '></div>';
+  };
+  document.getElementById('edCampos').innerHTML = [
+    campo('numeroPedidoCliente', 'Nº do pedido do cliente', 'text'), campo('dataPedido', 'Data do pedido', 'date'), campo('previsaoComercialEntrega', 'Previsão de entrega', 'date'),
+    campo('prazoPagamento', 'Condição de pagamento', 'text'), campo('percentualNF', '% NF', 'number'), campo('frete/tipo', 'Frete', 'frete'),
+    campo('frete/prazo', 'Prazo do frete', 'text'), campo('frete/enderecoEntrega', 'Endereço de entrega', 'text', ' style="grid-column:span 2"'),
+    campo('enderecoFaturamento', 'Endereço de faturamento', 'text', ' class="full"'), campo('observacoes', 'Observações', 'area')
+  ].join('');
+  document.getElementById('edCampos').querySelectorAll('[data-campo]').forEach(function(el) { el.addEventListener('input', previewEdicao); el.addEventListener('change', previewEdicao); });
+  document.getElementById('edMotivo').value = '';
+  renderItensEdicao();
+  document.getElementById('modalEdicao').classList.add('open');
+}
+function renderItensEdicao() {
+  var p = ed.pedido, prods = produtosDoCliente(p);
+  var ctx = PedidoEdicao.contextoItens(ed.id, raw.pedidos, raw.ops, p.itens);
+  var dataRef = (document.querySelector('#edCampos [data-campo="dataPedido"]') || {}).value || p.dataPedido || hojeLocal();
+  document.getElementById('edItens').innerHTML = '<thead><tr><th>Produto</th><th class="num">Quantidade</th><th class="num">Preço un.</th><th class="num">Desconto R$</th><th></th></tr></thead><tbody>' +
+    ed.itens.map(function(i, idx) {
+      var c = ctx[i.sku];
+      var piso = c ? Math.max(c.produzido, c.expedido) : 0;
+      var travado = c && (c.ops.length || c.produzido > 0 || c.expedido > 0);
+      var vig = i.sku ? GestaoComercial.precoVigente(raw.precos_venda, i.sku, dataRef) : null;
+      // Sem preço na data do pedido: sugere o de hoje (item novo em pedido antigo).
+      var vigHoje = !vig && i.sku ? GestaoComercial.precoVigente(raw.precos_venda, i.sku, hojeLocal()) : null;
+      var trava = c ? [c.produzido ? 'produzido ' + un(c.produzido) : '', c.expedido ? 'expedido ' + un(c.expedido) : '', c.ops.length ? 'OP ' + c.ops.join(', ') : ''].filter(Boolean).join(' · ') : '';
+      return '<tr><td><select data-i="' + idx + '" data-f="sku"' + (c ? ' disabled' : '') + '><option value="">Escolha o produto...</option>' +
+        prods.map(function(x) { return '<option value="' + esc(x.sku) + '"' + (x.sku === i.sku ? ' selected' : '') + '>' + esc(x.sku + ' — ' + (x.descricao || '')) + '</option>'; }).join('') +
+        '</select>' + (trava ? '<div class="ed-trava">' + esc(trava) + '</div>' : '') + '</td>' +
+        '<td><input type="number" min="' + piso + '" step="1" data-i="' + idx + '" data-f="qtd" value="' + esc(i.qtd) + '">' + (piso ? '<div class="ed-trava">mín. ' + un(piso) + '</div>' : '') + '</td>' +
+        '<td><input type="number" min="0" step="0.0001" data-i="' + idx + '" data-f="valorUnitario" value="' + esc(i.valorUnitario) + '" placeholder="' + (vig ? 'tabela ' + vig.preco : vigHoje ? 'tabela atual ' + vigHoje.preco : 'sem preço') + '"></td>' +
+        '<td><input type="number" min="0" step="0.01" data-i="' + idx + '" data-f="desconto" value="' + esc(i.desconto) + '"></td>' +
+        '<td><button class="btn btn-ghost btn-sm" data-rem="' + idx + '"' + (travado ? ' disabled title="Item com OP, produção ou saída não é removido"' : '') + '>Remover</button></td></tr>';
+    }).join('') + '</tbody>';
+  var tab = document.getElementById('edItens');
+  tab.querySelectorAll('[data-f]').forEach(function(el) {
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function() {
+      ed.itens[+el.dataset.i][el.dataset.f] = el.dataset.f === 'sku' ? el.value : el.value;
+      if (el.dataset.f === 'sku') renderItensEdicao(); else previewEdicao();
+    });
+  });
+  tab.querySelectorAll('[data-rem]').forEach(function(b) { b.addEventListener('click', function() { ed.itens.splice(+b.dataset.rem, 1); renderItensEdicao(); }); });
+  previewEdicao();
+}
+document.getElementById('edAddItem').addEventListener('click', function() { ed.itens.push({sku: '', qtd: '', valorUnitario: '', desconto: 0}); renderItensEdicao(); });
+document.getElementById('edMotivo').addEventListener('input', previewEdicao);
+function propostaEdicao() {
+  var campos = {};
+  document.querySelectorAll('#edCampos [data-campo]').forEach(function(el) { campos[el.dataset.campo] = el.value; });
+  return {campos: campos, itens: ed.itens.map(function(i) { return {sku: i.sku, qtd: i.qtd, valorUnitario: i.valorUnitario, desconto: i.desconto}; })};
+}
+function baseEdicao() {
+  return {id: ed.id, pedidoComercial: raw.pedidos_comerciais[ed.id], pedidos: raw.pedidos, ops: raw.ops, produtos: raw.produtos, analiseItens: ed.pedido.itens};
+}
+function autorAtual() { return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser || {}).email || 'desconhecido'; }
+var edPlano = null;
+function previewEdicao() {
+  if (!ed) return;
+  edPlano = PedidoEdicao.planejar(baseEdicao(), propostaEdicao(), {motivo: document.getElementById('edMotivo').value, autor: autorAtual()});
+  var mud = edPlano.mudancas.map(function(m) { return '<li>' + esc(PedidoEdicao.descrever(m)) + '</li>'; }).join('');
+  var erros = edPlano.erros.filter(function(e) { return !/motivo|Nada foi alterado/.test(e) || edPlano.mudancas.length; });
+  document.getElementById('edPreview').innerHTML = '<div class="ed-preview">' +
+    (mud ? '<b>O que muda na versão ' + edPlano.versaoNova + '</b><ul>' + mud + '</ul>' : '<span class="muted">Nenhuma alteração ainda.</span>') +
+    (edPlano.avisos.length ? '<div class="ed-avisos" style="margin-top:6px">' + edPlano.avisos.map(esc).join('<br>') + '</div>' : '') +
+    (erros.length ? '<div class="ed-erros" style="margin-top:6px">' + erros.map(esc).join('<br>') + '</div>' : '') + '</div>';
+  document.getElementById('edSalvar').disabled = !!edPlano.erros.length;
+}
+function fecharEdicao() { document.getElementById('modalEdicao').classList.remove('open'); ed = null; edPlano = null; }
+document.getElementById('edCancelar').addEventListener('click', fecharEdicao);
+document.getElementById('edSalvar').addEventListener('click', function() {
+  if (!ed || !edPlano || edPlano.erros.length) return;
+  var btn = this, id = ed.id, versaoAberta = ed.versaoAberta, meta = {motivo: document.getElementById('edMotivo').value, autor: autorAtual(), agora: new Date().toISOString()};
+  var proposta = propostaEdicao();
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  // Relê o pedido e reserva o número da versão: se alguém salvou antes, para.
+  db.ref('pedidos_comerciais/' + id).once('value').then(function(snap) {
+    var pc = snap.val();
+    // A lista de itens do editor foi montada na versão aberta: salvar sobre
+    // uma versão mais nova apagaria a alteração de outra pessoa.
+    if ((Number(pc && pc.versao) || 1) !== versaoAberta) throw new Error('Outra pessoa salvou este pedido depois que você abriu o editor. Feche e abra de novo para ver a versão atual.');
+    var base = Object.assign(baseEdicao(), {pedidoComercial: pc});
+    var plano = PedidoEdicao.planejar(base, proposta, meta);
+    if (plano.erros.length) throw new Error(plano.erros.join(' '));
+    return db.ref('pedidos_comerciais/' + id + '/versao').transaction(function(v) {
+      return (Number(v) || 1) === plano.versaoAtual ? plano.versaoNova : undefined;
+    }).then(function(res) {
+      if (!res.committed) throw new Error('Outra pessoa salvou este pedido agora há pouco. Feche e abra de novo para ver a versão atual.');
+      return db.ref().update(PedidoEdicao.atualizacoes(base, plano, meta)).catch(function(err) {
+        return db.ref('pedidos_comerciais/' + id + '/versao').set(plano.versaoAtual === 1 && !pc.versao ? null : plano.versaoAtual).then(function() { throw err; });
+      });
+    }).then(function() {
+      var removidas = plano.mudancas.filter(function(m) { return m.tipo === 'ITEM_REMOVIDO'; })
+        .map(function(m) { return plano.ctx[m.sku] && plano.ctx[m.sku].linhaKey; }).filter(Boolean);
+      return Promise.all(removidas.map(function(k) { return typeof cleanFutureSlots === 'function' ? cleanFutureSlots(k, db) : null; }));
+    });
+  }).then(function() {
+    fecharEdicao();
+  }).catch(function(e) {
+    var box = document.getElementById('edPreview');
+    box.insertAdjacentHTML('beforeend', '<div class="ed-erros" style="margin:6px 0">Não salvou: ' + esc(e.message) + '</div>');
+  }).finally(function() { btn.disabled = false; btn.textContent = 'Salvar nova versão'; });
+});
+
+function abrirVersoes(id) {
+  var pc = (raw.pedidos_comerciais || {})[id] || {};
+  var vs = Object.keys(pc.versoes || {}).map(function(k) { return pc.versoes[k]; }).sort(function(a, b) { return (b.versao || 0) - (a.versao || 0); });
+  document.getElementById('vsTitulo').textContent = 'Versões de ' + (pc.numeroFormatado || id);
+  document.getElementById('vsLista').innerHTML = vs.length ? vs.map(function(v) {
+    return '<div class="versao"><b>Versão ' + v.versao + '</b> · ' + esc(new Date(v.em).toLocaleString('pt-BR')) + ' · ' + esc(v.por || '—') +
+      '<div>Motivo: ' + esc(v.motivo || '—') + '</div><ul style="margin:4px 0 0 18px">' +
+      (v.mudancas || []).map(function(m) { return '<li>' + esc(m.texto || PedidoEdicao.descrever(m)) + '</li>'; }).join('') + '</ul>' +
+      (v.email ? '<div class="muted">E-mail à diretoria: ' + esc(v.email.status || '') + '</div>' : '') + '</div>';
+  }).join('') + '<div class="versao"><b>Versão 1</b> · pedido original</div>' : '<div class="vazio">Pedido sem edições.</div>';
+  document.getElementById('modalVersoes').classList.add('open');
+}
+document.getElementById('vsFechar').addEventListener('click', function() { document.getElementById('modalVersoes').classList.remove('open'); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { fecharEdicao(); document.getElementById('modalVersoes').classList.remove('open'); } });
 </script>
 </body>
 </html>
