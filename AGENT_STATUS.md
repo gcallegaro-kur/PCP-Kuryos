@@ -118,6 +118,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Operação de dados — importação da pasta 02. Comercial (2026-09-17).**
+  Sem código. 751 caminhos planos, cópia antes em
+  `../backups/2026-09-17_importacao_comercial/`, teste em 1 registro e
+  conferência profunda 751/751. `precos_venda`: 110 SKUs / 116 vigências
+  (id `imp_AAAAMMDD`, `origem: IMPORTACAO_PASTA_COMERCIAL`, motivo com o
+  arquivo). 17 pedidos comerciais completados só em campo vazio (preço dos
+  itens + linha do PCP, nº do cliente, condição, % NF, frete) com marca
+  `importacaoComercial`; pedido 0006 e itens suspeitos (pedidos 10 e 24) fora.
+  `clientes/*/condicaoPagamento` em 8 clientes que estavam vazios. Nenhuma
+  versão nem e-mail gerado. Cobertura de preço da carteira: 8% -> 77%.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — Gestão Comercial (2026-09-16).** Três commits, todos
   por worktree limpo: `bca729a` (22:25, Hosting + RTDB: tela
   `gestao_comercial.html` no módulo comercial, motor
