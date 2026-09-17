@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/inspecao-pa.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -357,6 +358,41 @@
         observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.
       </div>
 
+      <!-- CK-7 — inspeção de produto acabado. Só para palete: o plano acima
+           é a análise de GRANEL e não se faz diante de um palete pronto. -->
+      <div id="qCk7Box" style="display:none">
+        <div class="plano-wrap">
+          <div class="plano-head"><span>Inspeção de produto acabado (CK-7)</span><span id="qCk7Resumo"></span></div>
+          <div style="padding:12px">
+            <div class="field-hint" style="margin-bottom:6px">Parâmetros do produto — usados no julgamento e guardados para as próximas inspeções.</div>
+            <div class="form-grid" id="qCk7Param">
+              <div class="form-group">
+                <label>Conteúdo nominal</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="qCk7Nominal" min="0" step="any" placeholder="200">
+                  <select id="qCk7Unidade" style="width:90px"><option value="g">g</option><option value="ml">ml</option></select>
+                </div>
+              </div>
+              <div class="form-group"><label>Unidades por caixa</label><input type="number" id="qCk7UnCaixa" min="0" step="1" placeholder="24"></div>
+              <div class="form-group"><label>Código de barras do produto</label><input type="text" id="qCk7EanProduto" placeholder="EAN-13"></div>
+              <div class="form-group"><label>Código de barras da caixa</label><input type="text" id="qCk7EanCaixa" placeholder="DUN-14 / EAN"></div>
+            </div>
+            <div id="qCk7Amostra" class="section-note" style="margin:8px 0"></div>
+            <div class="plano-scroll"><table class="plano-tabela"><tbody id="qCk7Itens"></tbody></table></div>
+            <div id="qCk7Pesos" style="margin-top:12px"></div>
+            <div class="form-grid" style="margin-top:10px">
+              <div class="form-group"><label>Retenção — unidades coletadas</label><input type="number" id="qCk7RetUn" min="0" step="1" placeholder="3"></div>
+              <div class="form-group"><label>Retenção — local</label><input type="text" id="qCk7RetLocal" placeholder="Ex.: prateleira RET-01"></div>
+            </div>
+            <div class="form-group">
+              <label>Laudo externo (físico-químico / microbiológico)</label>
+              <input type="text" id="qCk7Lab" placeholder="Número e resultado do laudo — opcional, não trava a liberação">
+            </div>
+            <div id="qCk7Impedimentos" class="alert alert-danger" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-grid">
         <div class="form-group">
           <label>Data da inspeção</label>
@@ -683,6 +719,8 @@ function nomeItem(codigo) {
    ABA 1 — FILA DE INSPEÇÃO
    ══════════════════════════════════════════════════════════════════════ */
 var laudoAtual = null; // { itemCodigo, loteKey, lote, itemTipo, plano, resultados }
+var allParametrosPa = {};
+dbOnValue(db.ref('parametros_pa'), function(snap) { allParametrosPa = snap.val() || {}; });
 
 function renderFila() {
   var tbody = document.getElementById('qFilaBody');
@@ -747,7 +785,9 @@ function renderFila() {
       return '<tr>' +
         '<td>' + (f.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') +
           '<b>' + escapeHtml(f.itemCodigo) + '</b>' +
-          (espec ? ' <span class="badge badge-blue" title="Tem plano de inspeção cadastrado">📋</span>' : '') +
+          (f.itemTipo === 'produto'
+            ? ' <span class="badge badge-purple" title="Checklist de produto acabado (CK-7)">CK-7</span>'
+            : espec ? ' <span class="badge badge-blue" title="Tem plano de inspeção cadastrado">📋</span>' : '') +
           (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
         '<td>' + escapeHtml(f.loteOrigem || '—') +
           (f.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(f.dataValidade) + '</span>' : '') + '</td>' +
@@ -818,9 +858,12 @@ function abrirLaudo(itemCodigo, loteKey) {
   var forn = fornecedorDoLote(lote, allPedidosCompra);
   var entrada = lote.recebimento || null;
 
+  var ehPa = itemTipo === 'produto';
   laudoAtual = {
     itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, itemTipo: itemTipo,
-    espec: espec, resultados: {}, fornecedor: forn
+    espec: espec, resultados: {}, fornecedor: forn,
+    ehPa: ehPa, ck7: {respostas: {}, pesos: [], camposMontados: false},
+    parametros: ehPa ? Object.assign({}, allParametrosPa[itemKey] || {}) : null
   };
 
   document.getElementById('modalLaudoTitle').textContent =
@@ -869,13 +912,39 @@ function abrirLaudo(itemCodigo, loteKey) {
     : 'Entrada anterior ao novo formulário: complete os dados disponíveis durante o laudo.';
   document.getElementById('qObservacao').value = '';
 
+  if (laudoAtual.ehPa) {
+    var par = InspecaoPA.parametros(laudoAtual.parametros);
+    document.getElementById('qCk7Nominal').value = par.conteudoNominal == null ? '' : par.conteudoNominal;
+    document.getElementById('qCk7Unidade').value = par.unidadeMedida;
+    document.getElementById('qCk7UnCaixa').value = par.unidadesPorCaixa == null ? '' : par.unidadesPorCaixa;
+    document.getElementById('qCk7EanProduto').value = par.eanProduto;
+    document.getElementById('qCk7EanCaixa').value = par.eanCaixa;
+    document.getElementById('qCk7RetUn').value = '';
+    document.getElementById('qCk7RetLocal').value = '';
+    document.getElementById('qCk7Lab').value = '';
+    ['qCk7Nominal', 'qCk7Unidade', 'qCk7UnCaixa', 'qCk7EanProduto', 'qCk7EanCaixa'].forEach(function(id) {
+      document.getElementById(id).onchange = renderCk7;
+    });
+  }
   renderPlanoInspecao();
+  renderCk7();
   document.getElementById('modalLaudoBg').classList.add('open');
 }
 
 function renderPlanoInspecao() {
   var box = document.getElementById('qPlanoBox');
   var vazio = document.getElementById('qSemPlano');
+  // Achado do usuário (17/09): a especificação cadastrada é a análise de
+  // GRANEL (aspecto, pH, densidade, teor de álcool) -- de tacho, antes do
+  // envase. Num palete pronto ela não tem como ser feita, e escondia o que
+  // realmente precisa ser visto. Para PA vale o CK-7 abaixo.
+  if (laudoAtual && laudoAtual.ehPa) {
+    box.style.display = 'none';
+    vazio.style.display = '';
+    vazio.innerHTML = 'A análise de granel (aspecto, cor, odor, pH, densidade) pertence à manipulação do lote, antes do envase — não à liberação do palete. Aqui vale a inspeção de produto acabado abaixo.';
+    return;
+  }
+  vazio.innerHTML = 'Este item não tem especificação cadastrada — o laudo fica pelo checklist abaixo e pela observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.';
   var itens = laudoAtual && laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
   if (!itens || !Object.keys(itens).length) {
     box.style.display = 'none';
@@ -934,6 +1003,138 @@ function renderPlanoInspecao() {
   });
 }
 
+// Parâmetros digitados na hora (viram parametros_pa/{sku} ao salvar).
+function ck7ParametrosDaTela() {
+  var v = function(id) { var x = document.getElementById(id).value; return x === '' ? null : x; };
+  return {
+    conteudoNominal: v('qCk7Nominal') == null ? null : Number(v('qCk7Nominal')),
+    unidadeMedida: document.getElementById('qCk7Unidade').value || 'g',
+    unidadesPorCaixa: v('qCk7UnCaixa') == null ? null : Number(v('qCk7UnCaixa')),
+    eanProduto: document.getElementById('qCk7EanProduto').value.trim(),
+    eanCaixa: document.getElementById('qCk7EanCaixa').value.trim(),
+    torqueAtivo: !!(laudoAtual.parametros && laudoAtual.parametros.torqueAtivo),
+    torqueMin: laudoAtual.parametros ? laudoAtual.parametros.torqueMin : null,
+    torqueMax: laudoAtual.parametros ? laudoAtual.parametros.torqueMax : null,
+    toleranciaPct: laudoAtual.parametros ? laudoAtual.parametros.toleranciaPct : null
+  };
+}
+
+function caixasDoPalete(lote) {
+  var fechadas = Number(lote.caixasFechadas || 0) || 0;
+  return fechadas + (Number(lote.unidadesCaixaParcial || 0) > 0 ? 1 : 0);
+}
+
+function avaliarCk7() {
+  var par = ck7ParametrosDaTela();
+  return InspecaoPA.avaliar(laudoAtual.ck7.respostas, laudoAtual.ck7.pesos, par, {caixas: caixasDoPalete(laudoAtual.lote)});
+}
+
+function renderCk7() {
+  var box = document.getElementById('qCk7Box');
+  if (!laudoAtual || !laudoAtual.ehPa) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  var aval = avaliarCk7();
+  var par = aval.parametros;
+
+  document.getElementById('qCk7Resumo').innerHTML =
+    '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
+    '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
+    '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>' +
+    (aval.criticosNC ? ' <span class="badge badge-red">⚠ crítico</span>' : '');
+
+  var amostra = aval.amostragem;
+  document.getElementById('qCk7Amostra').innerHTML = amostra.caixas
+    ? '<b>Amostra:</b> ' + escapeHtml(amostra.texto) + '. Inspecione as unidades dessas caixas.'
+    : 'Palete sem número de caixas registrado na conferência — informe a amostra na observação.';
+
+  var secaoAtual = '';
+  document.getElementById('qCk7Itens').innerHTML = aval.linhas.map(function(l) {
+    var cab = '';
+    if (l.secao !== secaoAtual) {
+      secaoAtual = l.secao;
+      cab = '<tr><td colspan="3" style="background:var(--surface-2);font-weight:700;font-size:11px;text-transform:uppercase;color:var(--muted)">' + escapeHtml(l.secao) + '</td></tr>';
+    }
+    var badge = l.severidade === 'CRITICO' ? '<span class="badge badge-red">crítico</span>'
+      : l.severidade === 'MAIOR' ? '<span class="badge badge-orange">maior</span>'
+      : '<span class="badge badge-gray">menor</span>';
+    var ref = l.referencia ? '<div class="plano-espec">Esperado: ' + escapeHtml(String(l.referencia)) + '</div>' : '';
+    var campo = l.tipo === 'NUMERO'
+      ? '<input type="number" step="any" class="plano-val" data-ck7-valor="' + escapeAttr(l.id) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '">'
+      : '<select class="plano-cnc" data-ck7-cnc="' + escapeAttr(l.id) + '">' +
+          '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
+          '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
+          '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option>' +
+          '<option value="NA"' + (l.cnc === 'NA' ? ' selected' : '') + '>NA</option>' +
+        '</select>';
+    var icone = l.conforme === true ? '<span style="color:var(--success)">✓</span>'
+      : l.conforme === false ? '<span style="color:var(--danger)">✕</span>'
+      : l.cnc === 'NA' ? '<span style="color:var(--muted)">NA</span>' : '<span style="color:var(--muted)">·</span>';
+    return cab + '<tr' + (l.conforme === false ? ' class="row-nc"' : '') + '>' +
+      '<td><span class="plano-ensaio">' + escapeHtml(l.texto) + '</span> ' + badge + ref +
+        (l.motivo ? '<div class="plano-espec" style="color:var(--danger)">' + escapeHtml(l.motivo) + '</div>' : '') + '</td>' +
+      '<td style="width:92px">' + campo + '</td>' +
+      '<td class="plano-res">' + icone + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // Pesagem: uma linha por unidade da amostra (envase manual tem deriva --
+  // a média sozinha esconde unidade fora do limite). Os CAMPOS são montados
+  // uma vez só; redesenhar a cada tecla apagava o que já tinha sido pesado.
+  var pes = aval.pesagem;
+  if (!laudoAtual.ck7.camposMontados) {
+    var qtdCampos = Math.max(amostra.amostra || 0, 1);
+    var inputs = '';
+    for (var i = 0; i < qtdCampos; i++) {
+      inputs += '<input type="number" step="any" class="plano-val" style="width:84px;margin:0 6px 6px 0" placeholder="un ' + (i + 1) + '" data-ck7-peso="' + i + '">';
+    }
+    document.getElementById('qCk7Pesos').innerHTML =
+      '<label>Pesagem das unidades (<span id="qCk7PesoUn">' + escapeHtml(par.unidadeMedida) + '</span>)</label>' +
+      '<div class="field-hint" style="margin-bottom:6px" id="qCk7PesoFaixa"></div>' +
+      '<div>' + inputs + '</div>' +
+      '<div class="field-hint" style="margin-top:4px" id="qCk7PesoResumo"></div>';
+    laudoAtual.ck7.camposMontados = true;
+    document.getElementById('qCk7Pesos').querySelectorAll('[data-ck7-peso]').forEach(function(inp) {
+      inp.addEventListener('change', function() {
+        laudoAtual.ck7.pesos[Number(inp.getAttribute('data-ck7-peso'))] = inp.value === '' ? null : Number(inp.value);
+        renderCk7();
+      });
+    });
+  }
+  document.getElementById('qCk7PesoUn').textContent = par.unidadeMedida;
+  document.getElementById('qCk7PesoFaixa').textContent = par.conteudoNominal != null
+    ? 'Nominal ' + par.conteudoNominal + par.unidadeMedida + ' · limite individual ' + pes.limiteIndividual + par.unidadeMedida + ' (−' + par.toleranciaPct + '%)'
+    : 'Informe o conteúdo nominal acima para o sistema julgar a pesagem.';
+  document.getElementById('qCk7PesoResumo').innerHTML = pes.n
+    ? 'Média <b>' + fmtNum(pes.media) + '</b> · mínimo <b>' + fmtNum(pes.minimo) + '</b> · máximo ' + fmtNum(pes.maximo) +
+      (pes.conforme === false ? ' <span class="badge badge-red">fora</span>' : pes.conforme === true ? ' <span class="badge badge-green">ok</span>' : '')
+    : '';
+
+  var imped = document.getElementById('qCk7Impedimentos');
+  var falta = aval.faltamParametros.length ? ['faltam parâmetros do produto: ' + aval.faltamParametros.join(' e ')] : [];
+  var listas = aval.impedimentos.concat(falta);
+  imped.className = 'alert ' + (aval.impedimentos.length ? 'alert-danger' : 'alert-success') + (listas.length ? ' show' : '');
+  imped.innerHTML = listas.length
+    ? (aval.impedimentos.length ? '<b>Não é possível liberar:</b> ' : '<b>Atenção:</b> ') + escapeHtml(listas.join('; ')) + '.'
+    : '';
+
+  document.getElementById('qCk7Itens').querySelectorAll('[data-ck7-cnc]').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var id = sel.getAttribute('data-ck7-cnc');
+      laudoAtual.ck7.respostas[id] = laudoAtual.ck7.respostas[id] || {};
+      laudoAtual.ck7.respostas[id].cnc = sel.value;
+      renderCk7();
+    });
+  });
+  document.getElementById('qCk7Itens').querySelectorAll('[data-ck7-valor]').forEach(function(inp) {
+    inp.addEventListener('change', function() {
+      var id = inp.getAttribute('data-ck7-valor');
+      laudoAtual.ck7.respostas[id] = laudoAtual.ck7.respostas[id] || {};
+      laudoAtual.ck7.respostas[id].valor = inp.value;
+      renderCk7();
+    });
+  });
+}
+
 function fecharModalLaudo() {
   document.getElementById('modalLaudoBg').classList.remove('open');
   laudoAtual = null;
@@ -980,6 +1181,29 @@ function salvarLaudo(decisao) {
     });
     resumoPlano = aval.conformes + 'C / ' + aval.naoConformes + 'NC / ' + aval.pendentes + ' pend.';
   }
+  // CK-7: defeito CRÍTICO ou peso fora NÃO liberam palete (decisão do
+  // usuário em 17/09). Rótulo errado, lote ilegível e vazamento não são
+  // desvio negociável -- o caminho é reter ou mandar para retrabalho.
+  var ck7 = null, avalPa = null;
+  if (laudoAtual.ehPa) {
+    avalPa = avaliarCk7();
+    if (avalPa.bloqueia && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO' || decisao === 'APROVADO_CONCESSAO')) {
+      showAlert('Não é possível liberar: ' + avalPa.impedimentos.join('; ') + '. Retenha o palete ou envie para retrabalho.', 'danger');
+      return;
+    }
+    if (!avalPa.completo && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO')) {
+      if (!confirm('O checklist tem ' + avalPa.pendentes + ' item(ns) sem resposta' +
+        (avalPa.pesagem.pendente ? ' e nenhuma pesagem registrada' : '') + '.\n\nLiberar assim mesmo?')) return;
+    }
+    ck7 = InspecaoPA.registro(avalPa, {
+      pesos: laudoAtual.ck7.pesos,
+      retencaoUnidades: document.getElementById('qCk7RetUn').value,
+      retencaoLocal: document.getElementById('qCk7RetLocal').value.trim(),
+      laboratorio: document.getElementById('qCk7Lab').value.trim() || null,
+      dataValidade: laudoAtual.lote.dataValidade || null
+    });
+  }
+
   // Aviso, não bloqueio: liberar apesar de ensaio crítico não conforme é
   // uma decisão que existe (concessão), e travá-la no software só faria
   // registrarem o laudo fora do sistema.
@@ -1007,7 +1231,9 @@ function salvarLaudo(decisao) {
     autorizadoPor: autorizadoPor,
     especificacaoKey: laudoAtual.espec ? laudoAtual.espec.key : null,
     ensaios: ensaios,
-    resumoPlano: resumoPlano
+    resumoPlano: resumoPlano,
+    ck7: ck7,
+    resumoCk7: ck7 ? ck7.resumo : null
   }, currentUserNome(), {
     itemTipo: laudoAtual.itemTipo,
     itemNome: laudoAtual.lote.itemNome || null,
@@ -1019,6 +1245,14 @@ function salvarLaudo(decisao) {
   }).then(function(r) {
     btns.forEach(function(b) { b.disabled = false; });
     if (!r.ok) { showAlert(r.erro, 'danger'); return; }
+    if (laudoAtual && laudoAtual.ehPa) {
+      var par = ck7ParametrosDaTela();
+      db.ref('parametros_pa/' + sanitizeKey(laudoAtual.itemCodigo)).update({
+        conteudoNominal: par.conteudoNominal, unidadeMedida: par.unidadeMedida,
+        unidadesPorCaixa: par.unidadesPorCaixa, eanProduto: par.eanProduto || null,
+        eanCaixa: par.eanCaixa || null, atualizadoEm: new Date().toISOString(), atualizadoPor: currentUserNome()
+      }).catch(function(e) { console.error('Falha ao guardar parâmetros de PA:', e); });
+    }
     fecharModalLaudo();
     var msg, tipo;
     if (r.decisao === 'LIBERADO') { msg = 'Lote liberado — já disponível para a Separação de Materiais.'; tipo = 'success'; }

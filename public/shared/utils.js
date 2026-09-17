@@ -2105,7 +2105,12 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       // registro de análise rastreável -- e o que um COA precisaria ler.
       especificacaoKey: laudo.especificacaoKey || null,
       ensaios: laudo.ensaios || null,
-      resumoPlano: laudo.resumoPlano || null
+      resumoPlano: laudo.resumoPlano || null,
+      // CK-7 (inspecao-pa.js): checklist de produto acabado do palete --
+      // itens conforme/não conforme, amostragem √N+1, pesagem individual,
+      // retenção e laudo externo. Só existe em lote de PA.
+      ck7: laudo.ck7 || null,
+      resumoCk7: laudo.resumoCk7 || null
     };
     // ── Pendência de endereçamento definitivo ──
     // Levantado pelo usuário (2026-09-08): "o correto não seria ir para
