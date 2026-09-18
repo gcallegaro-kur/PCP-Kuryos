@@ -65,8 +65,13 @@ correção da lista, apesar de ser a mais fácil.
   campo do material é um **padrão sugerido**, nunca uma trava — o valor da
   cotação tem que continuar editável.
 
-- **Anexo da proposta do fornecedor (PDF) na cotação** — não é só trabalho
-  de tela: **o Firebase Storage não está configurado no projeto**. Conferido
+- **Anexo da proposta do fornecedor (PDF) na cotação** — **o Storage já
+  está configurado** (Comercial desde setembro; `/manipulacao/{lote}` para a
+  foto da pesagem desde `13f1142`) e existe o módulo `shared/anexos.js`
+  (validação, caminho, registro). Falta só aplicar na cotação, na foto de RNC,
+  no certificado de calibração e no COA — cada um é tela + uma regra em
+  `storage.rules`. Texto original, de quando não havia Storage:
+  **o Firebase Storage não está configurado no projeto**. Conferido
   em 2026-09-07: não existe `storage.rules`, `firebase.json` não tem a chave
   `storage`, e nenhuma tela do sistema faz upload de arquivo (`grep` por
   `firebase.storage` e `input type="file"`: zero ocorrências).
@@ -569,8 +574,10 @@ realmente ganham.
   esperado só aparece depois de informar o contado), rodízio por "há mais
   tempo sem contar + posição ocupada", e ajuste que rateia falta em ordem de
   validade sem tocar o saldo agregado.
-- **Numeração de rua é GLOBAL, não escopada por área** ⚠ **bloqueia povoar as
-  outras áreas** — `estrutura_ruas/{codigoRua}` e o código do endereço é
+- ~~**Numeração de rua é GLOBAL, não escopada por área**~~ — **RESOLVIDO**
+  (confirmado pelo usuário e na base em 2026-09-17: `estrutura_ruas` usa
+  `GAL-1`, `FAB-6`, `DOC-1`…). Texto original mantido abaixo como histórico.
+  ⚠ **bloqueava povoar as outras áreas** — `estrutura_ruas/{codigoRua}` e o código do endereço é
   `rua.nivel.predio`, sem prefixo de área. Hoje as 236 posições estão todas
   em GALPÃO; as outras 4 áreas configuradas (FÁBRICA, RÓTULOS, MATÉRIA PRIMA,
   MATERIAL DE USO E CONSUMO) não têm nenhuma. Quando forem cadastradas, a
@@ -770,9 +777,10 @@ qualquer fase nova:
   temporizador de ronda de 2h e o escalonamento em 30min pressupõem essa
   arquitetura. Hoje só existe `alertas_pendentes`, que é fila de e-mail, não
   tarefa com responsável e prazo.
-- **Anexo de arquivo não existe** — bloqueia foto em RNC, certificado de
-  calibração e PDF do COA. Mesmo bloqueador do anexo de proposta em
-  **Compras** (ver acima): resolver o Storage uma vez destrava os dois.
+- ~~**Anexo de arquivo não existe**~~ — **RESOLVIDO na base** (`13f1142`):
+  Storage configurado e `shared/anexos.js` pronto; a primeira aplicação é a
+  foto obrigatória da pesagem do granel. Foto em RNC, certificado de
+  calibração e PDF do COA agora são trabalho de tela, não de infraestrutura.
 
 **Os 8 checklists (spec 2.2):** 1 parcial de fato, 7 inexistentes.
 

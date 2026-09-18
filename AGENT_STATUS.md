@@ -118,6 +118,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — foto obrigatória da pesagem (2026-09-17).** `13f1142`
+  no `origin/main`; Hosting + regras de Storage por worktree limpo às 23:19 BRT
+  (`manipulacao.html`, `qualidade.html`, `shared/anexos.js`,
+  `shared/manipulacao.js` idênticos ao commit). A pesagem do granel só fecha com
+  foto (câmera do celular), guardada em Storage `/manipulacao/{lote}/` e
+  registrada em `ops/{lote}/manipulacao/pesagem/fotos`; a Qualidade vê as fotos
+  na análise do granel. Módulo novo `shared/anexos.js` (validação por perfil,
+  caminho seguro, registro) para reaproveitar em RNC, calibração e COA.
+  `storage.rules`: pasta `/manipulacao/{lote}` só imagem < 10 MB (Comercial
+  intacto). Testes: `run_anexos_test.js`, `run_manipulacao_test.js`,
+  `run_manipulacao_ui_test.js` + regressões.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — CK-7, inspeção de produto acabado (2026-09-17).**
   `457d010` no `origin/main`; Hosting + regras por worktree limpo às 19:35 BRT
   (`qualidade.html`, `shared/inspecao-pa.js`, `shared/utils.js` idênticos ao
