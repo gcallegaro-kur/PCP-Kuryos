@@ -84,6 +84,17 @@ async function abrir(browser, uid, estadoInicial, pagina) {
           onAuthStateChanged(cb) { setTimeout(() => cb({uid: quem, email: perfil.email, displayName: perfil.nome}), 0); },
           signOut() { return Promise.resolve(); }};
       },
+      storage() {
+        exige('storage');
+        window.__arquivos = window.__arquivos || {};
+        return {ref(caminho) {
+          return {
+            put(arq, meta) { window.__arquivos[caminho] = {bytes: arq.size, tipo: (meta && meta.contentType) || arq.type}; return Promise.resolve(); },
+            getDownloadURL() { return Promise.resolve('https://storage.test/' + caminho); },
+            delete() { delete window.__arquivos[caminho]; return Promise.resolve(); }
+          };
+        }};
+      },
       database() {
         exige('database');
         const ref = (path) => {
@@ -170,7 +181,21 @@ async function campo(page, seletor, valor) {
     await page.waitForFunction(() => /fora do previsto/.test(document.getElementById('mPesagemErros').innerText));
     assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem justificativa não fecha');
     await campo(page, '[data-just="MPES-003"]', 'Ajuste de fragrância autorizado pelo P&D');
+    // Sem foto a pesagem não fecha (pedido do usuário: prova de auditoria).
+    await page.waitForFunction(() => /foto da pesagem/.test(document.getElementById('mPesagemErros').innerText));
+    assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem foto não fecha');
+    await page.setInputFiles('#mFotoInput', {name: 'balanca 1.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(2048, 7)});
+    await page.waitForFunction(() => Object.keys(((window.__db.ops['26260-01'].manipulacao || {}).pesagem || {}).fotos || {}).length === 1, null, {timeout: 8000});
     await page.waitForFunction(() => !document.getElementById('mBtnFecharPesagem').disabled);
+    const fotoGravada = await page.evaluate(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.fotos)[0]);
+    assert.equal(fotoGravada.enviadoPor, 'Operador João');
+    assert.match(fotoGravada.caminho, /^manipulacao\/26260-01\/\d+_balanca_1\.jpg$/);
+    assert.equal(fotoGravada.bytes, 2048);
+    assert.ok(await page.evaluate((c) => !!window.__arquivos[c], fotoGravada.caminho), 'arquivo foi para o Storage');
+    assert.equal(await page.locator('#mFotosLista img').count(), 1, 'miniatura aparece');
+    // Arquivo que não é imagem é recusado antes de subir.
+    await page.setInputFiles('#mFotoInput', {name: 'planilha.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(100, 1)});
+    await page.waitForFunction(() => /Só imagem/.test(document.getElementById('alertBox').innerText));
 
     await page.click('#mBtnFecharPesagem');
     await page.waitForFunction(() => (window.__db.ops['26260-01'].manipulacao || {}).status === 'PESADO', null, {timeout: 8000});
@@ -255,6 +280,7 @@ async function campo(page, seletor, valor) {
     await cq.page.waitForSelector('#modalGranelBg.open');
     assert.match(await cq.page.locator('#qGranelInfo').innerText(), /Pesagem por Operador João/);
     assert.match(await cq.page.locator('#qGranelInfo').innerText(), /conferida por Manipuladora Ana/);
+    assert.match(await cq.page.locator('#qGranelInfo').innerText(), /Fotos da pesagem: foto 1/, 'a auditoria vê a foto');
     const ensaios = await cq.page.locator('#qGranelPlanoBody').innerText();
     assert.match(ensaios, /ASPECTO/, 'a análise de granel usa a especificação do produto');
     assert.match(ensaios, /PH/);

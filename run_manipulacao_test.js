@@ -7,8 +7,9 @@ const previstos = {
   'MP-02': {mpCodigo: 'MP-02', mpNome: 'AGUA DEIONIZADA', unidade: 'kg', previsto: 35},
   'MP-03': {mpCodigo: 'MP-03', mpNome: 'FRAGRANCIA LEAO', unidade: 'kg', previsto: 5}
 };
+const foto = {'-F1': {nomeOriginal: 'balanca.jpg', caminho: 'manipulacao/26260-01/1_balanca.jpg', bytes: 1200}};
 const pesagemOk = {
-  inicio: '2026-09-17T12:00:00Z', fim: '2026-09-17T12:30:00Z', por: 'Operador João',
+  inicio: '2026-09-17T12:00:00Z', fim: '2026-09-17T12:30:00Z', por: 'Operador João', fotos: foto,
   itens: {
     'MP-01': {pesado: 60, loteMaterial: 'AK-2026-000576'},
     'MP-02': {pesado: 35, loteMaterial: 'AK-2026-000577'},
@@ -38,9 +39,15 @@ const pesagemOk = {
 {
   const vazia = M.validarPesagem(previstos, {itens: {}});
   assert.equal(vazia.ok, false);
-  assert.match(vazia.erros[0], /3 matéria/);
+  assert.ok(vazia.erros.some((e) => /3 matéria/.test(e)), vazia.erros.join(' | '));
 
-  const semLote = M.validarPesagem(previstos, {itens: {'MP-01': {pesado: 60}, 'MP-02': {pesado: 35}, 'MP-03': {pesado: 5}}});
+  // Sem foto a pesagem não fecha (pedido do usuário: prova de auditoria).
+  const semFoto = M.validarPesagem(previstos, Object.assign({}, pesagemOk, {fotos: {}}));
+  assert.equal(semFoto.ok, false);
+  assert.match(semFoto.erros[0], /foto da pesagem/);
+  assert.equal(M.EXIGE_FOTO_PESAGEM, true);
+
+  const semLote = M.validarPesagem(previstos, {fotos: foto, itens: {'MP-01': {pesado: 60}, 'MP-02': {pesado: 35}, 'MP-03': {pesado: 5}}});
   assert.ok(semLote.erros.some((e) => /Informe o lote usado de MP-01/.test(e)), 'lote do material é obrigatório');
 
   const ok = M.validarPesagem(previstos, pesagemOk);
@@ -50,11 +57,11 @@ const pesagemOk = {
   assert.equal(linha.foraTolerancia, false, 'dentro dos 2%');
 
   // Fora da tolerância exige justificativa.
-  const fora = {itens: Object.assign({}, pesagemOk.itens, {'MP-03': {pesado: 5.6, loteMaterial: 'AK-1'}})};
+  const fora = {fotos: foto, itens: Object.assign({}, pesagemOk.itens, {'MP-03': {pesado: 5.6, loteMaterial: 'AK-1'}})};
   const semJust = M.validarPesagem(previstos, fora);
   assert.equal(semJust.ok, false);
   assert.match(semJust.erros[0], /MP-03 está 12% fora do previsto/);
-  const comJust = M.validarPesagem(previstos, {itens: Object.assign({}, fora.itens, {'MP-03': {pesado: 5.6, loteMaterial: 'AK-1', justificativa: 'Ajuste de fragrância autorizado'}})});
+  const comJust = M.validarPesagem(previstos, {fotos: foto, itens: Object.assign({}, fora.itens, {'MP-03': {pesado: 5.6, loteMaterial: 'AK-1', justificativa: 'Ajuste de fragrância autorizado'}})});
   assert.equal(comJust.ok, true);
   assert.match(comJust.avisos[0], /12% fora do previsto/);
 }

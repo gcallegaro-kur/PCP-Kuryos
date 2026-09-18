@@ -9,9 +9,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/anexos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -60,6 +62,10 @@
     .etapa.atual{background:var(--primary);color:#fff}
     .val{width:96px}.lote{width:150px}
     .linha-alerta{background:var(--tint-orange-bg)}
+    .fotos{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+    .foto{width:120px;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2);font-size:11px}
+    .foto img{width:120px;height:90px;object-fit:cover;display:block}
+    .foto div{padding:4px 6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     @media(max-width:700px){.val,.lote{width:100%}}
   </style>
 </head>
@@ -107,6 +113,14 @@
           <thead><tr><th>Matéria-prima</th><th style="text-align:right">Previsto</th><th>Pesado</th><th>Lote usado</th><th>Perda</th><th>Justificativa</th><th style="text-align:right">Desvio</th></tr></thead>
           <tbody id="mPesagemBody"></tbody>
         </table></div>
+        <div id="mFotosPesagem" style="margin-top:12px">
+          <label>Foto da pesagem <span class="field-hint">— obrigatória: a tela da balança com o peso, para auditoria</span></label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="file" id="mFotoInput" accept="image/*" capture="environment" style="max-width:320px">
+            <span class="field-hint" id="mFotoStatus"></span>
+          </div>
+          <div class="fotos" id="mFotosLista"></div>
+        </div>
         <div id="mPesagemErros" class="alert alert-danger" style="margin-top:10px"></div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" id="mBtnIniciarPesagem">Iniciar pesagem</button>
@@ -164,6 +178,7 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
+var storage = firebase.storage();
 
 var allOps = {}, allProdutos = {}, allFormulas = {}, allBom = {}, allMateriais = {};
 var opAtual = null;   // chave em ops/
@@ -296,7 +311,7 @@ function renderPainel() {
     (resumo.rendimento != null ? ' · rendimento ' + fmtNum(resumo.rendimento) + ' kg (' + resumo.rendimentoPct + '%)' : '');
 
   // ── Pesagem ──
-  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho});
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotos: (f.pesagem || {}).fotos});
   var podeEditarPesagem = !st || st === 'AGUARDANDO_PESAGEM';
   document.getElementById('mPesagemQuem').textContent = (f.pesagem && f.pesagem.por) ? '— por ' + f.pesagem.por : '';
   document.getElementById('mPesagemBody').innerHTML = val.linhas.length ? val.linhas.map(function(l) {
@@ -312,6 +327,7 @@ function renderPainel() {
       '<td style="text-align:right">' + (l.desvioPct == null ? '—' : l.desvioPct + '%') + '</td></tr>';
   }).join('') : '<tr><td colspan="7" class="no-data">Fórmula não encontrada para este produto — cadastre em Fórmulas/BOM.</td></tr>';
 
+  renderFotos(f, podeEditarPesagem);
   var errosPes = document.getElementById('mPesagemErros');
   errosPes.className = 'alert alert-danger' + (podeEditarPesagem && val.erros.length ? ' show' : '');
   errosPes.textContent = val.erros.join(' ');
@@ -406,6 +422,62 @@ function ligarCampos() {
   });
 }
 
+/* Foto de prova da pesagem (pedido do usuário em 17/09: "usado como backlog
+   e auditoria"). O arquivo vai para o Storage; no banco fica só o registro. */
+function renderFotos(f, editavel) {
+  var fotos = Anexos.lista((f.pesagem || {}).fotos);
+  document.getElementById('mFotoInput').style.display = editavel ? '' : 'none';
+  document.getElementById('mFotosLista').innerHTML = fotos.length ? fotos.map(function(a) {
+    return '<div class="foto">' +
+      (a.url ? '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener"><img src="' + escapeAttr(a.url) + '" alt="Foto da pesagem"></a>' : '') +
+      '<div title="' + escapeAttr(a.nomeOriginal || '') + '">' + escapeHtml(a.enviadoPor || '') + ' · ' + escapeHtml(Anexos.tamanhoLegivel(a.bytes)) + '</div>' +
+      (editavel ? '<div><button class="btn btn-ghost btn-sm" data-remover-foto="' + escapeAttr(a.id) + '">Remover</button></div>' : '') +
+    '</div>';
+  }).join('') : '<span class="field-hint">Nenhuma foto ainda.</span>';
+  document.querySelectorAll('[data-remover-foto]').forEach(function(b) {
+    b.onclick = function() { removerFoto(b.getAttribute('data-remover-foto')); };
+  });
+}
+
+document.getElementById('mFotoInput').addEventListener('change', function() {
+  var input = this, arquivo = input.files && input.files[0];
+  if (!arquivo || !opAtual) return;
+  var v = Anexos.validar(arquivo, {perfil: 'imagem'});
+  if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); input.value = ''; return; }
+  var op = allOps[opAtual];
+  var caminhoArq = Anexos.caminho('manipulacao', opAtual, arquivo.name);
+  var status = document.getElementById('mFotoStatus');
+  status.textContent = 'Enviando ' + Anexos.tamanhoLegivel(arquivo.size) + '...';
+  var ref = storage.ref(caminhoArq);
+  Promise.resolve()
+    .then(function() { return ref.put(arquivo, {contentType: arquivo.type}); })
+    .then(function() { return ref.getDownloadURL(); })
+    .then(function(url) {
+      var reg = Anexos.registro(arquivo, caminhoArq, url, eu());
+      return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotos').push(reg);
+    })
+    .then(function() {
+      status.textContent = '';
+      input.value = '';
+      showAlert('Foto anexada à pesagem do lote ' + (op.lote || opAtual) + '.', 'success');
+    })
+    .catch(function(e) {
+      status.textContent = '';
+      showAlert('Não foi possível enviar a foto: ' + e.message, 'danger');
+    });
+});
+
+function removerFoto(id) {
+  var f = Manipulacao.fase(allOps[opAtual]) || {};
+  var a = ((f.pesagem || {}).fotos || {})[id];
+  if (!a || !confirm('Remover esta foto da pesagem?')) return;
+  Promise.resolve()
+    .then(function() { return storage.ref(a.caminho).delete().catch(function() { return null; }); })
+    .then(function() { return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotos/' + id).remove(); })
+    .then(function() { showAlert('Foto removida.', 'success'); })
+    .catch(function(e) { showAlert('Erro ao remover: ' + e.message, 'danger'); });
+}
+
 function gravarFase(updates) {
   var u = {};
   Object.keys(updates).forEach(function(k) { u['ops/' + opAtual + '/manipulacao/' + k] = updates[k]; });
@@ -424,7 +496,8 @@ document.getElementById('mBtnIniciarPesagem').addEventListener('click', function
    lote endereçado (FEFO), como o apontamento já faz no envase. */
 document.getElementById('mBtnFecharPesagem').addEventListener('click', function() {
   var op = allOps[opAtual];
-  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho});
+  var fotosGravadas = ((Manipulacao.fase(op) || {}).pesagem || {}).fotos;
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotos: fotosGravadas});
   if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
   if (!confirm('Fechar a pesagem do lote ' + op.lote + '?\n\nIsso baixa do estoque o que foi pesado.')) return;
   var btn = this; btn.disabled = true; btn.textContent = 'Baixando estoque...';

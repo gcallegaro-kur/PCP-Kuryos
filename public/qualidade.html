@@ -929,7 +929,15 @@ function abrirLaudoGranel(opKey) {
     'Pesado ' + fmtNum(resumo.pesadoTotal) + ' kg · rendimento ' + (resumo.rendimento != null ? fmtNum(resumo.rendimento) + ' kg' : '—') +
     (resumo.perdaProcessoPct != null ? ' · perda de processo ' + resumo.perdaProcessoPct + '%' : '') + '<br>' +
     'Pesagem por ' + escapeHtml((f.pesagem || {}).por || '—') + ' · conferida por ' + escapeHtml((f.conferencia || {}).por || '—') +
-    ' · manipulada por ' + escapeHtml((f.manipulacao || {}).por || '—');
+    ' · manipulada por ' + escapeHtml((f.manipulacao || {}).por || '—') +
+    // Fotos de prova da pesagem: a auditoria olha aqui (pedido do usuário, 17/09).
+    (function() {
+      var fotos = Object.keys((f.pesagem || {}).fotos || {}).map(function(k) { return f.pesagem.fotos[k]; })
+        .filter(function(a) { return a && a.url; });
+      return '<br>Fotos da pesagem: ' + (fotos.length
+        ? fotos.map(function(a, i) { return '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener">foto ' + (i + 1) + '</a>'; }).join(' · ')
+        : '<b style="color:var(--danger)">nenhuma</b>');
+    })();
   document.getElementById('qGranelObs').value = '';
   renderPlanoGranel();
   document.getElementById('modalGranelBg').classList.add('open');

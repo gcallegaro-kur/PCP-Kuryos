@@ -35,6 +35,10 @@
   };
   // Diferença aceita entre previsto e pesado antes de exigir justificativa.
   var TOLERANCIA_PESAGEM_PCT = 2;
+  // Pedido do usuário (2026-09-17): a pesagem só fecha com foto de prova --
+  // "usado como backlog e auditoria". É o registro de que aquele peso foi o
+  // que a balança mostrou, e vale mais que qualquer campo digitado.
+  var EXIGE_FOTO_PESAGEM = true;
 
   function n(v) { var x = Number(v); return isFinite(x) ? x : null; }
   function num(v) { var x = Number(v); return isFinite(x) ? x : 0; }
@@ -90,6 +94,8 @@
 
   function validarPesagem(previstos, pesagem) {
     var linhas = linhasPesagem(previstos, pesagem), erros = [], avisos = [];
+    var fotos = Object.keys((pesagem && pesagem.fotos) || {}).length;
+    if (EXIGE_FOTO_PESAGEM && !fotos) erros.push('Anexe ao menos uma foto da pesagem (prova de auditoria).');
     if (!linhas.length) erros.push('A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
     var pendentes = linhas.filter(function(l) { return l.pendente; });
     if (pendentes.length) erros.push(pendentes.length + ' matéria(s)-prima(s) sem peso registrado.');
@@ -102,7 +108,7 @@
     linhas.filter(function(l) { return l.foraTolerancia && l.justificativa; }).forEach(function(l) {
       avisos.push(l.mpCodigo + ': ' + l.desvioPct + '% fora do previsto (' + l.justificativa + ').');
     });
-    return {ok: !erros.length, erros: erros, avisos: avisos, linhas: linhas};
+    return {ok: !erros.length, erros: erros, avisos: avisos, linhas: linhas, fotos: fotos};
   }
 
   /* Conferência: OUTRA pessoa. É a regra que o usuário pediu, e é o que
@@ -210,7 +216,7 @@
   }
 
   return {
-    ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT,
+    ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT, EXIGE_FOTO_PESAGEM: EXIGE_FOTO_PESAGEM,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,
