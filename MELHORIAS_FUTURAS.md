@@ -697,6 +697,49 @@ Pedido" e MRP só usam material do cliente para a demanda dele. Regras em
 
 ## Qualidade
 
+### Revisão da spec do CQ pela Qualidade da Kuryos (2026-09-17)
+
+A Qualidade comentou a spec `ERP_Kuryos_Modulo_CQ_v1.1`. O que virou código já
+está em produção (CK-7 e a fase de granel); o resto fica aqui, com a correção
+que eles fizeram:
+
+- **CK-6, ronda de linha: 2h é muito tempo.** Palavras deles: "tem envase de
+  lote pequeno; envasadora manual, o peso acaba mudando um pouco". Modelo
+  proposto e ainda não construído: intervalo padrão de **1 hora**, configurável
+  por linha, com pontos obrigatórios no início do lote, na retomada após parada
+  ou ajuste e no fim; em lote curto, 3 pontos (início, meio, fim) no lugar do
+  relógio.
+- **CK-5, setup de linha / first article: "pelo menos 32 unidades"** (a spec
+  dizia 5–10). É o checklist que confere os insumos certos e o primeiro peso.
+- **CK-8, higiene e calibração diária:** "verificação diária das balanças,
+  estufas, pHmetro e termohigrômetro" — feita hoje no laboratório, fora do
+  sistema. Calibração 1×/ano por instrumento.
+- **Torquímetro não é usado hoje.** O CK-7 já trata: vedação verificada à mão é
+  obrigatória, e o campo de torque medido só aparece com
+  `parametros_pa/{sku}.torqueAtivo` ligado.
+- **Régua calibrada de 30 e 60 cm** para insumos maiores: instrumento que eles
+  gostariam de ter cadastrado.
+- **Retenção:** MP geralmente retida até o vencimento; PA **validade + 1 ano**,
+  com FQ anual (shelf life). O prazo do PA já está no CK-7; o ensaio anual de
+  estabilidade ainda não existe.
+- **Ajuste de granel deve consumir MP pelo sistema:** "solicitar via sistema a
+  quantidade e especificação para dar baixa do estoque e registrar o lote
+  utilizado. Não pode usar MP que não esteja na composição." Hoje a pesagem já
+  baixa estoque por lote, mas o **ajuste depois do fechamento** não tem fluxo.
+- **Ajuste aprovado precisa seguir para os próximos lotes e atualizar a ANVISA**
+  — versão de ficha técnica com rastro regulatório. Nem sempre uma reprovação
+  muda a especificação; tem que ser avaliado caso a caso.
+- **Análise visual também em MP e granel** (a spec marcava "não" para a seção
+  visual nesses dois tipos de RA).
+- **Assépsia é antes da OP entrar em produção**, não durante — por isso ficou
+  fora da fase de manipulação e pertence ao setup de linha.
+- **WMS de semi-acabado** (pedido do usuário em 17/09): identificar onde está o
+  granel que será envasado. Hoje o granel não tem endereço nem saldo próprio; a
+  fase de manipulação registra o rendimento, mas não vira lote endereçável.
+- **Prazo de análise:** a spec dizia 24h (urgente 4h); a Qualidade anotou que
+  **hoje são 3 dias**.
+
+
 O módulo **existe e está em produção** desde 2026-09-07 (`fc9760f`):
 `qualidade.html`, papel de acesso `qualidade`, fila de inspeção com plano de
 inspeção herdado da especificação cadastrada, RNC com vínculo automático ao
