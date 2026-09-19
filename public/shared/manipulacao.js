@@ -47,6 +47,45 @@
     return Object.keys(no).map(function(id) { return Object.assign({id: id}, no[id]); }).filter(function(a) { return a && a.caminho; });
   }
 
+  /* PESAGEM EM PARCELAS (pedido do usuário em 18/09: "fazer algumas pesagens
+     do mesmo item, ir somando várias pesagens, até atingir o total demandado
+     na OP"). Cada ida à balança é uma parcela com peso, lote e foto próprios
+     -- a segunda pesagem muitas vezes sai de outra embalagem, de outro lote.
+     O total da MP é a SOMA das parcelas; o operador nunca soma de cabeça.
+     Fica em pesagem/parcelas/{itemKey}/{id}, gravada na hora (sobrevive a
+     recarregar a página e a trocar de aparelho). Parcela errada não é
+     apagada: é CANCELADA com motivo e continua no dossiê do lote, riscada. */
+  function parcelasDoItem(pesagem, itemKey, incluirCanceladas) {
+    var no = ((pesagem && pesagem.parcelas) || {})[itemKey] || {};
+    return Object.keys(no).map(function(id) { return Object.assign({id: id}, no[id]); })
+      .filter(function(p) { return p && (incluirCanceladas || !p.canceladaEm); })
+      .sort(function(a, b) { return String(a.em || '').localeCompare(String(b.em || '')) || a.id.localeCompare(b.id); });
+  }
+  // Todas as fotos que provam a pesagem da MP: as das parcelas e, em lote
+  // pesado antes das parcelas existirem, as avulsas de fotosItens.
+  function fotosDaLinha(pesagem, itemKey) {
+    var parc = parcelasDoItem(pesagem, itemKey);
+    if (parc.length) {
+      return parc.filter(function(p) { return p.foto && p.foto.caminho; }).map(function(p, i) {
+        return Object.assign({id: p.id, parcela: i + 1, peso: p.peso, loteMaterial: p.loteMaterial || null}, p.foto);
+      });
+    }
+    return fotosDoItem(pesagem, itemKey);
+  }
+  function lotesUnicos(parc) {
+    var vistos = [];
+    parc.forEach(function(p) { var l = texto(p.loteMaterial); if (l && vistos.indexOf(l) < 0) vistos.push(l); });
+    return vistos;
+  }
+  // Validação de UMA ida à balança, antes de gravar.
+  function validarParcela(parcela) {
+    var p = parcela || {}, erros = [];
+    if (!(n(p.peso) > 0)) erros.push('Informe o peso que a balança mostrou.');
+    if (!texto(p.loteMaterial)) erros.push('Informe o lote da embalagem usada.');
+    if (EXIGE_FOTO_PESAGEM && !p.temFoto && !(p.foto && p.foto.caminho)) erros.push('Tire a foto da balança.');
+    return {ok: !erros.length, erros: erros};
+  }
+
   function n(v) { var x = Number(v); return isFinite(x) ? x : null; }
   function num(v) { var x = Number(v); return isFinite(x) ? x : 0; }
   function arred(v, casas) { var f = Math.pow(10, casas == null ? 3 : casas); return Math.round(Number(v) * f) / f; }
@@ -86,13 +125,24 @@
     var itens = (pesagem && pesagem.itens) || {};
     return Object.keys(previstos || {}).map(function(k) {
       var p = previstos[k] || {}, r = itens[k] || {};
-      var previsto = num(p.previsto), pesado = n(r.pesado);
+      var parc = parcelasDoItem(pesagem, k);
+      var previsto = num(p.previsto);
+      // Com parcelas, o pesado é a soma delas -- nunca o número digitado.
+      var pesado = parc.length ? arred(parc.reduce(function(s, x) { return s + num(x.peso); }, 0)) : n(r.pesado);
+      var lotes = parc.length ? lotesUnicos(parc) : (texto(r.loteMaterial) ? [texto(r.loteMaterial)] : []);
       var desvioPct = (previsto > 0 && pesado != null) ? arred((pesado - previsto) / previsto * 100, 2) : null;
+      var semFoto = parc.length ? parc.filter(function(x) { return !(x.foto && x.foto.caminho); }).length : 0;
+      var semLote = parc.length ? parc.filter(function(x) { return !texto(x.loteMaterial); }).length : 0;
       return {
         itemKey: k, mpCodigo: p.mpCodigo || k, mpNome: p.mpNome || '', unidade: p.unidade || 'kg',
-        previsto: previsto, pesado: pesado, loteMaterial: texto(r.loteMaterial) || null,
+        previsto: previsto, pesado: pesado, loteMaterial: lotes.join(', ') || null, lotes: lotes,
         perda: num(r.perda), justificativa: texto(r.justificativa) || null,
-        desvioPct: desvioPct, fotos: fotosDoItem(pesagem, k).length,
+        desvioPct: desvioPct,
+        fotos: parc.length ? parc.length - semFoto : fotosDoItem(pesagem, k).length,
+        parcelas: parc.length, parcelasSemFoto: semFoto, parcelasSemLote: semLote,
+        // Quanto ainda falta pôr na balança (0 quando completou ou passou).
+        falta: pesado == null ? previsto : Math.max(0, arred(previsto - pesado)),
+        excesso: pesado == null ? 0 : Math.max(0, arred(pesado - previsto)),
         foraTolerancia: desvioPct != null && Math.abs(desvioPct) > TOLERANCIA_PESAGEM_PCT,
         pendente: pesado == null || pesado <= 0
       };
@@ -102,14 +152,15 @@
   function validarPesagem(previstos, pesagem) {
     var linhas = linhasPesagem(previstos, pesagem), erros = [], avisos = [];
     var fotos = linhas.reduce(function(s, l) { return s + l.fotos; }, 0);
-    var semFoto = linhas.filter(function(l) { return !l.fotos; });
+    // Sem foto: MP sem nenhuma foto, ou com alguma parcela sem a sua.
+    var semFoto = linhas.filter(function(l) { return !l.pendente && (!l.fotos || l.parcelasSemFoto); });
     if (EXIGE_FOTO_PESAGEM && semFoto.length) {
       erros.push('Falta a foto da pesagem de ' + semFoto.map(function(l) { return l.mpCodigo; }).join(', ') + ' (prova de auditoria).');
     }
     if (!linhas.length) erros.push('A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
     var pendentes = linhas.filter(function(l) { return l.pendente; });
     if (pendentes.length) erros.push(pendentes.length + ' matéria(s)-prima(s) sem peso registrado.');
-    linhas.filter(function(l) { return !l.pendente && !l.loteMaterial; }).forEach(function(l) {
+    linhas.filter(function(l) { return !l.pendente && (!l.loteMaterial || l.parcelasSemLote); }).forEach(function(l) {
       erros.push('Informe o lote usado de ' + l.mpCodigo + '.');
     });
     linhas.filter(function(l) { return l.foraTolerancia && !l.justificativa; }).forEach(function(l) {
@@ -119,6 +170,21 @@
       avisos.push(l.mpCodigo + ': ' + l.desvioPct + '% fora do previsto (' + l.justificativa + ').');
     });
     return {ok: !erros.length, erros: erros, avisos: avisos, linhas: linhas, fotos: fotos};
+  }
+
+  /* O que o fechamento grava em pesagem/itens: o total somado das parcelas
+     e os lotes usados, junto com perda e justificativa digitadas. É o resumo
+     que a conferência, a Qualidade e o dossiê leem sem refazer a conta. */
+  function itensParaFechamento(previstos, pesagem) {
+    var out = {};
+    linhasPesagem(previstos, pesagem).forEach(function(l) {
+      var r = ((pesagem && pesagem.itens) || {})[l.itemKey] || {};
+      out[l.itemKey] = {
+        pesado: l.pesado, loteMaterial: l.loteMaterial, parcelas: l.parcelas,
+        perda: r.perda == null ? null : num(r.perda), justificativa: texto(r.justificativa) || null
+      };
+    });
+    return out;
   }
 
   /* Conferência: OUTRA pessoa. É a regra que o usuário pediu, e é o que
@@ -227,7 +293,8 @@
 
   return {
     ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT, EXIGE_FOTO_PESAGEM: EXIGE_FOTO_PESAGEM,
-    fotosDoItem: fotosDoItem,
+    fotosDoItem: fotosDoItem, parcelasDoItem: parcelasDoItem, fotosDaLinha: fotosDaLinha,
+    validarParcela: validarParcela, itensParaFechamento: itensParaFechamento,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,

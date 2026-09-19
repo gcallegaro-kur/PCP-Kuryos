@@ -75,6 +75,68 @@ const pesagemOk = {
   assert.match(comJust.avisos[0], /12% fora do previsto/);
 }
 
+// ── Pesagem em parcelas: várias idas à balança somam o total ─────────────
+{
+  const f = (id) => ({caminho: 'manipulacao/26260-01/' + id + '.jpg', url: 'https://x/' + id});
+  const parcelas = {
+    'MP-01': {
+      '-a': {peso: 25, loteMaterial: 'AK-576', foto: f('a'), em: '2026-09-18T10:00:00Z', por: 'João'},
+      '-b': {peso: 25, loteMaterial: 'AK-576', foto: f('b'), em: '2026-09-18T10:05:00Z', por: 'João'},
+      '-c': {peso: 10.2, loteMaterial: 'AK-590', foto: f('c'), em: '2026-09-18T10:09:00Z', por: 'João'},
+      // Parcela errada: cancelada com motivo, não soma e não some do registro.
+      '-x': {peso: 250, loteMaterial: 'AK-576', foto: f('x'), em: '2026-09-18T10:01:00Z', por: 'João',
+             canceladaEm: '2026-09-18T10:02:00Z', canceladaPor: 'João', motivoCancelamento: 'Digitei 250 em vez de 25'}
+    },
+    'MP-02': {'-d': {peso: 35, loteMaterial: 'AK-577', foto: f('d'), em: '2026-09-18T10:12:00Z'}}
+  };
+  const pes = {parcelas, itens: {}};
+  const linhas = M.linhasPesagem(previstos, pes);
+  const mp1 = linhas.find((l) => l.mpCodigo === 'MP-01');
+  assert.equal(mp1.pesado, 60.2, '25 + 25 + 10,2, sem a cancelada');
+  assert.equal(mp1.parcelas, 3);
+  assert.equal(mp1.loteMaterial, 'AK-576, AK-590', 'os dois lotes usados, sem repetir');
+  assert.equal(mp1.fotos, 3);
+  assert.equal(mp1.falta, 0);
+  assert.equal(mp1.excesso, 0.2);
+  const mp3 = linhas.find((l) => l.mpCodigo === 'MP-03');
+  assert.equal(mp3.pendente, true);
+  assert.equal(mp3.falta, 5, 'nada pesado: falta o previsto inteiro');
+
+  // Meio caminho: mostra quanto falta.
+  const meio = M.linhasPesagem(previstos, {parcelas: {'MP-01': {'-a': parcelas['MP-01']['-a']}}});
+  assert.equal(meio.find((l) => l.mpCodigo === 'MP-01').falta, 35);
+
+  // Ordem cronológica e a cancelada só aparece quando pedida.
+  assert.deepEqual(M.parcelasDoItem(pes, 'MP-01').map((p) => p.id), ['-a', '-b', '-c']);
+  assert.deepEqual(M.parcelasDoItem(pes, 'MP-01', true).map((p) => p.id), ['-a', '-x', '-b', '-c']);
+  // Fotos da linha vêm das parcelas, numeradas.
+  const fotos = M.fotosDaLinha(pes, 'MP-01');
+  assert.deepEqual(fotos.map((x) => x.parcela), [1, 2, 3]);
+  assert.equal(fotos[2].peso, 10.2);
+
+  // Falta a MP-03 -> não fecha; completando, fecha.
+  assert.equal(M.validarPesagem(previstos, pes).ok, false);
+  pes.parcelas['MP-03'] = {'-e': {peso: 5, loteMaterial: 'AK-578', foto: f('e'), em: '2026-09-18T10:20:00Z'}};
+  const ok = M.validarPesagem(previstos, pes);
+  assert.equal(ok.ok, true, ok.erros.join(' '));
+
+  // Parcela gravada sem foto (não deveria acontecer, mas o fechamento barra).
+  const semFoto = JSON.parse(JSON.stringify(pes));
+  delete semFoto.parcelas['MP-02']['-d'].foto;
+  assert.match(M.validarPesagem(previstos, semFoto).erros.join(' '), /Falta a foto da pesagem de MP-02/);
+
+  // O fechamento grava o total somado e os lotes.
+  pes.itens = {'MP-01': {perda: 0.1, justificativa: ''}};
+  const fech = M.itensParaFechamento(previstos, pes);
+  assert.deepEqual(fech['MP-01'], {pesado: 60.2, loteMaterial: 'AK-576, AK-590', parcelas: 3, perda: 0.1, justificativa: null});
+  assert.equal(fech['MP-03'].pesado, 5);
+
+  // Validação de uma ida à balança.
+  assert.deepEqual(M.validarParcela({}).erros, ['Informe o peso que a balança mostrou.', 'Informe o lote da embalagem usada.', 'Tire a foto da balança.']);
+  assert.equal(M.validarParcela({peso: '12,5'}).ok, false, 'vírgula chega convertida pela tela');
+  assert.equal(M.validarParcela({peso: 12.5, loteMaterial: 'AK-1', temFoto: true}).ok, true);
+}
+
 // ── Conferência: outra pessoa, obrigatória ──────────────────────────────
 {
   const conferidoTudo = {'MP-01': {ok: true}, 'MP-02': {ok: true}, 'MP-03': {ok: true}};

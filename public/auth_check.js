@@ -80,7 +80,7 @@ const KURYOS_MODULOS = {
   apontamento:  { rotulo: 'Apontamento Diário',    desc: 'Registro de produção no chão de fábrica',
                   paginas: ['form.html', 'manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'dossie_lote.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
@@ -94,7 +94,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html'] },
+                  paginas: ['qualidade.html', 'dossie_lote.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -624,13 +624,16 @@ function renderUnifiedNavbar(user) {
   // estoque no fluxo mas separada dele na navegação.
   const qualidadeGroup = grupo('Qualidade', [
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
-    temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage)
+    temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
+    // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
+    temMod('qualidade') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
   const producaoGroup = grupo('Produção', [
     temMod('apontamento') && ktLink('form.html', 'pencil', 'Apontamento Diário', activePage),
     temMod('apontamento') && ktLink('manipulacao.html', 'flask', 'Manipulação (granel)', activePage),
-    temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
+    temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
+    temMod('planejamento') && !temMod('qualidade') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
   const usersGroup = grupo('ADM', [

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dossiê do Lote</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/dossie-lote.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:10px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .card-body{padding:14px 16px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none}
+    .btn-primary{background:var(--primary);color:#fff}.btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .busca{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;color:var(--text);background:var(--card)}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:7px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    tr.clicavel{cursor:pointer}tr.clicavel:hover{background:var(--tint-blue-bg)}
+    .num{text-align:right;white-space:nowrap}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13.5px}
+    .hint{font-size:11.5px;color:var(--muted)}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}.badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}.badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 16px}
+    .campo .rot{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+    .campo .val{font-size:14px;font-weight:600;margin-top:2px;word-break:break-word}
+    .mp{border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;break-inside:avoid}
+    .mp-topo{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .fotos{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+    .foto{width:150px;font-size:11.5px}
+    .foto img{width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid var(--border);display:block;background:var(--tint-gray-bg)}
+    .foto.cancelada{opacity:.55}.foto.cancelada .leg b{text-decoration:line-through}
+    .foto .leg{margin-top:4px;line-height:1.35}
+    .sem-foto{width:150px;height:150px;border-radius:10px;border:2px dashed var(--danger);display:flex;align-items:center;justify-content:center;color:var(--danger);font-weight:700}
+    .tempo{border-left:2px solid var(--border);margin-left:6px;padding-left:14px}
+    .ev{position:relative;padding:5px 0;font-size:13px}
+    .ev::before{content:'';position:absolute;left:-20px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+    .ev .quando{font-size:11.5px;color:var(--muted);display:inline-block;min-width:118px}
+    .ev .etapa{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-right:6px}
+    .aviso{background:var(--tint-orange-bg);color:var(--tint-orange-fg);padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
+    .rolagem{overflow-x:auto}
+    #dossie{display:none}
+    @media(max-width:700px){
+      .header,.main{max-width:100%;padding-left:12px;padding-right:12px}
+      .header h1{font-size:22px}
+      .foto,.foto img,.sem-foto{width:130px}.foto img,.sem-foto{height:130px}
+      .card-body,.card-header{padding:12px}
+    }
+    /* Impressão / PDF: só o dossiê, sem menu nem busca. */
+    @media print{
+      body{background:#fff;color:#000}
+      .nao-imprime,#kuryos-sidebar,.kt-sidebar,nav,aside{display:none!important}
+      body.has-sidebar{padding-left:0!important;margin-left:0!important}
+      .card{box-shadow:none;border:1px solid #ccc;break-inside:avoid-page}
+      .main,.header{max-width:100%}
+      a{color:#000;text-decoration:none}
+    }
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Dossiê do Lote</h1>
+    <div class="header-sub">Tudo o que aconteceu com um lote: ordem de fabricação, pesagens com foto, conferência, manipulação, envase e qualidade</div>
+  </div>
+  <div class="nao-imprime" id="dAcoes" style="display:none"><button class="btn btn-primary" id="dImprimir">Imprimir / salvar PDF</button></div>
+</div>
+
+<div class="main">
+  <div class="card nao-imprime" id="dBuscaCard">
+    <div class="card-header"><h3>Buscar lote</h3><span class="hint" id="dResumoBusca">Carregando OPs...</span></div>
+    <div class="card-body">
+      <input type="search" class="busca" id="dBusca" placeholder="Lote (26250/02), cliente, produto ou SKU" autocomplete="off">
+      <div class="hint" style="margin-top:6px">Não precisa de acento nem da barra: "26250 02", "miss rose leao" e "rôse bourbon" funcionam.</div>
+      <div class="rolagem" style="margin-top:10px"><table>
+        <thead><tr><th>Lote</th><th>Produto</th><th>Cliente</th><th>Emissão</th><th>OP</th><th>Granel</th></tr></thead>
+        <tbody id="dResultados"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="dossie"></div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allOps = {};
+var opsCarregadas = false;
+var fontes = null;       // carregadas uma vez, na primeira abertura de dossiê
+var opAberta = null;
+var pedidoInicial = (function() {
+  var q = new URLSearchParams(location.search);
+  return q.get('op') || q.get('lote') || '';
+})();
+
+dbOnValue(db.ref('ops'), function(snap) {
+  allOps = snap.val() || {};
+  opsCarregadas = true;
+  if (fontes) fontes.ops = allOps;
+  renderBusca();
+  if (pedidoInicial) {
+    var k = DossieLote.acharOp(allOps, pedidoInicial);
+    document.getElementById('dBusca').value = k ? (allOps[k].lote || k) : pedidoInicial;
+    pedidoInicial = '';
+    renderBusca();
+    if (k) abrir(k);
+  } else if (opAberta) {
+    renderDossie();
+  }
+});
+
+function quando(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d)) return escapeHtml(iso);
+  return d.toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'});
+}
+function badgeGranel(o) {
+  var st = Manipulacao.estado(o);
+  if (!st) return '<span class="badge badge-gray">sem registro</span>';
+  var cls = st === 'LIBERADO' ? 'badge-green' : st === 'REPROVADO' ? 'badge-red' : 'badge-orange';
+  return '<span class="badge ' + cls + '">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>';
+}
+
+function renderBusca() {
+  var termo = document.getElementById('dBusca').value;
+  var r = DossieLote.buscar(allOps, termo, 40);
+  document.getElementById('dResumoBusca').textContent = !opsCarregadas ? 'Carregando OPs...'
+    : (termo.trim() ? r.total + ' lote(s) encontrado(s)' + (r.total > 40 ? ' — mostrando 40, refine a busca' : '') : 'Os 40 lotes mais recentes');
+  var tb = document.getElementById('dResultados');
+  tb.innerHTML = r.itens.length ? r.itens.map(function(o) {
+    return '<tr class="clicavel" data-op="' + escapeAttr(o.key) + '"><td><b>' + escapeHtml(o.lote || o.key) + '</b></td>' +
+      '<td>' + escapeHtml(o.produto || '—') + '<div class="hint">' + escapeHtml(o.sku || '') + '</div></td>' +
+      '<td>' + escapeHtml(o.cliente || '—') + '</td><td>' + quando(o.dataEmissao) + '</td>' +
+      '<td>' + escapeHtml(o.status || '—') + '</td><td>' + badgeGranel(o) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="no-data">' + (opsCarregadas ? 'Nenhum lote encontrado.' : 'Carregando...') + '</td></tr>';
+  tb.querySelectorAll('[data-op]').forEach(function(tr) {
+    tr.addEventListener('click', function() { abrir(tr.getAttribute('data-op')); });
+  });
+}
+var tBusca = null;
+document.getElementById('dBusca').addEventListener('input', function() {
+  clearTimeout(tBusca); tBusca = setTimeout(renderBusca, 150);
+});
+document.getElementById('dImprimir').addEventListener('click', function() { window.print(); });
+
+// O resto do lote mora em outros nós; carrega uma vez, na primeira abertura.
+function carregarFontes() {
+  if (fontes) return Promise.resolve(fontes);
+  var nos = {registros: 'registros', paradas: 'paradas_historico', perdas: 'perdas', movimentos: 'movimentos_estoque',
+    estoqueLotes: 'estoque_lotes', conferenciasPa: 'conferencias_pa', naoConformidades: 'nao_conformidades'};
+  var out = {ops: allOps};
+  return Promise.all(Object.keys(nos).map(function(k) {
+    return db.ref(nos[k]).once('value')
+      .then(function(s) { out[k] = s.val() || {}; })
+      .catch(function(e) { console.warn('Dossiê: sem acesso a ' + nos[k] + ':', e && e.message); out[k] = {}; out.faltando = (out.faltando || []).concat(nos[k]); });
+  })).then(function() { fontes = out; return out; });
+}
+
+function abrir(opKey) {
+  opAberta = opKey;
+  var box = document.getElementById('dossie');
+  box.style.display = 'block';
+  box.innerHTML = '<div class="card"><div class="card-body no-data">Montando o dossiê do lote ' + escapeHtml((allOps[opKey] || {}).lote || opKey) + '...</div></div>';
+  try { history.replaceState(null, '', 'dossie_lote.html?op=' + encodeURIComponent(opKey)); } catch (e) { /* nada */ }
+  carregarFontes().then(function() {
+    renderDossie();
+    box.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+}
+
+function campo(rot, val) { return '<div class="campo"><div class="rot">' + rot + '</div><div class="val">' + val + '</div></div>'; }
+function secao(titulo, extra, corpo) {
+  return '<div class="card"><div class="card-header"><h3>' + titulo + '</h3>' + (extra || '') + '</div><div class="card-body">' + corpo + '</div></div>';
+}
+
+function renderDossie() {
+  if (!opAberta || !fontes) return;
+  var d = DossieLote.montar(opAberta, fontes);
+  var box = document.getElementById('dossie');
+  if (!d) { box.innerHTML = '<div class="card"><div class="card-body no-data">OP não encontrada.</div></div>'; return; }
+  document.getElementById('dAcoes').style.display = '';
+  document.title = 'Dossiê do Lote ' + d.lote;
+  var op = d.op, g = d.granel, h = '';
+
+  if (fontes.faltando && fontes.faltando.length) {
+    h += '<div class="aviso">Seu usuário não tem acesso a: ' + escapeHtml(fontes.faltando.join(', ')) + '. Essas partes do dossiê aparecem vazias.</div>';
+  }
+
+  // 1. Ordem de fabricação
+  h += secao('Ordem de fabricação — lote ' + escapeHtml(d.lote), '<span class="badge badge-blue">' + escapeHtml(op.status || '—') + '</span>',
+    '<div class="grade">' +
+      campo('Produto', escapeHtml(op.produto || '—')) + campo('SKU', escapeHtml(op.sku || '—')) +
+      campo('Cliente', escapeHtml(op.cliente || '—')) + campo('Pedido', escapeHtml(op.skuPedidoKey || '—')) +
+      campo('Planejado', fmtNum(op.qtdPlanejada || 0) + ' un') + campo('Produzido', fmtNum(op.produzido || 0) + ' un') +
+      campo('Apontado', fmtNum(d.totalApontado) + ' un') + campo('Linha', escapeHtml(op.linha || '—')) +
+      campo('Emitida', quando(op.dataEmissao) + (op.emitidoPor ? '<div class="hint">' + escapeHtml(op.emitidoPor) + '</div>' : '')) +
+      campo('Envase', quando(op.dataInicioReal) + ' → ' + quando(op.dataFimReal)) +
+      campo('Encerrada', quando(op.confirmadoEm) + (op.confirmadoPor ? '<div class="hint">' + escapeHtml(op.confirmadoPor) + '</div>' : '')) +
+    '</div>');
+
+  // 2. Ordem de manipulação (granel)
+  if (!g.existe) {
+    h += secao('Ordem de manipulação (granel)', '<span class="badge badge-gray">sem registro</span>',
+      '<div class="no-data">Este lote não tem a fase de granel registrada no sistema — foi fabricado antes da tela de Manipulação existir, ou a pesagem ainda não começou.</div>');
+  } else {
+    var r = g.resumo, man = g.manipulacao, an = g.analise;
+    var cab = '<div class="grade" style="margin-bottom:12px">' +
+      campo('Situação', badgeGranel(op)) +
+      campo('Pesagem', quando(g.pesagem.inicio) + ' → ' + quando(g.pesagem.fim) + '<div class="hint">' + escapeHtml(g.pesagem.por || '—') + (r.minutosPesagem != null ? ' · ' + r.minutosPesagem + ' min' : '') + '</div>') +
+      campo('Conferência', quando(g.conferencia.em) + '<div class="hint">' + escapeHtml(g.conferencia.por || '—') + '</div>') +
+      campo('Manipulação', quando(man.inicio) + ' → ' + quando(man.fim) + '<div class="hint">' + escapeHtml(man.por || '—') + (r.minutosManipulacao != null ? ' · ' + r.minutosManipulacao + ' min' : '') + '</div>') +
+      campo('Previsto / pesado', fmtNum(r.previstoTotal) + ' / ' + fmtNum(r.pesadoTotal) + ' kg') +
+      campo('Rendimento', r.rendimento != null ? fmtNum(r.rendimento) + ' kg (' + r.rendimentoPct + '%)' : '—') +
+      campo('Perda de processo', r.perdaProcesso != null ? fmtNum(r.perdaProcesso) + ' kg (' + r.perdaProcessoPct + '%)' : '—') +
+      campo('Análise do granel', an ? escapeHtml(an.decisao || '—') + '<div class="hint">' + escapeHtml(an.por || '') + ' · ' + quando(an.em) + '</div>' : '—') +
+    '</div>' +
+    (man.observacao ? '<div class="hint" style="margin-bottom:10px"><b>Observação da manipulação:</b> ' + escapeHtml(man.observacao) + '</div>' : '') +
+    (an && an.observacao ? '<div class="hint" style="margin-bottom:10px"><b>Observação da Qualidade:</b> ' + escapeHtml(an.observacao) + '</div>' : '');
+
+    var mps = g.linhas.map(function(l) {
+      var un = escapeHtml(l.unidade);
+      var fotos = l.todasParcelas.map(function(p) {
+        var url = p.foto && p.foto.url;
+        return '<div class="foto' + (p.canceladaEm ? ' cancelada' : '') + '">' +
+          (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + escapeAttr(url) + '" alt="Balança ' + escapeAttr(l.mpCodigo) + '"></a>' : '<div class="sem-foto">sem foto</div>') +
+          '<div class="leg"><b>' + (p.ordem ? p.ordem + 'ª · ' : 'cancelada · ') + fmtNum(p.peso) + ' ' + un + '</b><br>lote ' + escapeHtml(p.loteMaterial || '—') +
+          '<br><span class="hint">' + escapeHtml(p.por || '') + ' · ' + quando(p.em) + '</span>' +
+          (p.canceladaEm ? '<br><span style="color:var(--danger)">Cancelada por ' + escapeHtml(p.canceladaPor || '—') + ': ' + escapeHtml(p.motivoCancelamento || '') + '</span>' : '') +
+          '</div></div>';
+      }).concat(l.fotosAvulsas.map(function(a) {
+        return '<div class="foto">' + (a.url ? '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + escapeAttr(a.url) + '" alt="Foto ' + escapeAttr(l.mpCodigo) + '"></a>' : '') +
+          '<div class="leg"><span class="hint">' + escapeHtml(a.enviadoPor || a.por || '') + ' · ' + quando(a.enviadoEm || a.em) + '</span></div></div>';
+      })).join('');
+      var c = l.conferencia;
+      return '<div class="mp"><div class="mp-topo"><div><b>' + escapeHtml(l.mpCodigo) + '</b> <span class="hint">' + escapeHtml(l.mpNome) + '</span></div>' +
+        '<div>' + (c ? (c.ok ? '<span class="badge badge-green">conferido</span>' : '<span class="badge badge-red">divergente</span>') : '<span class="badge badge-gray">sem conferência</span>') + '</div></div>' +
+        '<div class="grade">' + campo('Previsto', fmtNum(l.previsto) + ' ' + un) +
+          campo('Pesado', (l.pesado != null ? fmtNum(l.pesado) + ' ' + un : '—') + (l.parcelas > 1 ? '<div class="hint">em ' + l.parcelas + ' pesagens</div>' : '')) +
+          campo('Desvio', l.desvioPct == null ? '—' : (l.desvioPct > 0 ? '+' : '') + l.desvioPct + '%') +
+          campo('Lote(s) usado(s)', escapeHtml(l.loteMaterial || '—')) +
+          (l.perda ? campo('Perda na pesagem', fmtNum(l.perda) + ' ' + un) : '') +
+          (l.justificativa ? campo('Justificativa', escapeHtml(l.justificativa)) : '') +
+          (c && c.obs ? campo('Obs. da conferência', escapeHtml(c.obs)) : '') +
+        '</div>' +
+        '<div class="fotos">' + (fotos || '<div class="sem-foto">sem foto</div>') + '</div></div>';
+    }).join('');
+    h += secao('Ordem de manipulação (granel)', '<span class="hint">' + g.linhas.length + ' matéria(s)-prima(s)</span>', cab + (mps || '<div class="no-data">Sem fórmula registrada.</div>'));
+  }
+
+  // 3. Envase
+  var ap = d.apontamentos.length ? '<div class="rolagem"><table><thead><tr><th>Quando</th><th>Linha</th><th>Operador</th><th class="num">Quantidade</th><th>Tipo</th><th>Obs.</th></tr></thead><tbody>' +
+    d.apontamentos.map(function(a) {
+      var q = a.qtdIncrementoConfirmado != null ? a.qtdIncrementoConfirmado : a.quantidade;
+      return '<tr><td>' + quando(a.timestamp) + '</td><td>' + escapeHtml(a.linha || '—') + '</td><td>' + escapeHtml(a.operador || '—') + '</td>' +
+        '<td class="num">' + fmtNum(q || 0) + '</td><td>' + escapeHtml(a.tipo === 'fechamento_op' ? 'fechamento' : (a.tipo || 'apontamento')) + '</td>' +
+        '<td>' + escapeHtml(a.justificativaDivergencia && a.justificativaDivergencia !== 'N/A' ? a.justificativaDivergencia : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhum apontamento de envase.</div>';
+  var pa = d.paradas.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Paradas</h4><div class="rolagem"><table><thead><tr><th>Início</th><th>Motivo</th><th class="num">Duração</th></tr></thead><tbody>' +
+    d.paradas.map(function(p) { return '<tr><td>' + quando(p.inicio) + '</td><td>' + escapeHtml(p.motivo || '—') + '</td><td class="num">' + fmtNum(p.duracao || 0) + ' min</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+  var pe = d.perdas.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Perdas no envase</h4><div class="rolagem"><table><thead><tr><th>Data</th><th>Tipo</th><th class="num">Quantidade</th></tr></thead><tbody>' +
+    d.perdas.map(function(p) { return '<tr><td>' + escapeHtml(p.data || '—') + '</td><td>' + escapeHtml(p.tipo || '—') + '</td><td class="num">' + fmtNum(p.quantidade) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+  h += secao('Envase', '<span class="hint">' + d.apontamentos.length + ' apontamento(s) · ' + fmtNum(d.totalApontado) + ' un</span>', ap + pa + pe);
+
+  // 4. Consumo de materiais
+  var invertidos = d.consumos.filter(function(c) { return c.sinalInvertido; }).length;
+  h += secao('Materiais consumidos', '<span class="hint">' + d.consumos.length + ' item(ns)</span>',
+    (invertidos ? '<div class="aviso">' + invertidos + ' item(ns) tiveram o consumo lançado com o sinal invertido (o estoque subiu em vez de descer) — defeito de densidade já corrigido em 10/09. A quantidade abaixo é a consumida.</div>' : '') +
+    (d.consumos.length ? '<div class="rolagem"><table><thead><tr><th>Material</th><th class="num">Consumido</th><th>Origem</th><th>Quando</th></tr></thead><tbody>' +
+      d.consumos.map(function(c) {
+        var ult = c.movimentos[c.movimentos.length - 1] || {};
+        return '<tr><td><b>' + escapeHtml(c.itemCodigo) + '</b><div class="hint">' + escapeHtml(c.itemNome) + '</div></td>' +
+          '<td class="num">' + fmtNum(c.consumido) + ' ' + escapeHtml(c.unidade) + (c.sinalInvertido ? ' <span class="badge badge-orange">sinal invertido</span>' : '') + '</td>' +
+          '<td>' + escapeHtml(c.tipos.map(function(t) { return t === 'consumo_manipulacao' ? 'pesagem do granel' : t === 'consumo_producao' ? 'apontamento de envase' : t; }).join(', ')) + '</td>' +
+          '<td>' + quando(ult.em) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhuma baixa de material registrada para este lote.</div>'));
+
+  // 5. Produto acabado e Qualidade
+  var pal = d.paletes.length ? '<div class="rolagem"><table><thead><tr><th>Palete</th><th class="num">Quantidade</th><th>Endereço</th><th>Conferido</th><th>Situação / laudo</th></tr></thead><tbody>' +
+    d.paletes.map(function(l) {
+      var q = l.qualidade || {}, cf = l.conferencia || {};
+      return '<tr><td><b>' + escapeHtml(l.identificadorPalete || l.id) + '</b></td><td class="num">' + fmtNum(l.qtdOriginal || 0) + '</td>' +
+        '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
+        '<td>' + (cf.conferidoEm ? quando(cf.conferidoEm) + '<div class="hint">' + escapeHtml(cf.conferidoPor || '') + '</div>' : '—') + '</td>' +
+        '<td>' + escapeHtml(l.status || '—') + (q.decisao ? '<div class="hint">' + escapeHtml(q.decisao) + ' · ' + escapeHtml(q.inspecionadoPor || '') + ' · ' + quando(q.inspecionadoEm) +
+          (q.resumoCk7 ? ' · CK-7' : '') + (q.observacao ? ' · ' + escapeHtml(q.observacao) : '') + '</div>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhum palete de produto acabado registrado.</div>';
+  var cont = d.contagensPa.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Conferência de PA (Logística)</h4><div class="rolagem"><table><thead><tr><th>Quando</th><th>Por</th><th class="num">Contado</th><th class="num">Diferença</th></tr></thead><tbody>' +
+    d.contagensPa.map(function(c) { return '<tr><td>' + quando(c.contadoEm) + '</td><td>' + escapeHtml(c.contadoPor || '—') + '</td><td class="num">' + fmtNum(c.total || 0) + '</td><td class="num">' + fmtNum(c.diferenca || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+  var rnc = d.rncs.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Não conformidades</h4><div class="rolagem"><table><thead><tr><th>RNC</th><th>Aberta</th><th>Classificação</th><th>Descrição</th><th>Situação</th></tr></thead><tbody>' +
+    d.rncs.map(function(x) { return '<tr><td><b>' + escapeHtml(x.numero || x.id) + '</b></td><td>' + quando(x.abertaEm) + '<div class="hint">' + escapeHtml(x.abertaPor || '') + '</div></td><td>' + escapeHtml(x.classificacao || '—') + '</td><td>' + escapeHtml(x.descricao || '') + '</td><td>' + (x.encerradaEm ? 'encerrada ' + quando(x.encerradaEm) : escapeHtml(x.status || 'aberta')) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+  h += secao('Produto acabado e Qualidade', '<span class="hint">' + d.paletes.length + ' palete(s)</span>', pal + cont + rnc);
+
+  // 6. Linha do tempo
+  h += secao('Linha do tempo', '<span class="hint">' + d.linhaDoTempo.length + ' evento(s)</span>',
+    d.linhaDoTempo.length ? '<div class="tempo">' + d.linhaDoTempo.map(function(e) {
+      return '<div class="ev"><span class="quando">' + quando(e.em) + '</span> <span class="etapa">' + escapeHtml(e.etapa) + '</span>' +
+        escapeHtml(e.oque) + (e.quem ? ' <span class="hint">— ' + escapeHtml(e.quem) + '</span>' : '') + '</div>';
+    }).join('') + '</div>' : '<div class="no-data">Sem eventos.</div>');
+
+  h += '<div class="hint" style="text-align:center;margin-top:6px">Dossiê gerado em ' + quando(new Date().toISOString()) + '</div>';
+  box.innerHTML = h;
+}
+</script>
+</body>
+</html>

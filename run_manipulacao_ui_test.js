@@ -49,7 +49,8 @@ async function abrir(browser, uid, estadoInicial, pagina) {
   const page = await browser.newPage({viewport: {width: 1500, height: 1200}});
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('dialog', (d) => d.accept());
+  // confirm() aceita; prompt() responde o que o teste deixou em page.__respostaPrompt.
+  page.on('dialog', (d) => d.accept(d.type() === 'prompt' ? (page.__respostaPrompt || '') : undefined));
   await page.addInitScript(({data, quem}) => {
     const db = data;
     window.__db = db;
@@ -161,78 +162,132 @@ async function campo(page, seletor, valor) {
     await linha.locator('[data-abrir]').click();
     await page.waitForSelector('#mPainel');
     // A fórmula explode só o granel: 200ml x 1000 un x 0,9 = 180 kg.
-    const previstos = await page.evaluate(() => Object.values(previstos_ || {}), null).catch(() => null);
-    const tabela = await page.locator('#mPesagemBody').innerText();
-    assert.match(tabela, /MPGR-001/);
-    assert.match(tabela, /MPES-003/);
-    assert.doesNotMatch(tabela, /EP-00106/, 'embalagem não entra na manipulação — é consumo do envase');
+    const cartoes = await page.locator('#mPesagemCards').innerText();
+    assert.match(cartoes, /MPGR-001/);
+    assert.match(cartoes, /MPES-003/);
+    assert.doesNotMatch(cartoes, /EP-00106/, 'embalagem não entra na manipulação — é consumo do envase');
     assert.match(await page.locator('#mResumoTempos').innerText(), /Previsto 180/);
+    assert.equal(await page.locator('[data-add-parcela]').count(), 0, 'sem iniciar, não há o que lançar');
 
     await page.click('#mBtnIniciarPesagem');
     await page.waitForFunction(() => (window.__db.ops['26260-01'].manipulacao || {}).status === 'AGUARDANDO_PESAGEM');
+    await page.waitForSelector('[data-add-parcela="MPGR-001"]');
+    assert.equal(await page.locator('[data-add-parcela]').count(), 3, 'um "+ Adicionar pesagem" por MP');
 
-    // Peso fora da tolerância exige justificativa.
-    await campo(page, '[data-peso="MPGR-001"]', '108');
-    await campo(page, '[data-lotemat="MPGR-001"]', 'AK-2026-000576');
-    await campo(page, '[data-peso="MPGR-002"]', '63');
-    await campo(page, '[data-lotemat="MPGR-002"]', 'AK-2026-000577');
-    await campo(page, '[data-peso="MPES-003"]', '12');
-    await campo(page, '[data-lotemat="MPES-003"]', 'AK-2026-000578');
+    const foto = (nome) => ({name: nome, mimeType: 'image/jpeg', buffer: Buffer.alloc(2048, 7)});
+    const parcelas = (mp) => page.evaluate((m) => Object.values(((((window.__db.ops['26260-01'].manipulacao || {}).pesagem || {}).parcelas || {})[m]) || {}), mp);
+    async function pesar(mp, peso, lote, arquivo) {
+      const antes = (await parcelas(mp)).length;
+      await page.click('[data-add-parcela="' + mp + '"]');
+      await page.waitForSelector('#formParcela');
+      await page.fill('#fpPeso', peso);
+      if (lote != null) await page.fill('#fpLote', lote);
+      await page.setInputFiles('#fpFoto', foto(arquivo));
+      await page.waitForSelector('#formParcela .fp-preview');
+      await page.waitForFunction(() => !document.getElementById('fpSalvar').disabled);
+      await page.click('#fpSalvar');
+      await page.waitForFunction(([m, n]) => Object.keys((window.__db.ops['26260-01'].manipulacao.pesagem.parcelas || {})[m] || {}).length === n,
+        [mp, antes + 1], {timeout: 8000});
+      await page.waitForFunction(() => !document.getElementById('formParcela'));
+    }
+
+    // Álcool: 108 kg em duas idas à balança, de dois lotes diferentes.
+    await page.click('[data-add-parcela="MPGR-001"]');
+    await page.fill('#fpPeso', '60');
+    await page.fill('#fpLote', 'AK-2026-000576');
+    assert.equal(await page.locator('#fpSalvar').isDisabled(), true, 'sem foto não salva');
+    assert.match(await page.locator('#fpFaltando').innerText(), /foto/);
+    await page.click('#fpCancelar');
+    await pesar('MPGR-001', '60', 'AK-2026-000576', 'balanca alcool.jpg');
+    const p1 = (await parcelas('MPGR-001'))[0];
+    assert.equal(p1.peso, 60);
+    assert.equal(p1.por, 'Operador João');
+    assert.equal(p1.mpCodigo, 'MPGR-001');
+    assert.equal(p1.foto.enviadoPor, 'Operador João');
+    assert.match(p1.foto.caminho, /^manipulacao\/26260-01\/\d+_MPGR-001_balanca_alcool\.jpg$/);
+    assert.ok(await page.evaluate((c) => !!window.__arquivos[c], p1.foto.caminho), 'arquivo foi para o Storage');
+    const cardAlcool = page.locator('.mp-card[data-mp="MPGR-001"]');
+    assert.match(await cardAlcool.innerText(), /faltam 48 kg/, 'mostra quanto falta');
+    assert.match(await page.locator('#alertBox').innerText(), /1ª pesagem de MPGR-001 registrada: 60 kg\. Faltam 48 kg\./);
+
+    // Segunda ida: o lote anterior vem sugerido; vírgula decimal aceita.
+    await page.click('[data-add-parcela="MPGR-001"]');
+    assert.match(await page.locator('#formParcela .fp-titulo').innerText(), /2ª pesagem de MPGR-001/);
+    assert.equal(await page.inputValue('#fpLote'), 'AK-2026-000576', 'sugere o último lote usado');
+    await page.click('#fpCancelar');
+    await pesar('MPGR-001', '48,0', 'AK-2026-000590', 'alcool 2.jpg');
+    assert.match(await cardAlcool.innerText(), /Completo/);
+    assert.equal(await cardAlcool.locator('.parcela').count(), 2);
+    assert.equal(await cardAlcool.locator('.parcela img').count(), 2, 'foto de cada ida à balança');
+
+    // Água: digitou errado (630), cancela com motivo e pesa de novo.
+    await pesar('MPGR-002', '630', 'AK-2026-000577', 'agua.jpg');
+    assert.match(await page.locator('.mp-card[data-mp="MPGR-002"]').innerText(), /Passou 567 kg/);
+    page.__respostaPrompt = 'Digitei 630 em vez de 63';
+    await page.click('[data-cancelar-parcela^="MPGR-002|"]');
+    await page.waitForFunction(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.parcelas['MPGR-002'])[0].canceladaEm);
+    const cancelada = (await parcelas('MPGR-002'))[0];
+    assert.equal(cancelada.motivoCancelamento, 'Digitei 630 em vez de 63');
+    assert.equal(cancelada.canceladaPor, 'Operador João');
+    assert.equal(cancelada.peso, 630, 'o registro não é apagado');
+    await page.waitForSelector('.mp-card[data-mp="MPGR-002"] .parcela.cancelada');
+    await pesar('MPGR-002', '63', null, 'agua 2.jpg');
+    assert.match(await page.locator('.mp-card[data-mp="MPGR-002"]').innerText(), /Completo/);
+
+    // Fragrância acima da tolerância: exige justificativa.
+    await pesar('MPES-003', '12', 'AK-2026-000578', 'fragrancia.jpg');
     await page.waitForFunction(() => /fora do previsto/.test(document.getElementById('mPesagemErros').innerText));
     assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem justificativa não fecha');
-    await campo(page, '[data-just="MPES-003"]', 'Ajuste de fragrância autorizado pelo P&D');
-    // Uma foto POR matéria-prima: sem as três, a pesagem não fecha.
-    await page.waitForFunction(() => /Falta a foto da pesagem de/.test(document.getElementById('mPesagemErros').innerText));
-    assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem foto não fecha');
-    assert.equal(await page.locator('label.cam').count(), 3, 'um ícone de câmera por MP');
-    const foto = (nome) => ({name: nome, mimeType: 'image/jpeg', buffer: Buffer.alloc(2048, 7)});
-    await page.setInputFiles('[data-foto-item="MPGR-001"]', foto('balanca alcool.jpg'));
-    await page.waitForFunction(() => Object.keys((((window.__db.ops['26260-01'].manipulacao || {}).pesagem || {}).fotosItens || {})['MPGR-001'] || {}).length === 1, null, {timeout: 8000});
-    await page.waitForFunction(() => /Falta a foto da pesagem de MPGR-002, MPES-003|Falta a foto da pesagem de MPES-003, MPGR-002/.test(document.getElementById('mPesagemErros').innerText));
-    assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'faltam duas');
-    await page.setInputFiles('[data-foto-item="MPGR-002"]', foto('agua.jpg'));
-    await page.waitForFunction(() => Object.keys((window.__db.ops['26260-01'].manipulacao.pesagem.fotosItens || {})['MPGR-002'] || {}).length === 1);
-    await page.setInputFiles('[data-foto-item="MPES-003"]', foto('fragrancia.jpg'));
+    await page.fill('[data-just="MPES-003"]', 'Ajuste de fragrância autorizado pelo P&D');
     await page.waitForFunction(() => !document.getElementById('mBtnFecharPesagem').disabled, null, {timeout: 8000});
-    const fotoAlcool = await page.evaluate(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.fotosItens['MPGR-001'])[0]);
-    assert.equal(fotoAlcool.enviadoPor, 'Operador João');
-    assert.equal(fotoAlcool.mpCodigo, 'MPGR-001', 'a foto sabe de qual MP é');
-    assert.match(fotoAlcool.caminho, /^manipulacao\/26260-01\/\d+_MPGR-001_balanca_alcool\.jpg$/);
-    assert.ok(await page.evaluate((c) => !!window.__arquivos[c], fotoAlcool.caminho), 'arquivo foi para o Storage');
-    assert.equal(await page.locator('#mPesagemBody img').count(), 3, 'miniatura na linha de cada MP');
-    assert.equal(await page.locator('label.cam.ok').count(), 3, 'câmera fica verde quando tem foto');
+
     // Arquivo que não é imagem é recusado antes de subir.
-    await page.setInputFiles('[data-foto-item="MPGR-001"]', {name: 'planilha.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(100, 1)});
+    await page.click('[data-add-parcela="MPES-003"]');
+    await page.setInputFiles('#fpFoto', {name: 'planilha.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(100, 1)});
     await page.waitForFunction(() => /Só imagem/.test(document.getElementById('alertBox').innerText));
-    // Celular: as linhas viram cartões e a câmera continua à vista.
+    await page.click('#fpCancelar');
+
+    // Celular: cartões sem rolagem lateral, botões grandes, campo sem zoom.
     await page.setViewportSize({width: 390, height: 844});
-    const cartao = await page.evaluate(() => {
-      const tr = document.querySelector('#mPesagemBody tr');
-      const cam = document.querySelector('label.cam');
-      const r = cam.getBoundingClientRect();
-      return {display: getComputedStyle(tr).display, thead: getComputedStyle(document.querySelector('#mPesagemBody').closest('table').querySelector('thead')).display,
-        camAltura: r.height, larguraPagina: document.documentElement.scrollWidth};
-    });
-    assert.equal(cartao.display, 'block', 'linha vira cartão no celular');
-    assert.equal(cartao.thead, 'none');
-    assert.ok(cartao.camAltura >= 40, 'botão da câmera tem alvo de toque grande');
-    assert.ok(cartao.larguraPagina <= 390 + 4, 'sem rolagem horizontal no celular: ' + cartao.larguraPagina);
-    if (process.env.MANIP_SCREENSHOT) await page.screenshot({path: process.env.MANIP_SCREENSHOT, fullPage: true});
+    await page.click('[data-add-parcela="MPES-003"]');
+    await page.fill('#fpPeso', '0,5');
+    const cel = await page.evaluate(() => ({
+      add: document.querySelector('[data-add-parcela]').getBoundingClientRect().height,
+      cam: document.querySelector('#formParcela .cam').getBoundingClientRect().height,
+      fonte: parseFloat(getComputedStyle(document.getElementById('fpPeso')).fontSize),
+      largura: document.documentElement.scrollWidth
+    }));
+    assert.ok(cel.add >= 40, 'botão + com alvo de toque grande');
+    assert.ok(cel.cam >= 48, 'câmera com alvo de toque grande');
+    assert.ok(cel.fonte >= 16, 'campo de peso sem zoom automático do celular');
+    assert.ok(cel.largura <= 390 + 4, 'sem rolagem horizontal no celular: ' + cel.largura);
+    if (process.env.MANIP_SCREENSHOT) {
+      await page.locator('.mp-card[data-mp="MPGR-001"]').scrollIntoViewIfNeeded();
+      await page.screenshot({path: process.env.MANIP_SCREENSHOT, fullPage: true});
+    }
+    await page.click('#fpCancelar');
     await page.setViewportSize({width: 1500, height: 1200});
+
     await page.click('#mBtnFecharPesagem');
     await page.waitForFunction(() => (window.__db.ops['26260-01'].manipulacao || {}).status === 'PESADO', null, {timeout: 8000});
     let db = await page.evaluate(() => window.__db);
     const fase = db.ops['26260-01'].manipulacao;
     assert.equal(fase.pesagem.por, 'Operador João');
     assert.equal(fase.pesagem.baixaAplicada, true);
-    assert.equal(fase.pesagem.itens['MPGR-001'].pesado, 108);
-    assert.equal(fase.pesagem.itens['MPGR-001'].loteMaterial, 'AK-2026-000576');
+    assert.equal(fase.pesagem.itens['MPGR-001'].pesado, 108, 'soma das duas pesagens');
+    assert.equal(fase.pesagem.itens['MPGR-001'].loteMaterial, 'AK-2026-000576, AK-2026-000590');
+    assert.equal(fase.pesagem.itens['MPGR-001'].parcelas, 2);
+    assert.equal(fase.pesagem.itens['MPGR-002'].pesado, 63, 'a cancelada não soma');
+    assert.equal(fase.pesagem.itens['MPES-003'].justificativa, 'Ajuste de fragrância autorizado pelo P&D');
     // A baixa de estoque acontece na pesagem (decisão do usuário em 17/09).
     assert.equal(db.estoque['MPGR-001'].saldoAtual, 392, '500 − 108');
+    assert.equal(db.estoque['MPGR-002'].saldoAtual, 437, '500 − 63, sem os 630 cancelados');
     assert.equal(db.estoque['MPES-003'].saldoAtual, 88, '100 − 12');
     assert.ok(Object.keys(db.movimentos_estoque['MPGR-001'] || {}).length, 'movimento registrado');
     const mov = Object.values(db.movimentos_estoque['MPGR-001'])[0];
     assert.match(mov.motivo, /MANIPULAÇÃO/);
+    assert.equal(await page.locator('[data-add-parcela]').count(), 0, 'pesagem fechada não aceita mais parcela');
+    assert.match(await page.locator('#mConferenciaBody').innerText(), /em 2 pesagens/);
 
     // Quem pesou não pode conferir.
     assert.match(await page.locator('#mConferenciaBody').innerText(), /MPGR-001/);
@@ -318,6 +373,31 @@ async function campo(page, seletor, valor) {
     assert.deepEqual(cq.errors, [], 'erros na tela da Qualidade: ' + cq.errors.join(' | '));
     await cq.page.close();
 
+    // ── Dossiê do lote: a auditoria acha tudo pelo lote, cliente ou nome ─
+    const dossie = await abrir(browser, 'cq', dbCq, 'dossie_lote.html?op=26260-01');
+    await dossie.page.waitForFunction(() => /Ordem de manipulação/i.test((document.getElementById('dossie') || {}).innerText || ''), null, {timeout: 8000});
+    const txt = await dossie.page.locator('#dossie').innerText();
+    assert.match(txt, /Ordem de fabricação — lote 26260\/01/i);
+    assert.match(txt, /MISS RÔSE/);
+    assert.match(txt, /em 2 pesagens/);
+    assert.match(txt, /AK-2026-000576, AK-2026-000590/);
+    assert.match(txt, /Cancelada por Operador João: Digitei 630 em vez de 63/);
+    assert.match(txt, /2ª pesagem de MPGR-001: 48 kg \(lote AK-2026-000590\) com foto/, 'linha do tempo');
+    assert.match(txt, /Granel liberado/);
+    assert.match(txt, /pesagem do granel/, 'consumo de MP vem da pesagem');
+    assert.equal(await dossie.page.locator('#dossie .foto img').count(), 5, '2 do álcool + 2 da água (1 cancelada) + 1 da fragrância');
+    assert.equal(await dossie.page.locator('#dossie .foto.cancelada').count(), 1);
+    assert.equal(await dossie.page.locator('.kt-sidebar a[href="dossie_lote.html"]').count(), 1, 'Qualidade tem o Dossiê no menu');
+    // Busca sem acento, por cliente e produto.
+    await dossie.page.fill('#dBusca', 'rose nectar');
+    await dossie.page.waitForFunction(() => /2 lote/.test(document.getElementById('dResumoBusca').innerText));
+    await dossie.page.fill('#dBusca', '26260 02');
+    await dossie.page.waitForFunction(() => document.querySelectorAll('#dResultados tr[data-op]').length === 1);
+    await dossie.page.click('#dResultados tr[data-op="26260-02"]');
+    await dossie.page.waitForFunction(() => /não tem a fase de granel registrada/.test(document.getElementById('dossie').innerText));
+    assert.deepEqual(dossie.errors, [], 'erros no dossiê: ' + dossie.errors.join(' | '));
+    await dossie.page.close();
+
     // ── Apontamento: o envase só enxerga a OP depois da liberação ───────
     const envase = await abrir(browser, 'pes', estadoParaCq, 'form.html');
     await envase.page.waitForFunction(() => typeof Manipulacao !== 'undefined' && window.opsCache && window.opsCache['26260-01'], null, {timeout: 8000});
@@ -330,7 +410,7 @@ async function campo(page, seletor, valor) {
 
     assert.deepEqual(errors, [], 'erros na tela do pesador: ' + errors.join(' | '));
     assert.deepEqual(r2.errors, [], 'erros na tela do manipulador: ' + r2.errors.join(' | '));
-    console.log('OK Manipulação: pesagem baixa estoque e exige lote/justificativa, conferência é de outra pessoa, manipulação grava tempos, perdas e rendimento, granel vai para a Qualidade.');
+    console.log('OK Manipulação: pesagem em parcelas com foto soma até o total, cancelada fica no registro, baixa estoque; dossiê do lote acha e mostra tudo; pesagem baixa estoque e exige lote/justificativa, conferência é de outra pessoa, manipulação grava tempos, perdas e rendimento, granel vai para a Qualidade.');
   } finally {
     await browser.close();
   }

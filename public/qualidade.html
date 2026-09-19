@@ -937,12 +937,14 @@ function abrirLaudoGranel(opKey) {
       var links = [];
       Object.keys(f.previstos || porItem).forEach(function(k) {
         var mp = ((f.previstos || {})[k] || {}).mpCodigo || k;
-        var fotos = Manipulacao.fotosDoItem(f.pesagem, k).filter(function(a) { return a.url; });
+        // Uma foto por ida à balança (parcela); rótulo "MP 2ª 25 kg".
+        var fotos = Manipulacao.fotosDaLinha(f.pesagem, k).filter(function(a) { return a.url; });
         links.push(fotos.length
-          ? fotos.map(function(a) { return '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(mp) + '</a>'; }).join(' ')
+          ? fotos.map(function(a) { return '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(mp) + (a.parcela ? ' ' + a.parcela + 'ª ' + escapeHtml(fmtNum(a.peso)) + ' kg' : '') + '</a>'; }).join(' ')
           : '<b style="color:var(--danger)">' + escapeHtml(mp) + ' sem foto</b>');
       });
-      return '<br>Fotos da pesagem: ' + (links.length ? links.join(' · ') : '<b style="color:var(--danger)">nenhuma</b>');
+      return '<br>Fotos da pesagem: ' + (links.length ? links.join(' · ') : '<b style="color:var(--danger)">nenhuma</b>') +
+        ' · <a href="dossie_lote.html?op=' + encodeURIComponent(granelAtual.opKey) + '" target="_blank" rel="noopener">abrir dossiê do lote</a>';
     })();
   document.getElementById('qGranelObs').value = '';
   renderPlanoGranel();
