@@ -181,22 +181,44 @@ async function campo(page, seletor, valor) {
     await page.waitForFunction(() => /fora do previsto/.test(document.getElementById('mPesagemErros').innerText));
     assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem justificativa não fecha');
     await campo(page, '[data-just="MPES-003"]', 'Ajuste de fragrância autorizado pelo P&D');
-    // Sem foto a pesagem não fecha (pedido do usuário: prova de auditoria).
-    await page.waitForFunction(() => /foto da pesagem/.test(document.getElementById('mPesagemErros').innerText));
+    // Uma foto POR matéria-prima: sem as três, a pesagem não fecha.
+    await page.waitForFunction(() => /Falta a foto da pesagem de/.test(document.getElementById('mPesagemErros').innerText));
     assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem foto não fecha');
-    await page.setInputFiles('#mFotoInput', {name: 'balanca 1.jpg', mimeType: 'image/jpeg', buffer: Buffer.alloc(2048, 7)});
-    await page.waitForFunction(() => Object.keys(((window.__db.ops['26260-01'].manipulacao || {}).pesagem || {}).fotos || {}).length === 1, null, {timeout: 8000});
-    await page.waitForFunction(() => !document.getElementById('mBtnFecharPesagem').disabled);
-    const fotoGravada = await page.evaluate(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.fotos)[0]);
-    assert.equal(fotoGravada.enviadoPor, 'Operador João');
-    assert.match(fotoGravada.caminho, /^manipulacao\/26260-01\/\d+_balanca_1\.jpg$/);
-    assert.equal(fotoGravada.bytes, 2048);
-    assert.ok(await page.evaluate((c) => !!window.__arquivos[c], fotoGravada.caminho), 'arquivo foi para o Storage');
-    assert.equal(await page.locator('#mFotosLista img').count(), 1, 'miniatura aparece');
+    assert.equal(await page.locator('label.cam').count(), 3, 'um ícone de câmera por MP');
+    const foto = (nome) => ({name: nome, mimeType: 'image/jpeg', buffer: Buffer.alloc(2048, 7)});
+    await page.setInputFiles('[data-foto-item="MPGR-001"]', foto('balanca alcool.jpg'));
+    await page.waitForFunction(() => Object.keys((((window.__db.ops['26260-01'].manipulacao || {}).pesagem || {}).fotosItens || {})['MPGR-001'] || {}).length === 1, null, {timeout: 8000});
+    await page.waitForFunction(() => /Falta a foto da pesagem de MPGR-002, MPES-003|Falta a foto da pesagem de MPES-003, MPGR-002/.test(document.getElementById('mPesagemErros').innerText));
+    assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'faltam duas');
+    await page.setInputFiles('[data-foto-item="MPGR-002"]', foto('agua.jpg'));
+    await page.waitForFunction(() => Object.keys((window.__db.ops['26260-01'].manipulacao.pesagem.fotosItens || {})['MPGR-002'] || {}).length === 1);
+    await page.setInputFiles('[data-foto-item="MPES-003"]', foto('fragrancia.jpg'));
+    await page.waitForFunction(() => !document.getElementById('mBtnFecharPesagem').disabled, null, {timeout: 8000});
+    const fotoAlcool = await page.evaluate(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.fotosItens['MPGR-001'])[0]);
+    assert.equal(fotoAlcool.enviadoPor, 'Operador João');
+    assert.equal(fotoAlcool.mpCodigo, 'MPGR-001', 'a foto sabe de qual MP é');
+    assert.match(fotoAlcool.caminho, /^manipulacao\/26260-01\/\d+_MPGR-001_balanca_alcool\.jpg$/);
+    assert.ok(await page.evaluate((c) => !!window.__arquivos[c], fotoAlcool.caminho), 'arquivo foi para o Storage');
+    assert.equal(await page.locator('#mPesagemBody img').count(), 3, 'miniatura na linha de cada MP');
+    assert.equal(await page.locator('label.cam.ok').count(), 3, 'câmera fica verde quando tem foto');
     // Arquivo que não é imagem é recusado antes de subir.
-    await page.setInputFiles('#mFotoInput', {name: 'planilha.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(100, 1)});
+    await page.setInputFiles('[data-foto-item="MPGR-001"]', {name: 'planilha.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(100, 1)});
     await page.waitForFunction(() => /Só imagem/.test(document.getElementById('alertBox').innerText));
-
+    // Celular: as linhas viram cartões e a câmera continua à vista.
+    await page.setViewportSize({width: 390, height: 844});
+    const cartao = await page.evaluate(() => {
+      const tr = document.querySelector('#mPesagemBody tr');
+      const cam = document.querySelector('label.cam');
+      const r = cam.getBoundingClientRect();
+      return {display: getComputedStyle(tr).display, thead: getComputedStyle(document.querySelector('#mPesagemBody').closest('table').querySelector('thead')).display,
+        camAltura: r.height, larguraPagina: document.documentElement.scrollWidth};
+    });
+    assert.equal(cartao.display, 'block', 'linha vira cartão no celular');
+    assert.equal(cartao.thead, 'none');
+    assert.ok(cartao.camAltura >= 40, 'botão da câmera tem alvo de toque grande');
+    assert.ok(cartao.larguraPagina <= 390 + 4, 'sem rolagem horizontal no celular: ' + cartao.larguraPagina);
+    if (process.env.MANIP_SCREENSHOT) await page.screenshot({path: process.env.MANIP_SCREENSHOT, fullPage: true});
+    await page.setViewportSize({width: 1500, height: 1200});
     await page.click('#mBtnFecharPesagem');
     await page.waitForFunction(() => (window.__db.ops['26260-01'].manipulacao || {}).status === 'PESADO', null, {timeout: 8000});
     let db = await page.evaluate(() => window.__db);
@@ -280,7 +302,8 @@ async function campo(page, seletor, valor) {
     await cq.page.waitForSelector('#modalGranelBg.open');
     assert.match(await cq.page.locator('#qGranelInfo').innerText(), /Pesagem por Operador João/);
     assert.match(await cq.page.locator('#qGranelInfo').innerText(), /conferida por Manipuladora Ana/);
-    assert.match(await cq.page.locator('#qGranelInfo').innerText(), /Fotos da pesagem: foto 1/, 'a auditoria vê a foto');
+    assert.match(await cq.page.locator('#qGranelInfo').innerText(), /Fotos da pesagem: .*MPGR-001.*MPES-003|Fotos da pesagem: .*MPES-003/, 'a auditoria vê a foto de cada MP');
+    assert.doesNotMatch(await cq.page.locator('#qGranelInfo').innerText(), /sem foto/);
     const ensaios = await cq.page.locator('#qGranelPlanoBody').innerText();
     assert.match(ensaios, /ASPECTO/, 'a análise de granel usa a especificação do produto');
     assert.match(ensaios, /PH/);

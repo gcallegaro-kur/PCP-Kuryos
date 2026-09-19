@@ -36,9 +36,16 @@
   // Diferença aceita entre previsto e pesado antes de exigir justificativa.
   var TOLERANCIA_PESAGEM_PCT = 2;
   // Pedido do usuário (2026-09-17): a pesagem só fecha com foto de prova --
-  // "usado como backlog e auditoria". É o registro de que aquele peso foi o
-  // que a balança mostrou, e vale mais que qualquer campo digitado.
+  // "usado como backlog e auditoria" -- e a foto é POR MATÉRIA-PRIMA ("eu
+  // vinculo a foto à pesagem da MP em questão"). Cada foto prova que aquele
+  // peso daquela MP foi o que a balança mostrou.
+  // Fica em pesagem/fotosItens/{itemKey}/{id}, fora de pesagem/itens: o
+  // fechamento regrava pesagem/itens inteiro e apagaria as fotos.
   var EXIGE_FOTO_PESAGEM = true;
+  function fotosDoItem(pesagem, itemKey) {
+    var no = ((pesagem && pesagem.fotosItens) || {})[itemKey] || {};
+    return Object.keys(no).map(function(id) { return Object.assign({id: id}, no[id]); }).filter(function(a) { return a && a.caminho; });
+  }
 
   function n(v) { var x = Number(v); return isFinite(x) ? x : null; }
   function num(v) { var x = Number(v); return isFinite(x) ? x : 0; }
@@ -85,7 +92,7 @@
         itemKey: k, mpCodigo: p.mpCodigo || k, mpNome: p.mpNome || '', unidade: p.unidade || 'kg',
         previsto: previsto, pesado: pesado, loteMaterial: texto(r.loteMaterial) || null,
         perda: num(r.perda), justificativa: texto(r.justificativa) || null,
-        desvioPct: desvioPct,
+        desvioPct: desvioPct, fotos: fotosDoItem(pesagem, k).length,
         foraTolerancia: desvioPct != null && Math.abs(desvioPct) > TOLERANCIA_PESAGEM_PCT,
         pendente: pesado == null || pesado <= 0
       };
@@ -94,8 +101,11 @@
 
   function validarPesagem(previstos, pesagem) {
     var linhas = linhasPesagem(previstos, pesagem), erros = [], avisos = [];
-    var fotos = Object.keys((pesagem && pesagem.fotos) || {}).length;
-    if (EXIGE_FOTO_PESAGEM && !fotos) erros.push('Anexe ao menos uma foto da pesagem (prova de auditoria).');
+    var fotos = linhas.reduce(function(s, l) { return s + l.fotos; }, 0);
+    var semFoto = linhas.filter(function(l) { return !l.fotos; });
+    if (EXIGE_FOTO_PESAGEM && semFoto.length) {
+      erros.push('Falta a foto da pesagem de ' + semFoto.map(function(l) { return l.mpCodigo; }).join(', ') + ' (prova de auditoria).');
+    }
     if (!linhas.length) erros.push('A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
     var pendentes = linhas.filter(function(l) { return l.pendente; });
     if (pendentes.length) erros.push(pendentes.length + ' matéria(s)-prima(s) sem peso registrado.');
@@ -217,6 +227,7 @@
 
   return {
     ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT, EXIGE_FOTO_PESAGEM: EXIGE_FOTO_PESAGEM,
+    fotosDoItem: fotosDoItem,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,

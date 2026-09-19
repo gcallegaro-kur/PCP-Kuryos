@@ -31,6 +31,10 @@
     .main{padding:0 0 40px;max-width:96%;margin:0 auto}
     .section-note{font-size:12px;color:var(--muted);margin:0 auto 12px;line-height:1.5}
     .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    /* O aviso geral flutua no TOPO: ao aparecer e sumir não empurra a tela
+       (no celular o botão mudava de lugar embaixo do dedo) e não cobre os
+       botões de ação, que ficam embaixo. O toque atravessa o aviso. */
+    #alertBox{position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:1000;width:min(560px,calc(100% - 24px));box-shadow:0 8px 24px rgba(0,0,0,.18);margin:0;pointer-events:none}
     .alert.show{display:block}
     .alert-success{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg)}
@@ -62,10 +66,33 @@
     .etapa.atual{background:var(--primary);color:#fff}
     .val{width:96px}.lote{width:150px}
     .linha-alerta{background:var(--tint-orange-bg)}
-    .fotos{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-    .foto{width:120px;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2);font-size:11px}
-    .foto img{width:120px;height:90px;object-fit:cover;display:block}
-    .foto div{padding:4px 6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* Câmera por matéria-prima (pedido do usuário: "um ícone de câmera ao
+       lado da pesagem"). Alvo de toque grande: é usado com luva, no celular. */
+    .cam{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;height:40px;padding:0 12px;border-radius:10px;border:1.5px solid var(--primary);color:var(--primary);background:var(--card);font-size:18px;cursor:pointer;font-weight:700}
+    .cam.ok{border-color:var(--success);color:var(--success)}
+    .cam input{display:none}
+    .cam small{font-size:12px}
+    .miniaturas{display:inline-flex;gap:6px;vertical-align:middle;margin-left:6px;flex-wrap:wrap}
+    .celula-foto{display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px;vertical-align:middle}
+    .mini{position:relative;display:block;width:40px;height:40px;flex:0 0 40px}
+    .mini a{display:block;width:40px;height:40px}
+    .mini img{width:40px;height:40px;object-fit:cover;overflow:hidden;background:var(--bg-secondary,#eee);border-radius:6px;border:1px solid var(--border);display:block}
+    .mini button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:12px;line-height:20px;padding:0;cursor:pointer}
+    /* Celular: cada linha vira um cartão, com o rótulo do campo à esquerda. */
+    @media(max-width:700px){
+      .header h1{font-size:22px}
+      table.resp thead{display:none}
+      table.resp,table.resp tbody,table.resp tr,table.resp td{display:block;width:100%}
+      table.resp tr{border:1.5px solid var(--border);border-radius:12px;margin-bottom:10px;padding:6px 4px;background:var(--card)}
+      table.resp td{border:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 8px;text-align:left!important}
+      table.resp td[data-label]::before{content:attr(data-label);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;flex:0 0 38%}
+      table.resp td input,table.resp td select{flex:1;font-size:16px;padding:10px}
+      table.resp td.cabeca{display:block;font-size:14px;background:var(--surface-2);border-radius:8px}
+      .btn{padding:12px 16px;font-size:15px}
+      #mBtnFecharPesagem,#mBtnIniciarPesagem,#mBtnConferir,#mBtnIniciarManipulacao,#mBtnFecharManipulacao{width:100%;justify-content:center}
+      .card-body,.card-header{padding:12px}
+      .main,.header{max-width:100%;padding-left:12px;padding-right:12px}
+    }
     @media(max-width:700px){.val,.lote{width:100%}}
   </style>
 </head>
@@ -91,9 +118,9 @@
       <h3>Lotes em produção</h3>
       <span class="field-hint" id="mListaResumo"></span>
     </div>
-    <div style="overflow-x:auto"><table>
-      <thead><tr><th>Lote / OP</th><th>Produto</th><th>Cliente</th><th style="text-align:right">Planejado</th><th>Fase do granel</th><th></th></tr></thead>
-      <tbody id="mListaBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+    <div style="overflow-x:auto"><table class="resp">
+      <thead><tr><th>Lote / produto</th><th>Cliente</th><th style="text-align:right">Planejado</th><th>Fase do granel</th><th></th></tr></thead>
+      <tbody id="mListaBody"><tr><td colspan="5" class="no-data">Carregando...</td></tr></tbody>
     </table></div>
   </div>
 
@@ -109,18 +136,10 @@
       <!-- 1. Pesagem -->
       <div id="mBlocoPesagem">
         <h4 style="font-size:13px;margin-bottom:8px">1 · Pesagem <span class="field-hint" id="mPesagemQuem"></span></h4>
-        <div style="overflow-x:auto"><table>
-          <thead><tr><th>Matéria-prima</th><th style="text-align:right">Previsto</th><th>Pesado</th><th>Lote usado</th><th>Perda</th><th>Justificativa</th><th style="text-align:right">Desvio</th></tr></thead>
+        <div style="overflow-x:auto"><table class="resp">
+          <thead><tr><th>Matéria-prima</th><th style="text-align:right">Previsto</th><th>Pesado</th><th>Foto</th><th>Lote usado</th><th>Perda</th><th>Justificativa</th><th style="text-align:right">Desvio</th></tr></thead>
           <tbody id="mPesagemBody"></tbody>
         </table></div>
-        <div id="mFotosPesagem" style="margin-top:12px">
-          <label>Foto da pesagem <span class="field-hint">— obrigatória: a tela da balança com o peso, para auditoria</span></label>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="file" id="mFotoInput" accept="image/*" capture="environment" style="max-width:320px">
-            <span class="field-hint" id="mFotoStatus"></span>
-          </div>
-          <div class="fotos" id="mFotosLista"></div>
-        </div>
         <div id="mPesagemErros" class="alert alert-danger" style="margin-top:10px"></div>
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" id="mBtnIniciarPesagem">Iniciar pesagem</button>
@@ -132,7 +151,7 @@
       <div id="mBlocoConferencia" style="margin-top:18px">
         <h4 style="font-size:13px;margin-bottom:8px">2 · Conferência do manipulador</h4>
         <div class="field-hint" style="margin-bottom:8px">Confere item a item o que foi pesado. Quem confere não pode ser quem pesou.</div>
-        <div style="overflow-x:auto"><table>
+        <div style="overflow-x:auto"><table class="resp">
           <thead><tr><th>Matéria-prima</th><th style="text-align:right">Pesado</th><th>Lote</th><th>Confere?</th><th>Observação</th></tr></thead>
           <tbody id="mConferenciaBody"></tbody>
         </table></div>
@@ -235,19 +254,18 @@ function render() {
   var lista = opsAtivas();
   document.getElementById('mListaResumo').textContent = lista.length + ' OP(s) ativas';
   var tb = document.getElementById('mListaBody');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP ativa.</td></tr>'; return; }
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma OP ativa.</td></tr>'; return; }
   tb.innerHTML = lista.map(function(o) {
     var st = Manipulacao.estado(o);
     var badge = !st ? '<span class="badge badge-gray">sem fase</span>'
       : st === 'LIBERADO' ? '<span class="badge badge-green">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
       : st === 'REPROVADO' ? '<span class="badge badge-red">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
       : '<span class="badge badge-orange">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>';
-    return '<tr><td><b>' + escapeHtml(o.lote) + '</b></td>' +
-      '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
-      '<td>' + escapeHtml(o.cliente || '—') + '</td>' +
-      '<td style="text-align:right">' + fmtNum(o.qtdPlanejada || 0) + '</td>' +
-      '<td>' + badge + '</td>' +
-      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-abrir="' + escapeAttr(o.key) + '">Abrir granel</button></td></tr>';
+    return '<tr><td class="cabeca"><b>' + escapeHtml(o.lote) + '</b> · ' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
+      '<td data-label="Cliente">' + escapeHtml(o.cliente || '—') + '</td>' +
+      '<td data-label="Planejado" style="text-align:right">' + fmtNum(o.qtdPlanejada || 0) + '</td>' +
+      '<td data-label="Granel">' + badge + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-primary" data-abrir="' + escapeAttr(o.key) + '">Abrir granel</button></td></tr>';
   }).join('');
   tb.querySelectorAll('[data-abrir]').forEach(function(b) {
     b.addEventListener('click', function() { abrirOp(b.getAttribute('data-abrir')); });
@@ -311,23 +329,22 @@ function renderPainel() {
     (resumo.rendimento != null ? ' · rendimento ' + fmtNum(resumo.rendimento) + ' kg (' + resumo.rendimentoPct + '%)' : '');
 
   // ── Pesagem ──
-  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotos: (f.pesagem || {}).fotos});
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotosItens: (f.pesagem || {}).fotosItens});
   var podeEditarPesagem = !st || st === 'AGUARDANDO_PESAGEM';
   document.getElementById('mPesagemQuem').textContent = (f.pesagem && f.pesagem.por) ? '— por ' + f.pesagem.por : '';
   document.getElementById('mPesagemBody').innerHTML = val.linhas.length ? val.linhas.map(function(l) {
     var r = rascunho[l.itemKey] || {};
     var dis = podeEditarPesagem ? '' : ' disabled';
     return '<tr' + (l.foraTolerancia ? ' class="linha-alerta"' : '') + '>' +
-      '<td><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
-      '<td style="text-align:right">' + fmtNum(l.previsto) + ' ' + escapeHtml(l.unidade) + '</td>' +
-      '<td><input type="number" step="any" min="0" class="val" data-peso="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.pesado == null ? '' : r.pesado) + '"' + dis + '></td>' +
-      '<td><input type="text" class="lote" data-lotemat="' + escapeAttr(l.itemKey) + '" placeholder="lote interno" value="' + escapeAttr(r.loteMaterial || '') + '"' + dis + '></td>' +
-      '<td><input type="number" step="any" min="0" class="val" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></td>' +
-      '<td><input type="text" data-just="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.justificativa || '') + '"' + dis + '></td>' +
-      '<td style="text-align:right">' + (l.desvioPct == null ? '—' : l.desvioPct + '%') + '</td></tr>';
-  }).join('') : '<tr><td colspan="7" class="no-data">Fórmula não encontrada para este produto — cadastre em Fórmulas/BOM.</td></tr>';
-
-  renderFotos(f, podeEditarPesagem);
+      '<td class="cabeca"><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
+      '<td data-label="Previsto" style="text-align:right">' + fmtNum(l.previsto) + ' ' + escapeHtml(l.unidade) + '</td>' +
+      '<td data-label="Pesado"><input type="number" inputmode="decimal" step="any" min="0" class="val" data-peso="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.pesado == null ? '' : r.pesado) + '"' + dis + '></td>' +
+      '<td data-label="Foto">' + celulaFoto(f, l, podeEditarPesagem) + '</td>' +
+      '<td data-label="Lote usado"><input type="text" class="lote" data-lotemat="' + escapeAttr(l.itemKey) + '" placeholder="lote interno" value="' + escapeAttr(r.loteMaterial || '') + '"' + dis + '></td>' +
+      '<td data-label="Perda"><input type="number" inputmode="decimal" step="any" min="0" class="val" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></td>' +
+      '<td data-label="Justificativa"><input type="text" data-just="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.justificativa || '') + '"' + dis + '></td>' +
+      '<td data-label="Desvio" style="text-align:right">' + (l.desvioPct == null ? '—' : l.desvioPct + '%') + '</td></tr>';
+  }).join('') : '<tr><td colspan="8" class="no-data">Fórmula não encontrada para este produto — cadastre em Fórmulas/BOM.</td></tr>';
   var errosPes = document.getElementById('mPesagemErros');
   errosPes.className = 'alert alert-danger' + (podeEditarPesagem && val.erros.length ? ' show' : '');
   errosPes.textContent = val.erros.join(' ');
@@ -345,15 +362,15 @@ function renderPainel() {
     document.getElementById('mConferenciaBody').innerHTML = linhasConf.map(function(l) {
       var c = conferencia[l.itemKey] || {};
       var dis = podeConferir ? '' : ' disabled';
-      return '<tr><td><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
-        '<td style="text-align:right">' + fmtNum(l.pesado || 0) + ' ' + escapeHtml(l.unidade) + '</td>' +
-        '<td>' + escapeHtml(l.loteMaterial || '—') + '</td>' +
-        '<td><select data-conf="' + escapeAttr(l.itemKey) + '"' + dis + '>' +
+      return '<tr><td class="cabeca"><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></td>' +
+        '<td data-label="Pesado" style="text-align:right">' + fmtNum(l.pesado || 0) + ' ' + escapeHtml(l.unidade) + celulaFoto(f, l, false) + '</td>' +
+        '<td data-label="Lote">' + escapeHtml(l.loteMaterial || '—') + '</td>' +
+        '<td data-label="Confere?"><select data-conf="' + escapeAttr(l.itemKey) + '"' + dis + '>' +
           '<option value=""' + (c.ok == null ? ' selected' : '') + '>—</option>' +
           '<option value="sim"' + (c.ok === true ? ' selected' : '') + '>Confere</option>' +
           '<option value="nao"' + (c.ok === false ? ' selected' : '') + '>Divergente</option>' +
         '</select></td>' +
-        '<td><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis + '></td></tr>';
+        '<td data-label="Observação"><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis + '></td></tr>';
     }).join('');
     var valConf = Manipulacao.validarConferencia(previstos, f, eu());
     var errosConf = document.getElementById('mConferenciaErros');
@@ -420,60 +437,68 @@ function ligarCampos() {
   ['mRendimento', 'mPerdaResiduo', 'mPerdaAmostra', 'mPerdaOutra'].forEach(function(id) {
     document.getElementById(id).onchange = renderPainel;
   });
-}
-
-/* Foto de prova da pesagem (pedido do usuário em 17/09: "usado como backlog
-   e auditoria"). O arquivo vai para o Storage; no banco fica só o registro. */
-function renderFotos(f, editavel) {
-  var fotos = Anexos.lista((f.pesagem || {}).fotos);
-  document.getElementById('mFotoInput').style.display = editavel ? '' : 'none';
-  document.getElementById('mFotosLista').innerHTML = fotos.length ? fotos.map(function(a) {
-    return '<div class="foto">' +
-      (a.url ? '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener"><img src="' + escapeAttr(a.url) + '" alt="Foto da pesagem"></a>' : '') +
-      '<div title="' + escapeAttr(a.nomeOriginal || '') + '">' + escapeHtml(a.enviadoPor || '') + ' · ' + escapeHtml(Anexos.tamanhoLegivel(a.bytes)) + '</div>' +
-      (editavel ? '<div><button class="btn btn-ghost btn-sm" data-remover-foto="' + escapeAttr(a.id) + '">Remover</button></div>' : '') +
-    '</div>';
-  }).join('') : '<span class="field-hint">Nenhuma foto ainda.</span>';
+  document.querySelectorAll('[data-foto-item]').forEach(function(inp) {
+    inp.onchange = function() {
+      var arquivo = inp.files && inp.files[0];
+      if (arquivo) enviarFotoItem(inp.getAttribute('data-foto-item'), arquivo, inp);
+    };
+  });
   document.querySelectorAll('[data-remover-foto]').forEach(function(b) {
-    b.onclick = function() { removerFoto(b.getAttribute('data-remover-foto')); };
+    b.onclick = function() {
+      var partes = b.getAttribute('data-remover-foto').split('|');
+      removerFoto(partes[0], partes[1]);
+    };
   });
 }
 
-document.getElementById('mFotoInput').addEventListener('change', function() {
-  var input = this, arquivo = input.files && input.files[0];
-  if (!arquivo || !opAtual) return;
+/* Foto de prova POR MATÉRIA-PRIMA (pedido do usuário em 17/09: "eu vinculo a
+   foto à pesagem da MP em questão"). O arquivo vai para o Storage; no banco,
+   o registro fica em pesagem/fotosItens/{itemKey} -- fora de pesagem/itens,
+   que o fechamento regrava inteiro. */
+function celulaFoto(f, l, editavel) {
+  var fotos = Manipulacao.fotosDoItem(f.pesagem, l.itemKey);
+  var minis = fotos.map(function(a) {
+    return '<span class="mini">' +
+      (a.url ? '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener"><img src="' + escapeAttr(a.url) + '" alt="Foto da pesagem de ' + escapeAttr(l.mpCodigo) + '"></a>' : '') +
+      (editavel ? '<button type="button" title="Remover foto" data-remover-foto="' + escapeAttr(l.itemKey) + '|' + escapeAttr(a.id) + '">×</button>' : '') +
+    '</span>';
+  }).join('');
+  var botao = editavel
+    ? '<label class="cam' + (fotos.length ? ' ok' : '') + '" title="Fotografar a balança com o peso de ' + escapeAttr(l.mpCodigo) + '">' +
+        '<input type="file" accept="image/*" capture="environment" data-foto-item="' + escapeAttr(l.itemKey) + '">📷' +
+        (fotos.length ? '<small>✓</small>' : '') + '</label>'
+    : (fotos.length ? '' : '<span class="badge badge-red">sem foto</span>');
+  return '<span class="celula-foto">' + botao +
+    (minis ? '<span class="miniaturas">' + minis + '</span>' : '') + '</span>';
+}
+
+function enviarFotoItem(itemKey, arquivo, input) {
   var v = Anexos.validar(arquivo, {perfil: 'imagem'});
-  if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); input.value = ''; return; }
+  if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); if (input) input.value = ''; return; }
   var op = allOps[opAtual];
-  var caminhoArq = Anexos.caminho('manipulacao', opAtual, arquivo.name);
-  var status = document.getElementById('mFotoStatus');
-  status.textContent = 'Enviando ' + Anexos.tamanhoLegivel(arquivo.size) + '...';
+  var mp = (previstos[itemKey] || {}).mpCodigo || itemKey;
+  var caminhoArq = Anexos.caminho('manipulacao', opAtual, itemKey + '_' + arquivo.name);
   var ref = storage.ref(caminhoArq);
+  showAlert('Enviando a foto de ' + mp + ' (' + Anexos.tamanhoLegivel(arquivo.size) + ')...', 'warn');
   Promise.resolve()
     .then(function() { return ref.put(arquivo, {contentType: arquivo.type}); })
     .then(function() { return ref.getDownloadURL(); })
     .then(function(url) {
       var reg = Anexos.registro(arquivo, caminhoArq, url, eu());
-      return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotos').push(reg);
+      reg.mpCodigo = mp;
+      return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotosItens/' + itemKey).push(reg);
     })
-    .then(function() {
-      status.textContent = '';
-      input.value = '';
-      showAlert('Foto anexada à pesagem do lote ' + (op.lote || opAtual) + '.', 'success');
-    })
-    .catch(function(e) {
-      status.textContent = '';
-      showAlert('Não foi possível enviar a foto: ' + e.message, 'danger');
-    });
-});
+    .then(function() { showAlert('Foto da pesagem de ' + mp + ' anexada ao lote ' + (op.lote || opAtual) + '.', 'success'); })
+    .catch(function(e) { showAlert('Não foi possível enviar a foto: ' + e.message, 'danger'); });
+}
 
-function removerFoto(id) {
+function removerFoto(itemKey, id) {
   var f = Manipulacao.fase(allOps[opAtual]) || {};
-  var a = ((f.pesagem || {}).fotos || {})[id];
+  var a = ((((f.pesagem || {}).fotosItens) || {})[itemKey] || {})[id];
   if (!a || !confirm('Remover esta foto da pesagem?')) return;
   Promise.resolve()
     .then(function() { return storage.ref(a.caminho).delete().catch(function() { return null; }); })
-    .then(function() { return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotos/' + id).remove(); })
+    .then(function() { return db.ref('ops/' + opAtual + '/manipulacao/pesagem/fotosItens/' + itemKey + '/' + id).remove(); })
     .then(function() { showAlert('Foto removida.', 'success'); })
     .catch(function(e) { showAlert('Erro ao remover: ' + e.message, 'danger'); });
 }
@@ -496,8 +521,8 @@ document.getElementById('mBtnIniciarPesagem').addEventListener('click', function
    lote endereçado (FEFO), como o apontamento já faz no envase. */
 document.getElementById('mBtnFecharPesagem').addEventListener('click', function() {
   var op = allOps[opAtual];
-  var fotosGravadas = ((Manipulacao.fase(op) || {}).pesagem || {}).fotos;
-  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotos: fotosGravadas});
+  var fotosGravadas = ((Manipulacao.fase(op) || {}).pesagem || {}).fotosItens;
+  var val = Manipulacao.validarPesagem(previstos, {itens: rascunho, fotosItens: fotosGravadas});
   if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
   if (!confirm('Fechar a pesagem do lote ' + op.lote + '?\n\nIsso baixa do estoque o que foi pesado.')) return;
   var btn = this; btn.disabled = true; btn.textContent = 'Baixando estoque...';

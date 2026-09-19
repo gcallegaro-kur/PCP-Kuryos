@@ -931,12 +931,18 @@ function abrirLaudoGranel(opKey) {
     'Pesagem por ' + escapeHtml((f.pesagem || {}).por || '—') + ' · conferida por ' + escapeHtml((f.conferencia || {}).por || '—') +
     ' · manipulada por ' + escapeHtml((f.manipulacao || {}).por || '—') +
     // Fotos de prova da pesagem: a auditoria olha aqui (pedido do usuário, 17/09).
+    // Uma foto por matéria-prima (17/09); cada link diz de qual MP é.
     (function() {
-      var fotos = Object.keys((f.pesagem || {}).fotos || {}).map(function(k) { return f.pesagem.fotos[k]; })
-        .filter(function(a) { return a && a.url; });
-      return '<br>Fotos da pesagem: ' + (fotos.length
-        ? fotos.map(function(a, i) { return '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener">foto ' + (i + 1) + '</a>'; }).join(' · ')
-        : '<b style="color:var(--danger)">nenhuma</b>');
+      var porItem = (f.pesagem || {}).fotosItens || {};
+      var links = [];
+      Object.keys(f.previstos || porItem).forEach(function(k) {
+        var mp = ((f.previstos || {})[k] || {}).mpCodigo || k;
+        var fotos = Manipulacao.fotosDoItem(f.pesagem, k).filter(function(a) { return a.url; });
+        links.push(fotos.length
+          ? fotos.map(function(a) { return '<a href="' + escapeAttr(a.url) + '" target="_blank" rel="noopener">' + escapeHtml(mp) + '</a>'; }).join(' ')
+          : '<b style="color:var(--danger)">' + escapeHtml(mp) + ' sem foto</b>');
+      });
+      return '<br>Fotos da pesagem: ' + (links.length ? links.join(' · ') : '<b style="color:var(--danger)">nenhuma</b>');
     })();
   document.getElementById('qGranelObs').value = '';
   renderPlanoGranel();
