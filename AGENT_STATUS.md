@@ -118,6 +118,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — foto por matéria-prima na pesagem (2026-09-18).**
+  `50d1b09` no `origin/main`; Hosting por worktree limpo (`manipulacao.html`,
+  `qualidade.html`, `shared/manipulacao.js` idênticos ao commit). Cada MP exige
+  foto própria em `ops/{lote}/manipulacao/pesagem/fotosItens/{item}`; ícone de
+  câmera por linha; tabelas viram cartões abaixo de 700px. A foto geral
+  (`pesagem/fotos`) deixou de valer. Testes de manipulação, anexos, CK-7,
+  apontamento e transações aprovados.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — foto obrigatória da pesagem (2026-09-17).** `13f1142`
   no `origin/main`; Hosting + regras de Storage por worktree limpo às 23:19 BRT
   (`manipulacao.html`, `qualidade.html`, `shared/anexos.js`,
