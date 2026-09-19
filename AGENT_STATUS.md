@@ -118,6 +118,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — pesagem no celular + lote pelo FEFO (2026-09-18).**
+  `47c2eb2` no `origin/main`; Hosting por worktree limpo (5 arquivos idênticos).
+  `manipulacao.html`: três telas (lista na ordem da fórmula → MP → nova
+  pesagem com foto primeiro). Plano FEFO congelado em `pesagem/planoLotes`;
+  lote fora do FEFO exige `motivoForaFefo`. **`shared/utils.js` (reservado a
+  mim):** `sugerirAlocacaoFefo` ganhou opções `loteInterno`/`separadoPara`
+  (só ordenação, sem efeito quando ausentes) e `separarParcialLoteEndereco`
+  grava `enderecoOrigemKey/Codigo`.
+- **Aviso ao Codex:** `run_agenda_expedicao_ui_test.js` dá timeout também no
+  HEAD anterior (`8afcf05`), sem as mudanças acima — falha pré-existente,
+  provavelmente dependente de data. Não mexi.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — pesagem em parcelas + Dossiê do Lote (2026-09-18).**
   `a1f04f5` no `origin/main`; Hosting por worktree limpo (6 arquivos idênticos
   ao commit). Pesagem: cada ida à balança é parcela com peso/lote/foto em
