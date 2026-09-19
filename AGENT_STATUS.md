@@ -125,7 +125,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   com motivo (nunca apaga). Novo `dossie_lote.html` + `shared/dossie-lote.js`
   (só leitura): busca por lote/cliente/produto e junta OP, granel, apontamentos,
   paradas, perdas, consumo, paletes/laudos, conferência PA, RNC e linha do
-  tempo. `auth_check.js`: página nos módulos `planejamento` e `qualidade`.
+  tempo. Acesso só PCP (`emitir_op`) e `qualidade` — `8a97177` tirou do operador.
   Testes: `run_dossie_lote_test.js` (novo), manipulação unit/UI e regressões.
 - **Arquivos ativos:** nenhum.
 
