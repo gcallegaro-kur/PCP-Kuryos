@@ -118,6 +118,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — pesagem em parcelas + Dossiê do Lote (2026-09-18).**
+  `a1f04f5` no `origin/main`; Hosting por worktree limpo (6 arquivos idênticos
+  ao commit). Pesagem: cada ida à balança é parcela com peso/lote/foto em
+  `ops/{lote}/manipulacao/pesagem/parcelas/{mp}`; soma automática, cancelamento
+  com motivo (nunca apaga). Novo `dossie_lote.html` + `shared/dossie-lote.js`
+  (só leitura): busca por lote/cliente/produto e junta OP, granel, apontamentos,
+  paradas, perdas, consumo, paletes/laudos, conferência PA, RNC e linha do
+  tempo. `auth_check.js`: página nos módulos `planejamento` e `qualidade`.
+  Testes: `run_dossie_lote_test.js` (novo), manipulação unit/UI e regressões.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — foto por matéria-prima na pesagem (2026-09-18).**
   `50d1b09` no `origin/main`; Hosting por worktree limpo (`manipulacao.html`,
   `qualidade.html`, `shared/manipulacao.js` idênticos ao commit). Cada MP exige
