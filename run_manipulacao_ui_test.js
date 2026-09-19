@@ -158,6 +158,9 @@ async function campo(page, seletor, valor) {
     await linha.waitFor({timeout: 8000});
     assert.match(await linha.innerText(), /sem fase/);
     assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/02'}).count(), 0, 'OP concluída não aparece');
+    // Dossiê é ferramenta de gestão (Qualidade/PCP): o operador não vê.
+    assert.equal(await page.locator('.kt-sidebar a[href="dossie_lote.html"]').count(), 0, 'operador sem Dossiê no menu');
+    assert.equal(await page.locator('#mDossie').count(), 0, 'sem botão de dossiê na tela do operador');
 
     await linha.locator('[data-abrir]').click();
     await page.waitForSelector('#mPainel');

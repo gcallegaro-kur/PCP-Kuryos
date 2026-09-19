@@ -80,9 +80,9 @@ const KURYOS_MODULOS = {
   apontamento:  { rotulo: 'Apontamento Diário',    desc: 'Registro de produção no chão de fábrica',
                   paginas: ['form.html', 'manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'dossie_lote.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
-                  paginas: ['emitir_op.html'] },
+                  paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
                   paginas: ['comercial.html', 'gestao_comercial.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
@@ -584,6 +584,7 @@ function renderUnifiedNavbar(user) {
     // apagados), só não é mais oferecida como parte do fluxo ativo.
     temMod('planejamento') && ktLink('ops.html', 'gear', 'Controle de OPs', activePage),
     temMod('emitir_op') && ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage),
+    temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage),
     temMod('pedidos') && ktLink('pedidos.html', 'list', 'Pedidos', activePage),
     // "Matriz de Insumos > MRP" -- por ora só o rótulo muda (confirmado
     // pelo usuário: "a princípio só renomear"); uma funcionalidade de MRP
@@ -626,14 +627,15 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
     temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
     // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
-    temMod('qualidade') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
+    // É ferramenta de gestão -- Qualidade e PCP, nunca o operador (o papel
+    // `production` tem `planejamento`, por isso o acesso é por `emitir_op`).
+    temMod('qualidade') && !temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
   const producaoGroup = grupo('Produção', [
     temMod('apontamento') && ktLink('form.html', 'pencil', 'Apontamento Diário', activePage),
     temMod('apontamento') && ktLink('manipulacao.html', 'flask', 'Manipulação (granel)', activePage),
     temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
-    temMod('planejamento') && !temMod('qualidade') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
   const usersGroup = grupo('ADM', [
