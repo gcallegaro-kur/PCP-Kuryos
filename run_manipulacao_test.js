@@ -131,6 +131,39 @@ const pesagemOk = {
   assert.deepEqual(fech['MP-01'], {pesado: 60.2, loteMaterial: 'AK-576, AK-590', parcelas: 3, perda: 0.1, justificativa: null});
   assert.equal(fech['MP-03'].pesado, 5);
 
+  // Baixa por lote: 25 + 25 do AK-576 numa baixa, 10,2 do AK-590 em outra.
+  assert.deepEqual(M.baixasPorLote(previstos, pes).filter((b) => b.itemKey === 'MP-01').map((b) => [b.loteMaterial, b.qtd]),
+    [['AK-576', 50], ['AK-590', 10.2]]);
+  assert.deepEqual(M.baixasPorLote(previstos, pesagemOk).find((b) => b.itemKey === 'MP-03'),
+    {itemKey: 'MP-03', mpCodigo: 'MP-03', loteMaterial: 'AK-2026-000578', qtd: 5.05}, 'formato antigo: um grupo por MP');
+
+  // Ordem da fórmula manda na lista; próxima pendente dá a volta.
+  const ordenados = {'MP-01': Object.assign({ordem: 2}, previstos['MP-01']), 'MP-02': Object.assign({ordem: 0}, previstos['MP-02']),
+    'MP-03': Object.assign({ordem: 1}, previstos['MP-03'])};
+  assert.deepEqual(M.linhasPesagem(ordenados, {}).map((l) => l.mpCodigo), ['MP-02', 'MP-03', 'MP-01']);
+  const meioCaminho = {parcelas: {'MP-02': {'-z': {peso: 35, loteMaterial: 'L', foto: f('z')}}}};
+  assert.equal(M.proximaPendente(ordenados, meioCaminho, 'MP-02'), 'MP-03');
+  assert.equal(M.proximaPendente(ordenados, meioCaminho, 'MP-01'), 'MP-03', 'dá a volta e pula a completa');
+  assert.equal(M.proximaPendente(ordenados, pes, 'MP-01'), null, 'tudo pesado');
+
+  // FEFO indicado: quanto de cada lote, e qual é o próximo.
+  const plano = [{loteInterno: 'AK-576', qtd: 50, enderecos: ['FAB-1.1.1'], dataValidade: '2027-01-01'},
+                 {loteInterno: 'AK-590', qtd: 10, enderecos: ['FAB-2.1.1']}];
+  const sit0 = M.situacaoLotes(plano, []);
+  assert.equal(sit0.sugerido.loteInterno, 'AK-576');
+  const sit = M.situacaoLotes(plano, M.parcelasDoItem(pes, 'MP-01'));
+  assert.deepEqual(sit.linhas.map((l) => [l.loteInterno, l.pesado, l.falta]), [['AK-576', 50, 0], ['AK-590', 10.2, 0]]);
+  assert.equal(sit.sugerido, null, 'plano cumprido');
+  const sitMeio = M.situacaoLotes(plano, [{peso: 25, loteMaterial: 'AK-576'}, {peso: 3, loteMaterial: 'AK-999'}]);
+  assert.equal(sitMeio.sugerido.loteInterno, 'AK-576');
+  assert.equal(sitMeio.sugerido.falta, 25);
+  assert.deepEqual(sitMeio.fora, [{loteInterno: 'AK-999', pesado: 3}], 'lote fora do FEFO aparece separado');
+  // Fora do FEFO só com motivo; sem plano (material fora do WMS), qualquer lote.
+  assert.match(M.validarParcela({peso: 5, loteMaterial: 'AK-999', temFoto: true}, plano).erros[0], /O FEFO indica AK-576, AK-590\. Para usar outro lote, informe o motivo/);
+  assert.equal(M.validarParcela({peso: 5, loteMaterial: 'AK-999', temFoto: true, motivoForaFefo: 'Tambor do AK-576 contaminado'}, plano).ok, true);
+  assert.equal(M.validarParcela({peso: 5, loteMaterial: 'AK-576', temFoto: true}, plano).ok, true);
+  assert.equal(M.validarParcela({peso: 5, loteMaterial: 'QUALQUER', temFoto: true}, []).ok, true);
+
   // Validação de uma ida à balança.
   assert.deepEqual(M.validarParcela({}).erros, ['Informe o peso que a balança mostrou.', 'Informe o lote da embalagem usada.', 'Tire a foto da balança.']);
   assert.equal(M.validarParcela({peso: '12,5'}).ok, false, 'vírgula chega convertida pela tela');

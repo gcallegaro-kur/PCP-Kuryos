@@ -1815,6 +1815,8 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
       enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
       saldoLote: abatidoReal, qtdOriginal: abatidoReal,
       origemTipo: 'separacao_op', origemRef: origemRefNovo || null,
+      // De onde o pedaço saiu: é para onde a sobra volta depois da pesagem.
+      enderecoOrigemKey: lote.enderecoKey || null, enderecoOrigemCodigo: lote.enderecoCodigo || null,
       criadoEm: agora, atualizadoEm: agora, criadoPor: autor || null
     }).then(function(novoRef) {
       // Diferente de transferirLoteEndereco (que loga qtd=0 -- é a MESMA
@@ -3035,6 +3037,8 @@ function aplicarAjusteInventario(dbRef, contagem, autor) {
 function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBloqueados, opcoes) {
   var bloqueados = enderecosBloqueados || {};
   var consumidor = (opcoes && opcoes.clienteKey) || null;
+  var preferLote = (opcoes && opcoes.loteInterno) || null;
+  var preferRef = (opcoes && opcoes.separadoPara) || null;
   var donoCliente = function(lote) {
     var p = lote && lote.propriedade;
     return (p && p.tipo === 'CLIENTE' && p.clienteKey) ? p.clienteKey : null;
@@ -3059,6 +3063,17 @@ function sugerirAlocacaoFefo(itemCodigo, qtdNecessaria, lotesDoItem, enderecosBl
       var pa = consumidor && donoCliente(a.lote) === consumidor ? 0 : 1;
       var pb = consumidor && donoCliente(b.lote) === consumidor ? 0 : 1;
       if (pa !== pb) return pa - pb;
+      // Pesagem do granel (18/09): o que o operador DISSE que usou vem antes
+      // do FEFO -- o lote informado na balança e, dentro dele, o pedaço que a
+      // Separação já levou para esta OP. Sem isso a baixa podia sair de outro
+      // lote/endereço e o saldo da prateleira ficava errado. É preferência,
+      // não filtro: lote informado que não está no WMS cai no FEFO.
+      var la = preferLote && a.lote.loteInterno === preferLote ? 0 : 1;
+      var lb = preferLote && b.lote.loteInterno === preferLote ? 0 : 1;
+      if (la !== lb) return la - lb;
+      var sa = preferRef && a.lote.origemTipo === 'separacao_op' && a.lote.origemRef === preferRef ? 0 : 1;
+      var sb = preferRef && b.lote.origemTipo === 'separacao_op' && b.lote.origemRef === preferRef ? 0 : 1;
+      if (sa !== sb) return sa - sb;
       var va = a.lote.dataValidade || null, vb = b.lote.dataValidade || null;
       if (va && vb && va !== vb) return va < vb ? -1 : 1; // mais próximo de vencer primeiro
       if (va && !vb) return -1; // tem validade conhecida vem antes de quem não tem

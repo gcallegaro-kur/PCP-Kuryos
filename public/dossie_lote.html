@@ -260,6 +260,7 @@ function renderDossie() {
           (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + escapeAttr(url) + '" alt="Balança ' + escapeAttr(l.mpCodigo) + '"></a>' : '<div class="sem-foto">sem foto</div>') +
           '<div class="leg"><b>' + (p.ordem ? p.ordem + 'ª · ' : 'cancelada · ') + fmtNum(p.peso) + ' ' + un + '</b><br>lote ' + escapeHtml(p.loteMaterial || '—') +
           '<br><span class="hint">' + escapeHtml(p.por || '') + ' · ' + quando(p.em) + '</span>' +
+          (p.motivoForaFefo ? '<br><span style="color:var(--tint-orange-fg)">Fora do FEFO: ' + escapeHtml(p.motivoForaFefo) + '</span>' : '') +
           (p.canceladaEm ? '<br><span style="color:var(--danger)">Cancelada por ' + escapeHtml(p.canceladaPor || '—') + ': ' + escapeHtml(p.motivoCancelamento || '') + '</span>' : '') +
           '</div></div>';
       }).concat(l.fotosAvulsas.map(function(a) {
@@ -273,6 +274,9 @@ function renderDossie() {
           campo('Pesado', (l.pesado != null ? fmtNum(l.pesado) + ' ' + un : '—') + (l.parcelas > 1 ? '<div class="hint">em ' + l.parcelas + ' pesagens</div>' : '')) +
           campo('Desvio', l.desvioPct == null ? '—' : (l.desvioPct > 0 ? '+' : '') + l.desvioPct + '%') +
           campo('Lote(s) usado(s)', escapeHtml(l.loteMaterial || '—')) +
+          (l.planoFefo && l.planoFefo.linhas.length ? campo('FEFO indicado', l.planoFefo.linhas.map(function(x) {
+            return escapeHtml(x.loteInterno) + ': ' + fmtNum(x.planejado) + ' ' + un + (x.pesado ? ' (usado ' + fmtNum(x.pesado) + ')' : '');
+          }).join('<br>') + (l.planoFefo.fora.length ? '<div class="hint" style="color:var(--tint-orange-fg)">Fora do FEFO: ' + l.planoFefo.fora.map(function(x) { return escapeHtml(x.loteInterno) + ' ' + fmtNum(x.pesado) + ' ' + un; }).join(', ') + '</div>' : '')) : '') +
           (l.perda ? campo('Perda na pesagem', fmtNum(l.perda) + ' ' + un) : '') +
           (l.justificativa ? campo('Justificativa', escapeHtml(l.justificativa)) : '') +
           (c && c.obs ? campo('Obs. da conferência', escapeHtml(c.obs)) : '') +

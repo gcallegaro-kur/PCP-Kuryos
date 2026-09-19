@@ -78,40 +78,68 @@
     .mini a{display:block;width:40px;height:40px}
     .mini img{width:40px;height:40px;object-fit:cover;overflow:hidden;background:var(--bg-secondary,#eee);border-radius:6px;border:1px solid var(--border);display:block}
     .mini button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:12px;line-height:20px;padding:0;cursor:pointer}
-    /* Pesagem em parcelas: um cartão por matéria-prima, com a barra do quanto
-       já foi pesado e a lista de cada ida à balança. */
-    .mp-card{border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:12px;background:var(--card)}
-    .mp-card.ok{border-color:var(--success)}
-    .mp-card.alerta{border-color:var(--warning);background:var(--tint-orange-bg)}
-    .mp-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
-    .mp-topo .cod{font-size:15px;font-weight:700}
-    .mp-prev{font-size:12.5px;color:var(--muted);text-align:right}
-    .mp-prev b{color:var(--text);font-size:15px}
-    .barra{height:10px;border-radius:6px;background:var(--tint-gray-bg);margin:10px 0 6px;overflow:hidden}
+    /* Pesagem em três telas (lista -> MP -> nova pesagem), feita para o
+       celular do operador: alvos de toque grandes, números grandes, ações
+       fixas no rodapé, campos com fonte 16px (sem zoom automático no iOS). */
+    .pz-topo{margin-bottom:10px}
+    .pz-topo b{font-size:14px}
+    .barra{height:10px;border-radius:6px;background:var(--tint-gray-bg);margin:8px 0 6px;overflow:hidden}
     .barra span{display:block;height:100%;background:var(--primary);border-radius:6px}
-    .mp-card.ok .barra span{background:var(--success)}
-    .mp-card.alerta .barra span{background:var(--warning)}
-    .mp-estado{font-size:13px;margin-bottom:8px}
-    .parcela{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed var(--border)}
-    .parcela .p-num{flex:0 0 34px;height:34px;border-radius:50%;background:var(--tint-blue-bg);color:var(--primary);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+    .pz-ok .barra span{background:var(--success)}.pz-alerta .barra span{background:var(--warning)}
+    .pz-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;color:var(--text);font:inherit;min-height:60px}
+    .pz-row.pz-ok{border-color:color-mix(in srgb,var(--success) 45%,var(--border))}
+    .pz-row.pz-alerta{border-color:var(--warning);background:var(--tint-orange-bg)}
+    .pz-row.pz-parcial{border-color:var(--primary)}
+    .pz-num{flex:0 0 32px;height:32px;border-radius:50%;background:var(--tint-gray-bg);color:var(--muted);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+    .pz-ok .pz-num{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .pz-parcial .pz-num{background:var(--tint-blue-bg);color:var(--primary)}
+    .pz-txt{flex:1;min-width:0}.pz-txt b{display:block;font-size:14px}.pz-txt small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pz-dir{font-size:12.5px;font-weight:700;white-space:nowrap}
+    .pz-falta{color:var(--primary)}.pz-ok{color:var(--success)}.pz-alerta{color:var(--warning)}
+    .pz-seta{color:var(--muted);font-size:20px}
+    .pz-voltar{background:none;border:none;color:var(--primary);font-weight:700;font-size:15px;padding:8px 0;cursor:pointer}
+    .pz-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 10px}
+    .pz-cab b{font-size:16px}
+    .pz-x{background:none;border:1.5px solid var(--border);border-radius:10px;width:40px;height:40px;font-size:18px;cursor:pointer;color:var(--text)}
+    .pz-grande{text-align:center;padding:14px 12px 8px;border-radius:14px;background:var(--surface-2);margin-bottom:12px}
+    .pz-grande small{color:var(--muted);font-size:12.5px}
+    .pz-grande-num{font-size:40px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+    .pz-sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px}
+    .pz-lote{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:13.5px}
+    .pz-lote.atual{border-color:var(--primary);background:var(--tint-blue-bg)}
+    .pz-lote.feito{opacity:.65}
+    .pz-lote.fora{border-color:var(--warning);background:var(--tint-orange-bg)}
+    .pz-lote-q{font-weight:700;white-space:nowrap}
+    .pz-aviso{background:var(--tint-orange-bg);color:var(--tint-orange-fg);padding:10px 12px;border-radius:10px;font-size:12.5px;margin:10px 0}
+    .parcela{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px dashed var(--border)}
+    .parcela .p-num{flex:0 0 32px;height:32px;border-radius:50%;background:var(--tint-blue-bg);color:var(--primary);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
     .parcela .p-foto{width:52px;height:52px;flex:0 0 52px;border-radius:8px;object-fit:cover;border:1px solid var(--border);display:block;background:var(--tint-gray-bg)}
-    .parcela .p-info{flex:1;min-width:0;font-size:13px}
-    .parcela.cancelada{opacity:.6}
-    .parcela.cancelada .p-info b{text-decoration:line-through}
+    .parcela .p-info{flex:1;min-width:0;font-size:13.5px}
+    .parcela.cancelada{opacity:.6}.parcela.cancelada .p-info b{text-decoration:line-through}
     .parcela.cancelada .p-num{background:var(--tint-red-bg);color:var(--tint-red-fg)}
-    .btn-add{width:100%;justify-content:center;border:2px dashed var(--primary);background:transparent;color:var(--primary);padding:12px;font-size:15px;margin-top:8px}
-    .form-parcela{border:2px solid var(--primary);border-radius:12px;padding:12px;margin-top:10px;background:var(--tint-blue-bg)}
-    .fp-titulo{font-weight:700;font-size:14px;margin-bottom:10px}
-    .fp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-    .fp-grid input{font-size:16px;padding:10px}
-    .cam.grande{width:100%;height:52px;font-size:16px}
-    .fp-preview{width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--border);display:block;margin-top:8px}
-    .fp-faltando{font-size:12px;color:var(--tint-red-fg);margin:8px 0;min-height:16px}
-    .fp-acoes{display:flex;gap:8px;flex-wrap:wrap}
-    .fp-acoes .btn{flex:1;justify-content:center;padding:12px}
-    .mp-extra{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:10px}
+    .pz-mais{background:none;border:none;font-size:22px;color:var(--muted);width:40px;height:40px;cursor:pointer;line-height:1}
+    .pz-just{margin-top:12px}.pz-just input{border-color:var(--warning)}
+    .pz-opcoes{margin-top:12px;font-size:13px}.pz-opcoes summary{color:var(--muted);cursor:pointer;padding:6px 0}
+    .pz-link{background:none;border:none;color:var(--primary);font-weight:600;font-size:13.5px;padding:8px 0;cursor:pointer;text-decoration:underline}
+    .pz-acoes{position:sticky;bottom:0;z-index:5;background:var(--card);padding:12px 0 6px;margin-top:14px;display:flex;gap:8px;border-top:1px solid var(--border)}
+    .pz-acoes .btn{flex:1;justify-content:center;padding:14px 10px;font-size:15px}
+    .btn-camera{flex:2;display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;border-radius:12px;background:var(--primary);color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin:0}
+    .btn-camera input{display:none}
+    .form-parcela{padding:2px 0}
+    .fp-preview{width:100%;max-width:360px;height:200px;object-fit:cover;border-radius:12px;border:1px solid var(--border);display:block;background:var(--tint-gray-bg)}
+    .fp-peso{display:flex;align-items:center;gap:8px}
+    .fp-peso input{font-size:30px!important;font-weight:700;padding:10px 12px!important;height:60px;border-width:2px;border-color:var(--primary)}
+    .fp-peso span{font-size:18px;color:var(--muted);font-weight:700}
+    #formParcela input[type=text]{font-size:16px;padding:10px}
+    .fp-faltando{font-size:12.5px;color:var(--tint-red-fg);margin:10px 0 0;min-height:16px}
     .obrig{color:var(--tint-red-fg);font-weight:700}
-    @media(max-width:700px){.fp-grid,.mp-extra{grid-template-columns:1fr}.mp-card{padding:12px}}
+    #mPesagemRodape{position:sticky;bottom:0;z-index:5;background:var(--card);padding:10px 0 4px}
+    .modo-mp #mPesagemRodape,.modo-form #mPesagemRodape,.modo-mp #mPesagemErros,.modo-form #mPesagemErros,.modo-mp .pz-intro,.modo-form .pz-intro{display:none!important}
+    .conf-bts{display:flex;gap:6px}
+    .conf-bts button{flex:1;min-height:40px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-weight:700;font-size:13px;cursor:pointer;color:var(--text);padding:0 10px}
+    .conf-bts button.sim.on{background:var(--tint-green-bg);border-color:var(--success);color:var(--tint-green-fg)}
+    .conf-bts button.nao.on{background:var(--tint-red-bg);border-color:var(--danger);color:var(--tint-red-fg)}
+    .conf-bts button:disabled{cursor:default;opacity:.8}
     /* Celular: cada linha vira um cartão, com o rótulo do campo à esquerda. */
     @media(max-width:700px){
       .header h1{font-size:22px}
@@ -123,7 +151,14 @@
       table.resp td input,table.resp td select{flex:1;font-size:16px;padding:10px}
       table.resp td.cabeca{display:block;font-size:14px;background:var(--surface-2);border-radius:8px}
       .btn{padding:12px 16px;font-size:15px}
-      #mBtnFecharPesagem,#mBtnIniciarPesagem,#mBtnConferir,#mBtnIniciarManipulacao,#mBtnFecharManipulacao{width:100%;justify-content:center}
+      #mBtnFecharPesagem,#mBtnIniciarPesagem,#mBtnConferir,#mBtnIniciarManipulacao,#mBtnFecharManipulacao{width:100%;justify-content:center;padding:14px}
+      /* Lote aberto no celular: o painel é a tela; lista e explicação somem. */
+      body.lote-aberto .section-note,body.lote-aberto #mCardLista{display:none}
+      body.lote-aberto .header{padding-top:14px}
+      #alertBox{top:62px}
+      /* Com uma MP aberta, a tela é dela: some o cabeçalho do lote. */
+      #mPainel.foco-mp > .card-header,#mPainel.foco-mp #mEtapas,#mPainel.foco-mp #mResumoTempos,#mPainel.foco-mp #mBlocoPesagem > h4{display:none}
+      #mRendimento,#mPerdaResiduo,#mPerdaAmostra,#mPerdaOutra,#mObsManipulacao{font-size:16px;padding:10px}
       .card-body,.card-header{padding:12px}
       .main,.header{max-width:100%;padding-left:12px;padding-right:12px}
     }
@@ -147,7 +182,7 @@
     depois que a Qualidade aprovar o granel.
   </div>
 
-  <div class="card">
+  <div class="card" id="mCardLista">
     <div class="card-header">
       <h3>Lotes em produção</h3>
       <span class="field-hint" id="mListaResumo"></span>
@@ -170,10 +205,10 @@
       <!-- 1. Pesagem -->
       <div id="mBlocoPesagem">
         <h4 style="font-size:13px;margin-bottom:4px">1 · Pesagem <span class="field-hint" id="mPesagemQuem"></span></h4>
-        <div class="field-hint" style="margin-bottom:10px">Pese quantas vezes precisar. Cada ida à balança é uma pesagem, com o peso, o lote da embalagem e a foto da balança; o sistema soma e mostra quanto falta.</div>
+        <div class="field-hint pz-intro" style="margin-bottom:10px">Toque na matéria-prima, fotografe a balança e digite o peso. Pese quantas vezes precisar: o sistema soma, mostra quanto falta e indica o lote pelo FEFO.</div>
         <div id="mPesagemCards"></div>
         <div id="mPesagemErros" class="alert alert-danger" style="margin-top:10px"></div>
-        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <div id="mPesagemRodape" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" id="mBtnIniciarPesagem">Iniciar pesagem</button>
           <button class="btn btn-green" id="mBtnFecharPesagem">Fechar pesagem e baixar estoque</button>
         </div>
@@ -236,7 +271,10 @@ var opAtual = null;   // chave em ops/
 var previstos = {};   // itemKey -> {mpCodigo, mpNome, unidade, previsto}
 var rascunho = {};    // pesagem digitada antes de fechar
 var conferencia = {}; // itemKey -> {ok, obs}
-var formParcela = null;     // pesagem sendo lançada: {itemKey, peso, lote, arquivo, previewUrl, enviando}
+var formParcela = null;     // pesagem sendo lançada: {itemKey, arquivo, previewUrl, peso, lote, outroLote, motivoForaFefo, enviando}
+var mpAberta = null;        // MP na tela de detalhe (null = lista)
+var menuParcela = null;     // pesagem com o menu "⋯" aberto
+var allLotes = {}, allEnderecos = {}; // WMS: base do FEFO que indica o lote
 var assinaturaPesagem = ''; // só redesenha os cartões quando o conteúdo muda
 
 function setStatus(on, txt) {
@@ -259,6 +297,8 @@ dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; r
 dbOnValue(db.ref('formulas'), function(snap) { allFormulas = snap.val() || {}; render(); });
 dbOnValue(db.ref('bom'), function(snap) { allBom = snap.val() || {}; render(); });
 dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; render(); });
+dbOnValue(db.ref('estoque_lotes'), function(snap) { allLotes = snap.val() || {}; if (opAtual) renderPainel(); });
+dbOnValue(db.ref('enderecos_estoque'), function(snap) { allEnderecos = snap.val() || {}; if (opAtual) renderPainel(); });
 
 /* Previstos da fórmula (o granel). O BOM de embalagem não entra aqui: ele é
    consumido no envase, não na manipulação. */
@@ -271,8 +311,9 @@ function calcularPrevistos(op) {
   var calc = explodirMateriaisNecessarios(produto, Number(op.qtdPlanejada) || 0, formula, bom, allMateriais);
   if (!calc || !calc.ok) return {};
   var out = {};
-  (calc.itens || []).filter(function(it) { return it.origem === 'formula'; }).forEach(function(it) {
-    out[sanitizeKey(it.mpCodigo)] = {mpCodigo: it.mpCodigo, mpNome: it.mpNome, unidade: it.unidade || 'kg', previsto: it.quantidade};
+  (calc.itens || []).filter(function(it) { return it.origem === 'formula'; }).forEach(function(it, i) {
+    // `ordem`: a sequência da fórmula, que é a ordem da lista de pesagem.
+    out[sanitizeKey(it.mpCodigo)] = {mpCodigo: it.mpCodigo, mpNome: it.mpNome, unidade: it.unidade || 'kg', previsto: it.quantidade, ordem: i};
   });
   return out;
 }
@@ -314,6 +355,8 @@ function abrirOp(key) {
   conferencia = {};
   descartarFormParcela();
   assinaturaPesagem = '';
+  mpAberta = null; menuParcela = null;
+  document.body.classList.add('lote-aberto');
   var f = Manipulacao.fase(allOps[key]);
   if (f && f.pesagem && f.pesagem.itens) rascunho = JSON.parse(JSON.stringify(f.pesagem.itens));
   if (f && f.conferencia && f.conferencia.itens) conferencia = JSON.parse(JSON.stringify(f.conferencia.itens));
@@ -322,7 +365,9 @@ function abrirOp(key) {
   document.getElementById('mPainel').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 document.getElementById('mFechar').addEventListener('click', function() {
-  opAtual = null; descartarFormParcela(); document.getElementById('mPainel').style.display = 'none';
+  opAtual = null; mpAberta = null; descartarFormParcela(); manterTelaAcesa(false);
+  document.body.classList.remove('lote-aberto');
+  document.getElementById('mPainel').style.display = 'none';
 });
 
 function faseComRascunho() {
@@ -369,6 +414,7 @@ function renderPainel() {
   var podeEditarPesagem = st === 'AGUARDANDO_PESAGEM';
   document.getElementById('mPesagemQuem').textContent = (f.pesagem && f.pesagem.por) ? '— por ' + f.pesagem.por : '';
   renderPesagem(f, st, val, podeEditarPesagem);
+  manterTelaAcesa(podeEditarPesagem);
   atualizarValidacaoPesagem(val, podeEditarPesagem);
 
   document.getElementById('mBtnIniciarPesagem').style.display = acoes.indexOf('INICIAR_PESAGEM') >= 0 ? '' : 'none';
@@ -387,12 +433,12 @@ function renderPainel() {
         '<td data-label="Pesado" style="text-align:right">' + fmtNum(l.pesado || 0) + ' ' + escapeHtml(l.unidade) +
           (l.parcelas > 1 ? '<div class="field-hint">em ' + l.parcelas + ' pesagens</div>' : '') + celulaFoto(f, l) + '</td>' +
         '<td data-label="Lote">' + escapeHtml(l.loteMaterial || '—') + '</td>' +
-        '<td data-label="Confere?"><select data-conf="' + escapeAttr(l.itemKey) + '"' + dis + '>' +
-          '<option value=""' + (c.ok == null ? ' selected' : '') + '>—</option>' +
-          '<option value="sim"' + (c.ok === true ? ' selected' : '') + '>Confere</option>' +
-          '<option value="nao"' + (c.ok === false ? ' selected' : '') + '>Divergente</option>' +
-        '</select></td>' +
-        '<td data-label="Observação"><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis + '></td></tr>';
+        '<td data-label="Confere?"><div class="conf-bts">' +
+          '<button type="button" class="sim' + (c.ok === true ? ' on' : '') + '" data-conf="' + escapeAttr(l.itemKey) + '" data-valor="sim"' + dis + '>✓ Confere</button>' +
+          '<button type="button" class="nao' + (c.ok === false ? ' on' : '') + '" data-conf="' + escapeAttr(l.itemKey) + '" data-valor="nao"' + dis + '>✕ Diverge</button>' +
+        '</div></td>' +
+        '<td data-label="Observação"><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis +
+          (c.ok === false ? ' placeholder="Descreva a divergência"' : '') + '></td></tr>';
     }).join('');
     var valConf = Manipulacao.validarConferencia(previstos, f, eu());
     var errosConf = document.getElementById('mConferenciaErros');
@@ -442,11 +488,13 @@ function ligarCampos() {
       };
     });
   });
-  document.querySelectorAll('[data-conf]').forEach(function(sel) {
-    sel.onchange = function() {
-      var k = sel.getAttribute('data-conf');
+  document.querySelectorAll('[data-conf]').forEach(function(b) {
+    b.onclick = function() {
+      var k = b.getAttribute('data-conf');
       conferencia[k] = conferencia[k] || {};
-      conferencia[k].ok = sel.value === '' ? null : sel.value === 'sim';
+      var valor = b.getAttribute('data-valor') === 'sim';
+      // Tocar de novo no botão marcado desmarca.
+      conferencia[k].ok = conferencia[k].ok === valor ? null : valor;
       renderPainel();
     };
   });
@@ -464,12 +512,17 @@ function ligarCampos() {
   ligarPesagem();
 }
 
-/* ── Pesagem em parcelas ───────────────────────────────────────────────
-   Pedido do usuário (18/09): pesar o mesmo item várias vezes, somando até o
-   total da OP, com "adicionar pesagem, um +, alguma coisa mais intuitiva".
-   Cada parcela é gravada NA HORA em pesagem/parcelas/{itemKey}, com peso,
-   lote da embalagem e foto da balança. Parcela errada é cancelada com
-   motivo, nunca apagada: o dossiê do lote mostra tudo o que aconteceu. */
+/* ── Pesagem: uma MP por vez, pensada para o celular ───────────────────
+   Pedidos do usuário (18/09): pesar o mesmo item várias vezes até o total
+   ("+ adicionar pesagem"), a maior parte do uso é no celular de cada
+   operador, a lista segue a ORDEM DA FÓRMULA, a FOTO VEM ANTES do peso, e o
+   LOTE é indicado pelo FEFO ("quanto de cada lote tem que ser utilizado").
+   Três telas dentro do bloco de pesagem:
+     lista  -> uma linha por MP, na ordem da fórmula, com o que falta
+     mp     -> "Faltam X kg" grande, lotes do FEFO, pesagens feitas
+     form   -> foto já tirada, peso grande, lote do FEFO já escolhido
+   Cada pesagem é gravada NA HORA em pesagem/parcelas/{mp}; errada é
+   cancelada com motivo, nunca apagada. */
 function numeroDigitado(v) {
   var t = String(v == null ? '' : v).trim().replace(/\s/g, '');
   if (!t) return null;
@@ -484,6 +537,11 @@ function horaCurta(iso) {
   var d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
 }
+function validadeCurta(iso) {
+  if (!iso) return '';
+  var d = new Date(String(iso).length === 10 ? iso + 'T12:00:00' : iso);
+  return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', {month: '2-digit', year: '2-digit'});
+}
 
 function descartarFormParcela() {
   if (formParcela && formParcela.previewUrl && window.URL && URL.revokeObjectURL) {
@@ -492,168 +550,291 @@ function descartarFormParcela() {
   formParcela = null;
 }
 
+/* Plano FEFO da MP: o congelado no início da pesagem ou, antes disso, o
+   calculado agora. Separado para esta OP vem primeiro (separadoPara), e o
+   material do cliente antes do geral (clienteKey), como no apontamento. */
+function calcularPlanoFefo(itemKey) {
+  var prev = previstos[itemKey], op = allOps[opAtual] || {};
+  if (!prev || typeof sugerirAlocacaoFefo !== 'function') return [];
+  var lotes = allLotes[sanitizeKey(prev.mpCodigo)] || {};
+  var bloqueados = {};
+  Object.keys(allEnderecos).forEach(function(k) { if (allEnderecos[k] && allEnderecos[k].ativo === false) bloqueados[k] = true; });
+  var clienteKey = (typeof PropriedadeEstoque !== 'undefined') ? PropriedadeEstoque.clienteKeyDoSku(op.sku, allProdutos, null, op.cliente) : null;
+  var r = sugerirAlocacaoFefo(prev.mpCodigo, Number(prev.previsto) || 0, lotes, bloqueados, {clienteKey: clienteKey || null, separadoPara: op.lote});
+  var grupos = [], porLote = {};
+  r.alocacoes.forEach(function(a) {
+    var l = lotes[a.loteKey] || {};
+    var id = l.loteInterno || l.loteOrigem || a.loteKey;
+    if (!porLote[id]) { porLote[id] = {loteInterno: id, qtd: 0, enderecos: [], dataValidade: a.dataValidade || null}; grupos.push(porLote[id]); }
+    porLote[id].qtd = Math.round((porLote[id].qtd + a.qtdSugerida) * 1000) / 1000;
+    if (a.enderecoCodigo && porLote[id].enderecos.indexOf(a.enderecoCodigo) < 0) porLote[id].enderecos.push(a.enderecoCodigo);
+  });
+  return grupos;
+}
+function planoDaMp(itemKey) {
+  var congelado = ((((Manipulacao.fase(allOps[opAtual]) || {}).pesagem || {}).planoLotes) || {})[itemKey];
+  if (congelado && congelado.length) return congelado;
+  return calcularPlanoFefo(itemKey);
+}
+
 function renderPesagem(f, st, val, podeEditar) {
   var pes = f.pesagem || {};
-  var assinatura = JSON.stringify([opAtual, st, podeEditar, previstos, pes.parcelas || null, pes.fotosItens || null,
-    formParcela ? [formParcela.itemKey, formParcela.previewUrl || '', !!formParcela.enviando] : null]);
+  var modo = formParcela && podeEditar ? 'form' : (mpAberta && previstos[mpAberta] ? 'mp' : 'lista');
+  var bloco = document.getElementById('mBlocoPesagem');
+  bloco.classList.remove('modo-lista', 'modo-mp', 'modo-form');
+  bloco.classList.add('modo-' + modo);
+  document.getElementById('mPainel').classList.toggle('foco-mp', modo !== 'lista');
+  var assinatura = JSON.stringify([opAtual, st, podeEditar, modo, mpAberta, menuParcela, previstos, pes.parcelas || null,
+    pes.planoLotes || null, pes.fotosItens || null, modo === 'mp' || modo === 'form' ? allLotes[sanitizeKey((previstos[mpAberta] || {}).mpCodigo || '')] || null : null,
+    formParcela ? [formParcela.itemKey, formParcela.previewUrl || '', !!formParcela.enviando, !!formParcela.outroLote] : null]);
   if (assinatura === assinaturaPesagem) return;
+  var trocouTela = assinaturaPesagem && JSON.parse(assinaturaPesagem)[3] !== modo;
   assinaturaPesagem = assinatura;
   var box = document.getElementById('mPesagemCards');
   if (!val.linhas.length) {
     box.innerHTML = '<div class="no-data">Fórmula não encontrada para este produto — cadastre em Fórmulas/BOM.</div>';
     return;
   }
-  box.innerHTML = val.linhas.map(function(l) { return cartaoMp(pes, l, podeEditar, !st); }).join('');
+  if (modo === 'form') box.innerHTML = telaForm(pes, val.linhas.find(function(l) { return l.itemKey === formParcela.itemKey; }));
+  else if (modo === 'mp') box.innerHTML = telaMp(pes, val.linhas, val.linhas.find(function(l) { return l.itemKey === mpAberta; }), podeEditar);
+  else box.innerHTML = telaLista(val.linhas, podeEditar, !st);
+  // Trocou de tela: volta o topo do bloco para a vista (no celular a página
+  // é longa e a tela nova começaria fora da tela).
+  if (trocouTela && bloco.scrollIntoView) bloco.scrollIntoView({block: 'start'});
 }
 
-function cartaoMp(pes, l, podeEditar, naoIniciada) {
-  var un = escapeHtml(l.unidade);
+function statusLinha(l) {
+  if (l.pendente) return 'pend';
+  if (!l.foraTolerancia) return 'ok';
+  return l.excesso > 0 ? 'alerta' : 'parcial';
+}
+
+function telaLista(linhas, podeEditar, naoIniciada) {
+  var feitas = linhas.filter(function(l) { return statusLinha(l) === 'ok' || (statusLinha(l) === 'alerta'); }).length;
+  var pctGeral = linhas.length ? feitas / linhas.length * 100 : 0;
+  return '<div class="pz-topo"><b>' + feitas + ' de ' + linhas.length + ' matérias-primas pesadas</b>' +
+      '<div class="barra"><span style="width:' + pctGeral.toFixed(1) + '%"></span></div>' +
+      (naoIniciada ? '<div class="field-hint">Toque em <b>Iniciar pesagem</b> para começar. A lista segue a ordem da fórmula.</div>' : '') +
+    '</div>' +
+    linhas.map(function(l, i) {
+      var s = statusLinha(l), un = escapeHtml(l.unidade);
+      var dir = s === 'ok' ? '<span class="pz-ok">✓ ' + fmtNum(l.pesado) + ' ' + un + '</span>'
+        : s === 'alerta' ? '<span class="pz-alerta">passou ' + fmtNum(l.excesso) + ' ' + un + '</span>'
+        : '<span class="pz-falta">faltam ' + fmtNum(l.falta) + ' ' + un + '</span>';
+      return '<button type="button" class="pz-row pz-' + s + '" data-abrir-mp="' + escapeAttr(l.itemKey) + '">' +
+        '<span class="pz-num">' + (s === 'ok' ? '✓' : (i + 1)) + '</span>' +
+        '<span class="pz-txt"><b>' + escapeHtml(l.mpCodigo) + '</b><small>' + escapeHtml(l.mpNome) + ' · ' +
+          (l.pesado ? fmtNum(l.pesado) + ' de ' : '') + fmtNum(l.previsto) + ' ' + un + (l.parcelas ? ' · ' + l.parcelas + ' pesagem(ns)' : '') + '</small></span>' +
+        '<span class="pz-dir">' + dir + '</span><span class="pz-seta">›</span></button>';
+    }).join('');
+}
+
+function telaMp(pes, linhas, l, podeEditar) {
+  var un = escapeHtml(l.unidade), s = statusLinha(l);
+  var idx = linhas.indexOf(l);
   var todas = Manipulacao.parcelasDoItem(pes, l.itemKey, true);
+  var plano = planoDaMp(l.itemKey);
+  var sit = Manipulacao.situacaoLotes(plano, Manipulacao.parcelasDoItem(pes, l.itemKey));
   var pct = l.previsto > 0 ? Math.min(100, (l.pesado || 0) / l.previsto * 100) : 0;
-  var completo = !l.pendente && !l.foraTolerancia;
-  var passou = !l.pendente && l.foraTolerancia && l.excesso > 0;
-  var cls = completo ? ' ok' : passou ? ' alerta' : '';
-  var estado = l.pendente ? 'Nada pesado ainda'
-    : completo ? '<b style="color:var(--success)">✓ Completo</b> — ' + fmtNum(l.pesado) + ' ' + un + (l.desvioPct ? ' (' + (l.desvioPct > 0 ? '+' : '') + l.desvioPct + '%)' : '')
-    : passou ? '<b style="color:var(--warning)">Passou ' + fmtNum(l.excesso) + ' ' + un + '</b> do previsto (' + '+' + l.desvioPct + '%) — justifique abaixo ou cancele a pesagem errada'
-    : 'Pesado ' + fmtNum(l.pesado) + ' de ' + fmtNum(l.previsto) + ' ' + un + ' · <b>faltam ' + fmtNum(l.falta) + ' ' + un + '</b>';
+  var grande = s === 'ok'
+    ? '<small>Completo</small><div class="pz-grande-num" style="color:var(--success)">✓ ' + fmtNum(l.pesado) + ' ' + un + '</div><small>previsto ' + fmtNum(l.previsto) + ' ' + un + (l.desvioPct ? ' · ' + (l.desvioPct > 0 ? '+' : '') + l.desvioPct + '%' : '') + '</small>'
+    : s === 'alerta'
+    ? '<small>Passou do previsto</small><div class="pz-grande-num" style="color:var(--warning)">+' + fmtNum(l.excesso) + ' ' + un + '</div><small>pesado ' + fmtNum(l.pesado) + ' de ' + fmtNum(l.previsto) + ' ' + un + ' (+' + l.desvioPct + '%)</small>'
+    : '<small>Faltam</small><div class="pz-grande-num">' + fmtNum(l.falta) + ' ' + un + '</div><small>de ' + fmtNum(l.previsto) + ' ' + un + ' previstos' + (l.pesado ? ' · pesado ' + fmtNum(l.pesado) : '') + '</small>';
+
+  var lotesHtml = plano.length
+    ? '<div class="pz-sec">Lotes indicados (FEFO)</div>' + sit.linhas.map(function(x) {
+        var feito = x.falta <= 0;
+        return '<div class="pz-lote' + (feito ? ' feito' : (sit.sugerido && sit.sugerido.loteInterno === x.loteInterno ? ' atual' : '')) + '">' +
+          '<div><b>' + escapeHtml(x.loteInterno) + '</b> <span class="field-hint">' + escapeHtml(x.enderecos.join(', ')) + (x.dataValidade ? ' · vence ' + validadeCurta(x.dataValidade) : '') + '</span></div>' +
+          '<div class="pz-lote-q">' + (feito ? '✓ ' : '') + fmtNum(x.pesado) + ' / ' + fmtNum(x.planejado) + ' ' + un + '</div></div>';
+      }).join('') + sit.fora.map(function(x) {
+        return '<div class="pz-lote fora"><div><b>' + escapeHtml(x.loteInterno) + '</b> <span class="field-hint">fora do FEFO</span></div><div class="pz-lote-q">' + fmtNum(x.pesado) + ' ' + un + '</div></div>';
+      }).join('')
+    : '<div class="pz-aviso">Sem saldo desta MP por lote no estoque — informe o lote da embalagem em cada pesagem.</div>';
 
   var n = 0;
-  var linhasParcelas = todas.map(function(p) {
+  var parcelasHtml = todas.length ? '<div class="pz-sec">Pesagens</div>' + todas.map(function(p) {
     var cancelada = !!p.canceladaEm;
     if (!cancelada) n++;
     var url = p.foto && p.foto.url;
     return '<div class="parcela' + (cancelada ? ' cancelada' : '') + '">' +
       '<span class="p-num">' + (cancelada ? '✕' : ordinal(n)) + '</span>' +
-      (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img class="p-foto" src="' + escapeAttr(url) + '" alt="Balança: ' + escapeAttr(l.mpCodigo) + ' ' + escapeAttr(p.peso) + '"></a>'
-           : '<span class="p-foto" title="sem foto"></span>') +
-      '<div class="p-info"><b>' + fmtNum(p.peso) + ' ' + un + '</b> · lote ' + escapeHtml(p.loteMaterial || '—') +
+      (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img class="p-foto" src="' + escapeAttr(url) + '" alt="Balança"></a>' : '<span class="p-foto"></span>') +
+      '<div class="p-info"><b>' + fmtNum(p.peso) + ' ' + un + '</b> · ' + escapeHtml(p.loteMaterial || '—') +
         '<div class="field-hint">' + escapeHtml(p.por || '') + (p.em ? ' · ' + horaCurta(p.em) : '') + '</div>' +
+        (p.motivoForaFefo ? '<div class="field-hint" style="color:var(--tint-orange-fg)">Fora do FEFO: ' + escapeHtml(p.motivoForaFefo) + '</div>' : '') +
         (cancelada ? '<div class="field-hint" style="color:var(--tint-red-fg)">Cancelada por ' + escapeHtml(p.canceladaPor || '—') + ': ' + escapeHtml(p.motivoCancelamento || '') + '</div>' : '') +
+        (menuParcela === p.id && podeEditar && !cancelada ? '<button type="button" class="btn btn-danger btn-sm" style="margin-top:6px" data-cancelar-parcela="' + escapeAttr(l.itemKey) + '|' + escapeAttr(p.id) + '">Cancelar esta pesagem</button>' : '') +
       '</div>' +
-      (podeEditar && !cancelada ? '<button type="button" class="btn btn-ghost btn-sm" data-cancelar-parcela="' + escapeAttr(l.itemKey) + '|' + escapeAttr(p.id) + '">Cancelar</button>' : '') +
+      (podeEditar && !cancelada ? '<button type="button" class="pz-mais" aria-label="Opções da pesagem" data-menu-parcela="' + escapeAttr(p.id) + '">⋯</button>' : '') +
     '</div>';
-  }).join('');
-
-  var acao = '';
-  if (formParcela && formParcela.itemKey === l.itemKey && podeEditar) acao = formularioParcela(l);
-  else if (podeEditar) acao = '<button type="button" class="btn btn-add" data-add-parcela="' + escapeAttr(l.itemKey) + '">＋ ' + (l.parcelas ? 'Adicionar outra pesagem' : 'Adicionar pesagem') + '</button>';
-  else if (naoIniciada) acao = '<div class="field-hint" style="margin-top:6px">Clique em <b>Iniciar pesagem</b> para começar.</div>';
+  }).join('') : '';
 
   var r = rascunho[l.itemKey] || {};
   var dis = podeEditar ? '' : ' disabled';
-  var extra = (podeEditar || r.perda || r.justificativa || l.perda || l.justificativa)
-    ? '<div class="mp-extra">' +
-        '<div><label>Perda na pesagem (' + un + ')</label><input type="text" inputmode="decimal" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></div>' +
-        '<div><label>Justificativa do desvio' + (l.foraTolerancia && !l.falta ? ' <span class="obrig">obrigatória</span>' : '') + '</label><input type="text" data-just="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.justificativa || '') + '"' + dis + '></div>' +
+  var justHtml = (l.foraTolerancia && !l.falta) || r.justificativa || l.justificativa
+    ? '<div class="pz-just"><label>Justificativa do desvio <span class="obrig">obrigatória</span></label><input type="text" data-just="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.justificativa || '') + '"' + dis + ' placeholder="Por que passou do previsto?"></div>' : '';
+  var perdaHtml = '<details class="pz-opcoes"' + (r.perda ? ' open' : '') + '><summary>Mais opções</summary><label>Perda na pesagem (' + un + ')</label>' +
+    '<input type="text" inputmode="decimal" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></details>';
+
+  var proxima = Manipulacao.proximaPendente(previstos, pes, l.itemKey);
+  var acoes = podeEditar
+    ? '<div class="pz-acoes">' +
+        '<label class="btn-camera"><input type="file" accept="image/*" capture="environment" id="pzFoto">📷 ' + (l.parcelas ? 'Nova pesagem' : 'Fotografar a balança') + '</label>' +
+        (s !== 'pend' && proxima ? '<button type="button" class="btn btn-ghost pz-prox" data-abrir-mp="' + escapeAttr(proxima) + '">Próxima MP ›</button>' : '') +
       '</div>'
     : '';
 
-  return '<div class="mp-card' + cls + '" data-mp="' + escapeAttr(l.itemKey) + '">' +
-    '<div class="mp-topo"><div><div class="cod">' + escapeHtml(l.mpCodigo) + '</div><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></div>' +
-      '<div class="mp-prev">Previsto<br><b>' + fmtNum(l.previsto) + ' ' + un + '</b></div></div>' +
-    '<div class="barra"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
-    '<div class="mp-estado">' + estado + '</div>' +
-    linhasParcelas + acao + extra +
-  '</div>';
+  return '<button type="button" class="pz-voltar" data-voltar-lista>‹ Todas as MPs</button>' +
+    '<div class="pz-cab"><div><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></div><span class="field-hint">' + (idx + 1) + ' de ' + linhas.length + '</span></div>' +
+    '<div class="pz-grande pz-' + s + '">' + grande + '<div class="barra"><span style="width:' + pct.toFixed(1) + '%"></span></div></div>' +
+    lotesHtml + parcelasHtml + justHtml + perdaHtml + acoes;
 }
 
-function formularioParcela(l) {
-  var fp = formParcela;
-  var un = escapeHtml(l.unidade);
-  return '<div class="form-parcela" id="formParcela">' +
-    '<div class="fp-titulo">' + ordinal(l.parcelas + 1) + ' pesagem de ' + escapeHtml(l.mpCodigo) +
-      (l.pesado ? (l.falta > 0 ? ' <span class="field-hint">· faltam ' + fmtNum(l.falta) + ' ' + un + '</span>'
-                               : ' <span class="field-hint" style="color:var(--tint-orange-fg)">· o previsto já foi atingido</span>') : '') + '</div>' +
-    '<div class="fp-grid">' +
-      '<div><label>Peso na balança (' + un + ')</label><input type="text" inputmode="decimal" id="fpPeso" autocomplete="off" placeholder="ex.: ' + escapeAttr(fmtNum(l.falta || l.previsto)) + '" value="' + escapeAttr(fp.peso || '') + '"></div>' +
-      '<div><label>Lote da embalagem</label><input type="text" id="fpLote" autocomplete="off" placeholder="lote interno (AK-...)" value="' + escapeAttr(fp.lote || '') + '"></div>' +
+function telaForm(pes, l) {
+  var fp = formParcela, un = escapeHtml(l.unidade);
+  var plano = planoDaMp(l.itemKey);
+  var sit = Manipulacao.situacaoLotes(plano, Manipulacao.parcelasDoItem(pes, l.itemKey));
+  var sug = sit.sugerido;
+  var loteHtml;
+  if (plano.length && !fp.outroLote) {
+    var alvo = sit.linhas.find(function(x) { return x.loteInterno === fp.lote; }) || sug;
+    loteHtml = '<div class="pz-sec">Lote (indicado pelo FEFO)</div>' +
+      '<div class="pz-lote atual"><div><b>' + escapeHtml(fp.lote || '—') + '</b> <span class="field-hint">' + escapeHtml(alvo ? alvo.enderecos.join(', ') : '') +
+        (alvo && alvo.dataValidade ? ' · vence ' + validadeCurta(alvo.dataValidade) : '') + '</span></div>' +
+        '<div class="pz-lote-q">' + (alvo && alvo.falta > 0 ? 'faltam ' + fmtNum(alvo.falta) + ' ' + un : 'plano do FEFO cumprido') + '</div></div>' +
+      '<button type="button" class="pz-link" id="fpOutroLote">Usar outro lote</button>';
+  } else {
+    loteHtml = '<div class="pz-sec">Lote da embalagem</div>' +
+      '<input type="text" id="fpLote" autocomplete="off" placeholder="AK-2026-000576" value="' + escapeAttr(fp.lote || '') + '">' +
+      (plano.length ? '<label style="margin-top:8px">Motivo para não usar o lote do FEFO (' + escapeHtml(plano.map(function(x) { return x.loteInterno; }).join(', ')) + ')</label>' +
+        '<input type="text" id="fpMotivo" autocomplete="off" value="' + escapeAttr(fp.motivoForaFefo || '') + '" placeholder="Ex.: tambor do lote indicado está no fim">' +
+        '<button type="button" class="pz-link" id="fpVoltarFefo">Voltar para o lote do FEFO</button>' : '');
+  }
+  var outras = Manipulacao.proximaPendente(previstos, pes, l.itemKey);
+  return '<div class="pz-cab"><button type="button" class="pz-x" id="fpCancelar" aria-label="Cancelar">✕</button>' +
+      '<div style="flex:1"><b>' + ordinal(l.parcelas + 1) + ' pesagem · ' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></div></div>' +
+    '<div class="form-parcela" id="formParcela">' +
+      (fp.previewUrl ? '<img class="fp-preview" src="' + escapeAttr(fp.previewUrl) + '" alt="Foto da balança">' : '<div class="fp-preview"></div>') +
+      '<label class="pz-link" style="display:inline-block"><input type="file" accept="image/*" capture="environment" id="fpFoto" style="display:none">Refazer a foto</label>' +
+      '<div class="pz-sec">Peso que a balança mostra</div>' +
+      '<div class="fp-peso"><input type="text" inputmode="decimal" id="fpPeso" autocomplete="off" placeholder="0,0" value="' + escapeAttr(fp.peso || '') + '"><span>' + un + '</span></div>' +
+      '<div class="field-hint">' + (l.pesado ? (l.falta > 0 ? 'Faltam ' + fmtNum(l.falta) + ' ' + un + ' desta MP.' : 'O previsto desta MP já foi atingido.') : 'Previsto: ' + fmtNum(l.previsto) + ' ' + un + '.') + '</div>' +
+      loteHtml +
+      '<div class="fp-faltando" id="fpFaltando"></div>' +
     '</div>' +
-    '<label class="cam grande' + (fp.arquivo ? ' ok' : '') + '"><input type="file" accept="image/*" capture="environment" id="fpFoto">📷 ' +
-      (fp.arquivo ? 'Trocar a foto da balança' : 'Fotografar a balança') + '</label>' +
-    (fp.previewUrl ? '<img class="fp-preview" src="' + escapeAttr(fp.previewUrl) + '" alt="Foto da balança">' : '') +
-    '<div class="fp-faltando" id="fpFaltando"></div>' +
-    '<div class="fp-acoes">' +
-      '<button type="button" class="btn btn-green" id="fpSalvar"' + (fp.enviando ? ' disabled' : '') + '>' + (fp.enviando ? 'Enviando foto...' : '✓ Salvar pesagem') + '</button>' +
-      '<button type="button" class="btn btn-ghost" id="fpCancelar"' + (fp.enviando ? ' disabled' : '') + '>Cancelar</button>' +
-    '</div>' +
-  '</div>';
+    '<div class="pz-acoes">' +
+      '<button type="button" class="btn ' + (outras ? 'btn-ghost' : 'btn-green') + '" id="fpSalvar"' + (fp.enviando ? ' disabled' : '') + '>' + (fp.enviando ? 'Enviando...' : '✓ Salvar') + '</button>' +
+      (outras ? '<button type="button" class="btn btn-green" id="fpSalvarProxima"' + (fp.enviando ? ' disabled' : '') + '>' + (fp.enviando ? 'Enviando...' : 'Salvar e próxima ›') + '</button>' : '') +
+    '</div>';
 }
 
 // O que ainda falta preencher no formulário -- dito em português, na hora.
 function atualizarFormParcela() {
   if (!formParcela) return;
-  var v = Manipulacao.validarParcela({peso: numeroDigitado(formParcela.peso), loteMaterial: formParcela.lote, temFoto: !!formParcela.arquivo});
+  var v = Manipulacao.validarParcela({peso: numeroDigitado(formParcela.peso), loteMaterial: formParcela.lote,
+    temFoto: !!formParcela.arquivo, motivoForaFefo: formParcela.motivoForaFefo}, planoDaMp(formParcela.itemKey));
   var falt = document.getElementById('fpFaltando');
-  if (falt) falt.textContent = v.ok ? '' : 'Falta: ' + v.erros.map(function(e) {
-    return /peso/.test(e) ? 'peso' : /lote/.test(e) ? 'lote' : 'foto';
-  }).join(', ') + '.';
-  var b = document.getElementById('fpSalvar');
-  if (b && !formParcela.enviando) b.disabled = !v.ok;
+  if (falt) falt.textContent = v.ok ? '' : v.erros.join(' ');
+  ['fpSalvar', 'fpSalvarProxima'].forEach(function(id) {
+    var b = document.getElementById(id);
+    if (b && !formParcela.enviando) b.disabled = !v.ok;
+  });
 }
 
 function atualizarValidacaoPesagem(val, podeEditar) {
   var errosPes = document.getElementById('mPesagemErros');
   errosPes.className = 'alert alert-danger' + (podeEditar && val.erros.length ? ' show' : '');
   errosPes.textContent = val.erros.join(' ');
-  document.getElementById('mBtnFecharPesagem').disabled = !val.ok;
+  var btn = document.getElementById('mBtnFecharPesagem');
+  btn.disabled = !val.ok;
+  var faltam = val.linhas.filter(function(l) { return statusLinha(l) === 'pend' || statusLinha(l) === 'parcial'; }).length;
+  btn.textContent = val.ok ? 'Fechar pesagem e baixar estoque' : (faltam ? 'Fechar pesagem · faltam ' + faltam + ' MP(s)' : 'Fechar pesagem · veja as pendências');
 }
 
 function ligarPesagem() {
-  document.querySelectorAll('[data-add-parcela]').forEach(function(b) {
-    b.onclick = function() { abrirFormParcela(b.getAttribute('data-add-parcela')); };
+  document.querySelectorAll('[data-abrir-mp]').forEach(function(b) {
+    b.onclick = function() { mpAberta = b.getAttribute('data-abrir-mp'); menuParcela = null; renderPainel(); };
+  });
+  document.querySelectorAll('[data-voltar-lista]').forEach(function(b) {
+    b.onclick = function() { mpAberta = null; menuParcela = null; renderPainel(); };
+  });
+  document.querySelectorAll('[data-menu-parcela]').forEach(function(b) {
+    b.onclick = function() { var id = b.getAttribute('data-menu-parcela'); menuParcela = menuParcela === id ? null : id; renderPainel(); };
   });
   document.querySelectorAll('[data-cancelar-parcela]').forEach(function(b) {
-    b.onclick = function() {
-      var partes = b.getAttribute('data-cancelar-parcela').split('|');
-      cancelarParcela(partes[0], partes[1]);
-    };
+    b.onclick = function() { var partes = b.getAttribute('data-cancelar-parcela').split('|'); cancelarParcela(partes[0], partes[1]); };
   });
+  // Foto primeiro: o botão da MP abre a câmera; escolhida a foto, abre o formulário.
+  var cam = document.getElementById('pzFoto');
+  if (cam) cam.onchange = function() { receberFoto(this, mpAberta); };
+  var refazer = document.getElementById('fpFoto');
+  if (refazer) refazer.onchange = function() { receberFoto(this, formParcela && formParcela.itemKey); };
+  if (!formParcela) return;
   var peso = document.getElementById('fpPeso');
-  if (!peso || !formParcela) return;
+  if (peso) peso.oninput = function() { formParcela.peso = peso.value; atualizarFormParcela(); };
   var lote = document.getElementById('fpLote');
-  peso.oninput = function() { formParcela.peso = peso.value; atualizarFormParcela(); };
-  lote.oninput = function() { formParcela.lote = lote.value; atualizarFormParcela(); };
-  document.getElementById('fpFoto').onchange = function() {
-    var arquivo = this.files && this.files[0];
-    if (!arquivo) return;
-    var v = Anexos.validar(arquivo, {perfil: 'imagem'});
-    if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); this.value = ''; return; }
-    if (formParcela.previewUrl && URL.revokeObjectURL) { try { URL.revokeObjectURL(formParcela.previewUrl); } catch (e) { /* nada */ } }
-    formParcela.arquivo = arquivo;
-    formParcela.previewUrl = (window.URL && URL.createObjectURL) ? URL.createObjectURL(arquivo) : '';
-    renderPainel();
-  };
-  document.getElementById('fpSalvar').onclick = salvarParcela;
-  document.getElementById('fpCancelar').onclick = function() { descartarFormParcela(); renderPainel(); };
+  if (lote) lote.oninput = function() { formParcela.lote = lote.value.trim(); atualizarFormParcela(); };
+  var motivo = document.getElementById('fpMotivo');
+  if (motivo) motivo.oninput = function() { formParcela.motivoForaFefo = motivo.value.trim(); atualizarFormParcela(); };
+  var outro = document.getElementById('fpOutroLote');
+  if (outro) outro.onclick = function() { formParcela.outroLote = true; formParcela.lote = ''; renderPainel(); var c = document.getElementById('fpLote'); if (c) c.focus(); };
+  var voltar = document.getElementById('fpVoltarFefo');
+  if (voltar) voltar.onclick = function() { formParcela.outroLote = false; formParcela.motivoForaFefo = ''; formParcela.lote = loteSugerido(formParcela.itemKey); renderPainel(); };
+  var cancelar = document.getElementById('fpCancelar');
+  if (cancelar) cancelar.onclick = function() { descartarFormParcela(); renderPainel(); };
+  var salvar = document.getElementById('fpSalvar');
+  if (salvar) salvar.onclick = function() { salvarParcela(false); };
+  var salvarProx = document.getElementById('fpSalvarProxima');
+  if (salvarProx) salvarProx.onclick = function() { salvarParcela(true); };
   atualizarFormParcela();
 }
 
-function abrirFormParcela(itemKey) {
-  if (formParcela && formParcela.itemKey !== itemKey && (formParcela.peso || formParcela.arquivo) &&
-      !confirm('Há uma pesagem de ' + ((previstos[formParcela.itemKey] || {}).mpCodigo || '') + ' ainda não salva. Descartar?')) return;
-  descartarFormParcela();
-  // O lote costuma se repetir entre idas à balança: sugere o último usado
-  // (inclusive de pesagem cancelada -- a embalagem continua a mesma).
-  var anteriores = Manipulacao.parcelasDoItem((Manipulacao.fase(allOps[opAtual]) || {}).pesagem, itemKey, true);
-  var ultimo = anteriores.length ? anteriores[anteriores.length - 1].loteMaterial : '';
-  formParcela = {itemKey: itemKey, peso: '', lote: ultimo || '', arquivo: null, previewUrl: '', enviando: false};
-  renderPainel();
-  var campo = document.getElementById('fpPeso');
-  if (campo) { campo.focus(); campo.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+function loteSugerido(itemKey) {
+  var pes = (Manipulacao.fase(allOps[opAtual]) || {}).pesagem;
+  var sit = Manipulacao.situacaoLotes(planoDaMp(itemKey), Manipulacao.parcelasDoItem(pes, itemKey));
+  if (sit.sugerido) return sit.sugerido.loteInterno;
+  if (sit.linhas.length) return sit.linhas[sit.linhas.length - 1].loteInterno;
+  // Sem FEFO: o lote costuma se repetir entre idas à balança -- sugere o
+  // último usado (inclusive de pesagem cancelada; a embalagem é a mesma).
+  var anteriores = Manipulacao.parcelasDoItem(pes, itemKey, true);
+  return anteriores.length ? (anteriores[anteriores.length - 1].loteMaterial || '') : '';
 }
 
-function salvarParcela() {
+function receberFoto(input, itemKey) {
+  var arquivo = input.files && input.files[0];
+  if (!arquivo || !itemKey) return;
+  var v = Anexos.validar(arquivo, {perfil: 'imagem'});
+  if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); input.value = ''; return; }
+  var url = (window.URL && URL.createObjectURL) ? URL.createObjectURL(arquivo) : '';
+  if (formParcela && formParcela.itemKey === itemKey) {
+    if (formParcela.previewUrl && URL.revokeObjectURL) { try { URL.revokeObjectURL(formParcela.previewUrl); } catch (e) { /* nada */ } }
+    formParcela.arquivo = arquivo; formParcela.previewUrl = url;
+  } else {
+    descartarFormParcela();
+    var plano = planoDaMp(itemKey);
+    formParcela = {itemKey: itemKey, arquivo: arquivo, previewUrl: url, peso: '', lote: loteSugerido(itemKey),
+      outroLote: !plano.length, motivoForaFefo: '', enviando: false};
+  }
+  renderPainel();
+  var campo = document.getElementById('fpPeso');
+  if (campo) campo.focus();
+}
+
+function salvarParcela(irParaProxima) {
   var fp = formParcela;
   if (!fp || fp.enviando) return;
   var peso = numeroDigitado(fp.peso);
-  var v = Manipulacao.validarParcela({peso: peso, loteMaterial: fp.lote, temFoto: !!fp.arquivo});
+  var plano = planoDaMp(fp.itemKey);
+  var v = Manipulacao.validarParcela({peso: peso, loteMaterial: fp.lote, temFoto: !!fp.arquivo, motivoForaFefo: fp.motivoForaFefo}, plano);
   if (!v.ok) { showAlert(v.erros.join(' '), 'danger'); return; }
-  var op = allOps[opAtual], opKey = opAtual, itemKey = fp.itemKey;
+  var opKey = opAtual, itemKey = fp.itemKey;
   var mp = (previstos[itemKey] || {}).mpCodigo || itemKey;
   var arquivo = fp.arquivo;
   var caminhoArq = Anexos.caminho('manipulacao', opKey, itemKey + '_' + arquivo.name);
   var ref = storage.ref(caminhoArq);
+  var noPlano = plano.some(function(x) { return x.loteInterno === String(fp.lote).trim(); });
   fp.enviando = true;
   renderPainel();
   Promise.resolve()
@@ -664,14 +845,17 @@ function salvarParcela() {
       foto.mpCodigo = mp;
       return db.ref('ops/' + opKey + '/manipulacao/pesagem/parcelas/' + itemKey).push({
         peso: peso, loteMaterial: String(fp.lote).trim(), foto: foto,
+        motivoForaFefo: (!noPlano && plano.length) ? (fp.motivoForaFefo || null) : null,
         por: eu(), em: new Date().toISOString(), mpCodigo: mp
       });
     })
     .then(function() {
       if (formParcela === fp) descartarFormParcela();
-      var l = Manipulacao.linhasPesagem(previstos, faseComRascunho().pesagem).find(function(x) { return x.itemKey === itemKey; }) || {};
-      showAlert(ordinal(l.parcelas || 1) + ' pesagem de ' + mp + ' registrada: ' + fmtNum(peso) + ' kg. ' +
+      var pes = faseComRascunho().pesagem;
+      var l = Manipulacao.linhasPesagem(previstos, pes).find(function(x) { return x.itemKey === itemKey; }) || {};
+      showAlert(ordinal(l.parcelas || 1) + ' pesagem de ' + mp + ': ' + fmtNum(peso) + ' kg. ' +
         (l.falta > 0 ? 'Faltam ' + fmtNum(l.falta) + ' kg.' : 'Total ' + fmtNum(l.pesado) + ' kg.'), 'success');
+      mpAberta = irParaProxima ? (Manipulacao.proximaPendente(previstos, pes, itemKey) || itemKey) : itemKey;
       renderPainel();
     })
     .catch(function(e) {
@@ -694,6 +878,7 @@ function cancelarParcela(itemKey, id) {
   u[base + 'canceladaEm'] = new Date().toISOString();
   u[base + 'canceladaPor'] = eu();
   u[base + 'motivoCancelamento'] = motivo.trim();
+  menuParcela = null;
   db.ref().update(u)
     .then(function() { showAlert('Pesagem cancelada. O registro continua no dossiê.', 'success'); })
     .catch(function(e) { showAlert('Erro ao cancelar: ' + e.message, 'danger'); });
@@ -710,6 +895,19 @@ function celulaFoto(f, l) {
   }).join('') + '</span></span>';
 }
 
+// Celular de cada operador: a tela não apaga no meio da pesagem.
+var travaTela = null;
+function manterTelaAcesa(ligar) {
+  try {
+    if (ligar && !travaTela && navigator.wakeLock && navigator.wakeLock.request) {
+      navigator.wakeLock.request('screen').then(function(t) { travaTela = t; t.addEventListener && t.addEventListener('release', function() { travaTela = null; }); }).catch(function() { /* sem suporte */ });
+    } else if (!ligar && travaTela) { travaTela.release(); travaTela = null; }
+  } catch (e) { /* nada */ }
+}
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && opAtual && Manipulacao.estado(allOps[opAtual]) === 'AGUARDANDO_PESAGEM') manterTelaAcesa(true);
+});
+
 function gravarFase(updates) {
   var u = {};
   Object.keys(updates).forEach(function(k) { u['ops/' + opAtual + '/manipulacao/' + k] = updates[k]; });
@@ -720,6 +918,10 @@ document.getElementById('mBtnIniciarPesagem').addEventListener('click', function
   if (!Object.keys(previstos).length) { showAlert('Sem fórmula cadastrada não há o que pesar.', 'danger'); return; }
   var t = Manipulacao.transicao('INICIAR_PESAGEM', {quem: eu()});
   t.previstos = previstos;
+  // O FEFO do momento fica registrado: é o que o sistema mandou usar.
+  var plano = {};
+  Object.keys(previstos).forEach(function(k) { var p = calcularPlanoFefo(k); if (p.length) plano[k] = p; });
+  t['pesagem/planoLotes'] = Object.keys(plano).length ? plano : null;
   gravarFase(t).then(function() { showAlert('Pesagem iniciada. O relógio está correndo.', 'success'); })
     .catch(function(e) { showAlert('Erro ao iniciar: ' + e.message, 'danger'); });
 });
@@ -736,17 +938,26 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
   var autor = eu();
   var clienteKey = (typeof PropriedadeEstoque !== 'undefined')
     ? PropriedadeEstoque.clienteKeyDoSku(op.sku, allProdutos, null, op.cliente) : null;
-  var baixas = val.linhas.map(function(l) {
+  // Saldo agregado: uma baixa por MP (o total). Lotes do WMS: uma baixa por
+  // lote pesado, saindo do lote que o operador usou -- e, dentro dele, do
+  // pedaço que a Separação levou para esta OP.
+  var agregadas = val.linhas.filter(function(l) { return l.pesado > 0; }).map(function(l) {
     return Promise.resolve()
       .then(function() {
         return ajustarEstoque(db, l.mpCodigo, -Math.abs(l.pesado), 'consumo_manipulacao', op.lote,
           {clienteKeyConsumidor: clienteKey || null});
       })
-      .then(function() {
-        return baixarLotesFefo(db, 'material', l.mpCodigo, Math.abs(l.pesado), 'CONSUMO DE MANIPULAÇÃO', autor, op.lote, {clienteKey: clienteKey || null});
-      })
       .catch(function(err) { console.error('Falha na baixa de ' + l.mpCodigo + ':', err); return null; });
   });
+  // Em sequência: dois lotes da mesma MP em paralelo disputariam o mesmo
+  // lote do WMS quando um deles cai no FEFO.
+  var porLote = Manipulacao.baixasPorLote(previstos, pesagemAtual).reduce(function(cadeia, b) {
+    return cadeia.then(function() {
+      return baixarLotesFefo(db, 'material', b.mpCodigo, Math.abs(b.qtd), 'CONSUMO DE MANIPULAÇÃO', autor, op.lote,
+        {clienteKey: clienteKey || null, loteInterno: b.loteMaterial || null, separadoPara: op.lote});
+    }).catch(function(err) { console.error('Falha na baixa do lote ' + b.loteMaterial + ' de ' + b.mpCodigo + ':', err); return null; });
+  }, Promise.resolve());
+  var baixas = agregadas.concat([porLote]);
   Promise.all(baixas).then(function() {
     var t = Manipulacao.transicao('FECHAR_PESAGEM', {quem: autor});
     t['pesagem/itens'] = Manipulacao.itensParaFechamento(previstos, pesagemAtual);

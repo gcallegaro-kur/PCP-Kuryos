@@ -77,11 +77,43 @@
     parc.forEach(function(p) { var l = texto(p.loteMaterial); if (l && vistos.indexOf(l) < 0) vistos.push(l); });
     return vistos;
   }
-  // Validação de UMA ida à balança, antes de gravar.
-  function validarParcela(parcela) {
+  /* LOTES INDICADOS PELO FEFO (pedido do usuário em 18/09: "o lote tem que
+     ser indicado por FEFO, vindo direto da OP, falando quanto de cada lote
+     tem que ser utilizado"). O plano é calculado pela tela com
+     sugerirAlocacaoFefo (utils.js) e congelado em pesagem/planoLotes/{mp}
+     no início da pesagem: fica registrado o que o sistema mandou usar.
+     plano = [{loteInterno, qtd, enderecos: [código], dataValidade}]. */
+  function situacaoLotes(plano, parcelas) {
+    var linhas = (plano || []).map(function(p) {
+      return {loteInterno: texto(p.loteInterno), planejado: arred(num(p.qtd)), enderecos: p.enderecos || [],
+        dataValidade: p.dataValidade || null, pesado: 0};
+    });
+    var fora = {}, foraOrdem = [];
+    (parcelas || []).forEach(function(p) {
+      var l = texto(p.loteMaterial);
+      var ln = linhas.find(function(x) { return x.loteInterno === l; });
+      if (ln) ln.pesado = arred(ln.pesado + num(p.peso));
+      else if (l) { if (fora[l] == null) { fora[l] = 0; foraOrdem.push(l); } fora[l] = arred(fora[l] + num(p.peso)); }
+    });
+    linhas.forEach(function(l) { l.falta = Math.max(0, arred(l.planejado - l.pesado)); });
+    return {
+      linhas: linhas,
+      fora: foraOrdem.map(function(k) { return {loteInterno: k, pesado: fora[k]}; }),
+      // O próximo lote a usar: o primeiro do FEFO que ainda tem o que pesar.
+      sugerido: linhas.find(function(l) { return l.falta > 0; }) || null
+    };
+  }
+
+  // Validação de UMA ida à balança, antes de gravar. `plano` (opcional): o
+  // FEFO da MP -- lote fora dele só passa com motivo.
+  function validarParcela(parcela, plano) {
     var p = parcela || {}, erros = [];
     if (!(n(p.peso) > 0)) erros.push('Informe o peso que a balança mostrou.');
     if (!texto(p.loteMaterial)) erros.push('Informe o lote da embalagem usada.');
+    var lotesPlano = (plano || []).map(function(x) { return texto(x.loteInterno); }).filter(Boolean);
+    if (texto(p.loteMaterial) && lotesPlano.length && lotesPlano.indexOf(texto(p.loteMaterial)) < 0 && !texto(p.motivoForaFefo)) {
+      erros.push('O FEFO indica ' + lotesPlano.join(', ') + '. Para usar outro lote, informe o motivo.');
+    }
     if (EXIGE_FOTO_PESAGEM && !p.temFoto && !(p.foto && p.foto.caminho)) erros.push('Tire a foto da balança.');
     return {ok: !erros.length, erros: erros};
   }
@@ -144,9 +176,15 @@
         falta: pesado == null ? previsto : Math.max(0, arred(previsto - pesado)),
         excesso: pesado == null ? 0 : Math.max(0, arred(pesado - previsto)),
         foraTolerancia: desvioPct != null && Math.abs(desvioPct) > TOLERANCIA_PESAGEM_PCT,
-        pendente: pesado == null || pesado <= 0
+        pendente: pesado == null || pesado <= 0,
+        ordem: p.ordem == null ? null : Number(p.ordem)
       };
-    }).sort(function(a, b) { return a.mpNome.localeCompare(b.mpNome); });
+    }).sort(function(a, b) {
+      // Ordem da fórmula quando existe (decisão do usuário em 18/09: "a ordem
+      // da OP mesmo, seguindo sempre um mesmo padrão"); senão, por nome.
+      if (a.ordem != null && b.ordem != null && a.ordem !== b.ordem) return a.ordem - b.ordem;
+      return a.mpNome.localeCompare(b.mpNome);
+    });
   }
 
   function validarPesagem(previstos, pesagem) {
@@ -185,6 +223,38 @@
       };
     });
     return out;
+  }
+
+  /* Baixa de estoque por (MP, lote): cada lote informado na balança sai do
+     seu próprio lote no WMS, não do que o FEFO escolheria. Sem parcelas
+     (lote antigo), um grupo por MP com o lote digitado. */
+  function baixasPorLote(previstos, pesagem) {
+    var out = [];
+    linhasPesagem(previstos, pesagem).forEach(function(l) {
+      var parc = parcelasDoItem(pesagem, l.itemKey);
+      if (!parc.length) {
+        if (l.pesado > 0) out.push({itemKey: l.itemKey, mpCodigo: l.mpCodigo, loteMaterial: l.lotes[0] || null, qtd: l.pesado});
+        return;
+      }
+      var grupos = {}, ordem = [];
+      parc.forEach(function(p) {
+        var lote = texto(p.loteMaterial) || null, k = lote || '';
+        if (!grupos[k]) { grupos[k] = {itemKey: l.itemKey, mpCodigo: l.mpCodigo, loteMaterial: lote, qtd: 0}; ordem.push(k); }
+        grupos[k].qtd = arred(grupos[k].qtd + num(p.peso));
+      });
+      ordem.forEach(function(k) { if (grupos[k].qtd > 0) out.push(grupos[k]); });
+    });
+    return out;
+  }
+  // Próxima MP a pesar, na ordem da fórmula, depois de `atual` (dá a volta).
+  function proximaPendente(previstos, pesagem, atual) {
+    var linhas = linhasPesagem(previstos, pesagem);
+    var i = linhas.findIndex(function(l) { return l.itemKey === atual; });
+    for (var j = 1; j <= linhas.length; j++) {
+      var l = linhas[(i + j + linhas.length) % linhas.length];
+      if (l.itemKey !== atual && (l.pendente || l.falta > 0)) return l.itemKey;
+    }
+    return null;
   }
 
   /* Conferência: OUTRA pessoa. É a regra que o usuário pediu, e é o que
@@ -295,6 +365,7 @@
     ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT, EXIGE_FOTO_PESAGEM: EXIGE_FOTO_PESAGEM,
     fotosDoItem: fotosDoItem, parcelasDoItem: parcelasDoItem, fotosDaLinha: fotosDaLinha,
     validarParcela: validarParcela, itensParaFechamento: itensParaFechamento,
+    baixasPorLote: baixasPorLote, proximaPendente: proximaPendente, situacaoLotes: situacaoLotes,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,

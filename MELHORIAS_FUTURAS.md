@@ -596,6 +596,33 @@ realmente ganham.
   `shared/qrcode-lib.js` — etiqueta de endereço + leitura pela câmera do
   celular é um passo curto a partir do que existe. Adiado explicitamente pelo
   usuário nesta rodada ("só o coletor que eu colocaria no repo de melhorias").
+- **Lote por QR code / código de barras na pesagem do granel** (pedido do
+  usuário em 2026-09-18: "poder indicar o lote através de leitura de QR code
+  ou código de barras, que iremos utilizar na geração de etiquetas no
+  recebimento de material"). Hoje o lote na pesagem vem do FEFO
+  (`pesagem/planoLotes`, `manipulacao.html` → `calcularPlanoFefo`) ou é
+  digitado quando a MP não tem saldo por lote no WMS; "Usar outro lote" pede
+  motivo. Com a etiqueta do recebimento (`loteInterno` AK-...) impressa em
+  QR/Code128, o operador **lê a etiqueta da embalagem** em vez de confirmar
+  o chip ou digitar — e a leitura vira prova: lote lido ≠ lote do FEFO
+  abre o motivo na hora. Peças: (1) etiqueta de recebimento com o código
+  (`shared/qrcode-lib.js` já gera QR); (2) leitor pela câmera no
+  formulário da pesagem (`telaForm`) — `BarcodeDetector` nativo no Chrome
+  Android, com biblioteca de fallback para iPhone; (3) gravar na parcela
+  `loteLidoPorCodigo: true` para o dossiê distinguir lido de digitado.
+  Faz par com o coletor acima: o mesmo leitor serve endereço e lote.
+- **Devolução da sobra ao endereço depois da pesagem** (preocupação do
+  usuário em 2026-09-18: "como funcionaria devolverem para o local correto o
+  material que tiraram"). Base já pronta: a Separação grava no pedaço
+  separado `enderecoOrigemKey/Codigo` (de onde saiu) e a baixa da pesagem
+  sai primeiro do pedaço separado para a OP (`separadoPara` em
+  `sugerirAlocacaoFefo`). Falta o passo de volta: ao fechar a pesagem,
+  listar os pedaços `origemTipo: 'separacao_op'` da OP com saldo > 0
+  ("sobra a devolver: AK-576, 2 kg, levar para FAB-1.1.1") e um botão
+  "Devolvido" que chama `transferirLoteEndereco` para a origem — idealmente
+  confirmado pela leitura da etiqueta do endereço (coletor). Sem isso a
+  sobra fica no sistema no endereço da área de pesagem para sempre.
+  Proposta apresentada; aguardando decisão do usuário.
 - **Tipo de posição (picking × pulmão)** — adiado explicitamente pelo usuário:
   *"não separar por ora, quero primeiro começar a operação, depois
   aperfeiçoar"*. Quando retomar, o dado real já favorece derivar do nível em

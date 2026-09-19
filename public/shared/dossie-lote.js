@@ -92,6 +92,8 @@
       var avulsas = parcelas.length ? [] : Manipulacao.fotosDoItem(pes, l.itemKey);
       return Object.assign({}, l, {
         todasParcelas: parcelas, fotosAvulsas: avulsas,
+        // O que o FEFO mandou usar no início da pesagem x o que foi usado.
+        planoFefo: Manipulacao.situacaoLotes(((pes.planoLotes || {})[l.itemKey]) || [], parcelas.filter(function(p) { return !p.canceladaEm; })),
         conferencia: conf[l.itemKey] || null
       });
     });
