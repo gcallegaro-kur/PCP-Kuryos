@@ -129,6 +129,16 @@ correção da lista, apesar de ser a mais fácil.
   porque merece um ciclo próprio com teste dedicado (tela usada por
   Compras, não só PCP).
 
+- **PDF do Pedido de Compra tem o mesmo defeito de folhas em branco que a
+  OP tinha** — `compras.html` usa o mesmo `body *{visibility:hidden}` +
+  `#printArea{position:absolute}` que fazia a OP sair com 16 folhas em
+  branco: visibility:hidden esconde mas não tira do fluxo, então o Chrome
+  pagina a altura inteira da tela por trás. A correção já está pronta e
+  testada em `public/shared/fichas-op.css` (usada por emitir_op.html e
+  ops.html) — é trocar o bloco de impressão do compras.html pelo mesmo
+  padrão. Não foi feito junto porque compras.html é escopo do Codex.
+  (2026-09-21)
+
 ## Materiais / Cadastros
 
 - **Mecanismo de rename de código de material** — hoje o código
@@ -192,6 +202,22 @@ correção da lista, apesar de ser a mais fácil.
   por similaridade already ali pra acelerar). Ninguém está monitorando
   ativamente o "quantos faltam" ainda — talvez um indicador na tela inicial
   de Cadastros fizesse sentido.
+
+- **Nova versão de fórmula nasce SEM especificação e a OP não avisa** —
+  `+ Nova versão` (cadastros.html) cria `especificacoes/{produto}__{versao}`
+  com `itens: {}` vazio. Se alguém emitir OP nessa versão antes de a
+  Qualidade preencher os ensaios, a ficha físico-química sai com "Nenhuma
+  especificação de qualidade cadastrada pra esta versão da fórmula" e o
+  lote vai pro chão de fábrica sem parâmetro nenhum. O aviso de emissão já
+  lista "falta aprovar: Especificação", mas não é bloqueio e não diz que
+  ela está VAZIA. Sugestão: em emitir_op.html, avisar explicitamente
+  quando a especificação da versão escolhida não tiver nenhum ensaio, e
+  oferecer copiar da versão anterior. (2026-09-21, junto com a correção da
+  ficha impressa.)
+- **Ensaio crítico não aparece na ficha impressa** — `critico: true` existe
+  no cadastro e o laudo usa (`avaliarPlanoInspecao.bloqueia`), mas a ficha
+  de OP imprime todos os ensaios iguais. Quem preenche à mão não tem como
+  saber qual reprova o lote sozinho. (2026-09-21)
 
 ## Fórmulas — UX
 

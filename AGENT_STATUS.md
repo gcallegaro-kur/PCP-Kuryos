@@ -118,6 +118,39 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — impressão das fichas de OP (2026-09-21).** Três achados
+  do usuário, com PDF real das OPs 26253/07 e 26261/04 (22 folhas cada):
+  (1) ensaio cadastrado por `minimo`/`maximo` saía com a coluna
+  Especificação EM BRANCO na ficha físico-química — só `especificacaoTexto`
+  era impresso; (2) 16 folhas EM BRANCO por impressão — `body
+  *{visibility:hidden}` esconde mas não tira do fluxo, então o Chrome
+  paginava a tela do app inteira por trás; (3) Ordem de Envase vazando pra
+  uma 2ª folha. O bloco CSS de impressão, que era duplicado em
+  emitir_op.html e ops.html, virou **`public/shared/fichas-op.css`**. O
+  nome do PDF passou a ser `lote - cliente produto - sku`
+  (`nomeArquivoFichasOP`/`imprimirComNome` em utils.js), padrão da OP em
+  Excel que a fábrica já arquivava.
+- **Aviso ao Codex — `avaliarEnsaio` mudou de comportamento.** Limite
+  cadastrado com vírgula ("0,8") virava `parseFloat` = 0, não NaN: a faixa
+  saía "≥ 0" e o laudo aprovava qualquer leitura. Agora `numeroEspec`
+  troca a vírgula antes de converter, e o mesmo número vale pro laudo
+  (qualidade.html) e pra ficha impressa. `run_inspecao_pa_test.js` e
+  `run_inspecao_pa_ui_test.js` seguem passando.
+- **Aviso ao Codex — `run_agenda_expedicao_ui_test.js` passa.** O timeout
+  que registrei em 18/09 era falta de navegador do Playwright nesta
+  máquina, não defeito: com `channel: 'chrome'` os 15 testes de UI passam.
+  Vale baixar os navegadores (`npx playwright install`) antes de concluir
+  que um teste de UI quebrou aqui.
+- **Arquivos ativos:** `public/emitir_op.html`, `public/ops.html`,
+  `public/shared/utils.js`, `public/shared/fichas-op.css`,
+  `run_fichas_op_test.js`, `run_fichas_op_ui_test.js`. `compras.html` tem o
+  MESMO defeito de folha em branco — deixei registrado em
+  `MELHORIAS_FUTURAS.md` por ser escopo do Codex, não mexi.
+- **Pendente no meu diretório (não publicar):** `public/shared/manipulacao.js`
+  e `run_manipulacao_test.js` têm a devolução ao endereço ainda sem commit,
+  de 18/09. O deploy desta entrega foi por worktree limpo justamente por
+  isso.
+
 - **Entrega publicada — devolução da embalagem ao endereço (2026-09-21).**
   `a7fadf3` no `origin/main`; Hosting por worktree limpo (4 arquivos idênticos).
   Fluxo real confirmado pelo usuário: não há separação para o granel — o

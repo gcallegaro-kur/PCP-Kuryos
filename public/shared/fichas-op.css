@@ -1,0 +1,86 @@
+/* ══════════════════════════════════════════════════════════════════════
+   IMPRESSÃO DAS FICHAS DE OP (e das etiquetas de caixa de embarque)
+
+   Usado por emitir_op.html (impressão logo após emitir) e por ops.html
+   (reimpressão de uma OP já emitida). O HTML das fichas é montado por
+   montarFichasOP/paginaOP1/... em shared/utils.js, que já espera estas
+   classes prontas.
+
+   Era um bloco CSS DUPLICADO nos dois arquivos. Virou arquivo único
+   porque a correção das folhas em branco (abaixo) precisava ser feita
+   nos dois lugares e porque o teste de impressão
+   (run_fichas_op_impressao_test.js) precisa carregar o CSS DE VERDADE --
+   um teste contra uma terceira cópia não provaria nada.
+   ══════════════════════════════════════════════════════════════════════ */
+#printArea{display:none}
+
+@media print {
+  /* A tela do app inteira sai do FLUXO na impressão.
+
+     Antes era `body *{visibility:hidden}` + `#printArea{position:absolute}`.
+     visibility:hidden esconde mas NÃO tira do fluxo: a página do app
+     continuava ocupando a altura toda e o Chrome paginava esse vazio.
+     Achado do usuário em 21/09, com dois PDFs reais em mãos: a OP
+     26253/07 saiu com 22 folhas -- 6 de ficha e 16 EM BRANCO (só com o
+     cabeçalho/rodapé do próprio Chrome). Em ops.html o efeito é pior
+     justamente porque a tela por trás é a tabela comprida de OPs.
+     display:none tira do fluxo de verdade: 6 fichas = 6 folhas. */
+  body > *:not(#printArea){display:none !important}
+  #printArea{display:block;position:static;width:auto}
+
+  /* Tamanho e margem EXPLÍCITOS. Sem isto cada Chrome aplica a margem
+     padrão dele, e a mesma ficha que cabe numa folha aqui vaza pra
+     segunda folha na máquina do lado -- que foi exatamente a reclamação
+     da Ordem de Envase. Com 10mm sobram 277mm úteis de altura, que é a
+     medida usada pra dimensionar as fichas em shared/utils.js. */
+  @page { size: A4; margin: 10mm; }
+
+  /* Cada ficha é UMA folha -- nunca 1,2 folhas. Ver comentário de altura
+     em paginaOrdemEnvase (shared/utils.js): é a ficha mais cheia, e é
+     ela que define quanto as medidas abaixo podem crescer. */
+  .print-page{page-break-after:always;padding:6px 10px;font-size:12px}
+  .print-page:last-child{page-break-after:auto}
+  .print-h{font-size:16px;font-weight:700;margin-bottom:4px}
+  /* Título de bloco DENTRO de uma ficha ("Embalagem", "Paradas por
+     Turno"...). Era um style inline repetido 9 vezes em shared/utils.js;
+     virou classe porque o espaçamento entre blocos é a medida que decide
+     se a Ordem de Envase cabe ou não na folha -- e ela precisa ser
+     ajustável num lugar só. */
+  .print-h-sec{font-size:13px;margin-top:8px}
+  .print-sub{font-size:11px;color:#555;margin-bottom:12px}
+  .print-table{width:100%;border-collapse:collapse;margin-top:5px}
+  .print-table th,.print-table td{border:1px solid #999;padding:3px 8px;font-size:11px;text-align:left}
+  /* Linha de tabela não se parte no meio entre duas folhas. */
+  .print-table tr{page-break-inside:avoid;break-inside:avoid}
+  .print-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 16px;margin:6px 0;font-size:12px}
+  .print-sign{margin-top:6px;font-size:11px}
+  .print-sign-line{display:inline-block;border-bottom:1px solid #333;min-width:160px;margin-left:6px}
+  .print-fill-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px;margin:10px 0;font-size:11px}
+  /* Linha em branco pra preencher à mão: alta o bastante pra caber uma
+     caneta, baixa o bastante pra que as 16 linhas em branco da Ordem de
+     Envase não empurrem a ficha pra uma 2ª folha. */
+  .print-blank-table td{height:14px;padding:1px 8px}
+  .print-check{display:inline-block;width:11px;height:11px;border:1px solid #333;margin-right:4px;vertical-align:middle}
+
+  /* Etiqueta de caixa de embarque -- página NOMEADA (CSS Paged Media) com
+     tamanho próprio (90x55mm, padrão real da Kuryos), diferente do A4 das
+     fichas: os dois tipos coexistem no mesmo #printArea e cada elemento
+     pega o tamanho certo pela classe. Suportado nos navegadores Chromium
+     que a fábrica já usa. */
+  @page etiqueta { size: 90mm 55mm; margin: 2mm; }
+  .etiqueta-page{page:etiqueta;page-break-after:always;width:86mm;height:51mm;box-sizing:border-box;font-family:Arial,sans-serif;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+  .etiqueta-page:last-child{page-break-after:auto}
+  .etq-header{display:flex;justify-content:space-between;align-items:baseline;font-size:8px;border-bottom:1px solid #000;padding-bottom:2px}
+  .etq-produto{font-size:10px;font-weight:700;margin:3px 0;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .etq-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:7px;margin:3px 0}
+  .etq-lbl{display:block;color:#555;font-size:6px;text-transform:uppercase}
+  .etq-val{display:block;font-weight:700;font-size:8px}
+  /* EAN13 (produto) + QR (lote) lado a lado -- cada um cabe na mesma faixa
+     de altura, dá pra ler os dois sem espremer a etiqueta. */
+  .etq-codigos{display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto;gap:6px}
+  .etq-ean{text-align:center;flex:1;min-width:0}
+  .etq-ean svg{max-width:100%}
+  .etq-ean-vazio{font-size:6px;color:#777;font-style:italic;padding:6px 0}
+  .etq-qr{text-align:center}
+  .etq-codigo-txt{font-size:6px;letter-spacing:.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}

@@ -2290,28 +2290,54 @@ function lotesAguardandoQualidade(estoqueLotes) {
 // uma limitação: ninguém automatiza "odor característico".
 // ══════════════════════════════════════════════════════════════════════
 
+// Mínimo/máximo da especificação são campos de TEXTO LIVRE no cadastro e
+// quem preenche digita em português: "0,8". `parseFloat('0,8')` dá 0 --
+// não dá NaN. O efeito era silencioso e grave: a densidade cadastrada
+// como "0,8 a 0,9" virava a faixa "≥ 0", que aprova qualquer leitura, e
+// a mesma faixa errada iria agora pra ficha impressa. Trocar a vírgula
+// antes de converter é o que separa "sem limite cadastrado" de "limite
+// zero".
+function numeroEspec(v) {
+  if (v === '' || v == null) return NaN;
+  if (typeof v === 'number') return v;
+  return parseFloat(String(v).trim().replace(',', '.'));
+}
+// E volta pra vírgula na hora de mostrar -- a ficha é lida no chão de
+// fábrica, não num console.
+function numeroEspecTexto(n) { return String(n).replace('.', ','); }
+
+// Como a faixa numérica de um ensaio se escreve. Extraído de
+// avaliarEnsaio (onde nasceu) porque a ficha impressa da OP passou a
+// precisar da MESMA frase -- ver tabelaEspecificacoes. Devolve null
+// quando o ensaio não tem mínimo nem máximo cadastrados (especificação
+// descritiva, tipo "ODOR CARACTERÍSTICO").
+function faixaEspecificacao(ensaio) {
+  var e = ensaio || {};
+  var min = numeroEspec(e.minimo), max = numeroEspec(e.maximo);
+  var temMin = !isNaN(min), temMax = !isNaN(max);
+  return temMin && temMax ? (numeroEspecTexto(min) + ' – ' + numeroEspecTexto(max))
+    : temMin ? ('≥ ' + numeroEspecTexto(min))
+    : temMax ? ('≤ ' + numeroEspecTexto(max)) : null;
+}
+
 // Função PURA. Devolve { conforme: true|false|null, faixa, motivo }.
 // `conforme: null` = a especificação não é mensurável automaticamente (sem
 // min/max) OU não foi informado valor -- quem decide é o analista, no C/NC.
 function avaliarEnsaio(ensaio, valorMedido) {
   var e = ensaio || {};
-  var temMin = e.minimo !== '' && e.minimo != null && !isNaN(parseFloat(e.minimo));
-  var temMax = e.maximo !== '' && e.maximo != null && !isNaN(parseFloat(e.maximo));
-  var min = temMin ? parseFloat(e.minimo) : null;
-  var max = temMax ? parseFloat(e.maximo) : null;
-  var faixa = temMin && temMax ? (min + ' – ' + max)
-    : temMin ? ('≥ ' + min)
-    : temMax ? ('≤ ' + max) : null;
+  var min = numeroEspec(e.minimo), max = numeroEspec(e.maximo);
+  var temMin = !isNaN(min), temMax = !isNaN(max);
+  var faixa = faixaEspecificacao(e);
 
   if (!temMin && !temMax) {
     return { conforme: null, faixa: null, motivo: 'Especificação descritiva — avaliação do analista.' };
   }
-  if (valorMedido === '' || valorMedido == null || isNaN(parseFloat(valorMedido))) {
+  var v = numeroEspec(valorMedido);
+  if (isNaN(v)) {
     return { conforme: null, faixa: faixa, motivo: 'Sem valor medido.' };
   }
-  var v = parseFloat(valorMedido);
-  if (temMin && v < min) return { conforme: false, faixa: faixa, motivo: 'Abaixo do mínimo (' + min + ').' };
-  if (temMax && v > max) return { conforme: false, faixa: faixa, motivo: 'Acima do máximo (' + max + ').' };
+  if (temMin && v < min) return { conforme: false, faixa: faixa, motivo: 'Abaixo do mínimo (' + numeroEspecTexto(min) + ').' };
+  if (temMax && v > max) return { conforme: false, faixa: faixa, motivo: 'Acima do máximo (' + numeroEspecTexto(max) + ').' };
   return { conforme: true, faixa: faixa, motivo: 'Dentro da faixa.' };
 }
 
@@ -3612,7 +3638,7 @@ function tabelaEmBranco(titulo, colunas, linhas) {
   var n = linhas || 4;
   var linhasHtml = '';
   for (var i = 0; i < n; i++) linhasHtml += '<tr class="print-blank-table">' + colunas.map(function() { return '<td>&nbsp;</td>'; }).join('') + '</tr>';
-  return (titulo ? '<div class="print-h" style="font-size:13px;margin-top:14px">' + escapeHtml(titulo) + '</div>' : '') +
+  return (titulo ? '<div class="print-h print-h-sec">' + escapeHtml(titulo) + '</div>' : '') +
     '<table class="print-table print-blank-table"><thead><tr>' + colunas.map(function(c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') + '</tr></thead>' +
     '<tbody>' + linhasHtml + '</tbody></table>';
 }
@@ -3624,11 +3650,22 @@ function tabelaMateriaisSimples(itens) {
     itens.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td></tr>'; }).join('') +
     '</tbody></table>';
 }
+// A especificação de um ensaio mora em DOIS campos diferentes do
+// cadastro: `especificacaoTexto` (livre -- "LÍQUIDO", "0,8 - 0,9") ou
+// `minimo`/`maximo` (numérico). A ficha impressa só lia o texto, então
+// todo ensaio cadastrado por faixa saía com a coluna Especificação EM
+// BRANCO -- e o analista recebia a ficha sem o parâmetro que precisa
+// conferir. Achado do usuário em 21/09, com o PDF real da OP 26261/04:
+// DENSIDADE e CONTEÚDO LÍQUIDO MÉDIO impressos vazios. O texto continua
+// mandando quando existe (é o que a Qualidade escreveu, e costuma dizer
+// mais que a faixa); a faixa entra como alternativa, escrita do mesmo
+// jeito que o laudo já escreve (faixaEspecificacao).
 function tabelaEspecificacoes(especs, comResultado) {
-  if (!Object.keys(especs).length) return '<div class="field-hint">Nenhuma especificação de qualidade cadastrada pra esta versão da fórmula.</div>';
+  if (!Object.keys(especs || {}).length) return '<div class="field-hint">Nenhuma especificação de qualidade cadastrada pra esta versão da fórmula.</div>';
   return '<table class="print-table"><thead><tr><th>Ensaio</th><th>Especificação</th>' + (comResultado ? '<th>Resultado</th>' : '') + '<th>PA</th></tr></thead><tbody>' +
     Object.values(especs).map(function(e) {
-      return '<tr><td>' + escapeHtml(e.ensaio) + '</td><td>' + escapeHtml(e.especificacaoTexto || '') + '</td>' + (comResultado ? '<td>&nbsp;</td>' : '') + '<td>' + escapeHtml(e.metodo || '') + '</td></tr>';
+      var espec = e.especificacaoTexto || faixaEspecificacao(e) || '';
+      return '<tr><td>' + escapeHtml(e.ensaio) + '</td><td>' + escapeHtml(espec) + '</td>' + (comResultado ? '<td>&nbsp;</td>' : '') + '<td>' + escapeHtml(e.metodo || '') + '</td></tr>';
     }).join('') + '</tbody></table>';
 }
 
@@ -3667,7 +3704,7 @@ function paginaOP1(op) {
     // Fabricação, ficha 2, como "Volume teórico").
     '<tr><td>' + escapeHtml(op.sku) + '</td><td>' + escapeHtml(op.produto) + '</td><td>' + fmtNum(op.qtdPlanejada) + ' Un.</td><td>' + fmtNum((op.volumeTeoricoUnMl || 0) / 1000) + ' l</td><td>' + fmtNum(op.densidadeGranelUsada) + '</td></tr>' +
     '</tbody></table>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Material</div>' +
+    '<div class="print-h print-h-sec">Material</div>' +
     '<table class="print-table"><thead><tr><th>Código</th><th>Descrição do Material</th><th>Quantidade</th><th>Qtde. Separada</th></tr></thead><tbody>' +
     itensTodos.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td><td>&nbsp;</td></tr>'; }).join('') +
     '</tbody></table>' +
@@ -3690,7 +3727,7 @@ function paginaOF(op, formulaItens, especs) {
     '</div>' +
     campoAssinatura('Pesado por') + campoAssinatura('Peso conferido por') + campoAssinatura('Manipulado por') +
     '<div class="print-sign">Início: ___/____/___ - ___:___ &nbsp;&nbsp;&nbsp; Término: ___/____/___ - ___:___</div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Fórmula (pesagem)</div>' +
+    '<div class="print-h print-h-sec">Fórmula (pesagem)</div>' +
     '<table class="print-table"><thead><tr><th>SKU</th><th>Matéria-prima</th><th>%</th><th>QT (kg)</th><th>QT. Pesada</th><th>Lote MP</th><th>Conf.</th></tr></thead><tbody>' +
     formulaItens.map(function(i) {
       return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtPct3(i.percentualMM) + '</td><td>' + fmtNum(i.quantidade) + ' kg</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>';
@@ -3699,7 +3736,7 @@ function paginaOF(op, formulaItens, especs) {
     '</tbody></table>' +
     '<div class="field-hint" style="margin-top:8px">Instruções conforme ficha técnica -- seguir o procedimento de manipulação já cadastrado pra esta fórmula.</div>' +
     '<div class="print-sign">Ocorrência: <span class="print-sign-line" style="min-width:320px">&nbsp;</span></div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Especificações de Qualidade (granel)</div>' +
+    '<div class="print-h print-h-sec">Especificações de Qualidade (granel)</div>' +
     tabelaEspecificacoes(especs, true) +
     campoAssinatura('Aprovado por') +
     '<div class="print-sign">Data: ___/___/___</div>' +
@@ -3725,11 +3762,11 @@ function paginaOrdemEnvase(op, itensTodos, msAnvisa) {
     campoAssinatura('Operador') + campoAssinatura('Linha de produção') + campoAssinatura('Máquinas utilizadas') +
     '<div class="print-sign">Início de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Início de envase: ___/____/___ - ___:___</div>' +
     '<div class="print-sign">Término de setup: ___/____/___ - ___:___ &nbsp;&nbsp; Término de envase: ___/____/___ - ___:___</div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Granel (semi-acabado)</div>' +
+    '<div class="print-h print-h-sec">Granel (semi-acabado)</div>' +
     '<table class="print-table"><thead><tr><th>Fórmula</th><th>Massa concluída</th><th>Volume concluído</th></tr></thead><tbody>' +
     '<tr><td>' + escapeHtml(op.produto) + (op.formulaVersao ? ' (versão ' + escapeHtml(op.formulaVersao) + ')' : '') + '</td><td>' + fmtNum(op.massaLoteKg) + ' kg</td><td>' + fmtNum(op.volumeGranelL) + ' L</td></tr>' +
     '</tbody></table>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Embalagem</div>' +
+    '<div class="print-h print-h-sec">Embalagem</div>' +
     '<table class="print-table"><thead><tr><th>Código</th><th>Descrição do Material</th><th>Quantidade</th></tr></thead><tbody>' +
     itensBom.map(function(i) { return '<tr><td>' + escapeHtml(i.mpCodigo) + '</td><td>' + escapeHtml(i.mpNome) + '</td><td>' + fmtNum(i.quantidade) + ' ' + escapeHtml(i.unidade || '') + '</td></tr>'; }).join('') +
     '</tbody></table>' +
@@ -3759,7 +3796,7 @@ function paginaRotulagem(op, itensTodos) {
     tabelaEmBranco('Apontamentos da Ordem de Produção', ['Início (data e hora)', 'Término (data e hora)'], 3) +
     tabelaEmBranco('Paradas por Turno', ['Início', 'Final', 'Turno', 'Responsável'], 4) +
     tabelaEmBranco('Apontamentos de Perdas', ['Código', 'Descrição', 'Qtde', 'Lote'], 4) +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Frasco / Rótulo</div>' +
+    '<div class="print-h print-h-sec">Frasco / Rótulo</div>' +
     '<table class="print-table"><thead><tr><th>Item</th><th>Unidade</th><th>Qtde</th></tr></thead><tbody>' +
     itensFrascoRotulo.map(function(i) { return '<tr><td>' + escapeHtml(i.mpNome) + '</td><td>' + escapeHtml(i.unidade || 'UN') + '</td><td>' + fmtNum(i.quantidade) + '</td></tr>'; }).join('') +
     '</tbody></table>' +
@@ -3779,10 +3816,10 @@ function paginaRelatorioPA(op, especs) {
       '<div><b>Validade:</b> ' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</div>' +
       '<div><b>Quantidade de itens:</b> ' + fmtNum(op.qtdPlanejada) + ' un.</div>' +
     '</div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:14px">Análise Bulk — Semi Acabado Manipulado</div>' +
+    '<div class="print-h print-h-sec">Análise Bulk — Semi Acabado Manipulado</div>' +
     tabelaEspecificacoes(especs, true) +
     '<div class="print-sign"><span class="print-check"></span>Aprovado &nbsp;&nbsp; <span class="print-check"></span>Reprovado &nbsp;&nbsp; Responsável: <span class="print-sign-line">&nbsp;</span></div>' +
-    '<div class="print-h" style="font-size:13px;margin-top:16px">Análise Produto Envasado</div>' +
+    '<div class="print-h print-h-sec">Análise Produto Envasado</div>' +
     tabelaEspecificacoes(especs, true) +
     '<div class="print-sign"><span class="print-check"></span>Aprovado &nbsp;&nbsp; <span class="print-check"></span>Reprovado &nbsp;&nbsp; Responsável: <span class="print-sign-line">&nbsp;</span></div>' +
   '</div>';
@@ -3823,6 +3860,41 @@ function montarFichasOP(op, formulaItens, especs, msAnvisa, fichasSelecionadas) 
   if (sel.rotulagem !== false) html += paginaRotulagem(op, itensTodos);
   if (sel.relatorioPA !== false) html += paginaRelatorioPA(op, especs);
   return html;
+}
+
+/* ── Nome do arquivo impresso ──
+   Quem manda no nome que o Chrome sugere em "Salvar como PDF" é o
+   document.title da aba -- por isso todo PDF de OP que a fábrica
+   arquivava até agora se chamava "Controle de OPs · Kuryos PCP.pdf", e
+   dois lotes diferentes chegavam com o mesmo nome. Padrão pedido pelo
+   usuário em 21/09, que é o MESMO da OP em Excel que eles já arquivavam
+   ("EXEMPLO OP - 26183.03 - MISS ROSE BODY SPLASH AMBAR REAL 200ml -
+   MRARBS10.xlsx"): lote - cliente produto - sku. A barra do lote vira
+   ponto porque "/" não existe em nome de arquivo. */
+function nomeArquivoFichasOP(op) {
+  var o = op || {};
+  var partes = [
+    String(o.lote || '').replace(/\//g, '.'),
+    [o.cliente, o.produto].filter(Boolean).join(' '),
+    o.sku
+  ];
+  // Os demais caracteres proibidos em nome de arquivo (Windows) viram
+  // hífen -- nome de cliente/produto é texto livre de cadastro.
+  return partes.filter(Boolean).join(' - ').replace(/[\:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+}
+
+/* Imprime com um nome de arquivo próprio e devolve o título da aba
+   depois -- a aba continua sendo a tela do app, só o diálogo de
+   impressão vê o nome da OP. */
+function imprimirComNome(nome) {
+  var anterior = document.title;
+  if (nome) document.title = nome;
+  var voltar = function() {
+    document.title = anterior;
+    window.removeEventListener('afterprint', voltar);
+  };
+  window.addEventListener('afterprint', voltar);
+  window.print();
 }
 
 /* ── Etiqueta de caixa de embarque ──
