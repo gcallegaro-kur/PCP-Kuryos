@@ -132,6 +132,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   nome do PDF passou a ser `lote - cliente produto - sku`
   (`nomeArquivoFichasOP`/`imprimirComNome` em utils.js), padrão da OP em
   Excel que a fábrica já arquivava.
+- **Correção em cima da entrega — `f5f1fb2`, publicado.** O primeiro
+  conserto não bastou: no cadastro a coluna Especificação desses ensaios
+  não está VAZIA, está escrita **"N/A"** — e "N/A" é um valor, então o
+  texto vencia a faixa e a ficha continuava sem parâmetro. `textoEspecAusente`
+  trata N/A, NA, N.A., "-" e vazio como ausência. A faixa também passou a
+  imprimir o limite COMO ESTÁ no cadastro ("180g – 198g", não "180 – 198"):
+  a unidade faz parte da especificação e sumia ao formatar pelo parseFloat;
+  a comparação do laudo continua pelo número.
 - **Aviso ao Codex — `avaliarEnsaio` mudou de comportamento.** Limite
   cadastrado com vírgula ("0,8") virava `parseFloat` = 0, não NaN: a faixa
   saía "≥ 0" e o laudo aprovava qualquer leitura. Agora `numeroEspec`
