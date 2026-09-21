@@ -118,6 +118,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — laudos do CQ impressos (2026-09-21).** Escopo pedido pelo
+  usuário: (1) pesagem do CK-7 com quantidade de amostras EM ABERTO
+  (adicionar/remover campos) — hoje trava em √N+1 das caixas e os campos só
+  são montados uma vez; (2) análise de PA com a cara do "Relatório de
+  Análise" oficial e emissão em PDF, incluindo a seção microbiológica com
+  opção de entrar ou não; (3) laudos de MP (F0070/POP004) e de Embalagem
+  (F009/POP041), **roteados pelo `tipo` do material** (MPGR/MPES → MP;
+  EP/ES/ET → embalagem), com consulta e reimpressão. Referências reais lidas
+  em `06. Laboratório/01. CQ` (modelo Word + `gerar_relatorio.py`, os .doc de
+  LAUDOS MP e o F009 de embalagens). Responsável do laudo é **escolhido na
+  hora de imprimir** (decisão do usuário).
+- **Arquivos ativos:** `public/qualidade.html`, `public/shared/inspecao-pa.js`,
+  novos `public/shared/laudo-cq.js` e `public/shared/laudo-cq.css`, testes
+  `run_inspecao_pa_test.js`/`run_inspecao_pa_ui_test.js` e os novos
+  `run_laudo_cq_*`. Não mexo em `logistica.html` nem em `cadastros.html`.
+
 - **Entrega publicada — impressão das fichas de OP (2026-09-21).** `cb9b6a4`
   no `origin/main`; Hosting por worktree limpo (4 arquivos públicos conferidos
   por HTTP, idênticos ao commit). Três achados
