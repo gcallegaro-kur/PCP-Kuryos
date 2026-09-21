@@ -118,6 +118,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entrega publicada — devolução da embalagem ao endereço (2026-09-21).**
+  `a7fadf3` no `origin/main`; Hosting por worktree limpo (4 arquivos idênticos).
+  Fluxo real confirmado pelo usuário: não há separação para o granel — o
+  operador pega a embalagem inteira, item a item, e guarda de volta. A tela da
+  MP ganhou "Guardar de volta" (confirma o endereço de origem ou escolhe outro,
+  e aí `transferirLoteEndereco` move o lote); registro em
+  `pesagem/devolucoes/{mp}`; dossiê mostra por MP.
+- **Armadilha nova:** `firebase deploy | grep -m1` mata o deploy no meio
+  (SIGPIPE) e ele sai sem publicar — o `cmp` contra produção pegou. Não filtre
+  a saída do deploy com `-m1`.
+- **Arquivos ativos:** nenhum.
+
 - **Entrega publicada — pesagem no celular + lote pelo FEFO (2026-09-18).**
   `47c2eb2` no `origin/main`; Hosting por worktree limpo (5 arquivos idênticos).
   `manipulacao.html`: três telas (lista na ordem da fórmula → MP → nova
