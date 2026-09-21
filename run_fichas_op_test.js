@@ -45,22 +45,47 @@ assert.equal(sandbox.faixaEspecificacao({maximo: '7'}), '≤ 7');
 assert.equal(sandbox.faixaEspecificacao({especificacaoTexto: 'LÍQUIDO'}), null,
   'especificação descritiva não tem faixa');
 assert.equal(sandbox.faixaEspecificacao({}), null);
+// A unidade que a Qualidade digitou junto do número vai pro papel: "180g"
+// não pode virar "180" só porque o sistema converteu pra comparar.
+assert.equal(sandbox.faixaEspecificacao({minimo: '180g', maximo: '198g'}), '180g – 198g');
+
+// ── 2b. "N/A" é ausência de texto, não um valor ──────────────────────
+// É assim que a Qualidade escreve "a especificação está nas colunas
+// Mínimo/Máximo". Como "N/A" é um valor não-vazio, o campo de texto
+// vencia a faixa e a ficha continuava saindo sem parâmetro nenhum.
+['N/A', 'n/a', 'NA', 'N.A.', '-', '--', '', '   ', null, undefined]
+  .forEach(function(s) { assert.equal(sandbox.textoEspecAusente(s), true, JSON.stringify(s)); });
+['LÍQUIDO', '0,8 - 0,9', 'NAO APLICAVEL', 'N']
+  .forEach(function(s) { assert.equal(sandbox.textoEspecAusente(s), false, s); });
 
 // ── 3. A ficha impressa: texto manda, faixa entra quando falta ───────
-// Ensaios reais da OP 26261/04 (o PDF que o usuário mandou): DENSIDADE e
-// CONTEÚDO LÍQUIDO MÉDIO estavam cadastrados por faixa e saíam vazios.
+// Os 8 ensaios do print do cadastro que o usuário mandou em 21/09 --
+// inclusive os três que têm "N/A" no texto e a faixa nas colunas.
 const especs = {
-  e1: {ensaio: 'ASPECTO', especificacaoTexto: 'LIQUIDO', metodo: 'PA09'},
-  e2: {ensaio: 'DENSIDADE', especificacaoTexto: '', minimo: '0,98', maximo: '1,0', metodo: 'PA03'},
-  e3: {ensaio: 'CONTEÚDO LÍQUIDO MÉDIO', minimo: 49, maximo: 52, metodo: 'F060'},
-  e4: {ensaio: 'PH', especificacaoTexto: '5 - 7', minimo: '5', maximo: '7', metodo: 'PA01'},
+  e1: {ensaio: 'APLICAÇÃO EM MECHA', especificacaoTexto: 'N/A', metodo: ''},
+  e2: {ensaio: 'ASPECTO', especificacaoTexto: 'LIQUIDO', metodo: 'PA09'},
+  e3: {ensaio: 'CONTEÚDO LÍQUIDO MÉDIO', especificacaoTexto: 'N/A', minimo: '180g', maximo: '198g', metodo: 'F060'},
+  e4: {ensaio: 'DENSIDADE', especificacaoTexto: 'N/A', minimo: '0,85', maximo: '0,95', metodo: 'PA03'},
+  e5: {ensaio: 'PH', especificacaoTexto: 'N/A', minimo: '5,5', maximo: '6,5', metodo: 'PA01'},
+  e6: {ensaio: 'RESÍDUO SECO', especificacaoTexto: 'N/A', metodo: 'PA04'},
+  e7: {ensaio: 'CONTEÚDO SEM TEXTO', especificacaoTexto: '', minimo: 49, maximo: 52, metodo: 'F060'},
+  e8: {ensaio: 'PH COM TEXTO', especificacaoTexto: '5 - 7', minimo: '5', maximo: '7', metodo: 'PA01'},
 };
 const tabela = sandbox.tabelaEspecificacoes(especs, true);
 assert.ok(tabela.includes('<td>LIQUIDO</td>'), 'texto livre continua sendo impresso');
-assert.ok(tabela.includes('<td>0,98 – 1</td>'), 'DENSIDADE sai pela faixa, não em branco');
-assert.ok(tabela.includes('<td>49 – 52</td>'), 'CONTEÚDO LÍQUIDO MÉDIO sai pela faixa');
+assert.ok(tabela.includes('<td>180g – 198g</td>'), '"N/A" no texto não pode esconder a faixa');
+assert.ok(tabela.includes('<td>0,85 – 0,95</td>'), 'DENSIDADE sai pela faixa');
+assert.ok(tabela.includes('<td>5,5 – 6,5</td>'), 'PH sai pela faixa');
+assert.ok(tabela.includes('<td>49 – 52</td>'), 'texto vazio também cai na faixa');
 assert.ok(tabela.includes('<td>5 - 7</td>'), 'quando há texto E faixa, o texto da Qualidade manda');
-assert.ok(!/<td><\/td>/.test(tabela), 'nenhuma célula de especificação em branco');
+assert.ok(tabela.includes('<td>N/A</td>'), 'ensaio sem texto E sem faixa continua dizendo N/A');
+// Nenhuma linha pode sair com a coluna Especificação vazia -- era esse o
+// defeito. (A coluna PA pode: nem todo ensaio tem método cadastrado.)
+tabela.split('</tr>').slice(1, -1).forEach(function(linha) {
+  const celulas = linha.match(/<td>(.*?)<\/td>/g) || [];
+  assert.ok(celulas[1] && celulas[1] !== '<td></td>',
+    'especificação em branco em: ' + (celulas[0] || linha));
+});
 // Coluna Resultado continua em branco de propósito -- é preenchida à mão.
 assert.ok(tabela.includes('<th>Resultado</th>') && tabela.includes('<td>&nbsp;</td>'));
 assert.ok(sandbox.tabelaEspecificacoes({}, true).includes('Nenhuma especificação'),
@@ -75,6 +100,10 @@ assert.equal(sandbox.avaliarEnsaio({minimo: '0,8', maximo: '0,9'}, '0,95').confo
 assert.equal(sandbox.avaliarEnsaio({minimo: '0,8', maximo: '0,9'}, '').conforme, null);
 assert.equal(sandbox.avaliarEnsaio({especificacaoTexto: 'LÍQUIDO'}, 'x').conforme, null);
 assert.match(sandbox.avaliarEnsaio({minimo: '0,8'}, '0,7').motivo, /0,8/);
+// Unidade junto do limite não atrapalha a comparação nem some do motivo.
+assert.equal(sandbox.avaliarEnsaio({minimo: '180g', maximo: '198g'}, '185').conforme, true);
+assert.equal(sandbox.avaliarEnsaio({minimo: '180g', maximo: '198g'}, '175').conforme, false);
+assert.match(sandbox.avaliarEnsaio({minimo: '180g', maximo: '198g'}, '175').motivo, /180g/);
 
 // ── 5. Nome do arquivo: lote - cliente produto - sku ─────────────────
 // Padrão que o usuário pediu, igual ao da OP em Excel que eles já

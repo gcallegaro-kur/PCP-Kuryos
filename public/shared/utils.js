@@ -2302,22 +2302,34 @@ function numeroEspec(v) {
   if (typeof v === 'number') return v;
   return parseFloat(String(v).trim().replace(',', '.'));
 }
-// E volta pra vírgula na hora de mostrar -- a ficha é lida no chão de
-// fábrica, não num console.
-function numeroEspecTexto(n) { return String(n).replace('.', ','); }
+// Na hora de MOSTRAR, vale o que o cadastro tem escrito, não o número
+// reconvertido: a Qualidade digita "180g" e "0,85", e a ficha tem que
+// dizer "180g – 198g". Reescrever pelo parseFloat perderia a unidade e
+// trocaria a vírgula por ponto.
+function limiteEspecTexto(v) { return String(v == null ? '' : v).trim(); }
 
-// Como a faixa numérica de um ensaio se escreve. Extraído de
-// avaliarEnsaio (onde nasceu) porque a ficha impressa da OP passou a
-// precisar da MESMA frase -- ver tabelaEspecificacoes. Devolve null
-// quando o ensaio não tem mínimo nem máximo cadastrados (especificação
-// descritiva, tipo "ODOR CARACTERÍSTICO").
+// Como a faixa de um ensaio se escreve. Extraído de avaliarEnsaio (onde
+// nasceu) porque a ficha impressa da OP passou a precisar da MESMA frase
+// -- ver tabelaEspecificacoes. Devolve null quando o ensaio não tem
+// mínimo nem máximo cadastrados (especificação descritiva, tipo "ODOR
+// CARACTERÍSTICO").
 function faixaEspecificacao(ensaio) {
   var e = ensaio || {};
-  var min = numeroEspec(e.minimo), max = numeroEspec(e.maximo);
-  var temMin = !isNaN(min), temMax = !isNaN(max);
-  return temMin && temMax ? (numeroEspecTexto(min) + ' – ' + numeroEspecTexto(max))
-    : temMin ? ('≥ ' + numeroEspecTexto(min))
-    : temMax ? ('≤ ' + numeroEspecTexto(max)) : null;
+  var temMin = !isNaN(numeroEspec(e.minimo)), temMax = !isNaN(numeroEspec(e.maximo));
+  return temMin && temMax ? (limiteEspecTexto(e.minimo) + ' – ' + limiteEspecTexto(e.maximo))
+    : temMin ? ('≥ ' + limiteEspecTexto(e.minimo))
+    : temMax ? ('≤ ' + limiteEspecTexto(e.maximo)) : null;
+}
+
+// "N/A" é como a Qualidade escreve "esta especificação não é texto, está
+// nas colunas Mínimo/Máximo" -- e não é um valor vazio, então o campo de
+// texto vencia a faixa e a ficha continuava saindo sem parâmetro nenhum
+// (achado do usuário em 21/09, com print do cadastro: CONTEÚDO LÍQUIDO
+// MÉDIO 180g-198g, DENSIDADE 0,85-0,95 e PH 5,5-6,5, os três com "N/A"
+// no texto). Cobre N/A, NA, N.A., "-" e vazio.
+function textoEspecAusente(s) {
+  var v = String(s == null ? '' : s).trim().toUpperCase().replace(/[.\s\/]/g, '');
+  return v === '' || v === 'NA' || v === '-' || v === '--';
 }
 
 // Função PURA. Devolve { conforme: true|false|null, faixa, motivo }.
@@ -2336,8 +2348,8 @@ function avaliarEnsaio(ensaio, valorMedido) {
   if (isNaN(v)) {
     return { conforme: null, faixa: faixa, motivo: 'Sem valor medido.' };
   }
-  if (temMin && v < min) return { conforme: false, faixa: faixa, motivo: 'Abaixo do mínimo (' + numeroEspecTexto(min) + ').' };
-  if (temMax && v > max) return { conforme: false, faixa: faixa, motivo: 'Acima do máximo (' + numeroEspecTexto(max) + ').' };
+  if (temMin && v < min) return { conforme: false, faixa: faixa, motivo: 'Abaixo do mínimo (' + limiteEspecTexto(e.minimo) + ').' };
+  if (temMax && v > max) return { conforme: false, faixa: faixa, motivo: 'Acima do máximo (' + limiteEspecTexto(e.maximo) + ').' };
   return { conforme: true, faixa: faixa, motivo: 'Dentro da faixa.' };
 }
 
@@ -3664,7 +3676,12 @@ function tabelaEspecificacoes(especs, comResultado) {
   if (!Object.keys(especs || {}).length) return '<div class="field-hint">Nenhuma especificação de qualidade cadastrada pra esta versão da fórmula.</div>';
   return '<table class="print-table"><thead><tr><th>Ensaio</th><th>Especificação</th>' + (comResultado ? '<th>Resultado</th>' : '') + '<th>PA</th></tr></thead><tbody>' +
     Object.values(especs).map(function(e) {
-      var espec = e.especificacaoTexto || faixaEspecificacao(e) || '';
+      // Faixa manda quando o texto não diz nada ("N/A", "-", vazio); fora
+      // isso manda o texto, que é o que a Qualidade escreveu.
+      var faixa = faixaEspecificacao(e);
+      var espec = textoEspecAusente(e.especificacaoTexto)
+        ? (faixa || limiteEspecTexto(e.especificacaoTexto))
+        : e.especificacaoTexto;
       return '<tr><td>' + escapeHtml(e.ensaio) + '</td><td>' + escapeHtml(espec) + '</td>' + (comResultado ? '<td>&nbsp;</td>' : '') + '<td>' + escapeHtml(e.metodo || '') + '</td></tr>';
     }).join('') + '</tbody></table>';
 }

@@ -70,8 +70,10 @@ const ESPECS = {
   e1: {ensaio: 'ASPECTO', especificacaoTexto: 'LÍQUIDO', metodo: 'PA 09'},
   e2: {ensaio: 'ODOR', especificacaoTexto: 'CARACTERÍSTICO', metodo: 'PA09'},
   e3: {ensaio: 'COR', especificacaoTexto: 'AMARELO CLARO', metodo: 'PA09'},
-  e4: {ensaio: 'DENSIDADE', minimo: '0,8', maximo: '0,9', metodo: 'PA03'},
-  e5: {ensaio: 'CONTEÚDO LÍQUIDO MÉDIO', minimo: 184, maximo: 188, metodo: 'F060'},
+  // Os dois com "N/A" no texto e a faixa nas colunas Mínimo/Máximo --
+  // é como a Qualidade cadastra de verdade (print do usuário, 21/09).
+  e4: {ensaio: 'DENSIDADE', especificacaoTexto: 'N/A', minimo: '0,8', maximo: '0,9', metodo: 'PA03'},
+  e5: {ensaio: 'CONTEÚDO LÍQUIDO MÉDIO', especificacaoTexto: 'N/A', minimo: 184, maximo: 188, metodo: 'F060'},
   e6: {ensaio: 'PH', especificacaoTexto: 'NA', metodo: 'PA01'},
   e7: {ensaio: 'TEOR DE ÁLCOOL', especificacaoTexto: '65°G/L - 75°G/L', metodo: 'PA 08'},
 };
