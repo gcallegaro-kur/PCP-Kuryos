@@ -118,6 +118,9 @@
     .parcela.cancelada{opacity:.6}.parcela.cancelada .p-info b{text-decoration:line-through}
     .parcela.cancelada .p-num{background:var(--tint-red-bg);color:var(--tint-red-fg)}
     .pz-mais{background:none;border:none;font-size:22px;color:var(--muted);width:40px;height:40px;cursor:pointer;line-height:1}
+    .pz-guardar{margin-top:14px;padding:12px;border:1.5px dashed var(--warning);border-radius:12px;background:var(--tint-orange-bg);font-size:13.5px}
+    .pz-guardar.feito{border-style:solid;border-color:var(--success);background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .pz-guardar select{margin-top:6px;font-size:16px;padding:10px;width:100%}
     .pz-just{margin-top:12px}.pz-just input{border-color:var(--warning)}
     .pz-opcoes{margin-top:12px;font-size:13px}.pz-opcoes summary{color:var(--muted);cursor:pointer;padding:6px 0}
     .pz-link{background:none;border:none;color:var(--primary);font-weight:600;font-size:13.5px;padding:8px 0;cursor:pointer;text-decoration:underline}
@@ -274,6 +277,7 @@ var conferencia = {}; // itemKey -> {ok, obs}
 var formParcela = null;     // pesagem sendo lançada: {itemKey, arquivo, previewUrl, peso, lote, outroLote, motivoForaFefo, enviando}
 var mpAberta = null;        // MP na tela de detalhe (null = lista)
 var menuParcela = null;     // pesagem com o menu "⋯" aberto
+var devolverOutro = null;   // MP escolhendo outro endereço para guardar
 var allLotes = {}, allEnderecos = {}; // WMS: base do FEFO que indica o lote
 var assinaturaPesagem = ''; // só redesenha os cartões quando o conteúdo muda
 
@@ -584,7 +588,7 @@ function renderPesagem(f, st, val, podeEditar) {
   bloco.classList.remove('modo-lista', 'modo-mp', 'modo-form');
   bloco.classList.add('modo-' + modo);
   document.getElementById('mPainel').classList.toggle('foco-mp', modo !== 'lista');
-  var assinatura = JSON.stringify([opAtual, st, podeEditar, modo, mpAberta, menuParcela, previstos, pes.parcelas || null,
+  var assinatura = JSON.stringify([opAtual, st, podeEditar, modo, mpAberta, menuParcela, devolverOutro, previstos, pes.parcelas || null, pes.devolucoes || null,
     pes.planoLotes || null, pes.fotosItens || null, modo === 'mp' || modo === 'form' ? allLotes[sanitizeKey((previstos[mpAberta] || {}).mpCodigo || '')] || null : null,
     formParcela ? [formParcela.itemKey, formParcela.previewUrl || '', !!formParcela.enviando, !!formParcela.outroLote] : null]);
   if (assinatura === assinaturaPesagem) return;
@@ -610,6 +614,7 @@ function statusLinha(l) {
 }
 
 function telaLista(linhas, podeEditar, naoIniciada) {
+  var pesDaLista = ((Manipulacao.fase(allOps[opAtual]) || {}).pesagem) || {};
   var feitas = linhas.filter(function(l) { return statusLinha(l) === 'ok' || (statusLinha(l) === 'alerta'); }).length;
   var pctGeral = linhas.length ? feitas / linhas.length * 100 : 0;
   return '<div class="pz-topo"><b>' + feitas + ' de ' + linhas.length + ' matérias-primas pesadas</b>' +
@@ -624,7 +629,8 @@ function telaLista(linhas, podeEditar, naoIniciada) {
       return '<button type="button" class="pz-row pz-' + s + '" data-abrir-mp="' + escapeAttr(l.itemKey) + '">' +
         '<span class="pz-num">' + (s === 'ok' ? '✓' : (i + 1)) + '</span>' +
         '<span class="pz-txt"><b>' + escapeHtml(l.mpCodigo) + '</b><small>' + escapeHtml(l.mpNome) + ' · ' +
-          (l.pesado ? fmtNum(l.pesado) + ' de ' : '') + fmtNum(l.previsto) + ' ' + un + (l.parcelas ? ' · ' + l.parcelas + ' pesagem(ns)' : '') + '</small></span>' +
+          (l.pesado ? fmtNum(l.pesado) + ' de ' : '') + fmtNum(l.previsto) + ' ' + un + (l.parcelas ? ' · ' + l.parcelas + ' pesagem(ns)' : '') +
+          (l.parcelas && !Manipulacao.devolucaoDoItem(pesDaLista, l.itemKey) ? ' · <b style="color:var(--warning)">guardar embalagem</b>' : '') + '</small></span>' +
         '<span class="pz-dir">' + dir + '</span><span class="pz-seta">›</span></button>';
     }).join('');
 }
@@ -678,6 +684,7 @@ function telaMp(pes, linhas, l, podeEditar) {
   var perdaHtml = '<details class="pz-opcoes"' + (r.perda ? ' open' : '') + '><summary>Mais opções</summary><label>Perda na pesagem (' + un + ')</label>' +
     '<input type="text" inputmode="decimal" data-perda="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(r.perda == null ? '' : r.perda) + '"' + dis + '></details>';
 
+  var guardarHtml = l.parcelas > 0 ? blocoGuardar(pes, l, podeEditar) : '';
   var proxima = Manipulacao.proximaPendente(previstos, pes, l.itemKey);
   var acoes = podeEditar
     ? '<div class="pz-acoes">' +
@@ -689,7 +696,7 @@ function telaMp(pes, linhas, l, podeEditar) {
   return '<button type="button" class="pz-voltar" data-voltar-lista>‹ Todas as MPs</button>' +
     '<div class="pz-cab"><div><b>' + escapeHtml(l.mpCodigo) + '</b><div class="field-hint">' + escapeHtml(l.mpNome) + '</div></div><span class="field-hint">' + (idx + 1) + ' de ' + linhas.length + '</span></div>' +
     '<div class="pz-grande pz-' + s + '">' + grande + '<div class="barra"><span style="width:' + pct.toFixed(1) + '%"></span></div></div>' +
-    lotesHtml + parcelasHtml + justHtml + perdaHtml + acoes;
+    lotesHtml + parcelasHtml + guardarHtml + justHtml + perdaHtml + acoes;
 }
 
 function telaForm(pes, l) {
@@ -765,6 +772,15 @@ function ligarPesagem() {
   });
   document.querySelectorAll('[data-cancelar-parcela]').forEach(function(b) {
     b.onclick = function() { var partes = b.getAttribute('data-cancelar-parcela').split('|'); cancelarParcela(partes[0], partes[1]); };
+  });
+  document.querySelectorAll('[data-guardar]').forEach(function(b) {
+    b.onclick = function() { guardarItem(b.getAttribute('data-guardar'), b.getAttribute('data-outro') === '1'); };
+  });
+  document.querySelectorAll('[data-guardar-outro]').forEach(function(b) {
+    b.onclick = function() { devolverOutro = b.getAttribute('data-guardar-outro'); renderPainel(); };
+  });
+  document.querySelectorAll('[data-guardar-cancelar]').forEach(function(b) {
+    b.onclick = function() { devolverOutro = null; renderPainel(); };
   });
   // Foto primeiro: o botão da MP abre a câmera; escolhida a foto, abre o formulário.
   var cam = document.getElementById('pzFoto');
@@ -884,6 +900,90 @@ function cancelarParcela(itemKey, id) {
     .catch(function(e) { showAlert('Erro ao cancelar: ' + e.message, 'danger'); });
 }
 
+/* Guardar de volta: a embalagem inteira volta ao endereço de onde saiu.
+   Como a fábrica trabalha hoje (usuário, 18/09): "recebem embalagem inteira,
+   vão pegando, item a item. Próprio operador quem guarda também" -- não há
+   separação nem sobra a reconciliar, o que falta é a CONFIRMAÇÃO de que
+   voltou. Guardou em outro lugar? O sistema move o lote, senão o WMS passa
+   a mentir sobre onde o material está. */
+function enderecosDoItem(pes, l) {
+  var lotes = allLotes[sanitizeKey(l.mpCodigo)] || {};
+  var usados = Manipulacao.parcelasDoItem(pes, l.itemKey).map(function(p) { return String(p.loteMaterial || '').trim(); });
+  var achados = [];
+  Object.keys(lotes).forEach(function(k) {
+    var lt = lotes[k] || {};
+    if (usados.indexOf(String(lt.loteInterno || '').trim()) < 0 || !lt.enderecoKey) return;
+    achados.push({loteKey: k, loteInterno: lt.loteInterno, enderecoKey: lt.enderecoKey, enderecoCodigo: lt.enderecoCodigo || lt.enderecoKey});
+  });
+  return achados;
+}
+function opcoesEndereco(selecionado) {
+  return Object.keys(allEnderecos).filter(function(k) { return allEnderecos[k] && allEnderecos[k].ativo !== false; })
+    .sort(function(a, b) { return String((allEnderecos[a] || {}).codigo || a).localeCompare(String((allEnderecos[b] || {}).codigo || b)); })
+    .map(function(k) {
+      var e = allEnderecos[k] || {};
+      return '<option value="' + escapeAttr(k) + '"' + (k === selecionado ? ' selected' : '') + '>' + escapeHtml(e.codigo || k) + (e.area ? ' (' + escapeHtml(e.area) + ')' : '') + '</option>';
+    }).join('');
+}
+function blocoGuardar(pes, l, podeEditar) {
+  var d = Manipulacao.devolucaoDoItem(pes, l.itemKey);
+  if (d) {
+    return '<div class="pz-guardar feito">✓ Embalagem guardada' + (d.enderecoCodigo ? ' em <b>' + escapeHtml(d.enderecoCodigo) + '</b>' : '') +
+      '<div class="field-hint">' + escapeHtml(d.por || '') + (d.em ? ' · ' + horaCurta(d.em) : '') +
+      (d.mudou ? ' · mudou de lugar' + (d.enderecoAnteriorCodigo ? ' (saiu de ' + escapeHtml(d.enderecoAnteriorCodigo) + ')' : '') : '') + '</div></div>';
+  }
+  if (!podeEditar) return '<div class="pz-guardar">Embalagem ainda não confirmada como guardada.</div>';
+  var ends = enderecosDoItem(pes, l);
+  var codigos = ends.map(function(e) { return e.enderecoCodigo; })
+    .filter(function(c, i, a) { return a.indexOf(c) === i; }).sort();
+  if (devolverOutro === l.itemKey) {
+    return '<div class="pz-guardar"><b>Onde você guardou a embalagem?</b>' +
+      '<select id="pzEndereco" style="margin-top:8px">' + opcoesEndereco(ends.length ? ends[0].enderecoKey : null) + '</select>' +
+      '<div class="pz-acoes" style="position:static;border:none;padding-top:10px">' +
+        '<button type="button" class="btn btn-green" data-guardar="' + escapeAttr(l.itemKey) + '" data-outro="1">Confirmar novo lugar</button>' +
+        '<button type="button" class="btn btn-ghost" data-guardar-cancelar>Cancelar</button>' +
+      '</div></div>';
+  }
+  return '<div class="pz-guardar"><b>Guardar de volta</b>' +
+    '<div class="field-hint">' + (codigos.length ? 'Leve a embalagem de volta para <b>' + escapeHtml(codigos.join(', ')) + '</b> e confirme.' : 'Guarde a embalagem no lugar de onde tirou e confirme.') + '</div>' +
+    '<div class="pz-acoes" style="position:static;border:none;padding-top:10px">' +
+      '<button type="button" class="btn btn-green" data-guardar="' + escapeAttr(l.itemKey) + '">✓ Guardei' +
+        (codigos.length === 1 ? ' em ' + escapeHtml(codigos[0]) : codigos.length ? ' cada um no seu lugar' : '') + '</button>' +
+      '<button type="button" class="btn btn-ghost" data-guardar-outro="' + escapeAttr(l.itemKey) + '">Guardei em outro lugar</button>' +
+    '</div></div>';
+}
+function guardarItem(itemKey, outro) {
+  var pes = (Manipulacao.fase(allOps[opAtual]) || {}).pesagem || {};
+  var l = Manipulacao.linhasPesagem(previstos, pes).find(function(x) { return x.itemKey === itemKey; });
+  if (!l) return;
+  var ends = enderecosDoItem(pes, l);
+  var destinoKey = outro ? (document.getElementById('pzEndereco') || {}).value : (ends.length ? ends[0].enderecoKey : null);
+  var mudou = !!outro && !!destinoKey && ends.some(function(e) { return e.enderecoKey !== destinoKey; });
+  var destinoCodigo = destinoKey ? ((allEnderecos[destinoKey] || {}).codigo || destinoKey) : null;
+  var autor = eu();
+  var movidos = mudou ? ends.filter(function(e) { return e.enderecoKey !== destinoKey; }) : [];
+  // De onde saiu: todos os endereços que a embalagem deixou, em ordem.
+  var anteriores = movidos.map(function(e) { return e.enderecoCodigo; })
+    .filter(function(c, i, a) { return c && a.indexOf(c) === i; }).sort().join(', ');
+  var mover = movidos.reduce(function(cadeia, e) {
+    return cadeia.then(function() {
+      return transferirLoteEndereco(db, 'material', l.mpCodigo, e.loteKey, destinoKey, 'DEVOLUÇÃO APÓS PESAGEM', autor);
+    });
+  }, Promise.resolve());
+  mover.then(function() {
+    return db.ref('ops/' + opAtual + '/manipulacao/pesagem/devolucoes/' + itemKey).set({
+      em: new Date().toISOString(), por: autor, mpCodigo: l.mpCodigo,
+      enderecoKey: destinoKey || null, enderecoCodigo: destinoCodigo || null,
+      enderecoAnteriorCodigo: anteriores || null, mudou: mudou
+    });
+  }).then(function() {
+    devolverOutro = null;
+    showAlert('Embalagem de ' + l.mpCodigo + ' guardada' + (destinoCodigo ? ' em ' + destinoCodigo : '') + '.' +
+      (mudou ? ' Endereço do lote atualizado no estoque.' : ''), 'success');
+    renderPainel();
+  }).catch(function(e) { showAlert('Erro ao registrar a devolução: ' + e.message, 'danger'); });
+}
+
 // Fotos da MP, só leitura (conferência): as das parcelas, numeradas.
 function celulaFoto(f, l) {
   var fotos = Manipulacao.fotosDaLinha(f.pesagem, l.itemKey);
@@ -933,7 +1033,11 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
   var pesagemAtual = faseComRascunho().pesagem;
   var val = Manipulacao.validarPesagem(previstos, pesagemAtual);
   if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
-  if (!confirm('Fechar a pesagem do lote ' + op.lote + '?\n\nIsso baixa do estoque o que foi pesado.')) return;
+  var aGuardar = Manipulacao.pendentesDevolucao(previstos, pesagemAtual);
+  var avisoGuardar = aGuardar.length
+    ? '\n\nAinda não foi confirmado que a embalagem voltou ao lugar: ' + aGuardar.map(function(x) { return x.mpCodigo; }).join(', ') + '.'
+    : '';
+  if (!confirm('Fechar a pesagem do lote ' + op.lote + '?\n\nIsso baixa do estoque o que foi pesado.' + avisoGuardar)) return;
   var btn = this; btn.disabled = true; btn.textContent = 'Baixando estoque...';
   var autor = eu();
   var clienteKey = (typeof PropriedadeEstoque !== 'undefined')

@@ -26,7 +26,9 @@ const ops = {
           },
           'MP-02': {'-c': {peso: 5, loteMaterial: 'AK-3', foto: foto('c'), em: '2026-09-11T08:20:00Z', por: 'João'}}
         },
-        itens: {'MP-01': {pesado: 60, loteMaterial: 'AK-1, AK-2', parcelas: 2}}
+        itens: {'MP-01': {pesado: 60, loteMaterial: 'AK-1, AK-2', parcelas: 2}},
+        // O operador guardou a embalagem, e em outro lugar.
+        devolucoes: {'MP-01': {em: '2026-09-11T08:45:00Z', por: 'João', enderecoCodigo: 'FAB-2.1.1', mudou: true, enderecoAnteriorCodigo: 'FAB-1.1.1'}}
       },
       conferencia: {por: 'Ana', em: '2026-09-11T09:00:00Z', itens: {'MP-01': {ok: true}, 'MP-02': {ok: true}}},
       manipulacao: {inicio: '2026-09-11T09:10:00Z', fim: '2026-09-11T11:00:00Z', por: 'Ana', rendimento: 63, perdas: {residuo_tacho: 1}},
@@ -102,6 +104,9 @@ const fontes = {
   assert.deepEqual(mp1.todasParcelas.map((p) => [p.id, p.ordem]), [['-a', 1], ['-x', null], ['-b', 2]], 'cancelada aparece, sem número');
   assert.equal(mp1.todasParcelas[1].motivoCancelamento, 'peso errado');
   assert.equal(mp1.conferencia.ok, true);
+  assert.equal(mp1.devolucao.enderecoCodigo, 'FAB-2.1.1', 'onde a embalagem foi guardada');
+  assert.equal(mp1.devolucao.mudou, true);
+  assert.equal(d.granel.linhas.find((l) => l.mpCodigo === 'MP-02').devolucao, null, 'MP sem confirmação de devolução');
   assert.equal(d.granel.resumo.rendimento, 63);
   assert.equal(d.granel.analise.por, 'Daiene');
 

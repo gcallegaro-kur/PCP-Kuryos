@@ -38,6 +38,10 @@ function dados() {
       'MPGR-002': {saldoAtual: 500}, 'MPES-003': {saldoAtual: 100}
     },
     // WMS com dois lotes do álcool: o FEFO manda usar o que vence antes.
+    enderecos_estoque: {
+      'FAB-1-1-1': {codigo: 'FAB-1.1.1', area: 'FABRICA', ativo: true},
+      'FAB-2-1-1': {codigo: 'FAB-2.1.1', area: 'FABRICA', ativo: true}
+    },
     estoque_lotes: {'MPGR-001': {
       L590: {itemCodigo: 'MPGR-001', itemTipo: 'material', status: 'LIBERADO', saldoLote: 100, loteInterno: 'AK-2026-000590',
         dataValidade: '2027-06-30', enderecoKey: 'FAB-2-1-1', enderecoCodigo: 'FAB-2.1.1'},
@@ -261,8 +265,27 @@ async function campo(page, seletor, valor) {
     assert.equal((await parcelas('MPGR-001'))[1].loteMaterial, 'AK-2026-000590');
     await page.waitForFunction(() => /MPGR-002/.test(document.querySelector('.pz-cab').innerText));
 
+    // Guardar de volta: quem pesou é quem devolve a embalagem ao endereço.
+    // O álcool voltou para OUTRO lugar -> o lote muda de endereço no WMS.
+    await abrirMp('MPGR-001');
+    assert.match(await page.locator('#mPesagemCards').innerText(), /Leve a embalagem de volta para FAB-1\.1\.1, FAB-2\.1\.1/);
+    await page.click('[data-guardar-outro="MPGR-001"]');
+    await page.selectOption('#pzEndereco', 'FAB-2-1-1');
+    await page.click('[data-guardar="MPGR-001"][data-outro="1"]');
+    await page.waitForFunction(() => ((window.__db.ops['26260-01'].manipulacao.pesagem.devolucoes || {})['MPGR-001'] || {}).em);
+    const dev = await page.evaluate(() => window.__db.ops['26260-01'].manipulacao.pesagem.devolucoes['MPGR-001']);
+    assert.equal(dev.por, 'Operador João');
+    assert.equal(dev.enderecoCodigo, 'FAB-2.1.1');
+    assert.equal(dev.mudou, true);
+    assert.equal(dev.enderecoAnteriorCodigo, 'FAB-1.1.1', 'saiu do endereço do lote que mudou de lugar');
+    const lotesDepois = await page.evaluate(() => window.__db.estoque_lotes['MPGR-001']);
+    assert.equal(lotesDepois.L576.enderecoKey, 'FAB-2-1-1', 'o lote seguiu a embalagem no WMS');
+    assert.equal(lotesDepois.L590.enderecoKey, 'FAB-2-1-1');
+    assert.match(await page.locator('#mPesagemCards').innerText(), /Embalagem guardada em FAB-2\.1\.1/);
+
     // Água: sem saldo por lote no WMS -> digita o lote. Errou o peso (630):
     // cancela pelo menu "⋯" com motivo e pesa de novo.
+    await abrirMp('MPGR-002');
     assert.match(await page.locator('#mPesagemCards').innerText(), /Sem saldo desta MP por lote/);
     await pesar('MPGR-002', 'agua.jpg', '630', {jaNaTela: true, lote: 'AK-2026-000577'});
     await page.waitForFunction(() => /Passou do previsto/i.test(document.getElementById('mPesagemCards').innerText));
@@ -284,6 +307,16 @@ async function campo(page, seletor, valor) {
     await page.waitForFunction(() => Object.values(window.__db.ops['26260-01'].manipulacao.pesagem.parcelas['MPGR-002']).length === 2);
     await page.waitForFunction(() => /Completo/i.test(document.getElementById('mPesagemCards').innerText));
 
+    // A lista cobra o que ainda falta guardar.
+    await page.click('[data-voltar-lista]');
+    assert.match(await page.locator('#mPesagemCards').innerText(), /guardar embalagem/, 'a lista cobra o que falta guardar');
+    await page.click('.pz-row[data-abrir-mp="MPGR-002"]');
+    await page.click('[data-guardar="MPGR-002"]');
+    await page.waitForFunction(() => ((window.__db.ops['26260-01'].manipulacao.pesagem.devolucoes || {})['MPGR-002'] || {}).em);
+    const devAgua = await page.evaluate(() => window.__db.ops['26260-01'].manipulacao.pesagem.devolucoes['MPGR-002']);
+    assert.equal(devAgua.enderecoCodigo, null, 'MP fora do WMS: confirma sem endereço');
+    assert.equal(devAgua.mudou, false);
+
     // Fragrância acima da tolerância: pede justificativa na própria MP.
     await pesar('MPES-003', 'fragrancia.jpg', '12', {lote: 'AK-2026-000578'});
     await page.waitForSelector('[data-just="MPES-003"]');
@@ -296,8 +329,11 @@ async function campo(page, seletor, valor) {
     assert.equal(await page.locator('#mBtnFecharPesagem').isDisabled(), true, 'sem justificativa não fecha');
     await page.click('.pz-row[data-abrir-mp="MPES-003"]');
     await page.fill('[data-just="MPES-003"]', 'Ajuste de fragrância autorizado pelo P&D');
+    await page.click('[data-guardar="MPES-003"]');
+    await page.waitForFunction(() => Object.keys(window.__db.ops['26260-01'].manipulacao.pesagem.devolucoes || {}).length === 3);
     await page.click('[data-voltar-lista]');
     await page.waitForFunction(() => !document.getElementById('mBtnFecharPesagem').disabled, null, {timeout: 8000});
+    assert.doesNotMatch(await page.locator('#mPesagemCards').innerText(), /guardar embalagem/, 'tudo guardado');
     assert.equal(await page.locator('#mBtnFecharPesagem').innerText(), 'Fechar pesagem e baixar estoque');
     assert.match(await page.locator('#mPesagemCards').innerText(), /3 de 3 matérias-primas pesadas/);
 

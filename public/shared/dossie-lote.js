@@ -94,6 +94,8 @@
         todasParcelas: parcelas, fotosAvulsas: avulsas,
         // O que o FEFO mandou usar no início da pesagem x o que foi usado.
         planoFefo: Manipulacao.situacaoLotes(((pes.planoLotes || {})[l.itemKey]) || [], parcelas.filter(function(p) { return !p.canceladaEm; })),
+        // Quem guardou a embalagem de volta, onde e quando.
+        devolucao: Manipulacao.devolucaoDoItem(pes, l.itemKey),
         conferencia: conf[l.itemKey] || null
       });
     });

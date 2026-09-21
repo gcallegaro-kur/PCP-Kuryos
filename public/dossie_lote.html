@@ -277,6 +277,10 @@ function renderDossie() {
           (l.planoFefo && l.planoFefo.linhas.length ? campo('FEFO indicado', l.planoFefo.linhas.map(function(x) {
             return escapeHtml(x.loteInterno) + ': ' + fmtNum(x.planejado) + ' ' + un + (x.pesado ? ' (usado ' + fmtNum(x.pesado) + ')' : '');
           }).join('<br>') + (l.planoFefo.fora.length ? '<div class="hint" style="color:var(--tint-orange-fg)">Fora do FEFO: ' + l.planoFefo.fora.map(function(x) { return escapeHtml(x.loteInterno) + ' ' + fmtNum(x.pesado) + ' ' + un; }).join(', ') + '</div>' : '')) : '') +
+          (l.devolucao ? campo('Embalagem guardada', escapeHtml(l.devolucao.enderecoCodigo || 'confirmada') +
+            '<div class="hint">' + escapeHtml(l.devolucao.por || '') + ' · ' + quando(l.devolucao.em) +
+            (l.devolucao.mudou ? ' · mudou de lugar' + (l.devolucao.enderecoAnteriorCodigo ? ' (saiu de ' + escapeHtml(l.devolucao.enderecoAnteriorCodigo) + ')' : '') : '') + '</div>')
+            : (l.parcelas ? campo('Embalagem guardada', '<span style="color:var(--danger)">não confirmada</span>') : '')) +
           (l.perda ? campo('Perda na pesagem', fmtNum(l.perda) + ' ' + un) : '') +
           (l.justificativa ? campo('Justificativa', escapeHtml(l.justificativa)) : '') +
           (c && c.obs ? campo('Obs. da conferência', escapeHtml(c.obs)) : '') +

@@ -257,6 +257,22 @@
     return null;
   }
 
+  /* DEVOLUÇÃO AO ENDEREÇO (como a fábrica trabalha hoje, confirmado pelo
+     usuário em 18/09: "recebem embalagem inteira, vão pegando, item a item.
+     Próprio operador quem guarda também"). Não há separação nem sobra a
+     reconciliar: a embalagem inteira sai do endereço, vai à balança e volta.
+     O que o sistema precisa é da CONFIRMAÇÃO de que voltou -- e para onde,
+     quando não voltou para o mesmo lugar. Fica em pesagem/devolucoes/{mp}. */
+  function devolucaoDoItem(pesagem, itemKey) {
+    return ((pesagem && pesagem.devolucoes) || {})[itemKey] || null;
+  }
+  // MPs já pesadas que ainda não foram confirmadas como guardadas.
+  function pendentesDevolucao(previstos, pesagem) {
+    return linhasPesagem(previstos, pesagem)
+      .filter(function(l) { return l.parcelas > 0 && !devolucaoDoItem(pesagem, l.itemKey); })
+      .map(function(l) { return {itemKey: l.itemKey, mpCodigo: l.mpCodigo}; });
+  }
+
   /* Conferência: OUTRA pessoa. É a regra que o usuário pediu, e é o que
      transforma a pesagem em dupla checagem de verdade. */
   function validarConferencia(previstos, fase_, conferente) {
@@ -366,6 +382,7 @@
     fotosDoItem: fotosDoItem, parcelasDoItem: parcelasDoItem, fotosDaLinha: fotosDaLinha,
     validarParcela: validarParcela, itensParaFechamento: itensParaFechamento,
     baixasPorLote: baixasPorLote, proximaPendente: proximaPendente, situacaoLotes: situacaoLotes,
+    devolucaoDoItem: devolucaoDoItem, pendentesDevolucao: pendentesDevolucao,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,

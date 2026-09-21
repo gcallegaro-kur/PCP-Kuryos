@@ -164,6 +164,14 @@ const pesagemOk = {
   assert.equal(M.validarParcela({peso: 5, loteMaterial: 'AK-576', temFoto: true}, plano).ok, true);
   assert.equal(M.validarParcela({peso: 5, loteMaterial: 'QUALQUER', temFoto: true}, []).ok, true);
 
+  // Guardar de volta: quem pesou é quem devolve a embalagem ao endereço.
+  assert.deepEqual(M.pendentesDevolucao(previstos, pes).map((x) => x.mpCodigo), ['MP-02', 'MP-01', 'MP-03'],
+    'toda MP pesada precisa ser confirmada como guardada');
+  const comDevolucao = Object.assign({}, pes, {devolucoes: {'MP-01': {em: '2026-09-18T11:00:00Z', por: 'João', enderecoCodigo: 'FAB-1.1.1'}}});
+  assert.deepEqual(M.pendentesDevolucao(previstos, comDevolucao).map((x) => x.mpCodigo), ['MP-02', 'MP-03']);
+  assert.equal(M.devolucaoDoItem(comDevolucao, 'MP-01').enderecoCodigo, 'FAB-1.1.1');
+  assert.deepEqual(M.pendentesDevolucao(previstos, {}), [], 'sem pesagem, nada a guardar');
+
   // Validação de uma ida à balança.
   assert.deepEqual(M.validarParcela({}).erros, ['Informe o peso que a balança mostrou.', 'Informe o lote da embalagem usada.', 'Tire a foto da balança.']);
   assert.equal(M.validarParcela({peso: '12,5'}).ok, false, 'vírgula chega convertida pela tela');
