@@ -118,7 +118,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — impressão das fichas de OP (2026-09-21).** Três achados
+- **Entrega publicada — impressão das fichas de OP (2026-09-21).** `cb9b6a4`
+  no `origin/main`; Hosting por worktree limpo (4 arquivos públicos conferidos
+  por HTTP, idênticos ao commit). Três achados
   do usuário, com PDF real das OPs 26253/07 e 26261/04 (22 folhas cada):
   (1) ensaio cadastrado por `minimo`/`maximo` saía com a coluna
   Especificação EM BRANCO na ficha físico-química — só `especificacaoTexto`
@@ -141,15 +143,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   máquina, não defeito: com `channel: 'chrome'` os 15 testes de UI passam.
   Vale baixar os navegadores (`npx playwright install`) antes de concluir
   que um teste de UI quebrou aqui.
-- **Arquivos ativos:** `public/emitir_op.html`, `public/ops.html`,
-  `public/shared/utils.js`, `public/shared/fichas-op.css`,
-  `run_fichas_op_test.js`, `run_fichas_op_ui_test.js`. `compras.html` tem o
-  MESMO defeito de folha em branco — deixei registrado em
-  `MELHORIAS_FUTURAS.md` por ser escopo do Codex, não mexi.
-- **Pendente no meu diretório (não publicar):** `public/shared/manipulacao.js`
-  e `run_manipulacao_test.js` têm a devolução ao endereço ainda sem commit,
-  de 18/09. O deploy desta entrega foi por worktree limpo justamente por
-  isso.
+- **Arquivos ativos:** nenhum; entrega encerrada. `compras.html` tem o
+  MESMO defeito de folha em branco (`visibility:hidden` no bloco de
+  impressão) — a correção pronta está em `public/shared/fichas-op.css`;
+  deixei registrado em `MELHORIAS_FUTURAS.md` por ser escopo do Codex, não
+  mexi.
+- **Sessão paralela:** enquanto isto rodava, a devolução ao endereço
+  (`a7fadf3`) foi commitada e publicada por outra sessão minha. O worktree
+  limpo desta entrega saiu de `cb9b6a4`, que já tem `a7fadf3` como
+  ancestral — nada meio-pronto foi ao ar.
 
 - **Entrega publicada — devolução da embalagem ao endereço (2026-09-21).**
   `a7fadf3` no `origin/main`; Hosting por worktree limpo (4 arquivos idênticos).
