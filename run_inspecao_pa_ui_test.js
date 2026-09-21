@@ -48,6 +48,9 @@ async function abrir(browser) {
     const db = data;
     window.__db = db;
     window.__iniciado = false;
+    // O nome do PDF é o título da aba no momento da impressão -- guardar o
+    // título aqui é a única forma de conferir isso sem abrir o diálogo.
+    window.print = function() { window.__tituloImpressao = document.title; };
     const partes = (p) => String(p || '').split('/').filter(Boolean);
     const ler = (p) => partes(p).reduce((o, k) => (o == null ? undefined : o[k]), db);
     const gravar = (p, v) => {
@@ -151,6 +154,29 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.match(await page.locator('#qCk7Amostra').innerText(), /7 de 36 caixa\(s\) — √N\+1/);
     assert.equal(await page.locator('#qChecklistRecebimento').isVisible(), false, 'checklist de recebimento não vale para palete');
 
+    // ── 2b. Pesagem com a quantidade EM ABERTO ───────────────────────────
+    // A amostra de ASPECTO segue √N+1 sobre as caixas (7 de 36, acima). A de
+    // PESO é outra: o Relatório de Análise oficial pede 32, e a tela dava 7.
+    // Pedido do usuário em 21/09 -- padrão 32, mas a inspetora muda à vontade.
+    const nCampos = () => page.locator('[data-ck7-peso]').count();
+    assert.equal(await nCampos(), 32, 'pesagem começa no padrão do laudo');
+    await peso(page, 0, '195');
+    // Encolher preserva o que já foi digitado e renumera do fim pra frente.
+    await page.fill('#qCk7PesoQtd', '4');
+    await page.locator('#qCk7PesoQtd').dispatchEvent('change');
+    assert.equal(await nCampos(), 4);
+    assert.equal(await page.locator('[data-ck7-peso="0"]').inputValue(), '195',
+      'encolher não pode apagar peso já registrado');
+    await page.click('#qCk7PesoMais');
+    assert.equal(await nCampos(), 5, '"+ unidade" acrescenta uma pesagem');
+    assert.equal(await page.locator('[data-ck7-peso="0"]').inputValue(), '195');
+    // O × de uma unidade remove aquela linha.
+    await page.click('[data-ck7-peso-rm="4"]');
+    assert.equal(await nCampos(), 4);
+    await page.fill('#qCk7PesoQtd', '3');
+    await page.locator('#qCk7PesoQtd').dispatchEvent('change');
+    assert.equal(await nCampos(), 3);
+
     // ── 3. Parâmetros do produto e pesagem ───────────────────────────────
     await page.fill('#qCk7Nominal', '200');
     await page.fill('#qCk7UnCaixa', '24');
@@ -214,6 +240,47 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(db.parametros_pa.MRARBS04.conteudoNominal, 200, 'parâmetros guardados para a próxima inspeção');
     assert.equal(db.parametros_pa.MRARBS04.unidadesPorCaixa, 24);
     assert.equal(db.parametros_pa.MRARBS04.eanProduto, '7899999000012');
+
+    // ── 6b. Emissão do laudo em PDF ──────────────────────────────────────
+    // O relatório é o ESPELHO do que ficou gravado: sai do laudo acima, não
+    // de uma redigitação. Pedido do usuário em 21/09 -- hoje esse documento
+    // é montado fora do sistema, por um script que lê uma planilha do Forms.
+    // O Firebase simulado entrega o snapshot UMA vez (o `on` do stub não é
+    // listener de verdade), então a tela não redesenha sozinha depois da
+    // gravação. Entregar o snapshot novo à mão é exatamente o que o
+    // listener real faz em produção.
+    await page.evaluate(() => { allEstoqueLotes = window.__db.estoque_lotes; renderFila(); });
+    await page.waitForSelector('#qHistBody [data-emitir-item]');
+    await page.click('#qHistBody [data-emitir-item="MRARBS04"]');
+    await page.waitForSelector('#modalEmitirBg.open');
+    // Sem lista cadastrada, "Outro responsável" já vem escolhido e o nome
+    // de quem está logado entra preenchido.
+    assert.equal(await page.locator('#qEmitResponsavel').inputValue(), 'outro');
+    assert.equal(await page.locator('#qEmitNome').inputValue(), 'Daiene');
+    await page.fill('#qEmitNome', 'Mario Callegaro');
+    await page.fill('#qEmitRegistro', 'CRQ 04413184');
+    await page.click('#qEmitImprimir');
+    await page.waitForFunction(() => document.getElementById('laudoPrintArea').innerHTML.length > 0);
+
+    const laudo = await page.evaluate(() => document.getElementById('laudoPrintArea').innerText);
+    assert.match(laudo, /RELATÓRIO DE ANÁLISE/);
+    assert.match(laudo, /BODY SPLASH NÉCTAR DAS TAMARAS/, 'produto do lote');
+    assert.match(laudo, /26257\/17/, 'lote analisado');
+    assert.match(laudo, /MISS RÔSE/, 'cliente do produto');
+    assert.match(laudo, /Análise de Peso: 3 amostras/, 'a pesagem que foi feita, não um número fixo');
+    assert.match(laudo, /Mario Callegaro/);
+    assert.match(laudo, /CRQ 04413184/);
+    assert.match(laudo, /☒ Produto APROVADO/, 'liberado para expedição = aprovado no laudo');
+    assert.match(laudo, /Conformidade do Rótulo/, 'aspecto visual da embalagem veio do CK-7');
+    assert.match(laudo, /LAB-2026-88/, 'laudo externo informado na inspeção');
+    // O nome do arquivo do PDF é o título da aba no momento da impressão.
+    assert.equal(await page.evaluate(() => window.__tituloImpressao),
+      'Relatório de análise - BODY SPLASH NÉCTAR DAS TAMARAS - 26257.17');
+    // Quem assinou entra na lista para a próxima emissão.
+    await page.waitForFunction(() => (window.__db.config || {}).responsaveisCq, null, {timeout: 6000});
+    db = await page.evaluate(() => window.__db);
+    assert.equal(db.config.responsaveisCq[0].nome, 'Mario Callegaro');
+    assert.equal(db.config.responsaveisCq[0].registro, 'CRQ 04413184');
 
     // ── 7. Material continua com o plano de ensaios de sempre ────────────
     const linhaMp = page.locator('#qFilaBody tr', {hasText: 'MP-0001'});

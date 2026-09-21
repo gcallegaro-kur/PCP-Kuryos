@@ -1,0 +1,76 @@
+/* ══════════════════════════════════════════════════════════════════════
+   IMPRESSÃO DOS LAUDOS DO CQ
+
+   O HTML vem de shared/laudo-cq.js (funções puras). Aqui é só a folha.
+
+   A regra de isolamento é a MESMA de shared/fichas-op.css, e pelo mesmo
+   motivo: `visibility:hidden` esconde mas NÃO tira do fluxo, e o Chrome
+   pagina a altura inteira da tela por trás -- foi o que fez a OP 26253/07
+   sair com 22 folhas, 16 em branco (achado do usuário em 21/09, com PDF
+   real). `display:none` tira do fluxo de verdade.
+
+   Arquivo separado do fichas-op.css de propósito: laudo e ficha de OP são
+   documentos diferentes, com tamanhos e tabelas próprios, e quem for
+   ajustar a altura de um não pode mexer no outro sem perceber.
+   ══════════════════════════════════════════════════════════════════════ */
+#laudoPrintArea{display:none}
+
+@media print {
+  body > *:not(#laudoPrintArea){display:none !important}
+  #laudoPrintArea{display:block;position:static;width:auto}
+
+  /* Tamanho e margem explícitos -- sem isto cada Chrome aplica a margem
+     padrão dele e o mesmo laudo cabe aqui e vaza ali. */
+  @page { size: A4; margin: 12mm; }
+
+  .laudo-page{page-break-after:always;font-size:11px;color:#000;line-height:1.35;
+    font-family:Arial,Helvetica,sans-serif}
+  .laudo-page:last-child{page-break-after:auto}
+
+  .laudo-topo{text-align:center;border:1px solid #000;padding:6px 8px;margin-bottom:10px}
+  .laudo-topo-org{font-size:10px;letter-spacing:.3px}
+  .laudo-topo-doc{font-size:15px;font-weight:700;margin-top:3px}
+  .laudo-topo-ref{font-size:9px;color:#333;margin-top:3px}
+
+  .laudo-h{font-size:12px;font-weight:700;margin:10px 0 4px;border-bottom:1px solid #000;padding-bottom:2px}
+  .laudo-h2{font-size:11px;font-weight:700;margin:8px 0 3px}
+  /* Título de seção nunca fica sozinho no fim da folha, com a tabela na
+     folha seguinte -- é o tipo de quebra que faz o laudo parecer errado
+     pra quem recebe. */
+  .laudo-h,.laudo-h2{page-break-after:avoid;break-after:avoid}
+  .laudo-lista{margin:0 0 4px 16px;padding:0}
+  .laudo-lista li{margin:1px 0}
+
+  .laudo-tabela{width:100%;border-collapse:collapse;margin:4px 0}
+  .laudo-tabela th,.laudo-tabela td{border:1px solid #666;padding:2px 5px;font-size:10px;
+    text-align:left;vertical-align:top}
+  .laudo-tabela th{background:#eee;font-weight:700}
+  /* Linha não se parte entre duas folhas. */
+  .laudo-tabela tr{page-break-inside:avoid;break-inside:avoid}
+  .laudo-pesos td{text-align:center;padding:1px 3px}
+  .laudo-pesos th{text-align:center}
+  .laudo-pesos-resumo{display:flex;gap:22px;font-size:10px;margin-top:3px}
+
+  .laudo-linha-info{font-size:10px;margin:3px 0}
+  .laudo-nota-peq{font-size:9px;color:#333;margin:3px 0}
+  .laudo-conclusao{display:flex;gap:28px;font-size:11px;margin:4px 0}
+  /* Caixa de escrever à mão: sem altura mínima, "Observações" vira um
+     título solto com nada embaixo -- e é onde a Qualidade anota o desvio. */
+  .laudo-obs{border:1px solid #666;min-height:42px;padding:4px 6px;font-size:10px;
+    white-space:pre-wrap}
+
+  .laudo-assina{margin-top:8px;font-size:10px}
+  /* Espaço em branco ACIMA da linha é onde a pessoa assina à mão; nome e
+     registro vêm embaixo, impressos. */
+  .laudo-assina-bloco{margin-top:30px;display:inline-block;text-align:center;min-width:250px}
+  .laudo-assina-nome{font-weight:700;border-top:1px solid #000;padding-top:3px}
+  .laudo-assina-reg{font-size:9px}
+  .laudo-assina-rotulo{font-size:9px;color:#333;margin-top:1px}
+
+  .laudo-nota{font-size:9px;color:#333;margin-top:10px;font-style:italic}
+
+  /* Campo para preencher à mão (formulários F0070 / F009). */
+  .laudo-campo{display:inline-block;border-bottom:1px solid #000;min-width:120px}
+  .laudo-check{display:inline-block;width:10px;height:10px;border:1px solid #000;
+    margin:0 3px;vertical-align:middle}
+}

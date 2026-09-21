@@ -34,6 +34,29 @@
   var TOLERANCIA_PADRAO = 3; // -3% INMETRO
   var RETENCAO_MESES_APOS_VALIDADE = 12;
 
+  /* Quantas unidades entram na PESAGEM. Não se confunde com a amostragem
+     de ASPECTO (√N+1 sobre as CAIXAS do palete, acima): o Relatório de
+     Análise oficial da Kuryos diz, em duas linhas seguidas, "Amostragem
+     Aspecto: √N + 1" e "Análise de Peso: 32 amostras". A tela seguia a
+     amostragem de caixas também pra pesagem, e a inspetora acabava com 4 ou
+     5 campos onde o laudo pede 32.
+
+     32 é o PADRÃO, não um teto: o usuário pediu a quantidade em aberto
+     (2026-09-21), porque lote pequeno não justifica 32 pesagens e lote
+     problemático pede mais. Quem define é quem está com a balança na mão. */
+  var UNIDADES_PESAGEM_PADRAO = 32;
+
+  /* Lista de pesos com o tamanho pedido, preservando o que já foi digitado.
+     Encolher descarta do fim pra frente -- é a única ordem que não embaralha
+     a numeração das unidades já pesadas. */
+  function redimensionarPesos(pesos, quantidade) {
+    var atual = Array.isArray(pesos) ? pesos.slice() : [];
+    var alvo = Math.max(Math.floor(n(quantidade) || 0), 0);
+    while (atual.length > alvo) atual.pop();
+    while (atual.length < alvo) atual.push(null);
+    return atual;
+  }
+
   // Roteiro padrão: igual para todos os SKUs. O que varia por produto são os
   // PARÂMETROS (conteúdo nominal, unidades por caixa, códigos de barras).
   var PLANO_PADRAO = [
@@ -222,6 +245,7 @@
   return {
     PLANO_PADRAO: PLANO_PADRAO, TOLERANCIA_PADRAO: TOLERANCIA_PADRAO,
     RETENCAO_MESES_APOS_VALIDADE: RETENCAO_MESES_APOS_VALIDADE,
+    UNIDADES_PESAGEM_PADRAO: UNIDADES_PESAGEM_PADRAO, redimensionarPesos: redimensionarPesos,
     amostragem: amostragem, parametros: parametros, faltamParametros: faltamParametros,
     avaliarPesos: avaliarPesos, itensAplicaveis: itensAplicaveis, avaliar: avaliar,
     prazoRetencao: prazoRetencao, registro: registro
