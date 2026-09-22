@@ -789,9 +789,22 @@
       return;
     }
     const plural = todasOps.length === 1 ? '' : 's';
+    /* OP em 'Aguardando Confirmação' precisa da MESMA linha especial aqui.
+       Antes, o ramo filtrado desenhava tudo com renderOpRow -- e o botão
+       "Confirmar conclusão" só existia na visão padrão. Quem filtrava por
+       "Aguardando Confirmação" (o caminho natural de quem está procurando
+       exatamente essas OPs) ou por "Todos" via a OP e NENHUMA forma de
+       confirmá-la. A cadeia inteira trava atrás disso: sem confirmação a
+       Conferência de PA fica bloqueada, o palete não entra no estoque e a
+       Expedição não enxerga. Achado pelo teste de fluxo ponta a ponta
+       (run_fluxo_ponta_a_ponta_test.js). */
     tbody.innerHTML =
       '<tr class="group-header"><td colspan="8">🔎 ' + todasOps.length + ' OP' + plural + ' encontrada' + plural + '</td></tr>' +
-      todasOps.map(renderOpRow).join('');
+      todasOps.map(function(o) {
+        return o.status === 'Aguardando Confirmação'
+          ? renderOpAguardandoConfirmacaoRow(o)
+          : renderOpRow(o);
+      }).join('');
   }
 
   function renderOpsPanel() {
