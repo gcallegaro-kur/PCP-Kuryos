@@ -32,6 +32,9 @@ const RetrabalhoOp = require(path.join(root, 'public/shared/retrabalho-op.js'));
 
 const ID = process.argv.find((a) => a.startsWith('--id='))?.slice(5) || 'RT-26216-04-20260921';
 const APLICAR = process.argv.includes('--apply');
+// --verificar: só lê e mostra como o caso ficou. Serve para conferir
+// depois, quando quem rodou não foi quem está olhando o resultado.
+const VERIFICAR = process.argv.includes('--verificar');
 
 const key = (v) => String(v || '').trim().replace(/[.\/[\]#$]/g, '-').replace(/\s+/g, '_').slice(0, 60);
 
@@ -61,11 +64,22 @@ function migrar(base, id, agora) {
       'será apontado quando conferido.',
   });
 
-  // Estado real da execução no momento da migração: a linha estava aberta
-  // desde o início do envase e parada desde as 17:09.
+  /* Estado real da execução no momento da migração.
+
+     ERRO QUE ISTO CORRIGE (achado em produção em 22/09, depois de migrar o
+     caso do TAWUS): a primeira versão assumia que o retrabalho estava
+     sempre PAUSADO. O caso real estava `em_andamento`, retomado às 09:03
+     daquele dia -- e a migração o deixou pausado às 15:48 com motivo "Fim
+     de turno", uma parada que nunca aconteceu, e com `abertaDesde` no
+     envase de 21/09, o que inflava o tempo em aberto da OP.
+
+     Retrabalho em execução continua em execução: a linha fica ATIVA e
+     `abertaDesde` é a retomada (`periodoInicio`), que é a base do cálculo
+     de ritmo. Pausado continua pausado, com a pausa que já existia. */
+  const emExecucao = rt.status === 'em_andamento';
   op.setupInicio = rt.setupInicio || null;
   op.setupFim = rt.setupFim || null;
-  op.abertaDesde = rt.envaseInicio || rt.setupInicio || agora;
+  op.abertaDesde = (emExecucao && rt.periodoInicio) || rt.envaseInicio || rt.setupInicio || agora;
   op.abertaLinha = rt.linha;
   op.dataInicioReal = rt.setupInicio || rt.envaseInicio || null;
   op.status = 'Em Produção';
@@ -73,16 +87,19 @@ function migrar(base, id, agora) {
   (base.ops || (base.ops = {}))[loteKey] = op;
 
   // A linha deixa de estar "ocupada por retrabalho" (o que bloqueava
-  // alocação e rearranjo) e passa a estar ocupada pela OP, pausada.
+  // alocação e rearranjo) e passa a estar ocupada pela OP -- no mesmo
+  // estado em que o retrabalho estava, nunca num estado inventado.
   const lk = key(rt.linha);
   const estado = (base.estado_linhas || (base.estado_linhas = {}))[lk] || {};
-  base.estado_linhas[lk] = {
-    status: 'parada',
-    inicioParada: rt.inicioParada || estado.inicioParada || agora,
-    motivoParada: estado.motivoParada || 'Fim de turno',
-    lote: op.lote, produto: op.produto,
-    opAtual: {lote: op.lote},
-  };
+  base.estado_linhas[lk] = emExecucao
+    ? {status: 'ativa', lote: op.lote, produto: op.produto, opAtual: {lote: op.lote}}
+    : {
+      status: 'parada',
+      inicioParada: rt.inicioParada || estado.inicioParada || agora,
+      motivoParada: estado.motivoParada || 'Fim de turno',
+      lote: op.lote, produto: op.produto,
+      opAtual: {lote: op.lote},
+    };
   if (base.retrabalhos_linhas) delete base.retrabalhos_linhas[rt.linha];
 
   // O caso antigo fica como histórico, apontando para a OP que o sucedeu.
@@ -103,6 +120,34 @@ if (require.main === module) {
   (async () => {
     const db = admin.database();
     const antes = (await db.ref().get()).val();
+
+    if (VERIFICAR) {
+      const rt = (antes.retrabalhos || {})[ID] || {};
+      const loteNovo = rt.migradoParaOp;
+      const op = loteNovo ? (antes.ops || {})[key(loteNovo)] : null;
+      const orig = (antes.ops || {})[rt.opKey] || {};
+      const linha = (antes.estado_linhas || {})[key(rt.linha)] || {};
+      console.log(JSON.stringify({
+        migrado: !!loteNovo,
+        opDeRetrabalho: op && {
+          lote: op.lote, tipoOrdem: op.tipoOrdem, retrabalhoDe: op.retrabalhoDe,
+          status: op.status, qtdPlanejada: op.qtdPlanejada,
+          produzidoLinha: op.produzidoLinha, abertaLinha: op.abertaLinha,
+          setupInicio: op.setupInicio, abertaDesde: op.abertaDesde,
+          creditaPedido: op.skuPedidoKey !== '' && op.skuPedidoKey != null,
+          baixaBom: Object.keys(op.materiaisConsumo || {}).length > 0,
+        },
+        opOriginalIntacta: {lote: orig.lote, status: orig.status, produzidoLinha: orig.produzidoLinha,
+          skuPedidoKey: orig.skuPedidoKey},
+        linha: {nome: rt.linha, status: linha.status, inicioParada: linha.inicioParada,
+          motivoParada: linha.motivoParada, lote: linha.lote,
+          bloqueadaPorRetrabalho: linha.retrabalhoId !== undefined},
+        reservaDeRetrabalho: (antes.retrabalhos_linhas || {})[rt.linha] || null,
+        registroAntigo: {status: rt.status, migradoParaOp: rt.migradoParaOp, migradoEm: rt.migradoEm},
+      }, null, 1));
+      await admin.app().delete();
+      return;
+    }
     const agora = new Date().toISOString();
     const backup = path.join(root, 'backups', 'migracao-retrabalho-' + ID + '-' + Date.now() + '.json');
     fs.writeFileSync(backup, JSON.stringify(antes));

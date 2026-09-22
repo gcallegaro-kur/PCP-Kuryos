@@ -114,4 +114,28 @@ assert.equal(migrar(jaExiste, ID, AGORA).lote, '26216/04-RT2');
 assert.ok(jaExiste.ops['26216-04-RT2'], 'a OP nova não sobrescreve a que já estava lá');
 assert.deepEqual(jaExiste.ops['26216-04-RT1'], {lote: '26216/04-RT1'}, 'a anterior fica intacta');
 
+// ── 10. Retrabalho EM EXECUÇÃO continua em execução ──────────────────
+// Defeito real, achado em produção em 22/09: a primeira versão assumia
+// sempre pausado. O caso do TAWUS estava `em_andamento`, retomado às 09:03,
+// e a migração o deixou pausado com motivo "Fim de turno" -- uma parada que
+// nunca aconteceu -- e com abertaDesde no envase de 21/09, inflando o tempo
+// em aberto da OP.
+const rodando = base();
+rodando.retrabalhos[ID].status = 'em_andamento';
+rodando.retrabalhos[ID].periodoInicio = '2026-09-22T12:03:08.164Z';
+delete rodando.retrabalhos[ID].inicioParada;
+rodando.estado_linhas.Linha_2 = {status: 'ativa', lote: '26216/04',
+  produto: 'PERFUME TAWUS 30ML', retrabalhoId: ID, tipoOperacao: 'retrabalho'};
+migrar(rodando, ID, AGORA);
+const emExec = rodando.ops['26216-04-RT1'];
+assert.equal(rodando.estado_linhas.Linha_2.status, 'ativa',
+  'não pode inventar uma pausa numa linha que estava rodando');
+assert.equal(rodando.estado_linhas.Linha_2.inicioParada, undefined);
+assert.equal(rodando.estado_linhas.Linha_2.motivoParada, undefined,
+  'nem inventar motivo de parada');
+assert.equal(rodando.estado_linhas.Linha_2.retrabalhoId, undefined, 'e continua desbloqueando');
+assert.equal(emExec.abertaDesde, '2026-09-22T12:03:08.164Z',
+  'a base do ritmo é a retomada real, não o envase de ontem');
+assert.equal(emExec.setupInicio, '2026-09-21T18:42:00.000Z', 'o setup original continua preservado');
+
 console.log('run_retrabalho_migracao_test: OK');
