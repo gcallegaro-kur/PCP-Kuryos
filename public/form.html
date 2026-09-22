@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/rearranjo-linhas-tela.js"></script>
+  <script src="shared/retrabalho-op.js"></script>
   <script src="shared/retrabalhos-gestao.js"></script>
   <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
@@ -4400,6 +4401,25 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
   });
 }
 
+/* OP de retrabalho alocada NESTE posto.
+
+   O vínculo não é um campo novo: a OP de retrabalho guarda o nome do
+   recurso em `linha` -- o mesmo campo que o Painel de Turno e a Grade já
+   leem para linha e rotulagem. Posto de trabalho vira só mais um nome de
+   recurso possível, que é exatamente o que o usuário pediu em 22/09:
+   "essa ordem de retrabalho pode ser alocada em linhas de produção ou
+   postos de trabalho". */
+function opRetrabalhoDoPosto(nomePosto) {
+  if (typeof RetrabalhoOp === 'undefined') return null;
+  var alvo = String(nomePosto || '');
+  var k = Object.keys(opsCache).find(function(x) {
+    var o = opsCache[x];
+    return RetrabalhoOp.ehRetrabalho(o) && o.retrabalhoDestino === 'posto' &&
+      String(o.linha || '') === alvo && opEstaAtiva(o);
+  });
+  return k ? opsCache[k] : null;
+}
+
 function renderTurnoGridPostos() {
   var container = document.getElementById('turnoGridPostos');
   if (!container) return;
@@ -4423,7 +4443,21 @@ function renderTurnoGridPostos() {
     card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
       '<span class="andon-line-title" style="margin-bottom:0">' + escapeHtml(label) + '</span>' +
       '<span class="turno-badge posto">Posto</span></div>' +
-      '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(a.produto || 'Atividade') + '</div>' +
+      (function() {
+        // Posto com OP de retrabalho alocada mostra a OP, o lote de origem e
+        // o avanço -- senão o operador soma produção sem saber do que é.
+        var opRt = opRetrabalhoDoPosto(a.nome);
+        if (!opRt) {
+          return '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(a.produto || 'Atividade') + '</div>';
+        }
+        var feito = getProduzido(opRt, 'posto');
+        var pct = opRt.qtdPlanejada ? Math.min(100, Math.round((feito / opRt.qtdPlanejada) * 100)) : 0;
+        return '<div class="turno-op-lote">♻️ Retrabalho · OP ' + escapeHtml(opRt.lote) + '</div>' +
+          '<div style="font-weight:700;font-size:14px;margin-bottom:4px">' + escapeHtml(opRt.produto || '') + '</div>' +
+          '<div class="turno-stat-line">Lote de origem ' + escapeHtml(opRt.retrabalhoDe || '—') + '</div>' +
+          '<div class="turno-progress-wrap"><div class="turno-progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div class="turno-progress-nums"><span>' + fmtNum(feito) + ' / ' + fmtNum(opRt.qtdPlanejada || 0) + ' un.</span><span>' + pct + '%</span></div>';
+      })() +
       '<div class="turno-stat-line">' + fmtNum(a.quantidadeTurno || 0) + ' un. neste turno' + (a.operador ? ' · ' + escapeHtml(a.operador) : '') + '</div>' +
       '<button type="button" class="andon-btn btn-resume" data-somar-posto="' + id + '" style="margin-bottom:8px">+ Somar produção</button>' +
       '<button type="button" class="andon-btn btn-stop" data-fechar-posto="' + id + '">Encerrar</button>';
@@ -4915,8 +4949,11 @@ function abrirAtividadePostoModal(id) {
   var a = atividadesPostoCache[id];
   if (!a) return;
   atividadePostoAlvoAtual = id;
-  document.getElementById('atividadePostoSubtitle').textContent = a.nome;
-  document.getElementById('atividadePostoProduto').value = a.produto || '';
+  var opRt = opRetrabalhoDoPosto(a.nome);
+  document.getElementById('atividadePostoSubtitle').textContent =
+    a.nome + (opRt ? ' · retrabalho da OP ' + opRt.lote : '');
+  // Com OP alocada, o produto é o da OP -- não é campo de digitar.
+  document.getElementById('atividadePostoProduto').value = opRt ? (opRt.produto || '') : (a.produto || '');
   document.getElementById('atividadePostoQtd').value = '';
   document.getElementById('atividadePostoOperador').value = a.operador || '';
   document.getElementById('atividadePostoModal').classList.add('open');
@@ -4931,10 +4968,30 @@ document.getElementById('btnConfirmarAtividadePosto').addEventListener('click', 
   if (qtd <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
   var a = atividadesPostoCache[atividadePostoAlvoAtual] || {};
   var novaQtd = (a.quantidadeTurno || 0) + qtd;
+  var opRt = opRetrabalhoDoPosto(a.nome);
   var btn = this;
   btn.disabled = true;
   db.ref('atividadesPosto/' + atividadePostoAlvoAtual).update({
-    quantidadeTurno: novaQtd, operador: operador, produto: produto || a.produto || null
+    quantidadeTurno: novaQtd, operador: operador, produto: produto || a.produto || null,
+    // Guarda de qual OP é esta produção -- sem isto o registro do posto
+    // fecharia sem lote e o retrabalho ficaria sem rastro na OP.
+    opLote: opRt ? opRt.lote : (a.opLote || null)
+  }).then(function() {
+    /* Credita a OP de retrabalho em `produzidoPosto`. O campo e o
+       tratamento de `tipo==='posto'` já existiam no sistema -- mas NADA
+       escrevia neles: produção de posto nunca chegava a uma OP. É a única
+       peça de verdade nova deste pedido.
+
+       ajustarProduzidoOp é transação e clampa em zero (ver utils.js). Se
+       falhar, avisa: a quantidade do turno já foi somada, e deixar a OP
+       para trás em silêncio é o tipo de divergência que só aparece no
+       fechamento. */
+    if (!opRt) return null;
+    return ajustarProduzidoOp(db, opRt.lote, 'posto', qtd).then(function(r) {
+      if (!r.ok) showSuccess('Produção somada no posto', 'Mas a OP ' + opRt.lote + ' NÃO foi atualizada: ' + r.erro);
+    }).catch(function(e) {
+      showSuccess('Produção somada no posto', 'Mas a OP ' + opRt.lote + ' NÃO foi atualizada: ' + e.message);
+    });
   }).then(function() {
     btn.disabled = false;
     document.getElementById('atividadePostoModal').classList.remove('open');

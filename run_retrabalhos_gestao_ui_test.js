@@ -110,7 +110,9 @@ async function abrir(browser, base, papel) {
     // ── 1. Quantidade pendente: a tela diz o que falta ─────────────────
     let {page, errors} = await abrir(browser, dados(), 'admin');
     const kpis = await page.locator('#rtKpis').innerText();
-    assert.match(kpis, /1\s*\n?\s*COM QUANTIDADE PENDENTE/i, 'a pendência aparece no topo');
+    // Depois de 22/09 retrabalho é OP; os KPIs do formato antigo levam
+    // "Antigos" no rótulo, e somem quando o último caso for migrado.
+    assert.match(kpis, /1\s*\n?\s*ANTIGOS COM QUANTIDADE PENDENTE/i, 'a pendência aparece no topo');
 
     if (process.env.RT_SCREENSHOT) await page.screenshot({path: process.env.RT_SCREENSHOT, fullPage: true});
     const card = page.locator('.rt-card', {hasText: 'PERFUME TAWUS'});

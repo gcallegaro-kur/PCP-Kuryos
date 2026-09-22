@@ -12,6 +12,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/transferencia-op.js"></script>
+  <script src="shared/retrabalho-op.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -336,6 +337,31 @@
     }
 
 
+  /* Modal de abrir retrabalho. ops.html monta os outros modais por
+     style inline; este veio como markup, então traz as classes que usa. */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px}
+  .modal-bg.open{display:flex}
+  .modal-bg .modal{background:var(--card);border-radius:16px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .modal-header h2{font-size:17px;margin:0}
+  .modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+  .modal-body{padding:18px 20px;overflow-y:auto}
+  .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;background:var(--surface-2)}
+  .modal-bg label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+  .modal-bg input,.modal-bg select,.modal-bg textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--card);font-family:inherit}
+  .modal-bg .form-group{margin-bottom:12px}
+  .modal-bg .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .modal-bg .field-hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+  .modal-bg .section-note{font-size:12px;color:var(--muted);background:var(--surface-2);border-radius:8px;padding:9px 11px;line-height:1.5}
+  .modal-bg .alert{display:none;border-radius:8px;padding:9px 11px;font-size:12.5px}
+  .modal-bg .alert.show{display:block}
+  .modal-bg .alert-danger{background:var(--tint-red-bg,#fee2e2);color:var(--tint-red-fg,#991b1b)}
+  .modal-bg .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+  .modal-bg .btn:disabled{opacity:.5;cursor:not-allowed}
+  .modal-bg .btn-primary{background:var(--primary);color:#fff}
+  .modal-bg .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+  @media(max-width:600px){.modal-bg .form-grid{grid-template-columns:1fr}}
+
   /* Impressão das fichas de OP + etiquetas de caixa: shared/fichas-op.css
      (bloco único, compartilhado com emitir_op.html). */
 
@@ -479,6 +505,60 @@
 </div>
 
 <div id="toast" class="toast"></div>
+
+<!-- ══════════ MODAL: abrir OP de retrabalho ══════════
+     Correção de rumo do usuário (22/09): retrabalho é uma OP, não um
+     registro à parte. Ver shared/retrabalho-op.js para o porquê de ela
+     nascer SEM vínculo de pedido e SEM BOM. -->
+<div class="modal-bg" id="rtNovoBg">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><h2 id="rtNovoTitulo">Abrir retrabalho</h2><button class="modal-close" id="rtNovoClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="rtNovoInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>Motivo do retrabalho</label>
+        <textarea id="rtNovoMotivo" rows="2" placeholder="O que foi constatado e por que o lote volta para a linha"></textarea>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Escopo</label>
+          <input type="text" id="rtNovoEscopo" value="Lote inteiro" placeholder="Lote inteiro / parte identificada">
+        </div>
+        <div class="form-group">
+          <label>Unidades a retrabalhar</label>
+          <input type="number" id="rtNovoQtd" min="1" step="1">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Onde vai ser executado</label>
+          <select id="rtNovoDestinoTipo">
+            <option value="linha">Linha de produção</option>
+            <option value="rotulagem">Estação de rotulagem</option>
+            <option value="posto">Posto de trabalho</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Recurso</label>
+          <select id="rtNovoDestinoNome"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observação (opcional)</label>
+        <input type="text" id="rtNovoObs">
+      </div>
+      <div class="section-note" style="margin:0">
+        A OP de retrabalho <b>não credita pedido</b> e <b>não baixa BOM</b> — as unidades já foram
+        contadas na OP original. O que for consumido de verdade no retrabalho é lançado à parte.
+      </div>
+      <div id="rtNovoErro" class="alert alert-danger" style="margin-top:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="rtNovoCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="rtNovoConfirmar">Abrir OP de retrabalho</button>
+    </div>
+  </div>
+</div>
 
 <!-- Reimpressão das 5 fichas de uma OP já emitida (ver reimprimirFichas) -->
 <div id="printArea"></div>
@@ -1409,6 +1489,9 @@
           ${op.materiaisConsumo
             ? `<button class="btn-edit-inline" onclick="reimprimirEtiquetas('${escapedKeyAttr}')" title="Reimprimir etiquetas de caixa de embarque desta OP">🏷️</button>`
             : ``}
+          ${!isCancelada && !RetrabalhoOp.ehRetrabalho(op)
+            ? `<button class="btn-edit-inline" onclick="abrirRetrabalhoModal('${escapedKeyAttr}')" title="Abrir uma OP de retrabalho deste lote — não cria produção nova">♻️</button>`
+            : ``}
           ${isAdmin
             ? (!isCancelada
                 ? `<button class="btn-cancel-op" onclick="cancelOp('${escapedKeyAttr}')" title="Cancelar OP (mantém o registro, some das listas ativas)">🚫</button>`
@@ -1419,6 +1502,105 @@
       </tr>
     `;
   }
+
+  /* ── Abrir OP de retrabalho ──
+     O lote é o do produto + sufixo RT (decisão do usuário): retrabalho não
+     gera lote novo, é o mesmo lote voltando. Ver shared/retrabalho-op.js. */
+  let rtNovoOpKey = null;
+
+  function recursosDoDestino(tipo) {
+    if (tipo === 'rotulagem') return configGlobal.rotulagem || [];
+    if (tipo === 'posto') return configGlobal.postos || [];
+    return configGlobal.linhas || [];
+  }
+  function preencherRecursos() {
+    const tipo = document.getElementById('rtNovoDestinoTipo').value;
+    const lista = recursosDoDestino(tipo);
+    const sel = document.getElementById('rtNovoDestinoNome');
+    sel.innerHTML = lista.length
+      ? lista.map((r) => `<option value="${escapeAttr(r)}">${escapeHtml(r)}</option>`).join('')
+      : '<option value="">— nenhum cadastrado em Ajustes —</option>';
+  }
+
+  function abrirRetrabalhoModal(opKey) {
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    rtNovoOpKey = opKey;
+    const jaFeitos = RetrabalhoOp.doLote(opsGlobal, op.lote);
+    const produzido = getProduzido(op, 'linha') || op.produzido || 0;
+    document.getElementById('rtNovoTitulo').textContent = 'Abrir retrabalho — OP ' + op.lote;
+    document.getElementById('rtNovoInfo').innerHTML =
+      `<b>${escapeHtml(op.produto || op.sku || '')}</b><br>` +
+      `${escapeHtml(op.cliente || '—')} · ${fmtNum(produzido)} un. produzidas · status ${escapeHtml(op.status || '')}` +
+      (jaFeitos.length
+        ? `<br><span style="color:var(--warning)">Este lote já tem ${jaFeitos.length} retrabalho(s): ` +
+          jaFeitos.map((r) => escapeHtml(r.lote)).join(', ') + '</span>'
+        : '') +
+      `<br>A nova OP será <b>${escapeHtml(RetrabalhoOp.proximoNumero(op.lote, opsGlobal))}</b>.`;
+    document.getElementById('rtNovoMotivo').value = '';
+    document.getElementById('rtNovoEscopo').value = 'Lote inteiro';
+    document.getElementById('rtNovoQtd').value = produzido || '';
+    document.getElementById('rtNovoObs').value = '';
+    document.getElementById('rtNovoErro').className = 'alert alert-danger';
+    document.getElementById('rtNovoDestinoTipo').value = 'linha';
+    preencherRecursos();
+    document.getElementById('rtNovoBg').classList.add('open');
+  }
+  window.abrirRetrabalhoModal = abrirRetrabalhoModal;
+
+  function fecharRetrabalhoModal() {
+    document.getElementById('rtNovoBg').classList.remove('open');
+    rtNovoOpKey = null;
+  }
+  document.getElementById('rtNovoDestinoTipo').addEventListener('change', preencherRecursos);
+  document.getElementById('rtNovoClose').addEventListener('click', fecharRetrabalhoModal);
+  document.getElementById('rtNovoCancelar').addEventListener('click', fecharRetrabalhoModal);
+  document.getElementById('rtNovoBg').addEventListener('click', function(e) { if (e.target === this) fecharRetrabalhoModal(); });
+
+  document.getElementById('rtNovoConfirmar').addEventListener('click', function() {
+    if (!rtNovoOpKey) return;
+    const original = opsGlobal[rtNovoOpKey];
+    const erroBox = document.getElementById('rtNovoErro');
+    const dados = {
+      opOriginal: original, opOriginalKey: rtNovoOpKey, ops: opsGlobal,
+      motivo: document.getElementById('rtNovoMotivo').value,
+      escopo: document.getElementById('rtNovoEscopo').value,
+      qtdPlanejada: document.getElementById('rtNovoQtd').value,
+      observacao: document.getElementById('rtNovoObs').value,
+      destino: {tipo: document.getElementById('rtNovoDestinoTipo').value,
+        nome: document.getElementById('rtNovoDestinoNome').value},
+      autor: (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido',
+    };
+    const v = RetrabalhoOp.validar(dados);
+    if (!v.ok) { erroBox.className = 'alert alert-danger show'; erroBox.textContent = v.erros.join(' '); return; }
+    if (v.avisos.length && !confirm(v.avisos.join('\n\n') + '\n\nAbrir mesmo assim?')) return;
+
+    const nova = RetrabalhoOp.montar(dados);
+    const key = sanitizeKey(nova.lote);
+    const btn = this;
+    btn.disabled = true;
+    /* transaction, não set: o número RT é calculado a partir do que está em
+       memória, e duas pessoas abrindo retrabalho do mesmo lote ao mesmo
+       tempo chegariam ao mesmo -RT1. Se o nó já existe, aborta e avisa em
+       vez de sobrescrever uma OP. */
+    database.ref('ops/' + key).transaction(function(atual) {
+      if (atual !== null) return;
+      return nova;
+    }).then(function(res) {
+      btn.disabled = false;
+      if (!res.committed) {
+        erroBox.className = 'alert alert-danger show';
+        erroBox.textContent = 'A OP ' + nova.lote + ' já existe — alguém pode ter aberto este retrabalho agora há pouco. Feche e tente de novo.';
+        return;
+      }
+      fecharRetrabalhoModal();
+      showToast('Retrabalho aberto: OP ' + nova.lote + ' em ' + nova.linha + '.');
+    }).catch(function(err) {
+      btn.disabled = false;
+      erroBox.className = 'alert alert-danger show';
+      erroBox.textContent = 'Erro ao abrir o retrabalho: ' + err.message;
+    });
+  });
 
   // "Painel de logs" de emissão -- reimprime as 5 fichas de uma OP JÁ
   // emitida antes, sem precisar de nenhum estado em memória tipo

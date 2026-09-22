@@ -127,29 +127,39 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — retrabalho vira OP (2026-09-22).** O usuário refez o
-  escopo, e simplificou: *"A ideia é apenas poder abrir uma OP, mas de
-  retrabalho, ao invés de criar uma nova op. Essa ordem de retrabalho pode
-  ser alocada em linhas de produção ou postos de trabalho, em resumo é
-  isto."* O modelo de `retrabalhos/{id}` (universo paralelo, com status,
-  painel e callable próprios) sai de cena como caminho principal.
-- **Por que isto é mais simples do que parece:** uma OP de retrabalho é uma
-  OP **sem `skuPedidoKey`** (já não credita pedido) e **sem
-  `materiaisConsumo`** (já não baixa BOM). O não-contar-duas-vezes cai por
-  gravidade. `ops/{lote}` já tem `produzidoPosto` e o servidor já trata
-  `tipo==='posto'` — mas **nada escreve** esse campo hoje: falta o caminho
-  do posto apontar numa OP. É a única parte de verdade nova.
-- **Decisões do usuário:** numeração `{lote original}-RT{n}` (ex.:
-  `26216/04-RT1`) — é o MESMO lote sendo retrabalhado, não um lote novo; e o
-  RT-26216-04-20260921 que está no ar será **convertido** para o modelo
-  novo, preservando setup, envase e a pendência, mantendo a Linha 2.
-- **Arquivos ativos:** novos `public/shared/retrabalho-op.js` e testes
-  `run_retrabalho_op*`; `public/ops.html` (abrir retrabalho),
-  `public/form.html` (alocar/apontar OP em posto),
-  `public/retrabalhos.html` + `retrabalhos-gestao.js` (passam a listar OPs),
-  `public/shared/retrabalhos-tela.js` (para de bloquear a linha),
-  `scripts/` (migração idempotente). `functions/retrabalhos.js` e
-  `rearranjo_linhas.js` eu **não** removo — o histórico do caso antigo fica.
+- **Entrega publicada — retrabalho é uma OP (2026-09-22).** O usuário refez
+  o escopo: *"apenas poder abrir uma OP, mas de retrabalho... pode ser
+  alocada em linhas de produção ou postos de trabalho"*. O universo paralelo
+  `retrabalhos/{id}` sai do caminho principal.
+  - **`public/shared/retrabalho-op.js`** monta a OP. O que impede contar
+    produção duas vezes são duas AUSÊNCIAS, não campos novos: **sem
+    `skuPedidoKey`** (o crédito ao pedido já é pulado) e **sem
+    `materiaisConsumo`** (a baixa de BOM já não acontece). Quem "completar"
+    esses dois campos um dia quebra a regra inteira — tem asserção própria
+    em `run_retrabalho_op_test.js` por isso.
+  - **Numeração `{lote}-RT{n}`** (decisão do usuário): retrabalho não gera
+    lote novo, é o mesmo lote voltando.
+  - **Abrir:** botão ♻️ no Controle de OPs (filtre por Concluído ou busque o
+    lote — a tela esconde concluídas por padrão, de propósito).
+  - **Posto executa OP:** `produzidoPosto` e `tipo==='posto'` já existiam,
+    mas **nada escrevia** neles. Agora o card do posto mostra a OP de
+    retrabalho alocada (vínculo pelo campo `linha`, sem campo novo) e
+    "+ Somar produção" credita a OP via `ajustarProduzidoOp(...,'posto',...)`.
+    É a única peça de verdade nova.
+- **PENDÊNCIA OPERACIONAL — migrar o caso do TAWUS.**
+  `scripts/migrar-retrabalho-para-op.js` converte o RT-26216-04-20260921 em
+  `26216/04-RT1`, preserva setup/envase/pausa, **libera o bloqueio da Linha
+  2** e marca o registro antigo como migrado. Idempotente, com backup e
+  ensaio (sem `--apply` só simula). Lógica coberta por
+  `run_retrabalho_migracao_test.js`. **Ainda NÃO foi executado contra
+  produção** — escrita em produção não é liberada para mim nesta sessão.
+  Até rodar, a Linha 2 continua recusando alocação.
+- **Aviso ao Codex:** `form.html` levou o vínculo posto→OP e o script do
+  módulo; `ops.html` levou o botão e o modal. `functions/retrabalhos.js`,
+  `rearranjo_linhas.js` e o painel de execução continuam de pé — o caso
+  antigo segue funcionando até migrar.
+- **Arquivos ativos:** nenhum; entrega encerrada. 72 de 73 testes passando;
+  o único que não roda é `run_retrabalhos_rules_test.js` (emulador 9023).
 
 - **Entrega publicada — gestão de retrabalhos (2026-09-22).** O usuário pediu
   para eu corrigir a entrega anterior: *"não ficou bom... não deu pra

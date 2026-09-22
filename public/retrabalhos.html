@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/retrabalho-op.js"></script>
   <script src="shared/retrabalhos-gestao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -109,7 +110,7 @@
 <div class="header">
   <div>
     <h1>Retrabalhos</h1>
-    <div class="header-sub">Acompanhamento e avaliação dos casos de retrabalho. A execução (retomar, pausar, encerrar) continua no Apontamento, no Painel de Turno.</div>
+    <div class="header-sub">Retrabalho é uma OP como qualquer outra — só que sem vínculo de pedido e sem BOM, para não contar a mesma produção duas vezes. Abre-se pelo ♻️ no Controle de OPs e executa-se na linha, na rotulagem ou no posto.</div>
   </div>
 </div>
 
@@ -118,7 +119,22 @@
 
   <div class="card">
     <div class="card-header">
-      <h3>Casos</h3>
+      <h3>OPs de retrabalho</h3>
+      <span class="hint" id="rtOpsContagem"></span>
+    </div>
+    <div class="card-body">
+      <div class="rt-lista" id="rtOpsLista"></div>
+      <div class="no-data" id="rtOpsVazio" style="display:none">
+        Nenhuma OP de retrabalho aberta. Para abrir uma, vá em
+        <a href="ops.html">Controle de OPs</a>, filtre por Concluído (ou busque o lote) e clique no ♻️.
+      </div>
+    </div>
+  </div>
+
+  <!-- Formato antigo: some sozinho quando o último caso for migrado. -->
+  <div class="card" id="rtLegadoCard" style="display:none">
+    <div class="card-header">
+      <h3>Casos no formato antigo</h3>
       <span class="hint" id="rtContagem"></span>
     </div>
     <div class="card-body">
@@ -182,15 +198,71 @@ function duracao(min) {
 }
 
 /* ── Lista ─────────────────────────────────────────────────────────── */
+/* ── OPs de retrabalho ──
+   Depois da correção de rumo do usuário (22/09), esta é a lista principal:
+   retrabalho é uma OP. A seção "formato antigo" abaixo existe só enquanto
+   houver caso do modelo anterior por migrar -- e some sozinha quando não
+   houver mais. */
+var opsTodas = {};
+
+function renderOpsRetrabalho() {
+  var lista = RetrabalhoOp.listar(opsTodas);
+  var busca = String(buscaAtual || '').trim().toLowerCase();
+  var visiveis = lista.filter(function(op) {
+    var ativa = opEstaAtiva(op);
+    if (filtroAtual === 'abertos' && !ativa) return false;
+    if (filtroAtual === 'encerrados' && ativa) return false;
+    if (!busca) return true;
+    return [op.lote, op.retrabalhoDe, op.produto, op.cliente, op.linha, op.retrabalhoMotivo]
+      .join(' ').toLowerCase().indexOf(busca) >= 0;
+  });
+  document.getElementById('rtOpsContagem').textContent = visiveis.length + ' de ' + lista.length + ' OP(s)';
+  document.getElementById('rtOpsVazio').style.display = visiveis.length ? 'none' : '';
+  document.getElementById('rtOpsLista').innerHTML = visiveis.map(cartaoOp).join('');
+}
+
+function cartaoOp(op) {
+  var destino = op.retrabalhoDestino || 'linha';
+  var feito = getProduzido(op, destino === 'rotulagem' ? 'rotulagem' : destino === 'posto' ? 'posto' : 'linha');
+  var pct = op.qtdPlanejada ? Math.min(100, Math.round((feito / op.qtdPlanejada) * 100)) : 0;
+  var ativa = opEstaAtiva(op);
+  return '<div class="rt-card' + (ativa ? ' aberto' : '') + '">' +
+    '<div class="rt-topo">' +
+      '<div><div class="rt-lote">OP ' + escapeHtml(op.lote) + ' · ' + escapeHtml(op.linha || '—') + '</div>' +
+      '<div class="rt-produto">' + escapeHtml(op.produto || '') + '</div>' +
+      '<div class="rt-meta">' + escapeHtml(op.cliente || '—') + ' · ' + escapeHtml(op.retrabalhoEscopo || '—') + '</div></div>' +
+      '<span class="badge ' + (ativa ? 'b-roxo' : 'b-verde') + '">' + escapeHtml(op.status || '') + '</span>' +
+    '</div>' +
+    '<div class="rt-meta">' + escapeHtml(RetrabalhoOp.rotulo(op)) + ' · ' + escapeHtml(RetrabalhoOp.destinoRotulo(op)) + '</div>' +
+    '<div class="rt-meta">' + escapeHtml(op.retrabalhoMotivo || '') + '</div>' +
+    '<div class="rt-nums">' +
+      '<span><b>' + fmtNum(feito) + '</b> de ' + fmtNum(op.qtdPlanejada || 0) + ' un. (' + pct + '%)</span>' +
+    '</div>' +
+    '<div class="rt-passo">' +
+      '<div class="rt-passo-tit">Não credita pedido e não baixa BOM</div>' +
+      '<div>As unidades já foram contadas na OP ' + escapeHtml(op.retrabalhoDe || '') + '. ' +
+        'O que for consumido no retrabalho entra à parte.</div>' +
+    '</div>' +
+    '<div class="rt-acoes">' +
+      '<a class="btn btn-ghost btn-sm" href="ops.html">Ver no Controle de OPs</a>' +
+      '<a class="btn btn-ghost btn-sm" href="form.html">Ir para o Apontamento</a>' +
+    '</div>' +
+  '</div>';
+}
+
 function render() {
+  renderOpsRetrabalho();
+  document.getElementById('rtLegadoCard').style.display = Object.keys(todos).length ? '' : 'none';
   var itens = RetrabalhosGestao.lista(todos, papel());
   var c = RetrabalhosGestao.contadores(itens);
+  var opsRt = RetrabalhoOp.listar(opsTodas);
+  var abertasRt = opsRt.filter(function(o) { return opEstaAtiva(o); }).length;
   document.getElementById('rtKpis').innerHTML =
-    kpi(c.abertos, 'Casos em aberto', c.abertos ? 'destaque' : '') +
-    kpi(c.emExecucao, 'Em execução agora', '') +
-    kpi(c.aguardandoQualidade, 'Aguardando Qualidade', c.aguardandoQualidade ? 'destaque' : '') +
-    kpi(c.comQuantidadePendente, 'Com quantidade pendente', c.comQuantidadePendente ? 'alerta' : '') +
-    kpi(c.total, 'Total registrado', '');
+    kpi(abertasRt, 'OPs de retrabalho abertas', abertasRt ? 'destaque' : '') +
+    kpi(opsRt.length, 'OPs de retrabalho no total', '') +
+    kpi(c.abertos, 'Casos no formato antigo', c.abertos ? 'alerta' : '') +
+    kpi(c.aguardandoQualidade, 'Antigos aguardando Qualidade', c.aguardandoQualidade ? 'alerta' : '') +
+    kpi(c.comQuantidadePendente, 'Antigos com quantidade pendente', c.comQuantidadePendente ? 'alerta' : '');
 
   var visiveis = RetrabalhosGestao.filtrar(itens, {status: filtroAtual, busca: buscaAtual});
   document.getElementById('rtContagem').textContent =
@@ -408,6 +480,11 @@ document.getElementById('rtModalBg').addEventListener('click', function(e) {
 window.addEventListener('kuryos-auth-pronto', function() {
   render();
   if (casoAberto && todos[casoAberto]) abrirCaso(casoAberto);
+});
+
+dbOnValue(db.ref('ops'), function(snap) {
+  opsTodas = snap.val() || {};
+  render();
 });
 
 dbOnValue(db.ref('retrabalhos'), function(snap) {
