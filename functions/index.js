@@ -2102,3 +2102,22 @@ async function checkNotificacoesComercial(destinatarios) {
     }
   }
 }
+
+// Rearranjo administrativo: alocações e pausas mudam juntas; registros permanecem na linha original.
+exports.rearranjarLinhas = onCall({timeoutSeconds:120,memory:'512MiB'}, async request => {
+  if (!request.auth) throw new HttpsError('unauthenticated','Faça login.');
+  const uid=request.auth.uid;
+  if ((await db.ref('usuarios/'+uid+'/role').get()).val() !== 'admin') throw new HttpsError('permission-denied','Somente administradores podem rearranjar linhas.');
+  const agora=new Date().toISOString();
+  let evento, falha;
+  await db.ref().once('value');
+  const result=await db.ref().transaction(base=>{
+    evento=null; falha=null;
+    if(!base) return base;
+    try { evento=require('./rearranjo_linhas').rearranjar(base,request.data || {},uid,agora); return base; }
+    catch(e) { falha=e; return; }
+  },undefined,false);
+  if(falha) throw new HttpsError('failed-precondition',falha.message);
+  if(!result.committed || !evento) throw new HttpsError('aborted','As linhas mudaram. Atualize o painel.');
+  return {ok:true,operacaoId:request.data.operacaoId};
+});

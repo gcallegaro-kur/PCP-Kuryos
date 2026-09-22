@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');const {rearranjar}=require('./functions/rearranjo_linhas');
+const now='2026-09-22T10:00:00.000Z';
+const seed=()=>({usuarios:{a:{role:'admin',nome:'Admin'},p:{role:'production'}},config:{linhas:['Linha 1','Linha 2','Linha 3']},ops:{a:{lote:'1/1',abertaLinha:'Linha 1',linha:'Linha 1',abertaDesde:'2026-09-21T20:09:00.000Z',setupInicio:'2026-09-21T13:00:00Z',setupFim:'2026-09-21T14:00:00Z',produzidoLinha:850,status:'Em Produção',apontamentosAplicados:{r1:{quantidade:850}}}},estado_linhas:{Linha_1:{status:'parada',inicioParada:'2026-09-21T20:09:00Z',motivoParada:'Fim de turno',lote:'1/1',opAtual:{lote:'1/1'}}},registros:{ontem:{r1:{linha:'Linha 1',quantidade:850,lote:'1/1'}}},pedidos:{x:{produzido:850}},estoque:{m:100},paradas_historico:{antiga:{linha:'Linha 1'}}});
+const data={origem:'Linha 1',destino:'Linha 3',lote:'1/1',loteDestino:'',motivo:'Reorganização',operacaoId:'teste_rearranjo_01',apontamentosConferidos:true};
+let b=seed(),original=structuredClone(b);rearranjar(b,data,'a',now);
+assert.equal(b.ops.a.abertaLinha,'Linha 3');assert.equal(b.ops.a.produzidoLinha,850);assert.equal(b.ops.a.setupInicio,original.ops.a.setupInicio);assert.deepEqual(b.registros,original.registros);assert.deepEqual(b.pedidos,original.pedidos);assert.deepEqual(b.estoque,original.estoque);assert.equal(b.estado_linhas.Linha_3.motivoParada,'Fim de turno');assert.equal(b.estado_linhas.Linha_1.opAtual,undefined);assert.deepEqual(b.paradas_historico.antiga,original.paradas_historico.antiga);
+let after=structuredClone(b);rearranjar(b,data,'a',now);assert.deepEqual(b,after);
+assert.throws(()=>rearranjar(seed(),data,'p',now),/administradores/);
+for(const patch of [{destino:'Linha 1'},{lote:'errada'},{apontamentosConferidos:false},{motivo:''}]) assert.throws(()=>rearranjar(seed(),{...data,...patch},'a',now));
+b=seed();b.estado_linhas.Linha_1.status='ativa';assert.throws(()=>rearranjar(b,data,'a',now),/Pause/);
+b=seed();b.ops.b={...structuredClone(b.ops.a),lote:'2/2',abertaLinha:'Linha 3',linha:'Linha 3',produzidoLinha:123};b.estado_linhas.Linha_3={...structuredClone(b.estado_linhas.Linha_1),lote:'2/2',opAtual:{lote:'2/2'}};
+assert.throws(()=>rearranjar(structuredClone(b),data,'a',now),/mudou/);assert.throws(()=>rearranjar(structuredClone(b),{...data,loteDestino:'2/2'},'a',now),/ocupado/);
+rearranjar(b,{...data,loteDestino:'2/2',trocar:true},'a',now);assert.equal(b.ops.b.abertaLinha,'Linha 1');assert.equal(b.ops.b.produzidoLinha,123);assert.equal(b.estado_linhas.Linha_1.lote,'2/2');assert.equal(b.estado_linhas.Linha_3.lote,'1/1');
+console.log('OK: transferência, troca, histórico, totais, pausas, permissão, concorrência e repetição.');

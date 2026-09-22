@@ -153,7 +153,10 @@
     },
     "ops": {
       ".read": "auth != null",
-      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('emitir_op').val() == true))"
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('emitir_op').val() == true))",
+      "$opKey": {
+        ".validate": "!data.child('abertaLinha').exists() || !newData.child('abertaLinha').exists() || data.child('abertaLinha').val() == newData.child('abertaLinha').val() || (auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+      }
     },
     "pedidos_comerciais": {
       ".read": "auth != null",
@@ -272,6 +275,10 @@
         ".read": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
         ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
       }
+    },
+    "rearranjos_linhas": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'",
+      ".write": false
     }
   }
 }
