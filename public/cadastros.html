@@ -189,7 +189,7 @@
     .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
     .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
-<script src="shared/contatos-cliente.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script>
+<script src="shared/contatos-cliente.js"></script><script src="shared/espelho-cadastro.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script>
 </head>
 <body class="kuryos-theme has-sidebar">
 
@@ -1103,6 +1103,8 @@
               <label>Também é fornecedor (mesma empresa, cadastro em Fornecedores)</label>
               <input type="text" id="cliFornecedorVinculado-cli" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
               <input type="hidden" id="cliFornecedorVinculadoKey-cli">
+              <div style="margin-top:8px"><button type="button" class="btn btn-ghost btn-sm" id="cliVirarFornecedor-cli">📋 Criar o cadastro de fornecedor com estes dados</button></div>
+              <div class="field-hint" id="cliVirarFornecedorHint-cli">Abre o cadastro de fornecedor já preenchido com o que dá para aproveitar. Você confere, completa o que falta e salva; o vínculo entre os dois é gravado junto.</div>
             </div>
           </div>
           <div class="section-label">Status</div>
@@ -1301,6 +1303,8 @@
               <label>Também é cliente (mesma empresa, cadastro em Clientes)</label>
               <input type="text" id="fnClienteVinculado-forn" class="uc" placeholder="Digite pra buscar..." autocomplete="off">
               <input type="hidden" id="fnClienteVinculadoKey-forn">
+              <div style="margin-top:8px"><button type="button" class="btn btn-ghost btn-sm" id="fnVirarCliente-forn">📋 Criar o cadastro de cliente com estes dados</button></div>
+              <div class="field-hint" id="fnVirarClienteHint-forn">Abre o cadastro de cliente já preenchido com o que dá para aproveitar. Você confere, completa o que falta e salva; o vínculo entre os dois é gravado junto.</div>
             </div>
           </div>
           <div class="section-label">Status</div>
@@ -2509,6 +2513,73 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalBg-cli').classList.remove('open');
     editingKey = null;
   }
+  /* ESPELHO cliente <-> fornecedor (pedido do usuário em 21/09: um botão no
+     cadastro para "duplicar o cadastro para cliente também fornecedor ou
+     fornecedor também cliente"). Continuam sendo DOIS cadastros ligados: o
+     cliente tem código, detentor ANVISA e contatos por área; o fornecedor
+     tem tipos, prazo e endereço estruturado. Quem grava é o Salvar de
+     sempre -- a pessoa confere antes. */
+  var espelhoOrigemForn = null; // {key, nome} do fornecedor que originou este cliente
+
+  window.abrirClienteEspelhado = function(origem, fornecedor) {
+    var r = EspelhoCadastro.paraCliente(fornecedor, {origemKey: origem.key, clientes: allClientes});
+    var existente = EspelhoCadastro.acharEquivalente(allClientes, fornecedor, ['nome']);
+    if (existente) {
+      openModal(existente.key);
+      document.getElementById('cliFornecedorVinculado-cli').value = origem.nome;
+      document.getElementById('cliFornecedorVinculadoKey-cli').value = origem.key;
+      espelhoOrigemForn = origem;
+      showAlert('Este cliente já existe (' + (existente.por === 'cnpj' ? 'mesmo CNPJ' : 'mesmo nome') + '). Vinculei ao fornecedor — confira e salve.', 'info');
+      return;
+    }
+    openModal(null);
+    espelhoOrigemForn = origem;
+    var d = r.dados;
+    document.getElementById('fNome-cli').value = d.nome;
+    document.getElementById('fCodigo-cli').value = d.codigo;
+    document.getElementById('fCnpj-cli').value = d.cnpj;
+    document.getElementById('fEnderecoEntrega-cli').value = d.enderecoEntrega;
+    document.getElementById('fEnderecoFaturamento-cli').value = d.enderecoFaturamento;
+    document.getElementById('fCidade-cli').value = d.cidade;
+    document.getElementById('fUf-cli').value = d.uf;
+    document.getElementById('fCondicaoPagamento-cli').value = d.condicaoPagamento;
+    document.getElementById('fSite-cli').value = d.site;
+    document.getElementById('fAtivo-cli').value = d.ativo === false ? 'inativo' : 'ativo';
+    document.getElementById('cliFornecedorVinculado-cli').value = origem.nome;
+    document.getElementById('cliFornecedorVinculadoKey-cli').value = origem.key;
+    try { editorContatosCliente.carregar(d); } catch (e) { /* editor ainda não montado */ }
+    document.getElementById('modalTitle-cli').textContent = 'Novo Cliente (copiado do fornecedor ' + origem.nome + ')';
+    var box = document.getElementById('cliDupHint-cli');
+    box.innerHTML = '📋 Dados copiados do fornecedor <strong>' + escapeHtml(origem.nome) + '</strong>. Confira o código sugerido e salve.' +
+      (r.avisos.length ? '<br>' + r.avisos.map(escapeHtml).join('<br>') : '');
+    box.classList.add('show');
+  };
+
+  function virarFornecedor() {
+    if (!editingKey) { showAlert('Salve o cliente primeiro: o vínculo precisa do cadastro gravado.', 'danger'); return; }
+    var cliente = allClientes[editingKey] || {};
+    var jaVinculado = document.getElementById('cliFornecedorVinculadoKey-cli').value;
+    if (jaVinculado && allFornecedoresCli[jaVinculado]) {
+      showAlert('Este cliente já está vinculado ao fornecedor ' + (allFornecedoresCli[jaVinculado].nomeFantasia || allFornecedoresCli[jaVinculado].razaoSocial) + '.', 'info');
+      return;
+    }
+    // Mesma empresa já cadastrada do outro lado? Vincula em vez de duplicar.
+    var existente = EspelhoCadastro.acharEquivalente(allFornecedoresCli, cliente, ['nomeFantasia', 'razaoSocial']);
+    if (existente) {
+      document.getElementById('cliFornecedorVinculado-cli').value = existente.registro.nomeFantasia || existente.registro.razaoSocial;
+      document.getElementById('cliFornecedorVinculadoKey-cli').value = existente.key;
+      showAlert('Já existe o fornecedor ' + (existente.registro.nomeFantasia || existente.registro.razaoSocial) + ' (' + (existente.por === 'cnpj' ? 'mesmo CNPJ' : 'mesmo nome') + '). Vinculei aqui — salve para confirmar.', 'info');
+      return;
+    }
+    // A chave TEM que ser lida antes de fechar o modal: closeModal() zera
+    // `editingKey`, e o vínculo iria parar num cadastro chamado "null".
+    var origem = {key: editingKey, nome: cliente.nome || ''};
+    var r = EspelhoCadastro.paraFornecedor(cliente, {origemKey: origem.key});
+    closeModal();
+    activateMainTab('fornecedores', true);
+    window.abrirFornecedorEspelhado(origem, r);
+  }
+
   function saveModal() {
     var nome = document.getElementById('fNome-cli').value.trim();
     var codigo = document.getElementById('fCodigo-cli').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
@@ -2544,11 +2615,22 @@ document.addEventListener('DOMContentLoaded', function() {
       updates['clientes/' + key] = data;
       updates['clientes/' + editingKey] = null;
       promise = db.ref().update(updates);
+    } else if (espelhoOrigemForn && data.fornecedorVinculadoKey === espelhoOrigemForn.key) {
+      // Cadastro veio do fornecedor: grava os dois lados no mesmo update,
+      // senão um lado fica ligado e o outro não.
+      var espelho = {};
+      espelho['clientes/' + key] = Object.assign({}, allClientes[key] || {}, data);
+      espelho['fornecedores/' + espelhoOrigemForn.key + '/clienteVinculadoKey'] = key;
+      promise = db.ref().update(espelho);
     } else {
       promise = db.ref('clientes/' + key).update(data);
     }
     promise
-      .then(function() { showAlert('Cliente salvo com sucesso!', 'success'); closeModal(); })
+      .then(function() {
+        showAlert(espelhoOrigemForn ? 'Cliente salvo e vinculado ao fornecedor.' : 'Cliente salvo com sucesso!', 'success');
+        espelhoOrigemForn = null;
+        closeModal();
+      })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
       .finally(function() { document.getElementById('modalSaveBtn-cli').disabled = false; });
   }
@@ -2558,6 +2640,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalClose-cli').addEventListener('click', closeModal);
     document.getElementById('modalCancelBtn-cli').addEventListener('click', closeModal);
     document.getElementById('modalSaveBtn-cli').addEventListener('click', saveModal);
+    document.getElementById('cliVirarFornecedor-cli').addEventListener('click', virarFornecedor);
     document.getElementById('modalBg-cli').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
 
     var _t = null;
@@ -2860,6 +2943,51 @@ document.addEventListener('DOMContentLoaded', function() {
     renderCnpjsAdicionais();
   }
 
+  /* ESPELHO fornecedor <-> cliente -- ver o comentário do mesmo tema na aba
+     Clientes. O endereço do cliente é texto livre e o do fornecedor é
+     separado por CEP/logradouro/número: o que não dá para traduzir vira
+     aviso, nunca endereço chutado. */
+  var espelhoOrigemCli = null; // {key, nome} do cliente que originou este fornecedor
+
+  window.abrirFornecedorEspelhado = function(origem, r) {
+    openModalFornecedor(null);
+    espelhoOrigemCli = origem;
+    var d = r.dados;
+    document.getElementById('fnRazaoSocial-forn').value = d.razaoSocial;
+    document.getElementById('fnNomeFantasia-forn').value = d.nomeFantasia;
+    document.getElementById('fnCnpj-forn').value = d.cnpj;
+    document.getElementById('fnCondicaoPagamento-forn').value = d.condicaoPagamento;
+    document.getElementById('fnSite-forn').value = d.site;
+    document.getElementById('fnCidade-forn').value = d.cidade;
+    document.getElementById('fnUf-forn').value = d.uf;
+    document.getElementById('fnContatoNome-forn').value = d.contatoNome;
+    document.getElementById('fnContatoTelefone-forn').value = d.contatoTelefone;
+    document.getElementById('fnContatoEmail-forn').value = d.contatoEmail;
+    document.getElementById('fnAtivo-forn').checked = d.ativo !== false;
+    document.getElementById('fnClienteVinculado-forn').value = origem.nome;
+    document.getElementById('fnClienteVinculadoKey-forn').value = origem.key;
+    document.getElementById('modalFornecedorTitle-forn').textContent = 'Novo Fornecedor (copiado do cliente ' + origem.nome + ')';
+    var box = document.getElementById('fnDupHint-forn');
+    box.innerHTML = '📋 Dados copiados do cliente <strong>' + escapeHtml(origem.nome) + '</strong>. Falta marcar o <strong>tipo de fornecedor</strong> e conferir o endereço.' +
+      (r.avisos.length ? '<br>' + r.avisos.map(escapeHtml).join('<br>') : '');
+    box.classList.add('show');
+  };
+
+  function virarCliente() {
+    if (!editingKey) { showAlert('Salve o fornecedor primeiro: o vínculo precisa do cadastro gravado.', 'danger'); return; }
+    var fornecedor = allFornecedores[editingKey] || {};
+    var jaVinculado = document.getElementById('fnClienteVinculadoKey-forn').value;
+    if (jaVinculado && allClientesForn[jaVinculado]) {
+      showAlert('Este fornecedor já está vinculado ao cliente ' + allClientesForn[jaVinculado].nome + '.', 'info');
+      return;
+    }
+    // Mesma armadilha do outro lado: closeModalFornecedor() zera `editingKey`.
+    var origem = {key: editingKey, nome: fornecedor.nomeFantasia || fornecedor.razaoSocial || ''};
+    closeModalFornecedor();
+    activateMainTab('clientes', true);
+    window.abrirClienteEspelhado(origem, fornecedor);
+  }
+
   function saveFornecedor() {
     var razaoSocial = document.getElementById('fnRazaoSocial-forn').value.trim();
     if (!razaoSocial) { showAlert('Razão social é obrigatória.', 'danger'); return; }
@@ -2899,8 +3027,22 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     var key = editingKey || db.ref('fornecedores').push().key;
     document.getElementById('modalFornecedorSave-forn').disabled = true;
-    db.ref('fornecedores/' + key).update(data)
-      .then(function() { showAlert('Fornecedor salvo com sucesso!', 'success'); closeModalFornecedor(); })
+    // Cadastro veio do cliente: os dois lados do vínculo no mesmo update.
+    var gravar;
+    if (espelhoOrigemCli && data.clienteVinculadoKey === espelhoOrigemCli.key) {
+      var espelho = {};
+      espelho['fornecedores/' + key] = Object.assign({}, allFornecedores[key] || {}, data);
+      espelho['clientes/' + espelhoOrigemCli.key + '/fornecedorVinculadoKey'] = key;
+      gravar = db.ref().update(espelho);
+    } else {
+      gravar = db.ref('fornecedores/' + key).update(data);
+    }
+    gravar
+      .then(function() {
+        showAlert(espelhoOrigemCli ? 'Fornecedor salvo e vinculado ao cliente.' : 'Fornecedor salvo com sucesso!', 'success');
+        espelhoOrigemCli = null;
+        closeModalFornecedor();
+      })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
       .finally(function() { document.getElementById('modalFornecedorSave-forn').disabled = false; });
   }
@@ -2910,6 +3052,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalFornecedorClose-forn').addEventListener('click', closeModalFornecedor);
     document.getElementById('modalFornecedorCancel-forn').addEventListener('click', closeModalFornecedor);
     document.getElementById('modalFornecedorSave-forn').addEventListener('click', saveFornecedor);
+    document.getElementById('fnVirarCliente-forn').addEventListener('click', virarCliente);
     document.getElementById('modalFornecedor-forn').addEventListener('click', function(e) { if (e.target === this) closeModalFornecedor(); });
     document.getElementById('btnAddCnpj-forn').addEventListener('click', addCnpjAdicional);
 
