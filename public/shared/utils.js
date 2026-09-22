@@ -2116,7 +2116,13 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       // itens conforme/não conforme, amostragem √N+1, pesagem individual,
       // retenção e laudo externo. Só existe em lote de PA.
       ck7: laudo.ck7 || null,
-      resumoCk7: laudo.resumoCk7 || null
+      resumoCk7: laudo.resumoCk7 || null,
+      // F0070 / F009 (inspecao-embalagem.js + formulários oficiais do CQ):
+      // identificação do recebimento que os laudos em papel pedem e que a
+      // entrada da Logística não captura, e o checklist de embalagem.
+      recebimentoCq: laudo.recebimentoCq || null,
+      embalagem: laudo.embalagem || null,
+      resumoEmbalagem: laudo.resumoEmbalagem || null
     };
     // ── Pendência de endereçamento definitivo ──
     // Levantado pelo usuário (2026-09-08): "o correto não seria ir para

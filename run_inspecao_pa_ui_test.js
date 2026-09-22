@@ -1,8 +1,19 @@
 'use strict';
-/* Qualidade: a fila de PA passa a usar o checklist de produto acabado (CK-7)
-   e não mais a especificação de granel; defeito crítico e peso fora travam a
-   liberação. Tela real com utils.js, inspecao-pa.js e auth_check.js reais;
-   Firebase simulado em memória, para conferir o que ficaria gravado. */
+/* Qualidade ponta a ponta: UM lote de cada tipo, cada um no SEU roteiro, e
+   o laudo saindo impresso no formulário certo.
+
+   - Palete de PA  → CK-7 (√N+1 nas caixas, pesagem em aberto, retenção)
+                     → "Relatório de Análise — Produto Acabado"
+   - Matéria-prima → plano de ensaios da especificação → F0070 / POP 004
+   - Embalagem     → F009 / POP 041 (13 parâmetros + dimensional em aberto)
+
+   O roteiro é escolhido pelo `tipo` do cadastro de Materiais (MPGR/MPES vs
+   EP/ES/ET), que foi o pedido do usuário em 21/09. Defeito crítico e peso
+   fora travam a liberação nos três.
+
+   Tela real com utils.js, inspecao-pa.js, inspecao-embalagem.js, laudo-cq.js
+   e auth_check.js reais; Firebase simulado em memória, para conferir o que
+   ficaria gravado. */
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
@@ -20,8 +31,16 @@ function dados() {
       },
       'MP-0001': {
         lote_mp: {itemTipo: 'material', itemCodigo: 'MP-0001', itemNome: 'ÁLCOOL CEREAIS', unidade: 'kg',
-          saldoLote: 200, status: 'QUARENTENA', origemTipo: 'recebimento_pc', loteOrigem: 'AK-2026-000576',
-          criadoEm: '2026-09-16T12:00:00Z'}
+          saldoLote: 200, qtdOriginal: 200, status: 'QUARENTENA', origemTipo: 'recebimento_pc',
+          loteOrigem: 'AK-2026-000576', criadoEm: '2026-09-16T12:00:00Z',
+          recebimento: {notaFiscal: '347410', recebidoPor: 'Yasmim', data: '2026-09-16'}}
+      },
+      // Embalagem: mesmo lugar na fila, roteiro OUTRO (F009).
+      'EP-00106': {
+        lote_emb: {itemTipo: 'material', itemCodigo: 'EP-00106', itemNome: 'FRASCO 200ML CRISTAL 24GR',
+          unidade: 'un', saldoLote: 12000, qtdOriginal: 12000, status: 'QUARENTENA',
+          origemTipo: 'recebimento_pc', loteOrigem: 'BP-4471', criadoEm: '2026-09-16T12:00:00Z',
+          recebimento: {notaFiscal: '99871', recebidoPor: 'Adlai', data: '2026-09-16'}}
       }
     },
     // A especificação de GRANEL existe para os dois: o palete não pode mais puxá-la.
@@ -34,7 +53,13 @@ function dados() {
     },
     ops: {'26257-17': {lote: '26257/17', sku: 'MRARBS04', produto: 'BODY SPLASH NÉCTAR DAS TAMARAS', status: 'Concluído'}},
     produtos: {MRARBS04: {sku: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR DAS TAMARAS', cliente: 'MISS RÔSE'}},
-    materiais: {}, fornecedores: {}, pedidos_compra: {}, nao_conformidades: {}, parametros_pa: {}
+    // O `tipo` do cadastro é o que decide o roteiro (pedido do usuário em
+    // 21/09: "direcionar a partir da categoria do SKU cadastrado").
+    materiais: {
+      m1: {mpCodigo: 'MP-0001', mpNome: 'ÁLCOOL CEREAIS', tipo: 'MPGR', unidade: 'kg'},
+      m2: {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML CRISTAL 24GR', tipo: 'EP', unidade: 'un'}
+    },
+    fornecedores: {}, pedidos_compra: {}, nao_conformidades: {}, parametros_pa: {}
   };
 }
 
@@ -110,6 +135,26 @@ async function abrir(browser) {
   await page.waitForSelector('.kt-sidebar', {timeout: 8000});
   await page.waitForFunction(() => window.currentUser && window.currentUser.role === 'qualidade');
   return {page, errors, dialogos};
+}
+
+/* Preenche um campo pelo VALOR + evento, em vez de digitar.
+
+   O fill() do Playwright se perde nos campos dentro do modal de laudo
+   (`.modal-body` com overflow): ora fica preso na checagem de
+   actionability, ora insere o texto no campo que estava com o foco --
+   numa execução o "48" da largura foi parar no campo de quantidade, que
+   tinha "3", virando "348" amostras. É limitação da automação, não da
+   tela: no navegador os campos funcionam normalmente (ver o screenshot de
+   CK7_SCREENSHOT). O que o teste precisa garantir é que o valor digitado
+   chega ao registro gravado, e é isso que este helper exercita -- os
+   listeners reais da tela, com os eventos reais. */
+async function preencher(page, seletor, valor, evento) {
+  await page.evaluate(({s, v, ev}) => {
+    const el = document.querySelector(s);
+    if (!el) throw new Error('campo não encontrado: ' + s);
+    el.value = v;
+    el.dispatchEvent(new Event(ev || 'input', {bubbles: true}));
+  }, {s: seletor, v: valor, ev: evento});
 }
 
 // fill() sozinho não dispara 'change', que é o evento que a tela escuta.
@@ -289,6 +334,136 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(await page.locator('#qCk7Box').isVisible(), false, 'CK-7 é só de produto acabado');
     assert.match(await page.locator('#qPlanoBody').innerText(), /TEOR DE ÁLCOOL/);
     assert.equal(await page.locator('#qChecklistRecebimento').isVisible(), true);
+    assert.equal(await page.locator('#qEmbBox').isVisible(), false, 'F009 é só de embalagem');
+
+    // ── 7b. E sai no F0070, com os ensaios que foram medidos ─────────────
+    await page.evaluate(() => {
+      Object.keys(laudoAtual.espec.registro.itens).forEach((k) => {
+        laudoAtual.resultados[k] = {valor: '97'};
+      });
+      renderPlanoInspecao();
+    });
+    await preencher(page, '#qQtdPorEmb', '1000 L');
+    await preencher(page, '#qDescEmb', 'Container');
+    await page.selectOption('#qLacre', 'sim');
+    await page.selectOption('#qCondicaoEmb', 'APROPRIADA');
+    await page.selectOption('#qAvaria', 'SEM');
+    await page.click('#qBtnLiberar');
+    await page.waitForFunction(() => window.__db.estoque_lotes['MP-0001'].lote_mp.status !== 'QUARENTENA', null, {timeout: 8000});
+    db = await page.evaluate(() => window.__db);
+    const qMp = db.estoque_lotes['MP-0001'].lote_mp.qualidade;
+    assert.equal(qMp.decisao, 'LIBERADO');
+    assert.equal(qMp.recebimentoCq.qtdPorEmbalagem, '1000 L');
+    assert.equal(qMp.recebimentoCq.lacre, true);
+    assert.ok(!qMp.embalagem, 'MP não tem checklist de embalagem');
+
+    await page.evaluate(() => {
+      allEstoqueLotes = window.__db.estoque_lotes;
+      responsaveisCq = (window.__db.config || {}).responsaveisCq || [];
+      renderFila();
+    });
+    await page.click('#qHistBody [data-emitir-item="MP-0001"]');
+    await page.waitForSelector('#modalEmitirBg.open');
+    await page.selectOption('#qEmitResponsavel', '0');
+    await page.click('#qEmitImprimir');
+    await page.waitForFunction(() => /F0070/.test(document.getElementById('laudoPrintArea').innerText));
+    const f0070 = await page.evaluate(() => document.getElementById('laudoPrintArea').innerText);
+    assert.match(f0070, /RECEBIMENTO E ANÁLISE DE MATÉRIA PRIMA/);
+    assert.match(f0070, /POP 004/);
+    assert.match(f0070, /ÁLCOOL CEREAIS/);
+    assert.match(f0070, /TEOR DE ÁLCOOL/, 'o ensaio medido entra na tabela de resultados analíticos');
+    assert.match(f0070, /95 - 99/, 'com a especificação cadastrada');
+    assert.match(f0070, /Container/);
+    assert.match(f0070, /347410/, 'NF da entrada');
+    assert.doesNotMatch(f0070, /Rosqueamento/, 'parâmetro de embalagem não aparece em MP');
+    assert.doesNotMatch(f0070, /Microbiológicas/, 'micro é do relatório de PA');
+
+    // ── 8. Embalagem tem roteiro PRÓPRIO (F009) ──────────────────────────
+    // Pedido do usuário em 21/09: direcionar pela categoria do SKU. Frasco
+    // é EP no cadastro, então abre o formulário de embalagem, não o de MP.
+    // O modal já fechou sozinho ao liberar a MP acima.
+    const linhaEmb = page.locator('#qFilaBody tr', {hasText: 'EP-00106'});
+    await linhaEmb.locator('button[data-laudo-lote]').click();
+    await page.waitForSelector('#qEmbBox');
+    assert.equal(await page.locator('#qEmbBox').isVisible(), true, 'embalagem abre o F009');
+    assert.equal(await page.locator('#qCk7Box').isVisible(), false, 'CK-7 é só de palete');
+    assert.equal(await page.locator('#qPlanoBox').isVisible(), false, 'embalagem não usa ensaio de laboratório');
+    assert.equal(await page.locator('#qSemPlano').isVisible(), false,
+      'não faz sentido cobrar especificação de uma embalagem');
+    if (process.env.F009_SCREENSHOT) await page.screenshot({path: process.env.F009_SCREENSHOT, fullPage: true});
+    const itensEmb = await page.locator('#qEmbItens').innerText();
+    assert.match(itensEmb, /Rachaduras/);
+    assert.match(itensEmb, /Rosqueamento/);
+    assert.match(itensEmb, /Vedação/);
+    assert.equal(await page.locator('[data-emb-med]').count(), 12 * 4,
+      '12 amostras × 4 medidas, o padrão do formulário');
+
+    // Dimensional em aberto, igual à pesagem de PA.
+    await preencher(page, '[data-emb-med="0"][data-emb-campo="altura"]', '152');
+    await preencher(page, '#qEmbQtd', '3', 'change');
+    assert.equal(await page.locator('[data-emb-med]').count(), 3 * 4);
+    assert.equal(await page.locator('[data-emb-med="0"][data-emb-campo="altura"]').inputValue(), '152',
+      'encolher não apaga medida já registrada');
+    await preencher(page, '[data-emb-med="0"][data-emb-campo="largura"]', '48');
+    await preencher(page, '[data-emb-med="1"][data-emb-campo="altura"]', '152.2');
+    await preencher(page, '#qEmbFicha', 'Altura 152 ± 1 mm · Largura 48 ± 0,5 mm');
+
+    // Rachadura é crítica: trava a liberação, como no CK-7.
+    await page.selectOption('[data-emb-cnc="rachaduras"]', 'NC');
+    assert.match(await page.locator('#qEmbImpedimentos').innerText(), /Não é possível liberar/);
+    await page.click('#qBtnLiberar');
+    await page.waitForSelector('#alertBox.show');
+    assert.match(await page.locator('#alertBox').innerText(), /rachaduras/);
+    db = await page.evaluate(() => window.__db);
+    assert.equal(db.estoque_lotes['EP-00106'].lote_emb.status, 'QUARENTENA', 'nada gravado com defeito crítico');
+
+    // Tudo conforme: libera, guarda o checklist e a identificação do papel.
+    await page.evaluate(() => {
+      InspecaoEmbalagem.PLANO_F009.forEach((i) => { laudoAtual.emb.respostas[i.id] = {cnc: 'C'}; });
+      renderEmbalagem();
+    });
+    await preencher(page, '#qQtdPorEmb', '240 un');
+    await preencher(page, '#qDescEmb', 'Caixa de papelão');
+    await page.selectOption('#qLacre', 'nao');
+    await page.selectOption('#qCondicaoEmb', 'APROPRIADA');
+    await page.selectOption('#qAvaria', 'SEM');
+    await page.click('#qBtnLiberar');
+    await page.waitForFunction(() => window.__db.estoque_lotes['EP-00106'].lote_emb.status !== 'QUARENTENA', null, {timeout: 8000});
+    db = await page.evaluate(() => window.__db);
+    const qEmb = db.estoque_lotes['EP-00106'].lote_emb.qualidade;
+    assert.equal(qEmb.embalagem.versaoPlano, 'F009-REV01');
+    assert.equal(qEmb.embalagem.itens.vedacao.cnc, 'C');
+    assert.equal(qEmb.embalagem.dimensional.length, 2, 'só as amostras com medida vão para o laudo');
+    assert.equal(qEmb.embalagem.dimensional[0].altura, 152);
+    assert.equal(qEmb.embalagem.fichaTecnica, 'Altura 152 ± 1 mm · Largura 48 ± 0,5 mm');
+    assert.equal(qEmb.recebimentoCq.descricaoEmbalagem, 'Caixa de papelão');
+    assert.equal(qEmb.recebimentoCq.lacre, false);
+    assert.equal(qEmb.recebimentoCq.avaria, 'SEM');
+
+    // ── 9. O F009 sai impresso ───────────────────────────────────────────
+    await page.evaluate(() => {
+      allEstoqueLotes = window.__db.estoque_lotes;
+      // Mesmo motivo do snapshot acima: o `on` do stub entrega uma vez só.
+      responsaveisCq = (window.__db.config || {}).responsaveisCq || [];
+      renderFila();
+    });
+    await page.click('#qHistBody [data-emitir-item="EP-00106"]');
+    await page.waitForSelector('#modalEmitirBg.open');
+    assert.equal(await page.locator('#qEmitMicroBox').isVisible(), false,
+      'microbiológica é do relatório de PA, não do F009');
+    await page.selectOption('#qEmitResponsavel', '0');
+    await page.click('#qEmitImprimir');
+    await page.waitForFunction(() => /F009/.test(document.getElementById('laudoPrintArea').innerText));
+    const f009 = await page.evaluate(() => document.getElementById('laudoPrintArea').innerText);
+    assert.match(f009, /RECEBIMENTO E ANÁLISE DE EMBALAGENS/);
+    assert.match(f009, /POP 041/);
+    assert.match(f009, /FRASCO 200ML CRISTAL/);
+    assert.match(f009, /Rosqueamento/);
+    assert.match(f009, /Altura 152 ± 1 mm/, 'parâmetros da ficha técnica');
+    assert.match(f009, /Mario Callegaro/, 'responsável escolhido da lista salva na emissão anterior');
+    assert.match(f009, /99871/, 'NF veio da entrada da Logística');
+    assert.equal(await page.evaluate(() => window.__tituloImpressao),
+      'F009 - Análise de embalagem - FRASCO 200ML CRISTAL 24GR - BP-4471');
 
     assert.deepEqual(errors, [], 'erros de página: ' + errors.join(' | '));
     console.log('OK Qualidade: palete usa CK-7 (amostragem √N+1, pesagem, retenção), crítico e peso fora travam a liberação, material mantém o plano de ensaios.');

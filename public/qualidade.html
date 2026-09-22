@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/inspecao-pa.js"></script>
+  <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
   <script src="shared/manipulacao.js"></script>
   <script src="auth_check.js"></script>
@@ -444,6 +445,26 @@
         </div>
       </div>
 
+      <!-- F009 — inspeção de EMBALAGEM. Roteiro próprio: o que se analisa
+           numa embalagem (rachadura, furo, rebarba, rosqueamento, vedação e
+           medidas contra a ficha técnica) não é o que se analisa numa MP.
+           Ver shared/inspecao-embalagem.js. -->
+      <div id="qEmbBox" style="display:none">
+        <div class="plano-wrap">
+          <div class="plano-head"><span>Inspeção de embalagem (F009)</span><span id="qEmbResumo"></span></div>
+          <div style="padding:12px">
+            <div class="plano-scroll"><table class="plano-tabela"><tbody id="qEmbItens"></tbody></table></div>
+            <div style="margin-top:12px">
+              <label>Parâmetros da ficha técnica</label>
+              <input type="text" id="qEmbFicha" placeholder="Ex.: Altura 152 ± 1 mm · Largura 48 ± 0,5 mm · Volume 200 ± 5 ml">
+              <div class="field-hint" style="margin-top:4px">Sai impresso acima da tabela de medidas, como no formulário.</div>
+            </div>
+            <div id="qEmbDimensional" style="margin-top:12px"></div>
+            <div id="qEmbImpedimentos" class="alert alert-danger" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-grid">
         <div class="form-group">
           <label>Data da inspeção</label>
@@ -506,6 +527,47 @@
 
         <div class="form-group">
           <label><input type="checkbox" id="qCertificado" style="width:auto;margin-right:6px">Veio com Certificado de Qualidade do fornecedor</label>
+          <div class="field-hint">É o "Laudo: ( ) sim ( ) não" dos formulários F0070 e F009 — o laudo do FORNECEDOR que veio com a carga.</div>
+        </div>
+
+        <!-- Campos de identificação que os formulários F0070/F009 pedem e que
+             a entrada da Logística ainda não captura. Sem eles o laudo
+             impresso sai com lacuna justamente onde o auditor olha. -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Qtd por embalagem</label>
+            <input type="text" id="qQtdPorEmb" placeholder="Ex.: 1000 L / 240 un">
+          </div>
+          <div class="form-group">
+            <label>Descrição da embalagem</label>
+            <input type="text" id="qDescEmb" placeholder="Ex.: Container / Caixa de papelão">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Lacre</label>
+            <select id="qLacre">
+              <option value="">—</option>
+              <option value="sim">Sim</option>
+              <option value="nao">Não</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Condições das embalagens</label>
+            <select id="qCondicaoEmb">
+              <option value="">—</option>
+              <option value="APROPRIADA">Apropriada</option>
+              <option value="INAPROPRIADA">Inapropriada</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Avarias</label>
+            <select id="qAvaria">
+              <option value="">—</option>
+              <option value="SEM">Recebido sem avaria</option>
+              <option value="COM">Recebido com avarias</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1114,6 +1176,28 @@ document.getElementById('qGranelLiberar').addEventListener('click', function() {
 document.getElementById('qGranelReprovar').addEventListener('click', function() { decidirGranel('REPROVAR'); });
 
 /* ─────────── Laudo ─────────── */
+/* Qual roteiro abrir. Decisão do usuário (21/09): "direcionar entre
+   insumos/embalagens e MPs a partir do que está sendo dado entrada
+   (categoria do SKU cadastrado)".
+
+   O cadastro de Materiais já separa: MPGR (MP geral), MPES (fragrância),
+   EP/ES/ET (embalagem primária/secundária/terciária) e MU (uso e consumo).
+   Uso e consumo entra pelo roteiro de MP porque é o formulário que tem
+   tabela de ensaio -- não existe F009 de detergente de chão. */
+function materialDoItem(itemCodigo) {
+  var alvo = norm(itemCodigo);
+  var k = Object.keys(allMateriais).find(function(x) {
+    var m = allMateriais[x] || {};
+    return norm(m.mpCodigo) === alvo || norm(x) === alvo;
+  });
+  return k ? allMateriais[k] : null;
+}
+function roteiroDoLote(itemTipo, itemCodigo) {
+  if (itemTipo === 'produto') return 'PA';
+  var m = materialDoItem(itemCodigo) || {};
+  return /^(EP|ES|ET)$/.test(String(m.tipo || '')) ? 'EMBALAGEM' : 'MP';
+}
+
 function abrirLaudo(itemCodigo, loteKey) {
   var itemKey = sanitizeKey(itemCodigo);
   var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
@@ -1127,12 +1211,16 @@ function abrirLaudo(itemCodigo, loteKey) {
   laudoAtual = {
     itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, itemTipo: itemTipo,
     espec: espec, resultados: {}, fornecedor: forn,
-    ehPa: ehPa, ck7: {respostas: {}, pesos: [], camposMontados: false},
+    ehPa: ehPa, roteiro: roteiroDoLote(itemTipo, itemCodigo),
+    ck7: {respostas: {}, pesos: [], camposMontados: false},
+    emb: {respostas: {}, amostras: [], camposMontados: false},
     parametros: ehPa ? Object.assign({}, allParametrosPa[itemKey] || {}) : null
   };
 
   document.getElementById('modalLaudoTitle').textContent =
-    (itemTipo === 'produto' ? 'Liberação de palete — ' : 'Laudo — ') + itemCodigo;
+    (laudoAtual.roteiro === 'PA' ? 'Liberação de palete — '
+      : laudoAtual.roteiro === 'EMBALAGEM' ? 'Análise de embalagem — '
+      : 'Análise de matéria-prima — ') + itemCodigo;
   document.getElementById('qBtnLiberar').textContent =
     itemTipo === 'produto' ? 'Liberar para expedição' : 'Liberar para uso';
   document.getElementById('qLoteInfo').innerHTML =
@@ -1176,6 +1264,12 @@ function abrirLaudo(itemCodigo, loteKey) {
     ? 'Condições e certificado vieram da conferência da Logística e não podem ser alterados no laudo.'
     : 'Entrada anterior ao novo formulário: complete os dados disponíveis durante o laudo.';
   document.getElementById('qObservacao').value = '';
+  var rec = entrada || {};
+  document.getElementById('qQtdPorEmb').value = rec.qtdPorEmbalagem || '';
+  document.getElementById('qDescEmb').value = rec.descricaoEmbalagem || '';
+  document.getElementById('qLacre').value = rec.lacre === true ? 'sim' : rec.lacre === false ? 'nao' : '';
+  document.getElementById('qCondicaoEmb').value = rec.condicaoEmbalagemTexto || '';
+  document.getElementById('qAvaria').value = rec.avaria || '';
 
   if (laudoAtual.ehPa) {
     var par = InspecaoPA.parametros(laudoAtual.parametros);
@@ -1193,6 +1287,7 @@ function abrirLaudo(itemCodigo, loteKey) {
   }
   renderPlanoInspecao();
   renderCk7();
+  renderEmbalagem();
   document.getElementById('modalLaudoBg').classList.add('open');
 }
 
@@ -1208,6 +1303,17 @@ function renderPlanoInspecao() {
     vazio.style.display = '';
     vazio.innerHTML = 'A análise de granel (aspecto, cor, odor, pH, densidade) pertence à manipulação do lote, antes do envase — não à liberação do palete. Aqui vale a inspeção de produto acabado abaixo.';
     return;
+  }
+  // Embalagem tem roteiro próprio (F009) e não se analisa por ensaio de
+  // laboratório -- cobrar especificação dela seria pedir um cadastro que
+  // não faz sentido existir.
+  if (laudoAtual && laudoAtual.roteiro === 'EMBALAGEM') {
+    var itensEmb = laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
+    if (!itensEmb || !Object.keys(itensEmb).length) {
+      box.style.display = 'none';
+      vazio.style.display = 'none';
+      return;
+    }
   }
   vazio.innerHTML = 'Este item não tem especificação cadastrada — o laudo fica pelo checklist abaixo e pela observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.';
   var itens = laudoAtual && laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
@@ -1292,6 +1398,117 @@ function caixasDoPalete(lote) {
 function avaliarCk7() {
   var par = ck7ParametrosDaTela();
   return InspecaoPA.avaliar(laudoAtual.ck7.respostas, laudoAtual.ck7.pesos, par, {caixas: caixasDoPalete(laudoAtual.lote)});
+}
+
+/* ── F009: inspeção de embalagem ──
+   Mesma mecânica do CK-7: a tabela de parâmetros é redesenhada a cada
+   resposta, mas os campos de MEDIDA só são remontados quando a quantidade
+   de amostras muda -- remontar a cada tecla apagaria o que está sendo
+   digitado. */
+function renderEmbalagem() {
+  var box = document.getElementById('qEmbBox');
+  if (!laudoAtual || laudoAtual.roteiro !== 'EMBALAGEM') { box.style.display = 'none'; return; }
+  box.style.display = '';
+  var aval = InspecaoEmbalagem.avaliar(laudoAtual.emb.respostas, laudoAtual.emb.amostras);
+
+  document.getElementById('qEmbResumo').innerHTML =
+    '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
+    '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
+    '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>' +
+    (aval.criticosNC ? ' <span class="badge badge-red">⚠ crítico</span>' : '');
+
+  document.getElementById('qEmbItens').innerHTML = aval.linhas.map(function(l) {
+    var badge = l.severidade === 'CRITICO' ? '<span class="badge badge-red">crítico</span>'
+      : l.severidade === 'MAIOR' ? '<span class="badge badge-orange">maior</span>'
+      : '<span class="badge badge-gray">menor</span>';
+    var icone = l.conforme === true ? '<span style="color:var(--success)">✓</span>'
+      : l.conforme === false ? '<span style="color:var(--danger)">✕</span>'
+      : l.cnc === 'NA' ? '<span style="color:var(--muted)">NA</span>' : '<span style="color:var(--muted)">·</span>';
+    return '<tr' + (l.conforme === false ? ' class="row-nc"' : '') + '>' +
+      '<td><span class="plano-ensaio">' + escapeHtml(l.texto) + '</span> ' + badge + '</td>' +
+      '<td style="width:92px"><select class="plano-cnc" data-emb-cnc="' + escapeAttr(l.id) + '">' +
+        '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
+        '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
+        '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option>' +
+        '<option value="NA"' + (l.cnc === 'NA' ? ' selected' : '') + '>NA</option>' +
+      '</select></td>' +
+      '<td class="plano-res">' + icone + '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('qEmbItens').querySelectorAll('[data-emb-cnc]').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var id = sel.getAttribute('data-emb-cnc');
+      laudoAtual.emb.respostas[id] = laudoAtual.emb.respostas[id] || {};
+      laudoAtual.emb.respostas[id].cnc = sel.value;
+      renderEmbalagem();
+    });
+  });
+
+  if (!laudoAtual.emb.camposMontados) {
+    if (!laudoAtual.emb.amostras.length) {
+      laudoAtual.emb.amostras = InspecaoEmbalagem.redimensionarAmostras([], InspecaoEmbalagem.AMOSTRAS_PADRAO);
+    }
+    document.getElementById('qEmbDimensional').innerHTML =
+      '<label>Medidas das amostras</label>' +
+      '<div class="ck7-peso-barra">' +
+        '<label for="qEmbQtd">Amostras medidas</label>' +
+        '<input type="number" id="qEmbQtd" min="0" step="1" style="width:76px">' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="qEmbMais">+ amostra</button>' +
+        '<span class="field-hint" style="flex:1;min-width:200px">O formulário em papel tem ' +
+          InspecaoEmbalagem.AMOSTRAS_PADRAO + ' linhas; aqui a quantidade é sua.</span>' +
+      '</div>' +
+      '<div class="table-wrap"><table class="plano-tabela"><thead><tr><th style="width:70px">Amostra</th>' +
+        InspecaoEmbalagem.MEDIDAS.map(function(m) { return '<th>' + escapeHtml(m.texto) + '</th>'; }).join('') +
+        '<th style="width:36px"></th></tr></thead><tbody id="qEmbMedidas"></tbody></table></div>';
+    laudoAtual.emb.camposMontados = true;
+    document.getElementById('qEmbQtd').addEventListener('change', function() {
+      laudoAtual.emb.amostras = InspecaoEmbalagem.redimensionarAmostras(laudoAtual.emb.amostras, this.value);
+      montarMedidasEmbalagem();
+      renderEmbalagem();
+    });
+    document.getElementById('qEmbMais').addEventListener('click', function() {
+      laudoAtual.emb.amostras = InspecaoEmbalagem.redimensionarAmostras(laudoAtual.emb.amostras, laudoAtual.emb.amostras.length + 1);
+      montarMedidasEmbalagem();
+      renderEmbalagem();
+    });
+    montarMedidasEmbalagem();
+  }
+  document.getElementById('qEmbQtd').value = laudoAtual.emb.amostras.length;
+
+  var imped = document.getElementById('qEmbImpedimentos');
+  imped.className = 'alert alert-danger' + (aval.impedimentos.length ? ' show' : '');
+  imped.innerHTML = aval.impedimentos.length
+    ? '<b>Não é possível liberar:</b> ' + escapeHtml(aval.impedimentos.join('; ')) + '.'
+    : '';
+}
+
+function montarMedidasEmbalagem() {
+  var corpo = document.getElementById('qEmbMedidas');
+  if (!corpo || !laudoAtual) return;
+  corpo.innerHTML = laudoAtual.emb.amostras.map(function(a, i) {
+    return '<tr><td>' + (i + 1) + '</td>' +
+      InspecaoEmbalagem.MEDIDAS.map(function(m) {
+        return '<td><input type="number" step="any" class="plano-val" data-emb-med="' + i + '" data-emb-campo="' +
+          escapeAttr(m.id) + '" value="' + escapeAttr((a || {})[m.id] == null ? '' : a[m.id]) +
+          '" aria-label="' + escapeAttr(m.texto + ' da amostra ' + (i + 1)) + '"></td>';
+      }).join('') +
+      '<td><button type="button" class="ck7-peso-x" data-emb-rm="' + i + '" title="Remover a amostra ' + (i + 1) +
+        '" aria-label="Remover a amostra ' + (i + 1) + '">×</button></td></tr>';
+  }).join('');
+  corpo.querySelectorAll('[data-emb-med]').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      var i = Number(inp.getAttribute('data-emb-med'));
+      laudoAtual.emb.amostras[i] = laudoAtual.emb.amostras[i] || {};
+      laudoAtual.emb.amostras[i][inp.getAttribute('data-emb-campo')] = inp.value === '' ? null : Number(inp.value);
+    });
+  });
+  corpo.querySelectorAll('[data-emb-rm]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      laudoAtual.emb.amostras.splice(Number(btn.getAttribute('data-emb-rm')), 1);
+      montarMedidasEmbalagem();
+      renderEmbalagem();
+    });
+  });
 }
 
 /* Campos de peso. Remontados SÓ quando a quantidade muda (ver o comentário
@@ -1529,6 +1746,25 @@ function salvarLaudo(decisao) {
     });
   }
 
+  // F009: rachadura, furo, vedação, funcionamento e compatibilidade travam
+  // a liberação -- embalagem que vaza contamina o produto e para a linha.
+  // Mesma régua do CK-7, e pelo mesmo motivo: não é desvio negociável.
+  var embReg = null, avalEmb = null;
+  if (laudoAtual.roteiro === 'EMBALAGEM') {
+    avalEmb = InspecaoEmbalagem.avaliar(laudoAtual.emb.respostas, laudoAtual.emb.amostras);
+    if (avalEmb.bloqueia && (decisao === 'LIBERADO' || decisao === 'APROVADO_CONCESSAO')) {
+      showAlert('Não é possível liberar: ' + avalEmb.impedimentos.join('; ') + '. Retenha o lote ou devolva ao fornecedor.', 'danger');
+      return;
+    }
+    if (!avalEmb.completo && decisao === 'LIBERADO') {
+      if (!confirm('O checklist de embalagem tem ' + avalEmb.pendentes + ' parâmetro(s) sem resposta.\n\nLiberar assim mesmo?')) return;
+    }
+    embReg = InspecaoEmbalagem.registro(avalEmb, {
+      amostras: laudoAtual.emb.amostras,
+      fichaTecnica: document.getElementById('qEmbFicha').value.trim() || null
+    });
+  }
+
   // Aviso, não bloqueio: liberar apesar de ensaio crítico não conforme é
   // uma decisão que existe (concessão), e travá-la no software só faria
   // registrarem o laudo fora do sistema.
@@ -1558,7 +1794,18 @@ function salvarLaudo(decisao) {
     ensaios: ensaios,
     resumoPlano: resumoPlano,
     ck7: ck7,
-    resumoCk7: ck7 ? ck7.resumo : null
+    resumoCk7: ck7 ? ck7.resumo : null,
+    embalagem: embReg,
+    resumoEmbalagem: embReg ? embReg.resumo : null,
+    // Identificação que os formulários F0070/F009 pedem no cabeçalho.
+    recebimentoCq: laudoAtual.ehPa ? null : {
+      qtdPorEmbalagem: document.getElementById('qQtdPorEmb').value.trim() || null,
+      descricaoEmbalagem: document.getElementById('qDescEmb').value.trim() || null,
+      lacre: document.getElementById('qLacre').value === 'sim' ? true
+        : document.getElementById('qLacre').value === 'nao' ? false : null,
+      condicaoEmbalagem: document.getElementById('qCondicaoEmb').value || null,
+      avaria: document.getElementById('qAvaria').value || null
+    }
   }, currentUserNome(), {
     itemTipo: laudoAtual.itemTipo,
     itemNome: laudoAtual.lote.itemNome || null,
@@ -1735,17 +1982,86 @@ function dadosLaudoPa(itemCodigo, loteKey, lote, q, opcoes) {
   };
 }
 
+/* Identificação comum do F0070 e do F009. Vem de três lugares: o lote
+   (estoque_lotes), a entrada da Logística (lote.recebimento) e os campos
+   que a Qualidade preencheu no laudo (qualidade.recebimentoCq). */
+function dadosRecebimento(itemCodigo, loteKey, lote, q) {
+  var mat = materialDoItem(itemCodigo) || {};
+  var rec = lote.recebimento || {};
+  var cq = q.recebimentoCq || {};
+  var forn = fornecedorDoLote(lote, allPedidosCompra) || {};
+  var liberado = q.decisao === 'LIBERADO' || q.decisao === 'APROVADO_CONCESSAO';
+  return {
+    material: lote.itemNome || mat.mpNome || itemCodigo,
+    codigo: itemCodigo,
+    nomeComercial: lote.itemNome || mat.mpNome || '',
+    notaFiscal: rec.notaFiscal || '',
+    loteFornecedor: rec.loteFornecedor || lote.loteOrigem || '',
+    loteInterno: lote.loteInterno || rec.loteInterno || '',
+    fornecedor: forn.fornecedorNome || rec.fornecedorNome || '',
+    qtdRecebida: lote.qtdOriginal != null ? lote.qtdOriginal : lote.saldoLote,
+    unidade: lote.unidade || '',
+    qtdPorEmbalagem: cq.qtdPorEmbalagem || '',
+    descricaoEmbalagem: cq.descricaoEmbalagem || '',
+    lacre: cq.lacre == null ? null : cq.lacre,
+    condicaoEmbalagem: cq.condicaoEmbalagem || null,
+    validade: lote.dataValidade || null,
+    avaria: cq.avaria || null,
+    // "Laudo: ( ) sim ( ) não" do papel = certificado do FORNECEDOR.
+    laudoFornecedor: q.certificadoFornecedor === true ? true : q.certificadoFornecedor === false ? false : null,
+    observacoes: q.observacao || '',
+    conclusao: liberado ? 'APROVADO' : q.decisao === 'REPROVADO' ? 'REPROVADO' : q.decisao || '',
+    autorizadoPor: q.autorizadoPor || null,
+    dataRecebimento: rec.data || String(lote.criadoEm || '').slice(0, 10),
+    recebidoPor: rec.recebidoPor || '',
+    dataAnalise: q.dataInspecao || String(q.inspecionadoEm || '').slice(0, 10)
+  };
+}
+
+function dadosLaudoMp(itemCodigo, loteKey, lote, q, opcoes) {
+  var d = dadosRecebimento(itemCodigo, loteKey, lote, q);
+  var ensaios = q.ensaios || {};
+  d.ensaios = Object.keys(ensaios).map(function(k) {
+    var e = ensaios[k] || {};
+    return {
+      parametro: e.ensaio || '',
+      especificacao: e.especificacaoTexto || e.faixa || '',
+      metodo: e.metodo || '',
+      resultado: e.valor != null && e.valor !== '' ? String(e.valor) : LaudoCQ.cnc(e.cnc)
+    };
+  });
+  d.responsavel = (opcoes || {}).responsavel || {};
+  return d;
+}
+
+function dadosLaudoEmbalagem(itemCodigo, loteKey, lote, q, opcoes) {
+  var d = dadosRecebimento(itemCodigo, loteKey, lote, q);
+  var emb = q.embalagem || {};
+  var itens = emb.itens || {};
+  // Ordem do formulário, não a do objeto: a inspetora confere com o papel.
+  d.parametros = InspecaoEmbalagem.PLANO_F009.map(function(i) {
+    return {texto: i.texto, resultado: LaudoCQ.cnc((itens[i.id] || {}).cnc)};
+  });
+  d.dimensional = emb.dimensional || [];
+  d.fichaTecnica = emb.fichaTecnica || '';
+  d.responsavel = (opcoes || {}).responsavel || {};
+  return d;
+}
+
 function abrirEmissaoLaudo(itemCodigo, loteKey) {
   var lote = (allEstoqueLotes[sanitizeKey(itemCodigo)] || {})[loteKey];
   if (!lote || !lote.qualidade) { showAlert('Este lote ainda não tem laudo registrado.', 'danger'); return; }
-  if (lote.itemTipo !== 'produto') {
-    showAlert('A emissão de laudo de matéria-prima e de embalagem ainda não está disponível — por enquanto só produto acabado.', 'danger');
-    return;
-  }
-  emissaoAtual = {itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, q: lote.qualidade};
+  var roteiro = roteiroDoLote(lote.itemTipo, itemCodigo);
+  emissaoAtual = {itemCodigo: itemCodigo, loteKey: loteKey, lote: lote, q: lote.qualidade, roteiro: roteiro};
+  var nomeDoc = roteiro === 'PA' ? 'Relatório de Análise — Produto Acabado'
+    : roteiro === 'EMBALAGEM' ? 'F009 — Recebimento e Análise de Embalagens'
+    : 'F0070 — Recebimento e Análise de Matéria Prima';
   document.getElementById('qEmitResumo').innerHTML =
     '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b> · lote ' + escapeHtml(lote.loteOrigem || loteKey) +
-    '<br>Relatório de Análise — Produto Acabado, com os resultados já registrados neste laudo.';
+    '<br>' + escapeHtml(nomeDoc) + ', com os resultados já registrados neste laudo.';
+  // Microbiológicas e laudo externo só existem no relatório de PA.
+  document.getElementById('qEmitMicroBox').style.display = roteiro === 'PA' ? '' : 'none';
+  document.getElementById('qEmitLabBox').style.display = roteiro === 'PA' ? '' : 'none';
   var sel = document.getElementById('qEmitResponsavel');
   sel.innerHTML = responsaveisCq.map(function(r, i) {
     return '<option value="' + i + '">' + escapeHtml(r.nome) + (r.registro ? ' — ' + escapeHtml(r.registro) : '') + '</option>';
@@ -1786,14 +2102,28 @@ document.getElementById('qEmitImprimir').addEventListener('click', function() {
   } else {
     resp = responsaveisCq[Number(sel)] || {};
   }
-  var dados = dadosLaudoPa(emissaoAtual.itemCodigo, emissaoAtual.loteKey, emissaoAtual.lote, emissaoAtual.q, {
-    responsavel: resp,
-    micro: document.getElementById('qEmitMicro').checked,
-    laboratorio: document.getElementById('qEmitLab').value.trim()
-  });
-  document.getElementById('laudoPrintArea').innerHTML = LaudoCQ.paginaProdutoAcabado(dados);
+  var e = emissaoAtual;
+  var dados, html, prefixo;
+  if (e.roteiro === 'EMBALAGEM') {
+    dados = dadosLaudoEmbalagem(e.itemCodigo, e.loteKey, e.lote, e.q, {responsavel: resp});
+    html = LaudoCQ.paginaEmbalagem(dados);
+    prefixo = 'F009 - Análise de embalagem';
+  } else if (e.roteiro === 'MP') {
+    dados = dadosLaudoMp(e.itemCodigo, e.loteKey, e.lote, e.q, {responsavel: resp});
+    html = LaudoCQ.paginaMateriaPrima(dados);
+    prefixo = 'F0070 - Análise de matéria-prima';
+  } else {
+    dados = dadosLaudoPa(e.itemCodigo, e.loteKey, e.lote, e.q, {
+      responsavel: resp,
+      micro: document.getElementById('qEmitMicro').checked,
+      laboratorio: document.getElementById('qEmitLab').value.trim()
+    });
+    html = LaudoCQ.paginaProdutoAcabado(dados);
+    prefixo = 'Relatório de análise';
+  }
+  document.getElementById('laudoPrintArea').innerHTML = html;
   fecharEmissao();
-  imprimirComNome(LaudoCQ.nomeArquivo('Relatório de análise', dados));
+  imprimirComNome(LaudoCQ.nomeArquivo(prefixo, dados));
 });
 
 /* Emitir direto do laudo aberto. Só depois de registrado: o relatório é o

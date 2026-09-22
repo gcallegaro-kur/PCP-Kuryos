@@ -759,6 +759,39 @@ Pedido" e MRP só usam material do cliente para a demanda dele. Regras em
 
 ## Qualidade
 
+### Laudos do CQ — o que ficou de fora (2026-09-21)
+
+Entregue: os três laudos saem em PDF do próprio sistema (Relatório de
+Análise de PA, F0070 de MP e F009 de embalagem), roteados pelo `tipo` do
+material. O que ficou para depois:
+
+- **Aposentar o `gerar_relatorio.py`.** O script em
+  `06. Laboratório/01. CQ/23. Relatório de análise` continua rodando em
+  paralelo, lendo a planilha do Microsoft Forms. Os dois vão conviver
+  enquanto a Qualidade não migrar o preenchimento para o app — e dois
+  caminhos para o mesmo documento é exatamente o risco que o Gerador de OPs
+  em VBA já criou com a numeração de lote. Combinar uma data de corte.
+- **Arquivar o PDF junto ao lote.** Hoje o laudo é impresso e quem salva o
+  arquivo é a pessoa, na pasta do mês. O natural seria anexar ao próprio
+  lote (já existe `shared/anexos.js` e Storage configurado) para o Dossiê do
+  Lote mostrar o laudo emitido.
+- **Registro do responsável no cadastro de usuários.** Hoje a lista vive em
+  `config/responsaveisCq` e cresce sozinha quando alguém assina como
+  "Outro". Funciona, mas o CRQ/CRF deveria estar no cadastro da pessoa.
+- **Número sequencial de laudo.** O documento se identifica pelo lote. Se a
+  Anvisa ou um cliente pedir numeração própria do laudo, falta um contador.
+- **Medida fora da ficha técnica não é julgada.** No F009, a ficha técnica
+  é texto livre e a tabela dimensional só registra o que foi medido — o
+  sistema não compara. Para julgar, a ficha precisaria virar campo
+  estruturado (mínimo/máximo por medida) no cadastro do material.
+- **`fill()` do Playwright não age nos campos do modal de laudo.** Dentro de
+  `.modal-body` (que tem `overflow-y:auto`) o fill ora trava na checagem de
+  actionability, ora insere o texto no campo que estava com o foco. No
+  navegador os campos funcionam normalmente (conferido por screenshot); os
+  testes de UI usam o helper `preencher()`, que dispara o evento direto.
+  Se alguém descobrir a causa, vale corrigir — test harness que precisa de
+  desvio esconde defeito de verdade mais cedo ou mais tarde.
+
 ### Revisão da spec do CQ pela Qualidade da Kuryos (2026-09-17)
 
 A Qualidade comentou a spec `ERP_Kuryos_Modulo_CQ_v1.1`. O que virou código já

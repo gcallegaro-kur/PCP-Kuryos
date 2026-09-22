@@ -126,21 +126,32 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — laudos do CQ impressos (2026-09-21).** Escopo pedido pelo
-  usuário: (1) pesagem do CK-7 com quantidade de amostras EM ABERTO
-  (adicionar/remover campos) — hoje trava em √N+1 das caixas e os campos só
-  são montados uma vez; (2) análise de PA com a cara do "Relatório de
-  Análise" oficial e emissão em PDF, incluindo a seção microbiológica com
-  opção de entrar ou não; (3) laudos de MP (F0070/POP004) e de Embalagem
-  (F009/POP041), **roteados pelo `tipo` do material** (MPGR/MPES → MP;
-  EP/ES/ET → embalagem), com consulta e reimpressão. Referências reais lidas
-  em `06. Laboratório/01. CQ` (modelo Word + `gerar_relatorio.py`, os .doc de
-  LAUDOS MP e o F009 de embalagens). Responsável do laudo é **escolhido na
-  hora de imprimir** (decisão do usuário).
-- **Arquivos ativos:** `public/qualidade.html`, `public/shared/inspecao-pa.js`,
-  novos `public/shared/laudo-cq.js` e `public/shared/laudo-cq.css`, testes
-  `run_inspecao_pa_test.js`/`run_inspecao_pa_ui_test.js` e os novos
-  `run_laudo_cq_*`. Não mexo em `logistica.html` nem em `cadastros.html`.
+- **Entrega publicada — laudos do CQ em PDF (2026-09-21/22).** `0204133` e
+  o commit desta entrega, os dois no `origin/main` e no Hosting por worktree
+  limpo. Três pedidos do usuário:
+  1. **Pesagem do CK-7 em aberto.** A tela dava um campo por caixa da
+     amostragem √N+1 (4 ou 5). Mas √N+1 é a amostra de ASPECTO, sobre as
+     CAIXAS; o Relatório de Análise pede "Análise de Peso: 32 amostras", que
+     é outra coisa. Agora começa em 32 e a inspetora muda à vontade.
+  2. **Relatório de Análise de PA em PDF**, com as 9 seções do modelo Word
+     oficial, microbiológicas opcionais (sem elas sai a justificativa do
+     álcool ≥ 60%) e responsável escolhido na hora de imprimir.
+  3. **F0070 (MP) e F009 (embalagem)**, roteados pelo `tipo` do cadastro de
+     Materiais: MPGR/MPES/MU → MP, EP/ES/ET → embalagem. Embalagem ganhou
+     roteiro próprio (13 parâmetros do formulário + tabela dimensional em
+     aberto) porque o que se analisa nela não é ensaio de laboratório.
+  Novos: `public/shared/laudo-cq.js`, `laudo-cq.css`, `inspecao-embalagem.js`,
+  `run_laudo_cq_test.js`. Os formulários foram lidos em
+  `06. Laboratório/01. CQ` antes de escrever código — o layout é o do papel,
+  o ganho é a origem do dado.
+- **Aviso ao Codex — `utils.js` mudou.** `registrarLaudoQualidade` guarda
+  três campos novos no laudo (`recebimentoCq`, `embalagem`, `resumoEmbalagem`).
+  Nada existente mudou de forma. Vi o seu "não tocar Cadastro/CQ/utils.js" —
+  combinado, mas estes 7 arquivos eram o escopo que reservei em `d3d6169`.
+- **Aviso ao Codex — `run_retrabalhos_rules_test.js` exige o emulador na
+  9023.** Ele é o único que não roda numa varredura comum (65 de 66 passam);
+  quem for rodar a suíte inteira precisa subir o emulador antes.
+- **Arquivos ativos:** nenhum; entrega encerrada.
 
 - **Entrega publicada — impressão das fichas de OP (2026-09-21).** `cb9b6a4`
   no `origin/main`; Hosting por worktree limpo (4 arquivos públicos conferidos

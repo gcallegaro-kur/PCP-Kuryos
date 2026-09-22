@@ -262,14 +262,176 @@
      do lote vira ponto porque "/" não existe em nome de arquivo. */
   function nomeArquivo(prefixo, dados) {
     var d = dados || {};
-    var partes = [prefixo, d.produto || d.material || d.codInterno, String(d.lote || '').replace(/\//g, '.')];
+    // Produto acabado tem `lote`; recebimento tem lote interno (AK-...) e
+    // lote do fornecedor. O interno vem primeiro porque é o número que a
+    // Kuryos usa para rastrear -- o do fornecedor só serve quando ainda não
+    // houve geração de lote interno.
+    var lote = d.lote || d.loteInterno || d.loteFornecedor || '';
+    var partes = [prefixo, d.produto || d.material || d.codInterno, String(lote).replace(/\//g, '.')];
     return partes.filter(Boolean).join(' - ')
       .replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+  }
+
+
+  /* ══════════════════════════════════════════════════════════════════
+     IDENTIFICAÇÃO DO RECEBIMENTO — cabeça comum do F0070 e do F009
+
+     Os dois formulários pedem quase o mesmo bloco, na mesma ordem. Onde
+     diferem está marcado: só a MP tem "Qtd por embalagem", "LOTE INTERNO"
+     e "Validade" no corpo (a embalagem não tem validade).
+
+     "Laudo: ( ) sim ( ) não" é o laudo do FORNECEDOR que veio junto com a
+     carga -- no sistema é `certificadoFornecedor`, gravado pela Logística
+     na entrada. Não confundir com este documento, que é o laudo da Kuryos.
+     ══════════════════════════════════════════════════════════════════ */
+  function sn(valor) {
+    return '( ' + (valor === true ? 'X' : '&nbsp;') + ' ) Sim &nbsp; ( ' +
+      (valor === false ? 'X' : '&nbsp;') + ' ) Não';
+  }
+  function opcao(marcado, texto) {
+    return '( ' + (marcado ? 'X' : '&nbsp;') + ' ) ' + esc(texto);
+  }
+  function linhaCampo(partes) {
+    return '<div class="laudo-campo-linha">' + partes.filter(Boolean).join('') + '</div>';
+  }
+  function campo(rotulo, valor, largura) {
+    return '<span class="laudo-par"><b>' + esc(rotulo) + ':</b> ' +
+      '<span class="laudo-campo"' + (largura ? ' style="min-width:' + largura + '"' : '') + '>' +
+      esc(valor == null || valor === '' ? '' : valor) + '</span></span>';
+  }
+  function blocoIdentificacao(d, comValidade) {
+    var qtd = d.qtdRecebida != null ? fmt(d.qtdRecebida) + ' ' + (d.unidade || '') : '';
+    return '<div class="laudo-ident">' +
+      linhaCampo([
+        campo('Nome comercial', d.nomeComercial || d.material, '190px'),
+        campo('Código', d.codigo, '110px'),
+        campo('NF', d.notaFiscal, '90px')
+      ]) +
+      linhaCampo([
+        campo('Fornecedor', d.fornecedor, '230px'),
+        campo('Lote do fornecedor', d.loteFornecedor, '120px')
+      ]) +
+      linhaCampo([
+        campo('Qtd recebida', qtd, '120px'),
+        d.qtdPorEmbalagem != null && d.qtdPorEmbalagem !== ''
+          ? campo('Qtd por embalagem', d.qtdPorEmbalagem, '110px') : '',
+        d.loteInterno ? campo('Lote interno', d.loteInterno, '140px') : ''
+      ]) +
+      linhaCampo([
+        campo('Descrição da embalagem', d.descricaoEmbalagem, '200px'),
+        '<span class="laudo-par"><b>Lacre:</b> ' + sn(d.lacre === true ? true : d.lacre === false ? false : null) + '</span>'
+      ]) +
+      linhaCampo([
+        '<span class="laudo-par"><b>Condições das embalagens:</b> ' +
+          opcao(d.condicaoEmbalagem === 'APROPRIADA', 'Apropriada') + ' &nbsp; ' +
+          opcao(d.condicaoEmbalagem === 'INAPROPRIADA', 'Inapropriada') + '</span>',
+        comValidade ? campo('Validade', data(d.validade), '100px') : ''
+      ]) +
+      linhaCampo([
+        '<span class="laudo-par">' + opcao(d.avaria === 'SEM', 'Recebido sem avaria') + ' &nbsp; ' +
+          opcao(d.avaria === 'COM', 'Recebido com avarias') + '</span>',
+        '<span class="laudo-par laudo-par-dir"><b>Laudo:</b> ' +
+          sn(d.laudoFornecedor === true ? true : d.laudoFornecedor === false ? false : null) + '</span>'
+      ]) +
+    '</div>';
+  }
+
+  function blocoConclusaoRecebimento(d) {
+    return '<div class="laudo-conclusao">' +
+      '<span>' + marca(d.conclusao === 'APROVADO') + ' APROVADO</span>' +
+      '<span>' + marca(d.conclusao === 'REPROVADO') + ' REPROVADO</span>' +
+      (d.conclusao === 'RETIDO' ? '<span>' + marca(true) + ' RETIDO</span>' : '') +
+      (d.conclusao === 'APROVADO_CONCESSAO' ? '<span>' + marca(true) + ' APROVADO COM CONCESSÃO</span>' : '') +
+    '</div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     F0070 — RECEBIMENTO E ANÁLISE DE MATÉRIA PRIMA (POP 004)
+     ══════════════════════════════════════════════════════════════════ */
+  function paginaMateriaPrima(dados) {
+    var d = dados || {};
+    var ensaios = (d.ensaios || []).map(function(e) {
+      return [e.parametro, e.especificacao, e.metodo, e.resultado];
+    });
+    return '<div class="laudo-page">' +
+      cabecalho('POP 004', 'F0070 – Rev.01',
+        'RECEBIMENTO E ANÁLISE DE MATÉRIA PRIMA',
+        d.material ? String(d.material).toUpperCase() : '') +
+      blocoIdentificacao(d, true) +
+
+      '<div class="laudo-h">Resultados analíticos</div>' +
+      (ensaios.length
+        ? tabela(['Parâmetros', 'Especificações', 'Métodos', 'Resultados'], ensaios)
+        : '<div class="laudo-nota-peq">Nenhum ensaio cadastrado para este material — ' +
+          'a especificação entra em Cadastros › Fórmulas/BOM/Especificações.</div>') +
+
+      '<div class="laudo-h">Observações gerais</div>' +
+      '<div class="laudo-obs">' + esc(d.observacoes || '') + '</div>' +
+
+      '<div class="laudo-h">Conclusão</div>' +
+      blocoConclusaoRecebimento(d) +
+      (d.autorizadoPor ? '<div class="laudo-linha-info">Concessão autorizada por: ' + esc(d.autorizadoPor) + '</div>' : '') +
+
+      linhaCampo([
+        campo('Data do recebimento', data(d.dataRecebimento), '110px'),
+        campo('Recebido por', d.recebidoPor, '170px')
+      ]) +
+      rodapeResponsavel(d, 'Data da análise') +
+    '</div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     F009 — RECEBIMENTO E ANÁLISE DE EMBALAGENS (POP 041)
+
+     No papel as duas tabelas ficam lado a lado, em colunas estreitas.
+     Aqui saem empilhadas: a dimensional tem quantas amostras a inspetora
+     quiser (não as 12 fixas do papel) e não caberia espremida na metade
+     da folha.
+     ══════════════════════════════════════════════════════════════════ */
+  function paginaEmbalagem(dados) {
+    var d = dados || {};
+    var params = (d.parametros || []).map(function(p) { return [p.texto, p.resultado]; });
+    var medidas = d.dimensional || [];
+    return '<div class="laudo-page">' +
+      cabecalho('POP 041', 'F009 – Rev.01',
+        'RECEBIMENTO E ANÁLISE DE EMBALAGENS',
+        d.material ? String(d.material).toUpperCase() : '') +
+      blocoIdentificacao(d, false) +
+
+      '<div class="laudo-h">Resultados analíticos</div>' +
+      (params.length
+        ? tabela(['Parâmetros', 'Resultados'], params)
+        : '<div class="laudo-nota-peq">Nenhum parâmetro respondido.</div>') +
+
+      '<div class="laudo-h2">Parâmetros da ficha técnica</div>' +
+      (d.fichaTecnica ? '<div class="laudo-linha-info">' + esc(d.fichaTecnica) + '</div>' : '') +
+      (medidas.length
+        ? tabela(['Amostra', 'Altura', 'Largura', 'Comprimento', 'Volume'],
+            medidas.map(function(m, i) {
+              return [String(i + 1), fmt(m.altura), fmt(m.largura), fmt(m.comprimento), fmt(m.volume)];
+            }))
+        : '<div class="laudo-nota-peq">Nenhuma medida registrada.</div>') +
+
+      '<div class="laudo-h">Observações gerais</div>' +
+      '<div class="laudo-obs">' + esc(d.observacoes || '') + '</div>' +
+
+      '<div class="laudo-h">Conclusão</div>' +
+      blocoConclusaoRecebimento(d) +
+      (d.autorizadoPor ? '<div class="laudo-linha-info">Concessão autorizada por: ' + esc(d.autorizadoPor) + '</div>' : '') +
+
+      linhaCampo([
+        campo('Data do recebimento', data(d.dataRecebimento), '110px'),
+        campo('Análise feita por', d.recebidoPor, '170px')
+      ]) +
+      rodapeResponsavel(d, 'Data da análise') +
+    '</div>';
   }
 
   return {
     MICRO_PADRAO: MICRO_PADRAO, NOTA_MICRO: NOTA_MICRO, DISPENSA_MICRO: DISPENSA_MICRO,
     cnc: cnc, tabelaPesos: tabelaPesos, blocoMicro: blocoMicro,
-    paginaProdutoAcabado: paginaProdutoAcabado, nomeArquivo: nomeArquivo
+    paginaProdutoAcabado: paginaProdutoAcabado,
+    paginaMateriaPrima: paginaMateriaPrima, paginaEmbalagem: paginaEmbalagem,
+    nomeArquivo: nomeArquivo
   };
 });

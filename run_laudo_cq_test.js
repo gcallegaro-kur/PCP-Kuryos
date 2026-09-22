@@ -123,5 +123,13 @@ assert.equal(L.nomeArquivo('Relatório de análise', dados()),
   'Relatório de análise - HIDRATANTE ROSA RAINHA - 26244.09');
 assert.equal(L.nomeArquivo('Relatório de análise', {produto: 'A/B', lote: '26244/09'}),
   'Relatório de análise - A-B - 26244.09', 'caractere proibido em nome de arquivo não passa');
+// Laudo de recebimento não tem "lote": tem lote interno e lote do
+// fornecedor. O interno vem primeiro -- é o número que a Kuryos rastreia.
+assert.equal(L.nomeArquivo('F0070 - Análise de matéria-prima',
+  {material: 'ÁLCOOL 96', loteInterno: 'AK-2026-000300', loteFornecedor: 'R2062026'}),
+  'F0070 - Análise de matéria-prima - ÁLCOOL 96 - AK-2026-000300');
+assert.equal(L.nomeArquivo('F009 - Análise de embalagem',
+  {material: 'FRASCO 200ML', loteFornecedor: 'BP-4471'}),
+  'F009 - Análise de embalagem - FRASCO 200ML - BP-4471', 'sem lote interno, vale o do fornecedor');
 
 console.log('run_laudo_cq_test: OK');
