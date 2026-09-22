@@ -127,6 +127,30 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — retrabalho vira OP (2026-09-22).** O usuário refez o
+  escopo, e simplificou: *"A ideia é apenas poder abrir uma OP, mas de
+  retrabalho, ao invés de criar uma nova op. Essa ordem de retrabalho pode
+  ser alocada em linhas de produção ou postos de trabalho, em resumo é
+  isto."* O modelo de `retrabalhos/{id}` (universo paralelo, com status,
+  painel e callable próprios) sai de cena como caminho principal.
+- **Por que isto é mais simples do que parece:** uma OP de retrabalho é uma
+  OP **sem `skuPedidoKey`** (já não credita pedido) e **sem
+  `materiaisConsumo`** (já não baixa BOM). O não-contar-duas-vezes cai por
+  gravidade. `ops/{lote}` já tem `produzidoPosto` e o servidor já trata
+  `tipo==='posto'` — mas **nada escreve** esse campo hoje: falta o caminho
+  do posto apontar numa OP. É a única parte de verdade nova.
+- **Decisões do usuário:** numeração `{lote original}-RT{n}` (ex.:
+  `26216/04-RT1`) — é o MESMO lote sendo retrabalhado, não um lote novo; e o
+  RT-26216-04-20260921 que está no ar será **convertido** para o modelo
+  novo, preservando setup, envase e a pendência, mantendo a Linha 2.
+- **Arquivos ativos:** novos `public/shared/retrabalho-op.js` e testes
+  `run_retrabalho_op*`; `public/ops.html` (abrir retrabalho),
+  `public/form.html` (alocar/apontar OP em posto),
+  `public/retrabalhos.html` + `retrabalhos-gestao.js` (passam a listar OPs),
+  `public/shared/retrabalhos-tela.js` (para de bloquear a linha),
+  `scripts/` (migração idempotente). `functions/retrabalhos.js` e
+  `rearranjo_linhas.js` eu **não** removo — o histórico do caso antigo fica.
+
 - **Entrega publicada — gestão de retrabalhos (2026-09-22).** O usuário pediu
   para eu corrigir a entrega anterior: *"não ficou bom... não deu pra
   acompanhar bem"*. Dois defeitos concretos, os dois corrigidos:
