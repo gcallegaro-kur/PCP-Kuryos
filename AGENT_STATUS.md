@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Codex — rearranjo de linhas 21/09/2026
+
+- **Funcionalidade pronta:** botão administrativo em Apontamento para mover OP para linha livre ou trocar duas OPs. Exige pausa, conferência dos apontamentos e motivo; servidor revalida administrador/alocações, preserva registros/totais/setup, segmenta pausas por linha e grava auditoria/idempotência.
+- **Validação:** testes de domínio e navegador desktop/celular aprovados, regressões de encerramento e transações null aprovadas, sintaxe JS e regras conferidas. Commit funcional: `3331fdb`, enviado ao origin/main. Publicado em 21/09/2026 por worktree limpo `../deploy-rearranjo-linhas` (Hosting + RTDB + rearranjarLinhas). HTML e módulo publicados conferidos byte a byte (HTTP 200); callable sem login retorna HTTP 401.
+- **Correção operacional PENDENTE — mudança de diagnóstico confirmada pelo usuário:** 26216/04 é RETRABALHO de OP concluída (867 unidades), não produção nova. Não reabrir/somar produção original. Usuário confirmou setup 15:42, envase 16:00 e pausa 17:09 de 21/09. A unidade na 26160/04 era fictícia para fechar turno; registros e totais já zerados na base, restam alocação/setup/datas e marcadores idempotentes na OP/pedido. Nenhuma escrita operacional realizada nesta sessão. Backup completo em `backups/antes-rearranjo-retrabalho-20260921.json`.
+- **Pergunta pendente:** motivo, quantidade envolvida e quantidade retrabalhada hoje; desenho do painel RT registrado em MELHORIAS_FUTURAS.md. A migração Céu Infinito linha 1 → 3 foi exemplo para amanhã; não executada antecipadamente.
+- **Arquivos desta sessão:** functions/index.js, functions/rearranjo_linhas.js, public/form.html, public/shared/rearranjo-linhas-tela.js, database.rules.json, testes de rearranjo, AGENT_STATUS.md e MELHORIAS_FUTURAS.md. Cadastro/CQ/utils.js alheios preservados.
+
 ### Codex — Dev 3 11/09
 
 - **Retomada em 16/09 — contatos por área:** assumida a conclusão do escopo de contatos do Dev 2, cuja última execução falhou por limite semanal (tarefa atualmente inativa). Preservar e integrar as alterações salvas de Cadastro, Comercial, agenda/Expedição e módulos/testes de contatos. Validar, corrigir pendências, commit/push/deploy isolado. Nenhuma execução simultânea identificada nos arquivos reservados abaixo.
@@ -1077,3 +1085,4 @@ no disco** — não o último commit, não o índice do git. Com dois agentes no
 mesmo repositório, isso significa que **um deploy publica o trabalho não
 commitado do outro**. Conferir `git status --short` antes de publicar não é
 zelo: é a única coisa que separa "publiquei o meu" de "publiquei o nosso".
+
