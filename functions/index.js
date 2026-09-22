@@ -2126,7 +2126,10 @@ exports.apontarRetrabalho = onCall({timeoutSeconds:120,memory:'512MiB'}, async r
   if(!request.auth) throw new HttpsError('unauthenticated','Faça login.');
   const uid=request.auth.uid;
   const user=(await db.ref('usuarios/'+uid).get()).val() || {};
-  if(!['admin','production','pcp'].includes(user.role) && !(user.modulos && user.modulos.apontamento)) throw new HttpsError('permission-denied','Perfil sem acesso a retrabalho.');
+  // 'qualidade' entra aqui só para DECIDIR; quem checa ação por ação é
+  // retrabalhos.executar (PODE_EXECUTAR x PODE_DECIDIR). Sem isto o papel
+  // que a spec põe como responsável pela reinspeção nem chegaria à função.
+  if(!['admin','production','pcp','qualidade'].includes(user.role) && !(user.modulos && user.modulos.apontamento)) throw new HttpsError('permission-denied','Perfil sem acesso a retrabalho.');
   const agora=new Date().toISOString();let rt,falha;
   await db.ref().once('value');
   const result=await db.ref().transaction(base=>{

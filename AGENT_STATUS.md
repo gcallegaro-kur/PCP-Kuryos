@@ -127,27 +127,35 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — gestão de retrabalhos (2026-09-22).** O usuário pediu para
-  eu corrigir a entrega do Codex: *"não ficou bom... deixa com uma usabilidade
-  melhor, inclusive eu solicitei a questão de deixar algo mais direcionado pra
-  avaliar retrabalhos, aqui ele não ficou legal, não deu pra acompanhar bem"*.
-  Dois problemas concretos no que está no ar: (1) o botão "Encerrar execução"
-  **some** quando há apontamento com quantidade pendente, sem dizer por quê
-  (`retrabalhos-tela.js`); (2) o único lugar para ver retrabalho é uma pilha de
-  botões dentro do Apontamento, e depois de `finalizar` o caso fica em
-  `aguardando_qualidade` **para sempre** — não existe passo de avaliação, que é
-  o item 6 do `PLANO_GESTAO_RETRABALHOS.md`.
-- **Escopo que estou entregando:** tela própria de acompanhamento/avaliação +
-  a decisão da Qualidade que fecha o caso. **NÃO** estou construindo o modelo
-  completo do plano (caso x roteiro x ordens de fabricação/envase/rotulagem,
-  postos, unidades decimais) — isso continua do Codex e o plano segue válido.
-  A decisão é REGISTRO: não libera estoque nem mexe em lote, como o próprio
-  plano exige.
-- **Arquivos ativos:** `functions/retrabalhos.js` (ação `decidir`),
-  `functions/index.js` (só o gate do callable), `public/shared/retrabalhos-tela.js`,
-  novos `public/retrabalhos.html` e `public/shared/retrabalhos-gestao.js`,
-  `public/auth_check.js` (página + menu) e testes `run_retrabalhos_gestao*`.
-  Não toco em `form.html` nem em `rearranjo_linhas.js`.
+- **Entrega publicada — gestão de retrabalhos (2026-09-22).** O usuário pediu
+  para eu corrigir a entrega anterior: *"não ficou bom... não deu pra
+  acompanhar bem"*. Dois defeitos concretos, os dois corrigidos:
+  1. **O botão "Encerrar execução" sumia** quando havia apontamento com
+     quantidade pendente, sem dizer por quê. Agora aparece DESABILITADO com
+     o motivo ao lado. (Isso inverte a asserção da linha 13 de
+     `run_retrabalhos_ui_test.js`, que eu atualizei com comentário — era a
+     única forma de deixar a suíte verde e o comportamento certo.)
+  2. **O caso morria em `aguardando_qualidade`:** não havia passo de
+     avaliação. Nova ação `decidir` (liberado / nova etapa / reprovado) com
+     responsável, análise e histórico. **"Nova etapa" reocupa a linha de
+     verdade**, senão seria só um rótulo e o caso ficaria de novo sem saída.
+  Nova tela **`public/retrabalhos.html`** (módulo `qualidade`, menu novo):
+  KPIs, filtros, busca, linha do tempo do caso, conferência da quantidade
+  pendente e a avaliação. `decidir` é REGISTRO — não mexe em estoque, lote
+  nem RNC, como o `PLANO_GESTAO_RETRABALHOS.md` exige.
+- **Aviso ao Codex — permissões.** `apontarRetrabalho` passou a aceitar o
+  papel `qualidade` no gate do callable, **só** para decidir: quem separa as
+  ações é `PODE_EXECUTAR` x `PODE_DECIDIR` em `functions/retrabalhos.js`.
+  Qualidade continua sem poder apontar execução (coberto por teste).
+  `form.html` levou **uma linha** — o `<script>` de `retrabalhos-gestao.js`,
+  para o Apontamento e a tela nova dizerem a mesma frase.
+- **O modelo completo do plano continua com você.** Não implementei caso x
+  roteiro x ordens de fabricação/envase/rotulagem, postos nem unidades
+  decimais. O que entreguei opéra sobre o `retrabalhos/{id}` que já existe.
+- **Arquivos ativos:** nenhum; entrega encerrada. Testes novos:
+  `run_retrabalhos_gestao_test.js`, `run_retrabalhos_decisao_test.js` e
+  `run_retrabalhos_gestao_ui_test.js`. 68 de 69 passando — o único que não
+  roda é `run_retrabalhos_rules_test.js`, que exige o emulador na 9023.
 
 - **Entrega publicada — laudos do CQ em PDF (2026-09-21/22).** `0204133` e
   o commit desta entrega, os dois no `origin/main` e no Hosting por worktree

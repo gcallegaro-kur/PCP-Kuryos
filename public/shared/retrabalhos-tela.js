@@ -7,13 +7,26 @@
   function admin(){return window.currentUser && window.currentUser.role==='admin';}
   function podeExecutar(){var u=window.currentUser || {};return ['admin','production','pcp'].includes(u.role) || !!(u.modulos && u.modulos.apontamento);}
   function button(text,fn){var b=el('button',text,'andon-btn btn-neutral');b.type='button';b.onclick=fn;return b;}
+  /* Uma frase só, dizendo o que fazer agora -- e, quando algo está travado,
+     POR QUÊ. Vem de shared/retrabalhos-gestao.js para que o Apontamento e a
+     tela de Retrabalhos digam exatamente a mesma coisa. Com o módulo
+     ausente (página que não o carrega), devolve null e nada quebra. */
+  function passo(r){
+    if(typeof RetrabalhosGestao==='undefined') return null;
+    return RetrabalhosGestao.proximoPasso(r,(window.currentUser || {}).role || '');
+  }
   function card(linha,state){
     var r=cache[state.retrabalhoId];var c=el('div',null,'andon-card '+(state.status==='parada'?'stopped':'active'));
     c.appendChild(el('div',linha,'andon-line-title'));
     c.appendChild(el('div','Retrabalho · OP '+(r?r.loteOriginal:state.lote),'turno-op-lote'));
     c.appendChild(el('p',r?r.produto:state.produto));
     c.appendChild(el('p',state.status==='parada'?(state.motivoParada+' · desde '+date(state.inicioParada)):'Em andamento'));
-    if(r){c.appendChild(el('p',r.escopo+' · '+r.quantidadeConfirmada+' un. conferidas'+(r.apontamentosPendentes?' · quantidade pendente':'') ));c.appendChild(button('Ver retrabalho / apontamentos',function(){abrir(r.id);}));}
+    if(r){
+      c.appendChild(el('p',r.escopo+' · '+r.quantidadeConfirmada+' un. conferidas'+(r.apontamentosPendentes?' · quantidade pendente':'') ));
+      var pr=passo(r);
+      if(pr) c.appendChild(el('p','→ '+pr.titulo));
+      c.appendChild(button('Ver retrabalho / apontamentos',function(){abrir(r.id);}));
+    }
     else c.appendChild(el('p','Carregando retrabalho…'));
     return c;
   }
@@ -23,7 +36,10 @@
     if(!section){section=el('section',null,'card');section.id='retrabalhosPainel';linhas.after(section);}
     section.replaceChildren();var ids=Object.keys(cache);section.style.display=ids.length?'':'none';
     section.appendChild(el('h3','Retrabalhos'));
-    section.appendChild(el('p','Apontamentos próprios, sem somar novamente à produção da OP original.'));
+    section.appendChild(el('p','Apontamentos próprios, sem somar novamente à produção da OP original. Para acompanhar os casos, ver a linha do tempo e registrar a avaliação da Qualidade, use a tela de Retrabalhos.'));
+    var atalho=el('a','Abrir a tela de Retrabalhos','andon-btn btn-neutral');
+    atalho.href='retrabalhos.html';atalho.style.cssText='display:block;text-align:center;text-decoration:none';
+    section.appendChild(atalho);
     ids.sort().reverse().forEach(function(id){var r=cache[id];section.appendChild(button('OP '+r.loteOriginal+' · '+r.linha+' · '+(nomes[r.status]||r.status)+(r.apontamentosPendentes?' · quantidade pendente':''),function(){abrir(id);}));});
   }
   function abrir(id){
@@ -45,9 +61,12 @@
     async function enviar(acao,extra){
       erro.textContent='';var payload=Object.assign({retrabalhoId:id,revisao:r.revisao,acao:acao},extra || {});
       var signature=JSON.stringify(payload);if(signature!==lastSignature){lastSignature=signature;lastId='rt_'+Date.now()+'_'+Math.random().toString(36).slice(2);}
-      payload.operacaoId=lastId;box.querySelectorAll('button').forEach(function(b){b.disabled=true;});
+      payload.operacaoId=lastId;
+      var desabilitados=[];box.querySelectorAll('button').forEach(function(b){if(!b.disabled){b.disabled=true;desabilitados.push(b);}});
       try{await firebase.functions().httpsCallable('apontarRetrabalho')(payload);modal.remove();modal=null;showSuccess('Retrabalho atualizado','O apontamento foi salvo sem alterar a quantidade fabricada da OP original.');}
-      catch(e){erro.textContent=e.message || 'Falha ao gravar. Tente novamente.';box.querySelectorAll('button').forEach(function(b){b.disabled=false;});}
+      // Reabilitar em massa reativava o botão de encerrar que estava
+      // desabilitado de propósito. Só volta o que foi desabilitado aqui.
+      catch(e){erro.textContent=e.message || 'Falha ao gravar. Tente novamente.';desabilitados.forEach(function(b){b.disabled=false;});}
     }
     function field(label,id,type){var l=el('label',label),input=el(type==='textarea'?'textarea':'input');input.id=id;if(type!=='textarea')input.type=type;input.style.cssText='display:block;width:100%;padding:10px;margin-top:4px';l.appendChild(input);controls.appendChild(l);return input;}
     if(admin() && registros.length){
@@ -62,13 +81,37 @@
     if(podeExecutar() && r.status==='pausado'){
       controls.appendChild(el('p','A pausa permanece aberta até você confirmar a retomada.'));
       controls.appendChild(button('Retomar retrabalho agora',function(){if(confirm('Retomar o retrabalho na '+r.linha+' agora?'))enviar('retomar');}));
-      if(!r.apontamentosPendentes){var obs=field('Observação ao encerrar a execução','rtObsFim','textarea');controls.appendChild(button('Encerrar execução — aguardar Qualidade',function(){if(!obs.value.trim()){erro.textContent='Informe a observação do encerramento.';return;}if(confirm('Encerrar o retrabalho, liberar a linha e deixá-lo aguardando Qualidade?'))enviar('finalizar',{motivo:obs.value});}));}
+      /* Antes: com apontamento de quantidade pendente, este bloco inteiro
+         não era renderizado -- o botão de encerrar simplesmente NÃO EXISTIA
+         na tela, sem nenhuma explicação. Quem estava na linha concluía que o
+         sistema tinha quebrado (foi a reclamação do usuário em 22/09).
+         Agora o botão aparece DESABILITADO, com a frase que diz o que falta
+         para destravar. Sumir em silêncio esconde o problema; desabilitar
+         com motivo ensina o caminho. */
+      var pendente=r.apontamentosPendentes>0;
+      if(pendente){
+        var pr=passo(r);
+        var aviso=el('p',(pr?pr.titulo+'. '+pr.detalhe:'Confira a quantidade dos apontamentos pendentes antes de encerrar.'));
+        aviso.style.cssText='font-size:14px;line-height:1.5;margin-top:6px;color:var(--warning)';
+        controls.appendChild(aviso);
+      }
+      var obs=field('Observação ao encerrar a execução','rtObsFim','textarea');
+      var btnFim=button('Encerrar execução — aguardar Qualidade',function(){if(!obs.value.trim()){erro.textContent='Informe a observação do encerramento.';return;}if(confirm('Encerrar o retrabalho, liberar a linha e deixá-lo aguardando Qualidade?'))enviar('finalizar',{motivo:obs.value});});
+      if(pendente){btnFim.disabled=true;obs.disabled=true;btnFim.title='Confira a quantidade dos períodos pendentes para liberar o encerramento.';}
+      controls.appendChild(btnFim);
     } else if(podeExecutar() && r.status==='em_andamento'){
       var nova=field('Quantidade retrabalhada desde a retomada (deixe vazio se pendente)','rtNovaQuantidade','number');nova.min='0';nova.step='1';
       var operador=field('Operador','rtOperador','text');
       var pausa=field('Motivo da pausa','rtMotivoPausa','text');pausa.value='Fim de turno';
       controls.appendChild(button('Salvar período e pausar',function(){if(!pausa.value.trim()){erro.textContent='Informe o motivo da pausa.';return;}enviar('pausar',{quantidade:nova.value,motivo:pausa.value,operador:operador.value});}));
-    } else if(r.status==='aguardando_qualidade') controls.appendChild(el('p','Execução encerrada. A liberação da Qualidade e eventuais ajustes de estoque devem ser registrados no fluxo de Qualidade; este painel não libera nem duplica estoque.'));
+    } else if(r.status==='aguardando_qualidade'){
+      controls.appendChild(el('p','Execução encerrada. A avaliação da Qualidade é registrada na tela de Retrabalhos; este painel não libera nem duplica estoque.'));
+      var ir=el('a','Abrir na tela de Retrabalhos','andon-btn btn-neutral');
+      ir.href='retrabalhos.html';ir.style.cssText='display:block;text-align:center;text-decoration:none';
+      controls.appendChild(ir);
+    } else if(r.status==='liberado' || r.status==='reprovado'){
+      controls.appendChild(el('p','Caso encerrado pela Qualidade: '+(r.status==='liberado'?'retrabalho aprovado':'retrabalho reprovado')+'. O destino do lote é tratado na tela de Qualidade.'));
+    }
     box.querySelectorAll('p').forEach(function(p){p.style.cssText='font-size:14px;line-height:1.5;margin-top:6px';});
     document.body.appendChild(modal);
   }

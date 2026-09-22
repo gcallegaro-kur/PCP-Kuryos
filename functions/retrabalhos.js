@@ -8,9 +8,20 @@ function totalizar(rt) {
   rt.quantidadeConfirmada=registros.reduce((n,r)=>n+(r.quantidadePendente?0:Number(r.quantidade || 0)),0);
   rt.apontamentosPendentes=registros.filter(r=>r.quantidadePendente).length;
 }
+/* Quem executa aponta; quem decide é a Qualidade.
+
+   São permissões DIFERENTES de propósito: apontar quanto foi retrabalhado é
+   trabalho de quem está na linha; dizer se o retrabalho resolveu é decisão
+   técnica. O plano (PLANO_GESTAO_RETRABALHOS.md, item 6) coloca reinspeção e
+   disposição final na Qualidade, e é o que separa "a execução acabou" de "o
+   lote está bom". */
+const PODE_EXECUTAR = user => ['admin','production','pcp'].includes(user.role) || !!(user.modulos && user.modulos.apontamento);
+const PODE_DECIDIR = user => ['admin','qualidade'].includes(user.role);
+
 function executar(base,d,uid,agora) {
   const user=(base.usuarios || {})[uid] || {};
-  if(!['admin','production','pcp'].includes(user.role) && !(user.modulos && user.modulos.apontamento)) fail('Seu perfil não pode apontar retrabalho.');
+  if(d.acao==='decidir') { if(!PODE_DECIDIR(user)) fail('Somente a Qualidade (ou o administrador) decide o retrabalho.'); }
+  else if(!PODE_EXECUTAR(user)) fail('Seu perfil não pode apontar retrabalho.');
   const rt=(base.retrabalhos || {})[d.retrabalhoId];
   if(!rt) fail('Retrabalho não encontrado.');
   if(!/^[a-zA-Z0-9_-]{12,100}$/.test(d.operacaoId || '')) fail('Operação inválida.');
@@ -21,7 +32,7 @@ function executar(base,d,uid,agora) {
   const antes=clone(rt);
   if(d.acao==='corrigir_quantidade') {
     if(user.role!=='admin') fail('Somente admin pode corrigir apontamentos anteriores.');
-    if(!['pausado','em_andamento','aguardando_qualidade'].includes(rt.status)) fail('Retrabalho encerrado.');
+    if(!['pausado','em_andamento','aguardando_qualidade'].includes(rt.status)) fail('Retrabalho já decidido pela Qualidade; não é possível corrigir apontamento.');
     const ap=(rt.apontamentos || {})[d.apontamentoId];
     if(!ap) fail('Apontamento não encontrado.');
     if(!String(d.motivo || '').trim()) fail('Informe o motivo da correção.');
@@ -29,6 +40,40 @@ function executar(base,d,uid,agora) {
     if(qtd===null) fail('Informe a quantidade conferida.');
     ap.quantidade=qtd; ap.quantidadePendente=false; ap.corrigidoEm=agora; ap.corrigidoPor=user.nome || uid;
     if(String(d.operador || '').trim()) ap.operador=String(d.operador).trim().slice(0,120);
+  } else if(d.acao==='decidir') {
+    /* Fecha o ciclo. Antes disto o caso parava em `aguardando_qualidade` e
+       ficava ali para sempre -- não havia como registrar o resultado, que é
+       justamente o que o usuário reclamou não conseguir acompanhar.
+
+       A decisão é REGISTRO, não liberação: não mexe em estoque, em lote nem
+       em RNC. O plano é explícito -- "não tratar o status do RT como
+       liberação global automática de todos os paletes do SKU". Quem libera
+       o lote continua sendo a tela de Qualidade, lote a lote. */
+    if(rt.status!=='aguardando_qualidade') fail('A execução precisa estar encerrada e aguardando a Qualidade.');
+    const DESTINO={liberado:'liberado',reprovado:'reprovado',nova_etapa:'pausado'};
+    const destino=DESTINO[d.decisao];
+    if(!destino) fail('Decisão inválida.');
+    if(!String(d.analise || '').trim()) fail('Registre a análise que embasou a decisão.');
+    if(d.decisao==='nova_etapa') {
+      /* Nova etapa é um ciclo de verdade: devolve o caso para a linha, como
+         antes do `finalizar`. Sem isto "precisa de nova etapa" seria só um
+         rótulo, e o caso morreria num status sem saída -- o mesmo defeito
+         que estou corrigindo. */
+      const ocupada=Object.values(base.ops || {}).some(o=>o.abertaDesde && o.abertaLinha===rt.linha && !['Cancelado','Concluído'].includes(o.status));
+      if(ocupada) fail('A '+rt.linha+' está com uma OP aberta. Libere a linha antes de reabrir o retrabalho.');
+      if((base.retrabalhos_linhas || {})[rt.linha]) fail('A '+rt.linha+' já está reservada para outro retrabalho.');
+      (base.retrabalhos_linhas || (base.retrabalhos_linhas={}))[rt.linha]=d.retrabalhoId;
+      (base.estado_linhas || (base.estado_linhas={}))[key(rt.linha)]={status:'parada',inicioParada:agora,
+        motivoParada:'Aguardando retomada do retrabalho',lote:rt.loteOriginal,produto:rt.produto,
+        retrabalhoId:d.retrabalhoId,tipoOperacao:'retrabalho'};
+      rt.inicioParada=agora;
+      delete rt.encerradoEm;
+    }
+    rt.status=destino;
+    (rt.decisoes || (rt.decisoes={}))[d.operacaoId]={decisao:d.decisao,analise:String(d.analise).trim().slice(0,2000),
+      motivo:String(d.motivo || '').trim().slice(0,1000),responsavel:user.nome || uid,uid,em:agora};
+    rt.decisaoAtual={decisao:d.decisao,responsavel:user.nome || uid,em:agora};
+    if(d.decisao!=='nova_etapa') rt.decididoEm=agora;
   } else {
     const state=(base.estado_linhas || {})[key(rt.linha)] || {};
     if(state.retrabalhoId!==d.retrabalhoId || (base.retrabalhos_linhas || {})[rt.linha]!==d.retrabalhoId) fail('A ocupação da linha mudou. Atualize o painel.');

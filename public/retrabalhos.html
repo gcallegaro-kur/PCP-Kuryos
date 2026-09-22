@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retrabalhos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/retrabalhos-gestao.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--purple:#7c3aed;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-blue-fg:#1e40af;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff;--tint-purple-fg:#6b21a8}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--purple:#a78bfa;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-blue-fg:#93b4ff;--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--tint-purple-fg:#d8c8ff}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--purple:#a78bfa;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-blue-fg:#93b4ff;--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--tint-purple-fg:#d8c8ff}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:10px;flex-wrap:wrap}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px;max-width:70ch}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .card-body{padding:14px 16px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-primary{background:var(--primary);color:#fff}
+    .btn-green{background:var(--success);color:#fff}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    input,select,textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--card);font-family:inherit}
+    label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+    .form-group{margin-bottom:12px}
+
+    /* Números do topo: o que cobra ação de alguém vem em destaque. */
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
+    .kpi.destaque{border-left-color:var(--purple)}
+    .kpi.alerta{border-left-color:var(--warning)}
+    .kpi-num{font-size:24px;font-weight:700;line-height:1.1}
+    .kpi-rot{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:3px}
+
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .pill{padding:6px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--card);font-size:12.5px;font-weight:600;cursor:pointer;color:var(--text)}
+    .pill.ativo{background:var(--primary);border-color:var(--primary);color:#fff}
+
+    .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+    .b-azul{background:var(--tint-blue-bg);color:var(--tint-blue-fg)}
+    .b-laranja{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .b-roxo{background:var(--tint-purple-bg);color:var(--tint-purple-fg)}
+    .b-verde{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .b-vermelho{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .b-cinza{background:var(--tint-gray-bg);color:var(--muted)}
+
+    .rt-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+    .rt-card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);border-left:4px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:8px}
+    .rt-card.aberto{border-left-color:var(--purple)}
+    .rt-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+    .rt-lote{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.3px}
+    .rt-produto{font-size:15px;font-weight:700;line-height:1.25}
+    .rt-meta{font-size:12px;color:var(--muted)}
+    .rt-nums{display:flex;gap:16px;font-size:12.5px;flex-wrap:wrap}
+    .rt-nums b{font-size:15px}
+    /* A faixa do próximo passo é o coração da tela: o que fazer agora e,
+       quando algo está travado, POR QUÊ. Foi a falta disso que fez o botão
+       de encerrar "sumir" sem explicação na primeira versão. */
+    .rt-passo{background:var(--surface-2);border-radius:10px;padding:10px 12px;font-size:12.5px;border-left:3px solid var(--primary)}
+    .rt-passo.travado{border-left-color:var(--warning);background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .rt-passo-tit{font-weight:700;margin-bottom:2px}
+    .rt-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:16px}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:16px;max-width:720px;width:100%;max-height:92vh;display:flex;flex-direction:column}
+    .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .modal-header h2{font-size:17px}
+    .modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+    .modal-body{padding:18px 20px;overflow-y:auto}
+    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;background:var(--surface-2)}
+
+    .tl{list-style:none;margin:8px 0 0;padding:0;border-left:2px solid var(--border);margin-left:6px}
+    .tl li{position:relative;padding:0 0 14px 18px}
+    .tl li::before{content:'';position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--border)}
+    .tl li.pendente::before{background:var(--warning)}
+    .tl li.decisao::before{background:var(--purple)}
+    .tl li.encerramento::before{background:var(--success)}
+    .tl-quando{font-size:11px;color:var(--muted)}
+    .tl-tit{font-size:13px;font-weight:600}
+    .tl-det{font-size:12px;color:var(--muted)}
+
+    .aviso{border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px}
+    .aviso-info{background:var(--tint-blue-bg);color:var(--tint-blue-fg)}
+    .aviso-alerta{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .aviso-erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .no-data{text-align:center;padding:30px;color:var(--muted);font-size:13.5px}
+    .hint{font-size:12px;color:var(--muted)}
+    @media(max-width:700px){.rt-lista{grid-template-columns:1fr}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Retrabalhos</h1>
+    <div class="header-sub">Acompanhamento e avaliação dos casos de retrabalho. A execução (retomar, pausar, encerrar) continua no Apontamento, no Painel de Turno.</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="kpis" id="rtKpis"></div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Casos</h3>
+      <span class="hint" id="rtContagem"></span>
+    </div>
+    <div class="card-body">
+      <div class="filtros" style="margin-bottom:12px">
+        <button class="pill ativo" data-filtro="abertos">Em aberto</button>
+        <button class="pill" data-filtro="aguardando_qualidade">Aguardando Qualidade</button>
+        <button class="pill" data-filtro="encerrados">Encerrados</button>
+        <button class="pill" data-filtro="">Todos</button>
+        <input type="search" id="rtBusca" placeholder="Buscar por lote, produto, cliente ou linha" style="flex:1;min-width:220px;width:auto">
+      </div>
+      <div class="rt-lista" id="rtLista"></div>
+      <div class="no-data" id="rtVazio" style="display:none">Nenhum caso de retrabalho neste filtro.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: o caso inteiro ══════════ -->
+<div class="modal-bg" id="rtModalBg">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="rtModalTitulo">Retrabalho</h2>
+      <button class="modal-close" id="rtModalClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body" id="rtModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="rtModalFechar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var todos = {};          // retrabalhos/{id}
+var filtroAtual = 'abertos';
+var buscaAtual = '';
+var casoAberto = null;   // id no modal
+
+function papel() { return (window.currentUser && window.currentUser.role) || ''; }
+function ehAdmin() { return papel() === 'admin'; }
+function podeDecidir() { return ehAdmin() || papel() === 'qualidade'; }
+function dataHora(v) {
+  if (!v) return '—';
+  var d = new Date(v);
+  return isNaN(d) ? String(v) : d.toLocaleString('pt-BR', {timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'});
+}
+function duracao(min) {
+  var m = Math.max(0, Math.round(Number(min) || 0));
+  return m >= 60 ? Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0') : m + 'min';
+}
+
+/* ── Lista ─────────────────────────────────────────────────────────── */
+function render() {
+  var itens = RetrabalhosGestao.lista(todos, papel());
+  var c = RetrabalhosGestao.contadores(itens);
+  document.getElementById('rtKpis').innerHTML =
+    kpi(c.abertos, 'Casos em aberto', c.abertos ? 'destaque' : '') +
+    kpi(c.emExecucao, 'Em execução agora', '') +
+    kpi(c.aguardandoQualidade, 'Aguardando Qualidade', c.aguardandoQualidade ? 'destaque' : '') +
+    kpi(c.comQuantidadePendente, 'Com quantidade pendente', c.comQuantidadePendente ? 'alerta' : '') +
+    kpi(c.total, 'Total registrado', '');
+
+  var visiveis = RetrabalhosGestao.filtrar(itens, {status: filtroAtual, busca: buscaAtual});
+  document.getElementById('rtContagem').textContent =
+    visiveis.length + ' de ' + itens.length + ' caso(s)';
+  document.getElementById('rtVazio').style.display = visiveis.length ? 'none' : '';
+  document.getElementById('rtLista').innerHTML = visiveis.map(cartao).join('');
+  document.getElementById('rtLista').querySelectorAll('[data-abrir]').forEach(function(b) {
+    b.addEventListener('click', function() { abrirCaso(b.getAttribute('data-abrir')); });
+  });
+}
+function kpi(valor, rotulo, cls) {
+  return '<div class="kpi ' + cls + '"><div class="kpi-num">' + valor + '</div><div class="kpi-rot">' + escapeHtml(rotulo) + '</div></div>';
+}
+function cartao(r) {
+  var travado = r.passo.bloqueio ? ' travado' : '';
+  return '<div class="rt-card' + (r.aberto ? ' aberto' : '') + '">' +
+    '<div class="rt-topo">' +
+      '<div><div class="rt-lote">OP ' + escapeHtml(r.lote) + ' · ' + escapeHtml(r.linha || '—') + '</div>' +
+      '<div class="rt-produto">' + escapeHtml(r.produto) + '</div>' +
+      '<div class="rt-meta">' + escapeHtml(r.cliente || '—') + ' · ' + escapeHtml(r.escopo || '—') + '</div></div>' +
+      '<span class="badge b-' + r.statusCor + '">' + escapeHtml(r.statusRotulo) + '</span>' +
+    '</div>' +
+    '<div class="rt-meta">' + escapeHtml(r.motivo || '') + '</div>' +
+    '<div class="rt-nums">' +
+      '<span><b>' + fmtNum(r.confirmado) + '</b> un. conferidas' +
+        (r.referencia != null ? ' <span class="hint">de ' + fmtNum(r.referencia) + ' do lote</span>' : '') + '</span>' +
+      '<span><b>' + duracao(r.minutos) + '</b> apontados</span>' +
+      (r.pendentes ? '<span class="badge b-laranja">' + r.pendentes + ' período(s) sem quantidade</span>' : '') +
+    '</div>' +
+    '<div class="rt-passo' + travado + '">' +
+      '<div class="rt-passo-tit">' + escapeHtml(r.passo.titulo) + '</div>' +
+      '<div>' + escapeHtml(r.passo.detalhe || '') + '</div>' +
+    '</div>' +
+    '<div class="rt-acoes">' +
+      '<button class="btn btn-primary btn-sm" data-abrir="' + escapeAttr(r.id) + '">Abrir caso</button>' +
+      '<a class="btn btn-ghost btn-sm" href="form.html">Ir para o Apontamento</a>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ── Caso aberto ───────────────────────────────────────────────────── */
+function abrirCaso(id) {
+  var rt = todos[id];
+  if (!rt) return;
+  casoAberto = id;
+  var r = RetrabalhosGestao.resumo(Object.assign({id: id}, rt), papel());
+  document.getElementById('rtModalTitulo').textContent = 'Retrabalho · OP ' + r.lote;
+
+  var passoCls = r.passo.bloqueio ? 'aviso-alerta' : 'aviso-info';
+  var html = '<div class="aviso ' + passoCls + '"><b>' + escapeHtml(r.passo.titulo) + '</b><br>' +
+    escapeHtml(r.passo.detalhe || '') + '</div>';
+
+  html += '<div class="rt-nums" style="margin-bottom:12px">' +
+    '<span><b>' + escapeHtml(r.statusRotulo) + '</b> · ' + escapeHtml(r.linha || '—') + '</span>' +
+    '<span><b>' + fmtNum(r.confirmado) + '</b> un. conferidas</span>' +
+    '<span><b>' + duracao(r.minutos) + '</b> apontados em ' + r.apontamentos + ' período(s)</span>' +
+  '</div>';
+  html += '<div class="hint" style="margin-bottom:12px">' +
+    escapeHtml(r.produto) + ' · ' + escapeHtml(r.cliente || '—') + ' · ' + escapeHtml(r.escopo || '—') +
+    '<br>Motivo: ' + escapeHtml(r.motivo || '—') + '</div>';
+
+  html += '<h3 style="font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin-bottom:4px">Linha do tempo</h3>';
+  var tl = RetrabalhosGestao.linhaDoTempo(Object.assign({id: id}, rt));
+  html += '<ul class="tl">' + tl.map(function(i) {
+    return '<li class="' + escapeAttr(i.tipo) + '">' +
+      '<div class="tl-quando">' + dataHora(i.quando) + '</div>' +
+      '<div class="tl-tit">' + escapeHtml(i.titulo) + '</div>' +
+      (i.detalhe ? '<div class="tl-det">' + escapeHtml(i.detalhe) + '</div>' : '') +
+    '</li>';
+  }).join('') + '</ul>';
+
+  // Correção de quantidade: é o passo que destrava o encerramento, e é
+  // admin. Fica aqui também (não só no Apontamento) porque é aqui que a
+  // pendência aparece -- obrigar a caçar o caso na outra tela era parte do
+  // que o usuário chamou de "não dá pra acompanhar".
+  var pend = RetrabalhosGestao.pendentes(Object.assign({id: id}, rt));
+  if (pend.length && ehAdmin()) {
+    html += '<h3 style="font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin:16px 0 4px">Conferir quantidade pendente</h3>' +
+      '<div class="form-group"><label for="rtPeriodo">Período</label><select id="rtPeriodo">' +
+      pend.map(function(a) {
+        return '<option value="' + escapeAttr(a.id) + '">' + dataHora(a.inicio) + ' → ' + dataHora(a.fim) + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="form-group"><label for="rtQtd">Quantidade feita apenas nesse período (não acumulada)</label>' +
+        '<input type="number" id="rtQtd" min="0" step="1" placeholder="0"></div>' +
+      '<div class="form-group"><label for="rtMotivoQtd">Motivo da conferência</label>' +
+        '<input type="text" id="rtMotivoQtd" value="Conferência da quantidade retrabalhada"></div>' +
+      '<button class="btn btn-primary" id="rtSalvarQtd">Salvar quantidade conferida</button>';
+  } else if (pend.length) {
+    html += '<div class="aviso aviso-alerta" style="margin-top:16px">Há ' + pend.length +
+      ' período(s) sem quantidade. Só um administrador pode conferir.</div>';
+  }
+
+  // A avaliação que fechava o ciclo e não existia.
+  if (rt.status === 'aguardando_qualidade' && podeDecidir()) {
+    html += '<h3 style="font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin:16px 0 4px">Avaliação da Qualidade</h3>' +
+      '<div class="form-group"><label for="rtDecisao">Decisão</label><select id="rtDecisao">' +
+      Object.keys(RetrabalhosGestao.DECISOES).map(function(k) {
+        return '<option value="' + k + '">' + escapeHtml(RetrabalhosGestao.DECISOES[k].rotulo) + '</option>';
+      }).join('') + '</select><div class="hint" id="rtDecisaoAjuda" style="margin-top:4px"></div></div>' +
+      '<div class="form-group"><label for="rtAnalise">Análise que embasou a decisão</label>' +
+        '<textarea id="rtAnalise" rows="3" placeholder="O que foi verificado, com que resultado"></textarea></div>' +
+      '<div class="form-group"><label for="rtMotivoDec">Observação (opcional)</label>' +
+        '<input type="text" id="rtMotivoDec"></div>' +
+      '<button class="btn btn-green" id="rtSalvarDecisao">Registrar avaliação</button>';
+  }
+
+  if (Object.keys(rt.decisoes || {}).length) {
+    html += '<h3 style="font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;margin:16px 0 4px">Avaliações registradas</h3>' +
+      Object.values(rt.decisoes).sort(function(a, b) { return String(a.em).localeCompare(String(b.em)); })
+        .map(function(d) {
+          return '<div class="aviso aviso-info"><b>' +
+            escapeHtml((RetrabalhosGestao.DECISOES[d.decisao] || {}).rotulo || d.decisao) + '</b> · ' +
+            escapeHtml(d.responsavel || '') + ' · ' + dataHora(d.em) +
+            '<br>' + escapeHtml(d.analise || '') +
+            (d.motivo ? '<br><span class="hint">' + escapeHtml(d.motivo) + '</span>' : '') + '</div>';
+        }).join('');
+  }
+
+  html += '<div id="rtErro" class="aviso aviso-erro" style="display:none"></div>';
+  document.getElementById('rtModalBody').innerHTML = html;
+  ligarAcoesDoCaso(id, rt);
+  document.getElementById('rtModalBg').classList.add('open');
+}
+
+function ligarAcoesDoCaso(id, rt) {
+  var ajuda = document.getElementById('rtDecisaoAjuda');
+  var sel = document.getElementById('rtDecisao');
+  if (sel && ajuda) {
+    var mostra = function() { ajuda.textContent = (RetrabalhosGestao.DECISOES[sel.value] || {}).ajuda || ''; };
+    sel.addEventListener('change', mostra);
+    mostra();
+  }
+  var btnQtd = document.getElementById('rtSalvarQtd');
+  if (btnQtd) {
+    btnQtd.addEventListener('click', function() {
+      var qtd = document.getElementById('rtQtd').value;
+      var motivo = document.getElementById('rtMotivoQtd').value.trim();
+      if (qtd === '' || !motivo) { erro('Informe a quantidade conferida e o motivo.'); return; }
+      enviar(id, rt.revisao, {acao: 'corrigir_quantidade',
+        apontamentoId: document.getElementById('rtPeriodo').value, quantidade: qtd, motivo: motivo});
+    });
+  }
+  var btnDec = document.getElementById('rtSalvarDecisao');
+  if (btnDec) {
+    btnDec.addEventListener('click', function() {
+      var decisao = document.getElementById('rtDecisao').value;
+      var analise = document.getElementById('rtAnalise').value.trim();
+      if (!analise) { erro('Registre a análise que embasou a decisão.'); return; }
+      var conf = RetrabalhosGestao.DECISOES[decisao] || {};
+      if (!confirm(conf.rotulo + '\n\n' + (conf.ajuda || '') + '\n\nConfirma?')) return;
+      enviar(id, rt.revisao, {acao: 'decidir', decisao: decisao, analise: analise,
+        motivo: document.getElementById('rtMotivoDec').value.trim()});
+    });
+  }
+}
+function erro(msg) {
+  var box = document.getElementById('rtErro');
+  if (!box) { alert(msg); return; }
+  box.style.display = '';
+  box.textContent = msg;
+}
+
+/* Toda escrita passa pelo callable -- `retrabalhos` é somente leitura nas
+   regras do banco, de propósito: quantidade e decisão de qualidade não
+   podem ser gravadas direto pelo navegador. */
+var ultimaAssinatura = null, ultimaOperacao = null;
+function enviar(id, revisao, dados) {
+  var payload = Object.assign({retrabalhoId: id, revisao: revisao}, dados);
+  var assinatura = JSON.stringify(payload);
+  // Mesmo pedido = mesma operacaoId: retry não duplica apontamento.
+  if (assinatura !== ultimaAssinatura) {
+    ultimaAssinatura = assinatura;
+    ultimaOperacao = 'rtg_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  }
+  payload.operacaoId = ultimaOperacao;
+  var botoes = document.querySelectorAll('#rtModalBody button');
+  botoes.forEach(function(b) { b.disabled = true; });
+  firebase.functions().httpsCallable('apontarRetrabalho')(payload).then(function() {
+    document.getElementById('rtModalBg').classList.remove('open');
+    casoAberto = null;
+  }).catch(function(e) {
+    erro(e.message || 'Não foi possível gravar. Tente de novo.');
+    botoes.forEach(function(b) { b.disabled = false; });
+  });
+}
+
+/* ── Eventos da tela ───────────────────────────────────────────────── */
+document.querySelectorAll('[data-filtro]').forEach(function(p) {
+  p.addEventListener('click', function() {
+    document.querySelectorAll('[data-filtro]').forEach(function(x) { x.classList.remove('ativo'); });
+    p.classList.add('ativo');
+    filtroAtual = p.getAttribute('data-filtro');
+    render();
+  });
+});
+document.getElementById('rtBusca').addEventListener('input', function() {
+  buscaAtual = this.value;
+  render();
+});
+['rtModalClose', 'rtModalFechar'].forEach(function(id) {
+  document.getElementById(id).addEventListener('click', function() {
+    document.getElementById('rtModalBg').classList.remove('open');
+    casoAberto = null;
+  });
+});
+document.getElementById('rtModalBg').addEventListener('click', function(e) {
+  if (e.target === this) { this.classList.remove('open'); casoAberto = null; }
+});
+
+/* O que a tela oferece depende do PAPEL (só a Qualidade decide), e o
+   snapshot do banco costuma chegar antes de o auth_check resolver quem é o
+   usuário. Sem redesenhar aqui, a Qualidade via a tela de quem só
+   acompanha -- uma corrida que só aparece de vez em quando, que é o pior
+   tipo de defeito. */
+window.addEventListener('kuryos-auth-pronto', function() {
+  render();
+  if (casoAberto && todos[casoAberto]) abrirCaso(casoAberto);
+});
+
+dbOnValue(db.ref('retrabalhos'), function(snap) {
+  todos = snap.val() || {};
+  render();
+  // Caso aberto no modal: redesenha com o dado novo, para a pessoa ver o
+  // efeito do que acabou de gravar sem fechar e abrir de novo.
+  if (casoAberto && todos[casoAberto]) abrirCaso(casoAberto);
+});
+</script>
+</body>
+</html>

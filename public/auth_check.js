@@ -94,7 +94,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'dossie_lote.html'] },
+                  paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -626,6 +626,7 @@ function renderUnifiedNavbar(user) {
   const qualidadeGroup = grupo('Qualidade', [
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
     temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
+    temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
     // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
     // É ferramenta de gestão -- Qualidade e PCP, nunca o operador (o papel
     // `production` tem `planejamento`, por isso o acesso é por `emitir_op`).

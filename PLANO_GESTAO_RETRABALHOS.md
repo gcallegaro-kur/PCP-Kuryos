@@ -1,5 +1,27 @@
 # Gestão de Retrabalhos — modelo solicitado em 22/09/2026
 
+## Já entregue (Claude, 2026-09-22) — não reconstruir
+
+Sobre o `retrabalhos/{id}` que já existia, e **sem** tocar no modelo de caso x
+roteiro x ordens descrito abaixo:
+
+- `public/retrabalhos.html` + `public/shared/retrabalhos-gestao.js` — tela de
+  acompanhamento: KPIs, filtros, busca, linha do tempo do caso e a frase de
+  "próximo passo" (que diz **por que** um botão está travado).
+- Ação `decidir` em `functions/retrabalhos.js` — item 6 do modelo abaixo
+  (reinspeção e disposição final): liberado / nova etapa / reprovado, com
+  responsável, análise e histórico. **Nova etapa reocupa a linha**, gerando o
+  novo ciclo. A decisão é registro: não libera estoque, lote nem RNC.
+- Permissão: `PODE_EXECUTAR` (admin/production/pcp/módulo apontamento) x
+  `PODE_DECIDIR` (admin/qualidade).
+- O botão de encerrar execução não some mais com quantidade pendente: fica
+  desabilitado com o motivo.
+
+O que segue neste documento continua válido e **não** foi implementado:
+ordens de fabricação/envase/rotulagem separadas do caso, roteiro aprovado,
+recursos além de linha (postos, tanques), unidades decimais e a origem
+formal em RNC/análise.
+
 ## Objetivo e limite da entrega atual
 
 O usuário corrigiu o escopo: precisa de uma seção própria de **Gestão de
