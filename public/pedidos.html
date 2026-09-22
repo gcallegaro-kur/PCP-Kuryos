@@ -330,6 +330,18 @@
 </div>
 
 <!-- Modal: Novo / Editar Pedido -->
+<!-- Detalhe lote a lote (pedido do usuário em 22/09): a mesma conta do
+     Expedido/Conferência, quebrada por OP. -->
+<div class="modal-bg" id="modalOpBg">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-header" style="background:linear-gradient(135deg,#0a1c69,#3b5bdb)">
+      <h2 id="modalOpTitle">Expedido e estoque, OP por OP</h2>
+      <button class="modal-close" id="modalOpClose">×</button>
+    </div>
+    <div class="modal-body" id="modalOpBody"></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <div class="modal-header">
@@ -734,8 +746,8 @@
         '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.qtdPedidaTitle) + '">' + fmtNum(r.qtdPedida) + '</td>' +
         '<td style="text-align:right;cursor:help" title="' + escapeAttr(r.produzidoTitle) + '">' + fmtNum(r.produzido) + '</td>' +
         '<td style="cursor:help" title="' + escapeAttr(r.pctTitle) + '"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;border-radius:3px;background:#e5e7eb;overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:' + barColor + '"></div></div><span style="font-size:11px;font-weight:700">' + r.pct + '%</span></div></td>' +
-        '<td>' + celulaExpedido(r.conciliacao, r.qtdPedida) + '</td>' +
-        '<td>' + celulaConferencia(r.conciliacao) + '</td>' +
+        '<td>' + celulaExpedido(r.conciliacao, r.qtdPedida, 'pc:' + r.id, 'Pedido #' + r.id + ' — ' + r.cliente) + '</td>' +
+        '<td>' + celulaConferencia(r.conciliacao, 'pc:' + r.id, 'Pedido #' + r.id + ' — ' + r.cliente) + '</td>' +
         '<td>' + escapeHtml(fmtDate(r.data) || '-') + '</td>' +
         '<td>' + fmtDiasAberto(r) + '</td>' +
       '</tr>';
@@ -857,31 +869,108 @@
     dbOnValue(db.ref(no), function(snap) { conciliacaoFontes[no] = snap.val() || {}; recalcularConciliacao(); });
   });
   function conciliacaoDoPedido(key) { return conciliacao ? (conciliacao.porPedido[key] || null) : null; }
+  // Guarda o que cada célula mostra, para o detalhe por OP reabrir a MESMA
+  // conta que está na linha (e não recalcular por outro caminho).
+  var detalhesPorOp = {};
   var CONFERENCIA_ORDEM = {DIVERGENTE: 0, SEM_REGISTRO: 1, OK_APONTADA: 2, OK: 3, SEM_PRODUCAO: 4};
   function ordemConferencia(r) { return r ? CONFERENCIA_ORDEM[r.situacao] * 1e9 - Math.abs(r.diferenca) : 5e9; }
   var CARREGANDO_CONCILIACAO = '<span style="color:var(--muted);font-size:11px">carregando…</span>';
 
-  function celulaExpedido(r, qtdTotal) {
+  function registrarDetalhe(id, r, titulo) {
+    if (id && r) detalhesPorOp[id] = {resultado: r, titulo: titulo || ''};
+    return id && r && Object.keys(r.porOp || {}).length ? id : null;
+  }
+  function celulaExpedido(r, qtdTotal, id, titulo) {
     if (!conciliacao) return CARREGANDO_CONCILIACAO;
     if (!r) return '<span style="color:var(--muted)">—</span>';
+    var det = registrarDetalhe(id, r, titulo);
     var exp = r.expedido.total, qtd = qtdTotal || 0;
     var pctExp = qtd > 0 ? Math.round(exp / qtd * 100) : 0;
     var motivos = Object.keys(ConciliacaoPedidos.MOTIVOS_EXPEDIDO).filter(function(m) { return r.expedido.motivos[m]; })
       .map(function(m) { return ConciliacaoPedidos.MOTIVOS_EXPEDIDO[m] + ': ' + fmtNum(r.expedido.motivos[m]); });
     var titulo = 'Expedido: ' + fmtNum(exp) + ' de ' + fmtNum(qtd) + (motivos.length ? '\n' + motivos.join('\n') : '');
     var fill = pctExp >= 100 ? 'fill-green' : 'fill-orange';
-    return '<div class="prog-wrap" style="cursor:help" title="' + escapeAttr(titulo) + '">' +
-      '<div class="prog-label"><span>' + fmtNum(exp) + ' / ' + fmtNum(qtd) + '</span><span class="pct">' + pctExp + '%</span></div>' +
+    var dica = titulo + (det ? '\nClique para ver OP por OP.' : '');
+    return '<div class="prog-wrap"' + (det ? ' data-op-det="' + escapeAttr(det) + '" style="cursor:pointer"' : ' style="cursor:help"') +
+      ' title="' + escapeAttr(dica) + '">' +
+      '<div class="prog-label"><span>' + fmtNum(exp) + ' / ' + fmtNum(qtd) + (det ? ' <span style="color:var(--primary)">⧉</span>' : '') +
+        '</span><span class="pct">' + pctExp + '%</span></div>' +
       '<div class="prog-bar"><div class="prog-fill ' + fill + '" style="width:' + Math.min(pctExp, 100) + '%"></div></div></div>';
   }
-  function celulaConferencia(r) {
+  function celulaConferencia(r, id, titulo) {
     if (!conciliacao) return CARREGANDO_CONCILIACAO;
     if (!r || r.situacao === 'SEM_PRODUCAO') return '<span style="color:var(--muted)">—</span>';
+    var det = registrarDetalhe(id, r, titulo);
     var d = ConciliacaoPedidos.descrever(r);
     var visual = {OK: ['badge-green', '✓ '], OK_APONTADA: ['badge-green', '✓ '], DIVERGENTE: ['badge-red', '⚠ '], SEM_REGISTRO: ['badge-gray', '']}[r.situacao];
-    return '<span class="badge ' + visual[0] + '" style="cursor:help" title="' + escapeAttr(d.detalhe) + '">' + escapeHtml(visual[1] + d.rotulo) + '</span>' +
-      '<div style="font-size:11px;color:var(--muted);margin-top:2px">Em estoque: ' + fmtNum(r.estoque.total) + '</div>';
+    var nOps = Object.keys(r.porOp || {}).length;
+    return '<span class="badge ' + visual[0] + '"' + (det ? ' data-op-det="' + escapeAttr(det) + '" style="cursor:pointer"' : ' style="cursor:help"') +
+      ' title="' + escapeAttr(d.detalhe + (det ? '\nClique para ver OP por OP.' : '')) + '">' + escapeHtml(visual[1] + d.rotulo) + '</span>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:2px"' + (det ? ' data-op-det="' + escapeAttr(det) + '" style="cursor:pointer;font-size:11px;color:var(--muted);margin-top:2px"' : '') + '>' +
+      'Em estoque: ' + fmtNum(r.estoque.total) + (nOps ? ' · ' + nOps + ' OP(s)' : '') + '</div>';
   }
+
+  /* Detalhe lote a lote. Mostra, por OP: produzido, expedido (com motivo),
+     o que ainda está em estoque e a diferença da conta daquela OP. É o que
+     transforma um "divergente" do pedido inteiro em "a OP 26166/01 tem
+     1.392 a mais". */
+  function abrirDetalheOp(id) {
+    var d = detalhesPorOp[id];
+    if (!d) return;
+    var r = d.resultado, partes = ConciliacaoPedidos.linhasPorOp(r);
+    var MOT = ConciliacaoPedidos.MOTIVOS_EXPEDIDO, ORI = ConciliacaoPedidos.ORIGENS_ESTOQUE;
+    var corSit = {OK: 'badge-green', OK_APONTADA: 'badge-green', DIVERGENTE: 'badge-red', SEM_REGISTRO: 'badge-gray', SEM_PRODUCAO: 'badge-gray'};
+    var linhas = partes.linhas.map(function(l) {
+      var det = ConciliacaoPedidos.descrever(l);
+      var motivos = Object.keys(MOT).filter(function(m) { return l.expedido.motivos[m]; })
+        .map(function(m) { return MOT[m] + ' ' + fmtNum(l.expedido.motivos[m]); }).join(' · ');
+      var origens = Object.keys(ORI).filter(function(o) { return l.estoque.origens[o]; })
+        .map(function(o) { return ORI[o] + ' ' + fmtNum(l.estoque.origens[o]); }).join(' · ');
+      var obs = l.divergenciaApontada.ocorrencias.map(function(o) {
+        return 'Conferência apontou ' + (o.diferenca > 0 ? '+' : '') + fmtNum(o.diferenca) +
+          (o.motivo ? ' · ' + o.motivo : '') + (o.rnc ? ' · ' + o.rnc : '');
+      }).join('<br>');
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(l.opLote || 'Sem OP identificada') + '</strong>' +
+          (l.opKey ? '' : '<div style="font-size:11px;color:var(--muted)">saída sem OP registrada</div>') + '</td>' +
+        '<td style="text-align:right">' + fmtNum(l.produzido) + '</td>' +
+        '<td style="text-align:right">' + fmtNum(l.expedido.total) +
+          (motivos ? '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(motivos) + '</div>' : '') + '</td>' +
+        '<td style="text-align:right">' + fmtNum(l.estoque.total) +
+          (origens ? '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(origens) + '</div>' : '') + '</td>' +
+        '<td style="text-align:right">' + (l.diferenca ? (l.diferenca > 0 ? '+' : '') + fmtNum(l.diferenca) : '—') + '</td>' +
+        '<td><span class="badge ' + corSit[l.situacao] + '" title="' + escapeAttr(det.detalhe) + '">' + escapeHtml(det.rotulo) + '</span>' +
+          (obs ? '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + obs + '</div>' : '') + '</td>' +
+      '</tr>';
+    }).join('');
+    var restante = partes.restanteProduzido;
+    var rodape = '<tr style="font-weight:700;background:var(--surface-2,#f9fafb)">' +
+      '<td>Total do pedido</td><td style="text-align:right">' + fmtNum(r.produzido) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(r.expedido.total) + '</td>' +
+      '<td style="text-align:right">' + fmtNum(r.estoque.total) + '</td>' +
+      '<td style="text-align:right">' + (r.diferenca ? (r.diferenca > 0 ? '+' : '') + fmtNum(r.diferenca) : '—') + '</td><td></td></tr>';
+    var aviso = restante
+      ? '<div class="alert alert-info show" style="margin-top:12px">' + (restante > 0
+          ? fmtNum(restante) + ' un. produzidas no pedido não estão atribuídas a nenhuma OP (apontamento anterior às OPs atuais).'
+          : 'As OPs somam ' + fmtNum(-restante) + ' un. a mais que o produzido do pedido (retrabalho ou OP apontada em outro pedido).') + '</div>'
+      : '';
+    document.getElementById('modalOpTitle').textContent = 'OP por OP — ' + d.titulo;
+    document.getElementById('modalOpBody').innerHTML = partes.linhas.length
+      ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">' +
+          '<thead><tr style="text-align:left;border-bottom:1px solid var(--border)">' +
+          '<th style="padding:6px">OP / Lote</th><th style="padding:6px;text-align:right">Produzido</th>' +
+          '<th style="padding:6px;text-align:right">Expedido</th><th style="padding:6px;text-align:right">Em estoque</th>' +
+          '<th style="padding:6px;text-align:right">Diferença</th><th style="padding:6px">Conferência</th></tr></thead>' +
+          '<tbody>' + linhas + rodape + '</tbody></table></div>' + aviso
+      : '<div class="no-data">Este pedido ainda não tem OP com produção, saída ou estoque.</div>';
+    document.getElementById('modalOpBg').classList.add('open');
+  }
+  document.addEventListener('click', function(ev) {
+    var alvo = ev.target.closest && ev.target.closest('[data-op-det]');
+    if (alvo) abrirDetalheOp(alvo.getAttribute('data-op-det'));
+  });
+  document.getElementById('modalOpClose').addEventListener('click', function() { document.getElementById('modalOpBg').classList.remove('open'); });
+  document.getElementById('modalOpBg').addEventListener('click', function(ev) { if (ev.target === this) this.classList.remove('open'); });
 
   // ── Render ───────────────────────────────────────────────────────
   var opsSortCol = null, opsSortDir = 1;
@@ -943,8 +1032,8 @@
           '<div class="prog-bar"><div class="prog-fill ' + fillClass + '" style="width:' + Math.min(pc,100) + '%"></div></div>' +
         '</div>' +
       '</td>' +
-      '<td>' + celulaExpedido(conciliacaoDoPedido(p._key), p.qtdTotal) + '</td>' +
-      '<td>' + celulaConferencia(conciliacaoDoPedido(p._key)) + '</td>' +
+      '<td>' + celulaExpedido(conciliacaoDoPedido(p._key), p.qtdTotal, 'it:' + p._key, (p.produto || p._key) + ' — pedido #' + (p.id || '—')) + '</td>' +
+      '<td>' + celulaConferencia(conciliacaoDoPedido(p._key), 'it:' + p._key, (p.produto || p._key) + ' — pedido #' + (p.id || '—')) + '</td>' +
       '<td>' + statusBadge + '</td>' +
       '<td>' + insBadge + '</td>' +
       '<td><div class="actions-cell">' +

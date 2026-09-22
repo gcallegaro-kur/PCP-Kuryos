@@ -23,18 +23,20 @@ function dados() {
       '0021': {cliente: 'OUTRO', dataPedido: '2026-08-03', total_qtd: 200, itens: [{sku: 'DIV', descricao: 'ITEM DIVERGENTE', qtd: 200}]}
     },
     ops: {
-      '26244-16': {skuPedidoKey: '19__GLMKAM04'},
-      '26251-15': {skuPedidoKey: '17__PRF-AFEE-0014'}
+      // Duas OPs do mesmo item: é o que a quebra por OP tem que separar.
+      '26244-16': {skuPedidoKey: '19__GLMKAM04', lote: '26244/16', produzido: 750},
+      '26244-17': {skuPedidoKey: '19__GLMKAM04', lote: '26244/17', produzido: 250},
+      '26251-15': {skuPedidoKey: '17__PRF-AFEE-0014', lote: '26251/15', produzido: 2916}
     },
     expedicoes_comerciais: {
-      LEG_1: {legado: true, tipoLegado: 'EXPEDIDO', itens: {a: {qtd: 750, pedidoKey: '0019__GLMKAM04'}}},
-      LEG_2: {legado: true, tipoLegado: 'FURTO', itens: {a: {qtd: 50, skuPedidoKey: '19__GLMKAM04'}}},
-      LEG_3: {legado: true, tipoLegado: 'EXPEDIDO', itens: {a: {qtd: 1020, pedidoKey: '0017__PRF-AFEE-0014'}}},
+      LEG_1: {legado: true, tipoLegado: 'EXPEDIDO', itens: {a: {qtd: 750, pedidoKey: '0019__GLMKAM04', opKey: '26244-16', opLote: '26244/16'}}},
+      LEG_2: {legado: true, tipoLegado: 'FURTO', itens: {a: {qtd: 50, skuPedidoKey: '19__GLMKAM04', opKey: '26244-17', opLote: '26244/17'}}},
+      LEG_3: {legado: true, tipoLegado: 'EXPEDIDO', itens: {a: {qtd: 1020, pedidoKey: '0017__PRF-AFEE-0014', opKey: '26251-15', opLote: '26251/15'}}},
       LEG_4: {legado: true, tipoLegado: 'EXPEDIDO', itens: {a: {qtd: 90, pedidoKey: '0021__DIV'}}}
     },
     estoque_lotes: {
-      GLMKAM04: {p1: {itemTipo: 'produto', saldoLote: 200, opKey: '26244-16'}},
-      'PRF-AFEE-0014': {pa: {itemTipo: 'produto', saldoLote: 1895, opKey: '26251-15'}}
+      GLMKAM04: {p1: {itemTipo: 'produto', saldoLote: 200, opKey: '26244-17', opLote: '26244/17'}},
+      'PRF-AFEE-0014': {pa: {itemTipo: 'produto', saldoLote: 1895, opKey: '26251-15', opLote: '26251/15'}}
     },
     conferencias_pa: {'26251-15': {finalizadoEm: '2026-09-15T01:20:02Z', opLote: '26251/15', rncNumero: 'RNC-PA-26251-15',
       conciliacao: {diferenca: -1, motivo: 'PERDA_OU_AVARIA'}}},
@@ -151,6 +153,50 @@ const linha = (page, texto) => page.locator('#tableBody tr', {hasText: texto});
     assert.match(await page.locator('#pcTableBody tr', {hasText: '#0019'}).innerText(), /✓ OK\b/);
     assert.match(await page.locator('#pcTableBody tr', {hasText: '#0021'}).innerText(), /⚠ Diferença -10/);
 
+    // ── 8. Detalhe OP por OP (pedido do usuário em 22/09) ──────────────
+    // No pedido comercial agregado: abre pela célula de conferência.
+    await page.click('#pcTableBody tr:has-text("#0019") [data-op-det]');
+    await page.waitForSelector('#modalOpBg.open');
+    assert.match(await page.locator('#modalOpTitle').innerText(), /OP por OP — Pedido #0019/);
+    let corpo = await page.locator('#modalOpBody').innerText();
+    assert.match(corpo, /26244\/17[\s\S]*26244\/16/, 'lote mais novo primeiro');
+    assert.match(corpo, /Total do pedido/);
+    await page.click('#modalOpClose');
+    await page.waitForSelector('#modalOpBg.open', {state: 'detached'}).catch(() => null);
+
+    // Na tabela por SKU: a mesma conta, linha a linha.
+    await page.evaluate(() => switchPedidosTab('ops'));
+    await page.click('#tableBody tr:has-text("GLOW MICELAR") [data-op-det]');
+    await page.waitForSelector('#modalOpBg.open');
+    const linhasOp = await page.locator('#modalOpBody tbody tr').allInnerTexts();
+    assert.equal(linhasOp.length, 3, 'duas OPs + o total');
+    assert.match(linhasOp[0], /26244\/17/);
+    assert.match(linhasOp[0], /250/, 'produzido da OP');
+    assert.match(linhasOp[0], /Furto 50/, 'o motivo da saída acompanha a OP');
+    assert.match(linhasOp[0], /200/, 'em estoque nesta OP');
+    assert.match(linhasOp[0], /OK/);
+    assert.match(linhasOp[1], /26244\/16[\s\S]*750/);
+    assert.match(linhasOp[2], /Total do pedido[\s\S]*1\.000[\s\S]*800[\s\S]*200/);
+    assert.doesNotMatch(await page.locator('#modalOpBody').innerText(), /não estão atribuídas/, 'as OPs explicam todo o produzido');
+    await page.click('#modalOpClose');
+
+    // A OP com divergência apontada mostra a RNC na própria linha.
+    await page.click('#tableBody tr:has-text("ZAFIYR 30ML") [data-op-det]');
+    await page.waitForSelector('#modalOpBg.open');
+    corpo = await page.locator('#modalOpBody').innerText();
+    assert.match(corpo, /26251\/15/);
+    assert.match(corpo, /Conferência apontou -1 · PERDA_OU_AVARIA · RNC-PA-26251-15/);
+    await page.click('#modalOpClose');
+
+    // Saída que não diz de qual OP veio não some: aparece como "sem OP".
+    await page.click('#tableBody tr:has-text("ITEM DIVERGENTE") [data-op-det]');
+    await page.waitForSelector('#modalOpBg.open');
+    corpo = await page.locator('#modalOpBody').innerText();
+    assert.match(corpo, /Sem OP identificada/);
+    assert.match(corpo, /saída sem OP registrada/);
+    assert.match(corpo, /não estão atribuídas a nenhuma OP/, 'avisa o produzido que nenhuma OP explica');
+    await page.click('#modalOpClose');
+
     assert.deepEqual(errors, [], 'erros de página: ' + errors.join(' | '));
     await page.close();
 
@@ -163,7 +209,7 @@ const linha = (page, texto) => page.locator('#tableBody tr', {hasText: texto});
     assert.doesNotMatch(txt, /Sem registro|Diferença/, 'sem todas as fontes não pode acusar nada');
     assert.deepEqual(lento.errors, []);
 
-    console.log('OK Pedidos: colunas Expedido e Conferência nas duas tabelas, filtro, ordenação, agrupamento e carregamento.');
+    console.log('OK Pedidos: Expedido e Conferência nas duas tabelas, detalhe OP por OP com motivo/estoque/RNC, filtro, ordenação, agrupamento e carregamento.');
   } finally {
     await browser.close();
   }

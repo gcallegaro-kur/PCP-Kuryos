@@ -128,4 +128,68 @@ Object.values(CP.calcular(base({conferencias_pa: {'26251-15': {finalizadoEm: 'x'
   assert.ok(!/undefined|NaN|null/.test(d.rotulo + d.detalhe), d.detalhe);
 });
 
+// ── 11. A MESMA conta, quebrada por OP (pedido do usuário em 22/09) ─────
+{
+  const bOp = base({
+    ops: {
+      '26251-15': {skuPedidoKey: '17__PRF-AFEE-0014', lote: '26251/15', produzido: 1900},
+      '26244-16': {skuPedidoKey: '19__GLMKAM04', lote: '26244/16', produzido: 600},
+      '26244-17': {skuPedidoKey: '19__GLMKAM04', lote: '26244/17', produzido: 400}
+    },
+    expedicoes_comerciais: {
+      C1: carga({a: {qtd: 500, pedidoKey: '0019__GLMKAM04', opKey: '26244-16', opLote: '26244/16'}}, {legado: true, tipoLegado: 'EXPEDIDO'}),
+      C2: carga({a: {qtd: 50, pedidoKey: '0019__GLMKAM04', opKey: '26244-17', opLote: '26244/17'}}, {legado: true, tipoLegado: 'FURTO'}),
+      // Saída antiga, sem OP no registro: cai no balde "sem OP", não some.
+      C3: carga({a: {qtd: 30, pedidoKey: '0019__GLMKAM04'}}, {legado: true, tipoLegado: 'EXPEDIDO'})
+    },
+    estoque_lotes: {
+      GLMKAM04: {
+        p1: {itemTipo: 'produto', saldoLote: 100, opKey: '26244-16', opLote: '26244/16'},
+        p2: {itemTipo: 'produto', saldoLote: 350, opKey: '26244-17', opLote: '26244/17'}
+      }
+    }
+  });
+  const res = CP.calcular(bOp).porPedido['0019__GLMKAM04'];
+  const {linhas, restanteProduzido} = CP.linhasPorOp(res);
+  // Ordem: lote mais novo primeiro, "sem OP" por último.
+  assert.deepEqual(linhas.map((l) => l.opLote), ['26244/17', '26244/16', null]);
+  const l17 = linhas[0], l16 = linhas[1], semOp = linhas[2];
+  assert.deepEqual([l16.produzido, l16.expedido.total, l16.estoque.total, l16.diferenca, l16.situacao],
+    [600, 500, 100, 0, 'OK'], 'OP fechada: 500 expedidos + 100 em estoque = 600 produzidos');
+  assert.deepEqual([l17.produzido, l17.expedido.total, l17.estoque.total, l17.diferenca, l17.situacao],
+    [400, 50, 350, 0, 'OK']);
+  assert.deepEqual(l17.expedido.motivos, {FURTO: 50}, 'o motivo acompanha a OP');
+  assert.equal(semOp.opKey, null);
+  assert.equal(semOp.expedido.total, 30, 'saída sem OP não some da conta');
+  // Os totais por OP fecham com o total do pedido.
+  assert.equal(linhas.reduce((t, l) => t + l.expedido.total, 0), res.expedido.total);
+  assert.equal(linhas.reduce((t, l) => t + l.estoque.total, 0), res.estoque.total);
+  // O pedido produziu 1000; as OPs somam 1000.
+  assert.equal(restanteProduzido, 0);
+
+  // Divergência apontada pela Logística aparece na OP dela.
+  const comConf = CP.calcular(base({
+    ops: {'26251-15': {skuPedidoKey: '17__PRF-AFEE-0014', lote: '26251/15', produzido: 2916}},
+    conferencias_pa: {'26251-15': {finalizadoEm: 'x', opLote: '26251/15', rncNumero: 'RNC-PA-26251-15',
+      conciliacao: {diferenca: -1, motivo: 'PERDA_OU_AVARIA'}}},
+    estoque_lotes: {'PRF-AFEE-0014': {p: {itemTipo: 'produto', saldoLote: 2915, opKey: '26251-15', opLote: '26251/15'}}}
+  })).porPedido['0017__PRF-AFEE-0014'];
+  const lConf = CP.linhasPorOp(comConf).linhas[0];
+  assert.equal(lConf.divergenciaApontada.ocorrencias[0].rnc, 'RNC-PA-26251-15');
+  assert.equal(lConf.situacao, 'OK_APONTADA', 'com a divergência apontada, a OP fecha');
+
+  // Produzido do pedido que nenhuma OP explica.
+  const sobra = CP.calcular(base({ops: {'26244-16': {skuPedidoKey: '19__GLMKAM04', lote: '26244/16', produzido: 250}}}))
+    .porPedido['0019__GLMKAM04'];
+  assert.equal(CP.linhasPorOp(sobra).restanteProduzido, 750, '1000 do pedido - 250 da OP');
+  assert.deepEqual(CP.linhasPorOp(null), {linhas: [], restanteProduzido: 0});
+
+  // No agregado do pedido comercial, as OPs dos itens continuam separadas.
+  const itemA = CP.calcular(bOp).porPedido['0019__GLMKAM04'];
+  const itemB = CP.calcular(bOp).porPedido['0017__PRF-AFEE-0014'];
+  const agOp = CP.agregar([itemA, itemB]);
+  assert.deepEqual(CP.linhasPorOp(agOp).linhas.map((l) => l.opLote), ['26251/15', '26244/17', '26244/16', null]);
+  assert.equal(CP.linhasPorOp(agOp).linhas[1].expedido.total, 50);
+}
+
 console.log('run_conciliacao_pedidos_test: OK');

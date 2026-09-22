@@ -48,8 +48,27 @@
       expedido: {total: 0, motivos: {}},
       estoque: {total: 0, origens: {}},
       divergenciaApontada: {total: 0, ocorrencias: []},
-      esperado: 0, contabilizado: 0, diferenca: 0, situacao: 'SEM_PRODUCAO'
+      esperado: 0, contabilizado: 0, diferenca: 0, situacao: 'SEM_PRODUCAO',
+      // A MESMA conta, quebrada por OP (pedido do usuário em 22/09: "ver o
+      // que está expedido OP por OP, inclusive na conferência, mostrando o
+      // que tem em estoque OP por OP"). Toda saída e todo palete de PA
+      // sabem de qual OP vieram; o que não souber cai em SEM_OP.
+      porOp: {}
     };
+  }
+  var SEM_OP = 'SEM_OP';
+  function baldeOp(r, opKey, opLote) {
+    var k = opKey || SEM_OP;
+    if (!r.porOp[k]) {
+      r.porOp[k] = {
+        opKey: opKey || null, opLote: opLote || opKey || null, produzido: 0,
+        expedido: {total: 0, motivos: {}}, estoque: {total: 0, origens: {}},
+        divergenciaApontada: {total: 0, ocorrencias: []},
+        esperado: 0, contabilizado: 0, diferenca: 0, situacao: 'SEM_PRODUCAO'
+      };
+    }
+    if (opLote && !r.porOp[k].opLote) r.porOp[k].opLote = opLote;
+    return r.porOp[k];
   }
   function somar(lado, chave, qtd) {
     var q = arred(qtd);
@@ -73,6 +92,23 @@
       var k = resolver(r.pedidoKey || r.skuPedidoKey || (op && op.skuPedidoKey) || '');
       return porPedido[k] ? k : null;
     }
+    // Rótulo do lote: o que o registro trouxe, senão o da OP, senão a chave.
+    function loteDe(registro) {
+      var r = registro || {};
+      var op = r.opKey ? ops[r.opKey] : null;
+      return r.opLote || r.loteOrigem || (op && op.lote) || r.opKey || null;
+    }
+
+    // Produzido por OP: vem da própria OP. A soma das OPs pode não bater com
+    // pedidos/{k}.produzido (retrabalho, OP de outro pedido apontada aqui) --
+    // por isso o total do pedido continua sendo o do pedido, e a diferença
+    // aparece na linha "sem OP".
+    Object.keys(ops).forEach(function(opKey) {
+      var op = ops[opKey] || {};
+      var k = resolver(op.skuPedidoKey || '');
+      if (!porPedido[k] || !(n(op.produzido) > 0)) return;
+      baldeOp(porPedido[k], opKey, op.lote).produzido = arred(n(op.produzido));
+    });
 
     // ── Cargas: legado da planilha e fluxo novo ────────────────────────
     Object.keys(base.expedicoes_comerciais || {}).forEach(function(ck) {
@@ -86,6 +122,7 @@
         var k = chaveDe(i);
         if (!k) { semVinculo[destino[0]] = arred(semVinculo[destino[0]] + qtd); return; }
         somar(porPedido[k][destino[0]], destino[1], qtd);
+        somar(baldeOp(porPedido[k], i.opKey, loteDe(i))[destino[0]], destino[1], qtd);
       });
     });
 
@@ -97,6 +134,7 @@
         var k = chaveDe(l);
         if (!k) { semVinculo.estoque = arred(semVinculo.estoque + n(l.saldoLote)); return; }
         somar(porPedido[k].estoque, 'WMS', l.saldoLote);
+        somar(baldeOp(porPedido[k], l.opKey, loteDe(l)).estoque, 'WMS', l.saldoLote);
       });
     });
 
@@ -109,6 +147,7 @@
       var k = chaveDe(l);
       if (!k) { semVinculo.expedido = arred(semVinculo.expedido + n(s.quantidadeDestinada)); return; }
       somar(porPedido[k].expedido, 'DESCARTE', s.quantidadeDestinada);
+      somar(baldeOp(porPedido[k], l.opKey, loteDe(l)).expedido, 'DESCARTE', s.quantidadeDestinada);
     });
 
     // ── Divergência apontada pela Logística ───────────────────────────
@@ -119,14 +158,21 @@
       if (!dif) return;
       var k = chaveDe({opKey: opKey});
       if (!k) return;
+      var ocorrencia = {opKey: opKey, opLote: conf.opLote || opKey, diferenca: dif,
+        motivo: conf.conciliacao.motivo || null, observacao: conf.conciliacao.observacao || null,
+        rnc: conf.rncNumero || null};
       var d = porPedido[k].divergenciaApontada;
       d.total = arred(d.total + dif);
-      d.ocorrencias.push({opKey: opKey, opLote: conf.opLote || opKey, diferenca: dif,
-        motivo: conf.conciliacao.motivo || null, observacao: conf.conciliacao.observacao || null,
-        rnc: conf.rncNumero || null});
+      d.ocorrencias.push(ocorrencia);
+      var bo = baldeOp(porPedido[k], opKey, conf.opLote);
+      bo.divergenciaApontada.total = arred(bo.divergenciaApontada.total + dif);
+      bo.divergenciaApontada.ocorrencias.push(ocorrencia);
     });
 
-    Object.keys(porPedido).forEach(function(k) { fechar(porPedido[k]); });
+    Object.keys(porPedido).forEach(function(k) {
+      fechar(porPedido[k]);
+      Object.keys(porPedido[k].porOp).forEach(function(o) { fechar(porPedido[k].porOp[o]); });
+    });
     return {porPedido: porPedido, semVinculo: semVinculo};
   }
 
@@ -155,11 +201,37 @@
       Object.keys(r.estoque.origens).forEach(function(o) { somar(total.estoque, o, r.estoque.origens[o]); });
       total.divergenciaApontada.total = arred(total.divergenciaApontada.total + r.divergenciaApontada.total);
       total.divergenciaApontada.ocorrencias = total.divergenciaApontada.ocorrencias.concat(r.divergenciaApontada.ocorrencias);
+      // Cada OP é de um SKU só, mas somar é o certo caso a mesma OP apareça
+      // em dois itens do pedido.
+      Object.keys(r.porOp || {}).forEach(function(o) {
+        var de = r.porOp[o], para = baldeOp(total, de.opKey, de.opLote);
+        para.produzido = arred(para.produzido + de.produzido);
+        Object.keys(de.expedido.motivos).forEach(function(m) { somar(para.expedido, m, de.expedido.motivos[m]); });
+        Object.keys(de.estoque.origens).forEach(function(g) { somar(para.estoque, g, de.estoque.origens[g]); });
+        para.divergenciaApontada.total = arred(para.divergenciaApontada.total + de.divergenciaApontada.total);
+        para.divergenciaApontada.ocorrencias = para.divergenciaApontada.ocorrencias.concat(de.divergenciaApontada.ocorrencias);
+        fechar(para);
+      });
       if (GRAVIDADE[r.situacao] > GRAVIDADE[pior]) pior = r.situacao;
     });
     fechar(total);
     total.situacao = itens ? pior : 'SEM_PRODUCAO';
     return total;
+  }
+
+  /* As linhas da quebra por OP, na ordem do lote (mais novo em cima), com a
+     linha "sem OP" sempre por último. `restante` é o que o pedido tem e as
+     OPs não explicam -- produzido do pedido menos a soma das OPs. */
+  function linhasPorOp(r) {
+    if (!r) return {linhas: [], restanteProduzido: 0};
+    var chaves = Object.keys(r.porOp || {});
+    var linhas = chaves.map(function(k) { return r.porOp[k]; }).sort(function(a, b) {
+      if (!a.opKey) return 1;
+      if (!b.opKey) return -1;
+      return String(b.opLote || '').localeCompare(String(a.opLote || ''));
+    });
+    var somaProduzido = linhas.reduce(function(t, l) { return t + n(l.produzido); }, 0);
+    return {linhas: linhas, restanteProduzido: arred(n(r.produzido) - somaProduzido)};
   }
 
   function fmt(v) { return arred(v).toLocaleString('pt-BR'); }
@@ -193,5 +265,6 @@
   }
 
   return {calcular: calcular, agregar: agregar, descrever: descrever, fechar: fechar,
+    linhasPorOp: linhasPorOp, SEM_OP: SEM_OP,
     MOTIVOS_EXPEDIDO: MOTIVOS_EXPEDIDO, ORIGENS_ESTOQUE: ORIGENS_ESTOQUE};
 });
