@@ -6,7 +6,8 @@
    a tela anterior gravou é o que a próxima recebe -- se o elo não existe,
    o teste para exatamente nele, que é o que interessa descobrir.
 
-       Emitir OP → Apontamento (alocar, setup, apontar, encerrar)
+       Orçamento → aceite → solicitação de cadastro → Pedido comercial
+                 → Emitir OP → Apontamento (alocar, setup, apontar, encerrar)
                  → Conferência de PA → Qualidade (CK-7) → Expedição
 
    Cada passo afirma o que o PROCESSO exige, não o que o código faz hoje.
@@ -26,8 +27,12 @@ let BANCO = {
     planejamento: {diasSemana: [1, 2, 3, 4, 5], feriados: {}},
     tiposEnsaio: ['ASPECTO', 'PH'],
   },
+  clientes: {
+    MISSROSE: {nome: 'MISS RÔSE', cnpj: '12345678000199', codigo: 'MR', ativo: 'Ativo'},
+  },
   produtos: {
     MRARBS04: {sku: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR DAS TAMARAS', cliente: 'MISS RÔSE',
+      clienteKey: 'MISSROSE',
       densidadeGranel: 0.95, prazoValidadeMeses: 36, unCx: 24, kgCaixa: 5.2, volume: 200,
       unidadeVolume: 'ml', overfillPct: 0, perdaProcessoPct: 0, ean13: '7899999000012',
       msAnvisa: 'MS 2.0000.0000'},
@@ -54,6 +59,7 @@ let BANCO = {
   estoque_lotes: {}, enderecos_estoque: {}, nao_conformidades: {}, parametros_pa: {},
   paradas_historico: {}, atividadesPosto: {}, pedidos_comerciais: {}, programacao: {},
   retrabalhos: {}, retrabalhos_linhas: {}, pedidos_compra: {}, fornecedores: {},
+  orcamentos: {}, solicitacoes_cadastro_produto: {}, notificacoes_comercial: {},
 };
 
 const gaps = [];
@@ -109,6 +115,13 @@ async function abrirTela(browser, pagina, opcoes) {
               });
           };
         }};
+      },
+      /* Telas com anexo chamam firebase.storage() na carga. Sem este stub
+         o harness acusaria erro de JS numa tela que funciona na fabrica. */
+      storage() {
+        return {ref(p) { return {put() { return Promise.resolve({ref: {getDownloadURL: () => Promise.resolve('https://arquivo.test/' + p)}}); },
+          getDownloadURL() { return Promise.resolve('https://arquivo.test/' + p); }, delete() { return Promise.resolve(); },
+          child(c) { return this.ref(p + '/' + c); }}; }};
       },
       database() {
         const ref = (p) => {
@@ -177,6 +190,16 @@ async function atualizarPainel(page) {
   });
 }
 
+/* Mesmo caso do painel de turno: o `on` entrega o snapshot uma vez so. Em
+   producao a lista do comercial se redesenha a cada gravacao. */
+async function atualizarComercial(page) {
+  await page.evaluate(() => {
+    if (typeof orcamentos !== 'undefined') orcamentos = window.__db.orcamentos || {};
+    if (typeof pedidos !== 'undefined') pedidos = window.__db.pedidos_comerciais || {};
+    if (typeof renderLists === 'function') renderLists();
+  });
+}
+
 async function fechar(page, errors, etapa) {
   BANCO = await page.evaluate(() => window.__db);   // o bastão volta para o Node
   const graves = (errors || []).filter((e) => !/ResizeObserver|Failed to fetch/.test(e));
@@ -187,9 +210,132 @@ async function fechar(page, errors, etapa) {
 (async () => {
   const browser = await chromium.launch({headless: true, channel: 'chrome'});
   try {
-    // ══ 1. EMITIR OP ═══════════════════════════════════════════════════
+    // == 0. COMERCIAL =================================================
+    /* O inicio real da cadeia. O orcamento leva DOIS itens de proposito: um
+       produto que ja existe e um que nao existe. So o segundo pode virar
+       solicitacao de cadastro -- se os dois virarem, o comercial abre tarefa
+       para cadastrar o que ja esta cadastrado. */
+    console.log('\n0a. Orcamento -> envio -> aceite');
+    let page, errors, dialogos;
+    ({page, errors} = await abrirTela(browser, 'comercial.html'));
+    await page.locator('[data-tab="orc"]').click();
+    await page.waitForSelector('#view-orc', {state: 'visible', timeout: 6000});
+    await page.selectOption('#oClienteKey', 'MISSROSE').catch(() => {});
+    await page.fill('#oCliente', 'MISS ROSE');
+    await page.fill('#oValidade', '2026-10-31');
+    await page.fill('.od[data-i="0"]', 'BODY SPLASH NECTAR DAS TAMARAS');
+    await page.fill('.oq[data-i="0"]', '1000');
+    await page.fill('.ov[data-i="0"]', '10');
+    await page.click('#addO');
+    await page.waitForSelector('.od[data-i="1"]', {timeout: 6000});
+    await page.fill('.od[data-i="1"]', 'BODY SPLASH MANGA ROSA');
+    await page.fill('.oq[data-i="1"]', '500');
+    await page.fill('.ov[data-i="1"]', '12');
+    await page.click('#saveO');
+    await page.waitForFunction(() => Object.keys(window.__db.orcamentos || {}).length > 0, null, {timeout: 8000});
+
+    let db = await page.evaluate(() => window.__db);
+    const orcKey = Object.keys(db.orcamentos)[0];
+    console.log('   orcamento ' + orcKey + ' com ' + db.orcamentos[orcKey].itens.length + ' itens');
+    assert.equal(db.orcamentos[orcKey].status, 'EM_ELABORACAO');
+
+    await atualizarComercial(page);
+    await page.locator('[data-k="' + orcKey + '"][data-a="send"]').click();
+    await page.waitForFunction((k) => (window.__db.orcamentos[k] || {}).status === 'ENVIADO', orcKey, {timeout: 8000});
+    await atualizarComercial(page);
+    await page.locator('[data-k="' + orcKey + '"][data-a="accept"]').click();
+    await page.waitForFunction((k) => (window.__db.orcamentos[k] || {}).status === 'ACEITO', orcKey, {timeout: 8000});
+    console.log('   aceite registrado');
+
+    db = await page.evaluate(() => window.__db);
+    const solicitacoes = Object.entries(db.solicitacoes_cadastro_produto || {});
+    if (solicitacoes.length !== 1) {
+      registrar('Orcamento -> Cadastro',
+        'o aceite abriu ' + solicitacoes.length + ' solicitacoes de cadastro para 1 item novo ' +
+        '(o outro item ja estava cadastrado e nao deveria gerar tarefa)');
+    } else {
+      assert.equal(solicitacoes[0][1].item.descricao, 'BODY SPLASH MANGA ROSA');
+      assert.equal(solicitacoes[0][1].status, 'PENDENTE_CADASTRO');
+      console.log('   solicitacao de cadastro aberta para o item novo');
+    }
+    await fechar(page, errors, 'Orcamento');
+
+    // == 0b. A SOLICITACAO CHEGA A QUEM CADASTRA? =======================
+    /* O aceite avisa "foram enviados para cadastro". Este passo pergunta o
+       obvio: quem cadastra produto ve essa tarefa na tela dele? */
+    console.log('\n0b. A tarefa de cadastro chega ao cadastro');
+    ({page, errors} = await abrirTela(browser, 'cadastros.html'));
+    await page.locator('[data-maintab="produtos"], [data-tab="produtos"]').first().click().catch(() => {});
+    const temTarefa = await page.locator('.btn-cadastrar-solic').count();
+    if (!temTarefa) {
+      registrar('Orcamento -> Cadastro',
+        'a solicitacao de cadastro nao aparece em cadastros.html -- quem cadastra o produto ' +
+        'nunca fica sabendo da tarefa aberta pelo aceite do orcamento');
+    } else {
+      /* O elo so esta fechado se a tarefa (a) abrir o cadastro ja preenchido
+         e (b) SUMIR quando o produto existir. Tarefa que fica PENDENTE com o
+         produto ja cadastrado e o estado que faz o vendedor cobrar de novo. */
+      await page.locator('.btn-cadastrar-solic').first().click();
+      await page.waitForSelector('#fDescricao-prod', {state: 'visible', timeout: 6000});
+      assert.equal(await page.inputValue('#fDescricao-prod'), 'BODY SPLASH MANGA ROSA',
+        'o cadastro precisa abrir ja com a descricao que o Comercial informou');
+      assert.equal(await page.inputValue('#fCliente-prod'), 'MISS ROSE');
+      await page.fill('#fSku-prod', 'MRARBS09');
+      await page.click('#modalSaveBtn-prod');
+      await page.waitForFunction(() => (window.__db.produtos || {}).MRARBS09, null, {timeout: 8000});
+      console.log('   produto cadastrado a partir da tarefa');
+      await page.waitForFunction(() => Object.values(window.__db.solicitacoes_cadastro_produto || {})
+        .every((s) => s.status !== 'PENDENTE_CADASTRO'), null, {timeout: 8000})
+        .catch(() => registrar('Cadastro -> Comercial',
+          'o produto foi cadastrado mas a solicitacao continua PENDENTE_CADASTRO: a aba ' +
+          '"Cadastros pendentes" do Comercial seguiria cobrando um cadastro que ja existe'));
+      const dbc = await page.evaluate(() => window.__db);
+      const fechada = Object.values(dbc.solicitacoes_cadastro_produto || {})[0] || {};
+      if (fechada.status === 'CADASTRADO') {
+        assert.equal(fechada.produtoKey, 'MRARBS09', 'a tarefa precisa apontar para o produto criado');
+        console.log('   tarefa fechada e vinculada a ' + fechada.produtoKey);
+      }
+    }
+    await fechar(page, errors, 'Cadastro');
+
+    // == 0c. PEDIDO COMERCIAL -> DEMANDA NO PCP =========================
+    console.log('\n0c. Pedido comercial -> backlog do PCP');
+    ({page, errors} = await abrirTela(browser, 'comercial.html'));
+    await page.waitForSelector('#view-ped', {state: 'visible', timeout: 6000});
+    await page.selectOption('#pCliente', 'MISSROSE');
+    await page.fill('#pData', '2026-09-22');
+    await page.fill('#pPrevisao', '2026-11-15');
+    await page.waitForSelector('.pp[data-i="0"]', {timeout: 6000});
+    await page.selectOption('.pp[data-i="0"]', 'MRARBS04');
+    await page.fill('.pq[data-i="0"]', '1000');
+    await page.fill('.pv[data-i="0"]', '10');
+    await page.click('#saveP');
+    await page.waitForFunction(() => Object.keys(window.__db.pedidos || {}).length > 0, null, {timeout: 8000});
+
+    db = await page.evaluate(() => window.__db);
+    const pedComKey = Object.keys(db.pedidos_comerciais)[0];
+    const linhaPcpKey = Object.keys(db.pedidos)[0];
+    const linhaPcp = db.pedidos[linhaPcpKey];
+    console.log('   ' + pedComKey + ' gerou a demanda ' + linhaPcpKey + ' de ' + linhaPcp.qtdTotal + ' un.');
+    assert.equal(db.pedidos_comerciais[pedComKey].status, 'LIBERADO_PCP');
+    assert.equal(linhaPcp.sku, 'MRARBS04', 'a linha de demanda precisa carregar o SKU');
+    assert.equal(linhaPcp.qtdTotal, 1000);
+    assert.equal(linhaPcp.produzido, 0);
+    /* A promessa de entrega que o vendedor digitou precisa DESCER para
+       pedidos/{}: e o no que planejamento e MRP leem. Antes ela ficava so
+       no pedido-pai e a demanda nascia sem data nenhuma. */
+    if (linhaPcp.dataEntrega !== '2026-11-15') {
+      registrar('Pedido -> PCP',
+        'a previsao de entrega informada no pedido nao chegou a linha de demanda do PCP ' +
+        '(dataEntrega = ' + JSON.stringify(linhaPcp.dataEntrega) + ')');
+    } else {
+      console.log('   previsao de entrega 2026-11-15 chegou a demanda do PCP');
+    }
+    await fechar(page, errors, 'Pedido comercial');
+
+    // == 1. EMITIR OP ═══════════════════════════════════════════════════
     console.log('\n1. Emitir OP');
-    let {page, errors} = await abrirTela(browser, 'emitir_op.html');
+    ({page, errors} = await abrirTela(browser, 'emitir_op.html'));
     await page.fill('#fProdutoBusca', 'MRARBS04');
     await page.waitForSelector('#produtoResultados [data-produto], #produtoResultados div', {timeout: 6000});
     await page.locator('#produtoResultados').getByText('MRARBS04', {exact: false}).first().click();
@@ -202,7 +348,7 @@ async function fechar(page, errors, etapa) {
     await page.click('#btnEmitir');
     await page.waitForFunction(() => Object.keys(window.__db.ops || {}).length > 0, null, {timeout: 8000});
 
-    let db = await page.evaluate(() => window.__db);
+    db = await page.evaluate(() => window.__db);
     const opKey = Object.keys(db.ops)[0];
     const op = db.ops[opKey];
     console.log('   OP emitida: ' + op.lote + ' · ' + op.qtdPlanejada + ' un.');
@@ -216,7 +362,6 @@ async function fechar(page, errors, etapa) {
 
     // ══ 2. APONTAMENTO ═════════════════════════════════════════════════
     console.log('\n2. Apontamento (alocar → setup → apontar → encerrar)');
-    let dialogos;
     ({page, errors, dialogos} = await abrirTela(browser, 'form.html'));
     await page.waitForSelector('#turnoGridLinhas', {timeout: 8000});
     assert.ok(await page.locator('[data-alocar-nome]').count(), 'nenhuma linha oferece "+ Alocar OP"');

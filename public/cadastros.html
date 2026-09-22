@@ -621,6 +621,12 @@
       <div class="recalc-bar" style="margin:12px 16px">
         ℹ️ Produtos novos ganham código automático (categoria-cliente-sequencial) — veja as abas Clientes e Categorias, aqui mesmo, pra manter essas listas em dia.
       </div>
+      <!-- Tarefas vindas do Comercial. O aceite de um orçamento com item
+           não cadastrado grava em solicitacoes_cadastro_produto e avisa ao
+           vendedor que "foram enviados para cadastro" -- mas até aqui esse
+           nó não era lido por nenhuma outra tela, e quem cadastra produto
+           nunca ficava sabendo da tarefa. -->
+      <div id="solicitacoesCadastro-prod" style="display:none"></div>
       <div class="table-wrap">
         <table>
           <thead id="prodThead-prod">
@@ -3530,6 +3536,13 @@ document.addEventListener('DOMContentLoaded', function() {
   var allProdutos = {};
   var prodHoraCalcMap = {};
   var editingKey = null;
+  /* Solicitações de cadastro abertas pelo aceite de orçamento. Guardadas
+     aqui para (a) aparecerem como tarefa nesta tela e (b) poderem ser
+     fechadas quando o produto correspondente for realmente cadastrado --
+     senão a aba "Cadastros pendentes" do Comercial mostra PENDENTE_CADASTRO
+     para sempre, mesmo com o produto já existindo. */
+  var solicitacoesCad = {};
+  var solicitacaoEmCurso = null;
   var allClientesCad = {};
   var categoriasProdutoCad = [];
   var prodSortable = makeSortableTable(document.getElementById('prodThead-prod'), 'sku', 'asc');
@@ -3810,8 +3823,92 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  function solicitacoesPendentes() {
+    return Object.entries(solicitacoesCad || {})
+      .filter(function(e) { return e[1] && e[1].status === 'PENDENTE_CADASTRO'; });
+  }
+
+  function renderSolicitacoesCadastro() {
+    var box = document.getElementById('solicitacoesCadastro-prod');
+    if (!box) return;
+    var pend = solicitacoesPendentes();
+    if (!pend.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+    box.innerHTML =
+      '<div class="recalc-bar" style="margin:12px 16px;background:#fff7e6;border-color:#f0c36d">' +
+        '<b>📝 ' + pend.length + ' produto(s) aguardando cadastro</b>' +
+        '<div style="font-size:12px;color:var(--muted);margin:4px 0 8px">' +
+          'Vieram do aceite de orçamento no Comercial. Cadastrar aqui fecha a tarefa lá.' +
+        '</div>' +
+        pend.map(function(e) {
+          var s = e[1], it = s.item || {};
+          return '<div style="display:flex;gap:10px;align-items:center;padding:5px 0;flex-wrap:wrap">' +
+            '<button class="btn btn-primary btn-sm btn-cadastrar-solic" data-solic="' + escapeAttr(e[0]) + '">Cadastrar</button>' +
+            '<b>' + escapeHtml(it.descricao || '(sem descrição)') + '</b>' +
+            '<span style="color:var(--muted)">' + escapeHtml(s.cliente || '—') +
+              ' · orçamento ' + escapeHtml(s.orcamento || '—') + '</span>' +
+            (it.especificacao ? '<span style="color:var(--muted);font-size:12px">' + escapeHtml(it.especificacao) + '</span>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>';
+    box.querySelectorAll('.btn-cadastrar-solic').forEach(function(btn) {
+      btn.addEventListener('click', function() { abrirCadastroDeSolicitacao(btn.getAttribute('data-solic')); });
+    });
+  }
+
+  /* Abre o cadastro novo já com o que o Comercial informou. Não adivinha
+     nada além disso: volume, categoria e o resto continuam sendo decisão
+     de quem cadastra. */
+  function abrirCadastroDeSolicitacao(k) {
+    var s = (solicitacoesCad || {})[k];
+    if (!s) return;
+    openModal(null);
+    solicitacaoEmCurso = k;
+    document.getElementById('fDescricao-prod').value = (s.item || {}).descricao || '';
+    document.getElementById('fCliente-prod').value = s.cliente || '';
+    if (typeof atualizarHintCliente === 'function') atualizarHintCliente();
+    if (s.item && s.item.especificacao) {
+      var obs = document.getElementById('fObs-prod');
+      obs.value = (obs.value ? obs.value + '\n' : '') +
+        'Do orçamento ' + (s.orcamento || '') + ': ' + s.item.especificacao;
+    }
+  }
+
+  /* Fecha a tarefa quando o produto é salvo -- tanto pelo botão "Cadastrar"
+     (solicitacaoEmCurso) quanto por quem cadastrou por fora, casando pela
+     descrição. Sem isso a tarefa fica PENDENTE_CADASTRO com o produto já
+     existindo, que é exatamente o estado que faz o vendedor cobrar de novo.
+     Erro aqui NÃO é engolido: o produto foi salvo, mas a tarefa continuaria
+     aberta, e quem salvou precisa saber. */
+  function fecharSolicitacoesDoProduto(produtoKey, descricao) {
+    /* Autor inline de propósito: `currentUserNome` existe neste arquivo,
+       mas dentro de OUTRAS IIFEs (Materiais e Fórmulas) -- daqui ela é
+       ReferenceError, e o throw caía no .catch genérico do save, que
+       mostrava "Erro" enquanto o produto era gravado normalmente e a
+       tarefa ficava aberta em silêncio. */
+    var autor = (window.currentUser && window.currentUser.nome) ||
+      (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
+    var d = norm(descricao || '');
+    var updates = {}, quantas = 0;
+    solicitacoesPendentes().forEach(function(e) {
+      var casa = e[0] === solicitacaoEmCurso ||
+        (d && norm(((e[1].item) || {}).descricao || '') === d);
+      if (!casa) return;
+      quantas++;
+      var base = 'solicitacoes_cadastro_produto/' + e[0] + '/';
+      updates[base + 'status'] = 'CADASTRADO';
+      updates[base + 'produtoKey'] = produtoKey;
+      updates[base + 'cadastradoEm'] = new Date().toISOString();
+      updates[base + 'cadastradoPor'] = autor;
+    });
+    solicitacaoEmCurso = null;
+    if (!quantas) return Promise.resolve(0);
+    return db.ref().update(updates).then(function() { return quantas; });
+  }
+
   function openModal(key) {
     editingKey = key || null;
+    solicitacaoEmCurso = null;
     var p = key ? (allProdutos[key] || {}) : {};
     document.getElementById('modalTitle-prod').textContent = key ? 'Editar Produto' : 'Novo Produto';
     document.getElementById('sugestaoRitmoBox-prod').style.display = 'none';
@@ -4000,6 +4097,11 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(function() {
         showAlert('Produto salvo com sucesso!', 'success');
         closeModal();
+        return fecharSolicitacoesDoProduto(key, data.descricao).then(function(n) {
+          if (n) showAlert(n + ' solicitação(ões) de cadastro do Comercial concluída(s).', 'success');
+        }).catch(function(err) {
+          showAlert('Produto salvo, mas a solicitação do Comercial continua aberta: ' + err.message, 'warning');
+        });
       })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
       .finally(function() { document.getElementById('modalSaveBtn-prod').disabled = false; });
@@ -4131,6 +4233,10 @@ document.addEventListener('DOMContentLoaded', function() {
       allProdutos = snap.val() || {};
       refreshDatalistsAndFilters();
       renderTable();
+    });
+    dbOnValue(db.ref('solicitacoes_cadastro_produto'), function(snap) {
+      solicitacoesCad = snap.val() || {};
+      renderSolicitacoesCadastro();
     });
     dbOnValue(db.ref('clientes'), function(snap) {
       allClientesCad = snap.val() || {};

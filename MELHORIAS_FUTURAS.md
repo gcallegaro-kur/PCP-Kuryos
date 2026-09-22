@@ -989,3 +989,23 @@ posto conforme o procedimento. Esse módulo completo ainda não está feito.
 Modelo, papéis propostos, quantidades, genealogia, pontos reais de integração
 e coordenação com Claude estão em **PLANO_GESTAO_RETRABALHOS.md**. Retomar por
 esse documento; não tratar a tela inicial de envase como escopo definitivo.
+
+## MRP: usar a promessa de entrega como data de demanda (decisão de negócio pendente)
+
+Desde 2026-09-22 a previsão comercial de entrega desce do pedido para
+`pedidos/{PED__SKU}/dataEntrega` (`comercial.html`, `salvarPedido`). O dado
+existe agora, mas **o MRP continua ignorando-o de propósito**.
+
+Hoje `mrpDemandaPorMaterial` (`insumos.html`) data um pedido só pela grade de
+`programacao`; sem bloco programado ele cai em BACKLOG, que o motor trata como
+atrasado e coloca colapsado na frente. Trocar isso por `dataEntrega` parece
+uma melhoria óbvia e **não é**: um pedido hoje BACKLOG (urgente) passaria a ter
+data futura, e o MRP mandaria comprar mais tarde. Numa base em que 45 dos 84
+pedidos abertos não têm data, isso muda a urgência de compra de metade da
+carteira de uma vez, para menos urgente.
+
+O caminho correto é a data de necessidade de MATERIAL = entrega prometida
+menos o lead time de produção, não a entrega crua — e lead time de produção
+não está parametrizado. Enquanto não estiver, BACKLOG é o comportamento
+conservador e deve ficar. Retomar junto com a Fase 1 de
+`PLANO_PLANEJAMENTO_PCP.md`, que é onde `dataInicioPlanejada` passa a existir.

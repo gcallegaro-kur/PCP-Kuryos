@@ -127,6 +127,37 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Escopo atual — teste de fluxo ponta a ponta (2026-09-22).** O usuário pediu
+  testar "as funcionalidades, fluxos, integrações", começando "no orçamento >
+  cadastro > pedido" e seguindo em cadeia. `run_fluxo_ponta_a_ponta_test.js`
+  agora dirige as telas reais de Orçamento → aceite → cadastro → Pedido →
+  Emissão de OP → Apontamento → Conferência de PA → confirmação do PCP, com o
+  banco vivendo no Node e passando de tela em tela.
+- **Corrigido nesta rodada:**
+  1. `ops.html` — "Confirmar conclusão" não existia nas visões filtradas; quem
+     filtrava por "Aguardando Confirmação" via a OP e nenhuma forma de
+     confirmá-la, travando Conferência de PA, estoque e Expedição atrás disso.
+  2. `cadastros.html` + `database.rules.json` — a solicitação de cadastro aberta
+     pelo aceite de orçamento não era lida por NENHUMA outra tela. Agora aparece
+     como tarefa na aba Produtos, abre o cadastro pré-preenchido e é fechada
+     (`CADASTRADO` + `produtoKey`) quando o produto é salvo. A regra do nó ganhou
+     `modulos.cadastros`, senão quem cadastra tomaria PERMISSION_DENIED.
+  3. `comercial.html` — a previsão comercial de entrega agora desce para
+     `pedidos/{PED__SKU}/dataEntrega`. O MRP **continua** ignorando-a de
+     propósito; a razão está em `MELHORIAS_FUTURAS.md`.
+- **Armadilha que isto custou:** `currentUserNome` existe em `cadastros.html`,
+  mas dentro de outras IIFEs. Chamada da IIFE de Produtos era ReferenceError, o
+  throw caía no `.catch` genérico do save e a tela dizia "Erro" enquanto o
+  produto era gravado normalmente e a tarefa ficava aberta em silêncio.
+- **Gaps conhecidos que NÃO corrigi** (são escopo do `PLANO_PLANEJAMENTO_PCP.md`):
+  OP nasce sem `dataInicioPlanejada` quando não há bloco programado; o portão do
+  granel só barra OP que já começou a manipulação, então OP recém-emitida vai
+  direto ao envase sem laudo.
+- **Arquivos ativos:** `public/cadastros.html`, `public/comercial.html`,
+  `public/ops.html`, `database.rules.json`, `run_fluxo_ponta_a_ponta_test.js`.
+  `public/shared/conciliacao-pedidos.js` está modificado na árvore e **não é
+  meu** — não tocado, não commitado.
+
 - **Entrega publicada — retrabalho é uma OP (2026-09-22).** O usuário refez
   o escopo: *"apenas poder abrir uma OP, mas de retrabalho... pode ser
   alocada em linhas de produção ou postos de trabalho"*. O universo paralelo
