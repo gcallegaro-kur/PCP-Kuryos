@@ -15,7 +15,12 @@
    aponta quando souber. O registro antigo fica no banco marcado como
    migrado; nada é apagado.
 
-   Execute da raiz do projeto. Sem --apply, só faz backup e ensaia. */
+   NÃO depende do diretório atual: tudo é resolvido a partir de __dirname.
+   Chame pelo caminho completo do arquivo. Sem --apply, só faz backup e
+   ensaia a conversão num clone, sem tocar em produção.
+
+   O terminal da fábrica é PowerShell 5.1, onde `&&` NÃO é separador de
+   comando -- por isso este script não exige `cd` antes. */
 const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
