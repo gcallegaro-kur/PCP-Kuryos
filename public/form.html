@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/rearranjo-linhas-tela.js"></script>
+  <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
@@ -1067,6 +1068,7 @@ function renderMotivosParadaOptions() {
 // resolve produto/lote junto, então não precisa mais de um campo de Lote
 // separado nem do parsing antigo (parseOpId/parseProductFromOpDatalist).
 function openStopModal(linha) {
+  if (RetrabalhosTela.avisar(linha)) return;
   document.getElementById('andonLineName').value = linha;
   document.getElementById('andonModalSubtitle').textContent = 'Selecione o motivo e a OP em andamento pra confirmar a parada da ' + linha + '.';
 
@@ -1159,6 +1161,7 @@ function cancelResumeLine() {
 }
 
 function resumeLine(linha, state) {
+  if (RetrabalhosTela.avisar(linha)) return;
   var duration = 0;
   if (state.inicioParada) {
     var diffMs = new Date() - new Date(state.inicioParada);
@@ -4303,6 +4306,7 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
     var op = opAlocadoEm(nome, tipo);
     var lineKey = sanitizeKey(nome);
     var andonState = comParada ? (latestAndonStates[lineKey] || { status: 'ativa' }) : null;
+    if (andonState && andonState.retrabalhoId) { container.appendChild(RetrabalhosTela.card(nome, andonState)); return; }
     var card = document.createElement('div');
     card.className = 'andon-card ' + (andonState && andonState.status === 'parada' ? 'stopped' : 'active');
 
@@ -4607,6 +4611,7 @@ document.getElementById('alocarOpFiltro').addEventListener('input', function() {
 });
 
 function abrirAlocarOpModal(nome, tipo) {
+  if (tipo === 'linha' && RetrabalhosTela.avisar(nome)) return;
   alocarOpAlvoAtual = { nome: nome, tipo: tipo };
   document.getElementById('alocarOpSubtitle').textContent = nome;
   document.getElementById('alocarOpFiltro').value = '';
@@ -4625,6 +4630,7 @@ document.getElementById('btnConfirmarAlocarOp').addEventListener('click', functi
   btn.disabled = true;
   var agora = new Date().toISOString();
   var tipoAlvo = alocarOpAlvoAtual.tipo;
+  if (tipoAlvo === 'linha' && RetrabalhosTela.avisar(alocarOpAlvoAtual.nome)) { btn.disabled = false; return; }
   var alocUpdate = {};
   // abertaDesde(Rot) é a base do cálculo de ritmo (horasDesde) em Encerrar
   // OP/Turno -- setupInicio(Rot)/setupFim(Rot) ficam só pra registrar a

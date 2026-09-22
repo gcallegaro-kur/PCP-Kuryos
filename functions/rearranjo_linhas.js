@@ -21,6 +21,7 @@ function rearranjar(base, data, uid, agora) {
   base.estado_linhas = base.estado_linhas || {};
   const estados = base.estado_linhas;
   const src = estados[key(data.origem)] || {}, dst = estados[key(data.destino)] || {};
+  if (src.retrabalhoId || dst.retrabalhoId) fail('Linha ocupada por retrabalho. Encerre ou reorganize o retrabalho antes de alocar uma OP.');
   const conferirPausa = (state, op) => {
     if (state.status !== 'parada' || !state.inicioParada || !Number.isFinite(Date.parse(state.inicioParada)) || Date.parse(state.inicioParada) > Date.parse(agora)) fail('Pause as linhas envolvidas antes de transferir.');
     if ((state.opAtual && state.opAtual.lote !== op.lote) || (state.lote && state.lote !== op.lote)) fail('A pausa não corresponde à OP alocada. Atualize o painel.');

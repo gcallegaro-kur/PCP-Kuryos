@@ -2121,3 +2121,20 @@ exports.rearranjarLinhas = onCall({timeoutSeconds:120,memory:'512MiB'}, async re
   if(!result.committed || !evento) throw new HttpsError('aborted','As linhas mudaram. Atualize o painel.');
   return {ok:true,operacaoId:request.data.operacaoId};
 });
+
+exports.apontarRetrabalho = onCall({timeoutSeconds:120,memory:'512MiB'}, async request => {
+  if(!request.auth) throw new HttpsError('unauthenticated','Faça login.');
+  const uid=request.auth.uid;
+  const user=(await db.ref('usuarios/'+uid).get()).val() || {};
+  if(!['admin','production','pcp'].includes(user.role) && !(user.modulos && user.modulos.apontamento)) throw new HttpsError('permission-denied','Perfil sem acesso a retrabalho.');
+  const agora=new Date().toISOString();let rt,falha;
+  await db.ref().once('value');
+  const result=await db.ref().transaction(base=>{
+    rt=null;falha=null;if(!base)return base;
+    try {rt=require('./retrabalhos').executar(base,request.data || {},uid,agora);return base;}
+    catch(e){falha=e;return;}
+  },undefined,false);
+  if(falha) throw new HttpsError('failed-precondition',falha.message);
+  if(!result.committed || !rt) throw new HttpsError('aborted','Registro alterado. Reabra o retrabalho.');
+  return {ok:true,retrabalhoId:rt.id,revisao:rt.revisao};
+});

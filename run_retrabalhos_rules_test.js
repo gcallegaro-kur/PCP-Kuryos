@@ -1,0 +1,20 @@
+const assert=require('assert/strict');const admin=require('./functions/node_modules/firebase-admin');
+if(process.env.FIREBASE_DATABASE_EMULATOR_HOST!=='127.0.0.1:9023')throw new Error('Teste exige emulador local 9023.');
+const app=admin.initializeApp({projectId:'demo-retrabalho',databaseURL:'http://127.0.0.1:9023?ns=demo-retrabalho-default-rtdb'});
+const prod=admin.initializeApp({projectId:'demo-retrabalho',databaseURL:'http://127.0.0.1:9023?ns=demo-retrabalho-default-rtdb',databaseAuthVariableOverride:{uid:'p'}},'prod');
+const adm=admin.initializeApp({projectId:'demo-retrabalho',databaseURL:'http://127.0.0.1:9023?ns=demo-retrabalho-default-rtdb',databaseAuthVariableOverride:{uid:'a'}},'adm');
+(async()=>{await app.database().ref().set({usuarios:{p:{role:'production'},a:{role:'admin'}},estado_linhas:{Linha_1:{status:'ativa'},Linha_2:{status:'parada',retrabalhoId:'RT1'}},retrabalhos_linhas:{'Linha 2':'RT1'},retrabalhos:{RT1:{id:'RT1'}},ops:{normal:{lote:'1/1',status:'Programado'},concluida:{lote:'2/2',status:'Concluído',abertaLinha:'Linha 2',abertaDesde:'2026-08-01'}}});
+const denied=async promise=>assert.rejects(promise,/PERMISSION_DENIED|permission_denied/i);
+await prod.database().ref('estado_linhas/Linha_1').update({status:'parada'});
+await denied(prod.database().ref('estado_linhas/Linha_2').update({status:'ativa'}));
+await denied(adm.database().ref('estado_linhas/Linha_2').remove());
+await denied(prod.database().ref('estado_linhas/Linha_3').set({retrabalhoId:'forjado',status:'ativa'}));
+await denied(adm.database().ref('retrabalhos/RT1').update({quantidadeConfirmada:100}));
+await denied(prod.database().ref('ops/normal').update({abertaLinha:'Linha 2',abertaDesde:'2026-09-22'}));
+await prod.database().ref('ops/normal').update({abertaLinha:'Linha 1',abertaDesde:'2026-09-22'});
+await denied(prod.database().ref('ops/normal').update({abertaLinha:'Linha 3'}));
+await adm.database().ref('ops/normal').update({abertaLinha:'Linha 3'});
+await adm.database().ref('ops/concluida').update({observacao:'consulta legada'});
+assert.equal((await prod.database().ref('retrabalhos/RT1').get()).val().id,'RT1');
+console.log('OK regras reais: pausa normal permitida; linha RT protegida inclusive remoção; RT só servidor; alocação bloqueada em RT; transferência só admin; OP concluída legada editável.');await Promise.all(admin.apps.map(a=>a.delete()));})().catch(e=>{console.error(e);process.exit(1)});
+
