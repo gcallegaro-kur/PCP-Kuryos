@@ -979,29 +979,13 @@ Pendentes e de anexo de arquivo.
 - **`dashboard.html`** ⚠ — usuário queria ver rodando com dado real antes
   de decidir o que mudar; nunca revisitado desde então.
 
-## Retrabalho vinculado à OP original — definição iniciada em 21/09/2026
+## Gestão de Retrabalhos — escopo esclarecido em 22/09/2026
 
-Solicitado a partir do caso real da OP **26216/04 — PERFUME TAWUS 30ML**:
-867 unidades fabricadas em agosto, OP concluída; atividade de 21/09 é
-**retrabalho**, e não fabricação adicional. A linha 02 foi aberta por engano
-na 26160/04; a unidade lançada para fechar o turno era fictícia. Horários
-confirmados do retrabalho: setup 15:42, envase 16:00, pausa de fim de turno
-17:09 (America/Sao_Paulo), sem retomada automática.
-
-**Dinâmica proposta, ainda não implementada:** ordem de retrabalho própria
-(RT), ligada à OP/lote, SKU e pedido originais. Abertura administrativa com
-motivo, escopo, quantidade afetada e etapas; execução registra linha,
-operador, setup, pausas, quantidade retrabalhada, perdas e materiais
-adicionais. Fluxo: aberto → execução/pausa → aguardando Qualidade → liberado
-ou reprovado. Quantidade retrabalhada não soma a `produzido` da OP/pedido,
-não cria novamente estoque de PA nem reaplica automaticamente o BOM
-original. Só os materiais adicionais e perdas reais têm movimentação própria,
-auditável e idempotente. CQ e rastreabilidade devem tratar separadamente o
-produto afetado e o remanescente, sem inventar saldo nesta base.
-
-**Pendente com o usuário:** motivo, quantidade a retrabalhar e quantidade
-realmente retrabalhada em 21/09 (podem ser inicialmente pendentes); confirmar
-etapas de retrabalho e critério de liberação antes de implantar o painel.
-Não reabrir a OP original como fabricação para contornar a ausência de RT.
-Referências: `public/form.html` (alocação/apontamentos), `functions/rearranjo_linhas.js`
-(rearranjo administrativo), `public/qualidade.html` (trabalho paralelo em curso).
+Controle inicial de execução publicado em `a1fde05`; caso real da 26216/04
+corrigido, quantidade pendente, sem duplicar produção. O usuário esclareceu
+que deseja seção própria de gestão, originada em análises CQ/RNCs, com caso
+principal e ordens de fabricação/envase/rotulagem, executáveis em linha ou
+posto conforme o procedimento. Esse módulo completo ainda não está feito.
+Modelo, papéis propostos, quantidades, genealogia, pontos reais de integração
+e coordenação com Claude estão em **PLANO_GESTAO_RETRABALHOS.md**. Retomar por
+esse documento; não tratar a tela inicial de envase como escopo definitivo.

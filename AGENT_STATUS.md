@@ -5,13 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
-### Codex — rearranjo de linhas 21/09/2026
+### Codex — rearranjo de linhas e retrabalho 21–22/09/2026
 
-- **Funcionalidade pronta:** botão administrativo em Apontamento para mover OP para linha livre ou trocar duas OPs. Exige pausa, conferência dos apontamentos e motivo; servidor revalida administrador/alocações, preserva registros/totais/setup, segmenta pausas por linha e grava auditoria/idempotência.
-- **Validação:** testes de domínio e navegador desktop/celular aprovados, regressões de encerramento e transações null aprovadas, sintaxe JS e regras conferidas. Commit funcional: `3331fdb`, enviado ao origin/main. Publicado em 21/09/2026 por worktree limpo `../deploy-rearranjo-linhas` (Hosting + RTDB + rearranjarLinhas). HTML e módulo publicados conferidos byte a byte (HTTP 200); callable sem login retorna HTTP 401.
-- **Correção operacional PENDENTE — mudança de diagnóstico confirmada pelo usuário:** 26216/04 é RETRABALHO de OP concluída (867 unidades), não produção nova. Não reabrir/somar produção original. Usuário confirmou setup 15:42, envase 16:00 e pausa 17:09 de 21/09. A unidade na 26160/04 era fictícia para fechar turno; registros e totais já zerados na base, restam alocação/setup/datas e marcadores idempotentes na OP/pedido. Nenhuma escrita operacional realizada nesta sessão. Backup completo em `backups/antes-rearranjo-retrabalho-20260921.json`.
-- **Pergunta pendente:** motivo, quantidade envolvida e quantidade retrabalhada hoje; desenho do painel RT registrado em MELHORIAS_FUTURAS.md. A migração Céu Infinito linha 1 → 3 foi exemplo para amanhã; não executada antecipadamente.
-- **Arquivos desta sessão:** functions/index.js, functions/rearranjo_linhas.js, public/form.html, public/shared/rearranjo-linhas-tela.js, database.rules.json, testes de rearranjo, AGENT_STATUS.md e MELHORIAS_FUTURAS.md. Cadastro/CQ/utils.js alheios preservados.
+- **Publicado — rearranjo:** commit `3331fdb`, botão admin para transferir/trocar OPs pausadas, histórico e totais preservados. Hosting/RTDB/callable publicados e conferidos.
+- **Publicado — execução inicial de retrabalho:** commit `a1fde05`, Hosting/RTDB/`apontarRetrabalho`/`rearranjarLinhas` por worktree limpo `../deploy-retrabalho-26216`. Form e módulo conferidos byte a byte por HTTP; função sem login HTTP 401. Domínio, navegador desktop/celular, regras reais no emulador, regressões de encerramento/transações null e ensaio na base real aprovados.
+- **Correção operacional APLICADA E REVALIDADA:** `RT-26216-04-20260921`, lote inteiro, sedimentação inesperada do corante com precipitado. Setup 21/09 15:42, envase 16:00, pausa Fim de turno 17:09 BRT. Apontamento do período com quantidade pendente (campo numérico ausente), editável por admin no Apontamento. OP 26216/04 permanece Concluído com 867 unidades, sem duplicação de produção/estoque/pedido. OP 26160/04 voltou a Programado; alocação/setup/datas/marcadores fictícios retirados e preservados na auditoria do RT. Pedido original permaneceu com total zero, sem novo estorno. Backup pré-transação: `backups/correcao-rt26216-1790070001241.json`. Script idempotente: `scripts/corrigir-retrabalho-26216.js`.
+- **Novo direcionamento do usuário:** quer uma SEÇÃO DE GESTÃO, com origem em análise CQ/RNC, caso de retrabalho e ordens de fabricação/envase/rotulagem, execução em linha ou posto conforme trabalho. Esse módulo completo AINDA NÃO foi implementado; a tela publicada é o primeiro controle de execução. Modelo e integrações reais registrados em `PLANO_GESTAO_RETRABALHOS.md`; não interpretar o envase publicado como escopo final. Não inventar RNC nem procedimentos de tratamento do precipitado.
+- **Coordenação:** usuário lembrou que Claude está trabalhando. Qualidade, laudos, Cadastro e utils.js alheios intactos. Próxima seção deve usar arquivos próprios, com integração à tela CQ somente após coordenação. Nenhuma alteração antecipada na migração Céu Infinito linha 1 → 3, mencionada para amanhã.
+- **Arquivos ativos:** nenhum após registrar esta passagem. Últimos arquivos deste escopo: form.html, modules retrabalhos/rearranjo, functions/index.js, regras, testes, script de correção e docs. Trabalhos paralelos não incluídos.
 
 ### Codex — Dev 3 11/09
 
@@ -1096,4 +1097,3 @@ no disco** — não o último commit, não o índice do git. Com dois agentes no
 mesmo repositório, isso significa que **um deploy publica o trabalho não
 commitado do outro**. Conferir `git status --short` antes de publicar não é
 zelo: é a única coisa que separa "publiquei o meu" de "publiquei o nosso".
-
