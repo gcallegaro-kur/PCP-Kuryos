@@ -127,11 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Em andamento — migração do runtime das Functions (2026-09-23).** Node.js 20
-  é desligado em 30/10/2026. Troca `functions/package.json` engines 20 → 24 (GA,
-  descontinuado só em 04/2028), **sem** subir `firebase-functions` (5.1.1) nem
-  `firebase-admin`. Regressão completa no emulador antes do deploy, deploy por
-  worktree limpo. Arquivos ativos: `functions/package.json`, `AGENT_STATUS.md`.
+- **Publicado — runtime das Functions Node.js 20 → 24 (2026-09-23).** Commit
+  `6163b2a`; deploy `--only functions` por worktree limpo, as 19 funções
+  "Successful update" e `functions:list` mostra 19× `nodejs24`. Sem subir
+  `firebase-functions` (5.1.1) nem `firebase-admin` (12.7). Validação: 79/79
+  testes `run_*.js` no Node 24 e emulador carregando as 19 funções em node@24.
+  Node 24 só é descontinuado em 04/2028. A CLI segue avisando que
+  `firebase-functions` está desatualizado (upgrade tem breaking changes —
+  ciclo próprio, sem prazo). Sonda HTTP sem login não foi feita (bloqueada
+  pela política de permissões da sessão).
+- **Em andamento — GAP-05 (pedido → OP).** Módulo puro novo
+  `public/shared/impacto-pedido-ops.js`. Arquivos que vou tocar:
+  `public/gestao_comercial.html`, `public/comercial.html`, `public/ops.html`,
+  `database.rules.json` (nó novo `pendencias_pcp`), teste novo.
   **Na fila, decidido pelo usuário:** GAP-05 (pedido → OP), GAP-04 com a regra
   "toda OP com fórmula só envasa com bulk liberado" e GAP-18 (remover
   "+ Novo Pedido" de `pedidos.html`).
