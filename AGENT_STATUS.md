@@ -127,6 +127,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — média de peso do CK-7 pelo INMETRO (2026-09-23).** Commit
+  `5bd3027`, Hosting; `qualidade.html` e `shared/inspecao-pa.js` idênticos ao
+  commit. A média exigia ≥ nominal sem tolerância (tela só mostrava o −3%
+  individual) e bloqueava lotes dentro dos −3%. Decisão do usuário: x̄ ≥ Qn − k·s,
+  k = t(99,5%; n−1)/√n (bate com a tabela da Portaria 249/2021). Com menos de
+  5 unidades segue média ≥ nominal. Tela mostra média mínima, k e s; laudo
+  grava `limiteMedia`, `k`, `desvioPadrao`. Individual continua sem as `c`
+  unidades toleradas do plano do INMETRO (mais rígido; não pedido).
+  Arquivos ativos: nenhum.
+
 - **Módulo Operação, Fase 1 (2026-09-23) — PUBLICADO.** Commit `fccafce` (rebase de `88060ca`, mesmo conteúdo)
   no origin/main; Firebase `prod-kuryos`: Hosting + RTDB + função nova
   `onPesagemFechada` (criada; segredos do Graph concedidos). Os 9 arquivos
