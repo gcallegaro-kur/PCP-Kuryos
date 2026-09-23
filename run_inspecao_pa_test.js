@@ -45,6 +45,35 @@ const par200 = {conteudoNominal: 200, unidadesPorCaixa: 24};
   assert.strictEqual(I.avaliarPesos([200], I.parametros({})).conforme, null, 'sem nominal não julga');
 }
 
+// Critério da média do INMETRO (23/09): x̄ >= Qn − k·s, k = t(99,5%; n−1)/√n.
+{
+  // k bate com a tabela da Portaria 249/2021.
+  [[5, 2.059], [13, 0.847], [20, 0.64], [32, 0.485], [50, 0.379], [80, 0.295]].forEach(([n, k]) => {
+    assert.strictEqual(I.kInmetro(n), k, 'k para n=' + n);
+  });
+  // O caso relatado: média dentro dos −3%, abaixo do nominal, com dispersão
+  // normal de envase -- passa pelo INMETRO (antes bloqueava).
+  const relatado = I.avaliarPesos([199, 196, 201, 195, 198, 197, 200, 196], I.parametros(par200));
+  assert.strictEqual(relatado.media, 197.75);
+  assert.strictEqual(relatado.k, 1.237);
+  assert.strictEqual(relatado.limiteMedia, 197.376);
+  assert.strictEqual(relatado.conforme, true, 'média 197,75 >= 197,376 (200 − 1,237 × 2,121)');
+  // Lote sistematicamente baixo (pouca dispersão, todos ~197): reprova --
+  // não é variação, é enchimento abaixo do nominal.
+  const sistematico = I.avaliarPesos([197, 197.2, 196.8, 197.1, 196.9], I.parametros(par200));
+  assert.strictEqual(sistematico.mediaAbaixo, true);
+  assert.strictEqual(sistematico.conforme, false);
+  // Menos de 5 unidades: sem critério estatístico, média >= nominal.
+  const poucas = I.avaliarPesos([199, 198, 197], I.parametros(par200));
+  assert.strictEqual(poucas.k, null);
+  assert.strictEqual(poucas.limiteMedia, 200);
+  const aval = I.avaliar({}, [197, 197.2, 196.8, 197.1, 196.9], par200, {caixas: 9});
+  assert.match(aval.impedimentos.join(' '), /média de peso 197g abaixo do mínimo para a média \(199\.674g = nominal − k·s, INMETRO\)/);
+  const reg = I.registro(aval, {pesos: [197, 197.2, 196.8, 197.1, 196.9]});
+  assert.strictEqual(reg.pesagem.limiteMedia, 199.674);
+  assert.strictEqual(reg.pesagem.k, 2.059);
+}
+
 // ── Plano: torque só com parâmetro ligado ───────────────────────────────
 {
   const semTorque = I.itensAplicaveis(I.parametros(par200)).map((i) => i.id);
@@ -90,7 +119,7 @@ function todos(valor) {
   // Peso fora bloqueia mesmo com todos os itens conformes.
   const pesoRuim = I.avaliar(todos('C'), [199, 198], par200, {caixas: 36});
   assert.strictEqual(pesoRuim.bloqueia, true);
-  assert.match(pesoRuim.impedimentos[0], /média de peso abaixo/);
+  assert.match(pesoRuim.impedimentos[0], /média de peso [\d.]+g abaixo do mínimo para a média/);
 
   // Pendente: nada respondido.
   const vazio = I.avaliar({}, [], par200, {caixas: 36});

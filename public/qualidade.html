@@ -1744,7 +1744,13 @@ function renderCk7() {
   document.getElementById('qCk7PesoQtd').value = laudoAtual.ck7.pesos.length;
   document.getElementById('qCk7PesoUn').textContent = par.unidadeMedida;
   document.getElementById('qCk7PesoFaixa').textContent = par.conteudoNominal != null
-    ? 'Nominal ' + par.conteudoNominal + par.unidadeMedida + ' · limite individual ' + aval.pesagem.limiteIndividual + par.unidadeMedida + ' (−' + par.toleranciaPct + '%)'
+    ? 'Nominal ' + par.conteudoNominal + par.unidadeMedida + ' · limite individual ' + aval.pesagem.limiteIndividual + par.unidadeMedida + ' (−' + par.toleranciaPct + '%)' +
+      // A média tem regra própria (INMETRO, x̄ >= Qn − k·s): sem mostrá-la,
+      // um bloqueio dentro dos −3% parecia erro do sistema.
+      (aval.pesagem.limiteMedia != null
+        ? ' · média mínima ' + aval.pesagem.limiteMedia + par.unidadeMedida +
+          (aval.pesagem.k != null ? ' (nominal − k·s, INMETRO; k=' + aval.pesagem.k + ', s=' + aval.pesagem.desvioPadrao + ')' : ' (com menos de ' + InspecaoPA.N_MIN_CRITERIO_MEDIA + ' pesagens a média precisa atingir o nominal; com ' + InspecaoPA.N_MIN_CRITERIO_MEDIA + ' ou mais vale nominal − k·s, INMETRO)')
+        : ' · média mínima: nominal − k·s (INMETRO), calculada com as pesagens')
     : 'Informe o conteúdo nominal acima para o sistema julgar a pesagem.';
   atualizarJulgamentoCk7(aval);
 

@@ -266,7 +266,8 @@ const responder = (page, valor) => page.evaluate((v) => {
     // Média abaixo do nominal reprova.
     await peso(page, 0, '180');
     await page.waitForFunction(() => /Não é possível liberar/.test(document.getElementById('qCk7Impedimentos').innerText));
-    assert.match(await page.locator('#qCk7Impedimentos').innerText(), /média de peso abaixo do nominal/);
+    assert.match(await page.locator('#qCk7Impedimentos').innerText(), /média de peso [\d.,]+g abaixo do mínimo para a média/);
+    assert.match(await page.locator('#qCk7PesoFaixa').innerText(), /média mínima/, 'a regra da média aparece na tela');
     // Caso do envase manual: média boa, uma unidade fora do limite individual.
     await peso(page, 1, '215');
     await peso(page, 2, '215');

@@ -126,23 +126,62 @@
     return falta;
   }
 
-  /* Pesagem individual. Média abaixo do nominal reprova (conteúdo líquido
-     médio); unidade abaixo de nominal-tolerância reprova (unidade isolada
-     fora do limite INMETRO). Acima do nominal não reprova: é doação. */
+  /* CRITÉRIO DA MÉDIA (decisão do usuário, 23/09): até então a média tinha
+     de ser >= nominal, sem tolerância nenhuma, enquanto a tela só mostrava o
+     -3% da unidade -- média de 197 g num nominal de 200 g bloqueava e parecia
+     erro. Agora vale o critério do INMETRO para pré-medidos (Portaria
+     249/2021, mesmo da OIML R87): x̄ >= Qn - k·s, com s o desvio-padrão da
+     amostra e k = t(99,5%; n-1) / √n. É a fórmula por trás da tabela da
+     Portaria (n=5: 2,059; 13: 0,847; 20: 0,640; 32: 0,485; 80: 0,295), então
+     vale para qualquer quantidade que a inspetora pesar. */
+  var T_995 = [null, 63.657, 9.925, 5.841, 4.604, 4.032, 3.707, 3.499, 3.355, 3.250, 3.169,
+    3.106, 3.055, 3.012, 2.977, 2.947, 2.921, 2.898, 2.878, 2.861, 2.845,
+    2.831, 2.819, 2.807, 2.797, 2.787, 2.779, 2.771, 2.763, 2.756, 2.750];
+  var T_995_LONGE = [[30, 2.750], [40, 2.704], [50, 2.678], [60, 2.660], [80, 2.639], [120, 2.617], [1e9, 2.576]];
+  function t995(gl) {
+    if (!(gl >= 1)) return null;
+    if (gl <= 30) return T_995[Math.floor(gl)];
+    for (var i = 1; i < T_995_LONGE.length; i++) {
+      var a = T_995_LONGE[i - 1], b = T_995_LONGE[i];
+      if (gl <= b[0]) return b[0] >= 1e9 ? b[1] : a[1] + (b[1] - a[1]) * (gl - a[0]) / (b[0] - a[0]);
+    }
+    return 2.576;
+  }
+  function kInmetro(nAmostra) {
+    var t = t995(nAmostra - 1);
+    return t == null ? null : Math.round(t / Math.sqrt(nAmostra) * 1000) / 1000;
+  }
+
+  /* Pesagem individual. Média abaixo de Qn - k·s reprova (conteúdo líquido
+     médio, critério acima); unidade abaixo de nominal-tolerância reprova
+     (unidade isolada fora do limite). Acima do nominal não reprova: é doação.
+     Abaixo de 5 unidades (a menor amostra do plano do INMETRO) k explode --
+     n=2 dá k=45 e qualquer média passaria --, então a média tem de ser >=
+     nominal, como antes, e a tela pede mais pesagens. */
+  var N_MIN_CRITERIO_MEDIA = 5;
   function avaliarPesos(pesos, par) {
     var lista = (pesos || []).map(n).filter(function(v) { return v != null && v > 0; });
     var nominal = par.conteudoNominal;
     var limite = nominal != null ? arred(nominal * (1 - par.toleranciaPct / 100)) : null;
     if (!lista.length) {
-      return {n: 0, media: null, minimo: null, maximo: null, limiteIndividual: limite, foraLimite: [], mediaAbaixo: false, conforme: null, pendente: true};
+      return {n: 0, media: null, minimo: null, maximo: null, limiteIndividual: limite, limiteMedia: null, desvioPadrao: null, k: null,
+        foraLimite: [], mediaAbaixo: false, conforme: null, pendente: true};
     }
     var soma = lista.reduce(function(s, v) { return s + v; }, 0);
     var media = arred(soma / lista.length);
     var minimo = Math.min.apply(null, lista), maximo = Math.max.apply(null, lista);
     var foraLimite = limite != null ? lista.filter(function(v) { return v < limite; }) : [];
-    var mediaAbaixo = nominal != null && media < nominal;
+    var s = null, k = null, limiteMedia = null;
+    if (lista.length >= N_MIN_CRITERIO_MEDIA) {
+      var m = soma / lista.length;
+      s = Math.sqrt(lista.reduce(function(acc, v) { return acc + (v - m) * (v - m); }, 0) / (lista.length - 1));
+      k = kInmetro(lista.length);
+    }
+    if (nominal != null) limiteMedia = arred(k != null ? nominal - k * s : nominal);
+    var mediaAbaixo = limiteMedia != null && media < limiteMedia;
     return {
       n: lista.length, media: media, minimo: minimo, maximo: maximo, limiteIndividual: limite,
+      limiteMedia: limiteMedia, desvioPadrao: s == null ? null : arred(s), k: k,
       foraLimite: foraLimite, mediaAbaixo: mediaAbaixo, pendente: false,
       conforme: nominal == null ? null : (!mediaAbaixo && !foraLimite.length)
     };
@@ -189,7 +228,8 @@
     if (criticosNC.length) impedimentos.push(criticosNC.length + ' item(ns) crítico(s) não conforme(s)');
     if (pesagem.conforme === false) {
       impedimentos.push(pesagem.mediaAbaixo
-        ? 'média de peso abaixo do nominal'
+        ? 'média de peso ' + pesagem.media + par.unidadeMedida + ' abaixo do mínimo para a média (' + pesagem.limiteMedia + par.unidadeMedida +
+          (pesagem.k != null ? ' = nominal − k·s, INMETRO' : ' = nominal; com menos de ' + N_MIN_CRITERIO_MEDIA + ' unidades não se aplica o critério do INMETRO — pese mais') + ')'
         : pesagem.foraLimite.length + ' unidade(s) abaixo do limite de ' + pesagem.limiteIndividual + par.unidadeMedida);
     }
 
@@ -232,6 +272,8 @@
         media: aval.pesagem.media, minimo: aval.pesagem.minimo, maximo: aval.pesagem.maximo,
         nominal: aval.parametros.conteudoNominal, unidade: aval.parametros.unidadeMedida,
         toleranciaPct: aval.parametros.toleranciaPct, limiteIndividual: aval.pesagem.limiteIndividual,
+        limiteMedia: aval.pesagem.limiteMedia, desvioPadrao: aval.pesagem.desvioPadrao, k: aval.pesagem.k,
+        criterioMedia: 'INMETRO x̄ >= Qn - k·s',
         conforme: aval.pesagem.conforme
       },
       retencao: {unidades: n(e.retencaoUnidades), local: e.retencaoLocal || null, guardarAte: prazoRetencao(e.dataValidade)},
@@ -244,6 +286,7 @@
 
   return {
     PLANO_PADRAO: PLANO_PADRAO, TOLERANCIA_PADRAO: TOLERANCIA_PADRAO,
+    kInmetro: kInmetro, N_MIN_CRITERIO_MEDIA: N_MIN_CRITERIO_MEDIA,
     RETENCAO_MESES_APOS_VALIDADE: RETENCAO_MESES_APOS_VALIDADE,
     UNIDADES_PESAGEM_PADRAO: UNIDADES_PESAGEM_PADRAO, redimensionarPesos: redimensionarPesos,
     amostragem: amostragem, parametros: parametros, faltamParametros: faltamParametros,
