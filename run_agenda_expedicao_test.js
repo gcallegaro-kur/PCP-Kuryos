@@ -52,7 +52,7 @@ async function testarHandler(){
   race=s=>{s.usuarios.u1.role='production';};
   await assert.rejects(()=>handler({...req,data:{...dados,revisao:2}}),/revogada/);
   assert.equal(state.agendamentos_expedicao.agenda_001.revisao,2);
-  assert.equal(JSON.parse(fs.readFileSync('database.rules.json','utf8')).rules.agendamentos_expedicao['.write'],false);
+  assert.equal(require('./ler_regras').lerRegras().rules.agendamentos_expedicao['.write'],false);
   console.log('OK handler agenda: autenticação, permissão atual, revisão concorrente e estoque preservado.');
 }
 testarHandler().catch(err=>{console.error(err);process.exitCode=1;});

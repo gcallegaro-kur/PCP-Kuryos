@@ -95,7 +95,7 @@ chamadas.forEach(ch => assert.match(ch, /pedido\.status\)$/, 'toda chamada passa
 assert.match(index, /\["CANCELADO"\]\.includes\(pedido\.status\)/, 'recebimento continua recusando PC cancelado');
 
 // ── Regra do banco ───────────────────────────────────────────────────────
-const rules = JSON.parse(fs.readFileSync(path.join(__dirname, 'database.rules.json'), 'utf8')).rules;
+const rules = require('./ler_regras').lerRegras().rules;
 const validar = rules.pedidos_compra.$pedidoKey.status['.validate'];
 assert.match(validar, /'CANCELADO'/);
 assert.match(validar, /role'\)\.val\(\) == 'admin'/);

@@ -87,7 +87,7 @@ multi.pedidos_comerciais['PED-002'].frete.enderecoEntrega='Rua A, 100';multi.ped
 assert.equal(listar(fixture(),'2026-09-11').length,1);
 assert.equal(analisar(fixture(),'PA001','pa_op1_p1','2026-09-11').disponivel,true);
 assert.equal(fs.readFileSync('functions/expedicao_regras.js','utf8'),fs.readFileSync('public/shared/expedicao.js','utf8'),'Regras da UI e do servidor devem ser iguais');
-assert.equal(JSON.parse(fs.readFileSync('database.rules.json')).rules.expedicoes_comerciais['.write'],false);
+assert.equal(require('./ler_regras').lerRegras().rules.expedicoes_comerciais['.write'],false);
 
 // Executa o handler real com um RTDB simulado; força nova tentativa depois
 // de uma mudança concorrente, como faz a transaction do Firebase.
