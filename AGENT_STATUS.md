@@ -127,6 +127,38 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Módulo Operação, Fase 1 (2026-09-23) — commit `88060ca`, local, AINDA
+  NÃO PUBLICADO nem enviado ao origin.** O deploy foi barrado pela checagem
+  de permissão da sessão; publicar junto com o push:
+  `firebase deploy --only hosting,database,functions:onPesagemFechada --project prod-kuryos`
+  (com `FUNCTIONS_DISCOVERY_TIMEOUT=60`).
+  O que entra: menu "Operação" (Produção / Manipulação / Rotulagem), um
+  checkbox por setor em Usuários (`apontamento` segue sendo a chave da
+  Produção; `manipulacao`, `rotulagem`, `conferencia_pesagem` novos).
+  Marcação antiga só com `apontamento` herda os dois setores novos enquanto
+  a chave estiver ausente; `usuarios.html` grava `false` ao desmarcar.
+  Perfil `rotulagem` passa a ver só a Rotulagem (não vê mais a Manipulação).
+  Histórico: setor vê só os seus apontamentos; editar/excluir só admin/PCP
+  (perfil `production` perdeu a edição, pedido do usuário). Estoque por
+  área, só consulta (`estoque_setor.html` + `shared/estoque-setor.js`,
+  áreas por setor em `config/operacao/areasPorSetor`). Chave "Conferência
+  de Pesagem" (`config/conferenciaPesagem/ativa`, Ajustes): ligada, só
+  Qualidade/P&D conferem com login; admin libera com motivo
+  (`conferencia/modo = LIBERADO_PELO_ADMIN`); e-mail `onPesagemFechada`
+  (`functions/pesagem_fechada.js`, marca em `notificacoes_pesagem`).
+  Regras: módulos da Operação onde `apontamento` já escrevia + `ops` e
+  `estoque`; `ops/$opKey/manipulacao` para papel `qualidade` e marca
+  `conferencia_pesagem` — corrige a liberação do bulk pelo papel
+  `qualidade`, que as regras negavam. "Granel" virou "bulk" só no texto.
+- **Validação:** `run_operacao_ui_test.js` (novo), `run_operacao_rules_test.js`
+  (novo, emulador 9023), `run_pesagem_fechada_email_test.js` (novo),
+  manipulação unit/UI, histórico unit/UI, apontamento, OP encerrada,
+  transações null, dossiê e `run_retrabalhos_rules_test.js` no emulador.
+  Varredura completa: só 7 falhas, todas anteriores a este trabalho —
+  testes de Expedição/Compras fazem `JSON.parse` cru de
+  `database.rules.json`, que tem uma linha `//` desde `ea4c1bd`.
+- **Arquivos ativos:** nenhum. Fases 2 e 3 registradas em `MELHORIAS_FUTURAS.md`.
+
 - **Escopo atual — teste de fluxo ponta a ponta (2026-09-22).** O usuário pediu
   testar "as funcionalidades, fluxos, integrações", começando "no orçamento >
   cadastro > pedido" e seguindo em cadeia. `run_fluxo_ponta_a_ponta_test.js`
