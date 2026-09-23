@@ -136,7 +136,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `firebase-functions` está desatualizado (upgrade tem breaking changes —
   ciclo próprio, sem prazo). Sonda HTTP sem login não foi feita (bloqueada
   pela política de permissões da sessão).
-- **GAP-05 (pedido → OP) — pronto, publicando (2026-09-23).** Módulo puro
+- **Publicado — GAP-05 (pedido → OP) (2026-09-23).** Commit `d169cd9`, Hosting + RTDB por worktree limpo; `ops.html`, `comercial.html`, `gestao_comercial.html` e `shared/impacto-pedido-ops.js` idênticos ao commit por HTTP. Arquivos ativos: nenhum. Módulo puro
   `public/shared/impacto-pedido-ops.js`; `gestao_comercial.html` (prévia +
   pendência no mesmo update da versão), `comercial.html` (Cancelar saldo lê
   `ops` e grava a pendência junto), `ops.html` (painel no topo: cancelar pelo
