@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Entregue — modelagem dos fluxos do sistema (2026-09-23).** Pedido do
+  usuário: fluxo por área (tela › campo › onde aparece), numerado `[Área].n`,
+  fluxo padrão ponta a ponta, fluxos não padrão e gaps. Em
+  `FLUXOS_DO_SISTEMA.md`: 69 passos (CAD, CMP, COM, PCP, LOG, QUA, PRO, MAN,
+  ROT, FAT), 28 exceções (EX-01..28) e 20 gaps (GAP-01..20; 4 altos:
+  estoque sem base, devolução de cliente, portão do bulk, mudança de pedido
+  que não chega à OP). Versão navegável publicada como artifact
+  (https://claude.ai/artifact/4swhySza1PhashnA1ECYNH), gerada a partir do .md.
+  Só documentação; nenhum código alterado. **Quem mudar um fluxo atualiza o
+  passo no .md no mesmo commit.** Arquivos ativos: nenhum.
+
 - **Publicado — vírgula decimal na Qualidade (2026-09-23).** Hosting;
   `qualidade.html` e `shared/campo-decimal.js` idênticos ao commit. Num
   `type="number"` o Chrome descartava a vírgula ("197,5" → 1975, sem aviso).
