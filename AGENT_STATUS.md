@@ -127,11 +127,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Módulo Operação, Fase 1 (2026-09-23) — commit `88060ca`, local, AINDA
-  NÃO PUBLICADO nem enviado ao origin.** O deploy foi barrado pela checagem
-  de permissão da sessão; publicar junto com o push:
-  `firebase deploy --only hosting,database,functions:onPesagemFechada --project prod-kuryos`
-  (com `FUNCTIONS_DISCOVERY_TIMEOUT=60`).
+- **Módulo Operação, Fase 1 (2026-09-23) — PUBLICADO.** Commit `88060ca`
+  no origin/main; Firebase `prod-kuryos`: Hosting + RTDB + função nova
+  `onPesagemFechada` (criada; segredos do Graph concedidos). Os 9 arquivos
+  públicos alterados conferidos por HTTP: 200 e idênticos ao commit.
   O que entra: menu "Operação" (Produção / Manipulação / Rotulagem), um
   checkbox por setor em Usuários (`apontamento` segue sendo a chave da
   Produção; `manipulacao`, `rotulagem`, `conferencia_pesagem` novos).
