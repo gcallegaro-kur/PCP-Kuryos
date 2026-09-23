@@ -1910,6 +1910,19 @@ function campoSetupFim(tipo) { return tipo === 'rotulagem' ? 'setupFimRot' : 'se
 // nunca trava o que pode ser digitado). Esta função é o ponto único que
 // efetivamente barra a ação antes de qualquer escrita -- chamar sempre logo
 // no início do handler, antes de enfileirar/gravar qualquer coisa.
+/* Portão do bulk (GAP-04): toda porta que COMEÇA envase passa por aqui --
+   alocar na linha (lista ou lote digitado), Abrir OP do modo avançado, Fim
+   de Setup e o apontamento horário. A regra mora em Manipulacao.podeEnvasar
+   (shared/manipulacao.js). Só vale para a LINHA de envase: a rotulagem
+   rotula frasco antes do envase e não depende do laudo do bulk. */
+function bloquearSeBulkNaoLiberado(op, acao) {
+  if (!op || typeof Manipulacao === 'undefined') return false;
+  var r = Manipulacao.podeEnvasar(op);
+  if (r.ok) return false;
+  alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'envasar') + ': ' + r.motivo);
+  return true;
+}
+
 function bloquearSeOpCancelada(op, acao) {
   if (op && op.status === 'Cancelado') {
     alert('Esta OP foi cancelada' + (op.motivoCancelamento ? ' (' + op.motivoCancelamento + ')' : '') + ' e não pode ' + (acao || 'ser usada') + '.');
@@ -2271,6 +2284,7 @@ document.getElementById('btnAbrirOP').addEventListener('click', function() {
   var op = findOpByLote(lote);
   if (!op) { alert('OP não encontrada em Controle de OPs — confirme se já foi emitida.'); return; }
   if (bloquearSeOpCancelada(op, 'ser aberta')) return;
+  if (bloquearSeBulkNaoLiberado(op, 'ser aberta na linha')) return;
   if (!linha) { alert('Selecione a linha/posto.'); return; }
   if (op.abertaDesde) { alert('Essa OP já está aberta desde ' + fmtDataHora(op.abertaDesde) + '.'); return; }
 
@@ -3294,6 +3308,10 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     return;
   }
   if (bloquearSeOpConcluida(matchedOpForSave, 'receber apontamento')) {
+    btn.disabled = false; btn.textContent = 'Salvar Registro';
+    return;
+  }
+  if (!(configRotulagem || []).includes(linha) && bloquearSeBulkNaoLiberado(matchedOpForSave, 'receber apontamento de envase')) {
     btn.disabled = false; btn.textContent = 'Salvar Registro';
     return;
   }
@@ -4574,8 +4592,9 @@ function updatePedidosDatalistTurno(tipo) {
      OP até a qualidade liberar o material — já é o que acontece hoje na
      prática"). OP sem a fase de granel continua livre: o histórico inteiro é
      assim, e travar tudo de uma vez pararia a fábrica. */
-  alocarOpBloqueadasAtual = livres.filter(function(o) { return !Manipulacao.podeEnvasar(o).ok; });
-  alocarOpLivresAtual = livres.filter(function(o) { return Manipulacao.podeEnvasar(o).ok; });
+  var travaBulk = tipo !== 'rotulagem';
+  alocarOpBloqueadasAtual = travaBulk ? livres.filter(function(o) { return !Manipulacao.podeEnvasar(o).ok; }) : [];
+  alocarOpLivresAtual = travaBulk ? livres.filter(function(o) { return Manipulacao.podeEnvasar(o).ok; }) : livres;
 }
 
 function renderAlocarOpLista(filtroTexto) {
@@ -4590,7 +4609,7 @@ function renderAlocarOpLista(filtroTexto) {
     ? '<div class="alocar-op-empty" style="text-align:left">⏸ ' + alocarOpBloqueadasAtual.length +
       ' OP(s) com granel não liberado pela Qualidade: ' +
       alocarOpBloqueadasAtual.slice(0, 4).map(function(o) {
-        return escapeHtml(String(o.lote)) + ' (' + escapeHtml(Manipulacao.rotulo(Manipulacao.estado(o)).toLowerCase()) + ')';
+        return escapeHtml(String(o.lote)) + ' (' + escapeHtml(Manipulacao.estado(o) ? Manipulacao.rotulo(Manipulacao.estado(o)).toLowerCase() : 'bulk ainda não passou pela Manipulação') + ')';
       }).join(', ') + (alocarOpBloqueadasAtual.length > 4 ? ' e outras' : '') + '.</div>'
     : '';
   if (!itens.length) {
@@ -4680,6 +4699,7 @@ document.getElementById('btnConfirmarAlocarOp').addEventListener('click', functi
   var lote = document.getElementById('alocarOpLote').value.trim();
   if (!lote || !alocarOpAlvoAtual) { alert('Selecione uma OP na lista antes de confirmar.'); return; }
   if (bloquearSeOpCancelada(findOpByLote(lote), 'ser alocada')) return;
+  if (alocarOpAlvoAtual.tipo !== 'rotulagem' && bloquearSeBulkNaoLiberado(findOpByLote(lote), 'ser alocada na linha')) return;
   var btn = this;
   btn.disabled = true;
   var agora = new Date().toISOString();
@@ -4717,6 +4737,7 @@ function encerrarSetup(lote, tipo) {
   var op = findOpByLote(lote);
   if (!op || !op[campoAberturaInicio(tipo)]) return;
   if (bloquearSeOpCancelada(op, 'ter o setup encerrado')) return;
+  if (tipo !== 'rotulagem' && bloquearSeBulkNaoLiberado(op, 'começar o envase')) return;
   var agora = new Date().toISOString();
   var upd = {};
   upd[campoSetupFim(tipo)] = agora;

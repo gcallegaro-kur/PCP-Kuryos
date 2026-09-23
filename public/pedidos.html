@@ -210,7 +210,9 @@
     <option value="cliente">Agrupar por Cliente</option>
   </select>
   <button class="btn btn-ghost" id="btnOrdenarPrioridade">🔀 Ordenar Prioridades</button>
-  <button class="btn btn-primary" id="btnNovo">+ Novo Pedido</button>
+  <!-- GAP-18 (decisão do usuário, 23/09): pedido nasce só no Comercial, com
+       preço, versão e trava. Esta tela é consulta e priorização do backlog. -->
+  <a class="btn btn-ghost" href="comercial.html" title="Pedidos novos são lançados no Comercial">Novo pedido: Comercial →</a>
 </div>
 
 <div class="main">
@@ -1308,19 +1310,6 @@
   });
 
   // ── Modal: open new ──────────────────────────────────────────────
-  document.getElementById('btnNovo').addEventListener('click', function() {
-    openNew();
-  });
-
-  function openNew() {
-    editingKey = null;
-    document.getElementById('modalTitle').textContent = 'Novo Pedido';
-    resetForm();
-    document.getElementById('btnEncerrar').style.display = 'none';
-    hideModalAlert();
-    document.getElementById('modalBg').classList.add('open');
-    document.getElementById('fId').focus();
-  }
 
   function openEdit(key) {
     var p = allPedidos[key];
@@ -1408,6 +1397,8 @@
     // original) recriava o pedido numa chave nova, derrubando o vínculo,
     // apagando o checklist de insumos, e órfando o item em Pedidos
     // Comerciais -- exatamente o padrão relatado.
+    // Sem pedido aberto não há o que salvar: criar pedido é só no Comercial (GAP-18).
+    if (!editingKey) { showModalAlert('Pedidos novos são lançados no Comercial.'); return; }
     var existing = editingKey ? allPedidos[editingKey] : null;
     var isComercial = !!(existing && existing.parentPedidoId);
 

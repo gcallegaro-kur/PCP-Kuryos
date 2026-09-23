@@ -50,20 +50,25 @@ passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em
   soma expedido de forma atômica e idempotente, mas não existe o caminho inverso (carga
   que voltou, NF cancelada). O item "API de emissão de NF" abaixo prevê cancelamento
   **fiscal**; o estorno **físico** é outra coisa e precisa existir antes.
-- **GAP-04 (parte nova) — Portão do bulk.** 🔴 O envase só é barrado quando a OP já
-  começou a manipulação; OP recém-emitida vai direto ao envase sem laudo de granel.
-  **Decisão do usuário (23/09): toda OP cujo produto tem fórmula só envasa com o
-  bulk liberado pela Qualidade; OP sem fórmula (kit, bulk do cliente) passa.**
-  E o bulk reprovado não tem destino (reprocesso, ajuste ou descarte): a OP fica
-  travada. Registrado em `AGENT_STATUS.md` (22/09) como fora de escopo do teste ponta a
-  ponta; o ajuste de granel pós-fechamento já estava na seção Qualidade abaixo.
+- ~~**GAP-04 (parte nova) — Portão do bulk.**~~ **FEITO em 2026-09-23.** Decisão do
+  usuário: toda OP cujo produto tem fórmula (`ops/{lote}.formulaVersao`) só envasa com
+  o bulk LIBERADO; sem fórmula passa. `Manipulacao.podeEnvasar` ganhou a regra, com
+  corte prospectivo em `PORTAO_BULK_DESDE` (24/09 00:00 BRT): no dia havia 13 OPs
+  abertas com fórmula e sem fase de bulk (2 rodando, 11 programadas), feitas fora do
+  sistema — travá-las pararia a linha. OP que já envasou nunca trava; retrabalho não
+  pede bulk; rotulagem não depende do bulk. `form.html` aplica em Alocar OP (lista e
+  confirmação), Abrir OP (modo avançado), Fim de Setup e apontamento horário.
+  Testes: `run_portao_bulk_test.js` (28) e `run_portao_bulk_ui_test.js` (6 etapas);
+  `run_fluxo_ponta_a_ponta_test.js` passou a exigir o portão. **Continua aberto:**
+  bulk reprovado sem destino (reprocesso, ajuste com MP da composição, descarte) —
+  a OP fica travada; o ajuste de granel está na seção Qualidade abaixo.
 - **GAP-13 — Orçamento perdido.** 🟡 `orcamentos` só conhece EM_ELABORACAO, ENVIADO,
   ACEITO/convertido. Falta RECUSADO/VENCIDO com motivo, para ter funil e taxa de
   conversão por cliente.
-- **GAP-18 — Duas portas para criar pedido.** 🟡 `pedidos.html` › `+ Novo Pedido`
-  ainda cria pedido sem passar pelo Comercial (sem preço, versão nem trava da
-  `gestao_comercial.html`). **Decisão do usuário (23/09): remover o botão** — a
-  tela do PCP passa a ser só consulta de pedidos; todo pedido nasce no Comercial.
+- ~~**GAP-18 — Duas portas para criar pedido.**~~ **FEITO em 2026-09-23** (decisão do
+  usuário: remover). `pedidos.html` perdeu o "+ Novo Pedido" e o `openNew`; no lugar,
+  o link "Novo pedido: Comercial →". Salvar sem pedido aberto recusa. O modal segue
+  para editar o backlog. Guardado por `run_pedido_porta_unica_test.js`.
 
 ---
 

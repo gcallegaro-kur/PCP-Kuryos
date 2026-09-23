@@ -115,7 +115,7 @@ atualiza o passo aqui no mesmo commit.**
 | QUA.3 | Laudo › Liberar para uso · Aprovar c/ concessão · ⏸ Reter · Reprovar · 🖨 Emitir laudo | Decisão; reprovar e reter exigem motivo; concessão exige quem autorizou | LIBERADO: lote visível na **Separação** (LOG.5) e na **pesagem** (MAN.2). REPROVADO: **RNC automática** (QUA.8) + selo do fornecedor (CMP.3) | ✅ |
 | QUA.4 | Manipulação › Conferência (chave ligada) | ✓ Confere / ✕ Diverge por MP, com login | Pesagem conferida → MAN.4 | ✅ |
 | QUA.5 | Fila › 🧪 Analisar granel | Ensaios do bulk (CAD.5) | — | ✅ |
-| QUA.6 | Granel › Liberar para envase · Reprovar granel | Decisão | Liberado: a OP pode envasar (PRO.3). Reprovado: envase bloqueado + RNC | 🟡 brecha ([GAP-04](#gap-04)) |
+| QUA.6 | Granel › Liberar para envase · Reprovar granel | Decisão | Liberado: a OP pode envasar (PRO.3). Reprovado: envase bloqueado + RNC. Bulk reprovado ainda não tem destino ([GAP-04](#gap-04)) | 🟡 |
 | QUA.7 | Fila › 🔬 Laudar (palete de PA) | Inspeção CK-7: peso pelo INMETRO (x̄ ≥ Qn − k·s), embalagem, ensaios | Palete LIBERADO: disponível para a **carga** (FAT.1) | ✅ |
 | QUA.8 | ⚠️ Não Conformidades · + Nova RNC · ▶ Assumir · ✓ Encerrar | Automática (QUA.3, QUA.6, LOG.7) ou manual; encerrar exige causa raiz, ação e disposição | Disposição (devolver, descartar, retrabalhar, concessão) **não dispara a ação** ([GAP-10](#gap-10)) | 🟡 |
 | QUA.9 | 🏭 Desempenho de Fornecedor | — | Selo na cotação (CMP.3) | ✅ |
@@ -128,7 +128,7 @@ atualiza o passo aqui no mesmo commit.**
 |---|---|---|---|---|
 | PRO.1 | Operação › Produção › ▶️ Iniciar turno · + Abrir posto de trabalho | Turno, linhas e postos ativos, pessoas | Linhas no painel ANDON e nos dashboards | ✅ |
 | PRO.2 | Linha › + Alocar OP › ▶️ Abrir OP | OP programada (PCP.4); o material chegou pelo LOG.5 | OP em setup; linha ocupada | ✅ |
-| PRO.3 | Fim de Setup → iniciar envase | — | Início do envase registrado (tempo de setup medido). Bloqueia se o bulk da OP foi reprovado ou está pendente (ver [GAP-04](#gap-04)) | 🟡 |
+| PRO.3 | Fim de Setup → iniciar envase | — | Início do envase registrado (tempo de setup medido). **Portão do bulk** (desde 24/09): OP com fórmula só entra na linha com o bulk LIBERADO (QUA.6) — vale para Alocar OP, Abrir OP do modo avançado, Fim de Setup e apontamento horário. Sem fórmula passa; OP que já envasou nunca trava; OPs emitidas antes de 24/09 seguem a regra antiga | ✅ |
 | PRO.4 | Durante o turno: checkpoint (total acumulado), **+ Adicionar parada**, **+ Adicionar perda**, ⇄ Mudar de linha / trocar OPs | Total acumulado; motivo/duração da parada; material/quantidade da perda | Incremento gravado; a perda baixa o material | ✅ |
 | PRO.5 | Encerrar e Salvar (fim de turno) | Total até ali | OP pausada, pronta para continuar no dia seguinte | ✅ |
 | PRO.6 | 🏁 Finalizar OP (Fechar esta OP →) | Total final e perdas | Quantidade + **baixa do BOM/fórmula** + **crédito no pedido** numa só gravação. OP em **Aguardando Confirmação** → **PCP.5** e **LOG.7** | ✅ |
@@ -153,7 +153,7 @@ atualiza o passo aqui no mesmo commit.**
 
 | Nº | Onde | Faz / preenche | Resultado → aparece em | |
 |---|---|---|---|---|
-| ROT.1 | Operação › Rotulagem (mesma tela da Produção, seção Rotulagem) › + Alocar OP › Abrir OP | A mesma OP pode rodar **ao mesmo tempo** no envase e na rotulagem | Estação ocupada, setup próprio | ✅ |
+| ROT.1 | Operação › Rotulagem (mesma tela da Produção, seção Rotulagem) › + Alocar OP › Abrir OP | A mesma OP pode rodar **ao mesmo tempo** no envase e na rotulagem. A rotulagem **não** depende do laudo do bulk (rótulo vai no frasco antes do envase) | Estação ocupada, setup próprio | ✅ |
 | ROT.2 | Apontamento / Encerrar | Total rotulado, perdas | Soma em `produzidoRotulagem`, **separada**; **não credita o pedido** | 🟡 ([GAP-09](#gap-09)) |
 | ROT.3 | Estoque do setor (sala de rótulos) | Consulta dos rótulos | — | ✅ · ⬜ guarda dos rótulos liberados ([GAP-16](#gap-16)) |
 | ROT.4 | — | Ordem de rotulagem própria e "pronto = menor quantidade entre etapas" | **Não existe** | ⬜ ([GAP-09](#gap-09)) |
@@ -260,7 +260,7 @@ Em sequência, com o que passa de mão em mão:
 | EX-25 | **Mudança de fórmula/BOM com OPs abertas** | CAD.5 + Nova Versão → a OP emitida mantém a versão que usou; as próximas usam a nova | ✅ |
 | EX-26 | **Faturamento por acúmulo** (ex.: coleta a cada 3.000 kg) | Não existe gatilho; feito de cabeça sobre a grade da Expedição | ⬜ [GAP-14](#gap-14) |
 | EX-27 | **Inventário divergente** | LOG.6 contagem cega → ⚖️ Ajustar com motivo | ✅ |
-| EX-28 | **Pedido lançado fora do Comercial** | Pedidos e MRP › + Novo Pedido ainda cria pedido **sem passar pelo Comercial** (sem preço, versão nem trava) | 🟡 [GAP-18](#gap-18) |
+| EX-28 | **Pedido lançado fora do Comercial** | Fechado em 23/09: Pedidos e MRP não cria mais pedido (o botão virou "Novo pedido: Comercial →"); a tela edita prioridade e dados do backlog | ✅ |
 | EX-29 | **Material errado adaptado na produção** (ex.: cortar válvula de 120 mm para 100 mm) | Feito no chão **sem registro nenhum**: não há ordem de transformação, e o tempo e o custo somem na eficiência da linha | ⬜ [GAP-21](#gap-21) |
 | EX-30 | **Devolver ao cliente a sobra da remessa dele** | Não há saída "devolução ao cliente" que baixe `porCliente`; hoje se corrige com Estoque › ⚖️ Ajustar escolhendo o cliente | ⬜ [GAP-22](#gap-22) |
 | EX-31 | **Sobra da pesagem volta ao endereço de origem** | A Separação guarda de onde o material saiu, mas MAN.3 não oferece o "Devolvido": a sobra fica para sempre no endereço da área de pesagem | ⬜ [GAP-23](#gap-23) |
@@ -281,7 +281,7 @@ registrado no backlog em 23/09, na seção *Gaps levantados na modelagem de flux
 | GAP-01 | Saldo de estoque sem base (só 37 de 906 materiais têm saldo; 11 negativos). Inclui: empenho sem dono, remessa a caminho sem data no MRP, material de cliente parado sem alerta | PCP.2, PCP.3, MAN.2, LOG.5 | MRP, empenho e FEFO calculam sobre números falsos | Operação ("Dia D") | Integração entre setores · Propriedade do estoque · Operação Fase 2 (FEFO) | 🔴 |
 | GAP-02 | Não existe **devolução/reclamação de cliente** (entrada, inspeção, estorno no pedido, RNC de origem cliente) | EX-20, EX-23, COM.7 | Produzido ≠ expedido + estoque sem explicação; pós-venda fora do sistema | Código | novo | 🔴 |
 | GAP-03 | Não há **estorno da saída física** (NF cancelada, carga que voltou) | FAT.5, EX-21 | Correção só manual no banco | Código | novo (a API de NF prevê "cancelamento fiscal", não o físico) | 🟠 |
-| GAP-04 | **Portão do bulk incompleto**: OP recém-emitida vai ao envase sem laudo; bulk reprovado não tem destino; ajuste pós-fechamento sem fluxo; bulk sem endereço/saldo | QUA.6, PRO.3, EX-16, EX-32 | Risco regulatório (Anvisa) e OP travada | Código | novo (portão) · Qualidade › revisão da spec (ajuste de granel, WMS de semi-acabado) | 🔴 |
+| GAP-04 | **Bulk sem destino**: o portão foi fechado em 23/09 (toda OP com fórmula emitida desde 24/09 só envasa com bulk liberado), mas o bulk reprovado continua sem destino (reprocesso, ajuste ou descarte), o ajuste pós-fechamento não tem fluxo e o bulk não tem endereço/saldo | QUA.6, EX-16, EX-32 | OP com bulk reprovado fica travada sem caminho | Código | Qualidade › revisão da spec (ajuste de granel, WMS de semi-acabado) | 🟠 |
 | GAP-05 | ~~Mudança no pedido não chega à OP~~ **Resolvido em 23/09 para as OPs** (PCP.7). Continua aberto: cancelar o pedido não avisa Compras dos PCs/remessas ligados, e o PA já produzido do pedido cancelado fica sem destino | EX-03, CMP.7 | Compra ou remessa segue para pedido que não existe mais | Código | Gaps levantados na modelagem › GAP-05 | 🟡 |
 | GAP-06 | MRP incompleto: parâmetros vazios (lead time, segurança, lote mínimo/múltiplo); necessidade gravada ainda é a bruta; data de demanda = entrega − lead time de produção | PCP.2 | Plano manda comprar tudo "para ontem" | Operação + código | MRP — o que falta · MRP: promessa de entrega | 🟠 |
 | GAP-07 | **Planejamento sem vínculo confiável OP↔data↔linha**: OP sem bloco nasce sem data; OP arrastada não sincroniza com a grade de quantidades; "Alocar OP" não trava na OP programada; zona fixa desligada | PCP.3, PCP.4, PRO.2 | MRP e prazo cegos para parte da carteira; linha pode rodar OP fora do plano | Código | `PLANO_PLANEJAMENTO_PCP.md` · Planejamento / PCP | 🟠 |
@@ -295,7 +295,7 @@ registrado no backlog em 23/09, na seção *Gaps levantados na modelagem de flux
 | GAP-15 | "Visto do PCP" nos apontamentos | PCP.6 | PCP não sabe o que já revisou | Código | Operação Fase 2 | 🟡 |
 | GAP-16 | Pendências de guarda por setor (MP → Manipulação, rótulos → Rotulagem) e "Guardar / Mover" no setor; quarentena sem endereço bloqueado | LOG.4, MAN.6, ROT.3 | Material liberado esquecido na doca | Código + cadastro | Operação Fase 2 · WMS (quarentena com endereço) | 🟡 |
 | GAP-17 | Bulk em tanque com endereço + OP de higienização | MAN.6, PRO.3 | Não se sabe onde está o bulk | Código (Fase 3) | Operação Fase 3 | 🟡 |
-| GAP-18 | Duas portas para criar pedido (Comercial e Pedidos e MRP); número do pedido do cliente não aparece no PCP | EX-28, COM.4, PCP.1 | Pedido sem preço, versão nem trava; conciliação com cliente trava | Código (pequeno) | novo · Pedidos — clareza da tela | 🟡 |
+| GAP-18 | ~~Duas portas para criar pedido~~ **fechado em 23/09**. Continua aberto: o número do pedido do cliente não aparece nas tabelas do PCP | PCP.1 | Conciliação com o cliente trava no número | Código (pequeno) | Pedidos — clareza da tela | ⚪ |
 | GAP-19 | Cadastro incompleto só **avisa**: un/caixa, peso/caixa, validade; nova versão de fórmula nasce com especificação **vazia**; 74% dos ensaios sem faixa numérica e só 3 críticos | CAD.4, CAD.5, PCP.3, QUA.5, FAT.1 | Carga, NF e FEFO do PA errados; lote vai à linha sem parâmetro | Código (pequeno) + operação | Fórmulas / BOM / Especificações · Qualidade › itens avulsos | 🟡 |
 | GAP-20 | Cotação enviada e respondida fora do sistema (texto copiado; proposta sem anexo); NCM ausente, alíquota digitada de cabeça | CMP.4, CMP.5 | Sem registro de envio/resposta; fornecedor pode ganhar por imposto errado | Código | Compras (anexo da proposta, NCM) | 🟡 |
 | GAP-21 | **Ordem de transformação** de material (material errado adaptado para o certo) | EX-29, PRO.4 | Tempo e custo invisíveis; eficiência contaminada | Código | Ordens de Serviço › acessórias/de transformação | 🟡 |
@@ -345,4 +345,4 @@ marcado no backlog em 23/09.
 | Gestão de Retrabalhos | GAP-10 |
 | MRP: promessa de entrega | GAP-06 (depende de GAP-07) |
 | Operação — Fases 2 e 3 | Guardar/Mover e pendências de guarda → GAP-16. Visto do PCP → GAP-15. FEFO → GAP-01. Tanque e higienização → GAP-17. Consolidação da OP → GAP-28. Permissões de `registros` → dívida técnica |
-| Gaps levantados na modelagem de fluxos | GAP-02, GAP-03, GAP-04 (portão), GAP-05 (OPs resolvidas em 23/09; falta PC/remessa), GAP-13, GAP-18 — nasceram aqui |
+| Gaps levantados na modelagem de fluxos | GAP-02, GAP-03, GAP-04 (portão fechado em 23/09), GAP-05 (OPs resolvidas em 23/09; falta PC/remessa), GAP-13, GAP-18 (fechado em 23/09) — nasceram aqui |

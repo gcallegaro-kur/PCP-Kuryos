@@ -137,17 +137,43 @@
   }
   function rotulo(st) { return (ESTADOS[st] || {}).rotulo || '—'; }
 
-  /* PORTÃO DO ENVASE. OP sem fase de granel continua como sempre (a fábrica
-     não pode parar por causa do histórico); OP com fase só libera envase
-     depois da Qualidade liberar o granel. `exigirSempre` liga a trava para
-     todas as OPs quando a operação estiver madura. */
+  /* PORTÃO DO ENVASE (GAP-04 de FLUXOS_DO_SISTEMA.md).
+
+     Regra do usuário (23/09): OP cujo produto tem FÓRMULA só envasa com o
+     bulk liberado pela Qualidade; OP sem fórmula (kit, bulk do cliente) passa.
+     Antes disso, a trava só pegava OP que já tinha começado a manipulação no
+     sistema -- uma OP recém-emitida ia direto ao envase sem laudo.
+
+     Corte prospectivo em PORTAO_BULK_DESDE: no dia do corte havia 13 OPs
+     abertas com fórmula e sem nenhuma fase de bulk registrada (2 rodando na
+     linha, 11 programadas) -- o bulk delas foi feito fora do sistema.
+     Travá-las pararia a fábrica; elas seguem a regra antiga (só trava se a
+     fase existir). Mesmo desenho do corte da Conferência de PA.
+
+     Nunca trava no meio: OP que já envasou (produção de linha ou setup
+     encerrado) segue. OP de retrabalho não refabrica o produto, então não
+     pede bulk. `exigirSempre` continua ligando a trava para todas. */
+  var PORTAO_BULK_DESDE = '2026-09-24T03:00:00.000Z'; // 24/09/2026 00:00 BRT
+
+  function jaEnvasou(op) {
+    return num(op && op.produzidoLinha) > 0 || !!(op && op.setupFim);
+  }
+  function exigeBulk(op, desde) {
+    if (!op || op.tipo === 'RETRABALHO' || !texto(op.formulaVersao)) return false;
+    var emissao = new Date(op.dataEmissao || 0).getTime();
+    return !isNaN(emissao) && emissao >= new Date(desde || PORTAO_BULK_DESDE).getTime();
+  }
+
   function podeEnvasar(op, opcoes) {
     var st = estado(op);
     var exigir = !!(opcoes && opcoes.exigirSempre);
+    if (op && op.tipo === 'RETRABALHO') return {ok: true, motivo: null, estado: st};
     if (!st) {
-      return exigir
-        ? {ok: false, motivo: 'Esta OP não tem a fase de bulk registrada e a exigência está ligada.', estado: null}
-        : {ok: true, motivo: null, estado: null};
+      if (exigir) return {ok: false, motivo: 'Esta OP não tem a fase de bulk registrada e a exigência está ligada.', estado: null};
+      if (exigeBulk(op, opcoes && opcoes.desde) && !jaEnvasou(op)) {
+        return {ok: false, motivo: 'Esta OP tem fórmula: o bulk precisa ser pesado e manipulado na Manipulação e liberado pela Qualidade antes do envase.', estado: null};
+      }
+      return {ok: true, motivo: null, estado: null};
     }
     if (st === 'LIBERADO') return {ok: true, motivo: null, estado: st};
     if (st === 'REPROVADO') return {ok: false, motivo: 'Bulk reprovado pela Qualidade.', estado: st};
@@ -418,7 +444,8 @@
     validarParcela: validarParcela, itensParaFechamento: itensParaFechamento,
     baixasPorLote: baixasPorLote, proximaPendente: proximaPendente, situacaoLotes: situacaoLotes,
     devolucaoDoItem: devolucaoDoItem, pendentesDevolucao: pendentesDevolucao,
-    fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
+    fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar, exigeBulk: exigeBulk,
+    PORTAO_BULK_DESDE: PORTAO_BULK_DESDE,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,
     regraConferencia: regraConferencia, validarLiberacaoSemConferencia: validarLiberacaoSemConferencia,

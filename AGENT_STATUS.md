@@ -149,9 +149,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   **Aviso ao Codex:** `run_retrabalhos_rules_test.js` falha ("Missing
   expected rejection") **também com as regras do commit anterior** — não é
   desta mudança; é do módulo de retrabalhos/`estado_linhas`.
-  **Na fila, decidido pelo usuário:** GAP-05 (pedido → OP), GAP-04 com a regra
-  "toda OP com fórmula só envasa com bulk liberado" e GAP-18 (remover
-  "+ Novo Pedido" de `pedidos.html`).
+- **GAP-04 portão do bulk + GAP-18 — pronto, publicando (2026-09-23).**
+  `shared/manipulacao.js` (`podeEnvasar` com fórmula + corte
+  `PORTAO_BULK_DESDE` 24/09), `form.html` (5 portas do envase; rotulagem fora
+  do portão), `pedidos.html` (sem "+ Novo Pedido"). Testes novos
+  `run_portao_bulk_test.js` (28), `run_portao_bulk_ui_test.js` (6),
+  `run_pedido_porta_unica_test.js` (4); `run_fluxo_ponta_a_ponta_test.js`
+  ajustado para fixar a emissão depois do corte e exigir o portão (senão
+  quebraria a partir de 24/09). Regressão de manipulação, apontamento,
+  operação, retrabalho, rearranjo, histórico, transferência, conciliação e
+  GAP-05 aprovada. Sem mudança de regras do banco.
+
 
 - **Entregue — modelagem dos fluxos do sistema (2026-09-23).** Pedido do
   usuário: fluxo por área (tela › campo › onde aparece), numerado `[Área].n`,

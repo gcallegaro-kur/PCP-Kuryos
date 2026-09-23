@@ -386,19 +386,37 @@ async function fechar(page, errors, etapa) {
 
     // ══ 2. APONTAMENTO ═════════════════════════════════════════════════
     console.log('\n2. Apontamento (alocar → setup → apontar → encerrar)');
+    /* Portão do bulk (GAP-04): OP com fórmula emitida a partir do corte
+       (Manipulacao.PORTAO_BULK_DESDE) só envasa com o bulk liberado. A
+       emissão é fixada DEPOIS do corte para o teste não depender do dia em
+       que roda. */
+    const Manipulacao = require('./public/shared/manipulacao.js');
+    BANCO.ops[opKey].dataEmissao = new Date(new Date(Manipulacao.PORTAO_BULK_DESDE).getTime() + 86400000).toISOString();
     ({page, errors, dialogos} = await abrirTela(browser, 'form.html'));
     await page.waitForSelector('#turnoGridLinhas', {timeout: 8000});
     assert.ok(await page.locator('[data-alocar-nome]').count(), 'nenhuma linha oferece "+ Alocar OP"');
 
-    // 2a. O portão do granel deixa passar OP que nunca começou manipulação.
+    // 2a. Sem bulk liberado, a OP não aparece para a linha de envase.
     await page.locator('[data-alocar-nome="Linha 1"]').click();
     await page.waitForSelector('#alocarOpModal.open', {timeout: 6000});
-    const listaAloc = await page.locator('#alocarOpLista').innerText();
-    if (listaAloc.indexOf(op.lote) >= 0) {
+    // Só os cartões contam: o aviso das travadas, na mesma lista, cita o lote.
+    const cartoesAloc = (await page.locator('#alocarOpLista .alocar-op-card').allInnerTexts()).join(' | ');
+    assert.match(await page.locator('#alocarOpLista').innerText(), /granel não liberado/, 'a lista avisa por que a OP não está disponível');
+    if (cartoesAloc.indexOf(op.lote) >= 0) {
       registrar('Manipulação → Envase',
-        'OP recém-emitida, que nunca iniciou manipulação, pode ser alocada direto para envase: o portão do ' +
-        'granel só barra OP que JÁ começou a fase. É a causa raiz das OPs envasadas sem análise de granel.');
+        'OP com fórmula e sem bulk liberado aparece para envase: o portão do bulk não está barrando.');
     }
+    console.log('   sem bulk liberado: fora da lista de envase');
+    // O bulk passa por pesagem, conferência, manipulação e laudo
+    // (coberto por run_manipulacao_ui_test.js); aqui o laudo já saiu.
+    await page.evaluate((k) => {
+      window.__db.ops[k].manipulacao = {status: 'LIBERADO'};
+      if (typeof opsCache !== 'undefined') opsCache = window.__db.ops;
+      document.getElementById('alocarOpModal').classList.remove('open');
+      abrirAlocarOpModal('Linha 1', 'linha');
+    }, opKey);
+    await page.waitForFunction((lote) => [...document.querySelectorAll('#alocarOpLista .alocar-op-card')].some((c) => c.innerText.indexOf(lote) >= 0), op.lote, {timeout: 6000});
+    console.log('   bulk liberado: OP disponível para envase');
     await page.locator('.alocar-op-card').first().click();
     await page.click('#btnConfirmarAlocarOp');
     await page.waitForFunction((lote) => {
