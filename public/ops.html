@@ -13,6 +13,7 @@
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/transferencia-op.js"></script>
   <script src="shared/retrabalho-op.js"></script>
+  <script src="shared/impacto-pedido-ops.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -113,6 +114,22 @@
       background: #2563eb;
     }
     
+    /* GAP-05: pedidos cancelados/reduzidos pelo Comercial com OP aberta. */
+    .pend-pcp { border:1.5px solid var(--warning); border-radius:12px; padding:14px 16px; margin-bottom:14px; background:color-mix(in srgb, var(--warning) 7%, var(--card)); }
+    .pend-pcp h2 { font-size:15px; margin:0 0 4px; }
+    .pend-pcp .pend-sub { font-size:12px; color:var(--muted); margin-bottom:10px; }
+    .pend-item { border-top:1px solid var(--border); padding:10px 0 4px; }
+    .pend-item:first-of-type { border-top:0; }
+    .pend-item .pend-tit { font-weight:700; font-size:13px; }
+    .pend-item .pend-info { font-size:12px; color:var(--muted); margin:2px 0 6px; }
+    .pend-ops { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .pend-ops td { padding:5px 6px; border-top:1px dashed var(--border); vertical-align:middle; }
+    .pend-ops .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .pend-est { font-size:11px; font-weight:700; padding:2px 7px; border-radius:999px; white-space:nowrap; }
+    .pend-est.PENDENTE { color:var(--warning); background:color-mix(in srgb, var(--warning) 14%, transparent); }
+    .pend-est.CANCELADA, .pend-est.FECHADA, .pend-est.MANTIDA, .pend-est.SUMIU { color:var(--muted); background:color-mix(in srgb, var(--muted) 12%, transparent); }
+    .pend-acao { font-size:12px; padding:4px 10px; border-radius:7px; border:1.5px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; margin-left:4px; }
+    .pend-acao.perigo { border-color:var(--danger); color:var(--danger); }
     .card {
       background: var(--card);
       border: none;
@@ -383,6 +400,11 @@
       </button>
     </div>
   </div>
+
+  <!-- GAP-05 (FLUXOS_DO_SISTEMA.md): o Comercial cancelou ou reduziu um
+       pedido que ainda tem OP aberta. Cancelar é daqui (cancelOp, com a
+       cascata de empenho/alocação/grade); manter exige motivo. -->
+  <div id="pendenciasPcpBox" class="pend-pcp" hidden></div>
 
   <!-- OPs ativas x checklist de recebimento das ordens físicas são duas
        visões diferentes do mesmo dado -- mesmo padrão de abas já usado em
@@ -660,6 +682,12 @@
       // de divergência aparecer sem travar o carregamento da tela.
       conferirDivergencias().then(function() { recalculateAndRenderOps(); });
       recalculateAndRenderOps();
+      renderPendenciasPcp();
+    });
+
+    dbOnValue(database.ref('pendencias_pcp'), pSnap => {
+      pendenciasPcpGlobal = pSnap.val() || {};
+      renderPendenciasPcp();
     });
 
     // Fase 5 do plano (PLANO_PLANEJAMENTO_PCP.md): paradas são bem
@@ -674,6 +702,77 @@
     });
   }
   let paradasHistoricoGlobal = {};
+  let pendenciasPcpGlobal = {};
+
+  function podeDecidirPendencia() {
+    return !!window.currentUser && (window.currentUser.role === 'admin' || window.currentUser.role === 'pcp');
+  }
+
+  const PEND_ESTADO = {PENDENTE: 'a decidir', CANCELADA: 'cancelada', FECHADA: 'fechada', MANTIDA: 'mantida', SUMIU: 'não encontrada'};
+
+  function renderPendenciasPcp() {
+    const box = document.getElementById('pendenciasPcpBox');
+    if (!box || typeof ImpactoPedidoOps === 'undefined') return;
+    const abertas = Object.keys(pendenciasPcpGlobal)
+      .map(k => ({k, p: pendenciasPcpGlobal[k]}))
+      .filter(x => x.p && x.p.status === 'ABERTA')
+      .map(x => Object.assign(x, {sit: ImpactoPedidoOps.situacao(x.p, opsGlobal)}))
+      .sort((a, b) => String(a.p.criadoEm || '').localeCompare(String(b.p.criadoEm || '')));
+    // Tudo decidido (OP cancelada, fechada ou mantida): fecha a pendência.
+    // Só PCP/admin -- quem pode decidir é quem encerra.
+    if (podeDecidirPendencia()) {
+      abertas.filter(x => x.sit.resolvida).forEach(x => {
+        database.ref('pendencias_pcp/' + x.k).update({
+          status: 'RESOLVIDA', resolvidoEm: new Date().toISOString(),
+          resolvidoPor: window.currentUser.nome || window.currentUser.email || 'desconhecido'
+        }).catch(err => console.error('pendência PCP', err));
+      });
+    }
+    const visiveis = abertas.filter(x => !x.sit.resolvida);
+    if (!visiveis.length) { box.hidden = true; box.innerHTML = ''; return; }
+    const pode = podeDecidirPendencia();
+    const totalOps = visiveis.reduce((s, x) => s + x.sit.pendentes, 0);
+    const plural = visiveis.length === 1 ? '' : 's';
+    box.innerHTML = '<h2>⚠️ ' + totalOps + ' OP' + (totalOps === 1 ? '' : 's') + ' de pedido' + plural + ' alterado' + plural + ' pelo Comercial</h2>' +
+      '<div class="pend-sub">O pedido foi cancelado ou reduzido depois da OP emitida. Cancele a OP (libera empenho, alocação e grade) ou mantenha informando o motivo — por exemplo, vai virar estoque.' +
+      (pode ? '' : ' Só PCP ou administrador decidem.') + '</div>' +
+      visiveis.map(x => {
+        const p = x.p;
+        const itens = (p.itens || []).map(i => escapeHtml(i.sku) + (i.qtdNova == null
+          ? ' cancelado'
+          : ': ' + fmtNum(i.qtdAntes) + ' → ' + fmtNum(i.qtdNova) + ', sobram ' + fmtNum(i.excesso))).join(' · ');
+        const linhas = x.sit.linhas.map(l => {
+          const acoes = l.estado === 'PENDENTE' && pode
+            ? '<button type="button" class="pend-acao perigo" onclick="cancelOp(\'' + escapeAttr(l.opKey) + '\')">🚫 Cancelar OP</button>' +
+              '<button type="button" class="pend-acao" onclick="manterOpPendencia(\'' + escapeAttr(x.k) + '\',\'' + escapeAttr(l.key) + '\')">Manter</button>'
+            : '';
+          return '<tr><td><b>' + escapeHtml(l.lote) + '</b></td><td>' + escapeHtml(l.sku) + '</td>' +
+            '<td class="num">' + fmtNum(l.qtdPlanejada) + ' plan.</td><td class="num">' + fmtNum(l.produzidoAgora) + ' prod.</td>' +
+            '<td><span class="pend-est ' + l.estado + '">' + PEND_ESTADO[l.estado] + '</span>' +
+            (l.estado === 'MANTIDA' && l.motivoMantida ? ' <span style="font-size:11px;color:var(--muted)">' + escapeHtml(l.motivoMantida) + '</span>' : '') + '</td>' +
+            '<td style="text-align:right;white-space:nowrap">' + acoes + '</td></tr>';
+        }).join('');
+        return '<div class="pend-item">' +
+          '<div class="pend-tit">' + escapeHtml(ImpactoPedidoOps.descreverTipo(p.tipo)) + ' · Pedido ' + escapeHtml(p.pedidoComercialId) +
+            (p.numeroPedidoCliente ? ' / cliente ' + escapeHtml(p.numeroPedidoCliente) : '') + ' · ' + escapeHtml(p.cliente || '') + '</div>' +
+          '<div class="pend-info">' + itens + (p.motivo ? ' — “' + escapeHtml(p.motivo) + '”' : '') + ' · ' + escapeHtml(p.criadoPor || '') +
+            (p.criadoEm ? ', ' + escapeHtml(new Date(p.criadoEm).toLocaleString('pt-BR')) : '') + '</div>' +
+          '<div class="table-container"><table class="pend-ops"><tbody>' + linhas + '</tbody></table></div></div>';
+      }).join('');
+    box.hidden = false;
+  }
+
+  function manterOpPendencia(pendKey, opItemKey) {
+    if (!podeDecidirPendencia()) return;
+    const motivo = prompt('Por que manter esta OP mesmo com o pedido cancelado/reduzido? (ex.: vira estoque, vai para outro pedido)');
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Informe o motivo para manter a OP.'); return; }
+    database.ref('pendencias_pcp/' + pendKey + '/ops/' + opItemKey).update({
+      decisao: 'MANTIDA', motivoMantida: motivo.trim(), mantidaEm: new Date().toISOString(),
+      mantidaPor: window.currentUser.nome || window.currentUser.email || 'desconhecido'
+    }).then(() => showToast('OP mantida. O motivo ficou registrado na pendência.'))
+      .catch(err => { console.error(err); showToast('Erro ao registrar a decisão.'); });
+  }
 
   // Minutos parados de um lote desde um instante ISO -- soma a duração
   // (gravada em minutos, form.html/resumeLine) de toda parada registrada

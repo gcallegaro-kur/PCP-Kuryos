@@ -14,6 +14,7 @@
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/gestao-comercial.js"></script>
   <script src="shared/pedido-edicao.js"></script>
+  <script src="shared/impacto-pedido-ops.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -945,8 +946,15 @@ function previewEdicao() {
   edPlano = PedidoEdicao.planejar(baseEdicao(), propostaEdicao(), {motivo: document.getElementById('edMotivo').value, autor: autorAtual()});
   var mud = edPlano.mudancas.map(function(m) { return '<li>' + esc(PedidoEdicao.descrever(m)) + '</li>'; }).join('');
   var erros = edPlano.erros.filter(function(e) { return !/motivo|Nada foi alterado/.test(e) || edPlano.mudancas.length; });
+  // GAP-05: redução abaixo do que as OPs já comprometem vira pendência do PCP.
+  var afetados = ImpactoPedidoOps.avaliar(ImpactoPedidoOps.itensDaEdicao(edPlano), raw.ops);
+  var impacto = afetados.length ? '<div class="ed-avisos" style="margin-top:6px"><b>OPs que passam do novo total</b> — o PCP recebe uma pendência no Controle de OPs para cancelar ou manter:<br>' +
+    afetados.map(function(i) {
+      return esc(i.sku) + ': comprometido ' + un(i.comprometido) + ' (produzido ' + un(i.produzido) + ' + OPs abertas), novo total ' + un(i.qtdNova || 0) +
+        ' → sobram ' + un(i.excesso) + ' · OP ' + i.ops.map(function(o) { return esc(o.lote); }).join(', ');
+    }).join('<br>') + '</div>' : '';
   document.getElementById('edPreview').innerHTML = '<div class="ed-preview">' +
-    (mud ? '<b>O que muda na versão ' + edPlano.versaoNova + '</b><ul>' + mud + '</ul>' : '<span class="muted">Nenhuma alteração ainda.</span>') +
+    (mud ? '<b>O que muda na versão ' + edPlano.versaoNova + '</b><ul>' + mud + '</ul>' : '<span class="muted">Nenhuma alteração ainda.</span>') + impacto +
     (edPlano.avisos.length ? '<div class="ed-avisos" style="margin-top:6px">' + edPlano.avisos.map(esc).join('<br>') + '</div>' : '') +
     (erros.length ? '<div class="ed-erros" style="margin-top:6px">' + erros.map(esc).join('<br>') + '</div>' : '') + '</div>';
   document.getElementById('edSalvar').disabled = !!edPlano.erros.length;
@@ -971,7 +979,12 @@ document.getElementById('edSalvar').addEventListener('click', function() {
       return (Number(v) || 1) === plano.versaoAtual ? plano.versaoNova : undefined;
     }).then(function(res) {
       if (!res.committed) throw new Error('Outra pessoa salvou este pedido agora há pouco. Feche e abra de novo para ver a versão atual.');
-      return db.ref().update(PedidoEdicao.atualizacoes(base, plano, meta)).catch(function(err) {
+      var mapa = PedidoEdicao.atualizacoes(base, plano, meta);
+      // Pendência do PCP no MESMO update: ou grava a versão com o aviso, ou nada.
+      Object.assign(mapa, ImpactoPedidoOps.pendencia('PEDIDO_REDUZIDO', Object.assign({id: id}, pc),
+        ImpactoPedidoOps.avaliar(ImpactoPedidoOps.itensDaEdicao(plano), raw.ops),
+        {versao: plano.versaoNova, motivo: meta.motivo, autor: meta.autor, agora: meta.agora}));
+      return db.ref().update(mapa).catch(function(err) {
         return db.ref('pedidos_comerciais/' + id + '/versao').set(plano.versaoAtual === 1 && !pc.versao ? null : plano.versaoAtual).then(function() { throw err; });
       });
     }).then(function() {

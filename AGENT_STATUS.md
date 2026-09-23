@@ -136,10 +136,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `firebase-functions` está desatualizado (upgrade tem breaking changes —
   ciclo próprio, sem prazo). Sonda HTTP sem login não foi feita (bloqueada
   pela política de permissões da sessão).
-- **Em andamento — GAP-05 (pedido → OP).** Módulo puro novo
-  `public/shared/impacto-pedido-ops.js`. Arquivos que vou tocar:
-  `public/gestao_comercial.html`, `public/comercial.html`, `public/ops.html`,
-  `database.rules.json` (nó novo `pendencias_pcp`), teste novo.
+- **GAP-05 (pedido → OP) — pronto, publicando (2026-09-23).** Módulo puro
+  `public/shared/impacto-pedido-ops.js`; `gestao_comercial.html` (prévia +
+  pendência no mesmo update da versão), `comercial.html` (Cancelar saldo lê
+  `ops` e grava a pendência junto), `ops.html` (painel no topo: cancelar pelo
+  `cancelOp` existente ou manter com motivo; fecha sozinha), regra nova
+  `pendencias_pcp` em `database.rules.json`. Testes novos
+  `run_impacto_pedido_ops_test.js` (28) e `_ui_test.js` (3 telas, 8 etapas);
+  regressão de Gestão Comercial, edição de pedido, Comercial, contatos,
+  resumo, ponta a ponta, transferência/retrabalho/fichas de OP e
+  transações null aprovada; `run_operacao_rules_test.js` OK no emulador.
+  **Aviso ao Codex:** `run_retrabalhos_rules_test.js` falha ("Missing
+  expected rejection") **também com as regras do commit anterior** — não é
+  desta mudança; é do módulo de retrabalhos/`estado_linhas`.
   **Na fila, decidido pelo usuário:** GAP-05 (pedido → OP), GAP-04 com a regra
   "toda OP com fórmula só envasa com bulk liberado" e GAP-18 (remover
   "+ Novo Pedido" de `pedidos.html`).

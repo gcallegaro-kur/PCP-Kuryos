@@ -27,16 +27,19 @@ se for um gap que o modelo não tem, acrescente-o lá também.
 Apareceram ao modelar os fluxos por área e não tinham item neste backlog. Detalhe,
 passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em `bf0e823`.
 
-- **GAP-05 — Mudança no pedido não chega à OP.** 🔴 `Cancelar saldo`
-  (`comercial.html`, handler de `#cancelar`) só marca `pedidos/{k}/statusManual =
-  encerrado` e o pedido comercial CANCELADO: as OPs abertas do pedido continuam
-  Programadas, com empenho e na grade; PCs e remessas ligados não são avisados; PA já
-  produzido fica sem destino. A edição com versão (`shared/pedido-edicao.js`) trava
-  abaixo do produzido/expedido, mas **reduzir abaixo da quantidade da OP emitida não
-  gera aviso** (o único aviso é de SKU inativo). "Registrar aditivo" só grava texto e
-  versão. Escopo sugerido: ao cancelar/reduzir, listar as OPs afetadas e oferecer
-  cancelar/ajustar (reaproveitar o cancelamento de OP de `ops.html`, que já libera
-  empenho e alocação) e avisar o PCP.
+- ~~**GAP-05 — Mudança no pedido não chega à OP.**~~ **FEITO para as OPs em
+  2026-09-23.** `shared/impacto-pedido-ops.js` calcula, por item, comprometido =
+  produzido + o que falta nas OPs abertas; reduzir abaixo disso (Gestão Comercial)
+  ou cancelar o pedido (Comercial › Cancelar saldo) grava `pendencias_pcp/{id}__v{n}`
+  ou `{id}__cancelamento` **no mesmo update** da mudança. O Controle de OPs mostra o
+  painel no topo; o PCP cancela (fluxo existente, com cascata) ou mantém com motivo, e
+  a pendência fecha sozinha. Testes: `run_impacto_pedido_ops_test.js` (28 asserções)
+  e `run_impacto_pedido_ops_ui_test.js` (3 telas reais). **Continua aberto:**
+  cancelar o pedido não avisa Compras dos PCs e remessas ligados a ele
+  (`pedidos_compra/*/itens/*/pedidos`), e o PA já produzido do pedido cancelado fica
+  no estoque sem destino — precisa de decisão (reatribuir a outro pedido pela
+  transferência de OP, ou virar estoque livre). Também não há e-mail ao PCP: o
+  aviso é o painel.
 - **GAP-02 — Devolução e reclamação de cliente.** 🔴 Não há tela. A conciliação
   (`shared/conciliacao-pedidos.js`) já define que devolução volta a ser estoque, mas
   nada registra a entrada da mercadoria, a inspeção (fila do CQ), o estorno do expedido
@@ -49,6 +52,8 @@ passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em
   **fiscal**; o estorno **físico** é outra coisa e precisa existir antes.
 - **GAP-04 (parte nova) — Portão do bulk.** 🔴 O envase só é barrado quando a OP já
   começou a manipulação; OP recém-emitida vai direto ao envase sem laudo de granel.
+  **Decisão do usuário (23/09): toda OP cujo produto tem fórmula só envasa com o
+  bulk liberado pela Qualidade; OP sem fórmula (kit, bulk do cliente) passa.**
   E o bulk reprovado não tem destino (reprocesso, ajuste ou descarte): a OP fica
   travada. Registrado em `AGENT_STATUS.md` (22/09) como fora de escopo do teste ponta a
   ponta; o ajuste de granel pós-fechamento já estava na seção Qualidade abaixo.
@@ -57,8 +62,8 @@ passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em
   conversão por cliente.
 - **GAP-18 — Duas portas para criar pedido.** 🟡 `pedidos.html` › `+ Novo Pedido`
   ainda cria pedido sem passar pelo Comercial (sem preço, versão nem trava da
-  `gestao_comercial.html`). Decidir se fecha a porta (só consulta) ou se ela passa a
-  abrir o Comercial.
+  `gestao_comercial.html`). **Decisão do usuário (23/09): remover o botão** — a
+  tela do PCP passa a ser só consulta de pedidos; todo pedido nasce no Comercial.
 
 ---
 
