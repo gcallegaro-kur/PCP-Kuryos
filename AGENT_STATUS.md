@@ -127,7 +127,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Módulo Operação, Fase 1 (2026-09-23) — PUBLICADO.** Commit `88060ca`
+- **Módulo Operação, Fase 1 (2026-09-23) — PUBLICADO.** Commit `fccafce` (rebase de `88060ca`, mesmo conteúdo)
   no origin/main; Firebase `prod-kuryos`: Hosting + RTDB + função nova
   `onPesagemFechada` (criada; segredos do Graph concedidos). Os 9 arquivos
   públicos alterados conferidos por HTTP: 200 e idênticos ao commit.
