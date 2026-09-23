@@ -172,3 +172,12 @@ assert.strictEqual(I.RETENCAO_MESES_APOS_VALIDADE, 12);
 }
 
 console.log('run_inspecao_pa_test.js: OK');
+
+// Campo decimal com vírgula (shared/campo-decimal.js, 23/09).
+{
+  const {normalizar} = require('./public/shared/campo-decimal.js');
+  [['197,5', '197.5'], ['197.5', '197.5'], ['1.250,5', '1250.5'], ['200,', '200.'], [',5', '.5'],
+    ['12,3,4', '12.34'], ['abc9x', '9'], ['-3,2', '-3.2'], ['2-0', '20'], [' 19 8 ', '198'], ['', '']
+  ].forEach(([de, para]) => assert.strictEqual(normalizar(de), para, de));
+  console.log('run_inspecao_pa_test.js: OK (vírgula decimal)');
+}

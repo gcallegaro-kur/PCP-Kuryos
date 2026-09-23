@@ -275,7 +275,14 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.match(await page.locator('#qCk7Pesos').innerText(), /Média 203/);
     await peso(page, 0, '201');
     await peso(page, 1, '199');
-    await peso(page, 2, '200');
+    // Decimal com VÍRGULA, digitado tecla a tecla como no celular: num
+    // type="number" o Chrome descartava a vírgula e gravava 2004 (23/09).
+    const campo2 = page.locator('[data-ck7-peso="2"]');
+    await campo2.fill('');
+    await campo2.pressSequentially('200,4');
+    assert.equal(await campo2.inputValue(), '200.4', 'vírgula vira ponto, não some');
+    assert.equal(await page.evaluate(() => laudoAtual.ck7.pesos[2]), 200.4);
+    assert.equal(await page.locator('#qCk7Nominal').getAttribute('inputmode'), 'decimal', 'todo campo decimal da tela aceita vírgula');
 
     // ── 6. Tudo conforme: libera e grava o registro ──────────────────────
     await page.fill('#qCk7RetUn', '3');
@@ -291,7 +298,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(q.ck7.versaoPlano, 'CK7-2026-09');
     assert.equal(q.ck7.amostragem.caixasAmostradas, 7);
     assert.equal(q.ck7.amostragem.regra, '√N+1');
-    assert.equal(q.ck7.pesagem.media, 200);
+    assert.equal(q.ck7.pesagem.media, 200.133);
     assert.equal(q.ck7.pesagem.limiteIndividual, 194);
     assert.equal(q.ck7.pesagem.conforme, true);
     assert.equal(q.ck7.retencao.guardarAte, '2029-03-15', 'retenção = validade + 1 ano');
