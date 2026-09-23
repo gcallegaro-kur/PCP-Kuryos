@@ -18,6 +18,7 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const conferenciaPa = require('./functions/conferencia_pa.js');
+const Expedicao = require('./public/shared/expedicao.js');
 
 // ── Banco compartilhado, em Node ──────────────────────────────────────
 let BANCO = {
@@ -56,7 +57,9 @@ let BANCO = {
   },
   estoque: {'MPGR-001': {saldoAtual: 5000}, 'EP-00106': {saldoAtual: 50000}},
   pedidos: {}, alocacoes_planejamento: {}, ops: {}, registros: {}, estado_linhas: {},
-  estoque_lotes: {}, enderecos_estoque: {}, nao_conformidades: {}, parametros_pa: {},
+  estoque_lotes: {},
+  enderecos_estoque: {PA_A_01: {codigo: 'PA-A-01', area: 'PA', rua: 1, predio: 1, nivel: 1, ativo: true}},
+  nao_conformidades: {}, parametros_pa: {},
   paradas_historico: {}, atividadesPosto: {}, pedidos_comerciais: {}, programacao: {},
   retrabalhos: {}, retrabalhos_linhas: {}, pedidos_compra: {}, fornecedores: {},
   orcamentos: {}, solicitacoes_cadastro_produto: {}, notificacoes_comercial: {},
@@ -156,8 +159,29 @@ async function abrirTela(browser, pagina, opcoes) {
   await page.exposeFunction('__servidor', async (nome, payload, base) => {
     try {
       if (nome === 'finalizarConferenciaPA') {
-        const r = conferenciaPa.finalizar(base, payload, 'u1', new Date().toISOString());
-        return {base, data: r};
+        /* O modulo exporta `prepararFinalizacao`, que e PURA: recebe o
+           contexto e devolve o mapa plano de updates, sem tocar no banco --
+           quem grava e a Cloud Function. Aqui o Node faz o papel dela,
+           montando o mesmo contexto que functions/index.js monta e aplicando
+           os updates com caminhos planos (nunca objeto aninhado: no RTDB
+           isso apagaria campos irmaos). */
+        const opKey = String(payload.opKey || '');
+        const op = (base.ops || {})[opKey];
+        const itemKey = conferenciaPa.sanitizeKey(op && op.sku);
+        const {updates} = conferenciaPa.prepararFinalizacao({
+          opKey, op, conf: (base.conferencias_pa || {})[opKey],
+          enderecos: base.enderecos_estoque || {},
+          lotesItem: (base.estoque_lotes || {})[itemKey] || {},
+          autor: 'Gustavo', conciliacao: payload.conciliacao || null,
+          agora: new Date().toISOString(),
+        });
+        Object.entries(updates).forEach(([caminho, valor]) => {
+          const ks = caminho.split('/').filter(Boolean);
+          let x = base;
+          ks.slice(0, -1).forEach((k) => { if (x[k] == null || typeof x[k] !== 'object') x[k] = {}; x = x[k]; });
+          if (valor === null) delete x[ks[ks.length - 1]]; else x[ks[ks.length - 1]] = valor;
+        });
+        return {base, data: {ok: true}};
       }
     } catch (e) { return {erro: e.message}; }
     return {base};
@@ -476,20 +500,117 @@ async function fechar(page, errors, etapa) {
     console.log('   OP confirmada: Concluído');
     await fechar(page, errors, 'Confirmação do PCP');
 
-    // ══ 5. CONFERÊNCIA LIBERADA ════════════════════════════════════════
-    console.log('\n5. Conferência de PA liberada');
+    // == 5-6. CONFERENCIA LIBERADA -> PALETES -> ENTRADA NO WMS =========
+    /* O fim util da cadeia produtiva: a quantidade contada fisicamente vira
+       palete endereçado em quarentena, que e o que a Qualidade libera e a
+       Expedicao enxerga. Se parar aqui, a OP esta 'concluida' e o produto
+       nao existe em lugar nenhum do estoque. */
+    console.log('\n5. Conferencia de PA liberada -> registro dos paletes');
     ({page, errors} = await abrirTela(browser, 'estoque.html', {callables: ['finalizarConferenciaPA']}));
     await page.locator('[data-tab="conferenciapa"]').click();
     await page.waitForSelector('#tab-conferenciapa', {state: 'visible', timeout: 6000});
     const acoes = await page.locator('[data-cpa-op]').count();
     if (!acoes) {
-      registrar('Confirmação do PCP → Conferência',
-        'mesmo depois de o PCP confirmar, a conferência continua sem botão de ação');
+      registrar('Confirmacao do PCP -> Conferencia',
+        'mesmo depois de o PCP confirmar, a conferencia continua sem botao de acao');
+      await fechar(page, errors, 'Conferencia liberada');
     } else {
-      console.log('   liberada: botão "' + (await page.locator('[data-cpa-op]').first().innerText()) + '"');
-    }
-    await fechar(page, errors, 'Conferência liberada');
+      console.log('   liberada: botao "' + (await page.locator('[data-cpa-op]').first().innerText()) + '"');
+      await page.locator('[data-cpa-op]').first().click();
+      await page.waitForSelector('#cpaAdicionar', {timeout: 6000});
+      /* A tela ja abre com um palete. Clicar em '+ Adicionar palete' aqui
+         criava uma segunda linha vazia e a validacao -- corretamente --
+         recusava a contagem inteira. */
+      await page.waitForSelector('.cpa-palete', {timeout: 6000});
+      assert.equal(await page.locator('.cpa-palete').count(), 1, 'o modal abre com exatamente um palete');
+      /* 960 un. em caixas de 24 = 40 caixas exatas. Contagem que bate com o
+         apontamento fecha em UMA etapa (analisarTriplaConferenciaPA); divergir
+         aqui exigiria recontagem, que e outro teste. */
+      await page.fill('.cpa-palete .cpa-caixas', '40');
+      await page.fill('.cpa-palete .cpa-multiplo', '24');
+      await page.fill('.cpa-palete .cpa-parcial', '0');
+      /* O endereço vem do seletor do WMS, que é um modal com grade de ruas e
+         níveis -- e tem testes próprios. Aqui uso a API pública do módulo, a
+         MESMA que o seletor chama ao escolher, em vez de forjar o input: o que
+         este teste precisa provar é o elo conferência→estoque, não a grade. */
+      await page.evaluate(() => {
+        const input = document.querySelector('.cpa-palete .cpa-endereco');
+        SeletorEndereco.atualizarCampo(input, 'PA_A_01', window.__db.enderecos_estoque);
+      });
+      await page.click('#cpaSalvar');
+      await page.waitForFunction(() => {
+        const l = (window.__db.estoque_lotes || {}).MRARBS04 || {};
+        return Object.keys(l).length > 0;
+      }, null, {timeout: 10000}).catch(() => {});
 
+      const dbf = await page.evaluate(() => window.__db);
+      const lotes = Object.values((dbf.estoque_lotes || {}).MRARBS04 || {});
+      if (!lotes.length) {
+        const conf = Object.values(dbf.conferencias_pa || {})[0] || {};
+        registrar('Conferencia -> Estoque',
+          'a contagem foi registrada mas nenhum palete entrou em estoque_lotes ' +
+          '(status da conferencia: ' + (conf.status || 'ausente') + ')');
+      } else {
+        console.log('   ' + lotes.length + ' palete(s) no WMS, ' + lotes[0].saldoLote + ' un., endereco ' + lotes[0].enderecoCodigo);
+        assert.equal(lotes[0].status, 'QUARENTENA', 'PA recem-conferido tem que nascer bloqueado para a Qualidade');
+        assert.equal(lotes[0].opKey && true, true);
+        /* O credito ao pedido comercial e o que fecha o ciclo com o cliente. */
+        if (!lotes[0].skuPedidoKey) {
+          registrar('Conferencia -> Pedido',
+            'o palete entrou no estoque sem skuPedidoKey: o produto existe fisicamente mas nao ' +
+            'esta amarrado ao pedido que o gerou, e a Expedicao nao consegue abater a entrega');
+        }
+      }
+      await fechar(page, errors, 'Registro de paletes');
+    }
+
+    // == 7. QUALIDADE: o palete em quarentena chega na fila do CQ =======
+    /* O palete nasceu QUARENTENA. Se ele nao aparecer na fila do CQ, fica
+       parado no galpao sem ninguem saber que ha o que liberar -- e o pedido
+       nunca e entregue mesmo com o produto pronto e endereçado. */
+    console.log('\n7. Qualidade: o palete em quarentena entra na fila');
+    ({page, errors} = await abrirTela(browser, 'qualidade.html', {papel: 'qualidade'}));
+    await page.waitForSelector('#qFilaBody', {timeout: 8000});
+    const naFila = await page.evaluate(() => {
+      const txt = document.getElementById('qFilaBody').innerText || '';
+      return txt.indexOf('MRARBS04') >= 0;
+    });
+    if (!naFila) {
+      registrar('Conferencia -> Qualidade',
+        'o palete de PA entrou no estoque em QUARENTENA mas nao aparece na fila da Qualidade: ' +
+        'ninguem fica sabendo que ha lote esperando liberacao, e o pedido nao e entregue ' +
+        'mesmo com o produto pronto e enderecado');
+    } else {
+      console.log('   palete na fila do CQ aguardando laudo');
+    }
+    await fechar(page, errors, 'Qualidade');
+
+    // == 8. EXPEDICAO: a trava tem que SEGURAR =========================
+    /* Teste negativo de proposito. O perigo aqui nao e a Expedicao nao ver o
+       palete: e ver cedo demais e despachar produto sem laudo. A regra real
+       (shared/expedicao.js, a mesma que a tela usa) roda contra o estado que
+       a cadeia inteira produziu, e tem que recusar -- pelo motivo certo. */
+    console.log('\n8. Expedicao: produto sem laudo nao pode sair');
+    const linhas = Expedicao.listar(BANCO, new Date().toISOString().slice(0, 10));
+    const linha = linhas.find((l) => l.lote.itemCodigo === 'MRARBS04');
+    if (!linha) {
+      registrar('Estoque -> Expedicao',
+        'o palete conferido nao aparece nem como indisponivel na Expedicao: nao da para saber ' +
+        'que ele existe nem por que nao pode sair');
+    } else if (linha.disponivel) {
+      registrar('Qualidade -> Expedicao',
+        'a Expedicao liberou um palete que a Qualidade ainda nao avaliou (status ' +
+        linha.lote.status + '): produto sem laudo poderia ser despachado');
+    } else {
+      assert.equal(linha.motivo, 'Aguardando liberacao da Qualidade'.replace('liberacao', 'libera\u00e7\u00e3o'),
+        'a trava precisa ser a da Qualidade, nao outra falha que esconda o motivo real');
+      console.log('   bloqueado corretamente: "' + linha.motivo + '"');
+      /* Tudo o que vem ANTES da Qualidade ja tem que estar em ordem -- senao
+         o laudo vai liberar e a Expedicao vai recusar pelo motivo seguinte. */
+      assert.equal(linha.lote.skuPedidoKey && true, true, 'o palete precisa estar amarrado ao pedido');
+      assert.equal(linha.op.status, 'Conclu\u00eddo');
+      assert.ok(linha.comercial, 'o pedido comercial precisa ser alcancavel a partir do palete');
+    }
     console.log('\n──────── RESUMO ────────');
     if (!gaps.length) console.log('Nenhum gap encontrado nos elos percorridos.');
     gaps.forEach((g) => console.log('· [' + g.elo + '] ' + g.oQue));
