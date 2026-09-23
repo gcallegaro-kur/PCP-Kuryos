@@ -137,6 +137,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   (https://claude.ai/artifact/4swhySza1PhashnA1ECYNH), gerada a partir do .md.
   Só documentação; nenhum código alterado. **Quem mudar um fluxo atualiza o
   passo no .md no mesmo commit.** Arquivos ativos: nenhum.
+- **Integrado ao backlog (2026-09-23).** Cada gap do `FLUXOS_DO_SISTEMA.md`
+  aponta a seção do `MELHORIAS_FUTURAS.md`; nova seção *Backlog × fluxo* encaixa
+  cada seção do backlog em gap/passo ou "dívida técnica". Do backlog vieram
+  GAP-21..28 e EX-29..32 (transformação de material, devolução de remessa ao
+  cliente, sobra da pesagem, inspeção em linha CK-3/4/5/6/8, documentação CQ,
+  coletor, histórico de produto, dossiê). No backlog: nota de ligação no
+  topo, seção *Gaps levantados na modelagem de fluxos* (GAP-02/03/04/05/13/18,
+  que não tinham item) e 6 itens marcados FEITO (selo, solicitação pelo MRP,
+  estoque de PA, devolução ao fornecedor, em trânsito, campo de segurança).
+  Destaque: migração do Node 20 das Functions vence em 30/10/2026.
 
 - **Publicado — vírgula decimal na Qualidade (2026-09-23).** Hosting;
   `qualidade.html` e `shared/campo-decimal.js` idênticos ao commit. Num

@@ -7,7 +7,9 @@ desenvolvimento"*.
 
 Conferido contra o código publicado em `bf0e823` (telas, abas e botões com o nome que
 aparece na tela). Complementa o `MAPA_DO_SISTEMA.md` (quem é dono de cada dado) e a
-`AUDITORIA_INTEGRACAO.md` (os elos entre setores). **Quem mudar um fluxo no código
+`AUDITORIA_INTEGRACAO.md` (os elos entre setores), e está ligado ao `MELHORIAS_FUTURAS.md`:
+cada gap aponta a seção do backlog onde está o detalhe, e a seção *Backlog × fluxo* diz
+onde cada item do backlog se encaixa. **Quem mudar um fluxo no código
 atualiza o passo aqui no mesmo commit.**
 
 ## Como ler
@@ -258,6 +260,10 @@ Em sequência, com o que passa de mão em mão:
 | EX-26 | **Faturamento por acúmulo** (ex.: coleta a cada 3.000 kg) | Não existe gatilho; feito de cabeça sobre a grade da Expedição | ⬜ [GAP-14](#gap-14) |
 | EX-27 | **Inventário divergente** | LOG.6 contagem cega → ⚖️ Ajustar com motivo | ✅ |
 | EX-28 | **Pedido lançado fora do Comercial** | Pedidos e MRP › + Novo Pedido ainda cria pedido **sem passar pelo Comercial** (sem preço, versão nem trava) | 🟡 [GAP-18](#gap-18) |
+| EX-29 | **Material errado adaptado na produção** (ex.: cortar válvula de 120 mm para 100 mm) | Feito no chão **sem registro nenhum**: não há ordem de transformação, e o tempo e o custo somem na eficiência da linha | ⬜ [GAP-21](#gap-21) |
+| EX-30 | **Devolver ao cliente a sobra da remessa dele** | Não há saída "devolução ao cliente" que baixe `porCliente`; hoje se corrige com Estoque › ⚖️ Ajustar escolhendo o cliente | ⬜ [GAP-22](#gap-22) |
+| EX-31 | **Sobra da pesagem volta ao endereço de origem** | A Separação guarda de onde o material saiu, mas MAN.3 não oferece o "Devolvido": a sobra fica para sempre no endereço da área de pesagem | ⬜ [GAP-23](#gap-23) |
+| EX-32 | **Ajuste do bulk depois de fechado** (MP adicional para corrigir pH, viscosidade…) | Não há fluxo: a MP do ajuste não é solicitada, baixada nem rastreada por lote. Pedido da Qualidade: "não pode usar MP que não esteja na composição" | ⬜ [GAP-04](#gap-04) |
 
 ---
 
@@ -265,26 +271,77 @@ Em sequência, com o que passa de mão em mão:
 
 Ordenados pelo que custa hoje na operação. "Tipo" separa o que é **código** do que é
 **operação** (dado a preencher, papel a atribuir), que não se resolve programando.
+A coluna **Backlog** aponta a seção do `MELHORIAS_FUTURAS.md` (ou outro plano) onde o
+detalhe de implementação mora. **"novo"** = o gap apareceu nesta modelagem e foi
+registrado no backlog em 23/09, na seção *Gaps levantados na modelagem de fluxos*.
 
-| Nº | Gap | Passos afetados | Custa hoje | Tipo | Prioridade |
-|---|---|---|---|---|---|
-| GAP-01 | Saldo de estoque sem base (só 37 de 906 materiais têm saldo; 11 negativos) | PCP.2, PCP.3, MAN.2, LOG.5 | MRP, empenho e FEFO calculam sobre números falsos | Operação ("Dia D") | 🔴 |
-| GAP-02 | Não existe **devolução/reclamação de cliente** (entrada, inspeção, estorno no pedido, RNC de origem cliente) | EX-20, EX-23, COM.7 | Produzido ≠ expedido + estoque sem explicação; pós-venda fora do sistema | Código | 🔴 |
-| GAP-03 | Não há **estorno da saída física** (NF cancelada, carga que voltou) | FAT.5, EX-21 | Correção só manual no banco | Código | 🟠 |
-| GAP-04 | **Portão do bulk incompleto**: OP recém-emitida vai ao envase sem laudo; bulk reprovado não tem destino (reprocesso/descarte) | QUA.6, PRO.3, EX-16 | Risco regulatório (Anvisa) e OP travada | Código | 🔴 |
-| GAP-05 | **Mudança no pedido não chega à OP**: reduzir ou cancelar não avisa o PCP, não cancela OP/empenho, não avisa compras/remessas | EX-02, EX-03, PCP.3 | Produz o que o cliente não quer mais; empenho preso | Código | 🔴 |
-| GAP-06 | Parâmetros do MRP vazios (lead time, segurança, lote mínimo/múltiplo) | PCP.2 | Plano manda comprar tudo "para ontem" | Operação | 🟠 |
-| GAP-07 | OP sem programação nasce sem data de início | PCP.3, PCP.4 | MRP e prazo cegos para parte da carteira | Código (Plano PCP) | 🟠 |
-| GAP-08 | Falta na separação não sobe ao PCP nem à linha (elo 8) | LOG.5, EX-07 | Linha para sem aviso | Código | 🟠 |
-| GAP-09 | **Rotulagem sem ordem própria**; produção da rotulagem não conta; não há "pronto = menor entre etapas" | ROT.2, ROT.4, PRO.6 | Pedido parece pronto com parte não rotulada | Código | 🟠 |
-| GAP-10 | **Disposição da RNC não vira ação**: devolver, descartar e retrabalhar são feitos à mão em outra tela; retrabalho não nasce da RNC nem lança o material consumido; Compras não é avisado da devolução | QUA.8, EX-12, EX-18, EX-19 | Casos parados; custo da não qualidade invisível | Código | 🟠 |
-| GAP-11 | NF emitida fora (sem integração com o emissor) | FAT.4 | Redigitação; nº da NF pode faltar | Código (API) | 🟡 |
-| GAP-12 | Não há **contas a pagar / a receber** (parcelas do PC e da venda não vão a lugar nenhum) | CMP.9, FAT.6 | Financeiro trabalha em paralelo | Decisão: integrar, não construir (PLANO_CUSTOS) | 🟡 |
-| GAP-13 | Orçamento sem status de perdido/recusado/vencido | EX-01 | Sem funil nem taxa de conversão | Código (pequeno) | 🟡 |
-| GAP-14 | Faturamento parcial por acúmulo sem gatilho | EX-26 | Coleta decidida de cabeça | Código | 🟡 |
-| GAP-15 | "Visto do PCP" nos apontamentos (Fase 2 da Operação) | PCP.6 | PCP não sabe o que já revisou | Código | 🟡 |
-| GAP-16 | Pendências de guarda por setor (MP → Manipulação, rótulos → Rotulagem) | LOG.4, MAN.6, ROT.3 | Material liberado esquecido na doca | Código (Fase 2) | 🟡 |
-| GAP-17 | Bulk em tanque com endereço + OP de higienização | MAN.6, PRO.3 | Não se sabe onde está o bulk | Código (Fase 3) | 🟡 |
-| GAP-18 | Duas portas para criar pedido (Comercial e Pedidos e MRP) | EX-28, COM.4 | Pedido sem preço, versão nem trava | Código (pequeno) | 🟡 |
-| GAP-19 | Un/caixa, peso/caixa e validade só avisam na OP | CAD.4, PCP.3, FAT.1 | Carga, NF e FEFO do PA errados | Código (pequeno) + operação | 🟡 |
-| GAP-20 | Cotação enviada fora do sistema (texto copiado) | CMP.4 | Sem registro de envio/resposta | Código | ⚪ |
+| Nº | Gap | Passos afetados | Custa hoje | Tipo | Backlog | Prioridade |
+|---|---|---|---|---|---|---|
+| GAP-01 | Saldo de estoque sem base (só 37 de 906 materiais têm saldo; 11 negativos). Inclui: empenho sem dono, remessa a caminho sem data no MRP, material de cliente parado sem alerta | PCP.2, PCP.3, MAN.2, LOG.5 | MRP, empenho e FEFO calculam sobre números falsos | Operação ("Dia D") | Integração entre setores · Propriedade do estoque · Operação Fase 2 (FEFO) | 🔴 |
+| GAP-02 | Não existe **devolução/reclamação de cliente** (entrada, inspeção, estorno no pedido, RNC de origem cliente) | EX-20, EX-23, COM.7 | Produzido ≠ expedido + estoque sem explicação; pós-venda fora do sistema | Código | novo | 🔴 |
+| GAP-03 | Não há **estorno da saída física** (NF cancelada, carga que voltou) | FAT.5, EX-21 | Correção só manual no banco | Código | novo (a API de NF prevê "cancelamento fiscal", não o físico) | 🟠 |
+| GAP-04 | **Portão do bulk incompleto**: OP recém-emitida vai ao envase sem laudo; bulk reprovado não tem destino; ajuste pós-fechamento sem fluxo; bulk sem endereço/saldo | QUA.6, PRO.3, EX-16, EX-32 | Risco regulatório (Anvisa) e OP travada | Código | novo (portão) · Qualidade › revisão da spec (ajuste de granel, WMS de semi-acabado) | 🔴 |
+| GAP-05 | **Mudança no pedido não chega à OP**: reduzir ou cancelar não avisa o PCP, não cancela OP/empenho, não avisa compras/remessas | EX-02, EX-03, PCP.3 | Produz o que o cliente não quer mais; empenho preso | Código | novo | 🔴 |
+| GAP-06 | MRP incompleto: parâmetros vazios (lead time, segurança, lote mínimo/múltiplo); necessidade gravada ainda é a bruta; data de demanda = entrega − lead time de produção | PCP.2 | Plano manda comprar tudo "para ontem" | Operação + código | MRP — o que falta · MRP: promessa de entrega | 🟠 |
+| GAP-07 | **Planejamento sem vínculo confiável OP↔data↔linha**: OP sem bloco nasce sem data; OP arrastada não sincroniza com a grade de quantidades; "Alocar OP" não trava na OP programada; zona fixa desligada | PCP.3, PCP.4, PRO.2 | MRP e prazo cegos para parte da carteira; linha pode rodar OP fora do plano | Código | `PLANO_PLANEJAMENTO_PCP.md` · Planejamento / PCP | 🟠 |
+| GAP-08 | Falta na separação não sobe ao PCP nem à linha; separação sem conferente; uma OP por vez | LOG.5, EX-07 | Linha para sem aviso; viagem ao galpão por OP | Código | `AUDITORIA_INTEGRACAO.md` elo 8 · WMS (onda, duplo-check) | 🟠 |
+| GAP-09 | **Rotulagem sem ordem própria**; produção da rotulagem não conta; não há "pronto = menor entre etapas"; celofane pendurado no envase; perda por etapa não medida | ROT.2, ROT.4, PRO.6 | Pedido parece pronto com parte não rotulada | Código | Ordens de Serviço / Roteiro · Estoque / Produção (perda por etapa) | 🟠 |
+| GAP-10 | **Disposição da RNC não vira ação**: devolver, descartar e retrabalhar são feitos à mão em outra tela; retrabalho não nasce da RNC nem lança o material consumido; Compras não é avisado da devolução; caso TAWUS não migrado | QUA.8, EX-12, EX-18, EX-19 | Casos parados; custo da não qualidade invisível | Código | Gestão de Retrabalhos · `PLANO_GESTAO_RETRABALHOS.md` | 🟠 |
+| GAP-11 | NF emitida fora (sem integração com o emissor) | FAT.4 | Redigitação; nº da NF pode faltar | Código (API) | Outros achados › API de emissão de NF | 🟡 |
+| GAP-12 | Não há **contas a pagar / a receber** (parcelas do PC e da venda não vão a lugar nenhum) | CMP.9, FAT.6 | Financeiro trabalha em paralelo | Decisão: integrar, não construir | `PLANO_CUSTOS.md` · Outros achados › gatilho de Financeiro | 🟡 |
+| GAP-13 | Orçamento sem status de perdido/recusado/vencido | EX-01 | Sem funil nem taxa de conversão | Código (pequeno) | novo | 🟡 |
+| GAP-14 | Faturamento parcial por acúmulo sem gatilho | EX-26 | Coleta decidida de cabeça | Código | Ordens de Serviço › faturamento por acúmulo | 🟡 |
+| GAP-15 | "Visto do PCP" nos apontamentos | PCP.6 | PCP não sabe o que já revisou | Código | Operação Fase 2 | 🟡 |
+| GAP-16 | Pendências de guarda por setor (MP → Manipulação, rótulos → Rotulagem) e "Guardar / Mover" no setor; quarentena sem endereço bloqueado | LOG.4, MAN.6, ROT.3 | Material liberado esquecido na doca | Código + cadastro | Operação Fase 2 · WMS (quarentena com endereço) | 🟡 |
+| GAP-17 | Bulk em tanque com endereço + OP de higienização | MAN.6, PRO.3 | Não se sabe onde está o bulk | Código (Fase 3) | Operação Fase 3 | 🟡 |
+| GAP-18 | Duas portas para criar pedido (Comercial e Pedidos e MRP); número do pedido do cliente não aparece no PCP | EX-28, COM.4, PCP.1 | Pedido sem preço, versão nem trava; conciliação com cliente trava | Código (pequeno) | novo · Pedidos — clareza da tela | 🟡 |
+| GAP-19 | Cadastro incompleto só **avisa**: un/caixa, peso/caixa, validade; nova versão de fórmula nasce com especificação **vazia**; 74% dos ensaios sem faixa numérica e só 3 críticos | CAD.4, CAD.5, PCP.3, QUA.5, FAT.1 | Carga, NF e FEFO do PA errados; lote vai à linha sem parâmetro | Código (pequeno) + operação | Fórmulas / BOM / Especificações · Qualidade › itens avulsos | 🟡 |
+| GAP-20 | Cotação enviada e respondida fora do sistema (texto copiado; proposta sem anexo); NCM ausente, alíquota digitada de cabeça | CMP.4, CMP.5 | Sem registro de envio/resposta; fornecedor pode ganhar por imposto errado | Código | Compras (anexo da proposta, NCM) | 🟡 |
+| GAP-21 | **Ordem de transformação** de material (material errado adaptado para o certo) | EX-29, PRO.4 | Tempo e custo invisíveis; eficiência contaminada | Código | Ordens de Serviço › acessórias/de transformação | 🟡 |
+| GAP-22 | Devolução de material de remessa ao cliente | EX-30, LOG.8 | Estoque do cliente corrigido por ajuste manual | Código | Propriedade do estoque › saída manual de lote de cliente | 🟡 |
+| GAP-23 | Sobra da pesagem sem volta ao endereço | EX-31, MAN.3, LOG.5 | Saldo "preso" na área de pesagem | Código | WMS › devolução da sobra (aguarda decisão) | 🟡 |
+| GAP-24 | **Inspeção em linha não existe**: setup/first article (CK-5, 32 un), ronda (CK-6, 1 h), assépsia (CK-3/4), higiene e calibração (CK-8); não há Tarefas Pendentes com SLA | PRO.2, PRO.3, PRO.4, MAN.4 | Desvio de peso/vedação só aparece no laudo do palete | Código | Qualidade › revisão da spec · inventário contra a spec | 🟠 |
+| GAP-25 | **Documentação da Qualidade**: RA sem número próprio, retenção (RET) fora do sistema, laudo não arquivado no lote, calibração e COA inexistentes, `gerar_relatorio.py` em paralelo | QUA.3, QUA.7, FAT.1 | Planilhas paralelas; dossiê do lote incompleto para auditoria | Código | Qualidade › laudos do CQ · inventário contra a spec | 🟡 |
+| GAP-26 | Sem leitura de código de barras / QR (coletor): endereço, lote na pesagem, contagem | LOG.3–LOG.7, MAN.2 | Tudo digitado, maior fonte de erro do WMS | Código | WMS › leitura de código de barras · lote por QR na pesagem | 🟡 |
+| GAP-27 | Alteração de cadastro de produto sem histórico (quem inativou, quem mudou) | CAD.4 | SKU inativado com pedido aberto sem autor | Código (pequeno) | Produtos / SKU › histórico de alterações | 🟡 |
+| GAP-28 | Rastreabilidade ponta a ponta incompleta: dossiê do lote sem separação, expedição e OPs derivadas | QUA, FAT.5, EX-04, EX-19 | Recall/auditoria exige juntar telas | Código | Operação › consolidação completa da OP | ⚪ |
+
+### Fora do fluxo, mas com prazo
+
+- **Migrar as Cloud Functions de Node.js 20 antes de 30/10/2026.** Não é um passo de
+  fluxo, mas se o runtime for desativado param todas as callables (Conferência de PA,
+  Expedição, faturamento, e-mails) — ou seja, FAT, LOG.7 e CMP de uma vez.
+  Backlog: *Outros achados › Migrar Cloud Functions*. Faltam ~5 semanas.
+
+---
+
+## Backlog × fluxo
+
+Como cada seção do `MELHORIAS_FUTURAS.md` se encaixa neste modelo. **Dívida técnica** =
+não muda nenhum passo do fluxo (qualidade de código, acessibilidade, segurança); entra
+no planejamento por risco, não por fluxo. **Feito** = o item já foi entregue e foi
+marcado no backlog em 23/09.
+
+| Seção do backlog | Encaixe no fluxo |
+|---|---|
+| Integração entre setores | Selo na cotação e solicitação pelo MRP: **feito** (CMP.3, PCP.2). Área de quarentena → GAP-16. Saldo → GAP-01 |
+| Compras | NCM e anexo da proposta → GAP-20. Etiqueta (arquivo por item, térmica, lista duplicada) → melhoria do CMP.8. Categoria/busca de MU → melhoria do CAD.2. Race do recebimento em `insumos.html` e PDF do PC → dívida técnica |
+| Materiais / Cadastros | Rename de código, log de alterações, categoria de uso de MU → melhorias do CAD.3 |
+| Produtos / SKU | Histórico de alterações → GAP-27. Cópia órfã, resolver de SKU, 95 códigos antigos, 2 sem cadastro → dívida técnica / dado |
+| Pedidos — clareza da tela | Nº do pedido do cliente e SKU nas tabelas → GAP-18 (PCP.1) |
+| Fórmulas / BOM / Especificações | Especificação vazia em versão nova, ensaio crítico na ficha, 78 especificações e 531 itens a revisar → GAP-19 |
+| Fórmulas — UX | Melhorias do CAD.5 |
+| Planejamento / PCP | Sincronização OP arrastada × grade, trava do Alocar OP, zona fixa → GAP-07. Alertas sonoros, e-mail de turno, mensagens do Encerrar OP, operador obrigatório → melhorias do PRO.6/PCP.6. `saveConfig`, dia útil duplicado, listas mortas, cores → dívida técnica. Fichas na pasta de rede, etiqueta maior, DUM14 → melhorias do PCP.3 |
+| Acessibilidade · Limpeza de código · Segurança | Dívida técnica (a de segurança pesa mais: leitura aberta a qualquer logado) |
+| Ordens de Serviço / Roteiro / Estoque de PA | Ordens principais e roteiro por SKU → GAP-09. Transformação → GAP-21. Faturamento por acúmulo → GAP-14. Estoque de PA incremental: base **feita** (LOG.7 + WMS), o gate "menor entre etapas" segue em GAP-09 |
+| Estoque / Produção | Estoque de PA e devolução ao fornecedor: **feitos** (LOG.7, EX-12). Perda por etapa → GAP-09 |
+| WMS — lacunas | Coletor e QR na pesagem → GAP-26. Sobra da pesagem → GAP-23. Onda e duplo-check → GAP-08. Quarentena com endereço → GAP-16. Picking × pulmão, capacidade, reabastecimento, contagem por papel → melhorias do LOG.4/LOG.6. `opcoesEnderecoSelect` triplicado → dívida técnica |
+| MRP — o que falta | Em trânsito e campo de estoque de segurança: **feitos** (PCP.2). Necessidade líquida gravada e empenho na decisão → GAP-06 |
+| Propriedade do estoque | Devolução ao cliente → GAP-22. Remessa sem data, empenho sem dono, material parado → GAP-01. PCs sem 🔗 Cliente/pedido → dado de operação |
+| Organização / navegação | `horizonte.html` no limbo → GAP-07. Categoria de produto em texto livre → GAP-19 |
+| Qualidade (laudos, spec, inventário, avulsos) | CK-3/4/5/6/8 e Tarefas Pendentes → GAP-24. RA, RET, calibração, COA, arquivar laudo, `gerar_relatorio.py` → GAP-25. Ajuste de granel e WMS de semi-acabado → GAP-04. Faixas numéricas e críticos → GAP-19 |
+| Outros achados antigos | API de NF → GAP-11. Gatilho de Financeiro → GAP-12. Node 20 → *fora do fluxo, com prazo*. OP 26215/01 e `dashboard.html` → dado / verificar |
+| Gestão de Retrabalhos | GAP-10 |
+| MRP: promessa de entrega | GAP-06 (depende de GAP-07) |
+| Operação — Fases 2 e 3 | Guardar/Mover e pendências de guarda → GAP-16. Visto do PCP → GAP-15. FEFO → GAP-01. Tanque e higienização → GAP-17. Consolidação da OP → GAP-28. Permissões de `registros` → dívida técnica |
+| Gaps levantados na modelagem de fluxos | GAP-02, GAP-03, GAP-04 (portão), GAP-05, GAP-13, GAP-18 — nasceram aqui |

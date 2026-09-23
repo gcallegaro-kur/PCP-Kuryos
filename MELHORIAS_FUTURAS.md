@@ -13,6 +13,53 @@ Ao adicionar um item novo: contexto de onde veio, por que foi adiado (ou
 "nunca chegou a ser feito"), e qualquer referência de arquivo/função
 relevante para retomar o trabalho depois.
 
+**Ligação com o modelo de fluxos (2026-09-23).** `FLUXOS_DO_SISTEMA.md` numera cada
+passo do sistema (`COM.5`, `LOG.7`…) e agrupa o que falta em gaps (`GAP-01`…`GAP-28`).
+Lá, a tabela de gaps diz em que seção daqui está o detalhe e a seção *Backlog × fluxo*
+diz onde cada seção daqui se encaixa. Ao adicionar um item novo, **cite o passo ou o
+gap que ele resolve** (ou escreva "dívida técnica" quando não mexer em fluxo nenhum) e,
+se for um gap que o modelo não tem, acrescente-o lá também.
+
+---
+
+## Gaps levantados na modelagem de fluxos (2026-09-23)
+
+Apareceram ao modelar os fluxos por área e não tinham item neste backlog. Detalhe,
+passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em `bf0e823`.
+
+- **GAP-05 — Mudança no pedido não chega à OP.** 🔴 `Cancelar saldo`
+  (`comercial.html`, handler de `#cancelar`) só marca `pedidos/{k}/statusManual =
+  encerrado` e o pedido comercial CANCELADO: as OPs abertas do pedido continuam
+  Programadas, com empenho e na grade; PCs e remessas ligados não são avisados; PA já
+  produzido fica sem destino. A edição com versão (`shared/pedido-edicao.js`) trava
+  abaixo do produzido/expedido, mas **reduzir abaixo da quantidade da OP emitida não
+  gera aviso** (o único aviso é de SKU inativo). "Registrar aditivo" só grava texto e
+  versão. Escopo sugerido: ao cancelar/reduzir, listar as OPs afetadas e oferecer
+  cancelar/ajustar (reaproveitar o cancelamento de OP de `ops.html`, que já libera
+  empenho e alocação) e avisar o PCP.
+- **GAP-02 — Devolução e reclamação de cliente.** 🔴 Não há tela. A conciliação
+  (`shared/conciliacao-pedidos.js`) já define que devolução volta a ser estoque, mas
+  nada registra a entrada da mercadoria, a inspeção (fila do CQ), o estorno do expedido
+  no pedido nem uma RNC com origem "cliente" ligada a pedido/NF/lote. Desenho natural:
+  entrada pela Logística em QUARENTENA com vínculo à saída original
+  (`expedicoes_comerciais`), decisão da Qualidade (reintegrar, retrabalhar, descartar).
+- **GAP-03 — Estorno da saída física.** 🟠 `confirmarExpedicaoPA` baixa paletes e
+  soma expedido de forma atômica e idempotente, mas não existe o caminho inverso (carga
+  que voltou, NF cancelada). O item "API de emissão de NF" abaixo prevê cancelamento
+  **fiscal**; o estorno **físico** é outra coisa e precisa existir antes.
+- **GAP-04 (parte nova) — Portão do bulk.** 🔴 O envase só é barrado quando a OP já
+  começou a manipulação; OP recém-emitida vai direto ao envase sem laudo de granel.
+  E o bulk reprovado não tem destino (reprocesso, ajuste ou descarte): a OP fica
+  travada. Registrado em `AGENT_STATUS.md` (22/09) como fora de escopo do teste ponta a
+  ponta; o ajuste de granel pós-fechamento já estava na seção Qualidade abaixo.
+- **GAP-13 — Orçamento perdido.** 🟡 `orcamentos` só conhece EM_ELABORACAO, ENVIADO,
+  ACEITO/convertido. Falta RECUSADO/VENCIDO com motivo, para ter funil e taxa de
+  conversão por cliente.
+- **GAP-18 — Duas portas para criar pedido.** 🟡 `pedidos.html` › `+ Novo Pedido`
+  ainda cria pedido sem passar pelo Comercial (sem preço, versão nem trava da
+  `gestao_comercial.html`). Decidir se fecha a porta (só consulta) ou se ela passa a
+  abrir o Comercial.
+
 ---
 
 ## Integração entre setores (auditoria de 2026-09-08)
@@ -23,11 +70,17 @@ um com a evidência no código e o número lido de produção.
 
 Os três que valem agir primeiro, e por quê:
 
-- **Selo de qualidade do fornecedor na cotação** — `desempenhoQualidadeFornecedor`
+> **Atualização 2026-09-23:** os dois primeiros itens abaixo estão **FEITOS**
+> (elos 1 e 4 fechados em 2026-09-08: `compras.html` chama
+> `desempenhoQualidadeFornecedor`, e `insumos.html` grava `solicitacoes_compra` pelo
+> 🛒 Solicitar Compra). Mantidos só como histórico. A área de quarentena segue aberta
+> (GAP-16).
+
+- ~~**Selo de qualidade do fornecedor na cotação**~~ — `desempenhoQualidadeFornecedor`
   já existe em `shared/utils.js` e tem UMA única chamada em todo o sistema
   (`qualidade.html:1252`). O comprador compara orçamentos sem ver que o
   fornecedor reprovou lote. Falta só exibir.
-- **"Gerar solicitação de compra" na Matriz de Insumos** — `insumos.html` calcula
+- ~~**"Gerar solicitação de compra" na Matriz de Insumos**~~ — `insumos.html` calcula
   a falta e `compras.html` nunca lê o nó `insumos`; nem `insumos.html` referencia
   `solicitacoes_compra`. Não há caminho de ida nem de volta: o MRP existe pra
   antecipar a falta e a informação não chega a quem compra.
@@ -564,14 +617,14 @@ nenhuma decisão já tomada na conversa:
 
 ## Estoque / Produção
 
-- **Sem estoque de produto acabado** (finished-goods) — ver seção "Ordens
-  de Serviço / Roteiro de Produção / Estoque de Produto Acabado" acima,
-  que cobre esse ponto em detalhe (o gate de disponibilidade proposto ali
-  é o que alimentaria esse estoque).
-- **Devolução ao fornecedor como movimento de estoque** — identificado
-  durante o design do estoque físico (Fase 4), nunca implementado. Hoje só
-  existe entrada (recebimento), consumo (apontamento), perda e ajuste
-  manual.
+- ~~**Sem estoque de produto acabado**~~ — **FEITO** (conferido em
+  2026-09-23): a Conferência de PA cria paletes endereçados em `estoque_lotes`
+  (QUARENTENA → laudo CK-7 → Expedição). O que continua aberto é o gate "menor
+  entre etapas" da seção acima (GAP-09 em `FLUXOS_DO_SISTEMA.md`).
+- ~~**Devolução ao fornecedor como movimento de estoque**~~ — **FEITO**
+  (lote interno/recebimento, `747b607`): Logística › Histórico › Devolver tira do
+  estoque e reabre o saldo do PC. Continua aberto: Compras não é avisado e não há
+  documento de devolução (GAP-10).
 - **Perda por etapa (Rotulagem vs Envase) E por SKU** ⚠ verificar se ainda
   procede — adiado explicitamente: "temos skus com insumos de menor
   qualidade, o que ocasionam mais perdas, queria tentar capturar e
@@ -700,9 +753,11 @@ deriva do BOM, grava `mpCodigo`, mostra saldo disponível por item). Falta:
   (`saldoAtual − saldoEmpenhado`) como referência visual, mas o número que
   ela grava como necessidade continua sendo o **bruto** do BOM. O passo
   seguinte é gravar o líquido, ou pelo menos oferecer os dois.
-- **"Em trânsito" não existe como conceito** — pedido de compra já colocado
-  mas não recebido não entra em conta nenhuma.
-- **Estoque de segurança não existe** por material.
+- ~~**"Em trânsito" não existe como conceito**~~ — **FEITO** no motor do MRP
+  (2026-09-13, `calcularMrpMaterial` desconta PC em trânsito).
+- ~~**Estoque de segurança não existe** por material~~ — o **campo** existe desde
+  o MRP (`materiais/{key}`, editável no card); falta preenchê-lo, junto com lead
+  time e lote mínimo/múltiplo — é operação (GAP-06).
 - **`saldoEmpenhado` não influencia decisão de compra** — o empenho funciona
   (emissão de OP reserva, apontamento baixa) e é exibido em `estoque.html` e
   agora em `insumos.html`, mas nenhum cálculo de compra usa o disponível
