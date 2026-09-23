@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Em andamento — migração do runtime das Functions (2026-09-23).** Node.js 20
+  é desligado em 30/10/2026. Troca `functions/package.json` engines 20 → 24 (GA,
+  descontinuado só em 04/2028), **sem** subir `firebase-functions` (5.1.1) nem
+  `firebase-admin`. Regressão completa no emulador antes do deploy, deploy por
+  worktree limpo. Arquivos ativos: `functions/package.json`, `AGENT_STATUS.md`.
+  **Na fila, decidido pelo usuário:** GAP-05 (pedido → OP), GAP-04 com a regra
+  "toda OP com fórmula só envasa com bulk liberado" e GAP-18 (remover
+  "+ Novo Pedido" de `pedidos.html`).
+
 - **Entregue — modelagem dos fluxos do sistema (2026-09-23).** Pedido do
   usuário: fluxo por área (tela › campo › onde aparece), numerado `[Área].n`,
   fluxo padrão ponta a ponta, fluxos não padrão e gaps. Em
