@@ -149,7 +149,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   **Aviso ao Codex:** `run_retrabalhos_rules_test.js` falha ("Missing
   expected rejection") **também com as regras do commit anterior** — não é
   desta mudança; é do módulo de retrabalhos/`estado_linhas`.
-- **GAP-04 portão do bulk + GAP-18 — pronto, publicando (2026-09-23).**
+- **Publicado — GAP-04 portão do bulk + GAP-18 (2026-09-23).** Commit `3d361e5`, Hosting por worktree limpo; `form.html`, `pedidos.html`, `shared/manipulacao.js` idênticos ao commit por HTTP. Arquivos ativos: nenhum.
   `shared/manipulacao.js` (`podeEnvasar` com fórmula + corte
   `PORTAO_BULK_DESDE` 24/09), `form.html` (5 portas do envase; rotulagem fora
   do portão), `pedidos.html` (sem "+ Novo Pedido"). Testes novos
