@@ -10,7 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
-  <script src="shared/inspecao-pa.js"></script>
+  <script src="shared/inspecao-pa.js"></script><script src="shared/spec-material.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
   <script src="shared/manipulacao.js"></script>
@@ -312,6 +312,41 @@
   <!-- ════════════════ ESPECIFICAÇÕES ════════════════ -->
   <div class="tab-panel" id="tab-especificacoes">
     <div class="section-note">
+      <b>Matéria-prima é cadastrada aqui</b> (decisão de 23/09): o plano nasce na própria análise do
+      lote e é mantido nesta aba. <b>Produto acabado</b> continua vindo de Cadastros › Fórmulas/BOM —
+      esta tela mostra, para não existir a mesma especificação em dois lugares.
+    </div>
+
+    <div class="card" id="espMpCard">
+      <div class="card-header">
+        <h3 id="espMpCount">Matérias-primas</h3>
+        <span class="field-hint" id="espMpResumo"></span>
+      </div>
+      <div class="kt-toolbar" style="padding:10px 14px 0">
+        <div class="kt-search"><span>🔎</span><input type="text" id="espMpSearch" placeholder="Buscar matéria-prima..."></div>
+        <select class="kt-select" id="espMpFiltro">
+          <option value="pendentes">Sem especificação</option>
+          <option value="proposta">Com sugestão do laudo antigo</option>
+          <option value="com">Já especificadas</option>
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:150px">Código</th>
+            <th>Matéria-prima</th>
+            <th style="width:110px">Tipo</th>
+            <th style="width:230px">Ensaios</th>
+            <th style="width:120px">Situação</th>
+            <th style="width:110px"></th>
+          </tr></thead>
+          <tbody id="espMpBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-note">
       Os planos de inspeção que a Qualidade usa para laudar. São os mesmos registros mantidos em
       <b>Cadastros › Fórmulas/BOM</b> — esta tela é de consulta, para não haver duas
       especificações do mesmo produto em lugares diferentes. Ensaio com faixa numérica
@@ -355,6 +390,51 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════ MODAL: Especificação de matéria-prima ══════════ -->
+<!-- Plano fixo de 6 ensaios (decisão do usuário em 23/09), com NA para o
+     que não se aplica. A spec é do MATERIAL: vale para todos os
+     fornecedores. Cada gravação cria uma versão nova. -->
+<!-- z-index acima do laudo: este modal abre POR CIMA da análise. -->
+<div class="modal-bg" id="modalSpecMpBg" style="z-index:1200">
+  <div class="modal" style="max-width:880px">
+    <div class="modal-header">
+      <div>
+        <h2 id="specMpTitulo">Especificação da matéria-prima</h2>
+        <div class="field-hint" id="specMpSub"></div>
+      </div>
+      <button class="modal-close" id="specMpFechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="specMpAviso" class="alert alert-info" style="display:none"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:150px">Ensaio</th>
+            <th>Especificação</th>
+            <th style="width:150px">Método</th>
+            <th style="width:90px">Mínimo</th>
+            <th style="width:90px">Máximo</th>
+            <th style="width:80px">Crítico</th>
+          </tr></thead>
+          <tbody id="specMpBody"></tbody>
+        </table>
+      </div>
+      <div class="field-hint" style="margin-top:10px">
+        Deixe <b>NA</b> no ensaio que não se aplica a esta matéria-prima — NA não reprova lote.
+        Mínimo e máximo só valem para ensaio numérico; o sistema usa a faixa para avaliar sozinho no laudo.
+      </div>
+      <div id="specMpErros" class="alert alert-danger" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <span class="field-hint" id="specMpVersao"></span>
+      <div class="modal-footer-right">
+        <button class="btn btn-ghost" id="specMpCancelar">Cancelar</button>
+        <button class="btn btn-primary" id="specMpSalvar">Salvar especificação</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ MODAL: Laudo do granel ══════════ -->
@@ -1315,11 +1395,20 @@ function renderPlanoInspecao() {
       return;
     }
   }
-  vazio.innerHTML = 'Este item não tem especificação cadastrada — o laudo fica pelo checklist abaixo e pela observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.';
+  // Matéria-prima cadastra a especificação AQUI (decisão de 23/09): a
+  // mensagem antiga mandava para Cadastros › Fórmulas/BOM, que só aceita
+  // produto -- era uma porta fechada.
+  vazio.innerHTML = laudoAtual && laudoAtual.roteiro === 'MP'
+    ? 'Esta matéria-prima ainda não tem especificação. ' +
+      '<button class="btn btn-primary btn-sm" id="qCadastrarSpecMp" style="margin-left:8px">Cadastrar especificação</button>' +
+      '<div class="field-hint" style="margin-top:6px">São seis ensaios — aspecto físico, cor, odor, pH, densidade e teor alcoólico — e o que não se aplica fica NA. Feito uma vez, vale para todos os lotes e fornecedores desta MP.</div>'
+    : 'Este item não tem especificação cadastrada — o laudo fica pelo checklist abaixo e pela observação. Para ter os ensaios aqui, cadastre a especificação em Cadastros › Fórmulas/BOM.';
   var itens = laudoAtual && laudoAtual.espec && laudoAtual.espec.registro && laudoAtual.espec.registro.itens;
   if (!itens || !Object.keys(itens).length) {
     box.style.display = 'none';
     vazio.style.display = '';
+    var bt = document.getElementById('qCadastrarSpecMp');
+    if (bt) bt.addEventListener('click', function() { abrirSpecMp(laudoAtual.itemCodigo); });
     return;
   }
   box.style.display = '';
@@ -2407,6 +2496,165 @@ function renderFornecedores() {
 /* ══════════════════════════════════════════════════════════════════════
    ABA 4 — ESPECIFICAÇÕES (consulta)
    ══════════════════════════════════════════════════════════════════════ */
+/* ─────────── Especificação de matéria-prima ───────────
+   O cadastro nasce na análise do lote (pedido do usuário em 23/09) e é
+   mantido nesta aba. `specs_mp_propostas` guarda o que foi lido dos laudos
+   antigos do laboratório: é SUGESTÃO, só vira especificação quando a
+   analista confere e salva. */
+var allPropostasSpec = {};
+var specMpAtual = null;
+
+function materiaisPrimas() {
+  return Object.keys(allMateriais).map(function(k) {
+    return Object.assign({key: k}, allMateriais[k]);
+  }).filter(function(m) { return /^(MPGR|MPES|MU)$/.test(String(m.tipo || '')); });
+}
+function specDoMaterial(codigo) { return especificacaoVigente(allEspecificacoes, codigo); }
+
+function renderEspecificacoesMp() {
+  var tbody = document.getElementById('espMpBody');
+  if (!tbody) return;
+  var busca = norm(document.getElementById('espMpSearch').value);
+  var filtro = document.getElementById('espMpFiltro').value;
+  var linhas = materiaisPrimas().map(function(m) {
+    var codigo = m.mpCodigo || m.key;
+    var atual = specDoMaterial(codigo);
+    var itens = atual ? Object.values((atual.registro || {}).itens || {}) : [];
+    var aplicaveis = itens.filter(function(i) { return i.aplicavel !== false && String(i.especificacaoTexto || '').toUpperCase() !== 'NA'; });
+    var proposta = allPropostasSpec[sanitizeKey(codigo)];
+    return {
+      codigo: codigo, nome: m.mpNome || m.nome || '—', tipo: m.tipo,
+      versao: atual ? atual.versao : null, ensaios: aplicaveis.map(function(i) { return i.ensaio; }),
+      temSpec: !!atual, temProposta: !!proposta,
+      textoBusca: norm(codigo + ' ' + (m.mpNome || ''))
+    };
+  }).filter(function(l) {
+    if (busca && l.textoBusca.indexOf(busca) === -1) return false;
+    if (filtro === 'pendentes' && l.temSpec) return false;
+    if (filtro === 'proposta' && (!l.temProposta || l.temSpec)) return false;
+    if (filtro === 'com' && !l.temSpec) return false;
+    return true;
+  }).sort(function(a, b) {
+    // Quem tem sugestão pronta aparece primeiro: é o trabalho mais barato.
+    if (a.temSpec !== b.temSpec) return a.temSpec ? 1 : -1;
+    if (a.temProposta !== b.temProposta) return a.temProposta ? -1 : 1;
+    return a.nome.localeCompare(b.nome);
+  });
+
+  var todas = materiaisPrimas().length;
+  var comSpec = materiaisPrimas().filter(function(m) { return specDoMaterial(m.mpCodigo || m.key); }).length;
+  var comProposta = Object.keys(allPropostasSpec).length;
+  document.getElementById('espMpCount').textContent = 'Matérias-primas (' + linhas.length + ')';
+  document.getElementById('espMpResumo').textContent =
+    comSpec + ' de ' + todas + ' especificadas · ' + comProposta + ' com sugestão do laudo antigo';
+
+  tbody.innerHTML = linhas.length ? linhas.map(function(l) {
+    var situacao = l.temSpec ? '<span class="badge badge-green">v' + escapeHtml(String(l.versao)) + '</span>'
+      : l.temProposta ? '<span class="badge badge-blue">sugestão pronta</span>'
+      : '<span class="badge badge-orange">sem especificação</span>';
+    return '<tr>' +
+      '<td><b>' + escapeHtml(l.codigo) + '</b></td>' +
+      '<td>' + escapeHtml(l.nome) + '</td>' +
+      '<td><span class="field-hint">' + escapeHtml(l.tipo) + '</span></td>' +
+      '<td>' + (l.ensaios.length ? escapeHtml(l.ensaios.join(', ')) : '<span class="field-hint">—</span>') + '</td>' +
+      '<td>' + situacao + '</td>' +
+      '<td style="text-align:right"><button class="btn ' + (l.temSpec ? 'btn-ghost' : 'btn-primary') + ' btn-sm esp-mp" data-mp="' + escapeAttr(l.codigo) + '">' +
+        (l.temSpec ? 'Editar' : 'Cadastrar') + '</button></td>' +
+    '</tr>';
+  }).join('') : '<tr><td colspan="6" class="no-data">Nenhuma matéria-prima nesse filtro.</td></tr>';
+  tbody.querySelectorAll('.esp-mp').forEach(function(b) {
+    b.addEventListener('click', function() { abrirSpecMp(b.getAttribute('data-mp')); });
+  });
+}
+
+function abrirSpecMp(codigo) {
+  var m = materiaisPrimas().find(function(x) { return (x.mpCodigo || x.key) === codigo; }) || {};
+  var atual = specDoMaterial(codigo);
+  var proposta = allPropostasSpec[sanitizeKey(codigo)];
+  var base = atual ? (atual.registro || {}).itens : null;
+  var origemProposta = false;
+  if (!base && proposta && proposta.itens) { base = proposta.itens; origemProposta = true; }
+  specMpAtual = {
+    codigo: codigo, nome: m.mpNome || m.nome || codigo,
+    versaoAtual: atual ? Number(String(atual.versao).replace(/\D/g, '')) || 1 : 0,
+    linhas: SpecMaterial.planoDoMaterial(base)
+  };
+  document.getElementById('specMpTitulo').textContent = 'Especificação — ' + codigo;
+  document.getElementById('specMpSub').textContent = specMpAtual.nome + ' · vale para todos os fornecedores';
+  var aviso = document.getElementById('specMpAviso');
+  if (origemProposta) {
+    aviso.className = 'alert alert-info show';
+    aviso.style.display = '';
+    aviso.innerHTML = '📋 Preenchido a partir do laudo antigo do laboratório (<b>' + escapeHtml(proposta.arquivo || 'F0070') + '</b>). ' +
+      'Confira cada linha: só vira especificação quando você salvar.';
+  } else { aviso.style.display = 'none'; aviso.innerHTML = ''; }
+  document.getElementById('specMpVersao').textContent = atual
+    ? 'Versão atual ' + atual.versao + ' — salvar cria a v' + (specMpAtual.versaoAtual + 1) + ', preservando o histórico.'
+    : 'Primeira versão desta matéria-prima.';
+  document.getElementById('specMpErros').style.display = 'none';
+  renderSpecMpLinhas();
+  document.getElementById('modalSpecMpBg').classList.add('open');
+}
+
+function renderSpecMpLinhas() {
+  document.getElementById('specMpBody').innerHTML = specMpAtual.linhas.map(function(l, i) {
+    return '<tr>' +
+      '<td><b>' + escapeHtml(l.ensaio) + '</b>' + (l.numerico ? '<div class="field-hint">numérico</div>' : '') + '</td>' +
+      '<td><input type="text" data-spec="especificacaoTexto" data-i="' + i + '" value="' + escapeAttr(l.especificacaoTexto) + '" placeholder="NA quando não se aplica"></td>' +
+      '<td><input type="text" data-spec="metodo" data-i="' + i + '" value="' + escapeAttr(l.metodo || '') + '"></td>' +
+      '<td><input type="number" step="any" data-spec="minimo" data-i="' + i + '" value="' + escapeAttr(l.minimo == null ? '' : l.minimo) + '"' + (l.numerico ? '' : ' disabled') + '></td>' +
+      '<td><input type="number" step="any" data-spec="maximo" data-i="' + i + '" value="' + escapeAttr(l.maximo == null ? '' : l.maximo) + '"' + (l.numerico ? '' : ' disabled') + '></td>' +
+      '<td style="text-align:center"><input type="checkbox" data-spec="critico" data-i="' + i + '"' + (l.critico ? ' checked' : '') + '></td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('specMpBody').querySelectorAll('[data-spec]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      var i = Number(el.getAttribute('data-i')), campo = el.getAttribute('data-spec');
+      specMpAtual.linhas[i][campo] = campo === 'critico' ? el.checked : el.value;
+    });
+    el.addEventListener('change', function() {
+      var i = Number(el.getAttribute('data-i')), campo = el.getAttribute('data-spec');
+      specMpAtual.linhas[i][campo] = campo === 'critico' ? el.checked : el.value;
+    });
+  });
+}
+
+function salvarSpecMp() {
+  if (!specMpAtual) return;
+  var v = SpecMaterial.validarPlano(specMpAtual.linhas);
+  var box = document.getElementById('specMpErros');
+  if (!v.ok) { box.className = 'alert alert-danger show'; box.style.display = ''; box.innerHTML = v.erros.map(escapeHtml).join('<br>'); return; }
+  var btn = document.getElementById('specMpSalvar');
+  btn.disabled = true;
+  var r = SpecMaterial.atualizacoes(sanitizeKey(specMpAtual.codigo), specMpAtual.linhas, {
+    versaoAtual: specMpAtual.versaoAtual, por: currentUserNome(), agora: new Date().toISOString(), origem: 'ANALISE_CQ'
+  });
+  // A sugestão do laudo antigo sai da fila assim que virou especificação.
+  r.updates['specs_mp_propostas/' + sanitizeKey(specMpAtual.codigo)] = null;
+  db.ref().update(r.updates).then(function() {
+    showAlert('Especificação de ' + specMpAtual.codigo + ' salva como ' + r.chave.split('__')[1] + '. As próximas análises já abrem com estes ensaios.', 'success');
+    fecharSpecMp();
+    if (laudoAtual && laudoAtual.itemCodigo === specMpAtual.codigo) abrirLaudo(laudoAtual.itemCodigo, laudoAtual.loteKey);
+  }).catch(function(e) {
+    box.className = 'alert alert-danger show'; box.style.display = ''; box.textContent = 'Erro ao salvar: ' + e.message;
+  }).finally(function() { btn.disabled = false; });
+}
+function fecharSpecMp() {
+  specMpAtual = null;
+  document.getElementById('modalSpecMpBg').classList.remove('open');
+}
+document.getElementById('specMpFechar').addEventListener('click', fecharSpecMp);
+document.getElementById('specMpCancelar').addEventListener('click', fecharSpecMp);
+document.getElementById('specMpSalvar').addEventListener('click', salvarSpecMp);
+['espMpSearch', 'espMpFiltro'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', renderEspecificacoesMp);
+  document.getElementById(id).addEventListener('change', renderEspecificacoesMp);
+});
+dbOnValue(db.ref('specs_mp_propostas'), function(snap) {
+  allPropostasSpec = snap.val() || {};
+  renderEspecificacoesMp();
+});
+
 function renderEspecificacoes() {
   var tbody = document.getElementById('espBody');
   if (!tbody) return;
@@ -2462,6 +2710,7 @@ function renderEspecificacoes() {
   tbody.querySelectorAll('.esp-ver').forEach(function(b) {
     b.addEventListener('click', function() { abrirEspecificacao(b.getAttribute('data-esp')); });
   });
+  renderEspecificacoesMp();
 }
 ['espSearch', 'espFiltro'].forEach(function(id) {
   document.getElementById(id).addEventListener('input', renderEspecificacoes);

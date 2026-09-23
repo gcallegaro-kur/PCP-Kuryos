@@ -88,7 +88,8 @@ const KURYOS_MODULOS = {
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
                   paginas: ['pedidos.html', 'insumos.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
-                  paginas: ['cadastros.html', 'produtos.html', 'materiais.html', 'clientes.html', 'formulas.html'] },
+                  paginas: ['cadastros.html'] },  // produtos/materiais/clientes/formulas.html foram
+                  // aposentados em 23/09: eram só redirecionamentos para as abas de cadastros.html
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',

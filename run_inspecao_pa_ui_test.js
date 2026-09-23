@@ -21,6 +21,15 @@ const assert = require('node:assert/strict');
 function dados() {
   return {
     usuarios: {u1: {nome: 'Daiene', email: 'cq@kuryos.com', role: 'qualidade'}},
+    // O que o importador leu do laudo antigo do laboratório: é SUGESTÃO.
+    specs_mp_propostas: {
+      'MP-0002': {codigo: 'MP-0002', materialNome: 'BASE DERM SKIN 12', arquivo: 'BASE DERM SKIN 12.txt',
+        confianca: 'EXATO', score: 1, itens: {
+          aspecto: {especificacaoTexto: 'Pasta', metodo: 'Visual'},
+          cor: {especificacaoTexto: 'Levemente amarelada', metodo: 'Visual'},
+          ph: {especificacaoTexto: '5,0 - 7,5', metodo: 'NBR10891'}
+        }}
+    },
     config: {linhas: ['Linha 1']},
     estoque_lotes: {
       MRARBS04: {
@@ -34,6 +43,13 @@ function dados() {
           saldoLote: 200, qtdOriginal: 200, status: 'QUARENTENA', origemTipo: 'recebimento_pc',
           loteOrigem: 'AK-2026-000576', criadoEm: '2026-09-16T12:00:00Z',
           recebimento: {notaFiscal: '347410', recebidoPor: 'Yasmim', data: '2026-09-16'}}
+      },
+      // MP SEM especificação: é o caso que a aba Especificações resolve.
+      'MP-0002': {
+        lote_novo: {itemTipo: 'material', itemCodigo: 'MP-0002', itemNome: 'BASE DERM SKIN 12', unidade: 'kg',
+          saldoLote: 50, qtdOriginal: 50, status: 'QUARENTENA', origemTipo: 'recebimento_pc',
+          loteOrigem: 'AK-2026-000900', criadoEm: '2026-09-23T12:00:00Z',
+          recebimento: {notaFiscal: '5510', recebidoPor: 'Yasmim', data: '2026-09-23'}}
       },
       // Embalagem: mesmo lugar na fila, roteiro OUTRO (F009).
       'EP-00106': {
@@ -57,6 +73,7 @@ function dados() {
     // 21/09: "direcionar a partir da categoria do SKU cadastrado").
     materiais: {
       m1: {mpCodigo: 'MP-0001', mpNome: 'ÁLCOOL CEREAIS', tipo: 'MPGR', unidade: 'kg'},
+      m9: {mpCodigo: 'MP-0002', mpNome: 'BASE DERM SKIN 12', tipo: 'MPGR', unidade: 'kg'},
       m2: {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML CRISTAL 24GR', tipo: 'EP', unidade: 'un'}
     },
     fornecedores: {}, pedidos_compra: {}, nao_conformidades: {}, parametros_pa: {}
@@ -465,8 +482,63 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(await page.evaluate(() => window.__tituloImpressao),
       'F009 - Análise de embalagem - FRASCO 200ML CRISTAL 24GR - BP-4471');
 
+    // ── 10. Especificação de MP nasce na Qualidade (23/09) ──────────────
+    // A MP sem spec abre o laudo com a porta ABERTA, não com a mensagem
+    // morta que mandava para Cadastros (que só aceita produto).
+    await page.evaluate(() => { allEstoqueLotes = window.__db.estoque_lotes; renderFila(); });
+    await page.locator('#qFilaBody tr', {hasText: 'MP-0002'}).locator('button[data-laudo-lote]').click();
+    await page.waitForSelector('#modalLaudoBg.open');
+    assert.match(await page.locator('#modalLaudoTitle').innerText(), /Análise de matéria-prima/);
+    await page.waitForSelector('#qCadastrarSpecMp');
+    assert.match(await page.locator('#qSemPlano').innerText(), /seis ensaios/);
+
+    // Abre o cadastro pela própria análise, já com a sugestão do laudo antigo.
+    await page.click('#qCadastrarSpecMp');
+    await page.waitForSelector('#modalSpecMpBg.open');
+    assert.match(await page.locator('#specMpAviso').innerText(), /laudo antigo do laboratório/);
+    assert.match(await page.locator('#specMpSub').innerText(), /vale para todos os fornecedores/);
+    const linhasSpec = await page.locator('#specMpBody tr').count();
+    assert.equal(linhasSpec, 6, 'os seis ensaios fixos');
+    assert.equal(await page.inputValue('[data-spec="especificacaoTexto"][data-i="0"]'), 'Pasta');
+    assert.equal(await page.inputValue('[data-spec="especificacaoTexto"][data-i="1"]'), 'Levemente amarelada');
+    assert.equal(await page.inputValue('[data-spec="especificacaoTexto"][data-i="2"]'), 'NA', 'odor não veio no laudo: fica NA');
+    assert.equal(await page.inputValue('[data-spec="metodo"][data-i="3"]'), 'NBR10891', 'método do pH veio do laudo');
+    assert.equal(await page.locator('[data-spec="minimo"][data-i="0"]').isDisabled(), true, 'ensaio descritivo não tem faixa');
+
+    // Tudo NA não é especificação.
+    for (let i = 0; i < 6; i++) await page.fill('[data-spec="especificacaoTexto"][data-i="' + i + '"]', 'NA');
+    await page.click('#specMpSalvar');
+    await page.waitForSelector('#specMpErros:visible');
+    assert.match(await page.locator('#specMpErros').innerText(), /todos em NA não é especificação/);
+
+    await page.fill('[data-spec="especificacaoTexto"][data-i="0"]', 'Pasta');
+    await page.fill('[data-spec="especificacaoTexto"][data-i="3"]', '5,0 - 7,5');
+    await page.fill('[data-spec="minimo"][data-i="3"]', '5');
+    await page.fill('[data-spec="maximo"][data-i="3"]', '7.5');
+    await page.check('[data-spec="critico"][data-i="3"]');
+    await page.click('#specMpSalvar');
+    await page.waitForFunction(() => window.__db.especificacoes['MP-0002__v1']);
+    const specNova = await page.evaluate(() => window.__db.especificacoes['MP-0002__v1']);
+    assert.equal(specNova.codProduto, 'MP-0002');
+    assert.equal(specNova.tipoItem, 'MATERIAL');
+    assert.equal(specNova.origem, 'ANALISE_CQ');
+    assert.equal(specNova.criadoPor, 'Daiene');
+    assert.equal(specNova.itens.aspecto.especificacaoTexto, 'Pasta');
+    assert.equal(specNova.itens.ph.minimo, 5);
+    assert.equal(specNova.itens.ph.critico, true);
+    assert.equal(specNova.itens.odor.aplicavel, false, 'NA fica gravado como não aplicável');
+    assert.equal(await page.evaluate(() => window.__db.specs_mp_propostas['MP-0002']), undefined,
+      'a sugestão sai da fila quando vira especificação');
+
+    // Na aba Especificações a MP aparece com a versão, e a lista cobra as pendentes.
+    await page.evaluate(() => { allEspecificacoes = window.__db.especificacoes; allPropostasSpec = window.__db.specs_mp_propostas || {}; ativarAbaQualidade('especificacoes'); });
+    await page.waitForSelector('#espMpBody tr');
+    const tabelaMp = await page.locator('#espMpBody').innerText();
+    assert.match(tabelaMp, /MP-0002/);
+    assert.match(await page.locator('#espMpResumo').innerText(), /de \d+ especificadas/);
+
     assert.deepEqual(errors, [], 'erros de página: ' + errors.join(' | '));
-    console.log('OK Qualidade: palete usa CK-7 (amostragem √N+1, pesagem, retenção), crítico e peso fora travam a liberação, material mantém o plano de ensaios.');
+    console.log('OK Qualidade: palete usa CK-7 (amostragem √N+1, pesagem, retenção), crítico e peso fora travam a liberação, material mantém o plano de ensaios; especificação de MP nasce na análise com a sugestão do laudo antigo.');
   } finally {
     await browser.close();
   }

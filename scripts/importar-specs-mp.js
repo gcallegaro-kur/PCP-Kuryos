@@ -151,6 +151,27 @@ function main() {
     revisar.slice(0, 6).forEach((r) => console.log('  ' + r.nome + ' — ' + r.motivo + (r.candidatos.length ? ' · candidatos: ' + r.candidatos.join(' | ') : '')));
   }
 
+  const gravar = args.includes('--gravar-propostas');
+  if (gravar) {
+    /* Grava a SUGESTÃO (nunca a especificação) em specs_mp_propostas/{codigo}.
+       A aba Especificações da Qualidade mostra isso como ponto de partida; a
+       especificação só existe quando a analista confere e salva. */
+    const propostasNo = {};
+    lista.forEach((p) => {
+      const itens = {};
+      p.plano.filter((l) => l.aplicavel).forEach((l) => {
+        itens[l.chave] = {especificacaoTexto: l.especificacaoTexto, metodo: l.metodo || null};
+      });
+      propostasNo[p.codigo.replace(/[.#$\[\]/]/g, '_')] = {
+        codigo: p.codigo, materialNome: p.materialNome, arquivo: p.arquivo, codigoLab: p.codigoLab,
+        confianca: p.confianca, score: p.score, itens: itens, lidoEm: new Date().toISOString()
+      };
+    });
+    const arquivoUpload = (jsonOut || 'propostas') + '.upload.json';
+    fs.writeFileSync(arquivoUpload, JSON.stringify(propostasNo, null, 1), 'utf8');
+    console.log('\nPara publicar as sugestões (nenhuma vira especificação sozinha):');
+    console.log('  firebase database:set /specs_mp_propostas ' + arquivoUpload + ' -f --project prod-kuryos');
+  }
   if (jsonOut) {
     fs.writeFileSync(jsonOut, JSON.stringify({geradoEm: new Date().toISOString(), propostas: lista, revisar: revisar, semEnsaio: semEnsaio}, null, 1), 'utf8');
     console.log('\nProposta completa em ' + jsonOut);
