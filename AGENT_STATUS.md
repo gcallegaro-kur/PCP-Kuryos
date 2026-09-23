@@ -149,6 +149,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   mas dentro de outras IIFEs. Chamada da IIFE de Produtos era ReferenceError, o
   throw caía no `.catch` genérico do save e a tela dizia "Erro" enquanto o
   produto era gravado normalmente e a tarefa ficava aberta em silêncio.
+- **Cadeia fechada até a Expedição (commit `f0f7f11`).** O teste vai de
+  orçamento até o palete endereçado em QUARENTENA, a fila do CQ e a trava da
+  Expedição. O passo 8 é negativo de propósito: roda `shared/expedicao.js`
+  contra o estado produzido e exige recusa por "Aguardando liberação da
+  Qualidade" — qualquer outro motivo significaria que o laudo liberaria e a
+  Expedição travaria no motivo seguinte. Falta o laudo do CQ e a saída física.
+- **Cuidado para quem mexer no harness:** `functions/conferencia_pa.js` exporta
+  `prepararFinalizacao` (pura, devolve `{updates, ...}`), não `finalizar`.
+  Tratar o retorno inteiro como mapa de updates grava nós de lixo e nenhum
+  palete — e a tela continua dizendo "Conferência concluída".
 - **Gaps conhecidos que NÃO corrigi** (são escopo do `PLANO_PLANEJAMENTO_PCP.md`):
   OP nasce sem `dataInicioPlanejada` quando não há bloco programado; o portão do
   granel só barra OP que já começou a manipulação, então OP recém-emitida vai
