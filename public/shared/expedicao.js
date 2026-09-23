@@ -47,7 +47,12 @@
     // valendo igual. A origem fica à vista: status LEGADO_ESTOQUE e
     // identificador com prefixo LEG-.
     var legado = lote.origemTipo === 'legado_planilha' && lote.legado === true;
-    var origemValida = lote.origemTipo === 'conferencia_pa' || legado;
+    // Palete DEVOLVIDO pelo cliente (GAP-02, shared/devolucao-cliente.js): nasce
+    // no recebimento da Logística, não na Conferência de PA. A conferência
+    // dele é o próprio recebimento (devolucao.recebidaEm), e o laudo da
+    // Qualidade continua obrigatório -- é ele que decide reintegrar/reenviar.
+    var devolvido = lote.origemTipo === 'devolucao_cliente' && !!(lote.devolucao && lote.devolucao.recebidaEm);
+    var origemValida = lote.origemTipo === 'conferencia_pa' || legado || devolvido;
     var vinculoGravado = legado ? lote.skuPedidoKeyOrigem : lote.skuPedidoKey;
     var motivo = '';
     if (lote.itemTipo !== 'produto' || !origemValida || !lote.identificadorPalete) motivo = 'Sem palete de PA conferido';
@@ -57,7 +62,7 @@
     else if (lote.validade && String(lote.validade).slice(0, 10) < hoje) motivo = 'Palete vencido';
     else if (!endereco || endereco.ativo === false || lote.aguardandoEnderecoDefinitivo) motivo = 'Aguardando endereço definitivo ativo';
     else if (op.status !== 'Concluído' || op.sku !== lote.itemCodigo || key(op.sku) !== itemKey) motivo = 'OP ou produto inconsistente';
-    else if (!legado && (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId)) motivo = 'Conferência de PA não finalizada';
+    else if (!legado && !devolvido && (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId)) motivo = 'Conferência de PA não finalizada';
     else if (!skuPedidoKey || !pedidoId || demanda.sku !== lote.itemCodigo || !demanda.cliente) motivo = 'Pedido de origem ausente; regularize o vínculo da OP no PCP';
     // No palete legado, skuPedidoKey guarda a chave RECONSTRUÍDA (a que existe
     // em /pedidos); a da OP é a antiga, sem zero à esquerda. Comparar as duas
@@ -72,7 +77,7 @@
     return {itemKey: itemKey, loteKey: loteKey, lote: lote, op: op, demanda: demanda, comercial: comercial || null,
       skuPedidoKey: skuPedidoKey, pedidoId: pedidoId, pedidoNumero: pedido.numeroFormatado || demanda.id || pedidoId,
       cliente: pedido.cliente || op.cliente || '', clienteKey: pedido.clienteKey || '',
-      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo, legado: legado};
+      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo, legado: legado, devolvido: devolvido};
   }
   function listar(base, hoje) {
     var linhas = [];

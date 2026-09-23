@@ -14,6 +14,7 @@ const PesagemFechada = require("./pesagem_fechada");
 const PedidoDiretoria = require("./pedido_diretoria");
 const {prepararFaturamento} = require("./faturamento_carga");
 const FaturamentoEmail = require("./faturamento_email");
+const DevolucaoCliente = require("./devolucao_cliente");
 
 admin.initializeApp();
 const db = admin.database();
@@ -2088,6 +2089,74 @@ exports.finalizarConferenciaPA = onCall(async (request) => {
     }, undefined, false);
     throw new HttpsError(e.code || "internal", e.message || "Não foi possível finalizar a conferência.");
   }
+});
+
+// ── Devolução de cliente: recebimento físico (GAP-02) ─────────────────
+// O Comercial autoriza (devolucoes.html grava devolucoes_cliente/{id} com
+// status AUTORIZADA); aqui a Logística confirma o que chegou. Tem que ser no
+// servidor por dois motivos: a Logística não escreve em pedidos/ (o estorno
+// do expedido) e a entrada do palete, o estorno e a baixa da autorização
+// precisam ir juntos, num update só. A regra é pura e testada em
+// devolucao_cliente.js (cópia byte a byte de public/shared/devolucao-cliente.js).
+exports.receberDevolucaoCliente = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Faça login para receber a devolução.");
+  const uid = request.auth.uid;
+  const user = (await db.ref("usuarios/" + uid).once("value")).val() || {};
+  const permitido = ["admin", "pcp", "logistica"].includes(user.role) || user.modulos && user.modulos.logistica === true;
+  if (!permitido) throw new HttpsError("permission-denied", "Seu perfil não pode receber devoluções de cliente.");
+  const data = request.data || {};
+  const devKey = String(data.devKey || "").trim();
+  if (!devKey || devKey.length > 80 || /[.#$[\]\/]/.test(devKey)) throw new HttpsError("invalid-argument", "Devolução inválida.");
+  const autor = user.nome || request.auth.token.name || request.auth.token.email || uid;
+  const devRef = db.ref("devolucoes_cliente/" + devKey);
+
+  const atual = (await devRef.once("value")).val();
+  if (!atual) throw new HttpsError("not-found", "Devolução não encontrada.");
+  if (atual.status === "RECEBIDA") return {ok: true, jaRecebida: true, total: atual.totalRecebido || 0};
+
+  const token = crypto.randomUUID();
+  const reservaEm = new Date().toISOString();
+  const lock = await devRef.transaction((d) => {
+    // `return d` no null, nunca `return;` (ver finalizarConferenciaPA).
+    if (!d) return d;
+    if (d.status !== "AUTORIZADA") return;
+    const inicio = Date.parse((d.recebendo && d.recebendo.em) || "");
+    if (Number.isFinite(inicio) && Date.now() - inicio < 120000) return;
+    d.recebendo = {token, em: reservaEm, por: autor};
+    return d;
+  }, undefined, false);
+  const reservado = lock.snapshot && lock.snapshot.val() || {};
+  if (reservado.status === "RECEBIDA") return {ok: true, jaRecebida: true, total: reservado.totalRecebido || 0};
+  if (!lock.committed || !reservado.recebendo || reservado.recebendo.token !== token) {
+    throw new HttpsError("aborted", reservado.status && reservado.status !== "AUTORIZADA"
+      ? "Esta devolução não está mais aguardando recebimento (" + reservado.status + ")."
+      : "Outra pessoa está confirmando este recebimento agora. Aguarde e atualize.");
+  }
+  const soltar = () => devRef.child("recebendo").remove().catch(() => null);
+  let plano;
+  try {
+    const [pedSnap, pcSnap, endSnap] = await Promise.all([
+      db.ref("pedidos").once("value"),
+      db.ref("pedidos_comerciais/" + String(reservado.pedidoComercialId || "_")).once("value"),
+      db.ref("enderecos_estoque").once("value"),
+    ]);
+    plano = DevolucaoCliente.prepararRecebimento({
+      devKey, dev: reservado, pedidos: pedSnap.val() || {}, pedidoComercial: pcSnap.val() || null,
+      enderecos: endSnap.val() || {}, autor, agora: new Date().toISOString(),
+      dados: {itens: Array.isArray(data.itens) ? data.itens.slice(0, 100) : [], observacao: data.observacao, nfDevolucao: data.nfDevolucao},
+    });
+  } catch (e) {
+    await soltar();
+    throw new HttpsError(e.code || "failed-precondition", e.message);
+  }
+  plano.updates["devolucoes_cliente/" + devKey + "/recebendo"] = null;
+  try {
+    await db.ref().update(plano.updates);
+  } catch (e) {
+    await soltar();
+    throw new HttpsError("internal", "Não foi possível gravar o recebimento: " + e.message);
+  }
+  return {ok: true, total: plano.total};
 });
 
 exports.checkNotificacoes = onSchedule(

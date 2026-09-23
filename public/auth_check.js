@@ -99,7 +99,7 @@ const KURYOS_MODULOS = {
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
-                  paginas: ['comercial.html', 'gestao_comercial.html'] },
+                  paginas: ['comercial.html', 'gestao_comercial.html', 'devolucoes.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
                   paginas: ['pedidos.html', 'insumos.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
@@ -108,9 +108,9 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html'] },
+                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html'] },
+                  paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -632,7 +632,10 @@ function renderUnifiedNavbar(user) {
 
   const comercialGroup = grupo('Comercial', [
     temMod('comercial') && ktLink('comercial.html', 'list', 'Pedidos e Orçamentos', activePage),
-    temMod('comercial') && ktLink('gestao_comercial.html', 'chart', 'Gestão Comercial', activePage)
+    temMod('comercial') && ktLink('gestao_comercial.html', 'chart', 'Gestão Comercial', activePage),
+    // Devolução de cliente (GAP-02): o Comercial autoriza, a Logística recebe
+    // e a Qualidade acompanha o destino -- a mesma tela nos três blocos.
+    temMod('comercial') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage)
   ]);
 
   const pcpGroup = grupo('PCP', [
@@ -677,7 +680,8 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=conferenciapa', 'clipboard', 'Conferência de PA', activePage),
     temMod('logistica') && ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage),
-    temMod('logistica') && ktLink('descarte.html', 'clipboard', 'Descarte e Reversa', activePage)
+    temMod('logistica') && ktLink('descarte.html', 'clipboard', 'Descarte e Reversa', activePage),
+    temMod('logistica') && !temMod('comercial') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage)
   ]);
 
   // "Qualidade" -- bloco próprio, não uma aba dentro de Estoque. A decisão
@@ -687,6 +691,7 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
     temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
+    temMod('qualidade') && !temMod('comercial') && !temMod('logistica') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage),
     // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
     // É ferramenta de gestão -- Qualidade e PCP, nunca o operador (o papel
     // `production` tem `planejamento`, por isso o acesso é por `emitir_op`).

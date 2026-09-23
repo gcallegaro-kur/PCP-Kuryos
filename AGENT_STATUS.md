@@ -127,28 +127,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **Publicado — runtime das Functions Node.js 20 → 24 (2026-09-23).** Commit
-  `6163b2a`; deploy `--only functions` por worktree limpo, as 19 funções
-  "Successful update" e `functions:list` mostra 19× `nodejs24`. Sem subir
-  `firebase-functions` (5.1.1) nem `firebase-admin` (12.7). Validação: 79/79
-  testes `run_*.js` no Node 24 e emulador carregando as 19 funções em node@24.
-  Node 24 só é descontinuado em 04/2028. A CLI segue avisando que
-  `firebase-functions` está desatualizado (upgrade tem breaking changes —
-  ciclo próprio, sem prazo). Sonda HTTP sem login não foi feita (bloqueada
-  pela política de permissões da sessão).
-- **Publicado — GAP-05 (pedido → OP) (2026-09-23).** Commit `d169cd9`, Hosting + RTDB por worktree limpo; `ops.html`, `comercial.html`, `gestao_comercial.html` e `shared/impacto-pedido-ops.js` idênticos ao commit por HTTP. Arquivos ativos: nenhum. Módulo puro
-  `public/shared/impacto-pedido-ops.js`; `gestao_comercial.html` (prévia +
-  pendência no mesmo update da versão), `comercial.html` (Cancelar saldo lê
-  `ops` e grava a pendência junto), `ops.html` (painel no topo: cancelar pelo
-  `cancelOp` existente ou manter com motivo; fecha sozinha), regra nova
-  `pendencias_pcp` em `database.rules.json`. Testes novos
-  `run_impacto_pedido_ops_test.js` (28) e `_ui_test.js` (3 telas, 8 etapas);
-  regressão de Gestão Comercial, edição de pedido, Comercial, contatos,
-  resumo, ponta a ponta, transferência/retrabalho/fichas de OP e
-  transações null aprovada; `run_operacao_rules_test.js` OK no emulador.
-  **Aviso ao Codex:** `run_retrabalhos_rules_test.js` falha ("Missing
-  expected rejection") **também com as regras do commit anterior** — não é
-  desta mudança; é do módulo de retrabalhos/`estado_linhas`.
+- **GAP-02 devolução de cliente — pronto, publicando (2026-09-23).** Tela nova
+  `devolucoes.html` (Comercial autoriza, Logística recebe, todos acompanham),
+  `shared/devolucao-cliente.js` + cópia `functions/devolucao_cliente.js`, callable
+  `receberDevolucaoCliente`, origem `devolucao_cliente` em
+  `functions/expedicao_regras.js` = `shared/expedicao.js`, conciliação com
+  DEVOLVIDO (estorno) e retrabalho (informativo) em `shared/conciliacao-pedidos.js`
+  (`pedidos.html`, `gestao_comercial.html`, `shared/gestao-comercial.js` passam
+  `devolucoes_cliente`), menu/módulos em `auth_check.js`, regras
+  `devolucoes_cliente`/`contadores_devolucao`. Testes novos: unit (49),
+  servidor+regras no emulador (25), UI (4 etapas).
+  **Aviso ao Codex — `descarte.html`:** o cabeçalho é `<header class="header">`,
+  e `renderUnifiedNavbar` (`auth_check.js:569/823`) remove todo `<header>` como
+  legado — em produção o título e o selo "Conectado" da tela somem ao carregar o
+  menu. Troca por `<div class="header">` resolve (feito assim em `devolucoes.html`).
 - **Publicado — GAP-04 portão do bulk + GAP-18 (2026-09-23).** Commit `3d361e5`, Hosting por worktree limpo; `form.html`, `pedidos.html`, `shared/manipulacao.js` idênticos ao commit por HTTP. Arquivos ativos: nenhum.
   `shared/manipulacao.js` (`podeEnvasar` com fórmula + corte
   `PORTAO_BULK_DESDE` 24/09), `form.html` (5 portas do envase; rotulagem fora

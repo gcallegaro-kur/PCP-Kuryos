@@ -30,7 +30,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function(ExpedicaoPA) {
   'use strict';
 
-  var MOTIVOS_EXPEDIDO = {EXPEDIDO: 'Expedido', FURTO: 'Furto', DESCARTE: 'Descarte'};
+  /* DEVOLVIDO entra NEGATIVO (GAP-02, 23/09): a devolução recebida estorna o
+     expedido, e a unidade volta para o estoque como palete de devolução. Sem
+     o estorno ela contaria duas vezes -- na carga e no palete. Retrabalho NÃO
+     entra na conta (é o mesmo lote voltando para a linha): só é informado. */
+  var MOTIVOS_EXPEDIDO = {EXPEDIDO: 'Expedido', FURTO: 'Furto', DESCARTE: 'Descarte', DEVOLVIDO: 'Devolvido (estorno)'};
   var ORIGENS_ESTOQUE = {WMS: 'Paletes no WMS', RETRABALHO: 'Retrabalho (planilha)', DEVOLUCAO: 'Devolução (planilha)'};
   // tipoLegado da planilha -> [lado da conta, motivo/origem]. O que não está
   // aqui (SEM_STATUS) não é classificável e fica de fora da conta.
@@ -49,6 +53,10 @@
       estoque: {total: 0, origens: {}},
       divergenciaApontada: {total: 0, ocorrencias: []},
       esperado: 0, contabilizado: 0, diferenca: 0, situacao: 'SEM_PRODUCAO',
+      // Informação ao lado da conta (pedido do usuário em 23/09): quanto voltou
+      // do cliente e quanto foi para retrabalho. Não somam no contabilizado.
+      devolvido: {total: 0, ocorrencias: []},
+      retrabalho: {total: 0, ocorrencias: []},
       // A MESMA conta, quebrada por OP (pedido do usuário em 22/09: "ver o
       // que está expedido OP por OP, inclusive na conferência, mostrando o
       // que tem em estoque OP por OP"). Toda saída e todo palete de PA
@@ -126,6 +134,34 @@
       });
     });
 
+    // ── Devoluções recebidas: estorno do expedido ─────────────────────
+    Object.keys(base.devolucoes_cliente || {}).forEach(function(dk) {
+      var d = base.devolucoes_cliente[dk] || {};
+      if (d.status !== 'RECEBIDA') return;
+      (Array.isArray(d.itens) ? d.itens : Object.values(d.itens || {})).forEach(function(i) {
+        var qtd = n(i && i.qtdRecebida);
+        if (!(qtd > 0)) return;
+        var k = chaveDe(i);
+        if (!k) { semVinculo.expedido = arred(semVinculo.expedido - qtd); return; }
+        somar(porPedido[k].expedido, 'DEVOLVIDO', -qtd);
+        somar(baldeOp(porPedido[k], i.opKey, loteDe(i)).expedido, 'DEVOLVIDO', -qtd);
+        porPedido[k].devolvido.total = arred(porPedido[k].devolvido.total + qtd);
+        porPedido[k].devolvido.ocorrencias.push({devKey: dk, numero: d.numero || dk, qtd: qtd, opLote: loteDe(i)});
+      });
+    });
+
+    // ── Retrabalho: só informação ─────────────────────────────────────
+    Object.keys(ops).forEach(function(rk) {
+      var rt = ops[rk] || {};
+      if (rt.tipoOrdem !== 'RETRABALHO' || rt.status === 'Cancelado') return;
+      var origem = ops[rt.retrabalhoDeOpKey] || {};
+      var k = chaveDe({opKey: rt.retrabalhoDeOpKey, skuPedidoKey: origem.skuPedidoKey});
+      if (!k) return;
+      var qtd = n(rt.qtdPlanejada);
+      porPedido[k].retrabalho.total = arred(porPedido[k].retrabalho.total + qtd);
+      porPedido[k].retrabalho.ocorrencias.push({opKey: rk, lote: rt.lote || rk, qtd: qtd, status: rt.status || ''});
+    });
+
     // ── Paletes de PA com saldo no WMS ─────────────────────────────────
     Object.keys(lotes).forEach(function(itemKey) {
       Object.keys(lotes[itemKey] || {}).forEach(function(loteKey) {
@@ -201,6 +237,11 @@
       Object.keys(r.estoque.origens).forEach(function(o) { somar(total.estoque, o, r.estoque.origens[o]); });
       total.divergenciaApontada.total = arred(total.divergenciaApontada.total + r.divergenciaApontada.total);
       total.divergenciaApontada.ocorrencias = total.divergenciaApontada.ocorrencias.concat(r.divergenciaApontada.ocorrencias);
+      ['devolvido', 'retrabalho'].forEach(function(c) {
+        if (!r[c]) return;
+        total[c].total = arred(total[c].total + r[c].total);
+        total[c].ocorrencias = total[c].ocorrencias.concat(r[c].ocorrencias);
+      });
       // Cada OP é de um SKU só, mas somar é o certo caso a mesma OP apareça
       // em dois itens do pedido.
       Object.keys(r.porOp || {}).forEach(function(o) {
@@ -258,6 +299,9 @@
       if (r.estoque.origens[o]) linhas.push('  ' + ORIGENS_ESTOQUE[o] + ': ' + fmt(r.estoque.origens[o]));
     });
     linhas.push('Expedido + Em estoque: ' + fmt(r.contabilizado));
+    if (r.devolvido && r.devolvido.total) linhas.push('Devolvido pelo cliente (já estornado do expedido): ' + fmt(r.devolvido.total));
+    if (r.retrabalho && r.retrabalho.total) linhas.push('Em retrabalho (informativo, não soma): ' + fmt(r.retrabalho.total) +
+      ' · ' + r.retrabalho.ocorrencias.map(function(o) { return o.lote; }).join(', '));
     if (r.situacao === 'DIVERGENTE') linhas.push(r.diferenca > 0
       ? 'Saídas + estoque passam do produzido em ' + fmt(r.diferenca)
       : 'Faltam ' + fmt(-r.diferenca) + ' un. sem destino registrado');

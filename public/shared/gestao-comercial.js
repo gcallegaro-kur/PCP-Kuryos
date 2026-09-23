@@ -146,7 +146,7 @@
     var conc = ConciliacaoPedidos.calcular({
       pedidos: linhas, ops: ops, estoque_lotes: raw.estoque_lotes || {},
       expedicoes_comerciais: raw.expedicoes_comerciais || {}, conferencias_pa: raw.conferencias_pa || {},
-      solicitacoes_descarte: raw.solicitacoes_descarte || {}
+      solicitacoes_descarte: raw.solicitacoes_descarte || {}, devolucoes_cliente: raw.devolucoes_cliente || {}
     });
 
     // Chave normalizada -> chave real (única), igual à Expedição.

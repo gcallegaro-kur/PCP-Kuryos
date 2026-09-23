@@ -762,6 +762,10 @@
     box.hidden = false;
   }
 
+  // Os botões dependem do papel, e o perfil chega depois dos dados: sem isto o
+  // PCP podia ver o painel sem "Cancelar OP"/"Manter" até alguma OP mudar.
+  window.addEventListener('kuryos-auth-pronto', function() { renderPendenciasPcp(); });
+
   function manterOpPendencia(pendKey, opItemKey) {
     if (!podeDecidirPendencia()) return;
     const motivo = prompt('Por que manter esta OP mesmo com o pedido cancelado/reduzido? (ex.: vira estoque, vai para outro pedido)');

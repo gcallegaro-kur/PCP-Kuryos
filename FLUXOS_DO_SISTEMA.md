@@ -70,6 +70,7 @@ atualiza o passo aqui no mesmo commit.**
 | COM.6 | Comercial › Documentos e histórico | **Anexar** (pedido do cliente, aceite, briefing, arte), linha do tempo | Anexos e eventos do pedido | ✅ |
 | COM.7 | Gestão Comercial › Carteira / Prazos / Visão geral | Acompanha pedido × produzido × expedido × a entregar | Leitura: vem do PRO.6 e do FAT.5 | ✅ |
 | COM.8 | Gestão Comercial › Tabela de preços | Preço por SKU com vigência | Preenche o item sem preço no COM.4 | ✅ |
+| COM.9 | Devoluções de Cliente › Autorizar devolução | Pedido, **saída (carga/NF) de onde volta**, quantidade por item (limitada ao que saiu e ainda não voltou), tipo de motivo, motivo, NF de devolução | `devolucoes_cliente/DEV-AAAA-NNN` AUTORIZADA → aparece para a Logística receber (LOG.9) | ✅ |
 
 **Exceções:** orçamento perdido ([EX-01](#ex-01)), ajuste de pedido ([EX-02](#ex-02)), cancelamento ([EX-03](#ex-03)).
 
@@ -103,6 +104,7 @@ atualiza o passo aqui no mesmo commit.**
 | LOG.6 | Estoque › 📋 Inventário Rotativo · Saldo Agregado › ⚖️ Ajustar | Contagem cega; ajuste com motivo | Saldo corrigido, movimento auditável | ✅ |
 | LOG.7 | Estoque › 📦 Conferência de PA | OP do PRO.6 aparece como **Aguardando PCP** (cobrança); depois do PCP.5: **+ Adicionar palete** (caixas fechadas, un/caixa, parcial, endereço) › **Confirmar contagem** | Palete de PA em **QUARENTENA** → **QUA.7** | ✅ |
 | LOG.8 | Descarte › Segregar e solicitar › Confirmar saída | Vencido, reprovado ou retido | Baixa só na coleta/destinação; entra na conciliação do pedido | ✅ |
+| LOG.9 | Devoluções de Cliente › Receber mercadoria | Devolução autorizada (COM.9): quanto chegou por item e endereço (sugere a Doca); NF de devolução, observação | Servidor (`receberDevolucaoCliente`): palete de devolução em **QUARENTENA** → **QUA.1**; **expedido do pedido estornado**; a carga original registra a devolução | ✅ |
 
 ---
 
@@ -252,10 +254,10 @@ Em sequência, com o que passa de mão em mão:
 | EX-17 | **Divergência na Conferência de PA** | LOG.7: 3 contagens, consenso de 2 das 3 últimas → causa e explicação → RNC automática → palete entra com o físico | ✅ |
 | EX-18 | **PA reprovado / retido** | QUA.7 Reprovar/Reter → RNC → decisão fora do sistema: retrabalho (EX-19), descarte (LOG.8) ou concessão | 🟡 [GAP-10](#gap-10) |
 | EX-19 | **Retrabalho** | Controle de OPs (filtrar Concluído) › ♻️ Abrir OP de retrabalho → OP `{lote}-RT{n}` sem crédito ao pedido e sem baixa de BOM → PRO.2/ROT.1/PRO.7 em linha, rotulagem ou posto → novo laudo QUA.7. **Não nasce da RNC**; material consumido no retrabalho (rótulo, tampa) não tem lançamento próprio; o caso TAWUS ainda não foi migrado (`scripts/migrar-retrabalho-para-op.js`) | 🟡 [GAP-10](#gap-10) |
-| EX-20 | **Devolução do cliente** | **Não existe tela.** A conciliação já considera devolução como "volta ao estoque", mas nada registra a entrada, a inspeção nem o estorno no pedido | ⬜ [GAP-02](#gap-02) |
+| EX-20 | **Devolução do cliente** | COM.9 autoriza → LOG.9 recebe em quarentena e estorna o expedido → QUA.1/QUA.7 laudo do palete decide o destino: **Liberar** = reintegrado (e pode ser reenviado pela Expedição, FAT.1), **Reter** = retrabalho (EX-19), **Reprovar** = descarte (LOG.8). Andamento de cada item na própria tela de Devoluções. A conciliação mostra o devolvido (estorno) e o retrabalho (informativo) | ✅ |
 | EX-21 | **NF cancelada / carga não saiu depois de confirmada** | **Não há estorno** da saída física (FAT.5). Antes de confirmar: cancelar a agenda com motivo (não mexe no estoque) e montar outra | ⬜ [GAP-03](#gap-03) |
 | EX-22 | **Carga parcial / reagendamento** | FAT.2 com parte dos paletes; o saldo segue reservado para a próxima viagem; cancelar a agenda com motivo e remontar | ✅ |
-| EX-23 | **Reclamação de cliente** | QUA.8 + Nova RNC manual. Não há origem "cliente" ligada a pedido/NF/lote nem retorno ao Comercial | 🟡 [GAP-02](#gap-02) |
+| EX-23 | **Reclamação de cliente** | QUA.8 + Nova RNC manual. A devolução física já tem fluxo (EX-20), mas a RNC não nasce dela nem tem origem "cliente" ligada a pedido/NF/lote | 🟡 [GAP-02](#gap-02) |
 | EX-24 | **Lote vencido / vencendo** | Estoque › Lotes Vencendo → LOG.8 Descarte | ✅ |
 | EX-25 | **Mudança de fórmula/BOM com OPs abertas** | CAD.5 + Nova Versão → a OP emitida mantém a versão que usou; as próximas usam a nova | ✅ |
 | EX-26 | **Faturamento por acúmulo** (ex.: coleta a cada 3.000 kg) | Não existe gatilho; feito de cabeça sobre a grade da Expedição | ⬜ [GAP-14](#gap-14) |
@@ -279,7 +281,7 @@ registrado no backlog em 23/09, na seção *Gaps levantados na modelagem de flux
 | Nº | Gap | Passos afetados | Custa hoje | Tipo | Backlog | Prioridade |
 |---|---|---|---|---|---|---|
 | GAP-01 | Saldo de estoque sem base (só 37 de 906 materiais têm saldo; 11 negativos). Inclui: empenho sem dono, remessa a caminho sem data no MRP, material de cliente parado sem alerta | PCP.2, PCP.3, MAN.2, LOG.5 | MRP, empenho e FEFO calculam sobre números falsos | Operação ("Dia D") | Integração entre setores · Propriedade do estoque · Operação Fase 2 (FEFO) | 🔴 |
-| GAP-02 | Não existe **devolução/reclamação de cliente** (entrada, inspeção, estorno no pedido, RNC de origem cliente) | EX-20, EX-23, COM.7 | Produzido ≠ expedido + estoque sem explicação; pós-venda fora do sistema | Código | novo | 🔴 |
+| GAP-02 | ~~Devolução de cliente~~ **fluxo físico feito em 23/09** (COM.9 → LOG.9 → laudo → destino). Continua aberto: RNC de origem "cliente" ligada à devolução/pedido/NF, e palete Retido que volta do retrabalho não tem caminho de volta à quarentena (vale para todo retrabalho, GAP-10) | EX-23, QUA.8 | Reclamação fora do sistema | Código | Gaps levantados na modelagem › GAP-02 | 🟡 |
 | GAP-03 | Não há **estorno da saída física** (NF cancelada, carga que voltou) | FAT.5, EX-21 | Correção só manual no banco | Código | novo (a API de NF prevê "cancelamento fiscal", não o físico) | 🟠 |
 | GAP-04 | **Bulk sem destino**: o portão foi fechado em 23/09 (toda OP com fórmula emitida desde 24/09 só envasa com bulk liberado), mas o bulk reprovado continua sem destino (reprocesso, ajuste ou descarte), o ajuste pós-fechamento não tem fluxo e o bulk não tem endereço/saldo | QUA.6, EX-16, EX-32 | OP com bulk reprovado fica travada sem caminho | Código | Qualidade › revisão da spec (ajuste de granel, WMS de semi-acabado) | 🟠 |
 | GAP-05 | ~~Mudança no pedido não chega à OP~~ **Resolvido em 23/09 para as OPs** (PCP.7). Continua aberto: cancelar o pedido não avisa Compras dos PCs/remessas ligados, e o PA já produzido do pedido cancelado fica sem destino | EX-03, CMP.7 | Compra ou remessa segue para pedido que não existe mais | Código | Gaps levantados na modelagem › GAP-05 | 🟡 |

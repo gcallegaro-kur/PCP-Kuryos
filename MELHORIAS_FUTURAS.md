@@ -40,12 +40,18 @@ passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em
   no estoque sem destino — precisa de decisão (reatribuir a outro pedido pela
   transferência de OP, ou virar estoque livre). Também não há e-mail ao PCP: o
   aviso é o painel.
-- **GAP-02 — Devolução e reclamação de cliente.** 🔴 Não há tela. A conciliação
-  (`shared/conciliacao-pedidos.js`) já define que devolução volta a ser estoque, mas
-  nada registra a entrada da mercadoria, a inspeção (fila do CQ), o estorno do expedido
-  no pedido nem uma RNC com origem "cliente" ligada a pedido/NF/lote. Desenho natural:
-  entrada pela Logística em QUARENTENA com vínculo à saída original
-  (`expedicoes_comerciais`), decisão da Qualidade (reintegrar, retrabalhar, descartar).
+- ~~**GAP-02 — Devolução e reclamação de cliente.**~~ **Fluxo físico FEITO em
+  2026-09-23** (`devolucoes.html`). Decisões do usuário: o Comercial autoriza,
+  vinculada à carga original; a Logística recebe em QUARENTENA; destinos reintegrar,
+  retrabalho, descarte e reenvio, decididos pelo laudo da Qualidade no palete; o
+  expedido do pedido é estornado; a conciliação mostra devolvido e retrabalho como
+  informação. Regra pura `shared/devolucao-cliente.js` (cópia em `functions/`),
+  callable `receberDevolucaoCliente`, origem `devolucao_cliente` aceita pela
+  Expedição, regras `devolucoes_cliente` e `contadores_devolucao`. **Continua
+  aberto:** (a) RNC com origem "cliente" ligada à devolução, ao pedido e à NF — hoje a
+  reclamação é RNC manual solta; (b) palete RETIDO que passou por retrabalho não volta
+  para QUARENTENA (`registrarLaudoQualidade` só decide lote em quarentena) — é o mesmo
+  buraco de todo retrabalho (GAP-10); (c) manual do fluxo em `manuais.html`.
 - **GAP-03 — Estorno da saída física.** 🟠 `confirmarExpedicaoPA` baixa paletes e
   soma expedido de forma atômica e idempotente, mas não existe o caminho inverso (carga
   que voltou, NF cancelada). O item "API de emissão de NF" abaixo prevê cancelamento

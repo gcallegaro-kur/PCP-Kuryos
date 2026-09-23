@@ -33,6 +33,7 @@ texto na tela diz isso, para ninguém cadastrar a mesma coisa em dois lugares.
 | Estoque, endereçamento, inventário, descarte | `estoque.html`, `separacao_materiais.html`, `descarte.html` | `insumos.html`, `qualidade.html` |
 | Qualidade: fila de inspeção, laudos, RNC, fornecedores | `qualidade.html` | `dossie_lote.html` |
 | Expedição de PA, faturamento e carga parcial | `expedicao.html` | `logistica.html`, `relatorio_expedicao.html` |
+| Devolução de cliente (autorizar, receber, acompanhar o destino) | `devolucoes.html` (Comercial autoriza; Logística recebe pelo servidor) | `qualidade.html` (o palete devolvido entra na Fila de Inspeção), `pedidos.html` e `gestao_comercial.html` (conciliação) |
 | Auditoria de um lote ponta a ponta | `dossie_lote.html` (só leitura) | — |
 | Usuários, papéis e módulos | `usuarios.html`, `admin.html` | — |
 | RH | `rh_cadastros.html`, `rh_avaliacao.html`, `rh_ferias.html`, `rh_dashboard.html` | — |
@@ -60,6 +61,8 @@ navegação, mas ainda grava `alocacoes_planejamento`, que o motor de reajuste l
 | `specs_mp_propostas` | importador dos laudos antigos (`scripts/importar-specs-mp.js`) | é **sugestão**; só vira especificação quando a Qualidade salva |
 | `expedicoes_comerciais`, `agendamentos_expedicao` | Expedição e Logística | carga parcial mantém o saldo reservado para a próxima viagem |
 | `nao_conformidades` | Qualidade | RNC de PA nasce da conferência com divergência |
+| `devolucoes_cliente` | Comercial cria AUTORIZADA ou cancela; **só o servidor** (`receberDevolucaoCliente`) marca RECEBIDA | o recebimento cria o palete `origemTipo: devolucao_cliente` e estorna `pedidos/*/expedido` no mesmo update |
+| `pendencias_pcp` | Comercial e Gestão Comercial criam; Controle de OPs decide | pedido cancelado/reduzido com OP aberta (GAP-05) |
 
 ## Quem pode ver o quê
 

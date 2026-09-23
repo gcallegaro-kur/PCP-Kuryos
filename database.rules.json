@@ -173,6 +173,19 @@
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('pedidos').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true))"
     },
+    "devolucoes_cliente": {
+      ".read": "auth != null",
+      "$dev": {
+        ".write": "auth != null && ((root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true) && (!data.exists() ? newData.child('status').val() == 'AUTORIZADA' : (data.child('status').val() == 'AUTORIZADA' && newData.child('status').val() == 'CANCELADA'))"
+      }
+    },
+    "contadores_devolucao": {
+      ".read": "auth != null",
+      "$ano": {
+        ".write": "auth != null && ((root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true)",
+        ".validate": "newData.isNumber() && (!data.exists() || newData.val() == data.val() + 1)"
+      }
+    },
     "pendencias_pcp": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('pedidos').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true))"
