@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — vírgula decimal na Qualidade (2026-09-23).** Hosting;
+  `qualidade.html` e `shared/campo-decimal.js` idênticos ao commit. Num
+  `type="number"` o Chrome descartava a vírgula ("197,5" → 1975, sem aviso).
+  O script converte os `step="any"` da página em texto com teclado decimal e
+  normaliza (vírgula → ponto). Outras telas com `step="any"` ainda têm o
+  mesmo risco — incluir o script nelas é uma linha cada.
 - **Publicado — média de peso do CK-7 pelo INMETRO (2026-09-23).** Commit
   `5bd3027`, Hosting; `qualidade.html` e `shared/inspecao-pa.js` idênticos ao
   commit. A média exigia ≥ nominal sem tolerância (tela só mostrava o −3%
