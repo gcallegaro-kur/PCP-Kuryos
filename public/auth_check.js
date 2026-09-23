@@ -77,8 +77,23 @@ window.cycleKuryosTheme = function() {
 const KURYOS_MODULOS = {
   analytics:    { rotulo: 'Dashboards',            desc: 'Dashboard Diário e Dashboard Geral',
                   paginas: ['dashboard.html', 'dashboard_analise.html'] },
-  apontamento:  { rotulo: 'Apontamento Diário',    desc: 'Registro de produção no chão de fábrica',
-                  paginas: ['form.html', 'manipulacao.html'] },
+  // OPERAÇÃO (23/09): o chão de fábrica em três setores, um checkbox cada --
+  // pedido do usuário: "Produção (apontamento, histórico, estoque WMS da
+  // fábrica); Manipulação (pesagem, manipulação e estoque da manipulação);
+  // Rotulagem (apontamentos e estoque da sala de rótulos)". A chave
+  // `apontamento` continua sendo a da Produção de propósito: as regras do
+  // banco e os `modulos` já gravados usam esse nome.
+  apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html'] },
+  manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
+                  paginas: ['manipulacao.html', 'estoque_setor.html'] },
+  rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html'] },
+  // Quem pode conferir a pesagem enquanto a chave "Conferência de Pesagem"
+  // (Ajustes) estiver ligada -- Qualidade e P&D. Dá acesso só à tela da
+  // Manipulação; conferir é a única ação que a tela oferece a quem só tem isto.
+  conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
+                  paginas: ['manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
                   paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
@@ -111,12 +126,12 @@ const KURYOS_MODULOS = {
 // usuário. 'admin' é '*': vê tudo sempre, e nunca pode ser trancado pra fora.
 const MODULOS_POR_PAPEL = {
   admin: '*',
-  pcp: ['analytics', 'apontamento', 'planejamento', 'emitir_op', 'comercial', 'pedidos', 'cadastros',
+  pcp: ['analytics', 'apontamento', 'manipulacao', 'rotulagem', 'planejamento', 'emitir_op', 'comercial', 'pedidos', 'cadastros',
         'compras', 'logistica', 'qualidade', 'config', 'usuarios'],
-  production: ['analytics', 'apontamento', 'planejamento'],
-  rotulagem: ['apontamento'],
+  production: ['analytics', 'apontamento', 'manipulacao', 'rotulagem', 'planejamento'],
+  rotulagem: ['rotulagem'],
   logistica: ['logistica'],
-  qualidade: ['qualidade'],
+  qualidade: ['qualidade', 'conferencia_pesagem'],
   rh: ['rh', 'rh_dashboard'],
   gestor: ['rh'],
   pending: []
@@ -146,6 +161,14 @@ function modulosDoUsuario(user) {
     const ativos = Object.keys(marcados).filter(function(m) {
       return marcados[m] === true && KURYOS_MODULOS[m];
     });
+    // Marcação feita antes da Operação existir (23/09): `apontamento` valia
+    // pelo apontamento inteiro E pela Manipulação. Chave ausente (nunca
+    // salva) herda de `apontamento`; `false` gravado é escolha do ADM.
+    if (marcados.apontamento === true) {
+      ['manipulacao', 'rotulagem'].forEach(function(m) {
+        if (!(m in marcados) && ativos.indexOf(m) < 0) ativos.push(m);
+      });
+    }
     // Objeto existente porém vazio é uma escolha do ADM ("este usuário não
     // acessa nada"), não um dado faltando -- respeitamos.
     return ativos;
@@ -157,6 +180,30 @@ function modulosDoUsuario(user) {
 function usuarioTemModulo(user, modulo) {
   return modulosDoUsuario(user).indexOf(modulo) !== -1;
 }
+// Setores da Operação que a pessoa enxerga. Gestão (planejamento) vê os
+// três -- é quem acompanha a fábrica inteira; o operador vê só o seu.
+function setoresOperacao(user) {
+  const tem = function(m) { return usuarioTemModulo(user, m); };
+  const gestao = !!user && (user.role === 'admin' || user.role === 'pcp' || tem('planejamento'));
+  return {
+    producao: tem('apontamento'), manipulacao: tem('manipulacao'), rotulagem: tem('rotulagem'),
+    gestao: gestao
+  };
+}
+// Conferir a pesagem com a chave ligada: Qualidade ou P&D. O admin NÃO entra
+// aqui só por ver tudo -- ele tem a liberação com motivo, que fica registrada
+// como tal; conferir é de quem foi marcado para isso.
+function podeConferirPesagem(user) {
+  if (!user) return false;
+  if (user.role === 'qualidade' && !(user.modulos && typeof user.modulos === 'object')) return true;
+  return !!(user.modulos && user.modulos.conferencia_pesagem === true);
+}
+// Editar/excluir apontamento: só o PCP (pedido do usuário, 23/09). O setor
+// consulta os próprios apontamentos, sem editar.
+function podeEditarApontamentos(user) {
+  if (!user) return false;
+  return user.role === 'admin' || user.role === 'pcp' || usuarioTemModulo(user, 'emitir_op');
+}
 // A pessoa pode abrir esta página?
 function podeAbrirPagina(user, pagina) {
   const exigidos = PAGINA_MODULOS[pagina];
@@ -167,7 +214,7 @@ function podeAbrirPagina(user, pagina) {
 // Primeira página que a pessoa consegue abrir -- usada como "home" e como
 // destino de um Acesso Negado. Sem isto, mandar alguém pra dashboard.html
 // (que ele também não acessa) trocaria um Acesso Negado por outro, em loop.
-const ORDEM_HOME = ['dashboard.html', 'form.html', 'qualidade.html', 'planejamento.html',
+const ORDEM_HOME = ['dashboard.html', 'form.html', 'qualidade.html', 'manipulacao.html', 'planejamento.html',
                     'logistica.html', 'comercial.html', 'compras.html', 'cadastros.html', 'pedidos.html',
                     'rh_dashboard.html', 'rh_avaliacao.html'];
 function homeDoUsuario(user) {
@@ -182,6 +229,9 @@ window.MODULOS_POR_PAPEL = MODULOS_POR_PAPEL;
 window.modulosDoUsuario = modulosDoUsuario;
 window.usuarioTemModulo = usuarioTemModulo;
 window.podeAbrirPagina = podeAbrirPagina;
+window.setoresOperacao = setoresOperacao;
+window.podeConferirPesagem = podeConferirPesagem;
+window.podeEditarApontamentos = podeEditarApontamentos;
 
 // Extrai o nome da página atual
 function getActivePageName() {
@@ -267,6 +317,7 @@ window.currentUser = null;
     :root[data-theme="dark"] .kt-brand-logo { filter: brightness(0) invert(1); }
     .kt-nav-group { display: flex; flex-direction: column; gap: 2px; }
     .kt-nav-cap { font-size: 11px; font-weight: 600; color: var(--ink-mute, #86868b); text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px 4px; }
+    .kt-nav-sub { font-size: 11.5px; font-weight: 700; color: var(--ink-soft, #515154); padding: 6px 12px 2px; }
     .kt-nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 9px; color: var(--ink-soft, #6e6e73); font-size: 13.5px; font-weight: 500; cursor: pointer; text-decoration: none; }
     .kt-nav-link svg { width: 18px; height: 18px; flex: none; }
     .kt-nav-link.active { background: var(--accent, #2456d6); color: #fff; font-weight: 600; }
@@ -495,7 +546,15 @@ function ktLink(href, icon, label, activePage) {
   // sem isso, NENHUM dos dois nunca ficava marcado como ativo, porque
   // activePage (só o nome do arquivo) nunca batia com href+query.
   var hrefPage = href.split('?')[0];
-  var cls = 'kt-nav-link' + (activePage === hrefPage ? ' active' : '');
+  var ativo = activePage === hrefPage;
+  // Operação (23/09): os três "Estoque do setor" são a mesma página com
+  // ?setor=; sem isto os três ficavam marcados ao mesmo tempo.
+  var setorLink = (href.match(/[?&]setor=([^&]+)/) || [])[1];
+  if (ativo && setorLink) {
+    var setorAqui = (window.location.search.match(/[?&]setor=([^&]+)/) || [])[1];
+    ativo = !setorAqui || setorAqui === setorLink;
+  }
+  var cls = 'kt-nav-link' + (ativo ? ' active' : '');
   return '<a class="' + cls + '" href="' + href + '">' + ktIcon(icon) + '<span>' + label + '</span></a>';
 }
 
@@ -634,10 +693,35 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && !temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
-  const producaoGroup = grupo('Produção', [
-    temMod('apontamento') && ktLink('form.html', 'pencil', 'Apontamento Diário', activePage),
-    temMod('apontamento') && ktLink('manipulacao.html', 'flask', 'Manipulação (granel)', activePage),
-    temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
+  // "Operação" (23/09): Produção, Manipulação e Rotulagem, cada setor com a
+  // sua tela de trabalho, o seu histórico e o estoque da sua área. O
+  // Apontamento e o Histórico são as mesmas páginas para os dois setores:
+  // cada página mostra só os setores da pessoa (setoresOperacao), então
+  // quem tem Produção e Rotulagem vê tudo num link só, como sempre foi.
+  const setores = setoresOperacao(user);
+  const sub = function(titulo, links) {
+    const corpo = links.filter(Boolean).join('');
+    return corpo ? '<div class="kt-nav-sub">' + titulo + '</div>' + corpo : '';
+  };
+  const apontaEm = setores.producao ? 'Produção' : 'Rotulagem';
+  const producaoGroup = grupo('Operação', [
+    sub('Produção', [
+      setores.producao && ktLink('form.html', 'pencil', 'Apontamento', activePage),
+      setores.producao && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
+      setores.producao && ktLink('estoque_setor.html?setor=producao', 'warehouse', 'Estoque da Fábrica', activePage)
+    ]),
+    sub('Manipulação', [
+      (setores.manipulacao || temMod('conferencia_pesagem')) && ktLink('manipulacao.html', 'flask', setores.manipulacao ? 'Pesagem e Manipulação' : 'Conferência de Pesagem', activePage),
+      setores.manipulacao && ktLink('estoque_setor.html?setor=manipulacao', 'warehouse', 'Estoque da Manipulação', activePage)
+    ]),
+    sub('Rotulagem', [
+      // Com Produção junto, o apontamento/histórico já estão no link acima.
+      setores.rotulagem && apontaEm === 'Rotulagem' && ktLink('form.html', 'pencil', 'Apontamento', activePage),
+      setores.rotulagem && apontaEm === 'Rotulagem' && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
+      setores.rotulagem && ktLink('estoque_setor.html?setor=rotulagem', 'warehouse', 'Estoque dos Rótulos', activePage)
+    ]),
+    // Gestão sem nenhum setor marcado continua achando o histórico aqui.
+    !setores.producao && !setores.rotulagem && temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
   ]);
 
   const usersGroup = grupo('ADM', [
@@ -668,7 +752,7 @@ function renderUnifiedNavbar(user) {
   // lista com os 9 seria ruído pra todo mundo.
   const manuaisGroup = grupo('Ajuda', [
     ktLink('manuais.html', 'book', 'Manuais de Operação', activePage),
-    temMod('apontamento') && ktLink('manual_apontamento.html', 'book', 'Apontamento', activePage),
+    (temMod('apontamento') || temMod('rotulagem') || temMod('manipulacao')) && ktLink('manual_apontamento.html', 'book', 'Apontamento', activePage),
     temMod('planejamento') && ktLink('manual_pcp.html', 'book', 'Planejamento e OPs', activePage),
     (temMod('pedidos') || temMod('comercial')) && ktLink('manual_comercial.html', 'book', 'Pedidos e MRP', activePage),
     temMod('compras') && ktLink('manual_compras.html', 'book', 'Compras', activePage),

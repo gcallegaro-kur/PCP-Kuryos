@@ -327,6 +327,23 @@
     <div class="section-note" id="autoAjusteStatus" style="margin-top:6px"></div>
   </div>
 
+  <!-- CONFERÊNCIA DE PESAGEM (23/09) -->
+  <div class="card">
+    <div class="card-title">Conferência de Pesagem</div>
+    <div class="section-note">
+      Ligada, a pesagem da Manipulação só é conferida por quem tem a permissão
+      <b>Conferência de Pesagem</b> em Usuários (Qualidade e P&amp;D), com o próprio login. Quem fica
+      marcado recebe um e-mail sempre que uma pesagem é fechada. Na falta dessas pessoas, um
+      administrador pode liberar a manipulação informando o motivo, e o motivo fica registrado no lote.
+      Desligada, volta a dupla checagem entre operadores: qualquer pessoa confere, menos quem pesou.
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:6px">
+      <input type="checkbox" id="iConferenciaPesagem">
+      <span id="lblConferenciaPesagem">Conferência de Pesagem desligada</span>
+    </label>
+    <div class="section-note" id="conferenciaPesagemStatus" style="margin-top:6px"></div>
+  </div>
+
   <!-- ZONA FIXA (CONGELAMENTO AUTOMÁTICO ROLANTE) -->
   <div class="card">
     <div class="card-title">Zona Fixa do Planejamento</div>
@@ -709,6 +726,31 @@ function renderAutoAjuste() {
       '. A grade só muda por edição manual.';
   st.style.color = ativo ? '' : 'var(--warning)';
 }
+
+/* Conferência de Pesagem: nó próprio (config/conferenciaPesagem), gravado
+   direto -- não passa por saveConfig, que regrava as chaves de configData. */
+var confPesagemCfg = {};
+function renderConferenciaPesagem() {
+  var ativa = confPesagemCfg.ativa === true;
+  document.getElementById('iConferenciaPesagem').checked = ativa;
+  document.getElementById('lblConferenciaPesagem').textContent = ativa ? 'Conferência de Pesagem LIGADA' : 'Conferência de Pesagem desligada';
+  var st = document.getElementById('conferenciaPesagemStatus');
+  st.textContent = (ativa ? 'Ligada' : 'Desligada') + (confPesagemCfg.alteradoPor ? ' por ' + confPesagemCfg.alteradoPor : '') +
+    (confPesagemCfg.alteradoEm ? ' em ' + new Date(confPesagemCfg.alteradoEm).toLocaleString('pt-BR') : '') + '.';
+}
+document.getElementById('iConferenciaPesagem').addEventListener('change', function() {
+  var ativa = this.checked;
+  var quem = (window.currentUser && window.currentUser.nome) || 'ADM';
+  db.ref('config/conferenciaPesagem').set({ativa: ativa, alteradoPor: quem, alteradoEm: new Date().toISOString()})
+    .then(function() {
+      showAlert(ativa ? 'Conferência de Pesagem ligada: só Qualidade/P&D conferem a pesagem.'
+        : 'Conferência de Pesagem desligada: a conferência volta a ser entre operadores.', 'success');
+    })
+    .catch(function(err) {
+      renderConferenciaPesagem();
+      showAlert('Não foi possível salvar — a chave continua como estava. ' + err.message, 'danger');
+    });
+});
 
 document.getElementById('iAutoAjusteAtivo').addEventListener('change', function() {
   var ativo = this.checked;
@@ -1241,6 +1283,8 @@ try {
 
   dbOnValue(db.ref('config'), function(snap) {
     var val = snap.val() || {};
+    confPesagemCfg = val.conferenciaPesagem || {};
+    renderConferenciaPesagem();
     configData.meta = val.meta || {};
     configData.metasPorLinha = val.metasPorLinha || {};
     configData.metasMatriz = val.metasMatriz || {};

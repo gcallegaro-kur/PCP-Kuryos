@@ -1,4 +1,4 @@
-/* Fase de granel do lote (Ordem de Manipulação).
+/* Fase de granel (bulk, na tela desde 23/09) do lote (Ordem de Manipulação).
 
    Decisões do usuário (2026-09-17):
    - "o número de lote da OP é o número de lote da ordem de fabricação, são o
@@ -29,9 +29,11 @@
     PESADO: {rotulo: 'Pesado — aguardando conferência', ordem: 2},
     CONFERIDO: {rotulo: 'Conferido — liberado para manipular', ordem: 3},
     EM_MANIPULACAO: {rotulo: 'Em manipulação', ordem: 4},
-    AGUARDANDO_CQ: {rotulo: 'Granel aguardando análise', ordem: 5},
-    LIBERADO: {rotulo: 'Granel liberado', ordem: 6},
-    REPROVADO: {rotulo: 'Granel reprovado', ordem: 7}
+    // "Vamos chamar de bulk ao invés de granel" (usuário, 23/09). Só o texto
+    // da tela muda; os nomes dos estados e dos nós no banco ficam.
+    AGUARDANDO_CQ: {rotulo: 'Bulk aguardando análise', ordem: 5},
+    LIBERADO: {rotulo: 'Bulk liberado', ordem: 6},
+    REPROVADO: {rotulo: 'Bulk reprovado', ordem: 7}
   };
   // Diferença aceita entre previsto e pesado antes de exigir justificativa.
   var TOLERANCIA_PESAGEM_PCT = 2;
@@ -144,12 +146,12 @@
     var exigir = !!(opcoes && opcoes.exigirSempre);
     if (!st) {
       return exigir
-        ? {ok: false, motivo: 'Esta OP não tem a fase de granel registrada e a exigência está ligada.', estado: null}
+        ? {ok: false, motivo: 'Esta OP não tem a fase de bulk registrada e a exigência está ligada.', estado: null}
         : {ok: true, motivo: null, estado: null};
     }
     if (st === 'LIBERADO') return {ok: true, motivo: null, estado: st};
-    if (st === 'REPROVADO') return {ok: false, motivo: 'Granel reprovado pela Qualidade.', estado: st};
-    return {ok: false, motivo: 'Granel ainda não liberado pela Qualidade (' + rotulo(st).toLowerCase() + ').', estado: st};
+    if (st === 'REPROVADO') return {ok: false, motivo: 'Bulk reprovado pela Qualidade.', estado: st};
+    return {ok: false, motivo: 'Bulk ainda não liberado pela Qualidade (' + rotulo(st).toLowerCase() + ').', estado: st};
   }
 
   // Linhas da pesagem: previsto (fórmula) x pesado, com desvio e sobra/perda.
@@ -273,13 +275,28 @@
       .map(function(l) { return {itemKey: l.itemKey, mpCodigo: l.mpCodigo}; });
   }
 
+  /* CONFERÊNCIA DE PESAGEM (usuário, 23/09): enquanto a operação não tem
+     "plena confiança nos processos e maturidade", a pesagem é conferida pela
+     Qualidade ou pelo P&D, com o próprio login, antes de manipular -- não
+     pelo manipulador. Chave em Ajustes (config/conferenciaPesagem/ativa);
+     desligada, volta a dupla checagem entre operadores. Sem ninguém da
+     Qualidade/P&D, o admin libera com motivo, e o motivo fica no lote. */
+  function regraConferencia(config) {
+    return {exigeAutorizado: !!(config && config.ativa === true)};
+  }
+
   /* Conferência: OUTRA pessoa. É a regra que o usuário pediu, e é o que
-     transforma a pesagem em dupla checagem de verdade. */
-  function validarConferencia(previstos, fase_, conferente) {
-    var f = fase_ || {}, erros = [];
+     transforma a pesagem em dupla checagem de verdade. `opcoes`:
+     {exigeAutorizado, autorizado} -- com a Conferência de Pesagem ligada,
+     só confere quem tem a permissão. */
+  function validarConferencia(previstos, fase_, conferente, opcoes) {
+    var f = fase_ || {}, erros = [], o = opcoes || {};
     var pesador = texto((f.pesagem || {}).por);
     var quem = texto(conferente);
     if (!quem) erros.push('Identifique quem está conferindo.');
+    if (o.exigeAutorizado && !o.autorizado) {
+      erros.push('A Conferência de Pesagem está ligada: quem confere é a Qualidade ou o P&D, com o próprio login.');
+    }
     if (quem && pesador && quem.toLowerCase() === pesador.toLowerCase()) {
       erros.push('Quem confere não pode ser quem pesou (' + pesador + ').');
     }
@@ -322,10 +339,20 @@
     };
   }
 
+  // Liberação sem conferência: só admin, só com motivo, só com a pesagem
+  // fechada. Fica registrada como liberação, nunca como conferência.
+  function validarLiberacaoSemConferencia(fase_, motivo, ehAdmin) {
+    var f = fase_ || {}, erros = [];
+    if (!ehAdmin) erros.push('Só um administrador pode liberar a manipulação sem a conferência.');
+    if (f.status !== 'PESADO') erros.push('A pesagem precisa estar fechada e aguardando conferência.');
+    if (!texto(motivo)) erros.push('Informe o motivo da liberação sem conferência.');
+    return {ok: !erros.length, erros: erros};
+  }
+
   function validarFechamentoManipulacao(previstos, fase_) {
     var f = fase_ || {}, man = f.manipulacao || {}, erros = [];
     if (!man.inicio) erros.push('A manipulação não foi iniciada.');
-    if (n(man.rendimento) == null || n(man.rendimento) <= 0) erros.push('Informe o rendimento obtido do granel.');
+    if (n(man.rendimento) == null || n(man.rendimento) <= 0) erros.push('Informe o rendimento obtido do bulk.');
     var r = resumoManipulacao(previstos, f);
     var avisos = [];
     if (r.rendimento != null && r.pesadoTotal > 0 && r.rendimento > r.pesadoTotal) {
@@ -348,7 +375,15 @@
       return {status: 'PESADO', 'pesagem/fim': agora, 'pesagem/por': quem, 'pesagem/baixaAplicada': true};
     }
     if (acao === 'CONFERIR') {
-      return {status: 'CONFERIDO', 'conferencia/por': quem, 'conferencia/em': agora};
+      // `modo` registra sob qual regra a conferência valeu: pela Qualidade/P&D
+      // (chave ligada) ou entre operadores.
+      return {status: 'CONFERIDO', 'conferencia/por': quem, 'conferencia/em': agora,
+        'conferencia/modo': c.modo || 'OPERADOR', 'conferencia/uid': c.uid || null};
+    }
+    if (acao === 'LIBERAR_SEM_CONFERENCIA') {
+      return {status: 'CONFERIDO', 'conferencia/por': quem, 'conferencia/em': agora,
+        'conferencia/modo': 'LIBERADO_PELO_ADMIN', 'conferencia/motivoLiberacao': texto(c.motivo) || null,
+        'conferencia/uid': c.uid || null};
     }
     if (acao === 'INICIAR_MANIPULACAO') {
       return {status: 'EM_MANIPULACAO', 'manipulacao/inicio': agora, 'manipulacao/por': quem};
@@ -370,7 +405,7 @@
     var st = estado(op);
     if (!st) return ['INICIAR_PESAGEM'];
     if (st === 'AGUARDANDO_PESAGEM') return ['FECHAR_PESAGEM'];
-    if (st === 'PESADO') return ['CONFERIR'];
+    if (st === 'PESADO') return ['CONFERIR', 'LIBERAR_SEM_CONFERENCIA'];
     if (st === 'CONFERIDO') return ['INICIAR_MANIPULACAO'];
     if (st === 'EM_MANIPULACAO') return ['FECHAR_MANIPULACAO'];
     if (st === 'AGUARDANDO_CQ') return ['LIBERAR', 'REPROVAR'];
@@ -386,6 +421,7 @@
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,
+    regraConferencia: regraConferencia, validarLiberacaoSemConferencia: validarLiberacaoSemConferencia,
     validarFechamentoManipulacao: validarFechamentoManipulacao,
     transicao: transicao, acoesDisponiveis: acoesDisponiveis, minutos: minutos
   };

@@ -1009,3 +1009,53 @@ menos o lead time de produção, não a entrega crua — e lead time de produç�
 não está parametrizado. Enquanto não estiver, BACKLOG é o comportamento
 conservador e deve ficar. Retomar junto com a Fase 1 de
 `PLANO_PLANEJAMENTO_PCP.md`, que é onde `dataInicioPlanejada` passa a existir.
+
+## Operação (Produção / Manipulação / Rotulagem) — Fases 2 e 3 (pedido do usuário em 23/09/2026)
+
+A Fase 1 foi publicada: menu Operação com os três setores, um checkbox por
+setor em Usuários, histórico por setor (consulta; edição só do PCP), estoque
+por área só para consulta (`estoque_setor.html` + `shared/estoque-setor.js`)
+e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
+
+- **Fase 2 — "Guardar / Mover" no setor.** Botão para o operador informar o
+  endereço onde guardou um lote, limitado às áreas do próprio setor
+  (`config/operacao/areasPorSetor`). Mesmo mecanismo que a Separação já usa
+  (`transferirLoteEndereco` / `separarParcialLoteEndereco` em `utils.js`).
+  Tem que ser "extremamente simples de operar". Depois: leitura da etiqueta
+  do endereço pela câmera no lugar da digitação (WMS Fase 3, o app gera
+  EAN13/Code39/QR mas não lê).
+- **Fase 2 — tela de pendências de armazenagem, aberta primeiro.** MP e
+  rótulos chegam na doca; quando a Qualidade libera o lote, os operadores da
+  Manipulação (MP) e da Rotulagem (rótulos) têm que ver, logo ao entrar, o
+  que precisam guardar e organizar. Precisa estar na `ORDEM_HOME` de
+  `auth_check.js` para quem é só do setor. Origem: lotes LIBERADO em
+  endereço de doca (área de recebimento), por tipo de material do setor.
+- **Fase 2 — visto do PCP nos apontamentos e na confirmação de OP de envase.**
+  O usuário quer "ir acompanhando" sem travar a fábrica: lista do que o PCP
+  ainda não viu, com o visto registrando quem/quando. Não bloqueante.
+- **Fase 2 — pesagem pelo FEFO quando o estoque estiver maduro.** A pesagem
+  já indica os lotes por FEFO (`calcularPlanoFefo` em `manipulacao.html`) e
+  baixa o lote informado. O que depende do "Dia D" é o saldo por lote ser
+  confiável — sem ele o FEFO sugere o que não existe.
+- **Fase 3 — bulk com endereço de tanque.** Preparação antes de executar
+  (física e sistema): identificar e etiquetar cada tanque/bombona; criar a
+  área "MANIPULAÇÃO" (ou "BULK") em Cadastros › Áreas de Endereço e os
+  tanques como posições dela; definir capacidade de cada um. No sistema: ao
+  fechar a manipulação, informar tanque + kg; o bulk aparece no estoque da
+  manipulação ("lote X no T-03, aguardando CQ/liberado"); o apontamento de
+  envase mostra em qual tanque está; sai do estoque quando a OP é encerrada
+  (consumo parcial depois).
+- **Fase 3 — OP de higienização do tanque.** Ao esvaziar o tanque, abrir uma
+  ordem de higienização sob responsabilidade da Manipulação, e o tanque só
+  volta a ser usado depois dela. O usuário quer chegar lá, mas a operação
+  ainda não está madura para isso.
+- **Consolidação completa da OP.** "Todos os apontamentos e tudo que é
+  envolvido de uma OP, digo tudo mesmo, cada OP que ramificou da OP iniciada
+  (envase, rotulagem, separação, expedição...)". Base existente:
+  `dossie_lote.html` (auditoria do lote). Conferir o que ele já cobre antes
+  de construir outra tela; o que falta provavelmente é separação, expedição
+  e as OPs derivadas (retrabalho, transferência).
+- **Ajuste fino das permissões por perfil.** O perfil Produção deixou de
+  editar/excluir no Histórico (só PCP/admin, pedido do usuário). As regras do
+  banco em `registros` ainda permitem gravar pelo papel `production` —
+  endurecer quando as outras telas que gravam ali estiverem mapeadas.

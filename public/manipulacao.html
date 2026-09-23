@@ -143,6 +143,9 @@
     .conf-bts button.sim.on{background:var(--tint-green-bg);border-color:var(--success);color:var(--tint-green-fg)}
     .conf-bts button.nao.on{background:var(--tint-red-bg);border-color:var(--danger);color:var(--tint-red-fg)}
     .conf-bts button:disabled{cursor:default;opacity:.8}
+    /* Conferência de Pesagem ligada e a pessoa não confere: os botões ficam
+       visivelmente apagados, não só desabilitados. */
+    #mConferenciaBody.bloqueado .conf-bts button,#mConferenciaBody.bloqueado input{opacity:.35}
     /* Celular: cada linha vira um cartão, com o rótulo do campo à esquerda. */
     @media(max-width:700px){
       .header h1{font-size:22px}
@@ -172,7 +175,7 @@
 <div class="header">
   <div>
     <h1>Manipulação</h1>
-    <div class="header-sub">Pesagem, conferência e manipulação do granel — mesma numeração de lote da OP</div>
+    <div class="header-sub">Pesagem, conferência e manipulação do bulk — mesma numeração de lote da OP</div>
   </div>
   <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando...</span></div>
 </div>
@@ -180,9 +183,9 @@
 <div class="main">
   <div class="alert" id="alertBox"></div>
   <div class="section-note">
-    O granel é a primeira fase do lote. Quem <b>pesa</b> registra o que saiu do estoque; quem <b>manipula</b> confere
-    antes de usar — e não pode ser a mesma pessoa. A baixa de estoque acontece na pesagem. O envase só é liberado
-    depois que a Qualidade aprovar o granel.
+    O bulk é a primeira fase do lote. Quem <b>pesa</b> registra o que saiu do estoque; depois a pesagem é
+    <b>conferida</b> por outra pessoa antes da manipulação. A baixa de estoque acontece na pesagem. O envase só é
+    liberado depois que a Qualidade aprovar o bulk.
   </div>
 
   <div class="card" id="mCardLista">
@@ -191,14 +194,14 @@
       <span class="field-hint" id="mListaResumo"></span>
     </div>
     <div style="overflow-x:auto"><table class="resp">
-      <thead><tr><th>Lote / produto</th><th>Cliente</th><th style="text-align:right">Planejado</th><th>Fase do granel</th><th></th></tr></thead>
+      <thead><tr><th>Lote / produto</th><th>Cliente</th><th style="text-align:right">Planejado</th><th>Fase do bulk</th><th></th></tr></thead>
       <tbody id="mListaBody"><tr><td colspan="5" class="no-data">Carregando...</td></tr></tbody>
     </table></div>
   </div>
 
   <div class="card" id="mPainel" style="display:none">
     <div class="card-header">
-      <h3 id="mPainelTitulo">Fase de granel</h3>
+      <h3 id="mPainelTitulo">Fase de bulk</h3>
       <button class="btn btn-ghost btn-sm" id="mFechar">Fechar</button>
     </div>
     <div class="card-body">
@@ -219,14 +222,19 @@
 
       <!-- 2. Conferência -->
       <div id="mBlocoConferencia" style="margin-top:18px">
-        <h4 style="font-size:13px;margin-bottom:8px">2 · Conferência do manipulador</h4>
-        <div class="field-hint" style="margin-bottom:8px">Confere item a item o que foi pesado. Quem confere não pode ser quem pesou.</div>
+        <h4 style="font-size:13px;margin-bottom:8px">2 · Conferência da pesagem</h4>
+        <div class="field-hint" style="margin-bottom:8px" id="mConfRegra">Confere item a item o que foi pesado. Quem confere não pode ser quem pesou.</div>
+        <div id="mConfAviso" class="pz-aviso" style="display:none"></div>
         <div style="overflow-x:auto"><table class="resp">
           <thead><tr><th>Matéria-prima</th><th style="text-align:right">Pesado</th><th>Lote</th><th>Confere?</th><th>Observação</th></tr></thead>
           <tbody id="mConferenciaBody"></tbody>
         </table></div>
         <div id="mConferenciaErros" class="alert alert-danger" style="margin-top:10px"></div>
-        <div style="margin-top:10px"><button class="btn btn-primary" id="mBtnConferir">Confirmar conferência</button></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="mBtnConferir">Confirmar conferência</button>
+          <button class="btn btn-ghost" id="mBtnLiberarSemConf" style="display:none">Liberar sem conferência (admin)</button>
+        </div>
+        <div id="mConfLiberacao" class="field-hint" style="margin-top:8px"></div>
       </div>
 
       <!-- 3. Manipulação -->
@@ -248,7 +256,7 @@
       </div>
 
       <div id="mBlocoCq" class="alert alert-warn" style="margin-top:18px">
-        Granel aguardando análise da Qualidade. O envase deste lote fica travado até a liberação.
+        Bulk aguardando análise da Qualidade. O envase deste lote fica travado até a liberação.
       </div>
     </div>
   </div>
@@ -280,6 +288,7 @@ var menuParcela = null;     // pesagem com o menu "⋯" aberto
 var devolverOutro = null;   // MP escolhendo outro endereço para guardar
 var allLotes = {}, allEnderecos = {}; // WMS: base do FEFO que indica o lote
 var assinaturaPesagem = ''; // só redesenha os cartões quando o conteúdo muda
+var configConfPesagem = {};  // config/conferenciaPesagem: {ativa, alteradoPor, alteradoEm}
 
 function setStatus(on, txt) {
   document.getElementById('sDot').classList.toggle('on', !!on);
@@ -291,6 +300,23 @@ function showAlert(msg, tipo) {
   box.className = 'alert alert-' + (tipo || 'success') + ' show';
   setTimeout(function() { box.classList.remove('show'); }, 7000);
 }
+/* Conferência de Pesagem (23/09). Com a chave ligada, só confere quem tem a
+   permissão (Qualidade/P&D, marcados em Usuários), com o próprio login; o
+   admin pode liberar informando o motivo. Quem só tem a permissão de
+   conferir (sem o setor Manipulação) vê apenas as pesagens esperando por ela. */
+function regraConf() { return Manipulacao.regraConferencia(configConfPesagem); }
+function autorizadoConferir() {
+  return !!window.currentUser && typeof window.podeConferirPesagem === 'function' && window.podeConferirPesagem(window.currentUser);
+}
+function ehAdmin() { return !!window.currentUser && window.currentUser.role === 'admin'; }
+function soConfere() {
+  var u = window.currentUser;
+  if (!u || typeof window.setoresOperacao !== 'function') return false;
+  var s = window.setoresOperacao(u);
+  return !s.manipulacao && !s.gestao && autorizadoConferir();
+}
+function meuUid() { var u = firebase.auth().currentUser; return u ? u.uid : null; }
+
 function eu() {
   return (window.currentUser && (window.currentUser.nome || window.currentUser.email)) ||
     (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
@@ -303,6 +329,9 @@ dbOnValue(db.ref('bom'), function(snap) { allBom = snap.val() || {}; render(); }
 dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; render(); });
 dbOnValue(db.ref('estoque_lotes'), function(snap) { allLotes = snap.val() || {}; if (opAtual) renderPainel(); });
 dbOnValue(db.ref('enderecos_estoque'), function(snap) { allEnderecos = snap.val() || {}; if (opAtual) renderPainel(); });
+dbOnValue(db.ref('config/conferenciaPesagem'), function(snap) { configConfPesagem = snap.val() || {}; render(); });
+// O perfil (window.currentUser) chega depois do primeiro desenho.
+var esperaPerfilManip = setInterval(function() { if (window.currentUser) { clearInterval(esperaPerfilManip); render(); } }, 300);
 
 /* Previstos da fórmula (o granel). O BOM de embalagem não entra aqui: ele é
    consumido no envase, não na manipulação. */
@@ -331,9 +360,16 @@ function opsAtivas() {
 
 function render() {
   var lista = opsAtivas();
-  document.getElementById('mListaResumo').textContent = lista.length + ' OP(s) ativas';
+  var conferidor = soConfere();
+  if (conferidor) lista = lista.filter(function(o) { return Manipulacao.estado(o) === 'PESADO'; });
+  document.querySelector('#mCardLista h3').textContent = conferidor ? 'Pesagens aguardando conferência' : 'Lotes em produção';
+  document.getElementById('mListaResumo').textContent = lista.length + (conferidor ? ' pesagem(ns) para conferir' : ' OP(s) ativas');
   var tb = document.getElementById('mListaBody');
-  if (!lista.length) { tb.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma OP ativa.</td></tr>'; return; }
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="no-data">' + (conferidor ? 'Nenhuma pesagem esperando conferência agora.' : 'Nenhuma OP ativa.') + '</td></tr>';
+    if (opAtual) renderPainel();
+    return;
+  }
   tb.innerHTML = lista.map(function(o) {
     var st = Manipulacao.estado(o);
     var badge = !st ? '<span class="badge badge-gray">sem fase</span>'
@@ -343,8 +379,8 @@ function render() {
     return '<tr><td class="cabeca"><b>' + escapeHtml(o.lote) + '</b> · ' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
       '<td data-label="Cliente">' + escapeHtml(o.cliente || '—') + '</td>' +
       '<td data-label="Planejado" style="text-align:right">' + fmtNum(o.qtdPlanejada || 0) + '</td>' +
-      '<td data-label="Granel">' + badge + '</td>' +
-      '<td style="text-align:right"><button class="btn btn-primary" data-abrir="' + escapeAttr(o.key) + '">Abrir granel</button></td></tr>';
+      '<td data-label="Bulk">' + badge + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-primary" data-abrir="' + escapeAttr(o.key) + '">' + (conferidor ? 'Conferir' : 'Abrir') + '</button></td></tr>';
   }).join('');
   tb.querySelectorAll('[data-abrir]').forEach(function(b) {
     b.addEventListener('click', function() { abrirOp(b.getAttribute('data-abrir')); });
@@ -394,7 +430,7 @@ function renderPainel() {
   if (!op) { document.getElementById('mPainel').style.display = 'none'; return; }
   var st = Manipulacao.estado(op);
   var acoes = Manipulacao.acoesDisponiveis(op);
-  document.getElementById('mPainelTitulo').textContent = 'Granel do lote ' + (op.lote || opAtual) + ' — ' + (op.produto || '');
+  document.getElementById('mPainelTitulo').textContent = 'Bulk do lote ' + (op.lote || opAtual) + ' — ' + (op.produto || '');
 
   var ordem = ['AGUARDANDO_PESAGEM', 'PESADO', 'CONFERIDO', 'EM_MANIPULACAO', 'AGUARDANDO_CQ', 'LIBERADO'];
   var idx = ordem.indexOf(st);
@@ -444,12 +480,31 @@ function renderPainel() {
         '<td data-label="Observação"><input type="text" data-confobs="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(c.obs || '') + '"' + dis +
           (c.ok === false ? ' placeholder="Descreva a divergência"' : '') + '></td></tr>';
     }).join('');
-    var valConf = Manipulacao.validarConferencia(previstos, f, eu());
+    var regra = regraConf();
+    var autorizado = autorizadoConferir();
+    var bloqueadoPelaRegra = regra.exigeAutorizado && !autorizado;
+    document.getElementById('mConfRegra').textContent = regra.exigeAutorizado
+      ? 'Conferência de Pesagem ligada: quem confere é a Qualidade ou o P&D, com o próprio login, item a item.'
+      : 'Confere item a item o que foi pesado. Quem confere não pode ser quem pesou.';
+    var aviso = document.getElementById('mConfAviso');
+    aviso.style.display = podeConferir && bloqueadoPelaRegra ? '' : 'none';
+    aviso.textContent = 'Aguardando a Qualidade ou o P&D conferir esta pesagem. Elas foram avisadas por e-mail quando a pesagem foi fechada.';
+    document.getElementById('mConferenciaBody').classList.toggle('bloqueado', podeConferir && bloqueadoPelaRegra);
+    if (bloqueadoPelaRegra) {
+      document.querySelectorAll('#mConferenciaBody button, #mConferenciaBody input').forEach(function(el) { el.disabled = true; });
+    }
+    var valConf = Manipulacao.validarConferencia(previstos, f, eu(), {exigeAutorizado: regra.exigeAutorizado, autorizado: autorizado});
     var errosConf = document.getElementById('mConferenciaErros');
-    errosConf.className = 'alert alert-danger' + (podeConferir && (valConf.erros.length || valConf.divergencias.length) ? ' show' : '');
+    errosConf.className = 'alert alert-danger' + (podeConferir && !bloqueadoPelaRegra && (valConf.erros.length || valConf.divergencias.length) ? ' show' : '');
     errosConf.textContent = valConf.erros.concat(valConf.divergencias.map(function(d) { return 'Divergência em ' + d.mpCodigo + ': ' + d.obs; })).join(' ');
-    document.getElementById('mBtnConferir').style.display = podeConferir ? '' : 'none';
+    document.getElementById('mBtnConferir').style.display = podeConferir && !bloqueadoPelaRegra ? '' : 'none';
     document.getElementById('mBtnConferir').disabled = !valConf.ok;
+    document.getElementById('mBtnLiberarSemConf').style.display = podeConferir && ehAdmin() ? '' : 'none';
+    var c = f.conferencia || {};
+    document.getElementById('mConfLiberacao').innerHTML = c.modo === 'LIBERADO_PELO_ADMIN'
+      ? '⚠ Liberado sem conferência por <b>' + escapeHtml(c.por || '') + '</b>' + (c.em ? ' em ' + escapeHtml(horaCurta(c.em)) : '') + ' — motivo: ' + escapeHtml(c.motivoLiberacao || '')
+      : (c.por && st !== 'PESADO' ? 'Conferido por <b>' + escapeHtml(c.por) + '</b>' + (c.em ? ' em ' + escapeHtml(horaCurta(c.em)) : '') +
+          (c.modo === 'CONFERENCIA_PESAGEM' ? ' (Conferência de Pesagem)' : '') : '');
   }
 
   // ── Manipulação ──
@@ -472,6 +527,12 @@ function renderPainel() {
     document.getElementById('mBtnFecharManipulacao').disabled = !valMan.ok;
   }
 
+  if (soConfere()) {
+    document.getElementById('mPesagemRodape').style.display = 'none';
+    document.getElementById('mBlocoManipulacao').style.display = 'none';
+  } else {
+    document.getElementById('mPesagemRodape').style.display = '';
+  }
   document.getElementById('mBlocoCq').style.display = st === 'AGUARDANDO_CQ' ? '' : 'none';
   document.getElementById('mBlocoPesagem').style.display = (st === 'LIBERADO' || st === 'REPROVADO') ? 'none' : '';
 
@@ -1069,7 +1130,9 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
     return gravarFase(t);
   }).then(function() {
     btn.disabled = false; btn.textContent = 'Fechar pesagem e baixar estoque';
-    showAlert('Pesagem fechada e estoque baixado. Agora outra pessoa precisa conferir.', 'success');
+    showAlert(regraConf().exigeAutorizado
+      ? 'Pesagem fechada e estoque baixado. A Qualidade e o P&D foram avisados por e-mail para conferir.'
+      : 'Pesagem fechada e estoque baixado. Agora outra pessoa precisa conferir.', 'success');
   }).catch(function(e) {
     btn.disabled = false; btn.textContent = 'Fechar pesagem e baixar estoque';
     showAlert('Erro ao fechar a pesagem: ' + e.message, 'danger');
@@ -1078,12 +1141,26 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
 
 document.getElementById('mBtnConferir').addEventListener('click', function() {
   var f = faseComRascunho();
-  var val = Manipulacao.validarConferencia(previstos, f, eu());
+  var regra = regraConf();
+  var val = Manipulacao.validarConferencia(previstos, f, eu(), {exigeAutorizado: regra.exigeAutorizado, autorizado: autorizadoConferir()});
   if (!val.ok) { showAlert(val.erros.concat(val.divergencias.map(function(d) { return 'Divergência em ' + d.mpCodigo; })).join(' '), 'danger'); return; }
-  var t = Manipulacao.transicao('CONFERIR', {quem: eu()});
+  var t = Manipulacao.transicao('CONFERIR', {quem: eu(), uid: meuUid(),
+    modo: regra.exigeAutorizado ? 'CONFERENCIA_PESAGEM' : 'OPERADOR'});
   t['conferencia/itens'] = conferencia;
   gravarFase(t).then(function() { showAlert('Conferência registrada. Pode manipular.', 'success'); })
     .catch(function(e) { showAlert('Erro ao conferir: ' + e.message, 'danger'); });
+});
+
+document.getElementById('mBtnLiberarSemConf').addEventListener('click', function() {
+  var f = Manipulacao.fase(allOps[opAtual]) || {};
+  var motivo = prompt('Liberar a manipulação do lote ' + ((allOps[opAtual] || {}).lote || '') + ' SEM a conferência da pesagem?\n\n' +
+    'Fica registrado no lote como liberação do administrador. Qual o motivo?');
+  if (motivo == null) return;
+  var val = Manipulacao.validarLiberacaoSemConferencia(f, motivo, ehAdmin());
+  if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
+  gravarFase(Manipulacao.transicao('LIBERAR_SEM_CONFERENCIA', {quem: eu(), uid: meuUid(), motivo: motivo}))
+    .then(function() { showAlert('Manipulação liberada sem conferência. O motivo ficou registrado no lote.', 'success'); })
+    .catch(function(e) { showAlert('Erro ao liberar: ' + e.message, 'danger'); });
 });
 
 document.getElementById('mBtnIniciarManipulacao').addEventListener('click', function() {
@@ -1101,7 +1178,7 @@ document.getElementById('mBtnFecharManipulacao').addEventListener('click', funct
   t['manipulacao/perdas'] = f.manipulacao.perdas;
   t['manipulacao/observacao'] = document.getElementById('mObsManipulacao').value.trim() || null;
   gravarFase(t).then(function() {
-    showAlert('Granel fechado e enviado para a Qualidade. O envase continua travado até a liberação.', 'success');
+    showAlert('Bulk fechado e enviado para a Qualidade. O envase continua travado até a liberação.', 'success');
   }).catch(function(e) { showAlert('Erro ao fechar: ' + e.message, 'danger'); });
 });
 </script>

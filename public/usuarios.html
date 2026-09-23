@@ -499,6 +499,11 @@
       // nó cheio de ruído e faz um módulo novo (criado depois) nascer
       // explicitamente negado em vez de simplesmente ausente.
       if (chk.checked) marcados[chk.getAttribute('data-mod')] = true;
+      // Exceção (23/09): Manipulação e Rotulagem desmarcadas gravam `false`.
+      // Marcação antiga só com `apontamento` herda os dois setores quando a
+      // chave está AUSENTE (modulosDoUsuario em auth_check.js) -- sem o
+      // `false`, desmarcar aqui não tiraria o acesso.
+      else if (['manipulacao', 'rotulagem'].indexOf(chk.getAttribute('data-mod')) >= 0) marcados[chk.getAttribute('data-mod')] = false;
     });
     const btn = document.getElementById('modSalvar');
     btn.disabled = true;

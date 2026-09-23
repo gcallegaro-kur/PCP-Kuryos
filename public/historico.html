@@ -193,6 +193,9 @@
       .prev-stats{grid-template-columns:1fr 1fr}
       #motivosContent{grid-template-columns:1fr}
     }
+    /* Operação (23/09): o setor consulta os próprios apontamentos; editar e
+       excluir ficam com o PCP. A classe vem de aplicarPermissoesHistorico(). */
+    body.hist-somente-leitura .btn-edit, body.hist-somente-leitura .btn-delete { display: none !important; }
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -523,6 +526,36 @@
     return 'linha';
   }
 
+  // Operação (23/09): cada setor vê os próprios apontamentos -- Produção as
+  // linhas e postos, Rotulagem a rotulagem. A gestão (PCP/planejamento) vê
+  // tudo, como sempre. Editar/excluir é só do PCP.
+  function setoresVisiveisHistorico() {
+    var u = window.currentUser;
+    if (!u || typeof window.setoresOperacao !== 'function') return null; // perfil ainda carregando: sem recorte
+    var s = window.setoresOperacao(u);
+    if (s.gestao || (!s.producao && !s.rotulagem)) return null;
+    return {linha: !!s.producao, posto: !!s.producao, rotulagem: !!s.rotulagem};
+  }
+  function registroVisivel(r) {
+    var v = setoresVisiveisHistorico();
+    return !v || !!v[setorDoRegistro(r)];
+  }
+  function podeEditarHistorico() {
+    var u = window.currentUser;
+    return !!u && typeof window.podeEditarApontamentos === 'function' && window.podeEditarApontamentos(u);
+  }
+  function aplicarPermissoesHistorico() {
+    document.body.classList.toggle('hist-somente-leitura', !podeEditarHistorico());
+  }
+  aplicarPermissoesHistorico();
+  // O perfil chega depois do primeiro desenho (auth_check.js é assíncrono).
+  var esperaPerfilHist = setInterval(function() {
+    if (!window.currentUser) return;
+    clearInterval(esperaPerfilHist);
+    aplicarPermissoesHistorico();
+    if (allRegistros.length) renderAll();
+  }, 300);
+
   dbOnValue(db.ref('config'), function(snap) {
     var cfg = snap.val() || {};
     configLinhasH = cfg.linhas || [];
@@ -696,6 +729,7 @@
     var comPed  = document.getElementById('fComPedido').value;
 
     return allRegistros.filter(function(r) {
+      if (!registroVisivel(r)) return false;
       if (linha && r.linha !== linha) return false;
       if (comPed === 'com' && !r.pedidoId) return false;
       if (comPed === 'sem' && r.pedidoId) return false;
@@ -1520,7 +1554,7 @@
     var totalPerdas = perdaEntries.reduce(function(s, k) { return s + (perdasObj[k] || 0); }, 0);
     var gap = opGapNaoExplicado(op);
 
-    var apontamentosDoLote = op.lote ? allRegistros.filter(function(r) { return r.lote === op.lote; }) : [];
+    var apontamentosDoLote = op.lote ? allRegistros.filter(function(r) { return r.lote === op.lote && registroVisivel(r); }) : [];
 
     // Horas trabalhadas e produção por hora da OP, pelos apontamentos de
     // envase carregados -- a OP não grava horas, e `mediaPorHora` é só o
@@ -1850,6 +1884,7 @@
   }
 
   function openEditModal(date, key) {
+    if (!podeEditarHistorico()) { showAlert('Só o PCP edita apontamentos. Fale com o PCP para corrigir.', 'danger'); return; }
     var r = allRegistros.find(function(x){ return x.data === date && x._key === key; });
     if (!r) return;
     editingDate = date; editingKey = key;
@@ -2194,6 +2229,7 @@
   });
 
   function deleteRegistro(date, key) {
+    if (!podeEditarHistorico()) { showAlert('Só o PCP exclui apontamentos.', 'danger'); return; }
     var r = allRegistros.find(function(x){ return x._key === key; });
     // Sem o registro em mãos não dá pra saber a quantidade -- e sem ela não
     // dá pra corrigir o total do pedido nem o da OP. A versão anterior

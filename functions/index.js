@@ -10,6 +10,7 @@ const {prepararAgenda} = require("./agenda_expedicao");
 const {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos} = require("./recebimento");
 const PropriedadeEstoque = require("./propriedade_estoque");
 const OpEncerrada = require("./op_encerrada");
+const PesagemFechada = require("./pesagem_fechada");
 const PedidoDiretoria = require("./pedido_diretoria");
 const {prepararFaturamento} = require("./faturamento_carga");
 const FaturamentoEmail = require("./faturamento_email");
@@ -1433,6 +1434,56 @@ exports.onOpEncerrada = onValueWritten(
           .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))[0] || null;
       const destinatarios = OpEncerrada.destinatarios(configSnap.val() || {});
       const email = OpEncerrada.montarEmail(op, opKey, fechamento);
+      await sendMailViaGraph(destinatarios, email.assunto, email.corpo, {html: true});
+      await marcaRef.update({status: "ENVIADO", enviadoEm: new Date().toISOString(), destinatarios, assunto: email.assunto});
+    } catch (e) {
+      await marcaRef.update({status: "ERRO", erro: String(e.message || e).slice(0, 500), erroEm: new Date().toISOString()}).catch(() => null);
+      throw e;
+    }
+  },
+);
+
+// E-mail à Qualidade/P&D quando a pesagem do bulk é fechada (pedido do
+// usuário, 2026-09-23): com a "Conferência de Pesagem" ligada, a manipulação
+// espera a conferência delas. Regras e texto em pesagem_fechada.js. Mesma
+// deduplicação do aviso de OP encerrada: marca reservada por transaction em
+// notificacoes_pesagem/{op}/{eventId} antes de enviar (ENVIADO/ERRO/IGNORADO).
+exports.onPesagemFechada = onValueWritten(
+  {
+    ref: "/ops/{opKey}/manipulacao/status",
+    instance: "prod-kuryos-default-rtdb",
+    secrets: [MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET, MS_GRAPH_SENDER_EMAIL],
+  },
+  async (event) => {
+    const antes = event.data.before.val();
+    const depois = event.data.after.val();
+    if (!PesagemFechada.deveNotificar(antes, depois)) return;
+    const opKey = event.params.opKey;
+    const marcaRef = db.ref(`notificacoes_pesagem/${opKey}/${sanitizeKey(event.id)}`);
+    const reserva = await marcaRef.transaction((atual) => {
+      if (atual) return; // já processado por outra entrega do mesmo evento
+      return {status: "ENVIANDO", em: new Date().toISOString()};
+    });
+    if (!reserva.committed) return;
+    try {
+      const [opSnap, configSnap, usuariosSnap] = await Promise.all([
+        db.ref("ops/" + opKey).once("value"), db.ref("config").once("value"), db.ref("usuarios").once("value")]);
+      const op = opSnap.val() || {};
+      const config = configSnap.val() || {};
+      if (!PesagemFechada.chaveLigada(config)) {
+        await marcaRef.update({status: "IGNORADO", motivo: "Conferência de Pesagem desligada"});
+        return;
+      }
+      if (((op.manipulacao || {}).status) !== PesagemFechada.STATUS_FECHADA) {
+        await marcaRef.update({status: "IGNORADO", motivo: "pesagem já conferida ou reaberta no envio"});
+        return;
+      }
+      const destinatarios = PesagemFechada.destinatarios(usuariosSnap.val() || {}, config);
+      if (!destinatarios.length) {
+        await marcaRef.update({status: "IGNORADO", motivo: "ninguém com a permissão Conferência de Pesagem tem e-mail"});
+        return;
+      }
+      const email = PesagemFechada.montarEmail(op, opKey);
       await sendMailViaGraph(destinatarios, email.assunto, email.corpo, {html: true});
       await marcaRef.update({status: "ENVIADO", enviadoEm: new Date().toISOString(), destinatarios, assunto: email.assunto});
     } catch (e) {

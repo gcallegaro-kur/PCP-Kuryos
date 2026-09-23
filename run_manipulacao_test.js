@@ -244,7 +244,7 @@ const pesagemOk = {
 // ── Estados e transições ────────────────────────────────────────────────
 {
   assert.deepEqual(M.acoesDisponiveis({}), ['INICIAR_PESAGEM']);
-  assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'PESADO'}}), ['CONFERIR']);
+  assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'PESADO'}}), ['CONFERIR', 'LIBERAR_SEM_CONFERENCIA']);
   assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'AGUARDANDO_CQ'}}), ['LIBERAR', 'REPROVAR']);
   assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'LIBERADO'}}), []);
 

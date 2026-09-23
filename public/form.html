@@ -319,8 +319,10 @@
       <div class="turno-grid" id="turnoGridLinhas"></div>
     </div>
 
-    <div class="turno-group-label">Rotulagem</div>
-    <div class="turno-grid" id="turnoGridRotulagem"></div>
+    <div id="secaoTurnoRotulagem">
+      <div class="turno-group-label">Rotulagem</div>
+      <div class="turno-grid" id="turnoGridRotulagem"></div>
+    </div>
 
     <div id="secaoTurnoPostos">
       <div class="turno-group-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -4248,19 +4250,36 @@ function opAlocadoEm(nome, tipo) {
   return found;
 }
 
-// Perfil Rotulagem só pode mexer na seção Rotulagem do painel -- Linhas,
-// Postos e o Modo Avançado inteiro ficam escondidos. window.currentUser só
+// Cada setor da Operação só mexe na sua seção do painel (23/09: Produção e
+// Rotulagem viraram checkboxes separados em Usuários). Só Rotulagem: Linhas,
+// Postos e o Modo Avançado inteiro ficam escondidos, como já era para o
+// perfil Rotulagem. Só Produção: a seção Rotulagem some. Quem tem os dois
+// (o perfil Produção, a gestão) vê tudo, como sempre. window.currentUser só
 // fica disponível depois que auth_check.js resolve o perfil (assíncrono),
 // por isso essa checagem roda a cada renderPainelTurno() em vez de uma vez
 // só no load.
+function setoresDoApontamento() {
+  var u = window.currentUser;
+  if (!u) return {linha: true, rotulagem: true};
+  if (typeof window.setoresOperacao !== 'function') {
+    return {linha: u.role !== 'rotulagem', rotulagem: true};
+  }
+  var s = window.setoresOperacao(u);
+  // Nenhum dos dois (gestão sem setor marcado): vê tudo, como antes.
+  if (!s.producao && !s.rotulagem) return {linha: true, rotulagem: true};
+  return {linha: !!s.producao, rotulagem: !!s.rotulagem};
+}
 function aplicarRestricaoRotulagem() {
-  var isRotulagem = window.currentUser && window.currentUser.role === 'rotulagem';
+  var st = setoresDoApontamento();
+  var soRotulagem = !st.linha;
   var secaoLinhas = document.getElementById('secaoTurnoLinhas');
   var secaoPostos = document.getElementById('secaoTurnoPostos');
+  var secaoRot = document.getElementById('secaoTurnoRotulagem');
   var modoAvancado = document.getElementById('modoAvancadoDetails');
-  if (secaoLinhas) secaoLinhas.style.display = isRotulagem ? 'none' : '';
-  if (secaoPostos) secaoPostos.style.display = isRotulagem ? 'none' : '';
-  if (modoAvancado) modoAvancado.style.display = isRotulagem ? 'none' : '';
+  if (secaoLinhas) secaoLinhas.style.display = soRotulagem ? 'none' : '';
+  if (secaoPostos) secaoPostos.style.display = soRotulagem ? 'none' : '';
+  if (secaoRot) secaoRot.style.display = st.rotulagem ? '' : 'none';
+  if (modoAvancado) modoAvancado.style.display = soRotulagem ? 'none' : '';
 }
 
 function renderPainelTurno() {
@@ -5035,20 +5054,23 @@ function fecharAtividadePostoDefinitivo(id, qtd, operador, produto) {
 // ── Encerrar Turno (checkpoint em lote) ─────────────────────────────
 function turnoItensAtivos() {
   var itens = [];
-  var isRotulagem = window.currentUser && window.currentUser.role === 'rotulagem';
-  // Perfil Rotulagem só vê a seção Rotulagem no painel -- "Encerrar Turno"
-  // não pode arrastar junto Linhas/Postos que essa pessoa nem enxerga na
-  // tela, senão fecharia o trabalho de outro supervisor sem querer.
+  var st = setoresDoApontamento();
+  var isRotulagem = !st.linha;
+  // Cada setor só vê a sua seção no painel -- "Encerrar Turno" não pode
+  // arrastar junto o que essa pessoa nem enxerga na tela, senão fecharia o
+  // trabalho de outro supervisor sem querer.
   if (!isRotulagem) {
     configLinhas.forEach(function(nome) {
       var op = opAlocadoEm(nome, 'linha');
       if (op) itens.push({ tipo: 'linha', nome: nome, lote: op.lote, op: op });
     });
   }
-  configRotulagem.forEach(function(nome) {
-    var op = opAlocadoEm(nome, 'rotulagem');
-    if (op) itens.push({ tipo: 'rotulagem', nome: nome, lote: op.lote, op: op });
-  });
+  if (st.rotulagem) {
+    configRotulagem.forEach(function(nome) {
+      var op = opAlocadoEm(nome, 'rotulagem');
+      if (op) itens.push({ tipo: 'rotulagem', nome: nome, lote: op.lote, op: op });
+    });
+  }
   if (!isRotulagem) {
     Object.keys(atividadesPostoCache).forEach(function(id) {
       var a = atividadesPostoCache[id];
