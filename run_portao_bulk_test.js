@@ -37,6 +37,8 @@ ok(M.podeEnvasar(nova({produzidoLinha: 120})).ok, 'OP que já envasou segue');
 ok(M.podeEnvasar(nova({setupFim: DEPOIS})).ok, 'OP com setup encerrado segue');
 
 // 6. Retrabalho não refabrica: passa mesmo com fórmula ou fase pendente.
+ok(M.podeEnvasar(nova({tipoOrdem: 'RETRABALHO'})).ok, 'retrabalho (tipoOrdem, o campo real) sem fase passa');
+ok(M.podeEnvasar(nova({tipoOrdem: 'RETRABALHO', manipulacao: {status: 'AGUARDANDO_CQ'}})).ok, 'retrabalho com fase pendente passa');
 ok(M.podeEnvasar(nova({tipo: 'RETRABALHO'})).ok, 'retrabalho sem fase passa');
 ok(M.podeEnvasar(nova({tipo: 'RETRABALHO', manipulacao: {status: 'REPROVADO'}})).ok, 'retrabalho não depende do bulk');
 

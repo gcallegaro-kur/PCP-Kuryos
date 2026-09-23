@@ -155,11 +155,14 @@
      pede bulk. `exigirSempre` continua ligando a trava para todas. */
   var PORTAO_BULK_DESDE = '2026-09-24T03:00:00.000Z'; // 24/09/2026 00:00 BRT
 
+  // OP de retrabalho: tipoOrdem 'RETRABALHO' (shared/retrabalho-op.js). O
+  // `tipo` antigo fica aceito para não depender de um só campo.
+  function ehRetrabalho(op) { return !!op && (op.tipoOrdem === 'RETRABALHO' || op.tipo === 'RETRABALHO'); }
   function jaEnvasou(op) {
     return num(op && op.produzidoLinha) > 0 || !!(op && op.setupFim);
   }
   function exigeBulk(op, desde) {
-    if (!op || op.tipo === 'RETRABALHO' || !texto(op.formulaVersao)) return false;
+    if (!op || ehRetrabalho(op) || !texto(op.formulaVersao)) return false;
     var emissao = new Date(op.dataEmissao || 0).getTime();
     return !isNaN(emissao) && emissao >= new Date(desde || PORTAO_BULK_DESDE).getTime();
   }
@@ -167,7 +170,7 @@
   function podeEnvasar(op, opcoes) {
     var st = estado(op);
     var exigir = !!(opcoes && opcoes.exigirSempre);
-    if (op && op.tipo === 'RETRABALHO') return {ok: true, motivo: null, estado: st};
+    if (ehRetrabalho(op)) return {ok: true, motivo: null, estado: st};
     if (!st) {
       if (exigir) return {ok: false, motivo: 'Esta OP não tem a fase de bulk registrada e a exigência está ligada.', estado: null};
       if (exigeBulk(op, opcoes && opcoes.desde) && !jaEnvasou(op)) {
