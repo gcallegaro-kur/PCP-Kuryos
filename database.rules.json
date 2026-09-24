@@ -22,7 +22,24 @@
     },
     "config": {
       ".read": "auth != null",
-      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('config').val() == true))"
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('config').val() == true))",
+      // Numeracao de Compras (24/09): SC, cotacao e PC reservam o numero aqui.
+      // Sem isto, quem tem so o modulo Compras tomava PERMISSION_DENIED ao criar
+      // qualquer documento. So sobe -- ninguem volta a numeracao.
+      "contadores": {
+        "solicitacaoCompra": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('compras').val() == true)",
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() > data.val())"
+        },
+        "processoCotacao": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('compras').val() == true)",
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() > data.val())"
+        },
+        "pedidoCompra": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('compras').val() == true)",
+          ".validate": "newData.isNumber() && (!data.exists() || newData.val() > data.val())"
+        }
+      }
     },
     "usuarios": {
       ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rh')",
