@@ -127,7 +127,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **GAP-02 devolução de cliente — pronto, publicando (2026-09-23).** Tela nova
+- **Publicado — GAP-02 devolução de cliente (2026-09-23).** Commit `dd520ee`: Hosting + RTDB + todas as Functions (20, nodejs24; `receberDevolucaoCliente` criada; as da Expedição republicadas com a regra nova) por worktree limpo; 9 arquivos públicos idênticos ao commit. Regressão completa 86/86 após corrigir o painel de pendências do `ops.html` (botões dependiam do tempo de carga do perfil). Arquivos ativos: nenhum. Tela nova
   `devolucoes.html` (Comercial autoriza, Logística recebe, todos acompanham),
   `shared/devolucao-cliente.js` + cópia `functions/devolucao_cliente.js`, callable
   `receberDevolucaoCliente`, origem `devolucao_cliente` em
