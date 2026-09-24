@@ -40,6 +40,17 @@ passos afetados e prioridade em `FLUXOS_DO_SISTEMA.md`; conferidos no código em
   no estoque sem destino — precisa de decisão (reatribuir a outro pedido pela
   transferência de OP, ou virar estoque livre). Também não há e-mail ao PCP: o
   aviso é o painel.
+- **Regularização da operação (23/09) — o que fica com o Claude.** Base lida em
+  23/09: as 338 cargas são todas legado da planilha (última em 11/09), nenhuma pelo
+  fluxo novo; 27 OPs concluídas desde 10/09 sem Conferência de PA; 3 conferências
+  abertas; 2 OPs aguardando PCP; 19 lotes em quarentena. Roteiro para a pessoa
+  responsável publicado em https://claude.ai/artifact/BsAc6bTQzDXKopw8cNTLxD.
+  Antes de reimportar a planilha: (a) `scripts/importar_expedicao_legado.py` só pula
+  palete ESTOQUE de OP com conferência **aberta** — pular também OP com conferência
+  finalizada e OP concluída a partir de 10/09 (esse estoque entra pela Conferência),
+  senão o estoque fica em dobro; (b) Conferência de PA de OP parcialmente expedida
+  antes do sistema cai em divergência e abre RNC automática — criar a causa
+  "Expedido antes do sistema (NF)" que registre a saída sem RNC.
 - ~~**GAP-02 — Devolução e reclamação de cliente.**~~ **Fluxo físico FEITO em
   2026-09-23** (`devolucoes.html`). Decisões do usuário: o Comercial autoriza,
   vinculada à carga original; a Logística recebe em QUARENTENA; destinos reintegrar,
