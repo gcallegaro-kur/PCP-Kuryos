@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — PC direto travado em "Criando..." (2026-09-24).** Commit
+  `f082ca6`, Hosting + RTDB; `compras.html` idêntico ao commit. O botão travava
+  antes da conferência da rota (return sem destravar) e `#alertBox` ficava
+  atrás do fundo do modal (z-index 500) — todo aviso com modal aberto era
+  invisível em Compras. Agora a rota é conferida antes, o botão destrava em
+  qualquer falha e o aviso flutua acima dos modais. Regras:
+  `config/contadores/{solicitacaoCompra,processoCotacao,pedidoCompra}`
+  graváveis pelo módulo Compras (antes só admin/PCP), só sobem. Testes:
+  `run_pc_direto_ui_test.js`, `run_compras_contadores_rules_test.js` (emulador
+  9023) + regressões de Compras. Arquivos ativos: nenhum.
+
 - **Publicado — GAP-02 devolução de cliente (2026-09-23).** Commit `dd520ee`: Hosting + RTDB + todas as Functions (20, nodejs24; `receberDevolucaoCliente` criada; as da Expedição republicadas com a regra nova) por worktree limpo; 9 arquivos públicos idênticos ao commit. Regressão completa 86/86 após corrigir o painel de pendências do `ops.html` (botões dependiam do tempo de carga do perfil). Arquivos ativos: nenhum. Tela nova
   `devolucoes.html` (Comercial autoriza, Logística recebe, todos acompanham),
   `shared/devolucao-cliente.js` + cópia `functions/devolucao_cliente.js`, callable
