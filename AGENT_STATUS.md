@@ -127,14 +127,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — perdas item a item no fechamento da OP (2026-09-25).**
-  Envase/rotulagem/manipulação pedem a perda de cada insumo da etapa.
-  **Arquivos ativos:** `public/form.html`, `public/manipulacao.html`,
-  `public/shared/manipulacao.js`, `public/shared/perdas-etapa.js`,
-  `public/shared/relatorio-pedido.js`, manuais de apontamento/apontador e testes
-  `run_perdas_etapa_test.js`, `run_fluxo_ponta_a_ponta_test.js`,
-  `run_manipulacao_ui_test.js`, `run_correcao_bulk_ui_test.js`,
-  `run_relatorio_pedido_test.js`.
+- **Publicado — perdas item a item no fechamento da OP (2026-09-25).** Commit
+  `e835c03`, Hosting por worktree novo do origin/main; 10 arquivos públicos
+  idênticos ao commit. Motor `shared/perdas-etapa.js`. Encerrar OP (Painel de
+  Turno) e Finalizar OP listam cada insumo da OP (`materiaisConsumo`; OP antiga
+  usa o BOM de `baixarEstoqueConsumo`); envase pede também unidades envasadas
+  descartadas e bulk (kg) — conversão só com peso/densidade reais (25 de 65 OPs
+  abertas); rotulagem põe frascos/rótulos em cima. Fechar exige perda ou "Não
+  houve perda". Formato de `perdas/{lote}` inalterado (tipo derivado do
+  material, `especificacao` = nome; novos: `materialCodigo` sempre, `unidade`,
+  `etapa`, `produto`). Insumo baixa estoque; produto é registro. Manipulação:
+  `manipulacao/perdasMp/{itemKey}` (kg, ≤ pesado) + `semPerda`; soma em
+  `perdasManipulacao`. Corrigido re-render que apagava o campo recém-tocado.
+  Relatório de Pedido: perda de produto fora do total de componentes. Turno
+  Retroativo segue com a lista livre. Bateria completa sem falhas.
+  Arquivos ativos: nenhum.
 
 - **PUBLICADO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
   Commit `f7354f7`, só Hosting (sem regras/Functions), do worktree limpo;
