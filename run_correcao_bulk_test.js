@@ -27,12 +27,18 @@ const dados = {rncNumero: 'RNC-2026-0007', motivo: 'turbidez', entradaKg: 495,
 ok(M.validarAberturaCorrecao(ciclo1, dados, true).ok, 'dados completos passam');
 ok(M.validarAberturaCorrecao(ciclo1, dados, false).erros.some(e => /Qualidade/.test(e)), 'sem permissão barra');
 ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {rncNumero: ''}), true).erros.some(e => /RNC/.test(e)), 'RNC obrigatória');
-ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {itens: []}), true).erros.some(e => /insumo/.test(e)), 'precisa de insumo');
+ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {itens: []}), true).erros.some(e => /matéria-prima/.test(e)), 'precisa de insumo');
 ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {itens: [{mpCodigo: 'SOLUB', quantidade: 0}]}), true).erros.some(e => /quantidade/.test(e)), 'insumo sem quantidade barra');
 ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {itens: [{mpCodigo: 'X', quantidade: 1}, {mpCodigo: 'X', quantidade: 2}]}), true).erros.some(e => /duas vezes/.test(e)), 'insumo repetido barra');
 ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {entradaKg: null}), true).erros.some(e => /massa/.test(e)), 'massa de entrada obrigatória');
 ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {retroativo: true}), true).erros.some(e => /retroativo/.test(e)), 'retroativo exige justificativa');
 ok(M.validarAberturaCorrecao(Object.assign({}, ciclo1, {status: 'LIBERADO'}), dados, true).erros.some(e => /reprovado/.test(e)), 'só reprovado');
+
+// 2b. Só matéria-prima entra no tanque.
+ok(M.ehMateriaPrima({tipo: 'MPGR'}) && M.ehMateriaPrima({tipo: 'MPES'}), 'MPGR e MPES são MP');
+ok(!M.ehMateriaPrima({tipo: 'EP'}) && !M.ehMateriaPrima({tipo: 'ET'}) && !M.ehMateriaPrima({tipo: 'MU'}), 'embalagem e uso e consumo não');
+ok(M.ehMateriaPrima({}), 'sem tipo no cadastro: não barra');
+ok(M.validarAberturaCorrecao(ciclo1, Object.assign({}, dados, {itens: [{mpCodigo: 'EP-1', tipo: 'EP', quantidade: 5}]}), true).erros.some(e => /embalagem primária — a correção adiciona matéria-prima/.test(e)), 'embalagem é recusada');
 
 // 3. Montar: ciclo 1 inteiro vai para o histórico; a fase recomeça com os insumos.
 const c2 = M.montarCorrecao(ciclo1, Object.assign({agora: '2026-09-25T15:00:00.000Z'}, dados));
@@ -57,7 +63,7 @@ ok(M.dispensaFoto(retro), 'retroativo dispensa foto');
 ok(M.validarPesagem(retro.previstos, pesC2, {dispensaFoto: true}).ok, 'retroativo fecha sem foto');
 ok(M.validarParcela({peso: 10, loteMaterial: 'AK-1'}, [], {dispensaFoto: true}).ok, 'parcela retroativa sem foto');
 ok(!M.validarParcela({peso: 10, loteMaterial: 'AK-1'}, []).ok, 'parcela normal sem foto barra');
-ok(M.validarPesagem({}, {}, {correcao: true}).erros.some(e => /correção não tem insumos/.test(e)), 'mensagem própria da correção');
+ok(M.validarPesagem({}, {}, {correcao: true}).erros.some(e => /correção não tem matérias-primas/.test(e)), 'mensagem própria da correção');
 
 // 5. Rendimento da correção soma o bulk que entrou: 495 + 300 = 795.
 const fechada = Object.assign({}, c2, {pesagem: pesC2, manipulacao: {inicio: 'a', rendimento: 790}});

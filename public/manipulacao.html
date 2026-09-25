@@ -355,7 +355,7 @@ function calcularPrevistos(op) {
   return out;
 }
 
-/* Na correção de um bulk reprovado, o que se pesa são os insumos que a
+/* Na correção de um bulk reprovado, o que se pesa são as matérias-primas que a
    Qualidade definiu (gravados em manipulacao/previstos), não a fórmula. */
 function previstosDaOp(op) {
   var f = Manipulacao.fase(op);
@@ -563,8 +563,8 @@ function renderPainel() {
     var an = faseOp.analise || {};
     reprov.innerHTML = '<b>Bulk reprovado pela Qualidade</b>' + (an.por ? ' (' + escapeHtml(an.por) + ')' : '') +
       (an.observacao ? ': ' + escapeHtml(an.observacao) : '') +
-      '. Se o bulk puder ser corrigido (ex.: adicionar insumos), a <b>Qualidade</b> abre a correção na tela Qualidade, ' +
-      'com a RNC e os insumos a adicionar. A correção aparece aqui para pesar, conferir e manipular, no mesmo lote.';
+      '. Se o bulk puder ser corrigido (ex.: adicionar matérias-primas), a <b>Qualidade</b> abre a correção na tela Qualidade, ' +
+      'com a RNC e as matérias-primas a adicionar. A correção aparece aqui para pesar, conferir e manipular, no mesmo lote.';
   }
   renderExcedente(op, faseOp);
   document.getElementById('mBlocoPesagem').style.display = (st === 'LIBERADO' || st === 'REPROVADO') ? 'none' : '';
@@ -1126,7 +1126,7 @@ function gravarFase(updates) {
 
 document.getElementById('mBtnIniciarPesagem').addEventListener('click', function() {
   if (!Object.keys(previstos).length) {
-    showAlert(Manipulacao.ehCorrecao(Manipulacao.fase(allOps[opAtual])) ? 'A correção não tem insumos a pesar.' : 'Sem fórmula cadastrada não há o que pesar.', 'danger');
+    showAlert(Manipulacao.ehCorrecao(Manipulacao.fase(allOps[opAtual])) ? 'A correção não tem matérias-primas a pesar.' : 'Sem fórmula cadastrada não há o que pesar.', 'danger');
     return;
   }
   var t = Manipulacao.transicao('INICIAR_PESAGEM', {quem: eu()});

@@ -234,7 +234,7 @@
       erros.push('Falta a foto da pesagem de ' + semFoto.map(function(l) { return l.mpCodigo; }).join(', ') + ' (prova de auditoria).');
     }
     if (!linhas.length) erros.push(opcoes && opcoes.correcao
-      ? 'A correção não tem insumos a pesar.'
+      ? 'A correção não tem matérias-primas a pesar.'
       : 'A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
     var pendentes = linhas.filter(function(l) { return l.pendente; });
     if (pendentes.length) erros.push(pendentes.length + ' matéria(s)-prima(s) sem peso registrado.');
@@ -485,6 +485,17 @@
   // Mesma regra de chave do resto do sistema (sanitizeKey de utils.js).
   function itemCorrecaoKey(codigo) { return texto(codigo).replace(/[.#$\[\]\/]/g, '_'); }
 
+  /* A correção adiciona MATÉRIA-PRIMA ao bulk (usuário, 25/09: "eu vou
+     adicionar MPs"). Cadastro de Materiais: MPGR (MP geral) e MPES
+     (fragrância) são MP; EP/ES/ET (embalagens) e MU (uso e consumo) não
+     entram num tanque. Sem tipo no cadastro, não dá para afirmar: aceita. */
+  var TIPOS_NAO_MP = {EP: 'embalagem primária', ES: 'embalagem secundária', ET: 'embalagem terciária', MU: 'uso e consumo'};
+  function ehMateriaPrima(material) {
+    var t = texto(material && material.tipo).toUpperCase();
+    return !TIPOS_NAO_MP[t];
+  }
+  function motivoNaoMp(material) { return TIPOS_NAO_MP[texto(material && material.tipo).toUpperCase()] || null; }
+
   function validarAberturaCorrecao(fase_, dados, podeAutorizar) {
     var f = fase_ || {}, d = dados || {}, erros = [];
     if (!podeAutorizar) erros.push('Só a Qualidade autoriza a correção do bulk.');
@@ -492,14 +503,15 @@
     if (!texto(d.rncNumero)) erros.push('Vincule a RNC da reprovação (obrigatória).');
     if (!texto(d.motivo)) erros.push('Descreva o motivo da correção.');
     var itens = (d.itens || []).filter(function(it) { return it && (texto(it.mpCodigo) || n(it.quantidade) != null); });
-    if (!itens.length) erros.push('Informe ao menos um insumo da correção.');
+    if (!itens.length) erros.push('Informe ao menos uma matéria-prima da correção.');
     var vistos = {};
     itens.forEach(function(it, i) {
       var cod = texto(it.mpCodigo);
-      if (!cod) erros.push('Insumo ' + (i + 1) + ': informe o código.');
+      if (!cod) erros.push('Matéria-prima ' + (i + 1) + ': informe o código.');
       else if (vistos[cod]) erros.push(cod + ' aparece duas vezes.');
       vistos[cod] = true;
-      if (!(n(it.quantidade) > 0)) erros.push((cod || 'Insumo ' + (i + 1)) + ': informe a quantidade.');
+      if (!(n(it.quantidade) > 0)) erros.push((cod || 'Matéria-prima ' + (i + 1)) + ': informe a quantidade.');
+      if (it.tipo && !ehMateriaPrima(it)) erros.push(cod + ' é ' + motivoNaoMp(it) + ' — a correção adiciona matéria-prima.');
     });
     if (!(n(d.entradaKg) > 0)) erros.push('Informe a massa do bulk reprovado que entra na correção (kg).');
     if (d.retroativo && !texto(d.justificativaRetroativo)) erros.push('Justifique o registro retroativo.');
@@ -624,6 +636,7 @@
     regraConferencia: regraConferencia, validarLiberacaoSemConferencia: validarLiberacaoSemConferencia,
     validarFechamentoManipulacao: validarFechamentoManipulacao,
     transicao: transicao, acoesDisponiveis: acoesDisponiveis, minutos: minutos,
+    ehMateriaPrima: ehMateriaPrima,
     ciclo: ciclo, ehCorrecao: ehCorrecao, dispensaFoto: dispensaFoto, ciclos: ciclos,
     validarAberturaCorrecao: validarAberturaCorrecao, montarCorrecao: montarCorrecao,
     massaTeorica: massaTeorica, calcularExcedente: calcularExcedente, materiaisDoExcedente: materiaisDoExcedente,

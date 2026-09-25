@@ -56,8 +56,8 @@ function dados() {
       'MPGR-001': {mpCodigo: 'MPGR-001', mpNome: 'ALCOOL CEREAIS', unidade: 'kg'},
       'MPGR-002': {mpCodigo: 'MPGR-002', mpNome: 'AGUA DEIONIZADA', unidade: 'kg'},
       'MPES-003': {mpCodigo: 'MPES-003', mpNome: 'FRAGRANCIA LEAO', unidade: 'kg'},
-      'MPGR-050': {mpCodigo: 'MPGR-050', mpNome: 'SOLUBILIZANTE PEG-40', unidade: 'kg'},
-      'EP-00106': {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML', unidade: 'un'}
+      'MPGR-050': {mpCodigo: 'MPGR-050', mpNome: 'SOLUBILIZANTE PEG-40', unidade: 'kg', tipo: 'MPGR'},
+      'EP-00106': {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML', unidade: 'un', tipo: 'EP'}
     },
     estoque: {
       'MPGR-050': {saldoAtual: 200, materialNome: 'SOLUBILIZANTE PEG-40'},
@@ -219,7 +219,16 @@ const fase = (page) => page.evaluate((k) => window.__db.ops[k].manipulacao, OP);
     // Sem insumo: barra.
     await q.page.fill('#qCorrMotivo', 'Turbidez — adição de solubilizante');
     await q.page.click('#qCorrConfirmar');
-    await q.page.waitForFunction(() => /ao menos um insumo/.test(document.getElementById('qCorrErros').innerText));
+    await q.page.waitForFunction(() => /ao menos uma matéria-prima/.test(document.getElementById('qCorrErros').innerText));
+    // A lista oferece só MP; embalagem digitada à mão é recusada.
+    const opcoes = await q.page.$$eval('#qCorrMateriais option', (os) => os.map((o) => o.value));
+    assert.ok(opcoes.some((v) => /^MPGR-050/.test(v)), 'MP na lista');
+    assert.ok(!opcoes.some((v) => /^EP-00106/.test(v)), 'embalagem fora da lista');
+    assert.match(await q.page.locator('#modalCorrecaoBg').innerText(), /Matérias-primas a adicionar/);
+    await q.page.fill('#qCorrItens .corr-cod', 'EP-00106');
+    await q.page.fill('#qCorrItens .corr-qtd', '5');
+    await q.page.click('#qCorrConfirmar');
+    await q.page.waitForFunction(() => /embalagem primária — a correção adiciona matéria-prima/.test(document.getElementById('qCorrErros').innerText));
     // Insumo fora do cadastro: barra.
     await q.page.fill('#qCorrItens .corr-cod', 'XYZ-999');
     await q.page.fill('#qCorrItens .corr-qtd', '60');

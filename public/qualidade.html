@@ -498,11 +498,11 @@
         <div class="field-hint">Vem preenchida com o rendimento do ciclo reprovado. Corrija se parte do bulk não entra.</div>
       </div>
       <div class="form-group">
-        <label>Insumos a adicionar <span style="color:var(--danger)">*</span></label>
+        <label>Matérias-primas a adicionar <span style="color:var(--danger)">*</span></label>
         <div id="qCorrItens"></div>
-        <button type="button" class="btn btn-ghost btn-sm" id="qCorrAddItem" style="margin-top:6px">＋ Insumo</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="qCorrAddItem" style="margin-top:6px">＋ Matéria-prima</button>
         <datalist id="qCorrMateriais"></datalist>
-        <div class="field-hint">A Manipulação pesa exatamente estes insumos (com foto, lote e conferência) e a baixa sai do estoque.</div>
+        <div class="field-hint">A lista mostra só matérias-primas (MP geral e fragrância). A Manipulação pesa exatamente estas MPs (com foto, lote e conferência) e a baixa sai do estoque.</div>
       </div>
       <div class="form-group">
         <label>Instrução técnica</label>
@@ -1371,7 +1371,7 @@ function rncsDoLote(lote) {
 function linhaInsumoCorrecao(it) {
   var d = it || {};
   return '<div class="corr-item" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">' +
-    '<input type="text" list="qCorrMateriais" class="corr-cod" placeholder="Código ou nome do insumo" value="' + escapeAttr(d.mpCodigo || '') + '" style="flex:3">' +
+    '<input type="text" list="qCorrMateriais" class="corr-cod" placeholder="Código ou nome da MP" value="' + escapeAttr(d.mpCodigo || '') + '" style="flex:3">' +
     '<input type="number" step="any" min="0" class="corr-qtd" placeholder="Qtd" value="' + escapeAttr(d.quantidade == null ? '' : d.quantidade) + '" style="flex:1">' +
     '<span class="corr-un field-hint" style="min-width:24px">' + escapeHtml(d.unidade || 'kg') + '</span>' +
     '<button type="button" class="btn btn-ghost btn-sm corr-del" title="Remover">✕</button></div>';
@@ -1392,7 +1392,7 @@ function materialDoCodigoCorrecao(txt) {
   if (!v) return null;
   var cod = v.split(' — ')[0].trim();
   var m = allMateriais[sanitizeKey(cod)] || Object.values(allMateriais).find(function(x) { return x && x.mpCodigo === cod; });
-  return m ? {mpCodigo: m.mpCodigo || cod, mpNome: m.mpNome || m.nome || '', unidade: m.unidade || 'kg'} : null;
+  return m ? {mpCodigo: m.mpCodigo || cod, mpNome: m.mpNome || m.nome || '', unidade: m.unidade || 'kg', tipo: m.tipo || ''} : null;
 }
 function abrirModalCorrecao(opKey) {
   if (!podeAutorizarCorrecao()) { showAlert('Só a Qualidade autoriza a correção do bulk.', 'danger'); return; }
@@ -1420,10 +1420,12 @@ function abrirModalCorrecao(opKey) {
   document.getElementById('qCorrRetroJust').value = '';
   document.getElementById('qCorrRetroJust').style.display = 'none';
   document.getElementById('qCorrItens').innerHTML = linhaInsumoCorrecao();
-  document.getElementById('qCorrMateriais').innerHTML = Object.keys(allMateriais).map(function(k) {
-    var m = allMateriais[k] || {};
-    return m.mpCodigo ? '<option value="' + escapeAttr(m.mpCodigo + ' — ' + (m.mpNome || m.nome || '')) + '">' : '';
-  }).join('');
+  // Só matéria-prima: embalagem e uso e consumo não vão para o tanque.
+  document.getElementById('qCorrMateriais').innerHTML = Object.keys(allMateriais)
+    .map(function(k) { return allMateriais[k] || {}; })
+    .filter(function(m) { return m.mpCodigo && Manipulacao.ehMateriaPrima(m); })
+    .sort(function(a, b) { return String(a.mpCodigo).localeCompare(String(b.mpCodigo)); })
+    .map(function(m) { return '<option value="' + escapeAttr(m.mpCodigo + ' — ' + (m.mpNome || m.nome || '')) + '">'; }).join('');
   ligarInsumosCorrecao();
   var erros = document.getElementById('qCorrErros');
   erros.className = 'alert alert-danger'; erros.textContent = '';
@@ -1454,7 +1456,7 @@ document.getElementById('qCorrConfirmar').addEventListener('click', function() {
     if (!txt && qtd === '') return null;
     var m = materialDoCodigoCorrecao(txt);
     if (txt && !m) desconhecidos.push(txt);
-    return {mpCodigo: m ? m.mpCodigo : txt, mpNome: m ? m.mpNome : '', unidade: m ? m.unidade : 'kg', quantidade: qtd === '' ? null : Number(qtd)};
+    return {mpCodigo: m ? m.mpCodigo : txt, mpNome: m ? m.mpNome : '', unidade: m ? m.unidade : 'kg', tipo: m ? m.tipo : '', quantidade: qtd === '' ? null : Number(qtd)};
   }).filter(Boolean);
   var dados = {
     rncNumero: rnc ? rnc.numero : '', rncKey: rncKey || null,
@@ -1469,7 +1471,7 @@ document.getElementById('qCorrConfirmar').addEventListener('click', function() {
   var box = document.getElementById('qCorrErros');
   if (erros.length) { box.className = 'alert alert-danger show'; box.textContent = erros.join(' '); return; }
   if (!confirm('Abrir a correção do bulk do lote ' + (op.lote || '') + '?\n\nA Manipulação vai pesar ' + itens.length +
-    ' insumo(s) e o envase continua travado até a nova análise.')) return;
+    ' matéria(s)-prima(s) e o envase continua travado até a nova análise.')) return;
   var btn = this; btn.disabled = true;
   // Transação: só abre se o bulk continua reprovado (duas pessoas clicando,
   // ou a tela desatualizada, não abrem dois ciclos).
@@ -1481,7 +1483,7 @@ document.getElementById('qCorrConfirmar').addEventListener('click', function() {
     btn.disabled = false;
     if (!res.committed) { showAlert('O bulk deste lote não está mais reprovado — nada foi alterado.', 'danger'); return; }
     fecharModalCorrecao();
-    showAlert('Correção aberta (RNC ' + dados.rncNumero + '). A Manipulação já vê os insumos para pesar.', 'success');
+    showAlert('Correção aberta (RNC ' + dados.rncNumero + '). A Manipulação já vê as matérias-primas para pesar.', 'success');
   }).catch(function(e) { btn.disabled = false; showAlert('Erro ao abrir a correção: ' + e.message, 'danger'); });
 });
 // O perfil chega depois do primeiro desenho: o botão depende dele.
