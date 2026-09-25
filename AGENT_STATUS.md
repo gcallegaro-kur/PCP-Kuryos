@@ -157,6 +157,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   inteiro (não `--short`), procurando rebase/merge em andamento.
   Arquivos ativos: nenhum.
 
+- **Publicado — correção de bulk só com matéria-prima (2026-09-25).** Commit
+  `967a93f`, Hosting por worktree novo do origin/main; 7 arquivos públicos
+  idênticos (inclui Relatório de Pedido). A lista da correção oferece só MP
+  (`tipo` MPGR/MPES, `Manipulacao.ehMateriaPrima`); EP/ES/ET/MU recusados;
+  textos falam em matérias-primas. Arquivos ativos: nenhum.
+
 - **Publicado — correção de bulk reprovado (2026-09-25).** Commit `b97fc03`,
   Hosting publicado. **Incidente:** meu deploy saiu de um worktree de
   `b97fc03` criado antes de `a2a3ec9` e derrubou o Relatório de Pedido (404);
