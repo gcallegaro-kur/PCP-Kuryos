@@ -127,6 +127,24 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — Separação consolidada por material (2026-09-25).** Commit
+  `c830041`, Hosting + RTDB por worktree limpo; 4 arquivos públicos idênticos ao
+  commit e regra conferida no ar. Aba nova em `separacao_materiais.html`: soma o
+  mesmo material de várias OPs (SKUs diferentes) por posição, na ordem do
+  Planejamento (na linha → `dataInicioPlanejada` → sem programação pela emissão).
+  Motor puro `shared/separacao-consolidada.js` (roda OP a OP sobre saldo simulado
+  com o FEFO real, dono respeitado; falta cai na OP de menor prioridade). Grava
+  pedaços com `origemRef` da OP, `ops/$op/separacaoParcial` (acumula) e
+  `separacaoConcluida` só quando completa (`via: 'consolidada'`). Regra nova:
+  esses dois campos graváveis por papel/módulo Logística — antes a separação por
+  OP também tomava PERMISSION_DENIED ao marcar a OP. Testes: unit 7, UI 8,
+  regras no emulador. **Atenção para testes de regra:** rodar com
+  `--project demo-<ns>`; sem isso o emulador aplica as regras a outro namespace
+  e tudo passa aberto (`run_operacao_rules_test.js` só passa com
+  `--project demo-operacao`). Ensaio na base: 18 OPs elegíveis, **nenhuma com
+  data no Planejamento** (tela avisa), 0 saldo endereçado nos materiais delas.
+  Arquivos ativos: nenhum.
+
 - **Publicado — PC direto travado em "Criando..." (2026-09-24).** Commit
   `f082ca6`, Hosting + RTDB; `compras.html` idêntico ao commit. O botão travava
   antes da conferência da rota (return sem destravar) e `#alertBox` ficava
