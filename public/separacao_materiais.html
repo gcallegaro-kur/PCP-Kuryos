@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
+  <script src="shared/separacao-consolidada.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -66,6 +67,18 @@
     .row-clicavel:hover td{background:var(--surface-2)}
     .sep-material-header td{background:var(--surface-2);font-weight:700;padding-top:12px}
     .sep-qtd{max-width:120px}
+    .modo-tabs{max-width:96%;margin:0 auto 12px;display:flex;gap:6px}
+    .modo-tab{padding:8px 16px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+    .modo-tab.ativo{background:var(--primary);border-color:var(--primary);color:#fff}
+    .cons-controles{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;padding:14px 16px 0}
+    .cons-controles .form-group{margin-bottom:0}
+    .cons-check{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);font-weight:500;margin:0 0 9px}
+    .cons-para{font-size:11.5px;color:var(--muted)}
+    .cons-ops-mat{font-size:11.5px;color:var(--muted);font-weight:400;margin-top:4px;line-height:1.6}
+    .cons-falta{color:var(--danger);font-weight:600}
+    .cons-kpis{display:flex;gap:18px;flex-wrap:wrap;padding:12px 16px 0;font-size:12.5px;color:var(--muted)}
+    .cons-kpis b{color:var(--text);font-size:15px}
+    input[type=date]{padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
@@ -77,6 +90,52 @@
   <div class="status-pill"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
 </div>
 
+<div class="main" style="padding-bottom:0"><div id="alertBox" class="alert alert-success"></div></div>
+
+<div class="modo-tabs">
+  <button class="modo-tab ativo" data-modo="op">Por OP</button>
+  <button class="modo-tab" data-modo="consolidado">Consolidado por material</button>
+</div>
+
+<div id="modoConsolidado" style="display:none">
+  <div class="section-note">Soma o que várias OPs pedem do mesmo material -- mesmo de SKUs diferentes -- e pede o total de uma vez. A ordem vem do Planejamento: OP já na linha primeiro, depois pela data programada; se faltar material, quem fica sem é a OP de menor prioridade. Cada parte separada continua amarrada à sua OP.</div>
+  <div class="main" style="padding-bottom:0">
+    <div class="card">
+      <div class="card-title">OPs consideradas (ordem de prioridade)</div>
+      <div class="cons-controles">
+        <div class="form-group"><label>Programadas até</label><input type="date" id="consAte"></div>
+        <label class="cons-check"><input type="checkbox" id="consSemData" checked> Incluir OPs sem programação (vão por último, pela emissão)</label>
+      </div>
+      <div class="section-note" id="consAvisoOrdem" style="display:none;margin:10px 16px 0;max-width:none"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:34px"></th><th style="width:34px">#</th><th>Lote</th><th>Produto</th><th>Cliente</th><th>Planejamento</th></tr></thead>
+          <tbody id="consOpsBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Lista de separação consolidada</div>
+      <div class="cons-kpis" id="consKpis"></div>
+      <div class="form-group" style="max-width:320px;padding:12px 16px 0">
+        <label>Destino *</label>
+        <select id="consDestino"><option value="">Selecione o endereço de destino...</option></select>
+        <div class="field-hint">Sempre escolhido manualmente -- o sistema nunca decide sozinho pra onde o material vai.</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Material / Origem sugerida (FEFO)</th><th>Validade</th><th>Para as OPs</th><th style="width:140px">Qtd a separar</th></tr></thead>
+          <tbody id="consMateriaisBody"></tbody>
+        </table>
+      </div>
+      <div style="padding:0 16px 16px;display:flex;gap:10px">
+        <button class="btn btn-green" id="btnConfirmarConsolidada">✅ Confirmar Separação Consolidada</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modoOp">
 <div class="kt-toolbar">
   <div class="kt-search"><span class="icon">🔍</span><input type="text" id="opSearch" placeholder="Buscar por lote, SKU ou produto..."></div>
   <select class="kt-select" id="opFiltro">
@@ -87,7 +146,6 @@
 </div>
 
 <div class="main">
-  <div id="alertBox" class="alert alert-success"></div>
 
   <div class="card">
     <div class="card-title" id="opCount">OPs</div>
@@ -122,6 +180,7 @@
       <button class="btn btn-ghost" id="btnFecharPainel">Fechar</button>
     </div>
   </div>
+</div>
 </div>
 
 <script>
@@ -281,12 +340,17 @@ function renderPainelSeparacaoMateriais(op) {
     var it = entry[1];
     var itemKey = sanitizeKey(it.mpCodigo);
     var lotesDoItem = allEstoqueLotes[itemKey] || {};
-    var sugestao = sugerirAlocacaoFefo(it.mpCodigo, it.quantidade, lotesDoItem, enderecosBloqueadosMap(), { clienteKey: clienteOp });
+    // O que uma separação consolidada já levou para esta OP sai da conta.
+    var jaLevado = (!op.separacaoConcluida && op.separacaoParcial && op.separacaoParcial.itens && Number(op.separacaoParcial.itens[it.mpCodigo])) || 0;
+    var qtdPedir = Math.max(0, Math.round(((Number(it.quantidade) || 0) - jaLevado) * 1000) / 1000);
+    var sugestao = sugerirAlocacaoFefo(it.mpCodigo, qtdPedir, lotesDoItem, enderecosBloqueadosMap(), { clienteKey: clienteOp });
     var cabecalho = '<tr class="sep-material-header"><td colspan="3">' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome) +
-      ' <span style="font-weight:400;color:var(--muted)">· necessário: ' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade || '') + '</span>' +
+      ' <span style="font-weight:400;color:var(--muted)">· necessário: ' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade || '') +
+      (jaLevado > 0 ? ' · já separado na consolidada: ' + fmtNum(jaLevado) : '') + '</span>' +
       (sugestao.faltante > 0 ? '<div class="field-hint" style="color:var(--danger)">Faltam ' + fmtNum(sugestao.faltante) + ' ' + escapeHtml(it.unidade || '') + ' -- só ' + fmtNum(sugestao.qtdTotal) + ' disponíveis em endereços liberados.</div>' : '') +
       '</td></tr>';
     if (!sugestao.alocacoes.length) {
+      if (qtdPedir <= 0) return cabecalho + '<tr><td colspan="3" class="no-data" style="padding:8px">Já separado.</td></tr>';
       return cabecalho + '<tr><td colspan="3" class="no-data" style="padding:8px">Nenhum lote liberado endereçado pra este material ainda.</td></tr>';
     }
     var linhas = sugestao.alocacoes.map(function(a) {
@@ -338,7 +402,187 @@ function confirmarSeparacao() {
   });
 }
 
+
+// ── Separação consolidada por material ─────────────────────────────────
+// Regras puras em shared/separacao-consolidada.js; aqui só tela e gravação.
+var consExcluidas = {};   // opKey -> true: OP desmarcada pelo separador
+var consPlano = [];       // último plano calculado (materiais)
+var modoAtual = 'op';
+
+function hojeMaisDias(n) {
+  var d = new Date(); d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function clienteKeyDaOp(op) {
+  return (typeof PropriedadeEstoque !== 'undefined')
+    ? PropriedadeEstoque.clienteKeyDoSku(op.sku, allProdutosSep, null, op.cliente) : null;
+}
+function trocarModo(modo) {
+  modoAtual = modo;
+  document.querySelectorAll('.modo-tab').forEach(function(b) { b.classList.toggle('ativo', b.getAttribute('data-modo') === modo); });
+  document.getElementById('modoOp').style.display = modo === 'op' ? '' : 'none';
+  document.getElementById('modoConsolidado').style.display = modo === 'consolidado' ? '' : 'none';
+  if (modo === 'consolidado') renderConsolidado();
+}
+function consOpsCandidatas() {
+  return SeparacaoConsolidada.opsNoHorizonte(opsGlobal, document.getElementById('consAte').value || null,
+    document.getElementById('consSemData').checked);
+}
+function fmtPlanejamento(p) {
+  var d = p.data ? new Date(p.data) : null;
+  var quando = d && !isNaN(d.getTime())
+    ? d.toLocaleDateString('pt-BR') + (p.data.length > 10 ? ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '') : '';
+  return escapeHtml(p.rotulo) + (quando && p.grupo !== 2 ? ' <span style="color:var(--muted)">· ' + escapeHtml(quando) + '</span>' : '');
+}
+function renderConsolidado() {
+  if (modoAtual !== 'consolidado') return;
+  var candidatas = consOpsCandidatas();
+  var opsBody = document.getElementById('consOpsBody');
+  // Na base de hoje quase nenhuma OP tem data no Planejamento: sem este aviso
+  // a ordem por emissão pareceria uma prioridade decidida por alguém.
+  var semData = candidatas.filter(function(e) { return SeparacaoConsolidada.prioridadeOp(e.op).grupo === 2; }).length;
+  var aviso = document.getElementById('consAvisoOrdem');
+  aviso.style.display = semData ? '' : 'none';
+  aviso.innerHTML = semData ? '⚠️ ' + semData + ' de ' + candidatas.length + ' OPs não têm data no Planejamento -- para elas a ordem é a de emissão. Programe-as no Planejamento para a prioridade valer.' : '';
+  if (!candidatas.length) {
+    opsBody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhuma OP aberta com embalagem pendente neste horizonte.</td></tr>';
+  } else {
+    opsBody.innerHTML = candidatas.map(function(e, i) {
+      var p = SeparacaoConsolidada.prioridadeOp(e.op);
+      return '<tr>' +
+        '<td><input type="checkbox" class="cons-op-chk" data-op-key="' + escapeAttr(e.opKey) + '"' + (consExcluidas[e.opKey] ? '' : ' checked') + '></td>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td><b>' + escapeHtml(e.op.lote || e.opKey) + '</b></td>' +
+        '<td>' + escapeHtml(e.op.produto || e.op.sku || '—') + '</td>' +
+        '<td>' + escapeHtml(e.op.cliente || '—') + '</td>' +
+        '<td>' + fmtPlanejamento(p) + '</td>' +
+      '</tr>';
+    }).join('');
+    opsBody.querySelectorAll('.cons-op-chk').forEach(function(chk) {
+      chk.addEventListener('change', function() {
+        var k = chk.getAttribute('data-op-key');
+        if (chk.checked) delete consExcluidas[k]; else consExcluidas[k] = true;
+        renderConsolidadoMateriais();
+      });
+    });
+  }
+  renderConsolidadoMateriais();
+}
+function renderConsolidadoMateriais() {
+  if (modoAtual !== 'consolidado') return;
+  var entradas = consOpsCandidatas().filter(function(e) { return !consExcluidas[e.opKey]; })
+    .map(function(e) { return { opKey: e.opKey, op: e.op, clienteKey: clienteKeyDaOp(e.op) }; });
+  consPlano = SeparacaoConsolidada.planejar(entradas, allEstoqueLotes, enderecosBloqueadosMap(), sugerirAlocacaoFefo, sanitizeKey);
+
+  var comFalta = consPlano.filter(function(m) { return m.faltante > 0; }).length;
+  document.getElementById('consKpis').innerHTML =
+    '<span><b>' + entradas.length + '</b> OPs</span>' +
+    '<span><b>' + consPlano.length + '</b> materiais</span>' +
+    '<span' + (comFalta ? ' class="cons-falta"' : '') + '><b' + (comFalta ? ' class="cons-falta"' : '') + '>' + comFalta + '</b> com falta de saldo endereçado</span>';
+
+  var body = document.getElementById('consMateriaisBody');
+  if (!consPlano.length) {
+    body.innerHTML = '<tr><td colspan="4" class="no-data">Nada a separar para as OPs marcadas.</td></tr>';
+    return;
+  }
+  body.innerHTML = consPlano.map(function(m, mi) {
+    var un = escapeHtml(m.unidade || '');
+    var opsTxt = m.ops.map(function(o) {
+      return escapeHtml(o.opLote) + ' (' + escapeHtml(o.sku || o.produto) + '): ' + fmtNum(o.necessario) +
+        (o.faltante > 0 ? ' <span class="cons-falta">falta ' + fmtNum(o.faltante) + '</span>' : '');
+    }).join(' · ');
+    var cab = '<tr class="sep-material-header"><td colspan="4">' + escapeHtml(m.mpCodigo) + ' — ' + escapeHtml(m.mpNome) +
+      ' <span style="font-weight:400;color:var(--muted)">· total: ' + fmtNum(m.necessario) + ' ' + un + ' para ' + m.ops.length + ' OP' + (m.ops.length > 1 ? 's' : '') + '</span>' +
+      (m.faltante > 0 ? '<div class="field-hint cons-falta">Faltam ' + fmtNum(m.faltante) + ' ' + un + ' -- só ' + fmtNum(m.alocado) + ' disponíveis em endereços liberados. Ficam sem as OPs de menor prioridade.</div>' : '') +
+      '<div class="cons-ops-mat">' + opsTxt + '</div></td></tr>';
+    if (!m.linhas.length) return cab + '<tr><td colspan="4" class="no-data" style="padding:8px">Nenhum lote liberado endereçado pra este material ainda.</td></tr>';
+    return cab + m.linhas.map(function(l, li) {
+      var para = l.partes.map(function(p) { return escapeHtml(p.opLote) + ': ' + fmtNum(p.qtd); }).join(' · ');
+      return '<tr data-cons-m="' + mi + '" data-cons-l="' + li + '">' +
+        '<td>📍 ' + escapeHtml(l.enderecoCodigo || '—') + (l.loteInterno ? ' <span class="cons-para">' + escapeHtml(l.loteInterno) + '</span>' : '') +
+          (l.doCliente ? ' <span title="Material de propriedade do cliente" style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;background:#ede9fe;color:#6d28d9">do cliente</span>' : '') + '</td>' +
+        '<td>' + fmtData(l.dataValidade) + '</td>' +
+        '<td class="cons-para">' + para + '</td>' +
+        '<td><input type="number" class="sep-qtd" min="0" step="any" max="' + l.qtd + '" value="' + l.qtd + '"></td>' +
+      '</tr>';
+    }).join('');
+  }).join('');
+}
+
+function confirmarConsolidada() {
+  var destino = document.getElementById('consDestino').value;
+  if (!destino) { showAlert('Selecione o endereço de destino -- é sempre uma escolha manual.', 'danger'); return; }
+  var tarefas = [];
+  var acima = false;
+  document.querySelectorAll('#consMateriaisBody tr[data-cons-m]').forEach(function(tr) {
+    var m = consPlano[Number(tr.getAttribute('data-cons-m'))];
+    var l = m && m.linhas[Number(tr.getAttribute('data-cons-l'))];
+    if (!l) return;
+    var qtd = parseFloat(tr.querySelector('.sep-qtd').value);
+    if (!qtd || qtd <= 0) return;
+    if (qtd > l.qtd) acima = true;
+    SeparacaoConsolidada.distribuir(l.partes, qtd).forEach(function(p) {
+      if (p.qtd > 0) tarefas.push({ mpCodigo: m.mpCodigo, loteKey: l.loteKey, qtd: p.qtd, opKey: p.opKey, opLote: p.opLote });
+    });
+  });
+  if (!tarefas.length) { showAlert('Nenhuma quantidade informada pra separar.', 'danger'); return; }
+  if (acima && !confirm('Alguma quantidade passou do planejado para a posição. O excedente não tem OP e não será separado. Continuar?')) return;
+
+  var autor = currentUserNome();
+  var btn = document.getElementById('btnConfirmarConsolidada');
+  btn.disabled = true;
+  var porOp = {};   // opKey -> mpCodigo -> qtd realmente separada
+  var erros = [];
+  // Uma de cada vez: várias partes saem do MESMO lote, e cada uma vira um
+  // pedaço próprio amarrado à sua OP (origemRef = lote da OP).
+  tarefas.reduce(function(prom, t) {
+    return prom.then(function() {
+      return separarParcialLoteEndereco(db, 'material', t.mpCodigo, t.loteKey, t.qtd, destino, 'SEPARAÇÃO CONSOLIDADA', autor, t.opLote)
+        .then(function(res) {
+          if (res.abatidoReal > 0) {
+            var o = porOp[t.opKey] || (porOp[t.opKey] = {});
+            o[t.mpCodigo] = Math.round(((o[t.mpCodigo] || 0) + res.abatidoReal) * 1000) / 1000;
+          }
+          if (res.abatidoReal < t.qtd) erros.push(t.mpCodigo + ' p/ ' + t.opLote + ': saldo da posição mudou, separado ' + fmtNum(res.abatidoReal) + ' de ' + fmtNum(t.qtd));
+        })
+        .catch(function(err) { erros.push(t.mpCodigo + ' p/ ' + t.opLote + ': ' + err.message); });
+    });
+  }, Promise.resolve()).then(function() {
+    var agora = new Date().toISOString();
+    return Promise.all(Object.keys(porOp).map(function(opKey) {
+      var ganhos = porOp[opKey];
+      return db.ref('ops/' + opKey + '/separacaoParcial').transaction(function(atual) {
+        atual = atual || { itens: {} };
+        atual.itens = atual.itens || {};
+        Object.keys(ganhos).forEach(function(mp) { atual.itens[mp] = Math.round(((Number(atual.itens[mp]) || 0) + ganhos[mp]) * 1000) / 1000; });
+        atual.em = agora; atual.por = autor;
+        return atual;
+      }).then(function(res) {
+        var op = opsGlobal[opKey];
+        if (!op || !res.committed) return;
+        var opAtualizada = Object.assign({}, op, { separacaoParcial: res.snapshot.val() });
+        if (SeparacaoConsolidada.necessidadeRestante(opAtualizada).length) return;
+        // Tudo que a OP pede já foi separado: vira "Separada", igual à separação por OP.
+        return db.ref('ops/' + opKey + '/separacaoConcluida').set({ em: agora, por: autor, itens: res.snapshot.val().itens, via: 'consolidada' });
+      });
+    }));
+  }).then(function() {
+    var nOps = Object.keys(porOp).length;
+    if (erros.length) showAlert('Separação registrada para ' + nOps + ' OP(s), com avisos: ' + erros.join(' | '), 'danger');
+    else showAlert('Separação consolidada confirmada para ' + nOps + ' OP(s).', 'success');
+  }).catch(function(err) {
+    showAlert('Material movido, mas falhou ao marcar as OPs: ' + err.message, 'danger');
+  }).finally(function() { btn.disabled = false; });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('consAte').value = hojeMaisDias(7);
+  document.getElementById('consAte').addEventListener('change', renderConsolidado);
+  document.getElementById('consSemData').addEventListener('change', renderConsolidado);
+  document.getElementById('btnConfirmarConsolidada').addEventListener('click', confirmarConsolidada);
+  document.querySelectorAll('.modo-tab').forEach(function(b) {
+    b.addEventListener('click', function() { trocarModo(b.getAttribute('data-modo')); });
+  });
   document.getElementById('opSearch').addEventListener('input', renderListaOps);
   document.getElementById('opFiltro').addEventListener('change', renderListaOps);
   document.getElementById('btnConfirmarSeparacao').addEventListener('click', confirmarSeparacao);
@@ -351,6 +595,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('ops'), function(snap) {
       opsGlobal = snap.val() || {};
       renderListaOps();
+      renderConsolidado();
       if (sepOpAtual && opsGlobal[sepOpAtual.opKey]) {
         sepOpAtual.op = opsGlobal[sepOpAtual.opKey];
         renderPainelSeparacaoMateriais(sepOpAtual.op);
@@ -359,14 +604,20 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('estoque_lotes'), function(snap) {
       allEstoqueLotes = snap.val() || {};
       if (sepOpAtual) renderPainelSeparacaoMateriais(sepOpAtual.op);
+      renderConsolidadoMateriais();
     });
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutosSep = snap.val() || {};
       if (sepOpAtual) renderPainelSeparacaoMateriais(sepOpAtual.op);
+      renderConsolidado();
     });
     dbOnValue(db.ref('enderecos_estoque'), function(snap) {
       allEnderecosEstoque = snap.val() || {};
       if (sepOpAtual) document.getElementById('sepDestino').innerHTML = '<option value="">Selecione o endereço de destino...</option>' + opcoesEnderecoSelect();
+      var consDest = document.getElementById('consDestino'), consSel = consDest.value;
+      consDest.innerHTML = '<option value="">Selecione o endereço de destino...</option>' + opcoesEnderecoSelect();
+      consDest.value = consSel;
+      renderConsolidadoMateriais();
     });
   } catch (err) {
     setStatus(false, 'Erro');
