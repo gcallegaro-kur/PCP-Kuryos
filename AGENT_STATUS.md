@@ -127,6 +127,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — correção de bulk reprovado (2026-09-25).** Bulk reprovado
+  pela Qualidade (ex.: turbidez) ficava travado para sempre. Novo ciclo de
+  correção no MESMO lote: Qualidade abre (RNC obrigatória + insumos da
+  correção), pesagem/conferência/manipulação da correção, nova análise; o
+  excedente de massa vira excedente de unidades na OP (qtdPlanejada +
+  embalagens em materiaisConsumo + empenho). **Arquivos ativos:**
+  `public/shared/manipulacao.js`, `public/manipulacao.html`,
+  `public/qualidade.html`, `public/dossie_lote.html`,
+  `run_correcao_bulk_test.js`.
+
 - **Publicado — Separação consolidada por material (2026-09-25).** Commit
   `c830041`, Hosting + RTDB por worktree limpo; 4 arquivos públicos idênticos ao
   commit e regra conferida no ar. Aba nova em `separacao_materiais.html`: soma o
