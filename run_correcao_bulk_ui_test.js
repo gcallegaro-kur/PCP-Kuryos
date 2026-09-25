@@ -342,6 +342,9 @@ const fase = (page) => page.evaluate((k) => window.__db.ops[k].manipulacao, OP);
     await m.page.locator('#mRendimento').dispatchEvent('change');
     await m.page.waitForFunction(() => !document.getElementById('mBtnFecharManipulacao').disabled);
     assert.match(await m.page.locator('#mManipulacaoResumo').innerText(), /Perda de processo: 5 kg/);
+    // Fechar exige responder a perda (25/09): os 5 kg ficaram no tacho.
+    await m.page.fill('#mPerdaResiduo', '5');
+    await m.page.locator('#mPerdaResiduo').dispatchEvent('change');
     let confirmTxt = '';
     m.page.removeAllListeners('dialog');
     m.page.on('dialog', (d) => { confirmTxt = d.message(); d.accept(); });

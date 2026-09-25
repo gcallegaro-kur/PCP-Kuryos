@@ -72,7 +72,11 @@
     Object.keys(origem || {}).forEach(function (t) { destino[t] = arred((destino[t] || 0) + origem[t]); });
     return destino;
   }
-  function total(tipos) { return arred(Object.keys(tipos || {}).reduce(function (s, t) { return s + n(tipos[t]); }, 0)); }
+  // Perda do PRODUTO (apontamento item a item, 25/09: unidades envasadas
+  // descartadas e bulk em kg) aparece por tipo, mas fica fora do total e do %
+  // -- são outras unidades, não componentes.
+  var TIPOS_PRODUTO = { 'Produto envasado (un)': 1, 'Bulk (kg)': 1 };
+  function total(tipos) { return arred(Object.keys(tipos || {}).reduce(function (s, t) { return TIPOS_PRODUTO[t] ? s : s + n(tipos[t]); }, 0)); }
   function pct(parte, todo) { return todo > 0 ? Math.round((parte / todo) * 1000) / 10 : null; }
 
   // Lista para escolher o pedido: um registro por número, mais recente em cima.

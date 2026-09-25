@@ -362,7 +362,11 @@
     var pesadoTotal = arred(linhas.reduce(function(s, l) { return s + num(l.pesado); }, 0));
     var previstoTotal = arred(linhas.reduce(function(s, l) { return s + num(l.previsto); }, 0));
     var perdasPesagem = arred(linhas.reduce(function(s, l) { return s + num(l.perda); }, 0));
-    var perdasManipulacao = arred(Object.keys(man.perdas || {}).reduce(function(s, k) { return s + num(man.perdas[k]); }, 0));
+    // Perda por matéria-prima (25/09): pesada e não foi para o tacho. Entra
+    // nas perdas declaradas; a perda de processo (entrada − rendimento) já a
+    // contém, porque o pesado conta como entrada.
+    var perdasMp = arred(Object.keys(man.perdasMp || {}).reduce(function(s, k) { return s + num(man.perdasMp[k]); }, 0));
+    var perdasManipulacao = arred(Object.keys(man.perdas || {}).reduce(function(s, k) { return s + num(man.perdas[k]); }, 0) + perdasMp);
     var rendimento = n(man.rendimento);
     // Num ciclo de correção o tanque não começa vazio: entra o bulk do ciclo
     // anterior. Sem somar essa massa, 800 kg obtidos com 300 kg de aditivo
@@ -373,7 +377,7 @@
     return {
       previstoTotal: previstoTotal, pesadoTotal: pesadoTotal, rendimento: rendimento,
       entradaBulk: entradaBulk, massaEntrada: massaEntrada,
-      perdasPesagem: perdasPesagem, perdasManipulacao: perdasManipulacao,
+      perdasPesagem: perdasPesagem, perdasManipulacao: perdasManipulacao, perdasMp: perdasMp,
       perdaProcesso: perdaProcesso,
       perdaProcessoPct: perdaProcesso != null && massaEntrada > 0 ? arred(perdaProcesso / massaEntrada * 100, 2) : null,
       rendimentoPct: rendimento != null && massaEntrada > 0 ? arred(rendimento / massaEntrada * 100, 2) : null,

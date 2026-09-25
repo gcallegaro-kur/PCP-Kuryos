@@ -16,6 +16,7 @@
   <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/perdas-etapa.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -56,6 +57,18 @@
     /* Achado do Auditor: fundo hex fixo (#fafafa) ficava quase branco
        flutuando no dark mode, em turno da noite -- troca por um tint
        relativo ao texto, mesmo padrão já usado em .andon-btn logo acima. */
+    .pe-lista{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    .pe-linha{display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:8px 10px}
+    .pe-linha.tem{border-color:#fca5a5}
+    .pe-nome{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.3}
+    .pe-nome small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+    .pe-qtd{width:96px;flex:none;font-size:16px;padding:9px 10px;text-align:right}
+    .pe-un{width:28px;flex:none;font-size:12px;color:var(--muted)}
+    .pe-grupo{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px}
+    .pe-hint{font-size:12px;color:var(--muted);margin:2px 0 8px;line-height:1.45}
+    .pe-outros summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--primary);margin:6px 0}
+    .pe-sem{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-top:10px}
+    .pe-sem input{width:20px;height:20px}
     .parada-section{border:1.5px solid var(--border);border-radius:10px;padding:14px;background:color-mix(in srgb, var(--text) 4%, var(--card))}
     .parada-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .parada-section-title{font-size:13px;font-weight:700;color:var(--muted)}
@@ -405,12 +418,17 @@
         </div>
         <div class="parada-section" style="margin-bottom:14px">
           <div class="parada-section-header">
-            <span class="parada-section-title">Perdas (opcional)</span>
-            <button type="button" class="btn-add-parada" id="btnAddPerdaEncerrarTurno">+ Adicionar perda</button>
+            <span class="parada-section-title">Perdas — item a item</span>
+          </div>
+          <div id="encerrarOpTurnoPerdasEtapa"></div>
+          <div class="parada-section-header" style="margin-top:10px">
+            <span class="pe-grupo" style="margin:0">Outra perda (fora da lista)</span>
+            <button type="button" class="btn-add-parada" id="btnAddPerdaEncerrarTurno">+ Outra perda</button>
           </div>
           <div id="encerrarOpTurnoPerdasList">
-            <div id="encerrarOpTurnoNoPerdasMsg" class="no-paradas">Nenhuma perda informada.</div>
+            <div id="encerrarOpTurnoNoPerdasMsg" class="no-paradas">Nenhuma outra perda.</div>
           </div>
+          <label class="pe-sem"><input type="checkbox" id="encerrarOpTurnoSemPerda"> Não houve perda nesta OP</label>
         </div>
         <div class="form-group" id="encerrarOpTurnoJustificaWrap" style="display:none">
           <label style="color:var(--danger);font-weight:700">Justificativa do Desvio (Obrigatório)</label>
@@ -749,12 +767,17 @@
         </div>
         <div class="parada-section" style="margin-bottom:14px">
           <div class="parada-section-header">
-            <span class="parada-section-title">Perdas da OP</span>
-            <button type="button" class="btn-add-parada" id="btnAddPerda">+ Adicionar perda</button>
+            <span class="parada-section-title">Perdas da OP — item a item</span>
+          </div>
+          <div id="opPerdasEtapa"></div>
+          <div class="parada-section-header" style="margin-top:10px">
+            <span class="pe-grupo" style="margin:0">Outra perda (fora da lista)</span>
+            <button type="button" class="btn-add-parada" id="btnAddPerda">+ Outra perda</button>
           </div>
           <div id="perdasList">
-            <div id="noPerdasMsg" class="no-paradas">Nenhuma perda informada.</div>
+            <div id="noPerdasMsg" class="no-paradas">Nenhuma outra perda.</div>
           </div>
+          <label class="pe-sem"><input type="checkbox" id="opSemPerda"> Não houve perda nesta OP</label>
         </div>
         <div class="form-group" id="opJustificaWrap" style="display:none; margin-top:12px;">
           <label style="color:var(--danger);font-weight:700">Justificativa do Desvio (Obrigatório)</label>
@@ -3861,6 +3884,7 @@ function preencheFechamentoForm(linha, lote, produto, pedidoId, apontadoHoje) {
   document.querySelectorAll('#perdasList .perda-entry').forEach(function(el){ el.remove(); });
   var noPerdasMsg = document.getElementById('noPerdasMsg');
   if (noPerdasMsg) noPerdasMsg.style.display = '';
+  renderPerdasEtapa('opPerdasEtapa', findOpByLote(lote), 'linha', 'opSemPerda');
 
   // Reset desvio
   document.getElementById('opJustificativa').value = '';
@@ -3942,6 +3966,7 @@ function addPerda(containerId, noMsgId) {
       '<input type="hidden" id="pMaterialKey-'+id+'">' +
     '</div>';
   document.getElementById(containerId).appendChild(div);
+  desmarcarSemPerdaDe(containerId);
   div.querySelector('.btn-rem-parada').addEventListener('click', function() {
     div.remove();
     var container = document.getElementById(containerId);
@@ -3987,6 +4012,113 @@ function collectPerdas(containerId) {
   return perdas;
 }
 
+// ── Perdas item a item por etapa (shared/perdas-etapa.js) ─────────────
+// Pedido do usuário (25/09): ao fechar a OP, pedir a perda de CADA insumo que
+// a etapa usa -- envase: todo o BOM + o produto (unidades envasadas
+// descartadas e bulk perdido em kg); rotulagem: frascos e rótulos em cima, o
+// resto recolhido. A lista vem da OP (materiaisConsumo) ou, em OP antiga, do
+// mesmo BOM que baixarEstoqueConsumo usa. Toda linha já leva o material, então
+// toda perda de embalagem desconta estoque (baixarEstoquePerdas).
+function bomItensDaOp(op) {
+  if (!op || !op.sku) return [];
+  var bom = null;
+  var achado = typeof melhorFormulaDoProduto === 'function' ? melhorFormulaDoProduto(op.sku, allFormulasForm) : null;
+  if (achado && achado.registro) bom = allBomForm[chaveVersao(op.sku, achado.registro.versao)] || null;
+  if (!bom) {
+    // Sem fórmula: o BOM de versão mais alta do SKU.
+    var ks = Object.keys(allBomForm).filter(function(k) { return allBomForm[k] && allBomForm[k].codProduto === op.sku; }).sort();
+    bom = ks.length ? allBomForm[ks[ks.length - 1]] : null;
+  }
+  return bom ? Object.values(bom.itens || {}) : [];
+}
+function desmarcarSemPerdaDe(containerId) {
+  var mapa = { encerrarOpTurnoPerdasList: 'encerrarOpTurnoSemPerda', encerrarOpTurnoPerdasEtapa: 'encerrarOpTurnoSemPerda',
+    perdasList: 'opSemPerda', opPerdasEtapa: 'opSemPerda' };
+  var chk = document.getElementById(mapa[containerId] || '');
+  if (chk) chk.checked = false;
+}
+function linhaPerdaEtapaHtml(i) {
+  return '<div class="pe-linha" data-cod="' + escapeAttr(i.materialCodigo) + '" data-nome="' + escapeAttr(i.materialNome) +
+    '" data-un="' + escapeAttr(i.unidade) + '" data-tipo="' + escapeAttr(i.tipo) + '">' +
+    '<div class="pe-nome">' + escapeHtml(i.materialNome) + '<small>' + escapeHtml(i.materialCodigo) + ' · ' + escapeHtml(i.tipo) + '</small></div>' +
+    '<input type="text" inputmode="decimal" class="pe-qtd" placeholder="0" aria-label="Perda de ' + escapeAttr(i.materialNome) + '">' +
+    '<span class="pe-un">' + escapeHtml(i.unidade) + '</span></div>';
+}
+function renderPerdasEtapa(containerId, op, tipo, semPerdaId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var etapa = PerdasEtapa.etapaDoSetor(tipo);
+  var ins = PerdasEtapa.insumosDaEtapa(etapa, op || {}, bomItensDaOp(op), allMateriaisForm);
+  var kgUn = PerdasEtapa.kgPorUnidade(op || {}, op ? allProdutosForm[op.sku] : null);
+  el.dataset.etapa = etapa;
+  el.dataset.kgUn = kgUn || '';
+  var html = '';
+  if (etapa === 'envase') {
+    html += '<div class="pe-grupo">Produto</div><div class="pe-lista">' +
+      '<div class="pe-linha" data-produto="unidades"><div class="pe-nome">Unidades envasadas descartadas<small>frasco cheio que caiu, vazou ou saiu fora de peso</small></div>' +
+        '<input type="text" inputmode="decimal" class="pe-qtd" placeholder="0" aria-label="Unidades envasadas descartadas"><span class="pe-un">un</span></div>' +
+      '<div class="pe-linha" data-produto="bulkKg"><div class="pe-nome">Bulk perdido fora do frasco<small>purga da linha, derramamento, sobra no tanque</small></div>' +
+        '<input type="text" inputmode="decimal" class="pe-qtd" placeholder="0" aria-label="Bulk perdido em kg"><span class="pe-un">kg</span></div>' +
+      '</div><div class="pe-hint" data-pe-conv>' + (kgUn ? '1 un ≈ ' + fmtNum(Math.round(kgUn * 1000) / 1000) + ' kg de bulk.' : 'Sem densidade no cadastro: unidades e kg ficam cada um na sua medida.') +
+      ' Frasco cheio descartado também perde as embalagens — lance-as abaixo.</div>';
+  }
+  html += '<div class="pe-grupo">' + (etapa === 'rotulagem' ? 'Frascos e rótulos' : 'Insumos da OP') + '</div>';
+  if (!ins.principais.length && !ins.outros.length) {
+    html += '<div class="no-paradas">Esta OP não tem BOM cadastrado — use “+ Outra perda”.</div>';
+  } else {
+    html += '<div class="pe-lista">' + ins.principais.map(linhaPerdaEtapaHtml).join('') + '</div>';
+    if (ins.outros.length) {
+      html += '<details class="pe-outros"><summary>Outros insumos da OP (' + ins.outros.length + ')</summary><div class="pe-lista">' +
+        ins.outros.map(linhaPerdaEtapaHtml).join('') + '</div></details>';
+    }
+  }
+  el.innerHTML = html;
+  var chk = document.getElementById(semPerdaId);
+  if (chk) chk.checked = false;
+  el.querySelectorAll('.pe-qtd').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      var linha = inp.closest('.pe-linha');
+      var tem = String(inp.value || '').trim() !== '' && Number(String(inp.value).replace(',', '.')) > 0;
+      if (linha) linha.classList.toggle('tem', tem);
+      if (tem && chk) chk.checked = false;
+      atualizarConversaoPerda(el);
+    });
+  });
+}
+function atualizarConversaoPerda(el) {
+  var conv = el.querySelector('[data-pe-conv]');
+  var kgUn = Number(el.dataset.kgUn) || 0;
+  if (!conv || !kgUn) return;
+  var un = Number(String((el.querySelector('[data-produto="unidades"] .pe-qtd') || {}).value || '').replace(',', '.')) || 0;
+  var kg = Number(String((el.querySelector('[data-produto="bulkKg"] .pe-qtd') || {}).value || '').replace(',', '.')) || 0;
+  var partes = ['1 un ≈ ' + fmtNum(Math.round(kgUn * 1000) / 1000) + ' kg de bulk.'];
+  if (un > 0) partes.push(fmtNum(un) + ' un ≈ ' + fmtNum(Math.round(un * kgUn * 1000) / 1000) + ' kg.');
+  if (kg > 0) partes.push(fmtNum(kg) + ' kg ≈ ' + fmtNum(Math.round(kg / kgUn)) + ' un.');
+  conv.textContent = partes.join(' ') + ' Frasco cheio descartado também perde as embalagens — lance-as abaixo.';
+}
+// {ok, erros, perdas}: tabela da etapa + lista livre, no formato de sempre.
+function collectPerdasEtapa(containerId, livreId, semPerdaId) {
+  var el = document.getElementById(containerId);
+  var etapa = (el && el.dataset.etapa) || 'envase';
+  var linhas = [], produto = {};
+  if (el) {
+    el.querySelectorAll('.pe-linha').forEach(function(l) {
+      var v = (l.querySelector('.pe-qtd') || {}).value || '';
+      if (l.dataset.produto) { produto[l.dataset.produto] = v; return; }
+      linhas.push({ materialCodigo: l.dataset.cod, materialNome: l.dataset.nome, unidade: l.dataset.un, tipo: l.dataset.tipo, qtd: v });
+    });
+  }
+  var val = PerdasEtapa.validarLinhas(linhas, produto);
+  if (!val.ok) return { ok: false, erros: val.erros, perdas: [] };
+  var perdas = PerdasEtapa.montarPerdas(etapa, linhas, produto, collectPerdas(livreId), el ? Number(el.dataset.kgUn) || null : null);
+  var chk = document.getElementById(semPerdaId);
+  if (!perdas.length && !(chk && chk.checked)) {
+    return { ok: false, erros: ['Informe as perdas desta OP item a item, ou marque "Não houve perda nesta OP".'], perdas: [] };
+  }
+  if (perdas.length && chk && chk.checked) chk.checked = false;
+  return { ok: true, erros: [], perdas: perdas };
+}
+
 // Desconta do estoque toda perda lançada COM material específico -- perda
 // só com categoria genérica (sem materialCodigo) continua sendo registrada
 // como sempre foi, só não desconta nada (não tem como saber qual material).
@@ -4024,7 +4156,9 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   var qtdTotal  = parseInt(document.getElementById('opQtdTotal').value) || 0;
   var apontado  = parseInt(this.dataset.opApontado||0) || 0;
   var pedidoId  = this.dataset.opPid || '';
-  var perdas    = collectPerdas();
+  var colPerdas = collectPerdasEtapa('opPerdasEtapa', 'perdasList', 'opSemPerda');
+  if (!colPerdas.ok) { btn.disabled = false; btn.textContent = '🏁 Finalizar OP'; alert(colPerdas.erros.join('\n')); return; }
+  var perdas    = colPerdas.perdas;
 
   var qtdFinal = Math.max(qtdTotal - apontado, 0);
 
@@ -4842,6 +4976,7 @@ function abrirEncerrarOpModal(nome, tipo, lote) {
   var perdasList = document.getElementById('encerrarOpTurnoPerdasList');
   perdasList.querySelectorAll('.perda-entry').forEach(function(el) { el.remove(); });
   document.getElementById('encerrarOpTurnoNoPerdasMsg').style.display = '';
+  renderPerdasEtapa('encerrarOpTurnoPerdasEtapa', opAtual, tipo, 'encerrarOpTurnoSemPerda');
   document.getElementById('encerrarOpTurnoJustificaWrap').style.display = 'none';
   document.getElementById('encerrarOpTurnoJustificativa').value = '';
   document.getElementById('encerrarOpTurnoModal').classList.add('open');
@@ -4903,8 +5038,10 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
   if (!encerrarOpAlvoAtual) return;
   var qtd = parseInt(document.getElementById('encerrarOpTurnoQtd').value) || 0;
   var operador = document.getElementById('encerrarOpTurnoOperador').value.trim();
-  var perdas = collectPerdas('encerrarOpTurnoPerdasList');
   if (!operador) { alert('Informe o operador.'); return; }
+  var colPerdas = collectPerdasEtapa('encerrarOpTurnoPerdasEtapa', 'encerrarOpTurnoPerdasList', 'encerrarOpTurnoSemPerda');
+  if (!colPerdas.ok) { alert(colPerdas.erros.join('\n')); return; }
+  var perdas = colPerdas.perdas;
   var opAlvo = findOpByLote(encerrarOpAlvoAtual.lote) || {};
   var hasDeviation = qtd > 0 && opAlvo.qtdPlanejada > 0 && qtd !== opAlvo.qtdPlanejada;
   var justificativa = document.getElementById('encerrarOpTurnoJustificativa').value.trim();

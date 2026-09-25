@@ -431,6 +431,18 @@ async function campo(page, seletor, valor) {
     await campo(r2.page, '#mPerdaResiduo', '3');
     await r2.page.waitForFunction(() => /Perda de processo/.test(document.getElementById('mManipulacaoResumo').innerText));
     assert.match(await r2.page.locator('#mManipulacaoResumo').innerText(), /5 kg/);
+    // Perda por matéria-prima (25/09): uma linha por MP pesada; não passa do pesado.
+    const linhasMp = await r2.page.locator('#mPerdasMp .mp-perda').allInnerTexts();
+    assert.equal(linhasMp.length, 3);
+    const chaveFrag = await r2.page.evaluate(() => {
+      const el = [...document.querySelectorAll('#mPerdasMp .mp-perda')].find((d) => /FRAGRANCIA/.test(d.innerText));
+      return el.querySelector('[data-perdamp]').getAttribute('data-perdamp');
+    });
+    await r2.page.fill('#mPerdasMp [data-perdamp="' + chaveFrag + '"]', '999');
+    await r2.page.click('#mBtnFecharManipulacao');
+    await r2.page.waitForFunction(() => /maior que o pesado/.test(document.body.innerText));
+    assert.equal((await r2.page.evaluate(() => window.__db)).ops['26260-01'].manipulacao.status, 'EM_MANIPULACAO', 'perda acima do pesado barra o fechamento');
+    await r2.page.fill('#mPerdasMp [data-perdamp="' + chaveFrag + '"]', '0,5');
     await r2.page.click('#mBtnFecharManipulacao');
     await r2.page.waitForFunction(() => window.__db.ops['26260-01'].manipulacao.status === 'AGUARDANDO_CQ', null, {timeout: 8000});
 
@@ -438,6 +450,7 @@ async function campo(page, seletor, valor) {
     const f2 = db2.ops['26260-01'].manipulacao;
     assert.equal(f2.manipulacao.rendimento, 178);
     assert.equal(f2.manipulacao.perdas.residuo_tacho, 3);
+    assert.deepEqual(f2.manipulacao.perdasMp, {[chaveFrag]: 0.5}, 'perda por MP gravada em kg');
     assert.ok(f2.manipulacao.inicio && f2.manipulacao.fim, 'tempos da manipulação gravados');
     assert.ok(f2.pesagem.inicio && f2.pesagem.fim, 'tempos da pesagem gravados');
     assert.match(await r2.page.locator('#mBlocoCq').innerText(), /envase deste lote fica travado/);

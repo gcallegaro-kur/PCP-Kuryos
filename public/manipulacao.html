@@ -13,6 +13,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/perdas-etapa.js"></script>
   <script src="shared/anexos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -164,6 +165,12 @@
       #alertBox{top:62px}
       /* Com uma MP aberta, a tela é dela: some o cabeçalho do lote. */
       #mPainel.foco-mp > .card-header,#mPainel.foco-mp #mEtapas,#mPainel.foco-mp #mResumoTempos,#mPainel.foco-mp #mBlocoPesagem > h4{display:none}
+      .mp-perdas{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+      .mp-perda{display:flex;align-items:center;gap:10px;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px}
+      .mp-perda.tem{border-color:#fca5a5}
+      .mp-perda .nm{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.3}
+      .mp-perda .nm small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+      .mp-perda input{width:96px;flex:none;font-size:16px;padding:9px 10px;text-align:right}
       #mRendimento,#mPerdaResiduo,#mPerdaAmostra,#mPerdaOutra,#mObsManipulacao{font-size:16px;padding:10px}
       .card-body,.card-header{padding:12px}
       .main,.header{max-width:100%;padding-left:12px;padding-right:12px}
@@ -247,6 +254,14 @@
           <div><label>Perda — amostra/análise (kg)</label><input type="number" step="any" min="0" id="mPerdaAmostra"></div>
           <div><label>Perda — outra (kg)</label><input type="number" step="any" min="0" id="mPerdaOutra"></div>
         </div>
+        <!-- Perda por matéria-prima (25/09): o que foi pesado e não entrou no
+             tacho. A MP já saiu do estoque na pesagem -- isto é registro, não
+             baixa. Perda do bulk já misturado segue nos campos acima. -->
+        <div style="margin:4px 0 10px">
+          <label>Perda por matéria-prima (pesada e que não foi para o tacho)</label>
+          <div id="mPerdasMp" class="mp-perdas"></div>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:8px"><input type="checkbox" id="mSemPerda" style="width:20px;height:20px"> Não houve perda nesta manipulação</label>
+        </div>
         <div><label>Observação da manipulação</label><textarea id="mObsManipulacao" rows="2" placeholder="Ajustes, intercorrências, equipamento usado..."></textarea></div>
         <div id="mManipulacaoResumo" class="field-hint" style="margin-top:8px"></div>
         <div id="mManipulacaoErros" class="alert alert-danger" style="margin-top:10px"></div>
@@ -284,6 +299,8 @@ var storage = firebase.storage();
 var allOps = {}, allProdutos = {}, allFormulas = {}, allBom = {}, allMateriais = {};
 var opAtual = null;   // chave em ops/
 var previstos = {};   // itemKey -> {mpCodigo, mpNome, unidade, previsto}
+var perdasMp = {};    // itemKey -> texto digitado (kg) -- rascunho da perda por MP
+var assinaturaPerdasMp = '';
 var rascunho = {};    // pesagem digitada antes de fechar
 var conferencia = {}; // itemKey -> {ok, obs}
 var formParcela = null;     // pesagem sendo lançada: {itemKey, arquivo, previewUrl, peso, lote, outroLote, motivoForaFefo, enviando}
@@ -408,6 +425,8 @@ function abrirOp(key) {
   previstos = previstosDaOp(allOps[key] || {});
   rascunho = {};
   conferencia = {};
+  perdasMp = {};
+  assinaturaPerdasMp = '';
   descartarFormParcela();
   assinaturaPesagem = '';
   mpAberta = null; menuParcela = null;
@@ -415,6 +434,9 @@ function abrirOp(key) {
   var f = Manipulacao.fase(allOps[key]);
   if (f && f.pesagem && f.pesagem.itens) rascunho = JSON.parse(JSON.stringify(f.pesagem.itens));
   if (f && f.conferencia && f.conferencia.itens) conferencia = JSON.parse(JSON.stringify(f.conferencia.itens));
+  var salvas = (f && f.manipulacao && f.manipulacao.perdasMp) || {};
+  Object.keys(salvas).forEach(function(k) { perdasMp[k] = String(salvas[k]); });
+  document.getElementById('mSemPerda').checked = !!(f && f.manipulacao && f.manipulacao.semPerda);
   document.getElementById('mPainel').style.display = '';
   renderPainel();
   document.getElementById('mPainel').scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -437,7 +459,44 @@ function faseComRascunho() {
   f.manipulacao.perdas = {
     residuo_tacho: r('mPerdaResiduo') || 0, amostra: r('mPerdaAmostra') || 0, outra: r('mPerdaOutra') || 0
   };
+  f.manipulacao.perdasMp = PerdasEtapa.limparPerdasMp(perdasMp);
   return f;
+}
+
+// Perda por matéria-prima (kg). Os valores digitados ficam em `perdasMp`.
+// renderPainel roda a cada mudança do banco e a cada "change" dos campos de
+// cima: redesenhar a lista trocaria o campo que o operador acabou de tocar
+// (o "change" do campo anterior dispara antes do foco chegar no novo) e o que
+// ele digitasse se perdia. Só redesenha quando as MPs ou o pesado mudam.
+// Só aparecem MPs já pesadas: sem pesado, não há o que perder.
+function renderPerdasMp(linhas, editavel) {
+  var box = document.getElementById('mPerdasMp');
+  var pesadas = linhas.filter(function(l) { return l.pesado != null && l.pesado > 0; });
+  var assinatura = JSON.stringify(pesadas.map(function(l) { return [l.itemKey, l.pesado, l.unidade]; }));
+  if (assinatura === assinaturaPerdasMp && box.childElementCount) {
+    box.querySelectorAll('[data-perdamp]').forEach(function(inp) { inp.disabled = !editavel; });
+    return;
+  }
+  assinaturaPerdasMp = assinatura;
+  if (!pesadas.length) { box.innerHTML = '<div class="field-hint">Nenhuma matéria-prima pesada ainda.</div>'; return; }
+  var foco = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-perdamp');
+  box.innerHTML = pesadas.map(function(l) {
+    var v = perdasMp[l.itemKey] == null ? '' : perdasMp[l.itemKey];
+    var tem = v !== '' && Number(String(v).replace(',', '.')) > 0;
+    return '<div class="mp-perda' + (tem ? ' tem' : '') + '"><div class="nm">' + escapeHtml(l.mpNome || l.mpCodigo) +
+      '<small>' + escapeHtml(l.mpCodigo) + ' · pesado ' + fmtNum(l.pesado) + ' ' + escapeHtml(l.unidade || 'kg') + '</small></div>' +
+      '<input type="text" inputmode="decimal" placeholder="0" data-perdamp="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(v) + '"' + (editavel ? '' : ' disabled') +
+      ' aria-label="Perda de ' + escapeAttr(l.mpNome || l.mpCodigo) + '"><span class="field-hint">' + escapeHtml(l.unidade || 'kg') + '</span></div>';
+  }).join('');
+  box.querySelectorAll('[data-perdamp]').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      perdasMp[inp.getAttribute('data-perdamp')] = inp.value;
+      var tem = inp.value !== '' && Number(String(inp.value).replace(',', '.')) > 0;
+      inp.closest('.mp-perda').classList.toggle('tem', tem);
+      if (tem) document.getElementById('mSemPerda').checked = false;
+    });
+    if (foco && inp.getAttribute('data-perdamp') === foco) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  });
 }
 
 function renderPainel() {
@@ -534,9 +593,10 @@ function renderPainel() {
   document.getElementById('mBlocoManipulacao').style.display = mostraMan ? '' : 'none';
   if (mostraMan) {
     var podeFechar = st === 'EM_MANIPULACAO';
-    ['mRendimento', 'mPerdaResiduo', 'mPerdaAmostra', 'mPerdaOutra', 'mObsManipulacao'].forEach(function(id) {
+    ['mRendimento', 'mPerdaResiduo', 'mPerdaAmostra', 'mPerdaOutra', 'mObsManipulacao', 'mSemPerda'].forEach(function(id) {
       document.getElementById(id).disabled = !podeFechar;
     });
+    renderPerdasMp(Manipulacao.linhasPesagem(previstos, f.pesagem || {}), podeFechar);
     var valMan = Manipulacao.validarFechamentoManipulacao(previstos, f);
     document.getElementById('mManipulacaoResumo').innerHTML = resumo.rendimento != null
       ? 'Perda de processo: <b>' + fmtNum(resumo.perdaProcesso) + ' kg</b> (' + resumo.perdaProcessoPct + '%) · perdas declaradas ' + fmtNum(resumo.perdasManipulacao) + ' kg'
@@ -1225,9 +1285,18 @@ document.getElementById('mBtnFecharManipulacao').addEventListener('click', funct
   var f = faseComRascunho();
   var val = Manipulacao.validarFechamentoManipulacao(previstos, f);
   if (!val.ok) { showAlert(val.erros.join(' '), 'danger'); return; }
+  var linhasMp = Manipulacao.linhasPesagem(previstos, f.pesagem || {});
+  var valMp = PerdasEtapa.validarPerdasMp(linhasMp.map(function(l) { return {itemKey: l.itemKey, nome: l.mpNome, codigo: l.mpCodigo, pesado: l.pesado}; }), perdasMp);
+  if (!valMp.ok) { showAlert(valMp.erros.join(' '), 'danger'); return; }
+  var semPerda = document.getElementById('mSemPerda').checked;
+  var temPerda = Object.keys(f.manipulacao.perdasMp).length ||
+    Object.keys(f.manipulacao.perdas || {}).some(function(k) { return Number(f.manipulacao.perdas[k]) > 0; });
+  if (!temPerda && !semPerda) { showAlert('Informe as perdas da manipulação (por matéria-prima ou do bulk), ou marque "Não houve perda nesta manipulação".', 'danger'); return; }
   var t = Manipulacao.transicao('FECHAR_MANIPULACAO', {quem: eu()});
   t['manipulacao/rendimento'] = f.manipulacao.rendimento;
   t['manipulacao/perdas'] = f.manipulacao.perdas;
+  t['manipulacao/perdasMp'] = Object.keys(f.manipulacao.perdasMp).length ? f.manipulacao.perdasMp : null;
+  t['manipulacao/semPerda'] = temPerda ? null : true;
   t['manipulacao/observacao'] = document.getElementById('mObsManipulacao').value.trim() || null;
   var op = allOps[opAtual], opKey = opAtual;
   var exc = Manipulacao.ehCorrecao(f) ? planoExcedente(op, f.manipulacao.rendimento) : null;

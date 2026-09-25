@@ -452,6 +452,12 @@ async function fechar(page, errors, etapa) {
       el.value = 'Perda de processo no envase, 40 un.';
       el.dispatchEvent(new Event('input', {bubbles: true}));
     });
+    /* Perdas item a item (25/09): fechar a OP exige responder a perda. As 40
+       un que faltam foram descartadas cheias -- é o campo do produto. */
+    await page.fill('#encerrarOpTurnoPerdasEtapa [data-produto="unidades"] .pe-qtd', '40');
+    // ...e o primeiro insumo da lista (vem do BOM da OP) teve 12 perdidos.
+    const insumoPerdido = await page.locator('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod]').first().getAttribute('data-cod');
+    await page.fill('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod="' + insumoPerdido + '"] .pe-qtd', '12');
     await page.click('#btnConfirmarEncerrarOpTurno');
     await page.waitForTimeout(800);
     if (dialogos.length) console.log('   AVISOS da tela: ' + dialogos.join(' | '));
@@ -464,6 +470,18 @@ async function fechar(page, errors, etapa) {
     const opDepois = db.ops[opKey];
     console.log('   encerrada: ' + opDepois.produzidoLinha + ' un., status ' + opDepois.status);
     assert.equal(opDepois.produzidoLinha, 960, 'a produção precisa ficar gravada na OP');
+    // Perdas item a item: gravadas no lote com o material; só o insumo baixa estoque.
+    await page.waitForFunction((k) => window.__db.perdas && window.__db.perdas[k], opKey, {timeout: 8000});
+    db = await page.evaluate(() => window.__db);
+    const lancadas = Object.values(db.perdas[opKey]).flatMap((r) => r.perdas || []);
+    const prodPerda = lancadas.find((x) => x.produto);
+    assert.equal(prodPerda.tipo, 'Produto envasado (un)');
+    assert.equal(prodPerda.quantidade, 40);
+    const insPerda = lancadas.find((x) => x.materialCodigo === insumoPerdido);
+    assert.equal(insPerda.quantidade, 12);
+    assert.equal(insPerda.etapa, 'envase');
+    await page.waitForFunction((m) => Object.values((window.__db.movimentos_estoque || {})[m] || {}).some((x) => /perda/i.test(x.tipo || '') && Math.abs(x.qtd) === 12), insumoPerdido, {timeout: 8000});
+    console.log('   perdas item a item gravadas (40 un envasadas + 12 de ' + insumoPerdido + ', só o insumo baixa estoque)');
     // O pedido deveria ser creditado -- esta OP saiu sem vínculo porque não
     // havia pedido na base do teste; só registra se o vínculo existia.
     await fechar(page, errors, 'Apontamento');

@@ -79,6 +79,18 @@ t('perdas: Excel antigo com rótulo legível; OP -v2 herda a perda do número do
   assert.deepEqual(v2.perdas, {}, 'lote original existe como OP: a perda não é duplicada na -v2');
 });
 
+t('perda do produto (item a item) aparece por tipo e fica fora do total de componentes', () => {
+  const b2 = base();
+  b2.perdas['26147-01'] = {e: {lote: '26147/01', perdas: [
+    {tipo: 'Frascos', quantidade: 6, especificacao: 'FRASCO PET', materialCodigo: 'EP-1', unidade: 'un', etapa: 'envase'},
+    {tipo: 'Produto envasado (un)', quantidade: 40, unidade: 'un', produto: true},
+    {tipo: 'Bulk (kg)', quantidade: 1.5, unidade: 'kg', produto: true}]}};
+  const l2 = R.montar('0008', b2, C.calcular(b2)).itens[0].lotes[1];
+  assert.deepEqual(l2.perdas, {Frascos: 6, 'Produto envasado (un)': 40, 'Bulk (kg)': 1.5});
+  assert.equal(l2.perdasTotal, 6);
+  assert.equal(l2.perdaPct, 0.2);
+});
+
 t('produção e saída sem OP aparecem numa linha própria', () => {
   const c = rel.itens[2];
   assert.equal(c.semOp.produzido, 0);
