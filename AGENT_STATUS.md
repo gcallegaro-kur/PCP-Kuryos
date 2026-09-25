@@ -138,10 +138,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `public/shared/laudo-cq.js`, `run_inspecao_pa_test.js`,
   `run_inspecao_pa_ui_test.js`.
 
-- **COMMITADO, DEPLOY PENDENTE — correção de bulk reprovado (2026-09-25).**
-  Commit `b97fc03` no origin/main. Hosting NÃO publicado: o deploy foi
-  bloqueado pela permissão da sessão; worktree limpo pronto em
-  `../deploy-correcao-bulk` (só Hosting, sem mudança de regras/Functions).
+- **Publicado — correção de bulk reprovado (2026-09-25).** Commit `b97fc03`,
+  Hosting por worktree limpo; 6 arquivos públicos HTTP 200 idênticos ao
+  commit (sem mudança de regras/Functions).
   Bulk reprovado deixava o lote travado. Agora: Qualidade abre a correção
   (card novo em `qualidade.html`, RNC obrigatória, massa que entra, insumos,
   transação só se ainda REPROVADO); o ciclo reprovado vai para
@@ -157,7 +156,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   mostra todos os ciclos. Reprovar de novo na correção não abre RNC nova.
   Testes: `run_correcao_bulk_test.js` (60), `run_correcao_bulk_ui_test.js`,
   `run_correcao_bulk_rules_test.js` (emulador, `--project demo-operacao`) +
-  regressões. **Pendente:** deploy; regularizar o lote reprovado de hoje
+  regressões. **Pendente:** regularizar o lote reprovado de hoje
   (usuário precisa informar o lote e as quantidades; leitura da produção
   também bloqueada nesta sessão). Arquivos ativos: nenhum.
 
