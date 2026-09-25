@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — perdas item a item no fechamento da OP (2026-09-25).**
+  Envase/rotulagem/manipulação pedem a perda de cada insumo da etapa.
+  **Arquivos ativos:** `public/form.html`, `public/manipulacao.html`,
+  `public/shared/manipulacao.js`, `public/shared/perdas-etapa.js`,
+  `public/shared/relatorio-pedido.js`, manuais de apontamento/apontador e testes
+  `run_perdas_etapa_test.js`, `run_fluxo_ponta_a_ponta_test.js`,
+  `run_manipulacao_ui_test.js`, `run_correcao_bulk_ui_test.js`,
+  `run_relatorio_pedido_test.js`.
+
 - **PUBLICADO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
   Commit `f7354f7`, só Hosting (sem regras/Functions), do worktree limpo;
   4 arquivos públicos idênticos ao commit por HTTP.
