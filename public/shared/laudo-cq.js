@@ -167,6 +167,25 @@
   /* ══════════════════════════════════════════════════════════════════
      RELATÓRIO DE ANÁLISE — PRODUTO ACABADO
      ══════════════════════════════════════════════════════════════════ */
+  /* Critério de peso dos laudos a partir de 25/09: Portaria INMETRO
+     249/2021 (T da tabela, c do plano, 2T, média Qn − k·s) e, para
+     produto declarado em ml, a densidade que converteu o nominal em
+     gramas -- sem ela impressa, "170 g" num frasco de 200 ml parece erro. */
+  var ORIGEM_DENSIDADE = {LAUDO: 'medida na amostra', BULK: 'análise do bulk', CADASTRO: 'cadastro do produto'};
+  function linhasCriterioPeso(d, unidade) {
+    var c = d.pesoCriterio;
+    var emMl = c.unidadeDeclarada === 'ml';
+    return '<div class="laudo-linha-info">Conteúdo declarado: ' + esc(fmt(c.nominalDeclarado) + ' ' + (emMl ? 'ml' : 'g')) +
+        (emMl ? '     Densidade: ' + esc(fmt(c.densidade, 3) + ' g/ml (' + (ORIGEM_DENSIDADE[c.origemDensidade] || '—') + ')') : '') +
+        '     Peso nominal: ' + esc(d.pesoNominal != null ? fmt(d.pesoNominal) + ' ' + unidade : '____') + '</div>' +
+      '<div class="laudo-linha-info">Tolerância T: ' + esc(fmt(c.tolerancia) + ' ' + (emMl ? 'ml' : 'g')) +
+        '     Mínimo individual (Qn − T): ' + esc(d.pesoMinimo != null ? fmt(d.pesoMinimo) + ' ' + unidade : '____') +
+        ', até ' + esc(String(c.c)) + ' unidade(s)' +
+        '     Nenhuma abaixo de (Qn − 2T): ' + esc(c.limiteT2 != null ? fmt(c.limiteT2) + ' ' + unidade : '____') +
+        '     Média mínima (Qn − k·s): ' + esc(c.limiteMedia != null ? fmt(c.limiteMedia) + ' ' + unidade : '____') +
+        '     [Portaria INMETRO 249/2021]</div>';
+  }
+
   function paginaProdutoAcabado(dados) {
     var d = dados || {};
     var pa = d.pa || {};
@@ -233,9 +252,10 @@
 
       subtitulo('5.2.', 'Tabela de peso (amostra de ' + nPesos + ' peça' + (nPesos === 1 ? '' : 's') + ')') +
       tabelaPesos(d.pesos, unidade) +
+      (d.pesoCriterio ? linhasCriterioPeso(d, unidade) :
       '<div class="laudo-linha-info">Peso nominal: ' + esc(d.pesoNominal != null ? fmt(d.pesoNominal) + ' ' + unidade : '____') +
         '     Mínimo aceitável [Δ3% segundo INMETRO]: ' +
-        esc(d.pesoMinimo != null ? fmt(d.pesoMinimo) + ' ' + unidade : '____') + '</div>' +
+        esc(d.pesoMinimo != null ? fmt(d.pesoMinimo) + ' ' + unidade : '____') + '</div>') +
 
       titulo(6, 'Análises Microbiológicas') +
       blocoMicro(d.micro) +

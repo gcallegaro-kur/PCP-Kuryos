@@ -67,7 +67,9 @@ function dados() {
       'MP-0001__v1': {codProduto: 'MP-0001', itens: {
         imp1: {ensaio: 'TEOR DE ÁLCOOL', especificacaoTexto: '95 - 99', minimo: 95, maximo: 99, metodo: 'PA08', critico: true}}}
     },
-    ops: {'26257-17': {lote: '26257/17', sku: 'MRARBS04', produto: 'BODY SPLASH NÉCTAR DAS TAMARAS', status: 'Concluído'}},
+    ops: {'26257-17': {lote: '26257/17', sku: 'MRARBS04', produto: 'BODY SPLASH NÉCTAR DAS TAMARAS', status: 'Concluído',
+      // Densidade apontada na análise físico-química do bulk do lote.
+      manipulacao: {status: 'LIBERADO', analise: {decisao: 'LIBERADO', ensaios: {dens: {ensaio: 'Densidade', valor: '0,9'}}}}}},
     produtos: {MRARBS04: {sku: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR DAS TAMARAS', cliente: 'MISS RÔSE'}},
     // O `tipo` do cadastro é o que decide o roteiro (pedido do usuário em
     // 21/09: "direcionar a partir da categoria do SKU cadastrado").
@@ -239,6 +241,28 @@ const responder = (page, valor) => page.evaluate((v) => {
     await page.locator('#qCk7PesoQtd').dispatchEvent('change');
     assert.equal(await nCampos(), 3);
 
+    // ── 3a. Produto em ml: peso convertido pela densidade (25/09) ────────
+    // A balança dá gramas; 200 ml de body splash não pesam 200 g.
+    assert.equal(await page.locator('#qCk7DensidadeGrupo').isVisible(), false, 'produto em g não pede densidade');
+    await page.fill('#qCk7Nominal', '200');
+    await page.selectOption('#qCk7Unidade', 'ml');
+    assert.equal(await page.locator('#qCk7DensidadeGrupo').isVisible(), true);
+    await peso(page, 0, '180');
+    // Sem densidade medida, vale a do bulk do lote (0,9): nominal 180 g.
+    await page.waitForFunction(() => /Nominal 180 g/.test(document.getElementById('qCk7PesoFaixa').innerText));
+    assert.match(await page.locator('#qCk7PesoFaixa').innerText(), /\(200 ml × 0,9 g\/ml\) · T = 9 ml = 8,1 g · individual mínimo 171,9 g/);
+    assert.match(await page.locator('#qCk7DensidadeOrigem').innerText(), /bulk do lote/);
+    // A densidade medida na nova amostragem vence a do bulk.
+    await page.fill('#qCk7Densidade', '0,85');
+    await page.locator('#qCk7Densidade').dispatchEvent('change');
+    await page.waitForFunction(() => /Nominal 170 g/.test(document.getElementById('qCk7PesoFaixa').innerText));
+    assert.match(await page.locator('#qCk7DensidadeOrigem').innerText(), /medida agora/);
+    assert.match(await page.locator('#qCk7PesoFaixa').innerText(), /Portaria INMETRO 249\/2021/);
+    await page.fill('#qCk7Densidade', '');
+    await page.locator('#qCk7Densidade').dispatchEvent('change');
+    await page.selectOption('#qCk7Unidade', 'g');
+    assert.equal(await page.locator('#qCk7DensidadeGrupo').isVisible(), false);
+
     // ── 3. Parâmetros do produto e pesagem ───────────────────────────────
     await page.fill('#qCk7Nominal', '200');
     await page.fill('#qCk7UnCaixa', '24');
@@ -247,7 +271,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     await peso(page, 1, '199');
     await peso(page, 2, '200');
     await page.waitForFunction(() => /Média/.test(document.getElementById('qCk7Pesos').innerText));
-    assert.match(await page.locator('#qCk7Pesos').innerText(), /limite individual 194g/);
+    assert.match(await page.locator('#qCk7Pesos').innerText(), /individual mínimo 191 g .* nenhuma abaixo de 182 g \(2T\)/);
     assert.match(await page.locator('#qCk7Pesos').innerText(), /Média 200/);
 
     if (process.env.CK7_SCREENSHOT) await page.screenshot({path: process.env.CK7_SCREENSHOT, fullPage: true});
@@ -271,7 +295,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     // Caso do envase manual: média boa, uma unidade fora do limite individual.
     await peso(page, 1, '215');
     await peso(page, 2, '215');
-    await page.waitForFunction(() => /abaixo do limite/.test(document.getElementById('qCk7Impedimentos').innerText));
+    await page.waitForFunction(() => /abaixo de 191 g \(nominal − T\); com 3 pesagens o INMETRO admite 0/.test(document.getElementById('qCk7Impedimentos').innerText));
     assert.match(await page.locator('#qCk7Pesos').innerText(), /Média 203/);
     await peso(page, 0, '201');
     await peso(page, 1, '199');
@@ -295,11 +319,14 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(lote.status, 'LIBERADO_EXPEDICAO', 'palete vai liberado para a Expedição');
     const q = lote.qualidade;
     assert.ok(q.ck7, 'o checklist fica gravado no laudo');
-    assert.equal(q.ck7.versaoPlano, 'CK7-2026-09');
+    assert.equal(q.ck7.versaoPlano, 'CK7-2026-09b');
     assert.equal(q.ck7.amostragem.caixasAmostradas, 7);
     assert.equal(q.ck7.amostragem.regra, '√N+1');
     assert.equal(q.ck7.pesagem.media, 200.133);
-    assert.equal(q.ck7.pesagem.limiteIndividual, 194);
+    assert.equal(q.ck7.pesagem.limiteIndividual, 191, '200 − T (9 g, Portaria 249)');
+    assert.equal(q.ck7.pesagem.limiteT2, 182);
+    assert.equal(q.ck7.pesagem.unidadeDeclarada, 'g');
+    assert.match(q.ck7.pesagem.criterio, /Portaria INMETRO 249\/2021/);
     assert.equal(q.ck7.pesagem.conforme, true);
     assert.equal(q.ck7.retencao.guardarAte, '2029-03-15', 'retenção = validade + 1 ano');
     assert.equal(q.ck7.retencao.unidades, 3);
@@ -338,6 +365,9 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.match(laudo, /26257\/17/, 'lote analisado');
     assert.match(laudo, /MISS RÔSE/, 'cliente do produto');
     assert.match(laudo, /Análise de Peso: 3 amostras/, 'a pesagem que foi feita, não um número fixo');
+    assert.match(laudo, /Mínimo individual \(Qn − T\): 191 g, até 0 unidade\(s\)/, 'critério do INMETRO impresso, não o Δ3% fixo');
+    assert.match(laudo, /Nenhuma abaixo de \(Qn − 2T\): 182 g/);
+    assert.doesNotMatch(laudo, /Δ3%/);
     assert.match(laudo, /Mario Callegaro/);
     assert.match(laudo, /CRQ 04413184/);
     assert.match(laudo, /☒ Produto APROVADO/, 'liberado para expedição = aprovado no laudo');

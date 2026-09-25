@@ -377,10 +377,19 @@ const fase = (page) => page.evaluate((k) => window.__db.ops[k].manipulacao, OP);
     await q2.page.waitForSelector('#modalGranelBg.open');
     assert.match(await q2.page.locator('#modalGranelTitle').innerText(), /correção \(ciclo 2\)/);
     assert.match(await q2.page.locator('#qGranelInfo').innerText(), /Correção da RNC RNC-2026-0031[\s\S]*entrou 175 kg[\s\S]*Pesado na correção 70 kg · rendimento 240 kg/);
+    // Sem especificação cadastrada: os seis ensaios físico-químicos do plano
+    // padrão, em vez de nenhum (25/09).
+    const plano = await q2.page.locator('#qGranelPlanoBody').innerText();
+    ['Aspecto físico', 'Cor', 'Odor', 'pH', 'Densidade', 'Teor alcoólico'].forEach((e) => assert.match(plano, new RegExp(e)));
+    assert.equal(await q2.page.locator('#qGranelSemPlano').isVisible(), true);
+    const avisosQ2 = [];
+    q2.page.on('dialog', (d) => avisosQ2.push(d.message()));
     await q2.page.click('#qGranelLiberar');
     await q2.page.waitForFunction((k) => window.__db.ops[k].manipulacao.status === 'LIBERADO', OP);
     db = await q2.page.evaluate(() => window.__db);
     assert.equal(Object.keys(db.nao_conformidades).length, 1, 'liberar não abre RNC');
+    assert.ok(avisosQ2.some((m) => /densidade do bulk não foi apontada/.test(m)), 'liberar sem densidade avisa');
+    assert.deepEqual(Object.keys(db.ops[OP].manipulacao.analise.ensaios).sort(), ['aspecto', 'cor', 'densidade', 'odor', 'ph', 'teor_alcoolico']);
     await q2.page.close();
 
     // ── Envase liberado; dossiê com os dois ciclos ──────────────────────

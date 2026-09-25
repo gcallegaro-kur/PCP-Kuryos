@@ -127,16 +127,25 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
-  Produto declarado em ml era pesado em g e comparado direto com o nominal
-  (sem densidade). Densidade: medida no laudo > análise do bulk do lote >
-  cadastro (OP), com a origem gravada. Critérios da Portaria INMETRO 249/2021
-  (tolerância T por faixa, c por plano de amostragem, nenhuma abaixo de 2T,
-  média Qn − k·s). Análise do bulk: seis ensaios FQ mesmo sem especificação,
-  valor numérico sempre apontável. **Arquivos ativos:**
-  `public/shared/inspecao-pa.js`, `public/qualidade.html`,
-  `public/shared/laudo-cq.js`, `run_inspecao_pa_test.js`,
-  `run_inspecao_pa_ui_test.js`.
+- **COMMITADO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
+  Produto declarado em ml era pesado em g e comparado direto com o nominal.
+  `shared/inspecao-pa.js`: tudo em gramas de conteúdo líquido (balança tarada
+  na embalagem vazia); nominal/T/2T × densidade para ml. Densidade: medida no
+  laudo > ensaio "Densidade" da análise do bulk do lote > cadastro (OP
+  `densidadeGranelUsada` / produto), origem gravada. Portaria INMETRO
+  249/2021: T da tabela por faixa (não mais −3% fixo; `toleranciaPct`
+  ignorado), c pelo plano (5/0, 13/1, 20/1, 32/2, 80/5; o do maior plano que
+  a amostra cobre), nenhuma abaixo de 2T, média Qn − k·s. Pesagens padrão =
+  n do plano pelo tamanho do lote (conferido da OP), senão 32. Registro
+  `CK7-2026-09b`; laudo impresso (`laudo-cq.js`) mostra T, 2T, média mínima
+  e densidade (laudo antigo sem `tolerancia` segue o texto de antes).
+  Análise do bulk: valor numérico sempre apontável em pH/densidade/álcool,
+  sem especificação mostra os seis ensaios padrão, e liberar sem densidade
+  pergunta. Manual da Qualidade seção 1c. Testes: `run_inspecao_pa_test.js`,
+  `run_inspecao_pa_ui_test.js`, `run_manipulacao_ui_test.js`,
+  `run_correcao_bulk_ui_test.js` + varredura. Leitura da produção bloqueada
+  nesta sessão: não foi possível ver quantos SKUs têm densidade no bulk/
+  cadastro. Arquivos ativos: nenhum.
 
 - **Publicado — Relatório de Pedido (2026-09-25).** Commit `a2a3ec9`, Hosting
   (republicado após o incidente abaixo; conferido byte a byte). Página nova

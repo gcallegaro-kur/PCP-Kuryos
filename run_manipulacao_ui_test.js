@@ -50,7 +50,10 @@ function dados() {
     movimentos_estoque: {}, nao_conformidades: {}, pedidos_compra: {}, fornecedores: {},
     especificacoes: {MRARBS04__v1: {codProduto: 'MRARBS04', itens: {
       e1: {ensaio: 'ASPECTO', especificacaoTexto: 'LÍQUIDO', metodo: 'PA09', critico: false},
-      e2: {ensaio: 'PH', especificacaoTexto: '5 - 7', minimo: 5, maximo: 7, metodo: 'PA01', critico: true}}}},
+      e2: {ensaio: 'PH', especificacaoTexto: '5 - 7', minimo: 5, maximo: 7, metodo: 'PA01', critico: true},
+      // Sem faixa cadastrada: o campo numérico ficava desabilitado e a
+      // densidade do bulk não tinha onde ser apontada (25/09).
+      e3: {ensaio: 'DENSIDADE', especificacaoTexto: 'N/A', metodo: 'PA02', critico: false}}}},
     parametros_pa: {}
   };
 }
@@ -459,11 +462,19 @@ async function campo(page, seletor, valor) {
     await cq.page.selectOption('[data-granel-cnc="e1"]', 'C');
     await cq.page.fill('[data-granel-valor="e2"]', '6');
     await cq.page.locator('[data-granel-valor="e2"]').dispatchEvent('change');
+    assert.equal(await cq.page.locator('[data-granel-valor="e3"]').isEnabled(), true, 'densidade apontável mesmo sem faixa');
+    await cq.page.fill('[data-granel-valor="e3"]', '0.872');
+    await cq.page.locator('[data-granel-valor="e3"]').dispatchEvent('change');
+    await cq.page.selectOption('[data-granel-cnc="e3"]', 'C');
+    const avisosCq = [];
+    cq.page.on('dialog', (d) => avisosCq.push(d.message()));
     await cq.page.click('#qGranelLiberar');
     await cq.page.waitForFunction(() => window.__db.ops['26260-01'].manipulacao.status === 'LIBERADO', null, {timeout: 8000});
     const dbCq = await cq.page.evaluate(() => window.__db);
     assert.equal(dbCq.ops['26260-01'].manipulacao.analise.por, 'Daiene');
     assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e2.valor), '6');
+    assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e3.valor), '0.872', 'densidade do bulk gravada para a pesagem do PA');
+    assert.ok(!avisosCq.some((m) => /densidade do bulk não foi apontada/.test(m)), 'com densidade, não pergunta');
     assert.deepEqual(cq.errors, [], 'erros na tela da Qualidade: ' + cq.errors.join(' | '));
     await cq.page.close();
 

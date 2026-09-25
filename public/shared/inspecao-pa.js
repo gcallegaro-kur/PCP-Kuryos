@@ -31,7 +31,28 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  var TOLERANCIA_PADRAO = 3; // -3% INMETRO
+  /* PESAGEM PELAS REGRAS DO INMETRO (decisão do usuário, 25/09: "seguir
+     todas as regras necessárias e vigentes"). Pré-medido de conteúdo
+     nominal igual: Portaria INMETRO 249/2021 -- mesma base da OIML R87.
+     Três critérios, todos obrigatórios para aprovar o lote:
+       1. média:      x̄ >= Qn − k·s
+       2. individual: no máximo c unidades abaixo de Qn − T (c do plano)
+       3. nenhuma unidade abaixo de Qn − 2T
+     T é a tolerância individual da tabela da Portaria, por faixa de Qn --
+     não um percentual único. Os −3% fixos que a tela usava só valem entre
+     300 e 500 g/ml; em 200 ml o INMETRO admite 9 ml, em 50 ml, 4,5 ml.
+
+     PRODUTO DECLARADO EM ml: o INMETRO mede volume pela massa líquida
+     dividida pela densidade. A inspetora pesa em gramas (balança tarada com
+     a embalagem vazia -- confirmado pelo usuário), então nominal, T e 2T
+     são convertidos para gramas pela densidade do lote. Antes a tela
+     comparava 170 g de perfume (0,85 g/ml) com "200" e reprovava tudo -- e
+     um creme de 1,05 passava mesmo com falta. */
+  var TABELA_TOLERANCIA = [ // [Qn até, tipo, valor]; faixas se encontram nos limites
+    [50, 'PCT', 9], [100, 'ABS', 4.5], [200, 'PCT', 4.5], [300, 'ABS', 9],
+    [500, 'PCT', 3], [1000, 'ABS', 15], [10000, 'PCT', 1.5], [15000, 'ABS', 150],
+    [50000, 'PCT', 1]
+  ];
   var RETENCAO_MESES_APOS_VALIDADE = 12;
 
   /* Quantas unidades entram na PESAGEM. Não se confunde com a amostragem
@@ -114,7 +135,6 @@
       unidadesPorCaixa: n(p.unidadesPorCaixa),
       eanProduto: p.eanProduto || '',
       eanCaixa: p.eanCaixa || '',
-      toleranciaPct: n(p.toleranciaPct) != null ? n(p.toleranciaPct) : TOLERANCIA_PADRAO,
       torqueAtivo: p.torqueAtivo === true,
       torqueMin: n(p.torqueMin), torqueMax: n(p.torqueMax)
     };
@@ -152,39 +172,120 @@
     return t == null ? null : Math.round(t / Math.sqrt(nAmostra) * 1000) / 1000;
   }
 
-  /* Pesagem individual. Média abaixo de Qn - k·s reprova (conteúdo líquido
-     médio, critério acima); unidade abaixo de nominal-tolerância reprova
-     (unidade isolada fora do limite). Acima do nominal não reprova: é doação.
-     Abaixo de 5 unidades (a menor amostra do plano do INMETRO) k explode --
-     n=2 dá k=45 e qualquer média passaria --, então a média tem de ser >=
-     nominal, como antes, e a tela pede mais pesagens. */
-  var N_MIN_CRITERIO_MEDIA = 5;
-  function avaliarPesos(pesos, par) {
-    var lista = (pesos || []).map(n).filter(function(v) { return v != null && v > 0; });
-    var nominal = par.conteudoNominal;
-    var limite = nominal != null ? arred(nominal * (1 - par.toleranciaPct / 100)) : null;
-    if (!lista.length) {
-      return {n: 0, media: null, minimo: null, maximo: null, limiteIndividual: limite, limiteMedia: null, desvioPadrao: null, k: null,
-        foraLimite: [], mediaAbaixo: false, conforme: null, pendente: true};
+  // Tolerância individual T (mesma unidade de Qn). Percentual é arredondado
+  // PARA CIMA ao décimo, como manda a Portaria.
+  function toleranciaInmetro(qn) {
+    var q = n(qn);
+    if (!(q > 0) || q > 50000) return null;
+    for (var i = 0; i < TABELA_TOLERANCIA.length; i++) {
+      var f = TABELA_TOLERANCIA[i];
+      if (q <= f[0]) return f[1] === 'ABS' ? f[2] : Math.ceil(arred(q * f[2] / 100, 6) * 10) / 10;
     }
-    var soma = lista.reduce(function(s, v) { return s + v; }, 0);
-    var media = arred(soma / lista.length);
-    var minimo = Math.min.apply(null, lista), maximo = Math.max.apply(null, lista);
-    var foraLimite = limite != null ? lista.filter(function(v) { return v < limite; }) : [];
-    var s = null, k = null, limiteMedia = null;
+    return null;
+  }
+
+  /* Plano de amostragem do INMETRO por tamanho do lote: n unidades e c,
+     quantas podem ficar abaixo de Qn − T. A inspetora pode pesar outra
+     quantidade (21/09: "quantidade em aberto"); o c usado é o do maior
+     plano que a amostra pesada cobre -- nunca mais tolerante do que o
+     plano que ela de fato cumpriu. */
+  var PLANO_INMETRO = [
+    {loteAte: 50, n: 5, c: 0}, {loteAte: 149, n: 13, c: 1}, {loteAte: 4000, n: 20, c: 1},
+    {loteAte: 10000, n: 32, c: 2}, {loteAte: Infinity, n: 80, c: 5}
+  ];
+  function planoPorLote(tamanhoLote) {
+    var N = Math.floor(n(tamanhoLote) || 0);
+    if (N <= 0) return null;
+    for (var i = 0; i < PLANO_INMETRO.length; i++) {
+      var p = PLANO_INMETRO[i];
+      if (N <= p.loteAte) return {lote: N, n: Math.min(p.n, N), c: p.c, k: kInmetro(Math.min(p.n, N))};
+    }
+    return null;
+  }
+  function aceitacaoPorAmostra(nPesado) {
+    var c = 0;
+    PLANO_INMETRO.forEach(function(p) { if (nPesado >= p.n) c = p.c; });
+    return c;
+  }
+
+  /* Densidade usada na pesagem de produto em ml. Ordem decidida com o
+     usuário (25/09): a medida na hora do laudo (nova amostragem) vence a da
+     análise do bulk do mesmo lote, que vence a do cadastro -- cadastro é
+     valor de projeto, não medida do lote, e só serve de último recurso. */
+  var ORIGENS_DENSIDADE = {LAUDO: 'medida no laudo', BULK: 'análise do bulk do lote', CADASTRO: 'cadastro do produto'};
+  function densidadeValida(v) {
+    var x = n(typeof v === 'string' ? v.trim().replace(',', '.') : v);
+    return x != null && x >= 0.3 && x <= 3 ? x : null;
+  }
+  function densidadeParaPesagem(fontes) {
+    var f = fontes || {};
+    var ordem = [['LAUDO', f.laudo], ['BULK', f.bulk], ['CADASTRO', f.cadastro]];
+    for (var i = 0; i < ordem.length; i++) {
+      if (ordem[i][1] === '' || ordem[i][1] == null) continue;
+      var v = densidadeValida(ordem[i][1]);
+      if (v != null) return {valor: v, origem: ordem[i][0], texto: ORIGENS_DENSIDADE[ordem[i][0]]};
+    }
+    return {valor: null, origem: null, texto: null};
+  }
+  // Densidade apontada na análise físico-química do bulk (ensaio "Densidade").
+  function densidadeDoBulk(ensaios) {
+    var achada = null;
+    Object.keys(ensaios || {}).forEach(function(k) {
+      var e = ensaios[k] || {};
+      if (achada == null && /densidade/i.test(String(e.ensaio || k))) achada = densidadeValida(e.valor);
+    });
+    return achada;
+  }
+
+  /* Pesagem individual, sempre em GRAMAS de conteúdo líquido. Produto em
+     ml converte nominal, T e 2T pela densidade; sem densidade não há como
+     julgar e a pesagem fica `semDensidade` -- a tela pede a medida em vez
+     de adivinhar. Abaixo de 5 unidades (a menor amostra do plano do
+     INMETRO) k explode -- n=2 dá k=45 e qualquer média passaria --, então
+     a média tem de ser >= nominal e a tela pede mais pesagens. Acima do
+     nominal não reprova: é doação. */
+  var N_MIN_CRITERIO_MEDIA = 5;
+  function avaliarPesos(pesos, par, densidade) {
+    var lista = (pesos || []).map(n).filter(function(v) { return v != null && v > 0; });
+    var qn = par.conteudoNominal;
+    var emVolume = String(par.unidadeMedida || '').toLowerCase() === 'ml';
+    var dens = emVolume && densidade ? densidadeValida(densidade.valor) : null;
+    var fator = emVolume ? dens : 1;
+    var T = toleranciaInmetro(qn);
+    var r = {
+      unidadeDeclarada: emVolume ? 'ml' : 'g', nominalDeclarado: qn, tolerancia: T,
+      densidade: dens, origemDensidade: dens ? (densidade.origem || null) : null,
+      semDensidade: emVolume && qn != null && !dens,
+      nominal: null, toleranciaMassa: null, limiteIndividual: null, limiteT2: null,
+      n: lista.length, media: null, minimo: null, maximo: null, limiteMedia: null, desvioPadrao: null, k: null,
+      c: aceitacaoPorAmostra(lista.length), foraLimite: [], abaixoT2: [], mediaAbaixo: false,
+      conforme: null, pendente: !lista.length
+    };
+    if (qn != null && fator && T != null) {
+      r.nominal = arred(qn * fator);
+      r.toleranciaMassa = arred(T * fator);
+      r.limiteIndividual = arred(qn * fator - T * fator);
+      r.limiteT2 = arred(qn * fator - 2 * T * fator);
+    }
+    if (!lista.length) return r;
+    var soma = lista.reduce(function(acc, v) { return acc + v; }, 0);
+    r.media = arred(soma / lista.length);
+    r.minimo = Math.min.apply(null, lista);
+    r.maximo = Math.max.apply(null, lista);
+    var s = null;
     if (lista.length >= N_MIN_CRITERIO_MEDIA) {
       var m = soma / lista.length;
       s = Math.sqrt(lista.reduce(function(acc, v) { return acc + (v - m) * (v - m); }, 0) / (lista.length - 1));
-      k = kInmetro(lista.length);
+      r.k = kInmetro(lista.length);
+      r.desvioPadrao = arred(s);
     }
-    if (nominal != null) limiteMedia = arred(k != null ? nominal - k * s : nominal);
-    var mediaAbaixo = limiteMedia != null && media < limiteMedia;
-    return {
-      n: lista.length, media: media, minimo: minimo, maximo: maximo, limiteIndividual: limite,
-      limiteMedia: limiteMedia, desvioPadrao: s == null ? null : arred(s), k: k,
-      foraLimite: foraLimite, mediaAbaixo: mediaAbaixo, pendente: false,
-      conforme: nominal == null ? null : (!mediaAbaixo && !foraLimite.length)
-    };
+    if (r.nominal == null) return r;
+    r.limiteMedia = arred(r.k != null ? r.nominal - r.k * s : r.nominal);
+    r.foraLimite = lista.filter(function(v) { return v < r.limiteIndividual; });
+    r.abaixoT2 = lista.filter(function(v) { return v < r.limiteT2; });
+    r.mediaAbaixo = r.media < r.limiteMedia;
+    r.conforme = !r.mediaAbaixo && r.foraLimite.length <= r.c && !r.abaixoT2.length;
+    return r;
   }
 
   // Itens do plano que valem para este produto (torque só quando ligado).
@@ -194,6 +295,7 @@
 
   /* respostas: {itemId: {cnc: 'C'|'NC'|'NA', valor?, observacao?}}
      Retorna as linhas prontas para a tela e o veredito. */
+  // opts: {caixas, densidade: {valor, origem}, tamanhoLote}
   function avaliar(respostas, pesos, parametrosRegistro, opts) {
     var par = parametros(parametrosRegistro);
     var o = opts || {};
@@ -216,25 +318,40 @@
       };
     });
 
-    var pesagem = avaliarPesos(pesos, par);
+    var pesagem = avaliarPesos(pesos, par, o.densidade);
+    var plano = planoPorLote(o.tamanhoLote);
     var naoConformes = linhas.filter(function(l) { return l.conforme === false; });
     var criticosNC = naoConformes.filter(function(l) { return l.severidade === 'CRITICO'; });
     var pendentes = linhas.filter(function(l) { return l.conforme == null && l.cnc !== 'NA'; });
     var naoAplicaveis = linhas.filter(function(l) { return l.cnc === 'NA'; });
     var amostra = amostragem(o.caixas);
     var falta = faltamParametros(par);
+    var avisos = [];
+    if (pesagem.origemDensidade === 'CADASTRO') avisos.push('densidade do cadastro, não medida neste lote — meça a densidade da amostra e informe no laudo');
+    if (plano && !pesagem.pendente && pesagem.n < plano.n) avisos.push('o plano do INMETRO para lote de ' + plano.lote + ' unidades pede ' + plano.n + ' pesagens (há ' + pesagem.n + ')');
 
     var impedimentos = [];
     if (criticosNC.length) impedimentos.push(criticosNC.length + ' item(ns) crítico(s) não conforme(s)');
+    if (pesagem.semDensidade && !pesagem.pendente) {
+      impedimentos.push('produto declarado em ml sem densidade do lote — informe a densidade medida para converter o peso');
+    }
     if (pesagem.conforme === false) {
-      impedimentos.push(pesagem.mediaAbaixo
-        ? 'média de peso ' + pesagem.media + par.unidadeMedida + ' abaixo do mínimo para a média (' + pesagem.limiteMedia + par.unidadeMedida +
-          (pesagem.k != null ? ' = nominal − k·s, INMETRO' : ' = nominal; com menos de ' + N_MIN_CRITERIO_MEDIA + ' unidades não se aplica o critério do INMETRO — pese mais') + ')'
-        : pesagem.foraLimite.length + ' unidade(s) abaixo do limite de ' + pesagem.limiteIndividual + par.unidadeMedida);
+      if (pesagem.mediaAbaixo) {
+        impedimentos.push('média de peso ' + pesagem.media + 'g abaixo do mínimo para a média (' + pesagem.limiteMedia + 'g' +
+          (pesagem.k != null ? ' = nominal − k·s, INMETRO' : ' = nominal; com menos de ' + N_MIN_CRITERIO_MEDIA + ' unidades não se aplica o critério do INMETRO — pese mais') + ')');
+      }
+      if (pesagem.abaixoT2.length) {
+        impedimentos.push(pesagem.abaixoT2.length + ' unidade(s) abaixo de ' + pesagem.limiteT2 + ' g (nominal − 2T): o INMETRO não admite nenhuma');
+      }
+      if (pesagem.foraLimite.length > pesagem.c) {
+        impedimentos.push(pesagem.foraLimite.length + ' unidade(s) abaixo de ' + pesagem.limiteIndividual +
+          ' g (nominal − T); com ' + pesagem.n + ' pesagens o INMETRO admite ' + pesagem.c);
+      }
     }
 
     return {
       parametros: par, faltamParametros: falta, linhas: linhas, amostragem: amostra, pesagem: pesagem,
+      planoPesagem: plano, avisos: avisos,
       conformes: linhas.filter(function(l) { return l.conforme === true; }).length,
       naoConformes: naoConformes.length, criticosNC: criticosNC.length,
       pendentes: pendentes.length, naoAplicaveis: naoAplicaveis.length,
@@ -264,16 +381,24 @@
         valor: l.valor, conforme: l.conforme, observacao: l.observacao || null};
     });
     return {
-      versaoPlano: 'CK7-2026-09',
+      versaoPlano: 'CK7-2026-09b',
       itens: itens,
       amostragem: {caixasPalete: aval.amostragem.caixas, caixasAmostradas: aval.amostragem.amostra, regra: '√N+1', posicoes: aval.amostragem.posicoes},
       pesagem: {
         unidades: aval.pesagem.n, pesos: (e.pesos || []).map(n).filter(function(v) { return v != null && v > 0; }),
         media: aval.pesagem.media, minimo: aval.pesagem.minimo, maximo: aval.pesagem.maximo,
-        nominal: aval.parametros.conteudoNominal, unidade: aval.parametros.unidadeMedida,
-        toleranciaPct: aval.parametros.toleranciaPct, limiteIndividual: aval.pesagem.limiteIndividual,
+        // Pesos, média e limites em GRAMAS de conteúdo líquido. `nominal` é
+        // o nominal em gramas (convertido pela densidade quando declarado em
+        // ml); o do rótulo fica em nominalDeclarado/unidadeDeclarada.
+        unidade: 'g', nominal: aval.pesagem.nominal,
+        nominalDeclarado: aval.pesagem.nominalDeclarado, unidadeDeclarada: aval.pesagem.unidadeDeclarada,
+        densidade: aval.pesagem.densidade, origemDensidade: aval.pesagem.origemDensidade,
+        tolerancia: aval.pesagem.tolerancia, toleranciaMassa: aval.pesagem.toleranciaMassa,
+        limiteIndividual: aval.pesagem.limiteIndividual, limiteT2: aval.pesagem.limiteT2,
         limiteMedia: aval.pesagem.limiteMedia, desvioPadrao: aval.pesagem.desvioPadrao, k: aval.pesagem.k,
-        criterioMedia: 'INMETRO x̄ >= Qn - k·s',
+        c: aval.pesagem.c, foraLimite: aval.pesagem.foraLimite.length, abaixoT2: aval.pesagem.abaixoT2.length,
+        planoLote: aval.planoPesagem || null,
+        criterio: 'Portaria INMETRO 249/2021: x̄ >= Qn - k·s; no máximo c abaixo de Qn - T; nenhuma abaixo de Qn - 2T',
         conforme: aval.pesagem.conforme
       },
       retencao: {unidades: n(e.retencaoUnidades), local: e.retencaoLocal || null, guardarAte: prazoRetencao(e.dataValidade)},
@@ -285,7 +410,9 @@
   }
 
   return {
-    PLANO_PADRAO: PLANO_PADRAO, TOLERANCIA_PADRAO: TOLERANCIA_PADRAO,
+    PLANO_PADRAO: PLANO_PADRAO,
+    toleranciaInmetro: toleranciaInmetro, planoPorLote: planoPorLote, aceitacaoPorAmostra: aceitacaoPorAmostra,
+    densidadeParaPesagem: densidadeParaPesagem, densidadeDoBulk: densidadeDoBulk, densidadeValida: densidadeValida,
     kInmetro: kInmetro, N_MIN_CRITERIO_MEDIA: N_MIN_CRITERIO_MEDIA,
     RETENCAO_MESES_APOS_VALIDADE: RETENCAO_MESES_APOS_VALIDADE,
     UNIDADES_PESAGEM_PADRAO: UNIDADES_PESAGEM_PADRAO, redimensionarPesos: redimensionarPesos,

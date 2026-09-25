@@ -462,7 +462,7 @@
         <div class="plano-scroll"><table class="plano-tabela"><tbody id="qGranelPlanoBody"></tbody></table></div>
       </div>
       <div id="qGranelSemPlano" class="field-hint" style="display:none;margin-bottom:12px">
-        Este produto não tem especificação cadastrada — a decisão fica pela observação.
+        Este produto não tem especificação cadastrada: aponte os seis ensaios e julgue cada um (C/NC). As faixas se cadastram na aba Especificações.
       </div>
       <div class="form-group">
         <label>Observação</label>
@@ -563,6 +563,13 @@
                   <input type="number" id="qCk7Nominal" min="0" step="any" placeholder="200">
                   <select id="qCk7Unidade" style="width:90px"><option value="g">g</option><option value="ml">ml</option></select>
                 </div>
+              </div>
+              <!-- Produto em ml é pesado em gramas: a densidade do lote
+                   converte nominal e tolerâncias (Portaria INMETRO 249/2021). -->
+              <div class="form-group" id="qCk7DensidadeGrupo" style="display:none">
+                <label>Densidade da amostra (g/ml, 20 °C)</label>
+                <input type="text" inputmode="decimal" id="qCk7Densidade" placeholder="Ex.: 0,872">
+                <div class="field-hint" id="qCk7DensidadeOrigem"></div>
               </div>
               <div class="form-group"><label>Unidades por caixa</label><input type="number" id="qCk7UnCaixa" min="0" step="1" placeholder="24"></div>
               <div class="form-group"><label>Código de barras do produto</label><input type="text" id="qCk7EanProduto" placeholder="EAN-13"></div>
@@ -1216,19 +1223,36 @@ function abrirLaudoGranel(opKey) {
   document.getElementById('modalGranelBg').classList.add('open');
 }
 
-function renderPlanoGranel() {
+/* Ensaio que se aponta como número (pH, densidade, teor alcoólico) mesmo
+   sem faixa cadastrada: a densidade do bulk vai para a pesagem do PA, e o
+   campo desabilitado impedia registrá-la (25/09). */
+function ensaioNumerico(nome) {
+  return /\bph\b|densidade|alco/i.test(String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+}
+/* Os seis ensaios físico-químicos do bulk (aspecto, cor, odor, pH,
+   densidade, teor alcoólico). Sem especificação cadastrada o analista
+   aponta os mesmos seis, julgando C/NC -- antes a tela não mostrava ensaio
+   nenhum e o bulk era liberado sem análise registrada. */
+function planoGranelPadrao() {
+  var itens = {};
+  SpecMaterial.PLANO_MP.forEach(function(p) { itens[p.chave] = {ensaio: p.ensaio, metodo: p.metodo, critico: false}; });
+  return itens;
+}
+function itensGranel() {
   var itens = granelAtual && granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens;
-  var vazio = document.getElementById('qGranelSemPlano');
+  return itens && Object.keys(itens).length ? itens : planoGranelPadrao();
+}
+
+function renderPlanoGranel() {
+  var itens = itensGranel();
+  var temEspec = !!(granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens &&
+    Object.keys(granelAtual.espec.registro.itens).length);
+  document.getElementById('qGranelSemPlano').style.display = temEspec ? 'none' : '';
   var corpo = document.getElementById('qGranelPlanoBody');
-  if (!itens || !Object.keys(itens).length) {
-    vazio.style.display = '';
-    corpo.innerHTML = '';
-    document.getElementById('qGranelPlanoResumo').textContent = '';
-    return;
-  }
-  vazio.style.display = 'none';
   var aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
-  document.getElementById('qGranelPlanoTitulo').textContent = 'Ensaios do granel — ' + granelAtual.espec.key.replace('__v', ' · versão ');
+  document.getElementById('qGranelPlanoTitulo').textContent = temEspec
+    ? 'Ensaios do granel — ' + granelAtual.espec.key.replace('__v', ' · versão ')
+    : 'Ensaios do granel — plano padrão (sem especificação cadastrada)';
   document.getElementById('qGranelPlanoResumo').innerHTML =
     '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
     '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
@@ -1240,7 +1264,7 @@ function renderPlanoGranel() {
       '<td><span class="plano-ensaio">' + escapeHtml(l.ensaio || '—') + '</span>' +
         (l.critico ? ' <span class="badge badge-red">crítico</span>' : '') +
         '<div class="plano-espec">' + escapeHtml(l.especificacaoTexto || '') + (l.metodo ? ' · ' + escapeHtml(l.metodo) : '') + '</div></td>' +
-      '<td><input type="number" step="any" class="plano-val" data-granel-valor="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '"' + (l.faixa ? '' : ' disabled') + '></td>' +
+      '<td><input type="number" step="any" class="plano-val" data-granel-valor="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '"' + (ensaioNumerico(l.ensaio) || l.faixa ? '' : ' disabled') + '></td>' +
       '<td><select class="plano-cnc" data-granel-cnc="' + escapeAttr(l.itemKey) + '">' +
         '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
         '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
@@ -1279,7 +1303,7 @@ function decidirGranel(decisao) {
     showAlert('Descreva o motivo — ele vira a descrição da não conformidade.', 'danger');
     return;
   }
-  var itens = granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens;
+  var itens = itensGranel();
   var ensaios = null, aval = null;
   if (itens && Object.keys(itens).length) {
     aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
@@ -1291,6 +1315,11 @@ function decidirGranel(decisao) {
   }
   if (decisao === 'LIBERAR' && aval && aval.bloqueia &&
       !confirm('⚠ Há ensaio CRÍTICO fora da especificação neste granel.\n\nLiberar assim mesmo?')) return;
+  // A densidade do bulk converte o peso do envase de produto em ml
+  // (Portaria INMETRO 249/2021). Sem ela a Qualidade terá de medir no laudo
+  // de cada palete.
+  if (decisao === 'LIBERAR' && ensaios && InspecaoPA.densidadeDoBulk(ensaios) == null &&
+      !confirm('A densidade do bulk não foi apontada. Ela é usada para calcular o peso mínimo do envase (produto em ml).\n\nLiberar sem densidade? A Qualidade terá de medi-la no laudo de cada palete.')) return;
 
   var t = Manipulacao.transicao(decisao, {quem: currentUserNome()});
   t['analise/ensaios'] = ensaios;
@@ -1528,7 +1557,10 @@ function abrirLaudo(itemCodigo, loteKey) {
     ehPa: ehPa, roteiro: roteiroDoLote(itemTipo, itemCodigo),
     ck7: {respostas: {}, pesos: [], camposMontados: false},
     emb: {respostas: {}, amostras: [], camposMontados: false},
-    parametros: ehPa ? Object.assign({}, allParametrosPa[itemKey] || {}) : null
+    parametros: ehPa ? Object.assign({}, allParametrosPa[itemKey] || {}) : null,
+    // Densidade do bulk do mesmo lote e a do cadastro: fontes da pesagem de
+    // produto em ml quando a inspetora não mede uma nova no laudo.
+    fontesPa: ehPa ? fontesPesagemPa(lote, itemCodigo) : null
   };
 
   document.getElementById('modalLaudoTitle').textContent =
@@ -1595,7 +1627,8 @@ function abrirLaudo(itemCodigo, loteKey) {
     document.getElementById('qCk7RetUn').value = '';
     document.getElementById('qCk7RetLocal').value = '';
     document.getElementById('qCk7Lab').value = '';
-    ['qCk7Nominal', 'qCk7Unidade', 'qCk7UnCaixa', 'qCk7EanProduto', 'qCk7EanCaixa'].forEach(function(id) {
+    document.getElementById('qCk7Densidade').value = '';
+    ['qCk7Nominal', 'qCk7Unidade', 'qCk7UnCaixa', 'qCk7EanProduto', 'qCk7EanCaixa', 'qCk7Densidade'].forEach(function(id) {
       document.getElementById(id).onchange = renderCk7;
     });
   }
@@ -1708,8 +1741,7 @@ function ck7ParametrosDaTela() {
     eanCaixa: document.getElementById('qCk7EanCaixa').value.trim(),
     torqueAtivo: !!(laudoAtual.parametros && laudoAtual.parametros.torqueAtivo),
     torqueMin: laudoAtual.parametros ? laudoAtual.parametros.torqueMin : null,
-    torqueMax: laudoAtual.parametros ? laudoAtual.parametros.torqueMax : null,
-    toleranciaPct: laudoAtual.parametros ? laudoAtual.parametros.toleranciaPct : null
+    torqueMax: laudoAtual.parametros ? laudoAtual.parametros.torqueMax : null
   };
 }
 
@@ -1718,9 +1750,40 @@ function caixasDoPalete(lote) {
   return fechadas + (Number(lote.unidadesCaixaParcial || 0) > 0 ? 1 : 0);
 }
 
+/* Fontes da pesagem de PA vindas do lote (25/09):
+   - densidade do BULK: ensaio "Densidade" da análise físico-química do
+     mesmo lote (ops/{op}/manipulacao/analise/ensaios);
+   - densidade do CADASTRO: a usada na emissão da OP, ou a do produto --
+     valor de projeto, último recurso;
+   - tamanho do LOTE para o plano de amostragem do INMETRO: o total
+     conferido da OP (apontado + divergência), senão o planejado. */
+function fontesPesagemPa(lote, sku) {
+  var op = (lote.opKey && allOpsQualidade[lote.opKey]) || opPorLote(lote.opLote || lote.loteOrigem) || {};
+  var analise = ((op.manipulacao || {}).analise) || {};
+  var prod = produtoPorSku(sku) || {};
+  var conf = lote.conferencia || {};
+  var total = Number(conf.qtdApontada) + Number(conf.divergenciaTotal || 0);
+  return {
+    densidadeBulk: InspecaoPA.densidadeDoBulk(analise.ensaios),
+    densidadeCadastro: op.densidadeGranelUsada != null ? op.densidadeGranelUsada : prod.densidadeGranel,
+    tamanhoLote: total > 0 ? total : (Number(op.qtdPlanejada) || null)
+  };
+}
+
+function densidadeCk7() {
+  var f = laudoAtual.fontesPa || {};
+  return InspecaoPA.densidadeParaPesagem({
+    laudo: document.getElementById('qCk7Densidade').value,
+    bulk: f.densidadeBulk, cadastro: f.densidadeCadastro
+  });
+}
+
 function avaliarCk7() {
   var par = ck7ParametrosDaTela();
-  return InspecaoPA.avaliar(laudoAtual.ck7.respostas, laudoAtual.ck7.pesos, par, {caixas: caixasDoPalete(laudoAtual.lote)});
+  return InspecaoPA.avaliar(laudoAtual.ck7.respostas, laudoAtual.ck7.pesos, par, {
+    caixas: caixasDoPalete(laudoAtual.lote), densidade: densidadeCk7(),
+    tamanhoLote: (laudoAtual.fontesPa || {}).tamanhoLote
+  });
 }
 
 /* ── F009: inspeção de embalagem ──
@@ -1868,7 +1931,34 @@ function montarCamposPeso() {
 
 /* Resumo da pesagem + impedimentos. Separado de renderCk7 porque digitar um
    peso precisa atualizar o julgamento SEM remontar os campos. */
+/* Limites da pesagem em gramas. Aqui e não em renderCk7: c e a média
+   mínima mudam a cada peso digitado. */
+function atualizarFaixaCk7(aval) {
+  var faixa = document.getElementById('qCk7PesoFaixa');
+  if (!faixa) return;
+  var par = aval.parametros, pes = aval.pesagem, emMl = pes.unidadeDeclarada === 'ml';
+  faixa.textContent = par.conteudoNominal == null
+    ? 'Informe o conteúdo nominal acima para o sistema julgar a pesagem.'
+    : pes.semDensidade
+      ? 'Nominal ' + par.conteudoNominal + ' ml: informe a densidade para converter em gramas.'
+      : pes.tolerancia == null
+        ? 'Nominal fora da tabela de tolerâncias do INMETRO.'
+        // Tudo em gramas, que é o que a balança mostra. Em ml, o nominal
+        // e as tolerâncias já vêm multiplicados pela densidade.
+        : 'Nominal ' + fmtNum(pes.nominal) + ' g' +
+          (emMl ? ' (' + par.conteudoNominal + ' ml × ' + fmtNum(pes.densidade) + ' g/ml)' : '') +
+          ' · T = ' + fmtNum(pes.tolerancia) + (emMl ? ' ml = ' + fmtNum(pes.toleranciaMassa) + ' g' : ' g') +
+          ' · individual mínimo ' + fmtNum(pes.limiteIndividual) + ' g (até ' + pes.c + ' abaixo disso com ' + (pes.n || 0) + ' pesagens)' +
+          ' · nenhuma abaixo de ' + fmtNum(pes.limiteT2) + ' g (2T)' +
+          (pes.limiteMedia != null
+            ? ' · média mínima ' + fmtNum(pes.limiteMedia) + ' g' +
+              (pes.k != null ? ' (nominal − k·s; k=' + pes.k + ', s=' + pes.desvioPadrao + ')' : ' (com menos de ' + InspecaoPA.N_MIN_CRITERIO_MEDIA + ' pesagens a média precisa atingir o nominal)')
+            : ' · média mínima: nominal − k·s, calculada com as pesagens') +
+          ' — Portaria INMETRO 249/2021.';
+}
+
 function atualizarJulgamentoCk7(aval) {
+  atualizarFaixaCk7(aval);
   var pes = aval.pesagem;
   var resumo = document.getElementById('qCk7PesoResumo');
   if (resumo) {
@@ -1880,7 +1970,7 @@ function atualizarJulgamentoCk7(aval) {
   var imped = document.getElementById('qCk7Impedimentos');
   if (!imped) return;
   var falta = aval.faltamParametros.length ? ['faltam parâmetros do produto: ' + aval.faltamParametros.join(' e ')] : [];
-  var listas = aval.impedimentos.concat(falta);
+  var listas = aval.impedimentos.concat(falta, aval.avisos || []);
   imped.className = 'alert ' + (aval.impedimentos.length ? 'alert-danger' : 'alert-success') + (listas.length ? ' show' : '');
   imped.innerHTML = listas.length
     ? (aval.impedimentos.length ? '<b>Não é possível liberar:</b> ' : '<b>Atenção:</b> ') + escapeHtml(listas.join('; ')) + '.'
@@ -1949,16 +2039,19 @@ function renderCk7() {
   // anterior montava uma vez e nunca mais.
   if (!laudoAtual.ck7.camposMontados) {
     if (!laudoAtual.ck7.pesos.length) {
-      laudoAtual.ck7.pesos = InspecaoPA.redimensionarPesos([], InspecaoPA.UNIDADES_PESAGEM_PADRAO);
+      // Padrão = amostra do plano do INMETRO para o tamanho do lote; sem
+      // lote conhecido, os 32 do relatório oficial. Continua em aberto.
+      laudoAtual.ck7.pesos = InspecaoPA.redimensionarPesos([], aval.planoPesagem ? aval.planoPesagem.n : InspecaoPA.UNIDADES_PESAGEM_PADRAO);
     }
     document.getElementById('qCk7Pesos').innerHTML =
-      '<label>Pesagem das unidades (<span id="qCk7PesoUn">' + escapeHtml(par.unidadeMedida) + '</span>)</label>' +
+      '<label>Pesagem das unidades (<span id="qCk7PesoUn"></span>)</label>' +
       '<div class="field-hint" style="margin-bottom:6px" id="qCk7PesoFaixa"></div>' +
       '<div class="ck7-peso-barra">' +
         '<label for="qCk7PesoQtd">Unidades pesadas</label>' +
         '<input type="number" id="qCk7PesoQtd" min="0" step="1" style="width:76px">' +
         '<button type="button" class="btn btn-ghost btn-sm" id="qCk7PesoMais">+ unidade</button>' +
-        '<span class="field-hint" style="flex:1;min-width:200px">A amostra de aspecto segue as caixas; o peso tem amostra própria — o laudo usa ' + InspecaoPA.UNIDADES_PESAGEM_PADRAO + '.</span>' +
+        '<span class="field-hint" style="flex:1;min-width:200px">A amostra de aspecto segue as caixas; o peso tem amostra própria — ' +
+          (aval.planoPesagem ? 'o plano do INMETRO para lote de ' + aval.planoPesagem.lote + ' unidades pede ' + aval.planoPesagem.n + '.' : 'o laudo usa ' + InspecaoPA.UNIDADES_PESAGEM_PADRAO + '.') + '</span>' +
       '</div>' +
       '<div id="qCk7PesoCampos"></div>' +
       '<div class="field-hint" style="margin-top:4px" id="qCk7PesoResumo"></div>';
@@ -1976,16 +2069,17 @@ function renderCk7() {
     montarCamposPeso();
   }
   document.getElementById('qCk7PesoQtd').value = laudoAtual.ck7.pesos.length;
-  document.getElementById('qCk7PesoUn').textContent = par.unidadeMedida;
-  document.getElementById('qCk7PesoFaixa').textContent = par.conteudoNominal != null
-    ? 'Nominal ' + par.conteudoNominal + par.unidadeMedida + ' · limite individual ' + aval.pesagem.limiteIndividual + par.unidadeMedida + ' (−' + par.toleranciaPct + '%)' +
-      // A média tem regra própria (INMETRO, x̄ >= Qn − k·s): sem mostrá-la,
-      // um bloqueio dentro dos −3% parecia erro do sistema.
-      (aval.pesagem.limiteMedia != null
-        ? ' · média mínima ' + aval.pesagem.limiteMedia + par.unidadeMedida +
-          (aval.pesagem.k != null ? ' (nominal − k·s, INMETRO; k=' + aval.pesagem.k + ', s=' + aval.pesagem.desvioPadrao + ')' : ' (com menos de ' + InspecaoPA.N_MIN_CRITERIO_MEDIA + ' pesagens a média precisa atingir o nominal; com ' + InspecaoPA.N_MIN_CRITERIO_MEDIA + ' ou mais vale nominal − k·s, INMETRO)')
-        : ' · média mínima: nominal − k·s (INMETRO), calculada com as pesagens')
-    : 'Informe o conteúdo nominal acima para o sistema julgar a pesagem.';
+  // Densidade só existe para produto em ml: mostra o campo e de onde veio.
+  var pes = aval.pesagem, emMl = pes.unidadeDeclarada === 'ml';
+  document.getElementById('qCk7DensidadeGrupo').style.display = emMl ? '' : 'none';
+  var fontes = laudoAtual.fontesPa || {};
+  document.getElementById('qCk7DensidadeOrigem').innerHTML = !emMl ? ''
+    : pes.origemDensidade === 'LAUDO' ? 'Usando a densidade medida agora.'
+      + (fontes.densidadeBulk != null ? ' Bulk: ' + fmtNum(fontes.densidadeBulk) + '.' : '')
+    : pes.origemDensidade === 'BULK' ? 'Usando a do bulk do lote: <b>' + fmtNum(pes.densidade) + '</b>. Meça de novo para usar a da amostra.'
+    : pes.origemDensidade === 'CADASTRO' ? '<span style="color:var(--warning)">Usando a do cadastro (' + fmtNum(pes.densidade) + ') — o bulk não tem densidade apontada. Meça a amostra.</span>'
+    : '<span style="color:var(--danger)">Sem densidade no bulk nem no cadastro: meça a amostra.</span>';
+  document.getElementById('qCk7PesoUn').textContent = 'g de conteúdo líquido — balança tarada com a embalagem vazia';
   atualizarJulgamentoCk7(aval);
 
   document.getElementById('qCk7Itens').querySelectorAll('[data-ck7-cnc]').forEach(function(sel) {
@@ -2303,6 +2397,13 @@ function dadosLaudoPa(itemCodigo, loteKey, lote, q, opcoes) {
     pesos: pes.pesos || [],
     unidadePeso: pes.unidade || 'g',
     pesoNominal: pes.nominal, pesoMinimo: pes.limiteIndividual,
+    // Laudos a partir de 25/09 (Portaria 249: T da tabela, densidade).
+    // Os antigos não têm `tolerancia` e o texto impresso segue o de então.
+    pesoCriterio: pes.tolerancia != null ? {
+      nominalDeclarado: pes.nominalDeclarado, unidadeDeclarada: pes.unidadeDeclarada,
+      densidade: pes.densidade, origemDensidade: pes.origemDensidade,
+      tolerancia: pes.tolerancia, limiteT2: pes.limiteT2, limiteMedia: pes.limiteMedia, c: pes.c
+    } : null,
     micro: {incluir: o.micro !== false, laboratorio: o.laboratorio || ck7.laboratorio || ''},
     conclusao: liberado ? 'APROVADO' : (q.decisao === 'REPROVADO' ? 'REPROVADO' : ''),
     observacoes: q.observacao || '',
