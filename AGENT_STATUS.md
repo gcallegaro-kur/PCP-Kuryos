@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
+  Produto declarado em ml era pesado em g e comparado direto com o nominal
+  (sem densidade). Densidade: medida no laudo > análise do bulk do lote >
+  cadastro (OP), com a origem gravada. Critérios da Portaria INMETRO 249/2021
+  (tolerância T por faixa, c por plano de amostragem, nenhuma abaixo de 2T,
+  média Qn − k·s). Análise do bulk: seis ensaios FQ mesmo sem especificação,
+  valor numérico sempre apontável. **Arquivos ativos:**
+  `public/shared/inspecao-pa.js`, `public/qualidade.html`,
+  `public/shared/laudo-cq.js`, `run_inspecao_pa_test.js`,
+  `run_inspecao_pa_ui_test.js`.
+
 - **COMMITADO, DEPLOY PENDENTE — correção de bulk reprovado (2026-09-25).**
   Commit `b97fc03` no origin/main. Hosting NÃO publicado: o deploy foi
   bloqueado pela permissão da sessão; worktree limpo pronto em
