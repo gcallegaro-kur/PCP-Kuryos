@@ -180,6 +180,19 @@
       </table></div>
     </div>
 
+    <!-- Bulk reprovado: a Qualidade decide se dá para corrigir (25/09).
+         A correção é um novo ciclo do mesmo lote, com RNC obrigatória. -->
+    <div class="card" id="qCardCorrecao" style="display:none;border-left-color:var(--danger)">
+      <div class="card-header">
+        <h3>Bulk reprovado — aguardando decisão de correção</h3>
+        <span class="field-hint" id="qCorrecaoResumo"></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Lote</th><th>Produto</th><th>Reprovado por</th><th style="text-align:right">Massa</th><th>Motivo</th><th></th></tr></thead>
+        <tbody id="qCorrecaoBody"></tbody>
+      </table></div>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <h3 id="qFilaTitulo">Aguardando liberação</h3>
@@ -460,6 +473,51 @@
       <button class="btn btn-ghost" id="qGranelCancelar">Cancelar</button>
       <button class="btn btn-danger" id="qGranelReprovar">Reprovar granel</button>
       <button class="btn btn-green" id="qGranelLiberar">Liberar para envase</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: Correção do bulk reprovado ══════════ -->
+<div class="modal-bg" id="modalCorrecaoBg">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header red"><h2 id="modalCorrecaoTitle">Correção do bulk</h2><button class="modal-close" id="modalCorrecaoClose" title="Fechar" aria-label="Fechar">×</button></div>
+    <div class="modal-body">
+      <div id="qCorrInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div class="form-group">
+        <label>RNC da reprovação <span style="color:var(--danger)">*</span></label>
+        <select class="kt-select" id="qCorrRnc"></select>
+        <div class="field-hint" id="qCorrRncHint"></div>
+      </div>
+      <div class="form-group">
+        <label>Motivo da correção <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="qCorrMotivo" placeholder="Ex.: turbidez — adição de solubilizante">
+      </div>
+      <div class="form-group">
+        <label>Massa do bulk reprovado que entra na correção (kg) <span style="color:var(--danger)">*</span></label>
+        <input type="number" step="any" min="0" id="qCorrEntrada">
+        <div class="field-hint">Vem preenchida com o rendimento do ciclo reprovado. Corrija se parte do bulk não entra.</div>
+      </div>
+      <div class="form-group">
+        <label>Insumos a adicionar <span style="color:var(--danger)">*</span></label>
+        <div id="qCorrItens"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="qCorrAddItem" style="margin-top:6px">＋ Insumo</button>
+        <datalist id="qCorrMateriais"></datalist>
+        <div class="field-hint">A Manipulação pesa exatamente estes insumos (com foto, lote e conferência) e a baixa sai do estoque.</div>
+      </div>
+      <div class="form-group">
+        <label>Instrução técnica</label>
+        <textarea id="qCorrInstrucao" rows="2" placeholder="Ordem de adição, agitação, temperatura, tempo..."></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="qCorrRetro" style="width:auto"> Registro retroativo (a correção já foi feita fisicamente)</label>
+        <input type="text" id="qCorrRetroJust" placeholder="Justificativa — ex.: correção feita em 25/09 antes de o sistema permitir" style="display:none;margin-top:6px">
+        <div class="field-hint">Só para regularizar: dispensa a foto da balança na pesagem da correção. Fica registrado no lote.</div>
+      </div>
+      <div id="qCorrErros" class="alert alert-danger"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="qCorrCancelar">Cancelar</button>
+      <button class="btn btn-danger" id="qCorrConfirmar">Abrir correção</button>
     </div>
   </div>
 </div>
@@ -955,7 +1013,7 @@ var laudoAtual = null; // { itemCodigo, loteKey, lote, itemTipo, plano, resultad
 var allParametrosPa = {};
 var allOpsQualidade = {};
 var granelAtual = null; // {opKey, op, espec, resultados}
-dbOnValue(db.ref('ops'), function(snap) { allOpsQualidade = snap.val() || {}; renderFilaGranel(); });
+dbOnValue(db.ref('ops'), function(snap) { allOpsQualidade = snap.val() || {}; renderFilaGranel(); renderFilaCorrecao(); });
 dbOnValue(db.ref('parametros_pa'), function(snap) { allParametrosPa = snap.val() || {}; });
 
 function renderFila() {
@@ -1126,10 +1184,14 @@ function abrirLaudoGranel(opKey) {
   granelAtual = {opKey: opKey, op: op, espec: especificacaoVigente(allEspecificacoes, op.sku), resultados: {}};
   var f = op.manipulacao || {};
   var resumo = Manipulacao.resumoManipulacao(f.previstos || {}, f);
-  document.getElementById('modalGranelTitle').textContent = 'Análise do granel — lote ' + (op.lote || opKey);
+  var corr = Manipulacao.ehCorrecao(f) ? (f.correcao || {}) : null;
+  document.getElementById('modalGranelTitle').textContent = 'Análise do granel — lote ' + (op.lote || opKey) +
+    (corr ? ' · correção (ciclo ' + Manipulacao.ciclo(f) + ')' : '');
   document.getElementById('qGranelInfo').innerHTML =
     '<b>' + escapeHtml(op.produto || op.sku || '') + '</b><br>' +
-    'Pesado ' + fmtNum(resumo.pesadoTotal) + ' kg · rendimento ' + (resumo.rendimento != null ? fmtNum(resumo.rendimento) + ' kg' : '—') +
+    (corr ? 'Correção da RNC <b>' + escapeHtml(corr.rncNumero || '—') + '</b> (' + escapeHtml(corr.motivo || '') + ') · entrou ' +
+      fmtNum(resumo.entradaBulk) + ' kg do bulk reprovado<br>' : '') +
+    (corr ? 'Pesado na correção ' : 'Pesado ') + fmtNum(resumo.pesadoTotal) + ' kg · rendimento ' + (resumo.rendimento != null ? fmtNum(resumo.rendimento) + ' kg' : '—') +
     (resumo.perdaProcessoPct != null ? ' · perda de processo ' + resumo.perdaProcessoPct + '%' : '') + '<br>' +
     'Pesagem por ' + escapeHtml((f.pesagem || {}).por || '—') + ' · conferida por ' + escapeHtml((f.conferencia || {}).por || '—') +
     ' · manipulada por ' + escapeHtml((f.manipulacao || {}).por || '—') +
@@ -1237,8 +1299,12 @@ function decidirGranel(decisao) {
   var u = {};
   Object.keys(t).forEach(function(k) { u['ops/' + granelAtual.opKey + '/manipulacao/' + k] = t[k]; });
   var op = granelAtual.op;
+  var rncCorrecao = Manipulacao.ehCorrecao(op.manipulacao) ? ((op.manipulacao.correcao || {}).rncNumero || null) : null;
   db.ref().update(u).then(function() {
     if (decisao !== 'REPROVAR') return null;
+    // Correção reprovada: a não conformidade é a mesma, já tem RNC. Uma nova
+    // correção (outro ciclo) volta a apontar para ela.
+    if (rncCorrecao) return {ok: true, numero: rncCorrecao, existente: true};
     return abrirRnc(db, {
       classificacao: 'MAIOR', origem: 'PRODUCAO',
       descricao: 'Granel do lote ' + (op.lote || granelAtual.opKey) + ' reprovado: ' + obs,
@@ -1249,12 +1315,177 @@ function decidirGranel(decisao) {
     fecharModalGranel();
     showAlert(decisao === 'LIBERAR'
       ? 'Granel liberado. O envase deste lote já pode ser alocado.'
-      : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + ' aberta.' : ''),
+      : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + (rnc.existente ? ' (a mesma da correção).' : ' aberta.') : '') +
+        ' Se der para corrigir, abra a correção em "Bulk reprovado".',
       decisao === 'LIBERAR' ? 'success' : 'danger');
   }).catch(function(e) { showAlert('Erro ao registrar a análise: ' + e.message, 'danger'); });
 }
 document.getElementById('qGranelLiberar').addEventListener('click', function() { decidirGranel('LIBERAR'); });
 document.getElementById('qGranelReprovar').addEventListener('click', function() { decidirGranel('REPROVAR'); });
+
+/* ─────────── Correção do bulk reprovado (25/09) ───────────
+   Decisão do usuário: "Só Qualidade autoriza, RNC obrigatória". O bulk
+   reprovado deixa de ser fim de linha: a Qualidade define os insumos a
+   adicionar e a Manipulação executa um novo ciclo no MESMO lote. */
+var correcaoAtual = null; // {opKey, op}
+function podeAutorizarCorrecao() {
+  var u = window.currentUser;
+  if (!u) return false;
+  return u.role === 'qualidade' || u.role === 'admin' || !!(u.modulos && u.modulos.qualidade === true);
+}
+function opsBulkReprovado() {
+  return Object.keys(allOpsQualidade)
+    .map(function(k) { return Object.assign({key: k}, allOpsQualidade[k]); })
+    .filter(function(o) { return o && o.status !== 'Cancelado' && Manipulacao.estado(o) === 'REPROVADO'; })
+    .sort(function(a, b) { return String((b.manipulacao.analise || {}).em || '').localeCompare(String((a.manipulacao.analise || {}).em || '')); });
+}
+function renderFilaCorrecao() {
+  var lista = opsBulkReprovado();
+  document.getElementById('qCardCorrecao').style.display = lista.length ? '' : 'none';
+  document.getElementById('qCorrecaoResumo').textContent = lista.length + ' lote(s)';
+  var pode = podeAutorizarCorrecao();
+  document.getElementById('qCorrecaoBody').innerHTML = lista.map(function(o) {
+    var f = o.manipulacao || {}, an = f.analise || {}, man = f.manipulacao || {};
+    return '<tr><td><b>' + escapeHtml(o.lote || o.key) + '</b>' + (Manipulacao.ciclo(f) > 1 ? '<div class="field-hint">ciclo ' + Manipulacao.ciclo(f) + '</div>' : '') + '</td>' +
+      '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
+      '<td>' + escapeHtml(an.por || '—') + '<div class="field-hint">' + fmtDataHora(an.em) + '</div></td>' +
+      '<td style="text-align:right">' + (man.rendimento != null ? fmtNum(man.rendimento) + ' kg' : '—') + '</td>' +
+      '<td>' + escapeHtml(an.observacao || '—') + '</td>' +
+      '<td style="text-align:right">' + (pode
+        ? '<button class="btn btn-danger btn-sm" data-corrigir="' + escapeAttr(o.key) + '">Abrir correção</button>'
+        : '<span class="field-hint">Só a Qualidade abre</span>') + '</td></tr>';
+  }).join('');
+  document.getElementById('qCorrecaoBody').querySelectorAll('[data-corrigir]').forEach(function(b) {
+    b.addEventListener('click', function() { abrirModalCorrecao(b.getAttribute('data-corrigir')); });
+  });
+}
+// RNCs do lote (a reprovação abre uma automaticamente); as abertas primeiro.
+function rncsDoLote(lote) {
+  return Object.keys(allRncs).map(function(k) { return Object.assign({_key: k}, allRncs[k]); })
+    .filter(function(r) { return r && r.numero && String(r.opLote || '') === String(lote || ''); })
+    .sort(function(a, b) {
+      var fa = (RNC_STATUS[a.status] || {}).aberta ? 0 : 1, fb = (RNC_STATUS[b.status] || {}).aberta ? 0 : 1;
+      return fa - fb || String(b.abertaEm || b.criadoEm || '').localeCompare(String(a.abertaEm || a.criadoEm || ''));
+    });
+}
+function linhaInsumoCorrecao(it) {
+  var d = it || {};
+  return '<div class="corr-item" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">' +
+    '<input type="text" list="qCorrMateriais" class="corr-cod" placeholder="Código ou nome do insumo" value="' + escapeAttr(d.mpCodigo || '') + '" style="flex:3">' +
+    '<input type="number" step="any" min="0" class="corr-qtd" placeholder="Qtd" value="' + escapeAttr(d.quantidade == null ? '' : d.quantidade) + '" style="flex:1">' +
+    '<span class="corr-un field-hint" style="min-width:24px">' + escapeHtml(d.unidade || 'kg') + '</span>' +
+    '<button type="button" class="btn btn-ghost btn-sm corr-del" title="Remover">✕</button></div>';
+}
+function ligarInsumosCorrecao() {
+  document.querySelectorAll('#qCorrItens .corr-del').forEach(function(b) {
+    b.onclick = function() { b.parentNode.remove(); };
+  });
+  document.querySelectorAll('#qCorrItens .corr-cod').forEach(function(inp) {
+    inp.onchange = function() {
+      var m = materialDoCodigoCorrecao(inp.value);
+      if (m) { inp.value = m.mpCodigo; inp.parentNode.querySelector('.corr-un').textContent = m.unidade || 'kg'; }
+    };
+  });
+}
+function materialDoCodigoCorrecao(txt) {
+  var v = String(txt || '').trim();
+  if (!v) return null;
+  var cod = v.split(' — ')[0].trim();
+  var m = allMateriais[sanitizeKey(cod)] || Object.values(allMateriais).find(function(x) { return x && x.mpCodigo === cod; });
+  return m ? {mpCodigo: m.mpCodigo || cod, mpNome: m.mpNome || m.nome || '', unidade: m.unidade || 'kg'} : null;
+}
+function abrirModalCorrecao(opKey) {
+  if (!podeAutorizarCorrecao()) { showAlert('Só a Qualidade autoriza a correção do bulk.', 'danger'); return; }
+  var op = allOpsQualidade[opKey];
+  if (!op) return;
+  correcaoAtual = {opKey: opKey, op: op};
+  var f = op.manipulacao || {}, an = f.analise || {}, man = f.manipulacao || {};
+  document.getElementById('modalCorrecaoTitle').textContent = 'Correção do bulk — lote ' + (op.lote || opKey);
+  document.getElementById('qCorrInfo').innerHTML = '<b>' + escapeHtml(op.produto || op.sku || '') + '</b><br>' +
+    'Reprovado por ' + escapeHtml(an.por || '—') + ' em ' + fmtDataHora(an.em) + (an.observacao ? ': ' + escapeHtml(an.observacao) : '') +
+    '<br>O lote continua o mesmo. A correção vira o ciclo ' + (Manipulacao.ciclo(f) + 1) + ' do bulk; o ciclo reprovado fica no dossiê.';
+  var rncs = rncsDoLote(op.lote);
+  var sel = document.getElementById('qCorrRnc');
+  sel.innerHTML = '<option value="">— escolha a RNC —</option>' + rncs.map(function(r) {
+    return '<option value="' + escapeAttr(r._key) + '">' + escapeHtml(r.numero) + ' · ' + escapeHtml(r.status || '') + ' · ' +
+      escapeHtml(String(r.descricao || '').slice(0, 70)) + '</option>';
+  }).join('');
+  if (rncs.length === 1) sel.value = rncs[0]._key;
+  document.getElementById('qCorrRncHint').textContent = rncs.length ? '' :
+    'Nenhuma RNC com este lote. Abra a RNC na aba Não conformidades (lote ' + (op.lote || '') + ') e volte aqui.';
+  document.getElementById('qCorrMotivo').value = an.observacao || '';
+  document.getElementById('qCorrEntrada').value = man.rendimento != null ? man.rendimento : '';
+  document.getElementById('qCorrInstrucao').value = '';
+  document.getElementById('qCorrRetro').checked = false;
+  document.getElementById('qCorrRetroJust').value = '';
+  document.getElementById('qCorrRetroJust').style.display = 'none';
+  document.getElementById('qCorrItens').innerHTML = linhaInsumoCorrecao();
+  document.getElementById('qCorrMateriais').innerHTML = Object.keys(allMateriais).map(function(k) {
+    var m = allMateriais[k] || {};
+    return m.mpCodigo ? '<option value="' + escapeAttr(m.mpCodigo + ' — ' + (m.mpNome || m.nome || '')) + '">' : '';
+  }).join('');
+  ligarInsumosCorrecao();
+  var erros = document.getElementById('qCorrErros');
+  erros.className = 'alert alert-danger'; erros.textContent = '';
+  document.getElementById('modalCorrecaoBg').classList.add('open');
+}
+function fecharModalCorrecao() {
+  document.getElementById('modalCorrecaoBg').classList.remove('open');
+  correcaoAtual = null;
+}
+document.getElementById('modalCorrecaoClose').addEventListener('click', fecharModalCorrecao);
+document.getElementById('qCorrCancelar').addEventListener('click', fecharModalCorrecao);
+document.getElementById('qCorrAddItem').addEventListener('click', function() {
+  document.getElementById('qCorrItens').insertAdjacentHTML('beforeend', linhaInsumoCorrecao());
+  ligarInsumosCorrecao();
+});
+document.getElementById('qCorrRetro').addEventListener('change', function() {
+  document.getElementById('qCorrRetroJust').style.display = this.checked ? '' : 'none';
+});
+document.getElementById('qCorrConfirmar').addEventListener('click', function() {
+  if (!correcaoAtual) return;
+  var op = allOpsQualidade[correcaoAtual.opKey] || correcaoAtual.op;
+  var rncKey = document.getElementById('qCorrRnc').value;
+  var rnc = rncKey ? allRncs[rncKey] : null;
+  var desconhecidos = [];
+  var itens = Array.prototype.slice.call(document.querySelectorAll('#qCorrItens .corr-item')).map(function(row) {
+    var txt = row.querySelector('.corr-cod').value.trim();
+    var qtd = row.querySelector('.corr-qtd').value;
+    if (!txt && qtd === '') return null;
+    var m = materialDoCodigoCorrecao(txt);
+    if (txt && !m) desconhecidos.push(txt);
+    return {mpCodigo: m ? m.mpCodigo : txt, mpNome: m ? m.mpNome : '', unidade: m ? m.unidade : 'kg', quantidade: qtd === '' ? null : Number(qtd)};
+  }).filter(Boolean);
+  var dados = {
+    rncNumero: rnc ? rnc.numero : '', rncKey: rncKey || null,
+    motivo: document.getElementById('qCorrMotivo').value, instrucao: document.getElementById('qCorrInstrucao').value,
+    entradaKg: document.getElementById('qCorrEntrada').value === '' ? null : Number(document.getElementById('qCorrEntrada').value),
+    itens: itens, retroativo: document.getElementById('qCorrRetro').checked,
+    justificativaRetroativo: document.getElementById('qCorrRetroJust').value,
+    quem: currentUserNome(), uid: (firebase.auth().currentUser || {}).uid || null
+  };
+  var val = Manipulacao.validarAberturaCorrecao(op.manipulacao, dados, podeAutorizarCorrecao());
+  var erros = val.erros.concat(desconhecidos.map(function(t) { return '"' + t + '" não está no cadastro de materiais.'; }));
+  var box = document.getElementById('qCorrErros');
+  if (erros.length) { box.className = 'alert alert-danger show'; box.textContent = erros.join(' '); return; }
+  if (!confirm('Abrir a correção do bulk do lote ' + (op.lote || '') + '?\n\nA Manipulação vai pesar ' + itens.length +
+    ' insumo(s) e o envase continua travado até a nova análise.')) return;
+  var btn = this; btn.disabled = true;
+  // Transação: só abre se o bulk continua reprovado (duas pessoas clicando,
+  // ou a tela desatualizada, não abrem dois ciclos).
+  db.ref('ops/' + correcaoAtual.opKey + '/manipulacao').transaction(function(atual) {
+    if (!atual) return atual; // null é o cache: deixa o SDK buscar no servidor
+    if (atual.status !== 'REPROVADO') return;
+    return Manipulacao.montarCorrecao(atual, dados);
+  }).then(function(res) {
+    btn.disabled = false;
+    if (!res.committed) { showAlert('O bulk deste lote não está mais reprovado — nada foi alterado.', 'danger'); return; }
+    fecharModalCorrecao();
+    showAlert('Correção aberta (RNC ' + dados.rncNumero + '). A Manipulação já vê os insumos para pesar.', 'success');
+  }).catch(function(e) { btn.disabled = false; showAlert('Erro ao abrir a correção: ' + e.message, 'danger'); });
+});
+// O perfil chega depois do primeiro desenho: o botão depende dele.
+var esperaPerfilCorrecao = setInterval(function() { if (window.currentUser) { clearInterval(esperaPerfilCorrecao); renderFilaCorrecao(); } }, 300);
 
 /* ─────────── Laudo ─────────── */
 /* Qual roteiro abrir. Decisão do usuário (21/09): "direcionar entre

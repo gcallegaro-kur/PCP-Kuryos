@@ -226,7 +226,8 @@ function renderDossie() {
     '<div class="grade">' +
       campo('Produto', escapeHtml(op.produto || '—')) + campo('SKU', escapeHtml(op.sku || '—')) +
       campo('Cliente', escapeHtml(op.cliente || '—')) + campo('Pedido', escapeHtml(op.skuPedidoKey || '—')) +
-      campo('Planejado', fmtNum(op.qtdPlanejada || 0) + ' un') + campo('Produzido', fmtNum(op.produzido || 0) + ' un') +
+      campo('Planejado', fmtNum(op.qtdPlanejada || 0) + ' un' + (op.excedenteBulk && op.excedenteBulk.unidades > 0
+        ? '<div class="hint">' + fmtNum(op.excedenteBulk.qtdBase) + ' da OP + ' + fmtNum(op.excedenteBulk.unidades) + ' de excedente do bulk corrigido</div>' : '')) + campo('Produzido', fmtNum(op.produzido || 0) + ' un') +
       campo('Apontado', fmtNum(d.totalApontado) + ' un') + campo('Linha', escapeHtml(op.linha || '—')) +
       campo('Emitida', quando(op.dataEmissao) + (op.emitidoPor ? '<div class="hint">' + escapeHtml(op.emitidoPor) + '</div>' : '')) +
       campo('Envase', quando(op.dataInicioReal) + ' → ' + quando(op.dataFimReal)) +
@@ -238,13 +239,23 @@ function renderDossie() {
     h += secao('Ordem de manipulação (granel)', '<span class="badge badge-gray">sem registro</span>',
       '<div class="no-data">Este lote não tem a fase de granel registrada no sistema — foi fabricado antes da tela de Manipulação existir, ou a pesagem ainda não começou.</div>');
   } else {
+    var nCiclos = (g.ciclos || []).length;
+    (g.ciclos || [g]).forEach(function(g, iCiclo) {
+    var ultimo = iCiclo === nCiclos - 1;
     var r = g.resumo, man = g.manipulacao, an = g.analise;
-    var cab = '<div class="grade" style="margin-bottom:12px">' +
-      campo('Situação', badgeGranel(op)) +
+    var corr = g.correcao;
+    var cab = (corr ? '<div class="hint" style="margin-bottom:10px;padding:10px;border-radius:8px;background:var(--tint-orange-bg,#fff7ed)">' +
+        '<b>Correção autorizada pela Qualidade</b> — RNC ' + escapeHtml(corr.rncNumero || '—') + ' · ' + escapeHtml(corr.por || '—') + ' · ' + quando(corr.em) +
+        '<br>Motivo: ' + escapeHtml(corr.motivo || '—') + (corr.instrucao ? '<br>Instrução: ' + escapeHtml(corr.instrucao) : '') +
+        (corr.retroativo ? '<br>Registro retroativo, sem foto da balança: ' + escapeHtml(corr.justificativaRetroativo || '') : '') + '</div>' : '') +
+      '<div class="grade" style="margin-bottom:12px">' +
+      campo('Situação', ultimo ? badgeGranel(op) : '<span class="badge ' + (g.statusCiclo === 'REPROVADO' ? 'badge-red' : 'badge-gray') + '">' + escapeHtml(Manipulacao.rotulo(g.statusCiclo)) + '</span>') +
+      (g.entradaBulk ? campo('Bulk reprovado que entrou', fmtNum(g.entradaBulk.kg) + ' kg') : '') +
+      (g.excedente && g.excedente.unidades > 0 ? campo('Excedente', '+' + fmtNum(g.excedente.unidades) + ' un<div class="hint">' + fmtNum(g.excedente.capacidade) + ' un no total (' + fmtNum(g.excedente.kgPorUnidade) + ' kg/un)</div>') : '') +
       campo('Pesagem', quando(g.pesagem.inicio) + ' → ' + quando(g.pesagem.fim) + '<div class="hint">' + escapeHtml(g.pesagem.por || '—') + (r.minutosPesagem != null ? ' · ' + r.minutosPesagem + ' min' : '') + '</div>') +
       campo('Conferência', quando(g.conferencia.em) + '<div class="hint">' + escapeHtml(g.conferencia.por || '—') + '</div>') +
       campo('Manipulação', quando(man.inicio) + ' → ' + quando(man.fim) + '<div class="hint">' + escapeHtml(man.por || '—') + (r.minutosManipulacao != null ? ' · ' + r.minutosManipulacao + ' min' : '') + '</div>') +
-      campo('Previsto / pesado', fmtNum(r.previstoTotal) + ' / ' + fmtNum(r.pesadoTotal) + ' kg') +
+      campo(corr ? 'Correção prevista / pesada' : 'Previsto / pesado', fmtNum(r.previstoTotal) + ' / ' + fmtNum(r.pesadoTotal) + ' kg') +
       campo('Rendimento', r.rendimento != null ? fmtNum(r.rendimento) + ' kg (' + r.rendimentoPct + '%)' : '—') +
       campo('Perda de processo', r.perdaProcesso != null ? fmtNum(r.perdaProcesso) + ' kg (' + r.perdaProcessoPct + '%)' : '—') +
       campo('Análise do granel', an ? escapeHtml(an.decisao || '—') + '<div class="hint">' + escapeHtml(an.por || '') + ' · ' + quando(an.em) + '</div>' : '—') +
@@ -257,7 +268,7 @@ function renderDossie() {
       var fotos = l.todasParcelas.map(function(p) {
         var url = p.foto && p.foto.url;
         return '<div class="foto' + (p.canceladaEm ? ' cancelada' : '') + '">' +
-          (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + escapeAttr(url) + '" alt="Balança ' + escapeAttr(l.mpCodigo) + '"></a>' : '<div class="sem-foto">sem foto</div>') +
+          (url ? '<a href="' + escapeAttr(url) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + escapeAttr(url) + '" alt="Balança ' + escapeAttr(l.mpCodigo) + '"></a>' : '<div class="sem-foto">' + (p.semFotoRetroativo ? 'sem foto (retroativo)' : 'sem foto') + '</div>') +
           '<div class="leg"><b>' + (p.ordem ? p.ordem + 'ª · ' : 'cancelada · ') + fmtNum(p.peso) + ' ' + un + '</b><br>lote ' + escapeHtml(p.loteMaterial || '—') +
           '<br><span class="hint">' + escapeHtml(p.por || '') + ' · ' + quando(p.em) + '</span>' +
           (p.motivoForaFefo ? '<br><span style="color:var(--tint-orange-fg)">Fora do FEFO: ' + escapeHtml(p.motivoForaFefo) + '</span>' : '') +
@@ -287,7 +298,9 @@ function renderDossie() {
         '</div>' +
         '<div class="fotos">' + (fotos || '<div class="sem-foto">sem foto</div>') + '</div></div>';
     }).join('');
-    h += secao('Ordem de manipulação (granel)', '<span class="hint">' + g.linhas.length + ' matéria(s)-prima(s)</span>', cab + (mps || '<div class="no-data">Sem fórmula registrada.</div>'));
+    h += secao('Ordem de manipulação (granel)' + (nCiclos > 1 ? ' — ciclo ' + g.ciclo + (corr ? ' (correção)' : '') : ''),
+      '<span class="hint">' + g.linhas.length + (corr ? ' insumo(s) da correção' : ' matéria(s)-prima(s)') + '</span>', cab + (mps || '<div class="no-data">Sem fórmula registrada.</div>'));
+    });
   }
 
   // 3. Envase

@@ -33,7 +33,12 @@
     // da tela muda; os nomes dos estados e dos nós no banco ficam.
     AGUARDANDO_CQ: {rotulo: 'Bulk aguardando análise', ordem: 5},
     LIBERADO: {rotulo: 'Bulk liberado', ordem: 6},
-    REPROVADO: {rotulo: 'Bulk reprovado', ordem: 7}
+    REPROVADO: {rotulo: 'Bulk reprovado', ordem: 7},
+    // Correção do bulk reprovado (usuário, 25/09): o bulk turvou, a Qualidade
+    // mandou adicionar insumos e o lote foi de ~500 para ~800 kg. Antes disso
+    // REPROVADO era fim de linha: o lote ficava travado e a fábrica seguia
+    // por fora do sistema. Agora a Qualidade abre um NOVO CICLO no mesmo lote.
+    CORRECAO_ABERTA: {rotulo: 'Correção aberta — aguardando pesagem', ordem: 0}
   };
   // Diferença aceita entre previsto e pesado antes de exigir justificativa.
   var TOLERANCIA_PESAGEM_PCT = 2;
@@ -108,15 +113,16 @@
 
   // Validação de UMA ida à balança, antes de gravar. `plano` (opcional): o
   // FEFO da MP -- lote fora dele só passa com motivo.
-  function validarParcela(parcela, plano) {
+  function validarParcela(parcela, plano, opcoes) {
     var p = parcela || {}, erros = [];
+    var semFotoOk = !!(opcoes && opcoes.dispensaFoto);
     if (!(n(p.peso) > 0)) erros.push('Informe o peso que a balança mostrou.');
     if (!texto(p.loteMaterial)) erros.push('Informe o lote da embalagem usada.');
     var lotesPlano = (plano || []).map(function(x) { return texto(x.loteInterno); }).filter(Boolean);
     if (texto(p.loteMaterial) && lotesPlano.length && lotesPlano.indexOf(texto(p.loteMaterial)) < 0 && !texto(p.motivoForaFefo)) {
       erros.push('O FEFO indica ' + lotesPlano.join(', ') + '. Para usar outro lote, informe o motivo.');
     }
-    if (EXIGE_FOTO_PESAGEM && !p.temFoto && !(p.foto && p.foto.caminho)) erros.push('Tire a foto da balança.');
+    if (EXIGE_FOTO_PESAGEM && !semFotoOk && !p.temFoto && !(p.foto && p.foto.caminho)) erros.push('Tire a foto da balança.');
     return {ok: !erros.length, erros: erros};
   }
 
@@ -218,15 +224,18 @@
     });
   }
 
-  function validarPesagem(previstos, pesagem) {
+  function validarPesagem(previstos, pesagem, opcoes) {
     var linhas = linhasPesagem(previstos, pesagem), erros = [], avisos = [];
+    var semFotoOk = !!(opcoes && opcoes.dispensaFoto);
     var fotos = linhas.reduce(function(s, l) { return s + l.fotos; }, 0);
     // Sem foto: MP sem nenhuma foto, ou com alguma parcela sem a sua.
     var semFoto = linhas.filter(function(l) { return !l.pendente && (!l.fotos || l.parcelasSemFoto); });
-    if (EXIGE_FOTO_PESAGEM && semFoto.length) {
+    if (EXIGE_FOTO_PESAGEM && !semFotoOk && semFoto.length) {
       erros.push('Falta a foto da pesagem de ' + semFoto.map(function(l) { return l.mpCodigo; }).join(', ') + ' (prova de auditoria).');
     }
-    if (!linhas.length) erros.push('A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
+    if (!linhas.length) erros.push(opcoes && opcoes.correcao
+      ? 'A correção não tem insumos a pesar.'
+      : 'A fórmula deste produto não foi encontrada — sem ela não há o que pesar.');
     var pendentes = linhas.filter(function(l) { return l.pendente; });
     if (pendentes.length) erros.push(pendentes.length + ' matéria(s)-prima(s) sem peso registrado.');
     linhas.filter(function(l) { return !l.pendente && (!l.loteMaterial || l.parcelasSemLote); }).forEach(function(l) {
@@ -355,13 +364,19 @@
     var perdasPesagem = arred(linhas.reduce(function(s, l) { return s + num(l.perda); }, 0));
     var perdasManipulacao = arred(Object.keys(man.perdas || {}).reduce(function(s, k) { return s + num(man.perdas[k]); }, 0));
     var rendimento = n(man.rendimento);
-    var perdaProcesso = rendimento != null && pesadoTotal > 0 ? arred(pesadoTotal - rendimento) : null;
+    // Num ciclo de correção o tanque não começa vazio: entra o bulk do ciclo
+    // anterior. Sem somar essa massa, 800 kg obtidos com 300 kg de aditivo
+    // pareceriam rendimento de 267%.
+    var entradaBulk = arred(num((f.entradaBulk || {}).kg));
+    var massaEntrada = arred(pesadoTotal + entradaBulk);
+    var perdaProcesso = rendimento != null && massaEntrada > 0 ? arred(massaEntrada - rendimento) : null;
     return {
       previstoTotal: previstoTotal, pesadoTotal: pesadoTotal, rendimento: rendimento,
+      entradaBulk: entradaBulk, massaEntrada: massaEntrada,
       perdasPesagem: perdasPesagem, perdasManipulacao: perdasManipulacao,
       perdaProcesso: perdaProcesso,
-      perdaProcessoPct: perdaProcesso != null && pesadoTotal > 0 ? arred(perdaProcesso / pesadoTotal * 100, 2) : null,
-      rendimentoPct: rendimento != null && pesadoTotal > 0 ? arred(rendimento / pesadoTotal * 100, 2) : null,
+      perdaProcessoPct: perdaProcesso != null && massaEntrada > 0 ? arred(perdaProcesso / massaEntrada * 100, 2) : null,
+      rendimentoPct: rendimento != null && massaEntrada > 0 ? arred(rendimento / massaEntrada * 100, 2) : null,
       minutosPesagem: minutos(pes.inicio, pes.fim),
       minutosManipulacao: minutos(man.inicio, man.fim),
       minutosTotal: minutos(pes.inicio, man.fim || pes.fim)
@@ -384,8 +399,10 @@
     if (n(man.rendimento) == null || n(man.rendimento) <= 0) erros.push('Informe o rendimento obtido do bulk.');
     var r = resumoManipulacao(previstos, f);
     var avisos = [];
-    if (r.rendimento != null && r.pesadoTotal > 0 && r.rendimento > r.pesadoTotal) {
-      erros.push('O rendimento (' + r.rendimento + ') é maior que o total pesado (' + r.pesadoTotal + ').');
+    if (r.rendimento != null && r.massaEntrada > 0 && r.rendimento > r.massaEntrada) {
+      erros.push(r.entradaBulk > 0
+        ? 'O rendimento (' + r.rendimento + ') é maior que o bulk que entrou (' + r.entradaBulk + ') mais o que foi pesado na correção (' + r.pesadoTotal + ').'
+        : 'O rendimento (' + r.rendimento + ') é maior que o total pesado (' + r.pesadoTotal + ').');
     }
     if (r.perdaProcessoPct != null && r.perdaProcessoPct > 5) {
       avisos.push('Perda de processo de ' + r.perdaProcessoPct + '% — acima de 5%.');
@@ -438,7 +455,160 @@
     if (st === 'CONFERIDO') return ['INICIAR_MANIPULACAO'];
     if (st === 'EM_MANIPULACAO') return ['FECHAR_MANIPULACAO'];
     if (st === 'AGUARDANDO_CQ') return ['LIBERAR', 'REPROVAR'];
+    if (st === 'CORRECAO_ABERTA') return ['INICIAR_PESAGEM'];
+    if (st === 'REPROVADO') return ['ABRIR_CORRECAO'];
     return [];
+  }
+
+  /* ══════════════ CORREÇÃO DO BULK REPROVADO ══════════════
+     Decisões do usuário (25/09/2026):
+     - "Só Qualidade autoriza, RNC obrigatória";
+     - o lote continua o MESMO (a correção é um novo ciclo da fase de bulk,
+       não OP nova nem lote novo);
+     - a massa a mais "vira excedente de produção": o envase acompanha e
+       envasa o excedente sob o mesmo lote, o que pede mais frascos, rótulos
+       e caixas.
+
+     Mecânica: ao abrir a correção, o ciclo reprovado inteiro (pesagem,
+     conferência, manipulação, análise) vai para historico/c{n} e a fase
+     recomeça com os insumos da correção como `previstos`. Assim a pesagem,
+     a conferência e a manipulação que já existem servem à correção sem
+     reescrita, e nada do ciclo anterior se perde. Chave 'c1', não '1': o
+     RTDB transforma chaves numéricas em array. */
+  function ciclo(f) { return Math.max(1, parseInt((f && f.ciclo) || 1, 10) || 1); }
+  function ehCorrecao(f) { return ciclo(f) > 1 && !!(f && f.correcao); }
+  // Registro retroativo (bulk corrigido antes de o sistema permitir): a
+  // Qualidade dispensa a foto da balança com justificativa, e isso fica
+  // gravado na correção. Nunca é o padrão.
+  function dispensaFoto(f) { return !!(f && f.correcao && f.correcao.retroativo); }
+
+  // Mesma regra de chave do resto do sistema (sanitizeKey de utils.js).
+  function itemCorrecaoKey(codigo) { return texto(codigo).replace(/[.#$\[\]\/]/g, '_'); }
+
+  function validarAberturaCorrecao(fase_, dados, podeAutorizar) {
+    var f = fase_ || {}, d = dados || {}, erros = [];
+    if (!podeAutorizar) erros.push('Só a Qualidade autoriza a correção do bulk.');
+    if (f.status !== 'REPROVADO') erros.push('Só um bulk reprovado pode ser corrigido.');
+    if (!texto(d.rncNumero)) erros.push('Vincule a RNC da reprovação (obrigatória).');
+    if (!texto(d.motivo)) erros.push('Descreva o motivo da correção.');
+    var itens = (d.itens || []).filter(function(it) { return it && (texto(it.mpCodigo) || n(it.quantidade) != null); });
+    if (!itens.length) erros.push('Informe ao menos um insumo da correção.');
+    var vistos = {};
+    itens.forEach(function(it, i) {
+      var cod = texto(it.mpCodigo);
+      if (!cod) erros.push('Insumo ' + (i + 1) + ': informe o código.');
+      else if (vistos[cod]) erros.push(cod + ' aparece duas vezes.');
+      vistos[cod] = true;
+      if (!(n(it.quantidade) > 0)) erros.push((cod || 'Insumo ' + (i + 1)) + ': informe a quantidade.');
+    });
+    if (!(n(d.entradaKg) > 0)) erros.push('Informe a massa do bulk reprovado que entra na correção (kg).');
+    if (d.retroativo && !texto(d.justificativaRetroativo)) erros.push('Justifique o registro retroativo.');
+    return {ok: !erros.length, erros: erros};
+  }
+
+  // A nova fase inteira (grava-se em ops/{lote}/manipulacao de uma vez).
+  function montarCorrecao(fase_, dados) {
+    var f = fase_ || {}, d = dados || {}, agora = d.agora || new Date().toISOString();
+    var n0 = ciclo(f);
+    var anterior = {};
+    Object.keys(f).forEach(function(k) { if (k !== 'historico') anterior[k] = f[k]; });
+    anterior.ciclo = n0;
+    var historico = Object.assign({}, f.historico || {});
+    historico['c' + n0] = anterior;
+    var previstosCorr = {};
+    (d.itens || []).filter(function(it) { return it && texto(it.mpCodigo); }).forEach(function(it, i) {
+      previstosCorr[itemCorrecaoKey(it.mpCodigo)] = {
+        mpCodigo: texto(it.mpCodigo), mpNome: texto(it.mpNome), unidade: texto(it.unidade) || 'kg',
+        previsto: arred(num(it.quantidade)), ordem: i, correcao: true
+      };
+    });
+    return {
+      status: 'CORRECAO_ABERTA', ciclo: n0 + 1,
+      previstos: previstosCorr,
+      entradaBulk: {kg: arred(num(d.entradaKg)), doCiclo: n0},
+      correcao: {
+        rncNumero: texto(d.rncNumero), rncKey: texto(d.rncKey) || null,
+        motivo: texto(d.motivo), instrucao: texto(d.instrucao) || null,
+        retroativo: !!d.retroativo, justificativaRetroativo: d.retroativo ? texto(d.justificativaRetroativo) : null,
+        por: texto(d.quem) || null, uid: d.uid || null, em: agora
+      },
+      historico: historico
+    };
+  }
+
+  // Todos os ciclos do lote, do primeiro ao atual (dossiê e Qualidade).
+  function ciclos(fase_) {
+    var f = fase_ || {};
+    var lista = Object.keys(f.historico || {}).map(function(k) { return f.historico[k]; })
+      .filter(Boolean).sort(function(a, b) { return ciclo(a) - ciclo(b); });
+    if (f.status) {
+      var atual = {};
+      Object.keys(f).forEach(function(k) { if (k !== 'historico') atual[k] = f[k]; });
+      atual.ciclo = ciclo(f);
+      lista.push(atual);
+    }
+    return lista;
+  }
+
+  /* EXCEDENTE: quantas unidades a mais o bulk corrigido rende. A conta usa
+     só dados do próprio lote: a massa teórica que a fórmula pediu para a
+     quantidade planejada (previstos do 1º ciclo) dá os kg por unidade.
+     Arredonda para BAIXO (regra do usuário: na dúvida, o menor número). */
+  function massaTeorica(previstos) {
+    return arred(Object.keys(previstos || {}).reduce(function(s, k) { return s + num((previstos[k] || {}).previsto); }, 0));
+  }
+  function calcularExcedente(d) {
+    var dados = d || {};
+    var rendimento = num(dados.rendimentoKg), base = Math.round(num(dados.qtdBase)), teorico = num(dados.massaTeoricaKg);
+    if (!(rendimento > 0) || !(base > 0) || !(teorico > 0)) {
+      return {ok: false, motivo: 'Sem a massa teórica da fórmula ou a quantidade planejada, não dá para converter kg em unidades.'};
+    }
+    var kgPorUn = teorico / base;
+    var capacidade = Math.floor(rendimento / kgPorUn + 1e-9);
+    return {ok: true, kgPorUnidade: arred(kgPorUn, 6), capacidade: capacidade,
+      qtdBase: base, excedente: Math.max(0, capacidade - base), qtdNova: Math.max(base, capacidade)};
+  }
+
+  /* Embalagens do excedente: o BOM (origem 'bom') escala com as unidades;
+     a fórmula não (a MP do bulk já saiu na pesagem). Guarda a quantidade
+     original para que um novo ciclo recalcule a partir dela, e devolve a
+     diferença a empenhar (positiva) ou a liberar (negativa). */
+  function materiaisDoExcedente(materiaisConsumo, qtdBase, qtdNova) {
+    var out = {}, deltas = [];
+    var base = num(qtdBase), nova = num(qtdNova);
+    Object.keys(materiaisConsumo || {}).forEach(function(k) {
+      var it = materiaisConsumo[k];
+      if (!it || it.origem !== 'bom' || !(base > 0)) { out[k] = it; return; }
+      var original = it.quantidadeOriginal != null ? num(it.quantidadeOriginal) : num(it.quantidade);
+      var qtd = arred(original * nova / base);
+      var delta = arred(qtd - num(it.quantidade));
+      out[k] = Object.assign({}, it, {quantidade: qtd, quantidadeOriginal: original});
+      if (delta) deltas.push({mpCodigo: it.mpCodigo, mpNome: it.mpNome || '', quantidade: delta});
+    });
+    return {materiais: out, deltas: deltas};
+  }
+  /* Separação já concluída com a quantidade antiga: o excedente pede mais
+     embalagem na linha. A OP volta a "separação parcial" com tudo o que já
+     foi levado, e as telas de Separação passam a pedir só a diferença.
+     Pela separação por OP, o concluído guarda só o que ELA levou (o parcial
+     da consolidada fica à parte); pela consolidada, o concluído já é o total. */
+  function separacaoAposExcedente(op, agora, quem) {
+    var o = op || {}, conc = o.separacaoConcluida;
+    if (!conc) return null;
+    var parcial = (o.separacaoParcial && o.separacaoParcial.itens) || {};
+    var itensConc = conc.itens || {};
+    var total = {};
+    Object.keys(parcial).forEach(function(mp) { total[mp] = num(parcial[mp]); });
+    if (conc.via !== 'consolidada') {
+      Object.keys(itensConc).forEach(function(mp) { total[mp] = arred(num(total[mp]) + num(itensConc[mp])); });
+    } else {
+      Object.keys(itensConc).forEach(function(mp) { total[mp] = Math.max(num(total[mp]), num(itensConc[mp])); });
+    }
+    return {
+      separacaoParcial: {itens: total, em: agora, por: quem || null},
+      separacaoConcluida: null,
+      separacaoReaberta: {motivo: 'Excedente do bulk corrigido', em: agora, por: quem || null, concluidaAntes: conc}
+    };
   }
 
   return {
@@ -453,6 +623,10 @@
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,
     regraConferencia: regraConferencia, validarLiberacaoSemConferencia: validarLiberacaoSemConferencia,
     validarFechamentoManipulacao: validarFechamentoManipulacao,
-    transicao: transicao, acoesDisponiveis: acoesDisponiveis, minutos: minutos
+    transicao: transicao, acoesDisponiveis: acoesDisponiveis, minutos: minutos,
+    ciclo: ciclo, ehCorrecao: ehCorrecao, dispensaFoto: dispensaFoto, ciclos: ciclos,
+    validarAberturaCorrecao: validarAberturaCorrecao, montarCorrecao: montarCorrecao,
+    massaTeorica: massaTeorica, calcularExcedente: calcularExcedente, materiaisDoExcedente: materiaisDoExcedente,
+    separacaoAposExcedente: separacaoAposExcedente
   };
 });

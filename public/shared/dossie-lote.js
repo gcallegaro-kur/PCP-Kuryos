@@ -80,6 +80,14 @@
   function montarGranel(op) {
     var f = Manipulacao.fase(op);
     if (!f) return {existe: false};
+    // Bulk corrigido (25/09): cada ciclo (o reprovado, a correção...) é
+    // auditado por inteiro. Os campos de topo continuam sendo o ciclo atual.
+    var ciclos = Manipulacao.ciclos(f).map(montarCiclo);
+    return Object.assign({existe: true, status: Manipulacao.estado(op), rotulo: Manipulacao.rotulo(Manipulacao.estado(op)),
+      ciclos: ciclos}, ciclos[ciclos.length - 1]);
+  }
+
+  function montarCiclo(f) {
     var previstos = f.previstos || {};
     var pes = f.pesagem || {};
     var conf = (f.conferencia || {}).itens || {};
@@ -100,7 +108,9 @@
       });
     });
     return {
-      existe: true, status: Manipulacao.estado(op), rotulo: Manipulacao.rotulo(Manipulacao.estado(op)),
+      ciclo: Manipulacao.ciclo(f), statusCiclo: f.status || null,
+      correcao: Manipulacao.ehCorrecao(f) ? f.correcao : null, entradaBulk: f.entradaBulk || null,
+      excedente: (f.manipulacao || {}).excedente || null,
       linhas: linhas, resumo: Manipulacao.resumoManipulacao(previstos, f),
       pesagem: {inicio: pes.inicio || null, fim: pes.fim || null, por: pes.por || null, baixaAplicada: !!pes.baixaAplicada},
       conferencia: {por: (f.conferencia || {}).por || null, em: (f.conferencia || {}).em || null},
@@ -193,8 +203,13 @@
     var ev = [];
     var add = function(em, etapa, oque, quem) { if (em) ev.push({em: em, etapa: etapa, oque: oque, quem: quem || null}); };
     add(op.dataEmissao, 'OP', 'OP emitida (' + num(op.qtdPlanejada) + ' un planejadas)', op.emitidoPor);
-    if (granel.existe) {
-      add(granel.pesagem.inicio, 'Pesagem', 'Pesagem iniciada', granel.pesagem.por);
+    (granel.existe ? granel.ciclos : []).forEach(function(granel) {
+      var sufixo = granel.correcao ? ' (correção, ciclo ' + granel.ciclo + ')' : '';
+      if (granel.correcao) {
+        add(granel.correcao.em, 'Qualidade', 'Correção do bulk aberta — RNC ' + (granel.correcao.rncNumero || '—') + ': ' + (granel.correcao.motivo || '') +
+          (granel.entradaBulk ? ' (entram ' + num(granel.entradaBulk.kg) + ' kg do bulk reprovado)' : ''), granel.correcao.por);
+      }
+      add(granel.pesagem.inicio, 'Pesagem', 'Pesagem iniciada' + sufixo, granel.pesagem.por);
       granel.linhas.forEach(function(l) {
         l.todasParcelas.forEach(function(p) {
           add(p.em, 'Pesagem', (p.ordem ? p.ordem + 'ª pesagem' : 'Pesagem') + ' de ' + l.mpCodigo + ': ' + num(p.peso) + ' ' + l.unidade + ' (lote ' + (p.loteMaterial || '—') + ')' + (p.foto ? ' com foto' : ' SEM FOTO'), p.por);
@@ -205,8 +220,9 @@
       add(granel.conferencia.em, 'Conferência', 'Pesagem conferida', granel.conferencia.por);
       add(granel.manipulacao.inicio, 'Manipulação', 'Manipulação iniciada', granel.manipulacao.por);
       add(granel.manipulacao.fim, 'Manipulação', 'Manipulação fechada' + (granel.manipulacao.rendimento != null ? ' (rendimento ' + num(granel.manipulacao.rendimento) + ' kg)' : ''), granel.manipulacao.fechadoPor || granel.manipulacao.por);
-      if (granel.analise) add(granel.analise.em, 'Qualidade', 'Granel ' + (granel.analise.decisao === 'LIBERADO' ? 'liberado' : granel.analise.decisao === 'REPROVADO' ? 'reprovado' : granel.analise.decisao || 'analisado'), granel.analise.por);
-    }
+      if (granel.excedente && granel.excedente.unidades > 0) add(granel.excedente.em || granel.manipulacao.fim, 'Manipulação', 'Excedente: +' + num(granel.excedente.unidades) + ' un planejadas no mesmo lote', granel.excedente.por);
+      if (granel.analise) add(granel.analise.em, 'Qualidade', 'Granel ' + (granel.analise.decisao === 'LIBERADO' ? 'liberado' : granel.analise.decisao === 'REPROVADO' ? 'reprovado' : granel.analise.decisao || 'analisado') + sufixo, granel.analise.por);
+    });
     add(op.dataInicioReal, 'Envase', 'Início do envase' + (op.linha ? ' na ' + op.linha : ''), null);
     apontamentos.forEach(function(r) {
       add(r.timestamp, 'Envase', 'Apontamento: ' + num(r.qtdIncrementoConfirmado != null ? r.qtdIncrementoConfirmado : r.quantidade) + ' un' + (r.tipo === 'fechamento_op' ? ' (fechamento)' : ''), r.operador);
