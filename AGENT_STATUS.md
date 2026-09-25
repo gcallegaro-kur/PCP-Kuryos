@@ -127,15 +127,28 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — correção de bulk reprovado (2026-09-25).** Bulk reprovado
-  pela Qualidade (ex.: turbidez) ficava travado para sempre. Novo ciclo de
-  correção no MESMO lote: Qualidade abre (RNC obrigatória + insumos da
-  correção), pesagem/conferência/manipulação da correção, nova análise; o
-  excedente de massa vira excedente de unidades na OP (qtdPlanejada +
-  embalagens em materiaisConsumo + empenho). **Arquivos ativos:**
-  `public/shared/manipulacao.js`, `public/manipulacao.html`,
-  `public/qualidade.html`, `public/dossie_lote.html`,
-  `run_correcao_bulk_test.js`.
+- **COMMITADO, DEPLOY PENDENTE — correção de bulk reprovado (2026-09-25).**
+  Commit `b97fc03` no origin/main. Hosting NÃO publicado: o deploy foi
+  bloqueado pela permissão da sessão; worktree limpo pronto em
+  `../deploy-correcao-bulk` (só Hosting, sem mudança de regras/Functions).
+  Bulk reprovado deixava o lote travado. Agora: Qualidade abre a correção
+  (card novo em `qualidade.html`, RNC obrigatória, massa que entra, insumos,
+  transação só se ainda REPROVADO); o ciclo reprovado vai para
+  `ops/{op}/manipulacao/historico/c{n}` e a fase recomeça em
+  `CORRECAO_ABERTA` com os insumos como `previstos`; pesagem/conferência/
+  manipulação existentes servem à correção; rendimento soma `entradaBulk`.
+  Ao fechar, excedente = floor(rendimento ÷ kg/un da fórmula) − planejado →
+  `qtdPlanejada` (original em `qtdPlanejadaOriginal`), `excedenteBulk`,
+  BOM escalado em `materiaisConsumo` (`quantidadeOriginal`), empenho somado
+  (transação própria — `empenharMateriais` SOBRESCREVE o empenho do lote) e
+  `separacaoConcluida` reaberta como `separacaoParcial` + `separacaoReaberta`.
+  Retroativo: `correcao.retroativo` dispensa foto com justificativa. Dossiê
+  mostra todos os ciclos. Reprovar de novo na correção não abre RNC nova.
+  Testes: `run_correcao_bulk_test.js` (60), `run_correcao_bulk_ui_test.js`,
+  `run_correcao_bulk_rules_test.js` (emulador, `--project demo-operacao`) +
+  regressões. **Pendente:** deploy; regularizar o lote reprovado de hoje
+  (usuário precisa informar o lote e as quantidades; leitura da produção
+  também bloqueada nesta sessão). Arquivos ativos: nenhum.
 
 - **Publicado — Separação consolidada por material (2026-09-25).** Commit
   `c830041`, Hosting + RTDB por worktree limpo; 4 arquivos públicos idênticos ao
