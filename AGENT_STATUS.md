@@ -139,8 +139,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `run_inspecao_pa_ui_test.js`.
 
 - **Publicado — correção de bulk reprovado (2026-09-25).** Commit `b97fc03`,
-  Hosting por worktree limpo; 6 arquivos públicos HTTP 200 idênticos ao
-  commit (sem mudança de regras/Functions).
+  Hosting publicado. **Incidente:** meu deploy saiu de um worktree de
+  `b97fc03` criado antes de `a2a3ec9` e derrubou o Relatório de Pedido (404);
+  a outra sessão republicou `a2a3ec9` e conferi: relatório e correção de bulk
+  no ar, idênticos ao origin/main. Lição: worktree de deploy nasce do
+  origin/main recém-buscado NA HORA do deploy, nunca reaproveitado.
   Bulk reprovado deixava o lote travado. Agora: Qualidade abre a correção
   (card novo em `qualidade.html`, RNC obrigatória, massa que entra, insumos,
   transação só se ainda REPROVADO); o ciclo reprovado vai para
