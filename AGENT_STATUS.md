@@ -127,7 +127,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **COMMITADO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
+- **PUBLICADO — peso do PA pela densidade + regras do INMETRO (2026-09-25).**
+  Commit `f7354f7`, só Hosting (sem regras/Functions), do worktree limpo;
+  4 arquivos públicos idênticos ao commit por HTTP.
   Produto declarado em ml era pesado em g e comparado direto com o nominal.
   `shared/inspecao-pa.js`: tudo em gramas de conteúdo líquido (balança tarada
   na embalagem vazia); nominal/T/2T × densidade para ml. Densidade: medida no
