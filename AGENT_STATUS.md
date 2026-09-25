@@ -138,6 +138,25 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `public/shared/laudo-cq.js`, `run_inspecao_pa_test.js`,
   `run_inspecao_pa_ui_test.js`.
 
+- **Publicado — Relatório de Pedido (2026-09-25).** Commit `a2a3ec9`, Hosting
+  (republicado após o incidente abaixo; conferido byte a byte). Página nova
+  `relatorio_pedido.html` (menu PCP e Comercial; módulos `pedidos`/`comercial`
+  em `auth_check.js`): por item, pedido / produzido / a produzir / expedido /
+  em estoque / lotes / perdas de componentes; clique abre os lotes; PDF, CSV e
+  link `?pedido=`. Motor `shared/relatorio-pedido.js` sobre a
+  `ConciliacaoPedidos` (mesma conta de `pedidos.html`); perdas pela regra do
+  Histórico (`perdas/{lote}` vence `ops.perdas` do Excel; OP `-vN` herda a
+  perda lançada no número do papel). Testes: `run_relatorio_pedido_test.js`
+  (8), `_ui_test.js` (7). Ensaio: 14 de 80 pedidos têm perda; 8 lançamentos de
+  julho são de OPs apagadas e sem pedido (não atribuíveis).
+  **Histórico com rótulo trocado:** o commit `81b4876` diz "Relatório de Pedido
+  publicado", mas contém a nota "correção de bulk publicada" da outra sessão —
+  fiz `git add`/`commit` no checkout principal sem ver que havia um rebase dela
+  parado no conflito. Conteúdo correto, só a mensagem errada; não reescrevi o
+  main publicado. Lição: antes de commitar no checkout principal, `git status`
+  inteiro (não `--short`), procurando rebase/merge em andamento.
+  Arquivos ativos: nenhum.
+
 - **Publicado — correção de bulk reprovado (2026-09-25).** Commit `b97fc03`,
   Hosting publicado. **Incidente:** meu deploy saiu de um worktree de
   `b97fc03` criado antes de `a2a3ec9` e derrubou o Relatório de Pedido (404);
