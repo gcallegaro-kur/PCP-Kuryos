@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatório de Pedido</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/expedicao.js"></script>
+  <script src="shared/conciliacao-pedidos.js"></script>
+  <script src="shared/relatorio-pedido.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-blue-bg:#eff6ff;--tint-blue-fg:#1e40af}
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --primary:#5e83ea; --bg:#000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-blue-bg:rgba(94,131,234,.18); --tint-blue-fg:#a5b4fc; } }
+    :root[data-theme="dark"] { color-scheme: dark; --primary:#5e83ea; --bg:#000; --card:#1c1c1e; --border:#38383a; --text:#f5f5f7; --muted:#98989d; --surface-2:#242426; --tint-green-bg:rgba(16,185,129,.18); --tint-green-fg:#6ee7b7; --tint-red-bg:rgba(239,68,68,.18); --tint-red-fg:#fca5a5; --tint-gray-bg:rgba(255,255,255,.08); --tint-orange-bg:rgba(251,146,60,.18); --tint-orange-fg:#fdba74; --tint-blue-bg:rgba(94,131,234,.18); --tint-blue-fg:#a5b4fc; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;max-width:96%;margin:0 auto}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+    .dot.on{background:var(--success)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .toolbar input,.toolbar select{padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text);min-width:0}
+    #busca{flex:1;min-width:200px}
+    #selPedido{flex:2;min-width:240px}
+    .chk{display:flex;align-items:center;gap:6px;font-size:13px}
+    .btn{padding:8px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:var(--card);color:var(--text);white-space:nowrap}
+    .btn:hover{background:var(--surface-2)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary);padding:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .cab{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .cab h2{font-size:22px}
+    .cab .meta{font-size:13px;color:var(--muted);line-height:1.7}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+    .kpi{background:var(--surface-2);border-radius:12px;padding:10px 12px}
+    .kpi .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+    .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    .kpi .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 8px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:7px 8px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    tr.item{cursor:pointer}
+    tr.item:hover td{background:var(--surface-2)}
+    tr.item td:first-child::before{content:'▸ ';color:var(--muted)}
+    tr.item.aberto td:first-child::before{content:'▾ '}
+    tr.lotes-row > td{background:var(--surface-2);padding:6px 10px 12px 26px}
+    tr.lotes-row table{font-size:12px;background:var(--card);border-radius:8px}
+    tr.total td{font-weight:700;border-top:2px solid var(--border)}
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .b-ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .b-warn{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .b-err{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .b-gray{background:var(--tint-gray-bg);color:var(--muted)}
+    .b-blue{background:var(--tint-blue-bg);color:var(--tint-blue-fg)}
+    .perdas{font-size:11.5px;line-height:1.5}
+    .muted{color:var(--muted)}
+    .nota{font-size:12px;color:var(--muted);line-height:1.55;margin-top:10px}
+    .vazio{text-align:center;padding:40px;color:var(--muted)}
+    @media print{
+      body{background:#fff;color:#000}
+      .nao-imprime,#kuryos-sidebar,.kt-sidebar,nav,aside{display:none!important}
+      body.has-sidebar{padding-left:0!important;margin-left:0!important}
+      .card{box-shadow:none;border:1px solid #ccc;break-inside:avoid-page}
+      .main,.header{max-width:100%}
+      tr.lotes-row{display:table-row!important}
+      tr.item td:first-child::before{content:''}
+      .table-wrap{overflow:visible}
+    }
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Relatório de Pedido</h1>
+    <div class="header-sub">Por item: produção total, lotes, expedido, em estoque e perdas</div>
+  </div>
+  <div class="status-pill nao-imprime"><div class="dot" id="sDot"></div><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div class="toolbar nao-imprime">
+    <input type="text" id="busca" placeholder="Buscar pedido, cliente ou nº do cliente...">
+    <select id="selPedido"><option value="">Carregando pedidos...</option></select>
+    <label class="chk"><input type="checkbox" id="soAbertos"> Só com itens em aberto</label>
+    <button class="btn" id="btnImprimir" disabled>🖨️ Imprimir / PDF</button>
+    <button class="btn" id="btnCsv" disabled>⬇️ Exportar CSV</button>
+  </div>
+
+  <div id="relatorio"><div class="card vazio">Escolha um pedido.</div></div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+// Mesmas fontes da conciliação da tela de Pedidos, mais perdas e o cabeçalho
+// comercial. O relatório só desenha quando todas chegaram: número parcial
+// (ex.: expedido sem as devoluções) seria pior que esperar um segundo.
+var fontes = {pedidos: null, ops: null, perdas: null, pedidos_comerciais: null, expedicoes_comerciais: null,
+  estoque_lotes: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
+var conc = null, relAtual = null, abertos = {};
+var pedidoInicial = new URLSearchParams(location.search).get('pedido') || '';
+
+function fmtNum(v) { return Number(v || 0).toLocaleString('pt-BR', {maximumFractionDigits: 3}); }
+function fmtPct(v) { return v == null ? '—' : v.toLocaleString('pt-BR', {maximumFractionDigits: 1}) + '%'; }
+function fmtData(iso) {
+  if (!iso) return '—';
+  var d = new Date(String(iso).length <= 10 ? iso + 'T00:00:00' : iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+}
+function setStatus(on, txt) {
+  document.getElementById('sDot').className = 'dot' + (on ? ' on' : '');
+  document.getElementById('sTxt').textContent = txt;
+}
+function carregado() { return Object.keys(fontes).every(function(k) { return fontes[k] !== null; }); }
+
+function badgeSituacao(it) {
+  var mapa = {OK: ['b-ok', 'Conferido'], OK_APONTADA: ['b-ok', 'Conferido · divergência apontada'],
+    SEM_REGISTRO: ['b-gray', 'Sem registro de saída'], SEM_PRODUCAO: ['b-gray', '—'],
+    DIVERGENTE: ['b-err', 'Diferença ' + (it.diferenca > 0 ? '+' : '') + fmtNum(it.diferenca)]};
+  var m = mapa[it.situacao] || ['b-gray', it.situacao];
+  return '<span class="badge ' + m[0] + '" title="Produzido = expedido + em estoque (mesma conta da tela de Pedidos)">' + escapeHtml(m[1]) + '</span>';
+}
+function badgeStatusItem(it) {
+  if (it.encerrado) return '<span class="badge b-gray">Encerrado</span>';
+  var cls = it.status === 'Concluído' ? 'b-ok' : (/Produção|Programado/.test(it.status) ? 'b-blue' : 'b-warn');
+  return '<span class="badge ' + cls + '">' + escapeHtml(it.status || '—') + '</span>';
+}
+function perdasHtml(tipos) {
+  var ks = Object.keys(tipos || {}).filter(function(t) { return tipos[t]; });
+  if (!ks.length) return '<span class="muted">—</span>';
+  return '<div class="perdas">' + ks.sort().map(function(t) { return escapeHtml(t) + ': <b>' + fmtNum(tipos[t]) + '</b>'; }).join('<br>') + '</div>';
+}
+function expedidoHtml(total, motivos) {
+  var MOT = ConciliacaoPedidos.MOTIVOS_EXPEDIDO;
+  var extras = Object.keys(motivos || {}).filter(function(m) { return m !== 'EXPEDIDO' && motivos[m]; });
+  return fmtNum(total) + (extras.length ? '<div class="perdas muted">' + extras.map(function(m) { return escapeHtml(MOT[m] || m) + ': ' + fmtNum(motivos[m]); }).join('<br>') + '</div>' : '');
+}
+
+// ── Seletor de pedido ────────────────────────────────────────────────
+function renderSeletor() {
+  var sel = document.getElementById('selPedido');
+  var busca = norm(document.getElementById('busca').value);
+  var soAbertos = document.getElementById('soAbertos').checked;
+  var atual = sel.value || pedidoInicial;
+  var lista = RelatorioPedido.listarPedidos(fontes.pedidos, fontes.pedidos_comerciais).filter(function(p) {
+    if (soAbertos && !p.abertos && p.id !== atual) return false;
+    return !busca || (norm(p.id) + ' ' + norm(p.cliente) + ' ' + norm(p.numeroCliente)).indexOf(busca) !== -1;
+  });
+  sel.innerHTML = '<option value="">Selecione o pedido (' + lista.length + ')...</option>' + lista.map(function(p) {
+    return '<option value="' + escapeAttr(p.id) + '">' + escapeHtml(p.id + ' · ' + (p.cliente || '—') + (p.data ? ' · ' + fmtData(p.data) : '') +
+      ' · ' + p.itens + (p.itens > 1 ? ' itens' : ' item') + (p.abertos ? ' · ' + p.abertos + ' em aberto' : '')) + '</option>';
+  }).join('');
+  if (atual && lista.some(function(p) { return p.id === atual; })) sel.value = atual;
+}
+
+// ── Relatório ────────────────────────────────────────────────────────
+function renderRelatorio() {
+  var id = document.getElementById('selPedido').value;
+  var alvo = document.getElementById('relatorio');
+  relAtual = id ? RelatorioPedido.montar(id, fontes, conc) : null;
+  document.getElementById('btnImprimir').disabled = !relAtual;
+  document.getElementById('btnCsv').disabled = !relAtual;
+  if (!relAtual) { alvo.innerHTML = '<div class="card vazio">' + (id ? 'Pedido sem itens.' : 'Escolha um pedido.') + '</div>'; return; }
+  var r = relAtual, t = r.totais;
+  var tiposPerda = Object.keys(t.perdas).filter(function(k) { return t.perdas[k]; });
+
+  var cab = '<div class="card"><div class="cab"><div><h2>Pedido ' + escapeHtml(r.pedidoId) + ' · ' + escapeHtml(r.cliente || '—') + '</h2>' +
+    '<div class="meta">' + (r.dataPedido ? 'Data do pedido: ' + fmtData(r.dataPedido) + ' · ' : '') +
+    (r.numeroCliente ? 'Nº do cliente: ' + escapeHtml(r.numeroCliente) + ' · ' : '') +
+    (r.previsaoEntrega ? 'Previsão de entrega: ' + fmtData(r.previsaoEntrega) + ' · ' : '') +
+    r.itens.length + (r.itens.length > 1 ? ' itens' : ' item') + ' · ' + t.lotes + (t.lotes === 1 ? ' lote' : ' lotes') + '</div></div>' +
+    '<div class="meta">Emitido em ' + escapeHtml(new Date().toLocaleString('pt-BR')) + '</div></div>' +
+    '<div class="kpis">' +
+      kpi(fmtNum(t.qtdPedido), 'Pedido', 'unidades') +
+      kpi(fmtNum(t.produzido), 'Produzido', fmtPct(t.atendidoPct) + ' do pedido') +
+      kpi(fmtNum(t.aProduzir), 'A produzir', 'itens em aberto') +
+      kpi(fmtNum(t.expedido), 'Expedido', t.motivos.DEVOLVIDO ? 'já descontada devolução' : 'saiu do galpão') +
+      kpi(fmtNum(t.estoque), 'Em estoque', 'paletes de PA') +
+      kpi(tiposPerda.length ? fmtNum(t.perdasTotal) : '—', 'Perdas de componentes', tiposPerda.length ? fmtPct(t.perdaPct) + ' s/ produzido' : 'nenhuma lançada') +
+    '</div></div>';
+
+  var linhas = r.itens.map(function(it, i) {
+    var aberto = !!abertos[it.key];
+    return '<tr class="item' + (aberto ? ' aberto' : '') + '" data-i="' + i + '">' +
+      '<td><b>' + escapeHtml(it.sku) + '</b><div class="muted">' + escapeHtml(it.produto) + '</div></td>' +
+      '<td>' + badgeStatusItem(it) + '</td>' +
+      '<td class="num">' + fmtNum(it.qtdPedido) + '</td>' +
+      '<td class="num">' + fmtNum(it.produzido) + '<div class="muted">' + fmtPct(it.atendidoPct) + '</div></td>' +
+      '<td class="num">' + fmtNum(it.aProduzir) + '</td>' +
+      '<td class="num">' + expedidoHtml(it.expedido, it.motivos) + '</td>' +
+      '<td class="num">' + fmtNum(it.estoque) + '</td>' +
+      '<td class="num">' + it.lotes.length + '</td>' +
+      '<td>' + perdasHtml(it.perdas) + (it.perdasTotal ? '<div class="muted perdas">' + fmtPct(it.perdaPct) + ' s/ produzido</div>' : '') + '</td>' +
+      '<td>' + badgeSituacao(it) + '</td>' +
+    '</tr>' +
+    '<tr class="lotes-row" data-lotes="' + i + '"' + (aberto ? '' : ' style="display:none"') + '><td colspan="10">' + tabelaLotes(it) + '</td></tr>';
+  }).join('');
+  var totalLinha = '<tr class="total"><td>Total do pedido</td><td></td>' +
+    '<td class="num">' + fmtNum(t.qtdPedido) + '</td><td class="num">' + fmtNum(t.produzido) + '<div class="muted">' + fmtPct(t.atendidoPct) + '</div></td>' +
+    '<td class="num">' + fmtNum(t.aProduzir) + '</td><td class="num">' + expedidoHtml(t.expedido, t.motivos) + '</td>' +
+    '<td class="num">' + fmtNum(t.estoque) + '</td><td class="num">' + t.lotes + '</td><td>' + perdasHtml(t.perdas) + '</td><td></td></tr>';
+
+  alvo.innerHTML = cab +
+    '<div class="card"><div class="card-title">Itens do pedido <span class="nao-imprime" style="text-transform:none;font-weight:500">— clique no item para ver os lotes</span></div>' +
+    '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Status</th><th class="num">Pedido</th><th class="num">Produzido</th><th class="num">A produzir</th>' +
+    '<th class="num">Expedido</th><th class="num">Em estoque</th><th class="num">Lotes</th><th>Perdas (componentes)</th><th>Conciliação</th></tr></thead>' +
+    '<tbody>' + linhas + totalLinha + '</tbody></table></div>' +
+    '<div class="nota">Produzido, expedido e em estoque usam a mesma conta da tela de Pedidos (produzido = expedido + em estoque). ' +
+    'Perdas são de componentes (frasco, rótulo, cartucho...), na unidade de cada um, como lançadas no apontamento — por isso não se somam às unidades de produto; ' +
+    'o % compara a quantidade perdida com o que foi produzido. Lotes antigos sem lançamento no apontamento usam as perdas importadas do Excel.</div></div>';
+
+  alvo.querySelectorAll('tr.item').forEach(function(tr) {
+    tr.addEventListener('click', function() {
+      var it = relAtual.itens[Number(tr.getAttribute('data-i'))];
+      abertos[it.key] = !abertos[it.key];
+      tr.classList.toggle('aberto', abertos[it.key]);
+      alvo.querySelector('tr[data-lotes="' + tr.getAttribute('data-i') + '"]').style.display = abertos[it.key] ? '' : 'none';
+    });
+  });
+}
+function kpi(v, l, s) { return '<div class="kpi"><div class="v">' + v + '</div><div class="l">' + escapeHtml(l) + '</div><div class="s">' + escapeHtml(s) + '</div></div>'; }
+function tabelaLotes(it) {
+  if (!it.lotes.length && !it.semOp.produzido && !it.semOp.expedido && !it.semOp.estoque) return '<div class="muted">Nenhum lote emitido para este item.</div>';
+  var linhas = it.lotes.map(function(l) {
+    return '<tr><td><b>' + escapeHtml(l.lote) + '</b>' + (l.retrabalho ? ' <span class="badge b-warn">retrabalho</span>' : '') + '</td>' +
+      '<td>' + escapeHtml(l.status || '—') + '</td><td>' + escapeHtml(l.linha || '—') + '</td>' +
+      '<td>' + fmtData(l.inicio) + (l.fim ? ' → ' + fmtData(l.fim) : '') + '</td>' +
+      '<td class="num">' + fmtNum(l.planejado) + '</td><td class="num">' + fmtNum(l.produzido) + '</td>' +
+      '<td class="num">' + expedidoHtml(l.expedido, l.motivos) + '</td><td class="num">' + fmtNum(l.estoque) + '</td>' +
+      '<td>' + perdasHtml(l.perdas) + '</td><td class="num">' + (l.perdasTotal ? fmtPct(l.perdaPct) : '—') + '</td></tr>';
+  }).join('');
+  var s = it.semOp;
+  if (s.produzido || s.expedido || s.estoque) {
+    linhas += '<tr><td colspan="4" class="muted" title="Produção apontada sem OP identificada (apontamentos antigos) ou saídas/paletes sem OP">Sem OP identificada</td>' +
+      '<td></td><td class="num">' + (s.produzido ? fmtNum(s.produzido) : '—') + '</td><td class="num">' + (s.expedido ? fmtNum(s.expedido) : '—') + '</td>' +
+      '<td class="num">' + (s.estoque ? fmtNum(s.estoque) : '—') + '</td><td></td><td></td></tr>';
+  }
+  return '<div class="table-wrap"><table><thead><tr><th>Lote</th><th>Status</th><th>Linha</th><th>Produção</th><th class="num">Planejado</th><th class="num">Produzido</th>' +
+    '<th class="num">Expedido</th><th class="num">Em estoque</th><th>Perdas</th><th class="num">% perda</th></tr></thead><tbody>' + linhas + '</tbody></table></div>';
+}
+
+function exportarCsv() {
+  if (!relAtual) return;
+  var blob = new Blob(['﻿' + RelatorioPedido.csv(relAtual)], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'relatorio-pedido-' + String(relAtual.pedidoId).replace(/[^\w-]+/g, '_') + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+}
+
+function recalcular() {
+  if (!carregado()) return;
+  conc = ConciliacaoPedidos.calcular(fontes);
+  setStatus(true, 'Atualizado');
+  renderSeletor();
+  renderRelatorio();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('busca').addEventListener('input', renderSeletor);
+  document.getElementById('soAbertos').addEventListener('change', renderSeletor);
+  document.getElementById('selPedido').addEventListener('change', function() {
+    abertos = {};
+    var id = this.value;
+    try { history.replaceState(null, '', id ? '?pedido=' + encodeURIComponent(id) : location.pathname); } catch (e) {}
+    renderRelatorio();
+  });
+  // Na impressão todos os lotes saem abertos (CSS de impressão).
+  document.getElementById('btnImprimir').addEventListener('click', function() { window.print(); });
+  document.getElementById('btnCsv').addEventListener('click', exportarCsv);
+
+  try {
+    db.ref('.info/connected').on('value', function(snap) { if (!snap.val()) setStatus(false, 'Reconectando...'); else if (carregado()) setStatus(true, 'Atualizado'); else setStatus(true, 'Carregando...'); });
+    Object.keys(fontes).forEach(function(no) {
+      dbOnValue(db.ref(no), function(snap) { fontes[no] = snap.val() || {}; recalcular(); });
+    });
+  } catch (err) {
+    setStatus(false, 'Erro');
+    console.error(err);
+  }
+});
+</script>
+</body>
+</html>

@@ -99,9 +99,9 @@ const KURYOS_MODULOS = {
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
-                  paginas: ['comercial.html', 'gestao_comercial.html', 'devolucoes.html'] },
+                  paginas: ['comercial.html', 'gestao_comercial.html', 'devolucoes.html', 'relatorio_pedido.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
-                  paginas: ['pedidos.html', 'insumos.html'] },
+                  paginas: ['pedidos.html', 'insumos.html', 'relatorio_pedido.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
                   paginas: ['cadastros.html'] },  // produtos/materiais/clientes/formulas.html foram
                   // aposentados em 23/09: eram só redirecionamentos para as abas de cadastros.html
@@ -635,7 +635,10 @@ function renderUnifiedNavbar(user) {
     temMod('comercial') && ktLink('gestao_comercial.html', 'chart', 'Gestão Comercial', activePage),
     // Devolução de cliente (GAP-02): o Comercial autoriza, a Logística recebe
     // e a Qualidade acompanha o destino -- a mesma tela nos três blocos.
-    temMod('comercial') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage)
+    temMod('comercial') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage),
+    // Relatório de Pedido: PCP e Comercial acompanham o mesmo pedido; quem
+    // tem os dois módulos vê o link só no PCP.
+    temMod('comercial') && !temMod('pedidos') && ktLink('relatorio_pedido.html', 'chart', 'Relatório de Pedido', activePage)
   ]);
 
   const pcpGroup = grupo('PCP', [
@@ -649,6 +652,7 @@ function renderUnifiedNavbar(user) {
     temMod('emitir_op') && ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage),
     temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage),
     temMod('pedidos') && ktLink('pedidos.html', 'list', 'Pedidos', activePage),
+    temMod('pedidos') && ktLink('relatorio_pedido.html', 'chart', 'Relatório de Pedido', activePage),
     // "Matriz de Insumos > MRP" -- por ora só o rótulo muda (confirmado
     // pelo usuário: "a princípio só renomear"); uma funcionalidade de MRP
     // de verdade fica pra quando o Estoque/Compras (Agendamentos) já
