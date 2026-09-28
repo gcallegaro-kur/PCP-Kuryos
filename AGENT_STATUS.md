@@ -127,6 +127,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — resultados do laudo de PA no sistema (2026-09-28).** FQ e
+  microbiologia do Relatório de Análise de PA eram impressos em branco (FQ sem
+  bulk analisado) ou com resultado FIXO nunca digitado (micro "Ausente").
+  Passam a ser preenchidos no laudo e gravados em `qualidade.resultadosPa`.
+  **Arquivos ativos:** `public/qualidade.html`, `public/shared/laudo-cq.js`,
+  `public/shared/laudo-pa-resultados.js` (novo), `public/manual_qualidade.html`,
+  `run_laudo_pa_resultados_test.js`, `run_inspecao_pa_ui_test.js`.
+
 - **Publicado — perdas item a item no fechamento da OP (2026-09-25).** Commit
   `e835c03`, Hosting por worktree novo do origin/main; 10 arquivos públicos
   idênticos ao commit. Motor `shared/perdas-etapa.js`. Encerrar OP (Painel de
