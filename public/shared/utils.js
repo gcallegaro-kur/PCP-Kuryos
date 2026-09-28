@@ -2117,6 +2117,9 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       // retenção e laudo externo. Só existe em lote de PA.
       ck7: laudo.ck7 || null,
       resumoCk7: laudo.resumoCk7 || null,
+      // Resultados FQ e microbiológicos do Relatório de Análise de PA,
+      // digitados no laudo (laudo-pa-resultados.js) -- antes iam ao papel.
+      resultadosPa: laudo.resultadosPa || null,
       // F0070 / F009 (inspecao-embalagem.js + formulários oficiais do CQ):
       // identificação do recebimento que os laudos em papel pedem e que a
       // entrada da Logística não captura, e o checklist de embalagem.

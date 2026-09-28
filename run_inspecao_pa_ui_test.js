@@ -312,6 +312,33 @@ const responder = (page, valor) => page.evaluate((v) => {
     await page.fill('#qCk7RetUn', '3');
     await page.fill('#qCk7RetLocal', 'RET-01');
     await page.fill('#qCk7Lab', 'LAB-2026-88 aprovado');
+
+    // ── 5b. Resultados do laudo (FQ e micro) digitados no sistema (28/09) ──
+    // Parâmetros da especificação do produto; densidade já vem do bulk.
+    await page.waitForSelector('#qResPaBox', {state: 'visible'});
+    const fqIni = await page.$$eval('#qResFqBody tr', (trs) => trs.map((tr) => [
+      tr.querySelector('[data-campo="parametro"]').value, tr.querySelector('[data-campo="resultado"]').value]));
+    assert.deepEqual(fqIni, [['ASPECTO', ''], ['PH', ''], ['Densidade', '0,9']], 'especificação + bulk mesclados');
+    assert.match(await page.locator('#qResFqOrigem').innerText(), /análise do bulk/);
+    const micro0 = await page.$$eval('#qResMicroBody select', (ss) => ss.map((s) => s.value));
+    assert.deepEqual(micro0, ['', '', '', ''], 'micro nasce sem resultado');
+    assert.match(await page.locator('#qResPaResumo').innerText(), /a preencher/);
+    await page.fill('#qResFqBody tr:nth-child(1) [data-campo="resultado"]', 'Límpido');
+    await page.fill('#qResFqBody tr:nth-child(2) [data-campo="resultado"]', '6,2');
+    const selMicro = page.locator('#qResMicroBody select');
+    await selMicro.nth(0).selectOption('< 1 × 10³ UFC/mL ou g');
+    await selMicro.nth(1).selectOption('Presente');
+    await selMicro.nth(2).selectOption('Ausente');
+    await selMicro.nth(3).selectOption('Ausente');
+    await page.waitForFunction(() => /micro fora/.test(document.getElementById('qResPaResumo').innerText));
+    // Micro contaminada não libera.
+    await page.click('#qBtnLiberar');
+    await page.waitForFunction(() => /microbiologia fora da especificação/.test(document.getElementById('alertBox').innerText));
+    assert.equal(await page.evaluate(() => window.__db.estoque_lotes.MRARBS04.pa_26257_17_p1.status), 'QUARENTENA');
+    await selMicro.nth(1).selectOption('Ausente');
+    await page.fill('#qResMicroLaudo', 'LAB-2026-88');
+    await page.waitForFunction(() => /completo/.test(document.getElementById('qResPaResumo').innerText));
+    if (process.env.PA_SHOT) { await page.locator('#qResPaBox').scrollIntoViewIfNeeded(); await page.locator('#qResPaBox').screenshot({path: process.env.PA_SHOT}); }
     await page.click('#qBtnLiberar');
     await page.waitForFunction(() => window.__db.estoque_lotes.MRARBS04.pa_26257_17_p1.status !== 'QUARENTENA', null, {timeout: 8000});
     db = await page.evaluate(() => window.__db);
@@ -332,6 +359,11 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(q.ck7.retencao.unidades, 3);
     assert.equal(q.ck7.laboratorio, 'LAB-2026-88 aprovado');
     assert.equal(q.ck7.itens.vedacao.cnc, 'C');
+    assert.deepEqual(q.resultadosPa.fq.map((l) => [l.parametro, l.resultado, l.origem]),
+      [['ASPECTO', 'Límpido', 'laudo'], ['PH', '6,2', 'laudo'], ['Densidade', '0,9', 'bulk']], 'FQ gravado no laudo');
+    assert.equal(q.resultadosPa.micro.realizada, true);
+    assert.deepEqual(q.resultadosPa.micro.linhas.map((l) => l.resultado), ['< 1 × 10³ UFC/mL ou g', 'Ausente', 'Ausente', 'Ausente']);
+    assert.equal(q.resultadosPa.micro.laudoExterno, 'LAB-2026-88');
     await page.waitForFunction(() => window.__db.parametros_pa && window.__db.parametros_pa.MRARBS04, null, {timeout: 6000});
     db = await page.evaluate(() => window.__db);
     assert.equal(db.parametros_pa.MRARBS04.conteudoNominal, 200, 'parâmetros guardados para a próxima inspeção');
@@ -356,6 +388,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(await page.locator('#qEmitNome').inputValue(), 'Daiene');
     await page.fill('#qEmitNome', 'Mario Callegaro');
     await page.fill('#qEmitRegistro', 'CRQ 04413184');
+    assert.equal(await page.locator('#qEmitMicroBox').isVisible(), false, 'micro já decidida no laudo');
     await page.click('#qEmitImprimir');
     await page.waitForFunction(() => document.getElementById('laudoPrintArea').innerHTML.length > 0);
 
@@ -373,6 +406,9 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.match(laudo, /☒ Produto APROVADO/, 'liberado para expedição = aprovado no laudo');
     assert.match(laudo, /Conformidade do Rótulo/, 'aspecto visual da embalagem veio do CK-7');
     assert.match(laudo, /LAB-2026-88/, 'laudo externo informado na inspeção');
+    assert.match(laudo, /ASPECTO[\s\S]*Límpido/, 'FQ digitado no laudo sai impresso');
+    assert.match(laudo, /PH[\s\S]*6,2/);
+    assert.match(laudo, /Pseudomonas aeruginosa[\s\S]*Ausente em 1 g ou 1 mL[\s\S]*Ausente/, 'micro digitada sai impressa');
     // O nome do arquivo do PDF é o título da aba no momento da impressão.
     assert.equal(await page.evaluate(() => window.__tituloImpressao),
       'Relatório de análise - BODY SPLASH NÉCTAR DAS TAMARAS - 26257.17');

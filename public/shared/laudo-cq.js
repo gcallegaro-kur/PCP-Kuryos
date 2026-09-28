@@ -101,15 +101,19 @@
      ≥ 60% dispensa o monitoramento, e o laudo sai com a justificativa
      técnica no lugar da tabela -- exatamente o que o gerar_relatorio.py já
      fazia perguntando "teor alcoólico acima de 60%?" no prompt. */
+  /* Sem resultado (28/09): o modelo trazia "Ausente" / "< 1 × 10³" já
+     impressos, e o laudo afirmava um resultado que ninguém registrou. O
+     resultado vem do laudo (`qualidade.resultadosPa.micro`); sem ele, sai
+     em branco -- pendência visível, nunca resultado inventado. */
   var MICRO_PADRAO = [
     {analise: 'Contagem de Microrganismos Mesófilos Aeróbios Totais', metodo: 'USP',
-      especificacao: '≤ 1 × 10³ UFC/g ou mL', resultado: '< 1 × 10³ UFC/mL ou g'},
+      especificacao: '≤ 1 × 10³ UFC/g ou mL', resultado: ''},
     {analise: 'Ausência de Pseudomonas aeruginosa', metodo: 'USP',
-      especificacao: 'Ausente em 1 g ou 1 mL', resultado: 'Ausente'},
+      especificacao: 'Ausente em 1 g ou 1 mL', resultado: ''},
     {analise: 'Ausência de Staphylococcus aureus', metodo: 'USP',
-      especificacao: 'Ausente em 1 g ou 1 mL', resultado: 'Ausente'},
+      especificacao: 'Ausente em 1 g ou 1 mL', resultado: ''},
     {analise: 'Ausência de coliformes totais e fecais', metodo: 'USP',
-      especificacao: 'Ausente em 1 g ou 1 mL', resultado: 'Ausente'}
+      especificacao: 'Ausente em 1 g ou 1 mL', resultado: ''}
   ];
   var NOTA_MICRO = '*Categoria microbiológica Tipo II da RDC 907/2024 (ANVISA)';
   var DISPENSA_MICRO =
@@ -128,7 +132,8 @@
     });
     return tabela(['Análise', 'Método', 'Especificação', 'Resultado obtido'], linhas) +
       '<div class="laudo-nota-peq">' + esc(NOTA_MICRO) + '</div>' +
-      (m.laboratorio ? '<div class="laudo-nota-peq">Laudo externo: ' + esc(m.laboratorio) + '</div>' : '');
+      (m.laboratorio || m.laudoExterno ? '<div class="laudo-nota-peq">Laudo externo: ' +
+        esc([m.laboratorio, m.laudoExterno ? 'nº ' + m.laudoExterno : ''].filter(Boolean).join(' · ')) + '</div>' : '');
   }
 
   /* ── Tabela de peso ──

@@ -14,6 +14,7 @@
   <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
+  <script src="shared/laudo-pa-resultados.js"></script>
   <script src="shared/manipulacao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -104,6 +105,16 @@
     .plano-tabela{width:100%;min-width:330px;font-size:12px;margin:0}
     .plano-tabela td{padding:6px 8px;border-bottom:1px solid var(--tint-gray-bg)}
     .plano-tabela tr:last-child td{border-bottom:none}
+    /* Resultados do laudo de PA (28/09): FQ e micro digitados aqui. */
+    .res-tab{width:100%;border-collapse:collapse;font-size:12px}
+    .res-tab th{text-align:left;font-size:10.5px;color:var(--muted);text-transform:uppercase;padding:6px 6px;border-bottom:1px solid var(--border)}
+    .res-tab td{padding:4px 6px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
+    .res-tab input,.res-tab select{width:100%;padding:6px 7px;font-size:12.5px}
+    .res-tab .res-resultado{border-color:var(--primary);font-weight:600}
+    .res-tab tr.res-falta .res-resultado{background:var(--tint-orange-bg,#fff7ed)}
+    .res-origem{font-size:10.5px;color:var(--muted);white-space:nowrap}
+    @media(max-width:700px){.res-tab thead{display:none}.res-tab,.res-tab tbody,.res-tab tr,.res-tab td{display:block;width:100%}
+      .res-tab tr{border:1px solid var(--border);border-radius:10px;margin-bottom:8px;padding:4px}.res-tab td{border:none}}
     .plano-ensaio{font-weight:600}
     .plano-espec{font-size:11px;color:var(--muted)}
     .plano-val{width:92px;padding:5px 7px;font-size:12px}
@@ -582,9 +593,42 @@
               <div class="form-group"><label>Retenção — unidades coletadas</label><input type="number" id="qCk7RetUn" min="0" step="1" placeholder="3"></div>
               <div class="form-group"><label>Retenção — local</label><input type="text" id="qCk7RetLocal" placeholder="Ex.: prateleira RET-01"></div>
             </div>
-            <div class="form-group">
-              <label>Laudo externo (físico-químico / microbiológico)</label>
-              <input type="text" id="qCk7Lab" placeholder="Número e resultado do laudo — opcional, não trava a liberação">
+            <!-- Resultados do laudo (28/09): o que o Relatório de Análise de
+                 PA imprime nas seções 3 (FQ) e 6 (micro). Antes, papel. -->
+            <div class="plano-wrap" id="qResPaBox" style="margin-top:14px">
+              <div class="plano-head"><span>Resultados do laudo — físico-químico e microbiologia</span><span id="qResPaResumo"></span></div>
+              <div style="padding:10px 12px">
+                <div class="field-hint" id="qResFqOrigem" style="margin-bottom:6px"></div>
+                <div style="overflow-x:auto"><table class="res-tab">
+                  <thead><tr><th style="width:24%">Parâmetro</th><th style="width:24%">Especificação</th><th style="width:22%">Resultado obtido</th><th style="width:24%">Método</th><th></th></tr></thead>
+                  <tbody id="qResFqBody"></tbody>
+                </table></div>
+                <button type="button" class="btn btn-ghost btn-sm" id="qResFqAdd" style="margin-top:6px">＋ Parâmetro</button>
+
+                <div class="form-group" style="margin-top:14px">
+                  <label>Análise microbiológica</label>
+                  <select id="qResMicroModo">
+                    <option value="realizada">Realizada — registrar os resultados</option>
+                    <option value="dispensada">Dispensada (ex.: álcool ≥ 60%) — com justificativa</option>
+                  </select>
+                </div>
+                <div id="qResMicroTabela">
+                  <div style="overflow-x:auto"><table class="res-tab">
+                    <thead><tr><th style="width:38%">Análise</th><th style="width:26%">Especificação</th><th style="width:28%">Resultado obtido</th><th>Método</th></tr></thead>
+                    <tbody id="qResMicroBody"></tbody>
+                  </table></div>
+                  <div class="form-grid" style="margin-top:8px">
+                    <div class="form-group"><label>Laboratório</label>
+                      <input type="text" id="qCk7Lab" placeholder="Ex.: laboratório terceirizado"></div>
+                    <div class="form-group"><label>Nº do laudo externo</label>
+                      <input type="text" id="qResMicroLaudo" placeholder="Ex.: LAB-2026-88"></div>
+                  </div>
+                </div>
+                <div id="qResMicroDispensa" class="form-group" style="display:none">
+                  <label>Justificativa da dispensa</label>
+                  <textarea id="qResMicroJust" rows="3"></textarea>
+                </div>
+              </div>
             </div>
             <div id="qCk7Impedimentos" class="alert alert-danger" style="margin-top:6px"></div>
           </div>
@@ -1628,6 +1672,7 @@ function abrirLaudo(itemCodigo, loteKey) {
     document.getElementById('qCk7RetLocal').value = '';
     document.getElementById('qCk7Lab').value = '';
     document.getElementById('qCk7Densidade').value = '';
+    iniciarResultadosPa();
     ['qCk7Nominal', 'qCk7Unidade', 'qCk7UnCaixa', 'qCk7EanProduto', 'qCk7EanCaixa', 'qCk7Densidade'].forEach(function(id) {
       document.getElementById(id).onchange = renderCk7;
     });
@@ -2149,7 +2194,7 @@ function salvarLaudo(decisao) {
   // CK-7: defeito CRÍTICO ou peso fora NÃO liberam palete (decisão do
   // usuário em 17/09). Rótulo errado, lote ilegível e vazamento não são
   // desvio negociável -- o caminho é reter ou mandar para retrabalho.
-  var ck7 = null, avalPa = null;
+  var ck7 = null, avalPa = null, resultadosPa = null;
   if (laudoAtual.ehPa) {
     avalPa = avaliarCk7();
     if (avalPa.bloqueia && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO' || decisao === 'APROVADO_CONCESSAO')) {
@@ -2160,6 +2205,16 @@ function salvarLaudo(decisao) {
       if (!confirm('O checklist tem ' + avalPa.pendentes + ' item(ns) sem resposta' +
         (avalPa.pesagem.pendente ? ' e nenhuma pesagem registrada' : '') + '.\n\nLiberar assim mesmo?')) return;
     }
+    var avalRes = LaudoPaResultados.avaliar(laudoAtual.resPa.fq, microDaTela());
+    if (avalRes.bloqueia && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO' || decisao === 'APROVADO_CONCESSAO')) {
+      showAlert('Não é possível liberar: microbiologia fora da especificação (' + avalRes.impedimentos.join('; ') + '). Retenha ou reprove o palete.', 'danger');
+      return;
+    }
+    if (!avalRes.completo && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO')) {
+      if (!confirm('Resultados do laudo sem preencher:\n- ' + avalRes.pendentes.join('\n- ') +
+        '\n\nEles saem EM BRANCO no relatório impresso. Liberar assim mesmo?')) return;
+    }
+    resultadosPa = LaudoPaResultados.registro(laudoAtual.resPa.fq, microDaTela());
     ck7 = InspecaoPA.registro(avalPa, {
       pesos: laudoAtual.ck7.pesos,
       retencaoUnidades: document.getElementById('qCk7RetUn').value,
@@ -2218,6 +2273,7 @@ function salvarLaudo(decisao) {
     resumoPlano: resumoPlano,
     ck7: ck7,
     resumoCk7: ck7 ? ck7.resumo : null,
+    resultadosPa: resultadosPa,
     embalagem: embReg,
     resumoEmbalagem: embReg ? embReg.resumo : null,
     // Identificação que os formulários F0070/F009 pedem no cabeçalho.
@@ -2336,6 +2392,130 @@ function linhasFqDoLaudo(op, sku) {
   });
 }
 
+/* ─────────── Resultados do laudo de PA (28/09) ───────────
+   "Preciso ter a opção de preencher os resultados obtidos, dentro do
+   sistema, não para ser preenchido no papel". FQ vem pré-preenchido da
+   análise do bulk do lote (quando existe) e é editável; micro é digitada
+   ou dispensada com justificativa. Ver shared/laudo-pa-resultados.js. */
+function iniciarResultadosPa() {
+  var lote = laudoAtual.lote || {};
+  var op = opPorLote(lote.opLote || lote.loteOrigem);
+  var ensaiosBulk = (((op || {}).manipulacao || {}).analise || {}).ensaios || null;
+  var espec = especificacaoVigente(allEspecificacoes, laudoAtual.itemCodigo);
+  var itensEspec = espec && espec.registro && espec.registro.itens;
+  var salvo = (lote.qualidade || {}).resultadosPa;
+  var micro = salvo && salvo.micro ? salvo.micro : LaudoPaResultados.microInicial();
+  laudoAtual.resPa = {
+    fq: salvo && salvo.fq ? JSON.parse(JSON.stringify(salvo.fq)) : LaudoPaResultados.fqInicial(ensaiosBulk, itensEspec, faixaEspecificacao),
+    micro: JSON.parse(JSON.stringify(micro.realizada === false ? LaudoPaResultados.microInicial() : micro)),
+    temBulk: !!(ensaiosBulk && Object.keys(ensaiosBulk).length)
+  };
+  document.getElementById('qResMicroModo').value = micro.realizada === false ? 'dispensada' : 'realizada';
+  document.getElementById('qResMicroJust').value = micro.realizada === false ? (micro.justificativa || '') : '';
+  document.getElementById('qResMicroLaudo').value = micro.laudoExterno || '';
+  document.getElementById('qCk7Lab').value = micro.laboratorio || '';
+  renderResultadosPa();
+}
+function linhaResFq(l, i) {
+  var falta = !String(l.resultado || '').trim();
+  return '<tr' + (falta ? ' class="res-falta"' : '') + '>' +
+    '<td><input type="text" data-res-fq="' + i + '" data-campo="parametro" value="' + escapeAttr(l.parametro || '') + '"></td>' +
+    '<td><input type="text" data-res-fq="' + i + '" data-campo="especificacao" value="' + escapeAttr(l.especificacao || '') + '" placeholder="Ex.: 5,0 a 7,0"></td>' +
+    '<td><input type="text" class="res-resultado" data-res-fq="' + i + '" data-campo="resultado" value="' + escapeAttr(l.resultado || '') + '" placeholder="Resultado"></td>' +
+    '<td><input type="text" data-res-fq="' + i + '" data-campo="metodo" value="' + escapeAttr(l.metodo || '') + '"></td>' +
+    '<td>' + (l.origem === 'bulk' ? '<span class="res-origem" title="Veio da análise do bulk deste lote">do bulk</span>'
+      : '<button type="button" class="btn btn-ghost btn-sm" data-res-fq-del="' + i + '" title="Remover">✕</button>') + '</td></tr>';
+}
+function linhaResMicro(l, i) {
+  var base = LaudoPaResultados.MICRO_PADRAO.find(function(m) { return m.analise === l.analise; }) || {opcoes: []};
+  var falta = !String(l.resultado || '').trim();
+  var opcoes = base.opcoes.slice();
+  if (l.resultado && opcoes.indexOf(l.resultado) < 0) opcoes.push(l.resultado);
+  return '<tr' + (falta ? ' class="res-falta"' : '') + '><td>' + escapeHtml(l.analise) + '</td><td>' + escapeHtml(l.especificacao) + '</td>' +
+    '<td><select class="res-resultado" data-res-micro="' + i + '"><option value="">— resultado —</option>' +
+      opcoes.map(function(o) { return '<option' + (o === l.resultado ? ' selected' : '') + '>' + escapeHtml(o) + '</option>'; }).join('') +
+    '</select></td><td>' + escapeHtml(l.metodo) + '</td></tr>';
+}
+function microDaTela() {
+  var r = laudoAtual && laudoAtual.resPa;
+  if (!r) return null;
+  if (document.getElementById('qResMicroModo').value === 'dispensada') {
+    return {realizada: false, justificativa: document.getElementById('qResMicroJust').value};
+  }
+  return {realizada: true, linhas: r.micro.linhas,
+    laboratorio: document.getElementById('qCk7Lab').value, laudoExterno: document.getElementById('qResMicroLaudo').value};
+}
+function atualizarResumoResPa() {
+  if (!laudoAtual || !laudoAtual.resPa) return;
+  var a = LaudoPaResultados.avaliar(laudoAtual.resPa.fq, microDaTela());
+  document.getElementById('qResPaResumo').innerHTML = a.bloqueia
+    ? '<span class="badge badge-red">micro fora</span>'
+    : a.completo ? '<span class="badge badge-green">completo</span>'
+    : '<span class="badge badge-orange">' + a.pendentes.length + ' a preencher</span>';
+}
+function renderResultadosPa() {
+  var r = laudoAtual && laudoAtual.resPa;
+  var box = document.getElementById('qResPaBox');
+  if (!r) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  document.getElementById('qResFqOrigem').textContent = r.temBulk
+    ? 'Pré-preenchido com a análise do bulk deste lote. Confira e complete o que faltar.'
+    : 'Este lote não tem análise do bulk registrada: digite os resultados obtidos.';
+  document.getElementById('qResFqBody').innerHTML = r.fq.map(linhaResFq).join('');
+  document.getElementById('qResMicroBody').innerHTML = r.micro.linhas.map(linhaResMicro).join('');
+  var dispensada = document.getElementById('qResMicroModo').value === 'dispensada';
+  document.getElementById('qResMicroTabela').style.display = dispensada ? 'none' : '';
+  document.getElementById('qResMicroDispensa').style.display = dispensada ? '' : 'none';
+  // Digitar não redesenha a tabela (perderia o foco): só atualiza o dado,
+  // o destaque da linha e o resumo.
+  document.querySelectorAll('#qResFqBody [data-res-fq]').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      r.fq[Number(inp.getAttribute('data-res-fq'))][inp.getAttribute('data-campo')] = inp.value;
+      if (inp.getAttribute('data-campo') === 'resultado') inp.closest('tr').classList.toggle('res-falta', !inp.value.trim());
+      atualizarResumoResPa();
+    });
+  });
+  document.querySelectorAll('#qResFqBody [data-res-fq-del]').forEach(function(b) {
+    b.addEventListener('click', function() { r.fq.splice(Number(b.getAttribute('data-res-fq-del')), 1); renderResultadosPa(); });
+  });
+  document.querySelectorAll('#qResMicroBody [data-res-micro]').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      r.micro.linhas[Number(sel.getAttribute('data-res-micro'))].resultado = sel.value;
+      sel.closest('tr').classList.toggle('res-falta', !sel.value);
+      atualizarResumoResPa();
+    });
+  });
+  atualizarResumoResPa();
+}
+document.getElementById('qResFqAdd').addEventListener('click', function() {
+  if (!laudoAtual || !laudoAtual.resPa) return;
+  laudoAtual.resPa.fq.push({parametro: '', especificacao: '', metodo: '', resultado: '', origem: 'laudo'});
+  renderResultadosPa();
+  var ultimos = document.querySelectorAll('#qResFqBody [data-campo="parametro"]');
+  if (ultimos.length) ultimos[ultimos.length - 1].focus();
+});
+document.getElementById('qResMicroModo').addEventListener('change', function() {
+  if (this.value === 'dispensada' && !document.getElementById('qResMicroJust').value.trim()) {
+    document.getElementById('qResMicroJust').value = LaudoCQ.DISPENSA_MICRO;
+  }
+  renderResultadosPa();
+});
+['qResMicroJust', 'qResMicroLaudo', 'qCk7Lab'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', atualizarResumoResPa);
+});
+
+// Seção 6 do impresso. Com resultados registrados, é o que foi digitado;
+// laudo antigo segue as opções da emissão -- com o resultado em branco.
+function microDoLaudo(q, o, ck7) {
+  var m = (q.resultadosPa || {}).micro;
+  if (m) {
+    return m.realizada === false
+      ? {incluir: false, justificativa: m.justificativa}
+      : {incluir: true, linhas: m.linhas, laboratorio: m.laboratorio || '', laudoExterno: m.laudoExterno || ''};
+  }
+  return {incluir: o.micro !== false, laboratorio: o.laboratorio || (ck7 || {}).laboratorio || ''};
+}
+
 /* Seção 4 (Aspecto Visual – Embalagem). O relatório oficial tem 7 linhas
    fixas; o CK-7 tem 21 itens. Este é o de-para, e ele é uma DECISÃO, não
    uma equivalência óbvia -- por isso está escrito aqui, à vista de quem
@@ -2383,7 +2563,9 @@ function dadosLaudoPa(itemCodigo, loteKey, lote, q, opcoes) {
     dataFabricacao: (op && (op.dataFimReal || op.dataEmissao)) || null,
     validade: lote.dataValidade || null,
     empresa: prod.cliente || (op && op.cliente) || '',
-    fq: linhasFqDoLaudo(op, itemCodigo),
+    // Laudo com resultados digitados (28/09): imprime o que foi registrado.
+    // Laudo antigo: bulk/especificação, como antes (resultado em branco).
+    fq: q.resultadosPa ? q.resultadosPa.fq : linhasFqDoLaudo(op, itemCodigo),
     embalagem: linhasEmbalagemDoLaudo(ck7.itens),
     amostragemTexto: ck7.amostragem && ck7.amostragem.caixasPalete
       ? ck7.amostragem.caixasAmostradas + ' de ' + ck7.amostragem.caixasPalete + ' caixas'
@@ -2404,7 +2586,7 @@ function dadosLaudoPa(itemCodigo, loteKey, lote, q, opcoes) {
       densidade: pes.densidade, origemDensidade: pes.origemDensidade,
       tolerancia: pes.tolerancia, limiteT2: pes.limiteT2, limiteMedia: pes.limiteMedia, c: pes.c
     } : null,
-    micro: {incluir: o.micro !== false, laboratorio: o.laboratorio || ck7.laboratorio || ''},
+    micro: microDoLaudo(q, o, ck7),
     conclusao: liberado ? 'APROVADO' : (q.decisao === 'REPROVADO' ? 'REPROVADO' : ''),
     observacoes: q.observacao || '',
     dataAnalise: q.dataInspecao || String(q.inspecionadoEm || '').slice(0, 10),
@@ -2490,8 +2672,11 @@ function abrirEmissaoLaudo(itemCodigo, loteKey) {
     '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b> · lote ' + escapeHtml(lote.loteOrigem || loteKey) +
     '<br>' + escapeHtml(nomeDoc) + ', com os resultados já registrados neste laudo.';
   // Microbiológicas e laudo externo só existem no relatório de PA.
-  document.getElementById('qEmitMicroBox').style.display = roteiro === 'PA' ? '' : 'none';
-  document.getElementById('qEmitLabBox').style.display = roteiro === 'PA' ? '' : 'none';
+  // Laudo com resultados registrados já decidiu a microbiologia; as opções
+  // da emissão só servem aos laudos antigos.
+  var microNoLaudo = roteiro === 'PA' && !!lote.qualidade.resultadosPa;
+  document.getElementById('qEmitMicroBox').style.display = roteiro === 'PA' && !microNoLaudo ? '' : 'none';
+  document.getElementById('qEmitLabBox').style.display = roteiro === 'PA' && !microNoLaudo ? '' : 'none';
   var sel = document.getElementById('qEmitResponsavel');
   sel.innerHTML = responsaveisCq.map(function(r, i) {
     return '<option value="' + i + '">' + escapeHtml(r.nome) + (r.registro ? ' — ' + escapeHtml(r.registro) : '') + '</option>';
