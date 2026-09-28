@@ -127,13 +127,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — resultados do laudo de PA no sistema (2026-09-28).** FQ e
-  microbiologia do Relatório de Análise de PA eram impressos em branco (FQ sem
-  bulk analisado) ou com resultado FIXO nunca digitado (micro "Ausente").
-  Passam a ser preenchidos no laudo e gravados em `qualidade.resultadosPa`.
-  **Arquivos ativos:** `public/qualidade.html`, `public/shared/laudo-cq.js`,
-  `public/shared/laudo-pa-resultados.js` (novo), `public/manual_qualidade.html`,
-  `run_laudo_pa_resultados_test.js`, `run_inspecao_pa_ui_test.js`.
+- **Publicado — resultados do laudo de PA no sistema (2026-09-28).** Commit
+  `6e80660`, Hosting por worktree novo do origin/main; 7 arquivos públicos
+  idênticos (inclui Relatório de Pedido e Manipulação). Laudo do palete ganhou
+  "Resultados do laudo": FQ (parâmetros da especificação ou os 5 do modelo,
+  mesclados com a análise do bulk do lote — marcados `bulk` — editáveis) e
+  micro (realizada com resultado por análise + laboratório + nº do laudo
+  externo, ou dispensada com justificativa). Grava `qualidade.resultadosPa`
+  (campo novo na whitelist de `registrarLaudoQualidade`, utils.js). Impresso
+  mostra só o digitado; `MICRO_PADRAO` de `laudo-cq.js` perdeu os resultados
+  fixos ("Ausente") que eram impressos sem análise — laudo antigo agora sai
+  com a micro em branco. Micro Presente/acima trava liberação; pendência só
+  avisa. Motor `shared/laudo-pa-resultados.js`. Testes:
+  `run_laudo_pa_resultados_test.js` (24), `run_inspecao_pa_ui_test.js`
+  estendido + regressões. Arquivos ativos: nenhum.
 
 - **Publicado — perdas item a item no fechamento da OP (2026-09-25).** Commit
   `e835c03`, Hosting por worktree novo do origin/main; 10 arquivos públicos
