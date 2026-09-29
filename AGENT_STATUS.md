@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Qualidade: fila separada por tipo de análise (2026-09-29).**
+  Abas Matéria-prima / Embalagem / Bulk / Produto acabado com contador; "Ver
+  tudo" consolidado como opção lembrada por usuário. Depois: histórico +
+  dashboard da Qualidade e da Manipulação. **Arquivos ativos:**
+  `public/qualidade.html`, `run_qualidade_fila_tipos_ui_test.js` (novo).
+
 - **COMMITADO, DEPLOY PENDENTE — edição no Histórico falhava com "set"
   (2026-09-29).** `historico.html`: ajustes do total da OP (transactions) e
   `saveOpDatasReais` (update na mesma OP) agora em FILA -- em paralelo o SDK
