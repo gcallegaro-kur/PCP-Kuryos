@@ -68,7 +68,8 @@ assert.ok(/^Manipulação: 500 \/ 500 kg \(100%\)/.test(linhas[0]), linhas[0]);
 assert.ok(/^Envase: 1\.450 \/ 1\.500 un \(97%\)/.test(linhas[1]), linhas[1]);
 assert.ok(/^Rotulagem: 1\.500 \/ 1\.500 un \(100%\)/.test(linhas[2]), linhas[2]);
 assert.ok(/^Produto acabado \(conferido\): 1\.000 \/ 1\.500 un \(67%\)/.test(linhas[3]), linhas[3]);
-assert.ok(/^Expedido: 0 \/ 1\.500 un/.test(linhas[4]), linhas[4]);
+assert.ok(/Liberado \(Qualidade\): 1\.000/.test(linhas[4]), linhas[4]);
+assert.ok(/^Expedido: 0 \/ 1\.500 un/.test(linhas[5]), linhas[5]);
 
 // 7. Meta zero não divide por zero.
 p = PO.calcular({qtdPlanejada: 0, produzidoLinha: 5}, bucket(0, 0), false);
@@ -89,5 +90,30 @@ p = PO.calcular({qtdPlanejada: 1500, produzidoLinha: 1500, produzidoRotulagem: 1
 assert.strictEqual(p.pa, 1200);
 assert.strictEqual(p.expedido, 300);
 assert.strictEqual(p.pct, 80);
+
+// 9. Qualidade: liberado x pendente x reprovado, por OP.
+const lotes = {SKU: {
+  a: {itemTipo: 'produto', opKey: 'X', saldoLote: 600, status: 'LIBERADO_EXPEDICAO'},
+  b: {itemTipo: 'produto', opKey: 'X', saldoLote: 300, status: 'QUARENTENA'},
+  c: {itemTipo: 'produto', opKey: 'X', saldoLote: 50, status: 'REPROVADO'},
+  d: {itemTipo: 'produto', opKey: 'X', saldoLote: 100, status: 'APROVADO_CONCESSAO'},
+  e: {itemTipo: 'produto', opKey: 'X', saldoLote: 0, status: 'QUARENTENA'},
+  f: {itemTipo: 'material', opKey: 'X', saldoLote: 999, status: 'QUARENTENA'},
+  g: {itemTipo: 'produto', opKey: 'Y', saldoLote: 40, origemTipo: 'legado_planilha', legado: true}
+}};
+const q = PO.paletesPorOp(lotes);
+assert.deepStrictEqual(q.X, {liberado: 700, pendente: 300, reprovado: 50});
+assert.strictEqual(q.Y.liberado, 40, 'legado nunca passou por laudo: conta como liberado');
+p = PO.calcular({qtdPlanejada: 2000, produzidoLinha: 2000}, bucket(1050, 200), false, q.X);
+assert.strictEqual(p.pa, 1250);
+assert.strictEqual(p.pendente, 300);
+assert.strictEqual(p.reprovado, 50);
+assert.strictEqual(p.liberado, 900, 'liberado = estoque liberado (700) + expedido (200)');
+assert.ok(/Aguardando a Qualidade: 300/.test(PO.tooltip(p)));
+assert.ok(/Reprovado: 50/.test(PO.tooltip(p)));
+// Sem pendência nem reprovação as linhas nem aparecem.
+p = PO.calcular({qtdPlanejada: 100}, bucket(100, 0), false, {liberado: 100, pendente: 0, reprovado: 0});
+assert.ok(!/Qualidade|Reprovado/.test(PO.tooltip(p).replace('(Qualidade)', '')));
+assert.strictEqual(p.liberado, 100);
 
 console.log('progresso-op: todos os testes passaram');

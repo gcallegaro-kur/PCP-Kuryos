@@ -135,6 +135,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   Enquanto a conciliação carrega, mostra "carregando" (nunca zero falso).
   Novo `shared/progresso-op.js` (puro) + `run_progresso_op_test.js` e
   `run_progresso_op_ui_test.js`. Achado no ensaio: campo ausente dava NaN%.
+  **Depois (mesmo dia):** barra em três faixas — liberado pela Qualidade (verde,
+  inclui expedido), aguardando a Qualidade (âmbar, QUARENTENA) e reprovado
+  (vermelho); palete legado conta como liberado. `ProgressoOp.paletesPorOp`.
+  Manipulação só aparece em OP que tem `ops/{op}.manipulacao` (as emitidas
+  depois do portão do bulk); OP antiga não tem dado e fica sem a linha.
   Arquivos ativos: nenhum.
 
 - **COMMITADO, DEPLOY PENDENTE — Qualidade: fila separada por tipo de análise

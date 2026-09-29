@@ -44,15 +44,45 @@
     return {chave: chave, rotulo: rotulo, unidade: 'un', valor: arred(valor), meta: meta, pct: pct(valor, meta), detalhe: detalhe || null};
   }
 
+  /* Estoque de PA por OP, separado pela decisão da Qualidade (o mesmo critério
+     da Expedição: só LIBERADO_EXPEDICAO/APROVADO_CONCESSAO pode sair).
+     Palete legado (importado da planilha) nunca passou pelo laudo: conta como
+     liberado, como a Expedição já faz. */
+  var LIBERADOS = {LIBERADO_EXPEDICAO: 1, APROVADO_CONCESSAO: 1};
+  var REPROVADOS = {REPROVADO: 1, AGUARDANDO_DESCARTE: 1};
+  function paletesPorOp(estoqueLotes) {
+    var out = {};
+    Object.keys(estoqueLotes || {}).forEach(function(item) {
+      Object.keys(estoqueLotes[item] || {}).forEach(function(k) {
+        var l = estoqueLotes[item][k] || {};
+        var saldo = n(l.saldoLote);
+        if (l.itemTipo !== 'produto' || !(saldo > 0) || !l.opKey) return;
+        var o = out[l.opKey] = out[l.opKey] || {liberado: 0, pendente: 0, reprovado: 0};
+        var legado = l.origemTipo === 'legado_planilha' && l.legado === true;
+        var campo = (legado || LIBERADOS[l.status]) ? 'liberado' : REPROVADOS[l.status] ? 'reprovado' : 'pendente';
+        o[campo] = arred(o[campo] + saldo);
+      });
+    });
+    return out;
+  }
+
   /* `bucket` é o `porOp` da conciliação para esta OP (ou null: sem palete nem
      saída ainda). `carregando` = a conciliação ainda não chegou -- nesse caso o
      PA fica indefinido em vez de virar um zero que pareceria "nada produzido". */
-  function calcular(op, bucket, carregando) {
+  function calcular(op, bucket, carregando, qualidade) {
     op = op || {};
     var meta = n(op.qtdPlanejada);
     var estoque = bucket ? n(bucket.estoque.total) : 0;
     var expedido = bucket ? n(bucket.expedido.total) : 0;
     var pa = arred(estoque + expedido);
+    // Divisão do estoque pela Qualidade. O que a conciliação conta e os paletes
+    // não explicam (ex.: estoque de planilha sem OP no palete) entra como
+    // liberado -- não há laudo a esperar. Reprovado/pendente nunca passam de estoque.
+    var q = qualidade || {liberado: 0, pendente: 0, reprovado: 0};
+    var pendente = Math.min(estoque, arred(q.pendente));
+    var reprovado = Math.min(estoque - pendente, arred(q.reprovado));
+    var liberadoEstoque = arred(estoque - pendente - reprovado);
+    var liberado = arred(liberadoEstoque + expedido);
 
     var etapas = [];
     var man = etapaManipulacao(op);
@@ -61,12 +91,16 @@
     etapas.push(etapaUn('rotulagem', 'Rotulagem', op.produzidoRotulagem, meta));
     if (n(op.produzidoPosto) > 0) etapas.push(etapaUn('posto', 'Posto de trabalho', op.produzidoPosto, meta));
     if (!carregando) {
-      etapas.push(etapaUn('pa', 'Produto acabado (conferido)', pa, meta, 'em estoque ' + estoque + ' + expedido ' + expedido));
+      etapas.push(etapaUn('pa', 'Produto acabado (conferido)', pa, meta));
+      etapas.push(etapaUn('liberado', '  ↳ Liberado (Qualidade)', liberado, meta, 'em estoque ' + fmt(liberadoEstoque) + ' + expedido ' + fmt(expedido)));
+      if (pendente > 0) etapas.push(etapaUn('pendente', '  ↳ Aguardando a Qualidade', pendente, meta));
+      if (reprovado > 0) etapas.push(etapaUn('reprovado', '  ↳ Reprovado', reprovado, meta));
       etapas.push(etapaUn('expedido', 'Expedido', expedido, meta));
     }
     return {
       carregando: !!carregando, planejado: meta,
       pa: carregando ? null : pa, estoque: estoque, expedido: expedido,
+      liberado: carregando ? null : liberado, pendente: carregando ? null : pendente, reprovado: carregando ? null : reprovado,
       pct: carregando ? null : pct(pa, meta), etapas: etapas
     };
   }
@@ -84,5 +118,5 @@
     return linhas.join('\n');
   }
 
-  return {calcular: calcular, tooltip: tooltip, fmt: fmt};
+  return {calcular: calcular, paletesPorOp: paletesPorOp, tooltip: tooltip, fmt: fmt};
 });

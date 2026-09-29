@@ -718,6 +718,7 @@
     });
   }
   const conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
+  let qualidadePorOp = {};       // opKey -> {liberado, pendente, reprovado} do estoque de PA
   let conciliacaoPorOp = null;   // opKey -> bucket `porOp` da conciliação
   let _conciliacaoOpsT = null;
   function agendarConciliacaoOps() {
@@ -732,6 +733,7 @@
           Object.keys(porOp).forEach(ok => { if (porOp[ok].opKey) idx[porOp[ok].opKey] = porOp[ok]; });
         });
         conciliacaoPorOp = idx;
+        qualidadePorOp = ProgressoOp.paletesPorOp(conciliacaoFontes.estoque_lotes);
       } catch (e) {
         console.error('Falha ao calcular o produto acabado das OPs:', e);
         conciliacaoPorOp = null;
@@ -1492,19 +1494,26 @@
   // hover (shared/progresso-op.js). Linha/Rotulagem/Posto continuam sendo
   // somatórias distintas, nunca somadas -- só que agora ficam no tooltip.
   function produzidoBreakdownHtml(op) {
-    const prog = ProgressoOp.calcular(op, conciliacaoPorOp ? (conciliacaoPorOp[op.key] || null) : null, conciliacaoPorOp === null);
+    const prog = ProgressoOp.calcular(op, conciliacaoPorOp ? (conciliacaoPorOp[op.key] || null) : null, conciliacaoPorOp === null, qualidadePorOp[op.key]);
     const planned = prog.planejado;
     const dica = escapeAttr(ProgressoOp.tooltip(prog));
     if (prog.carregando) {
       return '<div title="' + dica + '" style="cursor:help"><div style="font-size:11.5px;color:var(--muted)">Produto acabado: carregando…</div>' +
         '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:0%"></div></div></div>';
     }
-    const pct = Math.min(100, prog.pct);
+    // Três faixas na mesma barra: liberado pela Qualidade (verde, inclui o já
+    // expedido), aguardando a Qualidade (âmbar) e reprovado (vermelho).
+    const larg = v => planned > 0 ? Math.min(100, v / planned * 100) : 0;
+    const wLib = larg(prog.liberado), wPen = Math.min(100 - wLib, larg(prog.pendente)), wRep = Math.min(100 - wLib - wPen, larg(prog.reprovado));
+    const seg = (w, cor) => w > 0 ? '<div style="width:' + w + '%;background:' + cor + '"></div>' : '';
+    const nota = (prog.pendente > 0 ? '<span style="color:#b45309">⏳ ' + prog.pendente.toLocaleString('pt-BR') + ' na Qualidade</span>' : '') +
+      (prog.reprovado > 0 ? '<span style="color:var(--danger,#dc2626)">⛔ ' + prog.reprovado.toLocaleString('pt-BR') + ' reprov.</span>' : '');
     return '<div title="' + dica + '" style="cursor:help">' +
       '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">Produto acabado</div>' +
       '<div style="display:flex;justify-content:space-between;font-weight:600;font-size:11.5px">' +
       '<span>' + prog.pa.toLocaleString('pt-BR') + ' / ' + planned.toLocaleString('pt-BR') + ' un</span><span>' + prog.pct + '%</span></div>' +
-      '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="progress-bar-container" style="display:flex">' + seg(wLib, 'var(--success)') + seg(wPen, '#f59e0b') + seg(wRep, '#dc2626') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:10.5px;margin-top:2px"><span style="color:var(--success)">✔ ' + prog.liberado.toLocaleString('pt-BR') + ' liberado</span>' + nota + '</div>' +
       '</div>';
   }
 

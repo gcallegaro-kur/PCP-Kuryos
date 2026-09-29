@@ -33,7 +33,8 @@ function dados() {
       '0041': {cliente: 'MISS RÔSE', total_qtd: 40000, itens: [{sku: 'MRARBS01', qtd: 40000}]}
     },
     estoque_lotes: {MRARBS04: {
-      pa_26257_17_p1: {itemTipo: 'produto', opKey: '26257-17', saldoLote: 1500, origemTipo: 'conferencia_pa', skuPedidoKey: '14__MRARBS04'},
+      pa_26257_17_p1: {itemTipo: 'produto', opKey: '26257-17', saldoLote: 1500, status: 'LIBERADO_EXPEDICAO', origemTipo: 'conferencia_pa', skuPedidoKey: '14__MRARBS04'},
+      pa_26257_17_p3: {itemTipo: 'produto', opKey: '26257-17', saldoLote: 500, status: 'QUARENTENA', origemTipo: 'conferencia_pa', skuPedidoKey: '14__MRARBS04'},
       pa_26257_17_p2: {itemTipo: 'produto', opKey: '26257-17', saldoLote: 0, origemTipo: 'conferencia_pa', skuPedidoKey: '14__MRARBS04'}
     }},
     programacao: {
@@ -116,16 +117,20 @@ async function abrir(browser, pagina) {
     const barra = page.locator('tr', {hasText: '26257/17'}).locator('div[title*="Produto acabado"]').first();
     await barra.waitFor({timeout: 8000});
     // Só 1.500 un de PA conferido (palete com saldo): rotulagem completa não enche a barra.
-    await page.waitForFunction(() => /1\.500 \/ 4\.320 un/.test(document.querySelector('tr div[title*="Produto acabado"]').innerText), null, {timeout: 8000});
+    await page.waitForFunction(() => /2\.000 \/ 4\.320 un/.test(document.querySelector('tr div[title*="Produto acabado"]').innerText), null, {timeout: 8000});
     const linha = page.locator('tr', {hasText: '26257/17'});
     const texto = await linha.locator('div[title*="Produto acabado"]').first().innerText();
-    assert.match(texto, /1\.500 \/ 4\.320 un/);
-    assert.match(texto, /35%/);
+    assert.match(texto, /2\.000 \/ 4\.320 un/);
+    assert.match(texto, /46%/);
+    assert.match(texto, /1\.500 liberado/);
+    assert.match(texto, /500 na Qualidade/);
     assert.ok(!/Rotulagem/i.test(texto.replace(/PRODUTO ACABADO/i, '')), 'a barra não mostra mais rotulagem: ' + texto);
     const dica = await barra.getAttribute('title');
     assert.match(dica, /Envase: 3\.696 \/ 4\.320 un \(86%\)/);
     assert.match(dica, /Rotulagem: 4\.320 \/ 4\.320 un \(100%\)/);
-    assert.match(dica, /Produto acabado \(conferido\): 1\.500 \/ 4\.320 un \(35%\)/);
+    assert.match(dica, /Produto acabado \(conferido\): 2\.000 \/ 4\.320 un \(46%\)/);
+    assert.match(dica, /Liberado \(Qualidade\): 1\.500/);
+    assert.match(dica, /Aguardando a Qualidade: 500/);
     assert.match(dica, /Expedido: 0 \/ 4\.320 un/);
     if (process.env.PROG_SCREENSHOT) await page.screenshot({path: process.env.PROG_SCREENSHOT});
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
