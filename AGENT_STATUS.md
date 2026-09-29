@@ -127,6 +127,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Pipeline semanal da Qualidade (2026-09-29).** Aba
+  "Semana" em `qualidade_historico.html`: em aberto no início → entraram →
+  decididas → em aberto no fim, com Δ contra a semana anterior; clique na
+  barra do gráfico abre a semana. **Arquivos ativos:**
+  `public/qualidade_historico.html`, `public/shared/qualidade-historico.js`,
+  `run_qualidade_historico_test.js`, `run_qualidade_historico_ui_test.js`,
+  `public/manual_qualidade.html`.
+
 - **PUBLICADO — Histórico e indicadores da Qualidade (2026-09-29).**
   `qualidade_historico.html` (menu Qualidade › Histórico e Indicadores; página
   no módulo `qualidade`). Motor `shared/qualidade-historico.js` LÊ as decisões
