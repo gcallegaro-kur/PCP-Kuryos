@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — botão "Ajustar a grade" a partir do desvio (2026-09-29).**
+  Na Sequência, OP com desvio contra a grade de Quantidades ganha um botão
+  que acrescenta (ou libera) horas SÓ daquele pedido e empurra o que vem
+  depois na mesma linha até o primeiro horário vago, com prévia e
+  confirmação. Não liga o auto-ajuste pausado. **Arquivos ativos:**
+  `public/shared/ajuste-grade.js` (novo), `public/shared/sequencia-setor-tela.js`,
+  `public/planejamento.html`, `run_ajuste_grade_test.js` (novo),
+  `run_proximas_ordens_ui_test.js`, `public/manual_pcp.html`, `MELHORIAS_FUTURAS.md`.
+
 - **PUBLICADO — Sequência herda a grade de Quantidades + aviso de desvio
   (2026-09-29).** `sugestoesDaGrade` lê `programacao` (janela de 14 dias
   para trás): OP sem decisão do PCP e sem `linha` entra na linha do pedido
