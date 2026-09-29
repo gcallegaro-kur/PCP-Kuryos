@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Movimentar (WMS) (2026-09-29).** Tela própria, para o
+  celular, De onde → O quê → Para onde → Confirmar: posição, palete ou lote
+  por código digitado, leitor (teclado) ou câmera; palete inteiro, lote ou
+  parte; destino livre/ocupada/doca/bloqueada explícito; últimas
+  movimentações; etiquetas de endereço (Code39 + QR). **Arquivos ativos:**
+  `public/movimentar.html` (novo), `public/shared/movimentacao-wms.js` (novo),
+  `public/shared/movimentar-tela.js` (novo), `public/shared/utils.js`
+  (`separarParcialLoteEndereco`: origem configurável), `public/auth_check.js`,
+  `public/manual_logistica.html`, `run_movimentacao_wms_test.js`,
+  `run_movimentar_ui_test.js`.
+
 - **Publicado — Expedição de vendas em três telas (2026-09-29).** Commit
   `c80f48b`, Hosting por worktree novo do origin/main; 14 arquivos públicos
   idênticos (inclui qualidade/planejamento/relatório de pedido). Sem mudança
