@@ -12,7 +12,7 @@ const bulk = {e1: {ensaio: 'pH', especificacaoTexto: '5 a 7', metodo: 'PA01', va
   e2: {ensaio: 'Aspecto', especificacaoTexto: 'Límpido', cnc: 'C'}, e3: {ensaio: 'Odor', especificacaoTexto: 'Característico'}};
 const fqBulk = R.fqInicial(bulk, null);
 eq(fqBulk.map(l => [l.parametro, l.resultado, l.origem]), [
-  ['Aspecto', 'Conforme', 'bulk'], ['Cor', '', 'laudo'], ['Odor', '', 'laudo'], ['pH (25°C)', '6.1', 'bulk'], ['Densidade', '', 'laudo']],
+  ['Aspecto', 'Conforme', 'bulk'], ['Cor', '', 'laudo'], ['Odor', '', 'laudo'], ['pH (25°C)', '6,1', 'bulk'], ['Densidade', '', 'laudo']],
   'modelo oficial preenchido com o bulk; o que o bulk não mediu fica para o laudo');
 eq(fqBulk[3].especificacao, '5 a 7', 'especificação do bulk completa a linha sem especificação');
 const soDens = R.fqInicial({d: {ensaio: 'Densidade', valor: '0,9'}, x: {ensaio: 'Viscosidade', valor: '1200'}}, {a: {ensaio: 'PH', especificacaoTexto: '5 - 7'}});
@@ -22,6 +22,9 @@ const fqEspec = R.fqInicial(null, {a: {ensaio: 'Densidade', minimo: 0.8, maximo:
 eq(fqEspec, [{parametro: 'Densidade', especificacao: '0.8 a 0.9', metodo: 'Picnômetro', resultado: '', origem: 'laudo'}], 'especificação sem resultado');
 eq(R.fqInicial(null, null).map(l => l.parametro), ['Aspecto', 'Cor', 'Odor', 'pH (25°C)', 'Densidade'], 'modelo oficial');
 ok(R.fqInicial(null, null).every(l => l.resultado === ''), 'modelo não traz resultado');
+
+// 1b. NA da análise do granel sai "N/A".
+eq(R.fqInicial({t: {ensaio: 'Teor alcoólico', cnc: 'NA', na: true}}, null).find(l => l.parametro === 'Teor alcoólico').resultado, 'N/A', 'NA do bulk vira N/A');
 
 // 2. Micro: nasce sem resultado nenhum.
 const mi = R.microInicial();
@@ -54,7 +57,7 @@ eq(R.registro(cheio, {realizada: false, justificativa: 'Álcool'}).micro, {reali
 eq(L.MICRO_PADRAO.map(l => l.resultado), ['', '', '', ''], 'modelo impresso não afirma resultado');
 const base = {produto: 'P', lote: '1/1', pesos: [200], unidadePeso: 'g', pa: {}};
 let html = L.paginaProdutoAcabado(Object.assign({}, base, {fq: reg.fq, micro: {incluir: true, linhas: reg.micro.linhas, laboratorio: 'Lab X', laudoExterno: '88'}}));
-ok(/6\.1/.test(html) && /Característico/.test(html), 'FQ digitado impresso');
+ok(/6,1/.test(html) && /Característico/.test(html), 'FQ digitado impresso');
 ok(/Ausente/.test(html), 'micro digitada impressa');
 ok(/Laudo externo: Lab X · nº 88/.test(html), 'laboratório e número do laudo externo');
 html = L.paginaProdutoAcabado(Object.assign({}, base, {micro: {incluir: true}}));

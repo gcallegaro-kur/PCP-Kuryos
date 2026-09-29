@@ -11,7 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/inspecao-pa.js"></script>
-  <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script>
+  <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script><script src="shared/analise-granel.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
   <script src="shared/laudo-pa-resultados.js"></script>
@@ -129,6 +129,13 @@
     .plano-cnc{width:74px;padding:5px 4px;font-size:12px}
     .plano-res{width:26px;text-align:center;font-size:15px}
     .row-nc{background:var(--tint-red-bg)}
+    /* Análise do granel (29/09): faixa editável, só resultado, NA. */
+    .row-na td{opacity:.55}
+    .granel-cab td{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase}
+    .granel-faixa{display:flex;align-items:center;gap:4px}
+    .granel-faixa .plano-val{width:64px}
+    .granel-faixa span{font-size:11px;color:var(--muted)}
+    .granel-res{font-weight:700;border-color:var(--primary)}
     .rnc-det{background:var(--surface-2)}
     .rnc-det td{padding:0}
     .rnc-det-inner{padding:10px 18px 14px 34px;font-size:12px;line-height:1.6}
@@ -472,8 +479,9 @@
         <div class="plano-head"><span id="qGranelPlanoTitulo">Ensaios do granel</span><span id="qGranelPlanoResumo"></span></div>
         <div class="plano-scroll"><table class="plano-tabela"><tbody id="qGranelPlanoBody"></tbody></table></div>
       </div>
+      <div id="qGranelFaixaAviso" class="field-hint" style="display:none;margin:-6px 0 12px;color:var(--tint-orange-fg,#c2410c)"></div>
       <div id="qGranelSemPlano" class="field-hint" style="display:none;margin-bottom:12px">
-        Este produto não tem especificação cadastrada: aponte os seis ensaios e julgue cada um (C/NC). As faixas se cadastram na aba Especificações.
+        Este produto não tem especificação cadastrada: informe a faixa de pH, densidade e teor e digite o resultado; nos demais, marque C/NC. O que não se aplica, marque NA. As faixas informadas viram a especificação do produto.
       </div>
       <div class="form-group">
         <label>Observação</label>
@@ -1267,70 +1275,100 @@ function abrirLaudoGranel(opKey) {
   document.getElementById('modalGranelBg').classList.add('open');
 }
 
-/* Ensaio que se aponta como número (pH, densidade, teor alcoólico) mesmo
-   sem faixa cadastrada: a densidade do bulk vai para a pesagem do PA, e o
-   campo desabilitado impedia registrá-la (25/09). */
-function ensaioNumerico(nome) {
-  return /\bph\b|densidade|alco/i.test(String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-}
-/* Os seis ensaios físico-químicos do bulk (aspecto, cor, odor, pH,
-   densidade, teor alcoólico). Sem especificação cadastrada o analista
-   aponta os mesmos seis, julgando C/NC -- antes a tela não mostrava ensaio
-   nenhum e o bulk era liberado sem análise registrada. */
-function planoGranelPadrao() {
-  var itens = {};
-  SpecMaterial.PLANO_MP.forEach(function(p) { itens[p.chave] = {ensaio: p.ensaio, metodo: p.metodo, critico: false}; });
-  return itens;
-}
-function itensGranel() {
-  var itens = granelAtual && granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens;
-  return itens && Object.keys(itens).length ? itens : planoGranelPadrao();
-}
-
-function renderPlanoGranel() {
-  var itens = itensGranel();
-  var temEspec = !!(granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens &&
+function temEspecGranel() {
+  return !!(granelAtual && granelAtual.espec && granelAtual.espec.registro && granelAtual.espec.registro.itens &&
     Object.keys(granelAtual.espec.registro.itens).length);
+}
+/* Linhas da análise (shared/analise-granel.js): especificação do produto
+   ou, sem ela, os seis ensaios padrão. */
+function linhasGranel() {
+  return AnaliseGranel.linhas(temEspecGranel() ? granelAtual.espec.registro.itens : null, SpecMaterial.PLANO_MP);
+}
+function avaliacaoGranel() { return AnaliseGranel.avaliar(linhasGranel(), granelAtual.resultados); }
+
+/* Pedido do usuário (29/09): NA em todo ensaio; faixa de pH/teor/densidade
+   editável, vinda da especificação; no numérico, só o resultado -- o C/NC
+   sai da faixa. Digitar não redesenha a tabela (perderia o foco): só a
+   linha e o resumo. */
+function renderPlanoGranel() {
+  var temEspec = temEspecGranel();
   document.getElementById('qGranelSemPlano').style.display = temEspec ? 'none' : '';
-  var corpo = document.getElementById('qGranelPlanoBody');
-  var aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
   document.getElementById('qGranelPlanoTitulo').textContent = temEspec
     ? 'Ensaios do granel — ' + granelAtual.espec.key.replace('__v', ' · versão ')
     : 'Ensaios do granel — plano padrão (sem especificação cadastrada)';
+  var aval = avaliacaoGranel();
+  var corpo = document.getElementById('qGranelPlanoBody');
+  corpo.innerHTML = '<tr class="granel-cab"><td>Ensaio</td><td>Especificação</td><td>Resultado</td><td>NA</td><td></td></tr>' +
+    aval.linhas.map(function(l) {
+      var k = escapeAttr(l.key);
+      var dis = l.na ? ' disabled' : '';
+      var espec = l.numerico
+        ? '<div class="granel-faixa"><input type="text" inputmode="decimal" class="plano-val" data-granel-min="' + k + '" value="' + escapeAttr(l.minimoUsado == null ? '' : String(l.minimoUsado).replace('.', ',')) + '" placeholder="mín"' + dis + '>' +
+          '<span>a</span><input type="text" inputmode="decimal" class="plano-val" data-granel-max="' + k + '" value="' + escapeAttr(l.maximoUsado == null ? '' : String(l.maximoUsado).replace('.', ',')) + '" placeholder="máx"' + dis + '></div>'
+        : '<span class="plano-espec">' + escapeHtml(l.especificacaoTexto || 'Conforme padrão') + '</span>';
+      var resultado = l.numerico
+        ? '<input type="text" inputmode="decimal" class="plano-val granel-res" data-granel-valor="' + k + '" value="' + escapeAttr(l.valor == null ? '' : String(l.valor).replace('.', ',')) + '" placeholder="resultado"' + dis + '>'
+        : '<select class="plano-cnc" data-granel-cnc="' + k + '"' + dis + '>' +
+            '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
+            '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
+            '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option></select>';
+      return '<tr data-granel-linha="' + k + '"' + (l.conforme === false ? ' class="row-nc"' : l.na ? ' class="row-na"' : '') + '>' +
+        '<td><span class="plano-ensaio">' + escapeHtml(l.ensaio || '—') + '</span>' +
+          (l.critico ? ' <span class="badge badge-red">crítico</span>' : '') +
+          (l.metodo ? '<div class="plano-espec">' + escapeHtml(l.metodo) + '</div>' : '') + '</td>' +
+        '<td>' + espec + '</td><td>' + resultado + '</td>' +
+        '<td><input type="checkbox" data-granel-na="' + k + '"' + (l.na ? ' checked' : '') + ' title="Não se aplica"></td>' +
+        '<td class="plano-res" data-granel-status="' + k + '">' + iconeGranel(l) + '</td></tr>';
+    }).join('');
+  var guardar = function(k, campo, v) {
+    granelAtual.resultados[k] = granelAtual.resultados[k] || {};
+    granelAtual.resultados[k][campo] = v;
+  };
+  corpo.querySelectorAll('[data-granel-valor],[data-granel-min],[data-granel-max]').forEach(function(inp) {
+    var campo = inp.hasAttribute('data-granel-valor') ? 'valor' : inp.hasAttribute('data-granel-min') ? 'minimo' : 'maximo';
+    var k = inp.getAttribute('data-granel-' + (campo === 'valor' ? 'valor' : campo === 'minimo' ? 'min' : 'max'));
+    inp.addEventListener('input', function() { guardar(k, campo, inp.value); atualizarLinhasGranel(); });
+    inp.addEventListener('change', function() { guardar(k, campo, inp.value); atualizarLinhasGranel(); });
+  });
+  corpo.querySelectorAll('[data-granel-cnc]').forEach(function(sel) {
+    sel.addEventListener('change', function() { guardar(sel.getAttribute('data-granel-cnc'), 'cnc', sel.value); atualizarLinhasGranel(); });
+  });
+  // Marcar/desmarcar NA muda o que a linha aceita: aí sim redesenha.
+  corpo.querySelectorAll('[data-granel-na]').forEach(function(cb) {
+    cb.addEventListener('change', function() { guardar(cb.getAttribute('data-granel-na'), 'na', cb.checked); renderPlanoGranel(); });
+  });
+  atualizarLinhasGranel();
+}
+function iconeGranel(l) {
+  var t = escapeAttr(l.motivo || '');
+  return l.na ? '<span class="badge badge-gray" title="' + t + '">NA</span>'
+    : l.conforme === true ? '<span style="color:var(--success)" title="' + t + '">✓</span>'
+    : l.conforme === false ? '<span style="color:var(--danger)" title="' + t + '">✕</span>'
+    : '<span style="color:var(--muted)" title="' + t + '">·</span>';
+}
+function atualizarLinhasGranel() {
+  var aval = avaliacaoGranel();
+  aval.linhas.forEach(function(l) {
+    var tr = document.querySelector('#qGranelPlanoBody [data-granel-linha="' + CSS.escape(l.key) + '"]');
+    if (!tr) return;
+    tr.classList.toggle('row-nc', l.conforme === false);
+    tr.classList.toggle('row-na', !!l.na);
+    tr.querySelector('[data-granel-status]').innerHTML = iconeGranel(l);
+  });
   document.getElementById('qGranelPlanoResumo').innerHTML =
     '<span class="badge badge-green">' + aval.conformes + ' C</span> ' +
     '<span class="badge ' + (aval.naoConformes ? 'badge-red' : 'badge-gray') + '">' + aval.naoConformes + ' NC</span> ' +
+    '<span class="badge badge-gray">' + aval.na + ' NA</span> ' +
     '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>';
-  corpo.innerHTML = aval.linhas.map(function(l) {
-    var icone = l.conforme === true ? '<span style="color:var(--success)">✓</span>'
-      : l.conforme === false ? '<span style="color:var(--danger)">✕</span>' : '<span style="color:var(--muted)">·</span>';
-    return '<tr' + (l.conforme === false ? ' class="row-nc"' : '') + '>' +
-      '<td><span class="plano-ensaio">' + escapeHtml(l.ensaio || '—') + '</span>' +
-        (l.critico ? ' <span class="badge badge-red">crítico</span>' : '') +
-        '<div class="plano-espec">' + escapeHtml(l.especificacaoTexto || '') + (l.metodo ? ' · ' + escapeHtml(l.metodo) : '') + '</div></td>' +
-      '<td><input type="number" step="any" class="plano-val" data-granel-valor="' + escapeAttr(l.itemKey) + '" value="' + escapeAttr(l.valor == null ? '' : l.valor) + '"' + (ensaioNumerico(l.ensaio) || l.faixa ? '' : ' disabled') + '></td>' +
-      '<td><select class="plano-cnc" data-granel-cnc="' + escapeAttr(l.itemKey) + '">' +
-        '<option value=""' + (!l.cnc ? ' selected' : '') + '>—</option>' +
-        '<option value="C"' + (l.cnc === 'C' ? ' selected' : '') + '>C</option>' +
-        '<option value="NC"' + (l.cnc === 'NC' ? ' selected' : '') + '>NC</option>' +
-      '</select></td><td class="plano-res">' + icone + '</td></tr>';
-  }).join('');
-  corpo.querySelectorAll('[data-granel-valor]').forEach(function(inp) {
-    inp.addEventListener('change', function() {
-      var k = inp.getAttribute('data-granel-valor');
-      granelAtual.resultados[k] = granelAtual.resultados[k] || {};
-      granelAtual.resultados[k].valor = inp.value;
-      renderPlanoGranel();
-    });
-  });
-  corpo.querySelectorAll('[data-granel-cnc]').forEach(function(sel) {
-    sel.addEventListener('change', function() {
-      var k = sel.getAttribute('data-granel-cnc');
-      granelAtual.resultados[k] = granelAtual.resultados[k] || {};
-      granelAtual.resultados[k].cnc = sel.value;
-      renderPlanoGranel();
-    });
-  });
+  var aviso = document.getElementById('qGranelFaixaAviso');
+  var msgs = [];
+  if (aval.faixasAlteradas.length) {
+    msgs.push(temEspecGranel()
+      ? 'Faixa diferente da especificação em: ' + aval.faixasAlteradas.join(', ') + '. Vale só para este lote e fica registrada na análise.'
+      : 'Este produto não tem especificação: as faixas informadas viram a especificação v1 dele ao registrar a análise.');
+  }
+  aviso.style.display = msgs.length ? '' : 'none';
+  aviso.textContent = msgs.join(' ');
 }
 
 function fecharModalGranel() {
@@ -1347,18 +1385,13 @@ function decidirGranel(decisao) {
     showAlert('Descreva o motivo — ele vira a descrição da não conformidade.', 'danger');
     return;
   }
-  var itens = itensGranel();
-  var ensaios = null, aval = null;
-  if (itens && Object.keys(itens).length) {
-    aval = avaliarPlanoInspecao(itens, granelAtual.resultados);
-    ensaios = {};
-    aval.linhas.forEach(function(l) {
-      ensaios[l.itemKey] = {ensaio: l.ensaio, especificacaoTexto: l.especificacaoTexto || null, metodo: l.metodo || null,
-        critico: l.critico, faixa: l.faixa || null, valor: l.valor != null ? l.valor : null, cnc: l.cnc || null, conforme: l.conforme};
-    });
-  }
-  if (decisao === 'LIBERAR' && aval && aval.bloqueia &&
+  var aval = avaliacaoGranel();
+  var ensaios = AnaliseGranel.registro(aval);
+  if (decisao === 'LIBERAR' && aval.bloqueia &&
       !confirm('⚠ Há ensaio CRÍTICO fora da especificação neste granel.\n\nLiberar assim mesmo?')) return;
+  if (decisao === 'LIBERAR' && aval.pendentes &&
+      !confirm(aval.pendentes + ' ensaio(s) sem resultado: ' + aval.linhas.filter(function(l) { return l.status === 'PENDENTE'; })
+        .map(function(l) { return l.ensaio; }).join(', ') + '.\n\nSe não se aplicam, marque NA. Liberar assim mesmo?')) return;
   // A densidade do bulk converte o peso do envase de produto em ml
   // (Portaria INMETRO 249/2021). Sem ela a Qualidade terá de medir no laudo
   // de cada palete.
@@ -1371,6 +1404,17 @@ function decidirGranel(decisao) {
   t['analise/observacao'] = obs || null;
   var u = {};
   Object.keys(t).forEach(function(k) { u['ops/' + granelAtual.opKey + '/manipulacao/' + k] = t[k]; });
+  // Produto sem especificação: as faixas desta análise viram a v1 dele
+  // (mesma decisão da MP: o cadastro acontece na análise).
+  var specNova = null;
+  if (!temEspecGranel() && !especificacaoVigente(allEspecificacoes, granelAtual.op.sku)) {
+    specNova = AnaliseGranel.especificacaoDaAnalise(sanitizeKey(granelAtual.op.sku), aval,
+      {agora: new Date().toISOString(), por: currentUserNome(), lote: granelAtual.op.lote || null});
+    if (specNova) {
+      Object.assign(u, specNova.updates);
+      u['ops/' + granelAtual.opKey + '/manipulacao/analise/especificacaoKey'] = specNova.chave;
+    }
+  }
   var op = granelAtual.op;
   var rncCorrecao = Manipulacao.ehCorrecao(op.manipulacao) ? ((op.manipulacao.correcao || {}).rncNumero || null) : null;
   db.ref().update(u).then(function() {

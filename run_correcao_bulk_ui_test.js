@@ -385,6 +385,14 @@ const fase = (page) => page.evaluate((k) => window.__db.ops[k].manipulacao, OP);
     const plano = await q2.page.locator('#qGranelPlanoBody').innerText();
     ['Aspecto físico', 'Cor', 'Odor', 'pH', 'Densidade', 'Teor alcoólico'].forEach((e) => assert.match(plano, new RegExp(e)));
     assert.equal(await q2.page.locator('#qGranelSemPlano').isVisible(), true);
+    // Sem especificação (29/09): a faixa digitada aqui vira a v1 do produto;
+    // teor alcoólico não se aplica -> NA.
+    await q2.page.fill('[data-granel-min="ph"]', '5');
+    await q2.page.fill('[data-granel-max="ph"]', '7');
+    await q2.page.fill('[data-granel-valor="ph"]', '6,2');
+    await q2.page.check('[data-granel-na="teor_alcoolico"]');
+    await q2.page.waitForFunction(() => /viram a especificação v1/.test(document.getElementById('qGranelFaixaAviso').innerText));
+    if (process.env.GRANEL_SHOT) await q2.page.locator('#modalGranelBg .modal').screenshot({path: process.env.GRANEL_SHOT});
     const avisosQ2 = [];
     q2.page.on('dialog', (d) => avisosQ2.push(d.message()));
     await q2.page.click('#qGranelLiberar');
@@ -393,6 +401,14 @@ const fase = (page) => page.evaluate((k) => window.__db.ops[k].manipulacao, OP);
     assert.equal(Object.keys(db.nao_conformidades).length, 1, 'liberar não abre RNC');
     assert.ok(avisosQ2.some((m) => /densidade do bulk não foi apontada/.test(m)), 'liberar sem densidade avisa');
     assert.deepEqual(Object.keys(db.ops[OP].manipulacao.analise.ensaios).sort(), ['aspecto', 'cor', 'densidade', 'odor', 'ph', 'teor_alcoolico']);
+    assert.ok(avisosQ2.some((m) => /ensaio\(s\) sem resultado/.test(m)), 'liberar com ensaio pendente pergunta');
+    const an = db.ops[OP].manipulacao.analise;
+    assert.deepEqual([an.ensaios.ph.valor, an.ensaios.ph.cnc, an.ensaios.teor_alcoolico.cnc], [6.2, 'C', 'NA']);
+    const v1 = db.especificacoes && db.especificacoes['MRARBS04__v1'];
+    assert.ok(v1, 'produto sem especificação ganhou a v1 a partir da análise');
+    assert.deepEqual([v1.itens.ph.minimo, v1.itens.ph.maximo, v1.itens.teor_alcoolico.aplicavel], [5, 7, false]);
+    assert.equal(v1.origem, 'ANALISE_GRANEL');
+    assert.equal(an.especificacaoKey, 'MRARBS04__v1');
     await q2.page.close();
 
     // ── Envase liberado; dossiê com os dois ciclos ──────────────────────

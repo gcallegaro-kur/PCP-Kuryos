@@ -473,12 +473,27 @@ async function campo(page, seletor, valor) {
     assert.match(ensaios, /ASPECTO/, 'a análise de granel usa a especificação do produto');
     assert.match(ensaios, /PH/);
     await cq.page.selectOption('[data-granel-cnc="e1"]', 'C');
+    // Numérico (29/09): faixa da especificação já no campo, editável; só o
+    // resultado é digitado e o C/NC sai da faixa -- sem seletor C/NC.
+    assert.equal(await cq.page.inputValue('[data-granel-min="e2"]'), '5', 'faixa do pH vem da especificação');
+    assert.equal(await cq.page.inputValue('[data-granel-max="e2"]'), '7');
+    assert.equal(await cq.page.locator('[data-granel-cnc="e2"]').count(), 0, 'numérico não tem C/NC manual');
+    await cq.page.fill('[data-granel-valor="e2"]', '7,5');
+    await cq.page.waitForFunction(() => document.querySelector('[data-granel-linha="e2"]').classList.contains('row-nc'));
     await cq.page.fill('[data-granel-valor="e2"]', '6');
-    await cq.page.locator('[data-granel-valor="e2"]').dispatchEvent('change');
+    await cq.page.waitForFunction(() => !document.querySelector('[data-granel-linha="e2"]').classList.contains('row-nc'));
     assert.equal(await cq.page.locator('[data-granel-valor="e3"]').isEnabled(), true, 'densidade apontável mesmo sem faixa');
-    await cq.page.fill('[data-granel-valor="e3"]', '0.872');
-    await cq.page.locator('[data-granel-valor="e3"]').dispatchEvent('change');
-    await cq.page.selectOption('[data-granel-cnc="e3"]', 'C');
+    await cq.page.fill('[data-granel-valor="e3"]', '0,872');
+    await cq.page.waitForFunction(() => /Informe a faixa/.test(document.querySelector('[data-granel-status="e3"] span').title));
+    await cq.page.fill('[data-granel-min="e3"]', '0,85');
+    await cq.page.fill('[data-granel-max="e3"]', '0,95');
+    await cq.page.waitForFunction(() => /Faixa diferente da especificação em: DENSIDADE/i.test(document.getElementById('qGranelFaixaAviso').innerText));
+    // NA: marca e desmarca -- o campo trava e volta.
+    await cq.page.check('[data-granel-na="e1"]');
+    await cq.page.waitForFunction(() => document.querySelector('[data-granel-cnc="e1"]').disabled);
+    assert.match(await cq.page.locator('#qGranelPlanoResumo').innerText(), /1 NA/);
+    await cq.page.uncheck('[data-granel-na="e1"]');
+    await cq.page.selectOption('[data-granel-cnc="e1"]', 'C');
     const avisosCq = [];
     cq.page.on('dialog', (d) => avisosCq.push(d.message()));
     await cq.page.click('#qGranelLiberar');
@@ -487,6 +502,10 @@ async function campo(page, seletor, valor) {
     assert.equal(dbCq.ops['26260-01'].manipulacao.analise.por, 'Daiene');
     assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e2.valor), '6');
     assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e3.valor), '0.872', 'densidade do bulk gravada para a pesagem do PA');
+    const e3 = dbCq.ops['26260-01'].manipulacao.analise.ensaios.e3;
+    assert.deepEqual([e3.minimo, e3.maximo, e3.faixaAlterada, e3.cnc], [0.85, 0.95, true, 'C'], 'faixa usada e alteração registradas');
+    assert.equal(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e1.na, false);
+    assert.equal(Object.keys(dbCq.especificacoes).length, 1, 'produto COM especificação: a faixa do lote não reescreve o cadastro');
     assert.ok(!avisosCq.some((m) => /densidade do bulk não foi apontada/.test(m)), 'com densidade, não pergunta');
     assert.deepEqual(cq.errors, [], 'erros na tela da Qualidade: ' + cq.errors.join(' | '));
     await cq.page.close();

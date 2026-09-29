@@ -60,7 +60,8 @@
     return null; // texto livre: quem julga é a analista
   }
 
-  function cnc(c) { return c === 'C' ? 'Conforme' : c === 'NC' ? 'Não conforme' : ''; }
+  // 'NA' vem da análise do granel (29/09): ensaio que não se aplica.
+  function cnc(c) { return c === 'C' ? 'Conforme' : c === 'NC' ? 'Não conforme' : c === 'NA' ? 'N/A' : ''; }
 
   // "pH (25°C)", "PH" e "ph" são o mesmo parâmetro.
   function chave(nome) {
@@ -90,7 +91,8 @@
     var bulk = ensaiosBulk || {};
     Object.keys(bulk).forEach(function(k) {
       var e = bulk[k] || {};
-      var valor = e.valor != null && e.valor !== '' ? String(e.valor) : cnc(e.cnc);
+      // Número gravado pela análise do granel sai com vírgula no laudo.
+      var valor = e.valor != null && e.valor !== '' ? (typeof e.valor === 'number' ? String(e.valor).replace('.', ',') : String(e.valor)) : cnc(e.cnc);
       var alvo = linhas.find(function(l) { return chave(l.parametro) === chave(e.ensaio); });
       if (!alvo) {
         alvo = {parametro: texto(e.ensaio), especificacao: '', metodo: '', resultado: '', origem: 'laudo'};
