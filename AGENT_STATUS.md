@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — OP concluída com bulk aberto sumia da Manipulação
+  (2026-09-29).** Caso 26267/01: OP encerrada com a manipulação em
+  EM_MANIPULACAO; `manipulacao.html` esconde OP Concluída, ninguém fecha a
+  manipulação e o bulk nunca chega à Qualidade. **Arquivos ativos:**
+  `public/manipulacao.html`, `run_manipulacao_ui_test.js`.
+
 - **Publicado — Movimentar (WMS) + etiquetas que leem (2026-09-29).** Commit
   `c071a09`, Hosting por worktree novo do origin/main; arquivos idênticos
   (inclui cargas/faturamento/qualidade). `movimentar.html` (De onde → O quê →
