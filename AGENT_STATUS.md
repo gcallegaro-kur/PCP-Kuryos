@@ -127,6 +127,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — Rotulagem como área própria no apontamento (2026-09-29).**
+  Commit `20e09b9`, Hosting + Functions `onTurnoEncerrado` e
+  `checkNotificacoes` por worktree novo; arquivos públicos idênticos ao commit.
+  Abas Envase/Rotulagem no Painel de Turno para quem tem os dois setores
+  (`localStorage apontamento.setorVisao`); textos da rotulagem; parada na
+  rotuladora pelo mesmo `estado_linhas`/`paradas_historico`, agora com `setor`
+  (`linha`|`rotulagem`). Envase ignora parada de rotuladora: ritmo em
+  `ops.html` e disponibilidade do e-mail de turno. Encerrar turno marca a
+  rotuladora "Fim de turno". Cabeçalho do `form.html` abre espaço para o botão
+  de menu no celular. Teste: `run_operacao_ui_test.js` (bloco 5b).
+  Arquivos ativos: nenhum.
+
 - **Publicado — modal do apontamento cabe no celular (2026-09-29).** Commit
   `a16b747`, Hosting por worktree novo; `form.html` idêntico ao commit. Com a
   perda item a item o Encerrar OP passava da tela e o botão ficava fora (sem
