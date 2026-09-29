@@ -134,7 +134,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   horário dele -- só sugestão, a decisão do PCP e a linha da OP vencem.
   Desvio (`desvioHoras`, ≥ 1 h) contra `dataFimPlanejada` da OP ou o fim do
   pedido na grade; mostrado só ao PCP. Tolerância de 1 min no fim de cada
-  hora (segundos de sobra jogavam o término para depois da pausa). Só
+  hora (segundos de sobra jogavam o término para depois da pausa). Commit `65a46ef`, só
   Hosting. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Sequência por setor e Próximas Ordens (2026-09-29).**
