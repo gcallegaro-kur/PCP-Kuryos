@@ -196,6 +196,15 @@ const responder = (page, valor) => page.evaluate((v) => {
     const {page, errors, dialogos} = await abrir(browser);
 
     // ── 1. A fila marca o palete com CK-7 ────────────────────────────────
+    // ── 0. Uma fila por tipo de análise (29/09) ──────────────────────────
+    // Sem escolha lembrada, abre no primeiro tipo com pendência (matéria-prima).
+    await page.waitForSelector('[data-tipo-fila="mp"].on');
+    const abas = await page.locator('#qTipos').innerText();
+    assert.match(abas, /Matéria-prima\s*2[\s\S]*Embalagem\s*1[\s\S]*Bulk\s*0[\s\S]*Produto acabado\s*1[\s\S]*Ver tudo\s*4/);
+    assert.equal(await page.locator('#qFilaBody tr', {hasText: 'MRARBS04'}).count(), 0, 'palete não polui a fila de MP');
+    await page.waitForFunction(() => /\(2\)/.test(document.getElementById('qFilaTitulo').textContent));
+    assert.match(await page.locator('#qFilaTitulo').textContent(), /Matéria-prima \(2\)/);
+    await page.click('[data-tipo-fila="pa"]');
     const linhaPa = page.locator('#qFilaBody tr', {hasText: 'MRARBS04'});
     await linhaPa.waitFor({timeout: 8000});
     assert.match(await linhaPa.innerText(), /CK-7/);
@@ -419,6 +428,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     assert.equal(db.config.responsaveisCq[0].registro, 'CRQ 04413184');
 
     // ── 7. Material continua com o plano de ensaios de sempre ────────────
+    await page.click('[data-tipo-fila="mp"]');
     const linhaMp = page.locator('#qFilaBody tr', {hasText: 'MP-0001'});
     await linhaMp.locator('button[data-laudo-lote]').click();
     await page.waitForSelector('#qPlanoBox');
@@ -473,6 +483,7 @@ const responder = (page, valor) => page.evaluate((v) => {
     // Pedido do usuário em 21/09: direcionar pela categoria do SKU. Frasco
     // é EP no cadastro, então abre o formulário de embalagem, não o de MP.
     // O modal já fechou sozinho ao liberar a MP acima.
+    await page.click('[data-tipo-fila="embalagem"]');
     const linhaEmb = page.locator('#qFilaBody tr', {hasText: 'EP-00106'});
     await linhaEmb.locator('button[data-laudo-lote]').click();
     await page.waitForSelector('#qEmbBox');
@@ -560,6 +571,9 @@ const responder = (page, valor) => page.evaluate((v) => {
     // A MP sem spec abre o laudo com a porta ABERTA, não com a mensagem
     // morta que mandava para Cadastros (que só aceita produto).
     await page.evaluate(() => { allEstoqueLotes = window.__db.estoque_lotes; renderFila(); });
+    // "Ver tudo": opção da analista, lembrada na volta.
+    await page.click('[data-tipo-fila="tudo"]');
+    assert.equal(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('qualidade.tipoFila.')).map((k) => localStorage.getItem(k))[0]), 'tudo');
     await page.locator('#qFilaBody tr', {hasText: 'MP-0002'}).locator('button[data-laudo-lote]').click();
     await page.waitForSelector('#modalLaudoBg.open');
     assert.match(await page.locator('#modalLaudoTitle').innerText(), /Análise de matéria-prima/);

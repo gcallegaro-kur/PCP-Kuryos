@@ -127,11 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Qualidade: fila separada por tipo de análise (2026-09-29).**
-  Abas Matéria-prima / Embalagem / Bulk / Produto acabado com contador; "Ver
-  tudo" consolidado como opção lembrada por usuário. Depois: histórico +
-  dashboard da Qualidade e da Manipulação. **Arquivos ativos:**
-  `public/qualidade.html`, `run_qualidade_fila_tipos_ui_test.js` (novo).
+- **COMMITADO, DEPLOY PENDENTE — Qualidade: fila separada por tipo de análise
+  (2026-09-29).** `qualidade.html`, aba Fila: abas Matéria-prima / Embalagem /
+  Bulk / Produto acabado com contador (tipo por `roteiroDoLote`; bulk = granel
+  aguardando análise + reprovado aguardando correção); "Ver tudo" consolidado
+  é opção, lembrada em localStorage por uid. Sem escolha, abre no primeiro
+  tipo com pendência; `?tipo=` na URL também. Laudos recentes filtram pelo
+  tipo. A fila redesenha quando `materiais` carrega (antes a embalagem contava
+  como MP até algum outro dado chegar). Testes: `run_inspecao_pa_ui_test.js`
+  (abas, contagens, lembrança) + testes que abrem a Qualidade. Próximos:
+  histórico + dashboard da Qualidade, depois da Manipulação.
+  Arquivos ativos: nenhum.
 
 - **COMMITADO, DEPLOY PENDENTE — edição no Histórico falhava com "set"
   (2026-09-29).** `historico.html`: ajustes do total da OP (transactions) e

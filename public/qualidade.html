@@ -68,6 +68,15 @@
     .badge-purple{background:var(--tint-purple-bg);color:var(--purple)}
     .badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
     .stats{display:flex;gap:10px;max-width:96%;margin:0 auto 14px;flex-wrap:wrap}
+    /* Fila por tipo de análise (29/09) */
+    .q-tipos{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+    .q-tipo{padding:9px 14px;border-radius:22px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:13.5px;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;gap:8px}
+    .q-tipo.on{background:var(--primary);border-color:var(--primary);color:#fff}
+    .q-tipo .q-n{min-width:22px;padding:1px 7px;border-radius:12px;font-size:12px;background:var(--tint-gray-bg);color:var(--muted);text-align:center}
+    .q-tipo.on .q-n{background:rgba(255,255,255,.22);color:#fff}
+    .q-tipo .q-n.tem{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .q-tipo.on .q-n.tem{background:#fff;color:var(--primary)}
+    .q-tipo.tudo{border-style:dashed}
     .stat{background:var(--card);border-radius:12px;padding:10px 16px;box-shadow:var(--shadow);min-width:120px}
     .stat-val{font-size:20px;font-weight:700}
     .stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
@@ -185,6 +194,12 @@
       <div class="stat"><div class="stat-val" id="qStatRncAbertas" style="color:var(--danger)">—</div><div class="stat-lbl">RNCs abertas</div></div>
     </div>
 
+    <!-- Uma fila por tipo de análise (29/09): pedido do usuário, "para não
+         poluir tudo em um único lugar". Ver tudo junto é opção da analista,
+         lembrada no aparelho, não o padrão. -->
+    <div class="q-tipos" id="qTipos"></div>
+    <div class="section-note" id="qTipoVazio" style="display:none"></div>
+
     <!-- Granel: a análise que antes aparecia (errada) no palete. Ela pertence
          à fase de manipulação do lote, antes do envase. -->
     <div class="card" id="qCardGranel" style="display:none;border-left-color:var(--purple)">
@@ -211,14 +226,9 @@
       </table></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="qCardFila">
       <div class="card-header">
         <h3 id="qFilaTitulo">Aguardando liberação</h3>
-        <select class="kt-select" id="qFiltroTipo">
-          <option value="">Material e produto acabado</option>
-          <option value="material">Só material</option>
-          <option value="produto">Só produto acabado</option>
-        </select>
       </div>
       <div class="table-wrap">
         <table>
@@ -1041,7 +1051,9 @@ dbOnValue(db.ref('especificacoes'), function(snap) {
   renderEspecificacoes();
 });
 dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; renderEspecificacoes(); });
-dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; renderEspecificacoes(); });
+// O tipo de cada lote na fila (matéria-prima x embalagem) vem do cadastro de
+// materiais: a fila se redesenha quando ele chega.
+dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; renderEspecificacoes(); renderFila(); });
 dbOnValue(db.ref('fornecedores'), function(snap) {
   allFornecedores = snap.val() || {};
   var sel = document.getElementById('rncFornecedor');
@@ -1075,12 +1087,83 @@ var granelAtual = null; // {opKey, op, espec, resultados}
 dbOnValue(db.ref('ops'), function(snap) { allOpsQualidade = snap.val() || {}; renderFilaGranel(); renderFilaCorrecao(); });
 dbOnValue(db.ref('parametros_pa'), function(snap) { allParametrosPa = snap.val() || {}; });
 
+/* ── Fila por tipo de análise (29/09) ──
+   Matéria-prima, Embalagem, Bulk e Produto acabado, cada um na sua aba; "Ver
+   tudo" junta os quatro -- opção da analista, lembrada neste aparelho por
+   usuário. Sem escolha lembrada, abre no primeiro tipo com pendência. */
+var TIPOS_FILA = [
+  {k: 'mp', rot: 'Matéria-prima'}, {k: 'embalagem', rot: 'Embalagem'},
+  {k: 'bulk', rot: 'Bulk'}, {k: 'pa', rot: 'Produto acabado'}
+];
+var tipoFila = null;
+function tipoFilaDoLote(itemTipo, itemCodigo) {
+  var r = roteiroDoLote(itemTipo || 'material', itemCodigo);
+  return r === 'PA' ? 'pa' : r === 'EMBALAGEM' ? 'embalagem' : 'mp';
+}
+function chaveTipoFila() {
+  var au = firebase.auth().currentUser;
+  return 'qualidade.tipoFila.' + ((au && au.uid) || '');
+}
+function lerTipoFilaLembrado() {
+  try { return localStorage.getItem(chaveTipoFila()); } catch (e) { return null; }
+}
+function lembrarTipoFila(k) {
+  try { localStorage.setItem(chaveTipoFila(), k); } catch (e) { /* aba anônima: segue sem lembrar */ }
+}
+function contagemPorTipo() {
+  var c = {mp: 0, embalagem: 0, bulk: 0, pa: 0};
+  lotesAguardandoQualidade(allEstoqueLotes).forEach(function(f) { c[tipoFilaDoLote(f.itemTipo, f.itemCodigo)]++; });
+  c.bulk = opsGranelPendentes().length + opsBulkReprovado().length;
+  return c;
+}
+function tipoFilaAtual() {
+  if (tipoFila) return tipoFila;
+  var validos = TIPOS_FILA.map(function(t) { return t.k; }).concat(['tudo']);
+  var pedido = new URLSearchParams(location.search).get('tipo');
+  var lembrado = lerTipoFilaLembrado();
+  if (validos.indexOf(pedido) >= 0) return (tipoFila = pedido);
+  if (validos.indexOf(lembrado) >= 0) return (tipoFila = lembrado);
+  // Sem escolha: primeiro tipo com pendência. Não trava enquanto os dados
+  // chegam -- só fixa quando já há algo pendente.
+  var c = contagemPorTipo();
+  var comPendencia = TIPOS_FILA.filter(function(t) { return c[t.k] > 0; })[0];
+  if (comPendencia) return (tipoFila = comPendencia.k);
+  return 'mp';
+}
+function bulkVisivelNaFila() { var t = tipoFilaAtual(); return t === 'bulk' || t === 'tudo'; }
+function renderTiposFila() {
+  var box = document.getElementById('qTipos');
+  if (!box) return;
+  var atual = tipoFilaAtual(), c = contagemPorTipo();
+  var total = c.mp + c.embalagem + c.bulk + c.pa;
+  box.innerHTML = TIPOS_FILA.map(function(t) {
+    return '<button type="button" class="q-tipo' + (atual === t.k ? ' on' : '') + '" data-tipo-fila="' + t.k + '">' + escapeHtml(t.rot) +
+      ' <span class="q-n' + (c[t.k] ? ' tem' : '') + '">' + c[t.k] + '</span></button>';
+  }).join('') +
+    '<button type="button" class="q-tipo tudo' + (atual === 'tudo' ? ' on' : '') + '" data-tipo-fila="tudo" title="Todas as análises numa lista só">Ver tudo <span class="q-n">' + total + '</span></button>';
+  box.querySelectorAll('[data-tipo-fila]').forEach(function(b) {
+    b.onclick = function() {
+      tipoFila = b.getAttribute('data-tipo-fila');
+      lembrarTipoFila(tipoFila);
+      renderFila(); renderFilaGranel(); renderFilaCorrecao();
+    };
+  });
+  // Bulk tem os dois cards próprios; os demais tipos, a tabela de lotes.
+  document.getElementById('qCardFila').style.display = atual === 'bulk' ? 'none' : '';
+  var vazio = document.getElementById('qTipoVazio');
+  if (atual === 'bulk' && !c.bulk) {
+    vazio.style.display = '';
+    vazio.textContent = 'Nenhum bulk aguardando análise. O bulk chega aqui quando a Manipulação clica em "Fechar manipulação".';
+  } else vazio.style.display = 'none';
+}
+
 function renderFila() {
   var tbody = document.getElementById('qFilaBody');
   if (!tbody) return;
-  var filtroTipo = document.getElementById('qFiltroTipo').value;
+  var tipoAtual = tipoFilaAtual();
+  renderTiposFila();
   var fila = lotesAguardandoQualidade(allEstoqueLotes).filter(function(f) {
-    return !filtroTipo || (f.itemTipo || 'material') === filtroTipo;
+    return tipoAtual === 'tudo' || tipoFilaDoLote(f.itemTipo, f.itemCodigo) === tipoAtual;
   });
 
   var esperaMax = 0;
@@ -1111,7 +1194,8 @@ function renderFila() {
   document.getElementById('qStatLiberados').textContent = fmtNum(lib);
   document.getElementById('qStatReprovados').textContent = fmtNum(rep);
   document.getElementById('qStatRncAbertas').textContent = fmtNum(rncAbertas);
-  document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação (' + fila.length + ')';
+  var rotTipo = (TIPOS_FILA.filter(function(t) { return t.k === tipoAtual; })[0] || {}).rot;
+  document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação' + (rotTipo ? ' — ' + rotTipo : '') + ' (' + fila.length + ')';
 
   if (!fila.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
@@ -1159,7 +1243,10 @@ function renderFila() {
     });
   }
 
-  // Laudos recentes -- mais novos primeiro, 25 últimos
+  // Laudos recentes -- mais novos primeiro, 25 últimos, do tipo da aba.
+  if (tipoAtual !== 'tudo') recentes = recentes.filter(function(x) {
+    return tipoFilaDoLote(x.lote.itemTipo, x.lote.itemCodigo) === tipoAtual;
+  });
   recentes.sort(function(a, b) {
     return (b.lote.qualidade.inspecionadoEm || '') < (a.lote.qualidade.inspecionadoEm || '') ? -1 : 1;
   });
@@ -1209,7 +1296,7 @@ function renderFila() {
     });
   }
 }
-document.getElementById('qFiltroTipo').addEventListener('change', renderFila);
+// (o antigo seletor "Material / Produto acabado" virou as abas por tipo, 29/09)
 
 /* ─────────── Granel (fase de manipulação do lote) ─────────── */
 function opsGranelPendentes() {
@@ -1221,7 +1308,8 @@ function opsGranelPendentes() {
 
 function renderFilaGranel() {
   var lista = opsGranelPendentes();
-  document.getElementById('qCardGranel').style.display = lista.length ? '' : 'none';
+  document.getElementById('qCardGranel').style.display = lista.length && bulkVisivelNaFila() ? '' : 'none';
+  renderTiposFila();
   document.getElementById('qGranelResumo').textContent = lista.length + ' lote(s)';
   document.getElementById('qGranelBody').innerHTML = lista.map(function(o) {
     var man = (o.manipulacao && o.manipulacao.manipulacao) || {};
@@ -1473,7 +1561,8 @@ function opsBulkReprovado() {
 }
 function renderFilaCorrecao() {
   var lista = opsBulkReprovado();
-  document.getElementById('qCardCorrecao').style.display = lista.length ? '' : 'none';
+  document.getElementById('qCardCorrecao').style.display = lista.length && bulkVisivelNaFila() ? '' : 'none';
+  renderTiposFila();
   document.getElementById('qCorrecaoResumo').textContent = lista.length + ' lote(s)';
   var pode = podeAutorizarCorrecao();
   document.getElementById('qCorrecaoBody').innerHTML = lista.map(function(o) {
