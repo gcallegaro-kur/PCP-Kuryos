@@ -145,7 +145,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   outro pedido nunca recebe inserção. Prévia + confirm; log em
   `ajustes_planejamento/{dia}` com `por`. Auto-ajuste pausado continua
   desligado. Testes: `run_ajuste_grade_test.js`, `run_proximas_ordens_ui_test.js`
-  (clique, confirmação, gravação, log, desvio some). Só Hosting.
+  (clique, confirmação, gravação, log, desvio some). Commit `4d5707f`, só Hosting, conferido por HTTP.
   Arquivos ativos: nenhum.
 
 - **PUBLICADO — Sequência herda a grade de Quantidades + aviso de desvio
