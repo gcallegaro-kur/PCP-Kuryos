@@ -1033,8 +1033,10 @@ var allFornecedores = {};
 
 dbOnValue(db.ref('estoque_lotes'), function(snap) {
   allEstoqueLotes = snap.val() || {};
+  lotesCarregados = true;
   setStatus(true, 'Conectado');
   renderFila(); renderFornecedores();
+  atenderEmissaoPedida();
 }, { onError: function(e) { setStatus(false, 'Erro de conexão'); showAlert('Não foi possível ler os lotes: ' + e.message, 'danger'); } });
 
 dbOnValue(db.ref('nao_conformidades'), function(snap) {
@@ -1053,7 +1055,26 @@ dbOnValue(db.ref('especificacoes'), function(snap) {
 dbOnValue(db.ref('produtos'), function(snap) { allProdutos = snap.val() || {}; renderEspecificacoes(); });
 // O tipo de cada lote na fila (matéria-prima x embalagem) vem do cadastro de
 // materiais: a fila se redesenha quando ele chega.
-dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; renderEspecificacoes(); renderFila(); });
+dbOnValue(db.ref('materiais'), function(snap) { allMateriais = snap.val() || {}; materiaisCarregados = true; renderEspecificacoes(); renderFila(); atenderEmissaoPedida(); });
+
+/* Link direto do Histórico e Indicadores (qualidade_historico.html):
+   ?emitir={item}&lote={loteKey} abre a emissão do laudo daquele lote assim
+   que ele chega do banco -- uma vez só. */
+var emissaoPedidaUrl = (function() {
+  var p = new URLSearchParams(location.search);
+  return p.get('emitir') && p.get('lote') ? {item: p.get('emitir'), lote: p.get('lote')} : null;
+})();
+// O formulário (F0070, F009 ou PA) depende do tipo no cadastro de materiais:
+// só atende quando os lotes E os materiais chegaram.
+var lotesCarregados = false, materiaisCarregados = false;
+function atenderEmissaoPedida() {
+  if (!emissaoPedidaUrl || !lotesCarregados || !materiaisCarregados) return;
+  var l = (allEstoqueLotes[sanitizeKey(emissaoPedidaUrl.item)] || {})[emissaoPedidaUrl.lote];
+  if (!l) return;
+  var pedido = emissaoPedidaUrl;
+  emissaoPedidaUrl = null;
+  abrirEmissaoLaudo(pedido.item, pedido.lote);
+}
 dbOnValue(db.ref('fornecedores'), function(snap) {
   allFornecedores = snap.val() || {};
   var sel = document.getElementById('rncFornecedor');

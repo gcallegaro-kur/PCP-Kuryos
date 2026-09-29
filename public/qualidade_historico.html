@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Histórico e indicadores da Qualidade</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/qualidade-historico.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff;--purple:#7c3aed}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--purple:#a78bfa}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--purple:#a78bfa}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:12px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--text) 6%,transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:var(--success)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:12px;display:none}
+    #alertBox{position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:1000;width:min(560px,calc(100% - 24px));box-shadow:0 8px 24px rgba(0,0,0,.18);margin:0;pointer-events:none}
+    .alert.show{display:block}
+    .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .abas{display:flex;gap:6px;margin:10px 0 12px;border-bottom:1px solid var(--border)}
+    .aba{padding:10px 14px;border:none;background:none;font-weight:700;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+    .aba.on{color:var(--primary);border-bottom-color:var(--primary)}
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+    .filtros select,.filtros input{padding:9px 11px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;background:var(--card);color:var(--text)}
+    .filtros input{flex:1;min-width:220px}
+    .painel{display:none}.painel.on{display:block}
+    .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+    .tile{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px}
+    .tile .v{font-size:26px;font-weight:800;letter-spacing:-.02em}
+    .tile .l{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+    .tile .s{font-size:11.5px;color:var(--muted);margin-top:4px}
+    .card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-bottom:14px}
+    .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0}
+    .card-body{padding:12px 16px}
+    .grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:8px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    .num{text-align:right;white-space:nowrap}
+    .sub{font-size:11.5px;color:var(--muted)}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .r-APROVADO{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .r-CONCESSAO{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .r-REPROVADO{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .r-RETIDO{background:var(--tint-purple-bg);color:var(--purple)}
+    .tp{background:var(--tint-gray-bg);color:var(--muted)}
+    .acoes a{font-size:12.5px;font-weight:700;color:var(--primary);text-decoration:none;margin-right:10px;white-space:nowrap}
+    /* Gráfico semanal: barras empilhadas por resultado. Marcas finas, 2px de
+       folga entre segmentos, ponta arredondada só no topo, grade discreta. */
+    .graf{display:flex;align-items:flex-end;gap:14px;height:190px;padding:8px 4px 0;border-bottom:1px solid var(--border);position:relative}
+    .graf-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:default;min-width:0}
+    .graf-pilha{width:min(38px,70%);display:flex;flex-direction:column-reverse;gap:2px}
+    .graf-seg{width:100%}
+    .graf-pilha .graf-seg:last-child{border-radius:4px 4px 0 0}
+    .graf-tot{font-size:11.5px;font-weight:700;color:var(--text);margin-bottom:3px}
+    .graf-eixo{display:flex;gap:14px;padding:4px 4px 0}
+    .graf-eixo span{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+    .c-APROVADO{background:var(--success)}.c-CONCESSAO{background:var(--warning)}
+    .c-REPROVADO{background:var(--danger)}.c-RETIDO{background:var(--purple)}
+    .legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text);margin-bottom:8px}
+    .legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+    #dica{position:fixed;z-index:50;pointer-events:none;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.16);padding:8px 10px;font-size:12px;display:none;min-width:150px}
+    .nota{font-size:12px;color:var(--muted);line-height:1.5}
+    @media(max-width:980px){ .header{padding-left:62px} }
+    @media(max-width:700px){
+      .header h1{font-size:22px}
+      .main,.header{max-width:100%;padding-left:12px;padding-right:12px}
+      .header{padding-left:62px}
+      .grade2{grid-template-columns:1fr}
+      .graf{gap:6px}.graf-eixo{gap:6px}
+      table.resp thead{display:none}
+      table.resp,table.resp tbody,table.resp tr,table.resp td{display:block;width:100%}
+      table.resp tr{border:1.5px solid var(--border);border-radius:12px;margin-bottom:10px;padding:6px 4px}
+      table.resp td{border:none;padding:4px 8px}
+    }
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Histórico e indicadores da Qualidade</h1>
+    <div class="header-sub">Todas as análises decididas — matéria-prima, embalagem, bulk e produto acabado — e os indicadores do período</div>
+  </div>
+  <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div class="alert" id="alertBox"></div>
+  <div class="abas">
+    <button class="aba on" data-aba="dash">Indicadores</button>
+    <button class="aba" data-aba="hist">Histórico de análises</button>
+  </div>
+  <div class="filtros">
+    <select id="fPeriodo" aria-label="Período">
+      <option value="30">Últimos 30 dias</option>
+      <option value="90" selected>Últimos 90 dias</option>
+      <option value="180">Últimos 180 dias</option>
+      <option value="">Tudo</option>
+    </select>
+    <select id="fTipo" aria-label="Tipo de análise">
+      <option value="">Todos os tipos</option>
+      <option value="mp">Matéria-prima</option>
+      <option value="embalagem">Embalagem</option>
+      <option value="bulk">Bulk</option>
+      <option value="pa">Produto acabado</option>
+    </select>
+    <select id="fResultado" aria-label="Resultado" style="display:none">
+      <option value="">Todos os resultados</option>
+      <option value="APROVADO">Aprovado</option>
+      <option value="CONCESSAO">Aprovado c/ concessão</option>
+      <option value="REPROVADO">Reprovado</option>
+      <option value="RETIDO">Retido</option>
+    </select>
+    <input type="search" id="fBusca" placeholder="Buscar item, lote, fornecedor, cliente, analista, RNC…" autocomplete="off" style="display:none">
+  </div>
+
+  <!-- ══════════ INDICADORES ══════════ -->
+  <div class="painel on" id="p-dash">
+    <div class="tiles" id="tiles"><div class="no-data">Carregando…</div></div>
+    <div class="card">
+      <div class="card-header"><h3>Análises por semana</h3><span class="sub" id="grafSub"></span></div>
+      <div class="card-body">
+        <div class="legenda" id="legenda"></div>
+        <div class="graf" id="graf"></div>
+        <div class="graf-eixo" id="grafEixo"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Por tipo de análise</h3><span class="sub">Tempo = da entrada na Qualidade à decisão</span></div>
+      <div style="overflow-x:auto"><table class="resp">
+        <thead><tr><th>Tipo</th><th class="num">Análises</th><th class="num">Aprovação</th><th class="num">Reprovadas</th><th class="num">Concessões</th><th class="num">Retidas</th><th class="num">Tempo mediano</th><th class="num">90% até</th><th class="num">Na fila agora</th></tr></thead>
+        <tbody id="tbTipos"></tbody>
+      </table></div>
+    </div>
+    <div class="grade2">
+      <div class="card">
+        <div class="card-header"><h3>Fornecedores (matéria-prima e embalagem)</h3></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Fornecedor</th><th class="num">Lotes</th><th class="num">Reprovados</th><th class="num">Concessões</th><th class="num">Reprovação</th></tr></thead>
+          <tbody id="tbForn"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Produto acabado e analistas</h3></div>
+        <div class="card-body" id="boxPa"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ HISTÓRICO ══════════ -->
+  <div class="painel" id="p-hist">
+    <div class="card">
+      <div class="card-header"><h3 id="histTitulo">Análises</h3><span class="sub">Mais recentes primeiro</span></div>
+      <div style="overflow-x:auto"><table class="resp">
+        <thead><tr><th>Decidido em</th><th>Tipo</th><th>Item</th><th>Lote</th><th>Fornecedor / cliente</th><th>Resultado</th><th>Analista</th><th class="num">Tempo</th><th>RNC</th><th></th></tr></thead>
+        <tbody id="tbHist"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+<div id="dica"></div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+/* Histórico e indicadores da Qualidade (29/09). Motor em
+   shared/qualidade-historico.js; aqui só a tela. Nada é gravado. */
+var dados = {estoque: null, ops: null, materiais: null, pedidosCompra: null, rncs: null};
+var analises = [], pend = null, abaAtual = 'dash';
+var Q = QualidadeHistorico;
+var ROT_RES = {APROVADO: 'Aprovado', CONCESSAO: 'Aprovado c/ concessão', REPROVADO: 'Reprovado', RETIDO: 'Retido'};
+
+function setStatus(on, txt) {
+  document.getElementById('sDot').classList.toggle('on', !!on);
+  document.getElementById('sTxt').textContent = txt;
+}
+function pct(v) { return v == null ? '—' : (Math.round(v * 1000) / 10).toLocaleString('pt-BR') + '%'; }
+// Tempo legível: minutos, horas ou dias (o bulk sai em minutos, o palete em dias).
+function tempo(h) {
+  if (h == null) return '—';
+  if (h < 1) return Math.max(Math.round(h * 60), 0) + ' min';
+  if (h < 48) return (Math.round(h * 10) / 10).toLocaleString('pt-BR') + ' h';
+  return (Math.round(h / 24 * 10) / 10).toLocaleString('pt-BR') + ' dias';
+}
+function dataHora(ms) {
+  if (!ms) return '—';
+  var d = new Date(ms);
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(2) +
+    ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function filtros() {
+  var dias = document.getElementById('fPeriodo').value;
+  return {
+    desde: dias ? Date.now() - Number(dias) * 86400000 : null,
+    tipo: document.getElementById('fTipo').value,
+    resultado: document.getElementById('fResultado').value,
+    busca: document.getElementById('fBusca').value
+  };
+}
+function pronto() { return Object.keys(dados).every(function(k) { return dados[k] !== null; }); }
+
+function recalcular() {
+  if (!pronto()) return;
+  var ctx = {materiais: dados.materiais, pedidosCompra: dados.pedidosCompra, rncs: dados.rncs};
+  analises = Q.coletar(dados.estoque, dados.ops, ctx);
+  pend = Q.pendentes(dados.estoque, dados.ops, ctx, new Date());
+  render();
+}
+function render() {
+  if (!pronto()) return;
+  if (abaAtual === 'dash') renderDash(); else renderHist();
+}
+
+function tile(v, l, s) {
+  return '<div class="tile"><div class="v">' + v + '</div><div class="l">' + escapeHtml(l) + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+}
+function renderDash() {
+  var f = filtros();
+  var k = Q.kpis(analises, {desde: f.desde, tipo: f.tipo, semanas: 8});
+  var g = k.geral;
+  var filaTot = 0, filaMax = null;
+  Q.ORDEM_TIPOS.forEach(function(t) {
+    if (f.tipo && t !== f.tipo) return;
+    filaTot += pend[t].qtd;
+    if (pend[t].maisAntigoDias != null && (filaMax == null || pend[t].maisAntigoDias > filaMax)) filaMax = pend[t].maisAntigoDias;
+  });
+  document.getElementById('tiles').innerHTML =
+    tile(fmtNum(g.total), 'Análises decididas', 'no período') +
+    tile(pct(g.taxaAprovacao), 'Aprovação', fmtNum(g.APROVADO) + ' aprovadas · ' + fmtNum(g.CONCESSAO) + ' com concessão') +
+    tile(fmtNum(g.REPROVADO), 'Reprovações', pct(g.taxaReprovacao) + ' · ' + fmtNum(g.RETIDO) + ' retidas') +
+    tile(tempo(g.leadMedianaH), 'Tempo mediano até a decisão', '90% decididas em até ' + tempo(g.leadP90H)) +
+    (!f.tipo || f.tipo === 'bulk' ? tile(pct(k.primeiraPassagemBulk), 'Bulk aprovado na 1ª análise', fmtNum(k.opsBulk) + ' lote(s) de bulk') : '') +
+    tile(fmtNum(filaTot), 'Aguardando a Qualidade agora', filaMax != null ? 'espera mais longa: ' + tempo(filaMax * 24) : 'fila vazia');
+
+  // Gráfico semanal empilhado por resultado.
+  var ordem = ['APROVADO', 'CONCESSAO', 'REPROVADO', 'RETIDO'];
+  document.getElementById('legenda').innerHTML = ordem.map(function(r) {
+    return '<span><i class="c-' + r + '"></i>' + ROT_RES[r] + '</span>';
+  }).join('');
+  var maxSem = Math.max.apply(null, k.semanas.map(function(s) { return s.total; }).concat([1]));
+  document.getElementById('grafSub').textContent = 'últimas 8 semanas' + (f.tipo ? ' · ' + Q.TIPOS[f.tipo].rotulo : '');
+  document.getElementById('graf').innerHTML = k.semanas.map(function(s, i) {
+    var segs = ordem.filter(function(r) { return s[r]; }).map(function(r) {
+      return '<div class="graf-seg c-' + r + '" style="height:' + Math.max(s[r] / maxSem * 150, 3) + 'px"></div>';
+    }).join('');
+    return '<div class="graf-col" data-sem="' + i + '">' + (s.total ? '<div class="graf-tot">' + s.total + '</div>' : '') +
+      '<div class="graf-pilha">' + segs + '</div></div>';
+  }).join('');
+  document.getElementById('grafEixo').innerHTML = k.semanas.map(function(s) {
+    var d = new Date(s.inicio);
+    return '<span>' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '</span>';
+  }).join('');
+  var dica = document.getElementById('dica');
+  document.querySelectorAll('#graf .graf-col').forEach(function(col) {
+    var s = k.semanas[+col.getAttribute('data-sem')];
+    col.onmousemove = function(ev) {
+      var d = new Date(s.inicio), fim = new Date(s.inicio + 6 * 86400000);
+      dica.innerHTML = '<b>Semana de ' + d.toLocaleDateString('pt-BR') + ' a ' + fim.toLocaleDateString('pt-BR') + '</b><br>' +
+        ordem.map(function(r) { return '<i class="c-' + r + '" style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px"></i>' + ROT_RES[r] + ': <b>' + s[r] + '</b>'; }).join('<br>') +
+        '<br>Total: <b>' + s.total + '</b>';
+      dica.style.display = 'block';
+      dica.style.left = Math.min(ev.clientX + 14, window.innerWidth - 220) + 'px';
+      dica.style.top = (ev.clientY + 14) + 'px';
+    };
+    col.onmouseleave = function() { dica.style.display = 'none'; };
+  });
+
+  document.getElementById('tbTipos').innerHTML = Q.ORDEM_TIPOS.filter(function(t) { return !f.tipo || t === f.tipo; }).map(function(t) {
+    var r = k.porTipo[t], p = pend[t];
+    return '<tr><td><b>' + Q.TIPOS[t].rotulo + '</b></td><td class="num">' + fmtNum(r.total) + '</td><td class="num">' + pct(r.taxaAprovacao) +
+      '</td><td class="num">' + fmtNum(r.REPROVADO) + '</td><td class="num">' + fmtNum(r.CONCESSAO) + '</td><td class="num">' + fmtNum(r.RETIDO) +
+      '</td><td class="num">' + tempo(r.leadMedianaH) + '</td><td class="num">' + tempo(r.leadP90H) +
+      '</td><td class="num">' + fmtNum(p.qtd) + (p.maisAntigoDias != null ? '<div class="sub">mais antigo ' + tempo(p.maisAntigoDias * 24) + '</div>' : '') + '</td></tr>';
+  }).join('');
+
+  document.getElementById('tbForn').innerHTML = k.fornecedores.length ? k.fornecedores.slice(0, 15).map(function(fr) {
+    return '<tr><td>' + escapeHtml(fr.nome) + '</td><td class="num">' + fr.total + '</td><td class="num">' + fr.reprovados +
+      '</td><td class="num">' + fr.concessoes + '</td><td class="num">' + pct(fr.taxaReprovacao) + '</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="no-data">Nenhum lote de fornecedor analisado no período.</td></tr>';
+
+  document.getElementById('boxPa').innerHTML =
+    '<div class="nota" style="margin-bottom:8px"><b>Produto acabado</b> — ' +
+    (k.paletesPesados ? fmtNum(k.paletesPesados) + ' palete(s) com pesagem avaliada; <b>' + fmtNum(k.pesoForaPa) + '</b> fora do critério do INMETRO; <b>' +
+      fmtNum(k.criticosPa) + '</b> com defeito crítico.' : 'nenhum palete pesado no período.') +
+    ' ' + fmtNum(k.comRnc) + ' análise(s) com RNC.</div>' +
+    '<table><thead><tr><th>Analista</th><th class="num">Análises</th></tr></thead><tbody>' +
+    (k.analistas.length ? k.analistas.map(function(a) { return '<tr><td>' + escapeHtml(a.nome) + '</td><td class="num">' + a.total + '</td></tr>'; }).join('')
+      : '<tr><td colspan="2" class="no-data">—</td></tr>') + '</tbody></table>';
+}
+
+function renderHist() {
+  var f = filtros();
+  var lista = Q.filtrar(analises, f);
+  document.getElementById('histTitulo').textContent = 'Análises (' + lista.length + ')';
+  var tb = document.getElementById('tbHist');
+  if (!lista.length) { tb.innerHTML = '<tr><td colspan="10" class="no-data">Nenhuma análise com esses filtros.</td></tr>'; return; }
+  tb.innerHTML = lista.slice(0, 400).map(function(a) {
+    var acoes = [];
+    // Laudo impresso: só lote em estoque (MP, embalagem, palete) tem laudo emitível.
+    if (a.tipo !== 'bulk') acoes.push('<a href="qualidade.html?emitir=' + encodeURIComponent(a.itemCodigo) + '&lote=' + encodeURIComponent(a.loteKey) + '">Laudo</a>');
+    if (a.opKey) acoes.push('<a href="dossie_lote.html?op=' + encodeURIComponent(a.opKey) + '">Dossiê</a>');
+    var extra = [a.observacao, a.autorizadoPor ? 'autorizado por ' + a.autorizadoPor : '', a.ensaiosNc ? a.ensaiosNc + ' ensaio(s) fora' : '',
+      a.ciclo > 1 ? 'correção, ciclo ' + a.ciclo : (a.tipo === 'bulk' && a.ciclo === 1 && a.resultado === 'REPROVADO' ? '1ª análise' : '')].filter(Boolean).join(' · ');
+    return '<tr><td>' + dataHora(a.em) + '</td><td><span class="badge tp">' + Q.TIPOS[a.tipo].rotulo + '</span></td>' +
+      '<td><b>' + escapeHtml(a.itemCodigo) + '</b><div class="sub">' + escapeHtml(a.itemNome) + '</div></td>' +
+      '<td>' + escapeHtml(a.lote) + '</td><td>' + escapeHtml(a.origem || '—') + '</td>' +
+      '<td><span class="badge r-' + a.resultado + '">' + ROT_RES[a.resultado] + '</span>' + (extra ? '<div class="sub">' + escapeHtml(extra) + '</div>' : '') + '</td>' +
+      '<td>' + escapeHtml(a.por || '—') + '</td><td class="num">' + tempo(a.leadHoras) + '</td>' +
+      '<td>' + (a.rnc ? '<a href="qualidade.html?tab=rnc" style="color:var(--primary);font-weight:700;text-decoration:none">' + escapeHtml(a.rnc) + '</a>' : '—') + '</td>' +
+      '<td class="acoes">' + acoes.join('') + '</td></tr>';
+  }).join('') + (lista.length > 400 ? '<tr><td colspan="10" class="no-data">Mostrando as 400 mais recentes — refine a busca.</td></tr>' : '');
+}
+
+document.querySelectorAll('.aba').forEach(function(b) {
+  b.onclick = function() {
+    abaAtual = b.getAttribute('data-aba');
+    document.querySelectorAll('.aba').forEach(function(x) { x.classList.toggle('on', x === b); });
+    document.getElementById('p-dash').classList.toggle('on', abaAtual === 'dash');
+    document.getElementById('p-hist').classList.toggle('on', abaAtual === 'hist');
+    // Resultado e busca só fazem sentido no histórico.
+    document.getElementById('fResultado').style.display = abaAtual === 'hist' ? '' : 'none';
+    document.getElementById('fBusca').style.display = abaAtual === 'hist' ? '' : 'none';
+    render();
+  };
+});
+['fPeriodo', 'fTipo', 'fResultado'].forEach(function(id) { document.getElementById(id).addEventListener('change', render); });
+var _busca = null;
+document.getElementById('fBusca').addEventListener('input', function() { clearTimeout(_busca); _busca = setTimeout(render, 200); });
+
+db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ? 'Conectado' : 'Reconectando...'); });
+[['estoque_lotes', 'estoque'], ['ops', 'ops'], ['materiais', 'materiais'], ['pedidos_compra', 'pedidosCompra'], ['nao_conformidades', 'rncs']].forEach(function(p) {
+  dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
+});
+if (new URLSearchParams(location.search).get('aba') === 'historico') document.querySelector('.aba[data-aba="hist"]').click();
+</script>
+</body>
+</html>

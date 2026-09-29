@@ -127,13 +127,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Histórico e dashboard da Qualidade (2026-09-29).** Página
-  nova `qualidade_historico.html` (Dashboard + Histórico de laudos), motor
-  `shared/qualidade-historico.js`. **Arquivos ativos:** esses dois (novos),
-  `public/qualidade.html` (só link profundo para emitir laudo),
-  `public/auth_check.js` (página no módulo Qualidade + menu),
-  `run_qualidade_historico_test.js`, `run_qualidade_historico_ui_test.js` (novos),
-  `public/manual_qualidade.html`.
+- **PUBLICADO — Histórico e indicadores da Qualidade (2026-09-29).**
+  `qualidade_historico.html` (menu Qualidade › Histórico e Indicadores; página
+  no módulo `qualidade`). Motor `shared/qualidade-historico.js` LÊ as decisões
+  de onde moram: `estoque_lotes/*.qualidade` (MP/embalagem/PA) e
+  `ops/*.manipulacao.analise` + `historico/c{n}.analise` (bulk, cada ciclo).
+  KPIs: aprovação, reprovação, concessão, retido, tempo entrada→decisão
+  (mediana/p90), bulk na 1ª análise, fila por tipo, série semanal, fornecedor,
+  analista, peso/crítico de PA. Histórico com busca e links Laudo
+  (`qualidade.html?emitir=&lote=`, novo link profundo) e Dossiê. Ensaio na
+  base: 57 análises (38 PA, 7 bulk, 7 MP, 5 embalagem), nenhuma sem entrada ou
+  analista; **bulk analisado 1–3 min depois de fechar a manipulação em 5 de 6
+  casos** (lançamento em sequência, não tempo real de laboratório). Testes:
+  `run_qualidade_historico_test.js`, `run_qualidade_historico_ui_test.js`.
+  Próximo: histórico + dashboard da Manipulação. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Controle de OPs menos poluído (2026-09-29, opção A do usuário).**
   `ops.html`: lista principal só com o que pede ação. OP concluída sai da

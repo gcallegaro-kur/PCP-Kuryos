@@ -110,7 +110,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
+                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -702,6 +702,8 @@ function renderUnifiedNavbar(user) {
   const qualidadeGroup = grupo('Qualidade', [
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
     temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
+    // Histórico de análises + indicadores (29/09): consulta de todo laudo e KPIs.
+    temMod('qualidade') && ktLink('qualidade_historico.html', 'chart', 'Histórico e Indicadores', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
     temMod('qualidade') && !temMod('comercial') && !temMod('logistica') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage),
     // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
