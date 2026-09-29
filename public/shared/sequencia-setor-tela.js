@@ -35,6 +35,7 @@
     '.sq-sem{color:var(--warning,#c9910a);font-weight:600}' +
     '.sq-atraso{color:var(--danger,#d03b3b);font-weight:700}' +
     '.sq-adiante{color:var(--success,#0ca30c);font-weight:600}' +
+    '.sq-ajustar{margin-left:6px;padding:3px 9px;border:1.5px solid currentColor;border-radius:7px;background:var(--card);color:inherit;font-size:11.5px;font-weight:700;cursor:pointer}' +
     '.sq-acoes{display:flex;flex-direction:column;gap:4px;align-items:flex-end}' +
     '.sq-acoes .sq-btns{display:flex;gap:4px}' +
     '.sq-acoes button{min-width:34px;min-height:32px;border:1.5px solid var(--border);background:var(--card);color:var(--text);border-radius:7px;cursor:pointer;font-size:14px}' +
@@ -185,9 +186,13 @@
       if (!o.podeEditar || it.desvioHoras == null) return '';
       var h = Math.abs(it.desvioHoras).toLocaleString('pt-BR', {maximumFractionDigits: 1});
       var ref = it.origemPlano === 'OP' ? 'programado na OP' : 'planejado na grade';
+      // Botão "Ajustar a grade" (29/09): só quando o plano é a grade de
+      // Quantidades -- OP com horário próprio se ajusta no Planejamento de OPs.
+      var botao = it.origemPlano === 'grade' && it.pedidoKey && root.AjusteGrade
+        ? ' <button type="button" class="sq-ajustar" data-sq-ajustar="' + it.opKey + '">Ajustar a grade</button>' : '';
       return it.desvioHoras > 0
-        ? '<div class="sq-meta sq-atraso">⚠ ' + h + ' h depois do ' + ref + '</div>'
-        : '<div class="sq-meta sq-adiante">' + h + ' h antes do ' + ref + '</div>';
+        ? '<div class="sq-meta sq-atraso">⚠ ' + h + ' h depois do ' + ref + botao + '</div>'
+        : '<div class="sq-meta sq-adiante">' + h + ' h antes do ' + ref + botao + '</div>';
     }
     // Quem só consulta não tem o que "informar": diz de quem é a pendência.
     function motivoSemEstimativa(m) {
@@ -234,6 +239,48 @@
       }).join('') + '</div>';
     }
 
+    /* Ajustar a grade a partir do desvio: prévia (quantas horas, quem anda)
+       e só grava com a confirmação do PCP. Fica no log de ajustes do dia,
+       o mesmo que a grade mostra -- nada muda sem rastro. */
+    function ajustarGrade(opKey, botao) {
+      var it = null;
+      (filasAtuais.envase || []).forEach(function(g) { g.itens.forEach(function(x) { if (x.opKey === opKey) it = x; }); });
+      if (!it || !it.pedidoKey) return;
+      var agora = o.agora ? new Date(o.agora) : new Date();
+      botao.disabled = true;
+      db.ref('pedidos/' + it.pedidoKey).once('value').then(function(snap) {
+        var pedido = snap.val();
+        if (!pedido) { avisar('O pedido desta OP não existe mais.'); return; }
+        var linha = root.AjusteGrade.linhaDoPedido(dados.programacao, it.pedidoKey, dados.config.linhas || [], agora) || it.recurso;
+        var plano = root.AjusteGrade.planejar({
+          programacao: dados.programacao, pedidoKey: it.pedidoKey, pedido: pedido, linha: linha,
+          linhasCfg: dados.config.linhas || [], agora: agora, cal: calendario()
+        });
+        if (!plano.ok) { avisar(plano.erro); return; }
+        if (!plano.horas) { avisar(plano.resumo); return; }
+        var nome = pedido.id || it.pedidoKey;
+        var msg = 'Pedido ' + nome + ' (' + (pedido.produto || it.produto) + ')
+
+' + plano.resumo +
+          (plano.movidos.length ? '
+
+Pedidos que andam: ' + plano.movidos.map(function(k) { return k.split('__')[0]; }).join(', ') : '') +
+          '
+
+Horários alterados de ' + plano.de + ' a ' + plano.ate + '. Confirmar?';
+        if (!root.confirm(msg)) return;
+        return db.ref().update(plano.updates).then(function() {
+          var hoje = agora.getFullYear() + '-' + String(agora.getMonth() + 1).padStart(2, '0') + '-' + String(agora.getDate()).padStart(2, '0');
+          return db.ref('ajustes_planejamento/' + hoje).push({
+            timestamp: new Date().toISOString(), linha: linha, para: nome, de: null,
+            motivo: 'ajuste manual do PCP (Sequência): ' + plano.resumo,
+            por: (root.currentUser && root.currentUser.nome) || null
+          });
+        });
+      }).catch(function(e) { avisar('Não foi possível ajustar a grade: ' + e.message); })
+        .then(function() { botao.disabled = false; });
+    }
+
     function grupoDe(setor, recurso) {
       return (filasAtuais[setor] || []).find(function(g) { return g.recurso === recurso; });
     }
@@ -261,6 +308,9 @@
           var destino = grupoDe(setor, sel.value);
           if (destino) gravar(S.trocarRecurso(destino, sel.getAttribute('data-sq-recurso-op'), setor), 'o recurso');
         });
+      });
+      el.querySelectorAll('[data-sq-ajustar]').forEach(function(b) {
+        b.addEventListener('click', function() { ajustarGrade(b.getAttribute('data-sq-ajustar'), b); });
       });
       el.querySelectorAll('[data-sq-ritmo]').forEach(function(inp) {
         inp.addEventListener('change', function() {

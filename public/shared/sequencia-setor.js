@@ -189,7 +189,7 @@
       var fimPlanejado = !isNaN(fimOp) ? fimOp : (sug ? sug.fim : null);
       (porRecurso[recurso] = porRecurso[recurso] || []).push({
         opKey: opKey, lote: txt(op.lote) || opKey, produto: txt(op.produto || op.produtoNome), sku: txt(op.sku),
-        cliente: txt(op.cliente), qtdPlanejada: n(op.qtdPlanejada) || 0,
+        cliente: txt(op.cliente), qtdPlanejada: n(op.qtdPlanejada) || 0, pedidoKey: txt(op.skuPedidoKey) || null,
         restante: e.restante, unidade: e.unidade, emAndamento: e.emAndamento, status: e.status,
         recurso: recurso, posicao: n(d.posicao), naGrade: naGrade,
         inicioGrade: sug ? sug.inicio : null,
