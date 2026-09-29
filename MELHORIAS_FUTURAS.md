@@ -56,8 +56,12 @@ Adiado:
   só confiar a partir de uma amostra mínima; valor conservador.
 - **Grade de Quantidades não acompanha a execução.** O auto-ajuste
   (`autoAjustarPlanejamento`) está pausado a pedido do PCP; a Sequência mostra
-  o desvio (`desvioHoras`) mas não mexe na grade. Se o PCP quiser, um botão
-  "empurrar o restante do pedido" na grade a partir do desvio.
+  o desvio (`desvioHoras`) e, desde 29/09, o botão "Ajustar a grade"
+  (`shared/ajuste-grade.js`) acerta UM pedido sob comando do PCP. Pendente:
+  o mesmo botão na própria grade de Quantidades (hoje só na Sequência) e a
+  grade em horário livre (minutos) -- decisão já registrada em
+  `PLANO_PLANEJAMENTO_PCP.md` (Granularidade), mas `programacao` por hora
+  cheia alimenta apontamento, MRP, dashboard e o ajuste: migração própria.
 - **Ordem de retrabalho na fila.** O modelo de `PLANO_GESTAO_RETRABALHOS.md`
   (ordens de fabricação/envase/rotulagem de retrabalho) deve entrar como etapa
   lida pelo mesmo motor (`etapa()`), não como fila paralela. Hoje a OP de

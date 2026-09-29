@@ -259,15 +259,9 @@
         if (!plano.ok) { avisar(plano.erro); return; }
         if (!plano.horas) { avisar(plano.resumo); return; }
         var nome = pedido.id || it.pedidoKey;
-        var msg = 'Pedido ' + nome + ' (' + (pedido.produto || it.produto) + ')
-
-' + plano.resumo +
-          (plano.movidos.length ? '
-
-Pedidos que andam: ' + plano.movidos.map(function(k) { return k.split('__')[0]; }).join(', ') : '') +
-          '
-
-Horários alterados de ' + plano.de + ' a ' + plano.ate + '. Confirmar?';
+        var msg = 'Pedido ' + nome + ' (' + (pedido.produto || it.produto) + ')\n\n' + plano.resumo +
+          (plano.movidos.length ? '\n\nPedidos que andam: ' + plano.movidos.map(function(k) { return k.split('__')[0]; }).join(', ') : '') +
+          '\n\nHorários alterados de ' + plano.de + ' a ' + plano.ate + '. Confirmar?';
         if (!root.confirm(msg)) return;
         return db.ref().update(plano.updates).then(function() {
           var hoje = agora.getFullYear() + '-' + String(agora.getMonth() + 1).padStart(2, '0') + '-' + String(agora.getDate()).padStart(2, '0');

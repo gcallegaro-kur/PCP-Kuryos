@@ -135,14 +135,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `public/shared/analise-granel.js` (novo), `public/shared/laudo-pa-resultados.js`,
   `run_analise_granel_test.js` (novo), testes de UI que abrem o granel.
 
-- **EM ANDAMENTO — botão "Ajustar a grade" a partir do desvio (2026-09-29).**
-  Na Sequência, OP com desvio contra a grade de Quantidades ganha um botão
-  que acrescenta (ou libera) horas SÓ daquele pedido e empurra o que vem
-  depois na mesma linha até o primeiro horário vago, com prévia e
-  confirmação. Não liga o auto-ajuste pausado. **Arquivos ativos:**
-  `public/shared/ajuste-grade.js` (novo), `public/shared/sequencia-setor-tela.js`,
-  `public/planejamento.html`, `run_ajuste_grade_test.js` (novo),
-  `run_proximas_ordens_ui_test.js`, `public/manual_pcp.html`, `MELHORIAS_FUTURAS.md`.
+- **PUBLICADO — botão "Ajustar a grade" a partir do desvio (2026-09-29).**
+  Na Sequência, OP com desvio contra a grade de Quantidades tem o botão:
+  `shared/ajuste-grade.js` compara falta do pedido (qtdTotal − produzido)
+  com o que a grade ainda reserva (horas futuras em qualquer linha, hora
+  corrente pela fração que falta); faltando, insere horas depois do último
+  horário do pedido na linha e empurra os seguintes só até o primeiro vago;
+  sobrando, libera as últimas e não puxa ninguém. Hora corrente ocupada por
+  outro pedido nunca recebe inserção. Prévia + confirm; log em
+  `ajustes_planejamento/{dia}` com `por`. Auto-ajuste pausado continua
+  desligado. Testes: `run_ajuste_grade_test.js`, `run_proximas_ordens_ui_test.js`
+  (clique, confirmação, gravação, log, desvio some). Só Hosting.
+  Arquivos ativos: nenhum.
 
 - **PUBLICADO — Sequência herda a grade de Quantidades + aviso de desvio
   (2026-09-29).** `sugestoesDaGrade` lê `programacao` (janela de 14 dias

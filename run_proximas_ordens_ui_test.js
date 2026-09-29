@@ -44,6 +44,8 @@ function dados() {
         qtdPlanejada: 500, dataEmissao: '2026-09-28', skuPedidoKey: 'PED7__CR02', separacaoConcluida: true},
       '26300-09': {lote: '26300/09', sku: 'BS01', status: 'Concluído', qtdPlanejada: 10}
     },
+    // Pedido da 26300/03: faltam 500 e a grade não reserva mais nada.
+    pedidos: {'PED5__BS01': {id: 'PED5', produto: 'BODY SPLASH 200ML', sku: 'BS01', qtdTotal: 2000, produzido: 1500, mediaPorHora: 500}},
     // Grade de Quantidades: PED7 planejado na Linha 2 às 13h-15h; o pedido da
     // 26300/03 (rodando) estava planejado para acabar às 08:00.
     programacao: {
@@ -143,6 +145,21 @@ const ordemNaTela = (page, setor, recurso) => page.evaluate(({setor, recurso}) =
     assert.match(sugerida, /Começa hoje 08:00 · termina hoje 10:00[\s\S]*5 h antes do planejado na grade/);
     // Mais lento: o pedido da 26300/03 devia ter acabado às 08:00; a estimativa diz 09:00.
     assert.match(await p.locator('[data-sq-setor="envase"] [data-sq-item="26300-03"]').innerText(), /⚠ 1 h depois do planejado na grade/);
+
+    // ── 1b. Botão "Ajustar a grade": prévia, confirmação, grava e registra ─
+    const confirmacoes = [];
+    p.on('dialog', (d) => confirmacoes.push(d.message()));
+    await p.click('[data-sq-item="26300-03"] [data-sq-ajustar]');
+    await p.waitForFunction(() => ((((window.__db.programacao || {})['2026-09-29'] || {})['08_00'] || {}).env1 || {}).pedidoKey === 'PED5__BS01');
+    assert.match(confirmacoes.join('\n'), /Pedido PED5 \(BODY SPLASH 200ML\)[\s\S]*Acrescentar 1 h ao pedido na Linha 1 \(faltam 500 un; a grade reservava 0 un a 500 un\/h\)[\s\S]*Confirmar\?/);
+    const slotNovo = await p.evaluate(() => window.__db.programacao['2026-09-29']['08_00'].env1);
+    assert.deepEqual(slotNovo, {pedidoKey: 'PED5__BS01', produto: 'BODY SPLASH 200ML', sku: 'BS01', mediaPorHora: 500});
+    const ajustes = await p.evaluate(() => Object.values((window.__db.ajustes_planejamento || {})['2026-09-29'] || {}));
+    assert.equal(ajustes.length, 1);
+    assert.match(ajustes[0].motivo, /ajuste manual do PCP \(Sequência\): Acrescentar 1 h/);
+    assert.equal(ajustes[0].por, 'Carla PCP');
+    // A grade passa a reservar a hora: o desvio some.
+    await p.waitForFunction(() => !/depois do planejado/.test(document.querySelector('[data-sq-item="26300-03"]').innerText));
     // Rodando primeiro; depois emissão.
     assert.deepEqual(await ordemNaTela(p, 'envase', 'Linha 1'), ['26300-03', '26300-01', '26300-02']);
     const envTxt = await p.locator('[data-sq-setor="envase"]').innerText();
