@@ -1773,7 +1773,9 @@ function confirmarDestinacaoLote(dbRef, solicitacaoKey, autor, comprovante) {
 // lote de origem inteiro (fica simples e uniforme, sem branch especial
 // "é tudo ou é parte"). A origem nunca é apagada, mesmo zerada (mesmo
 // princípio de auditoria já usado em darBaixaLoteManual).
-function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, novoEnderecoKey, motivo, autor, origemRefNovo) {
+// `opcoes.origemTipo`: de onde o pedaço nasceu. Padrão 'separacao_op' (a
+// Separação de Materiais); a tela Movimentar (29/09) passa 'movimentacao'.
+function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, novoEnderecoKey, motivo, autor, origemRefNovo, opcoes) {
   if (!itemCodigo || !loteKey || !qtd || qtd <= 0 || !novoEnderecoKey) return Promise.resolve({ abatidoReal: 0, novoLoteKey: null });
   var itemKey = sanitizeKey(itemCodigo);
   var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
@@ -1814,7 +1816,7 @@ function separarParcialLoteEndereco(dbRef, itemTipo, itemCodigo, loteKey, qtd, n
       status: lote.status || 'LIBERADO',
       enderecoKey: novoEnderecoKey, enderecoCodigo: (novoEndereco && novoEndereco.codigo) || null,
       saldoLote: abatidoReal, qtdOriginal: abatidoReal,
-      origemTipo: 'separacao_op', origemRef: origemRefNovo || null,
+      origemTipo: (opcoes && opcoes.origemTipo) || 'separacao_op', origemRef: origemRefNovo || null,
       // De onde o pedaço saiu: é para onde a sobra volta depois da pesagem.
       enderecoOrigemKey: lote.enderecoKey || null, enderecoOrigemCodigo: lote.enderecoCodigo || null,
       criadoEm: agora, atualizadoEm: agora, criadoPor: autor || null
@@ -3948,8 +3950,12 @@ var CODE39_PATTERNS = {
   'Q': 'nnnnnnwww', 'R': 'wnnnnnwwn', 'S': 'nnwnnnwwn', 'T': 'nnnnwnwwn',
   'U': 'wwnnnnnnw', 'V': 'nwwnnnnnw', 'W': 'wwwnnnnnn', 'X': 'nwnnwnnnw',
   'Y': 'wwnnwnnnn', 'Z': 'nwwnwnnnn',
-  '-': 'nwnnnnwnw', '.': 'wwnnnnnwn', ' ': 'nwwnnnwnn', '$': 'nwnwnwnnn',
-  '/': 'nwnwnnwnn', '+': 'nwnnnwnwn', '%': 'nnnwnwnwn',
+  // '.' e '/' estavam com o padrão ERRADO até 29/09 ('wwnnnnnwn' e
+  // 'nwnwnnwnn'): nenhum leitor decodificava endereço (FAB-1.1.1) nem lote de
+  // OP (26246/07) em Code39. Achado pelo run_etiquetas_leitura_test.js (ZXing).
+  // Norma: '.' = 110000100; '/' = espaços largos nas posições 2, 4 e 8.
+  '-': 'nwnnnnwnw', '.': 'wwnnnnwnn', ' ': 'nwwnnnwnn', '$': 'nwnwnwnnn',
+  '/': 'nwnwnnnwn', '+': 'nwnnnwnwn', '%': 'nnnwnwnwn',
   '*': 'nwnnwnwnn' // start/stop
 };
 // Só o que a Kuryos realmente usa em lote/SKU (dígitos, A-Z, "/") tem
@@ -3961,10 +3967,17 @@ function code39Sanitizar(texto) {
 }
 // Gera o SVG do código de barras (largura em módulos: barra estreita = 1
 // módulo, larga = 3 módulos, mesma proporção clássica do Code 39).
+// Margem branca (quiet zone) OBRIGATÓRIA dos dois lados: sem ela o leitor
+// não acha o começo/fim do código quando há texto ou QR ao lado. Antes de
+// 29/09 o SVG começava colado na primeira barra (achado ao medir a leitura
+// das etiquetas com o ZXing -- run_etiquetas_leitura_test.js).
+var CODE39_QUIET_MODULOS = 10;
+// Largura total em módulos (para caber na etiqueta: moduloMm = largura / isto).
+function code39Modulos(texto) { return (code39Sanitizar(texto).length + 2) * 16 + 2 * CODE39_QUIET_MODULOS; }
 function code39Svg(texto, alturaMm, moduloMm) {
   alturaMm = alturaMm || 12; moduloMm = moduloMm || 0.33;
   var conteudo = '*' + code39Sanitizar(texto) + '*'; // start/stop obrigatórios
-  var x = 0;
+  var x = CODE39_QUIET_MODULOS * moduloMm;
   var barras = [];
   conteudo.split('').forEach(function(ch, idx) {
     var padrao = CODE39_PATTERNS[ch] || CODE39_PATTERNS['-'];
@@ -3976,6 +3989,7 @@ function code39Svg(texto, alturaMm, moduloMm) {
     }
     x += moduloMm; // espaço estreito fixo entre caracteres
   });
+  x += (CODE39_QUIET_MODULOS - 1) * moduloMm; // margem direita (o último espaço já conta 1)
   return '<svg xmlns="http://www.w3.org/2000/svg" width="' + x.toFixed(2) + 'mm" height="' + alturaMm + 'mm" viewBox="0 0 ' + x.toFixed(2) + ' ' + alturaMm + '">' + barras.join('') + '</svg>';
 }
 
@@ -4037,11 +4051,13 @@ function ean13Svg(codigo, alturaMm, moduloMm) {
   bits += '01010'; // guarda central
   for (var i = 0; i < 6; i++) bits += ean13R(parseInt(s[7 + i], 10));
   bits += '101'; // guarda direita -- 3+42+5+42+3 = 95 módulos no total (o número clássico do EAN13)
-  var x = 0, barras = [];
+  // Margem branca GS1: 11 módulos antes e 7 depois (ver code39Svg).
+  var x = 11 * moduloMm, barras = [];
   for (var i = 0; i < bits.length; i++) {
     if (bits[i] === '1') barras.push('<rect x="' + x.toFixed(3) + '" y="0" width="' + moduloMm.toFixed(3) + '" height="' + alturaMm + '" fill="#000"/>');
     x += moduloMm;
   }
+  x += 7 * moduloMm;
   return '<svg xmlns="http://www.w3.org/2000/svg" width="' + x.toFixed(2) + 'mm" height="' + alturaMm + 'mm" viewBox="0 0 ' + x.toFixed(2) + ' ' + alturaMm + '">' + barras.join('') + '</svg>';
 }
 
@@ -4088,8 +4104,10 @@ function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
   var qtdNestaCaixa = op.pecasPorCaixa
     ? (numeroCaixa < totalCaixas ? op.pecasPorCaixa : (op.qtdPlanejada - op.pecasPorCaixa * (totalCaixas - 1)))
     : op.qtdPlanejada;
-  var eanSvg = ean13Svg(op.ean13 || '', 8, 0.24);
-  var qrSvg = qrCodeSvg(op.lote || '', 13);
+  // EAN a 121% do nominal GS1 (módulo 0,40 mm; mínimo 0,264; máximo 0,66) e 13 mm de
+  // altura. Era 0,24 mm x 8 mm e NÃO lia no teste de leitura (29/09).
+  var eanSvg = ean13Svg(op.ean13 || '', 13, 0.4);
+  var qrSvg = qrCodeSvg(op.lote || '', 14);
   return '<div class="etiqueta-page">' +
     '<div class="etq-header"><b>' + escapeHtml(op.cliente || '—') + '</b><span>Caixa ' + numeroCaixa + ' de ' + totalCaixas + '</span></div>' +
     '<div class="etq-produto">' + escapeHtml(op.produto || '—') + '</div>' +

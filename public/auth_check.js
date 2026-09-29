@@ -108,7 +108,7 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
+                  paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
@@ -686,6 +686,8 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('relatorio_expedicao.html', 'clipboard', 'Relatório de Expedição', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
+    // Movimentar (29/09): de onde → o quê → para onde, para o celular.
+    temMod('logistica') && ktLink('movimentar.html', 'truck', 'Movimentar material', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=conferenciapa', 'clipboard', 'Conferência de PA', activePage),
     // Próximas Ordens (29/09): a fila da Separação na ordem do PCP.
     temMod('logistica') && ktLink('proximas_ordens.html?setor=separacao', 'list', 'Próximas Separações', activePage),

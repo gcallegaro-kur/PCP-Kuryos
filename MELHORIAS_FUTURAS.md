@@ -1187,3 +1187,13 @@ e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
   editar/excluir no Histórico (só PCP/admin, pedido do usuário). As regras do
   banco em `registros` ainda permitem gravar pelo papel `production` —
   endurecer quando as outras telas que gravam ali estiverem mapeadas.
+- **Etiqueta de palete impressa na Conferência de PA (29/09).** Hoje a etiqueta
+  do palete de produto acabado (PA-…, `EtiquetasWMS.pagina('palete')` em
+  `shared/etiquetas-wms.js`) sai pela tela Movimentar (🏷️ por lote). O ponto
+  natural é imprimir automaticamente quando a Conferência de PA cria os
+  paletes (`estoque.html`, aba Conferência de PA / `finalizarConferenciaPA`).
+- **Leitura de etiqueta no iPhone.** O botão 📷 Ler da Movimentar usa o
+  `BarcodeDetector` do navegador, que existe no Chrome do Android mas não no
+  Safari/iOS. No iPhone o campo aceita digitação e leitor Bluetooth; se virar
+  necessidade, embutir um leitor em JS (ex.: ZXing) — o mesmo já validado em
+  `run_etiquetas_leitura_test.js`.

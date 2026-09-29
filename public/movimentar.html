@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Movimentar material</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+<script src="shared/utils.js"></script><script src="auth_check.js"></script><script src="shared/qrcode-lib.js"></script><script src="shared/seletor-endereco.js"></script><script src="shared/movimentacao-wms.js"></script><script src="shared/etiquetas-wms.js"></script><link rel="stylesheet" href="shared/movimentar.css"><link rel="stylesheet" href="shared/theme.css">
+<style>
+body{margin:0;background:#f5f6fa;font-family:var(--font-ui);color:#182230}.wrap{max-width:1280px;margin:auto;padding:26px 18px}h1{margin:0}h2{font-size:19px;margin:0 0 12px}.sub{font-size:13px;color:#667085;margin-top:5px}.card{background:#fff;border-radius:15px;padding:18px;margin-top:16px;border:1px solid #eaecf0}.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.item{padding:12px;border:1px solid #e2e6ee;border-radius:10px;margin:8px 0}.item.selected{border-color:#17479e;background:#f1f6ff}.item.blocked{background:#f9fafb}.badge{font-size:11px;font-weight:700;background:#e7efff;color:#17479e;border-radius:20px;padding:3px 7px}.warning{color:#92400e}.btn{border:0;border-radius:8px;padding:11px 14px;background:#0a1c69;color:#fff;font-weight:700;cursor:pointer}.btn:disabled{opacity:.5}label{font-size:12px;font-weight:700;color:#475467;display:block;margin:9px 0 4px}input,select,textarea{width:100%;box-sizing:border-box;padding:9px;border:1px solid #d0d5dd;border-radius:7px;font:inherit;font-size:13px}input[type=checkbox]{width:auto;margin-right:8px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px;border-bottom:1px solid #eaecf0;text-align:left;vertical-align:top}.notice{padding:12px;background:#eef5ff;border-left:3px solid #2e6ac6;font-size:13px;border-radius:5px;margin:12px 0}.error{background:#fff2f0;border-color:#c4320a;color:#912018}.scroll{overflow:auto}.list{max-height:620px;overflow:auto}summary{cursor:pointer}#resultado:empty{display:none}@media(max-width:850px){.grid{grid-template-columns:1fr}}@media(max-width:450px){.fields{grid-template-columns:1fr}}
+</style></head><body class="kuryos-theme has-sidebar"><main class="wrap">
+<h1>Movimentar material</h1>
+<p class="sub">De onde sai, o que vai, para onde vai. Mover muda só a posição do material: o saldo não muda.</p>
+<div id="resultado" class="mv-aviso" role="status" aria-live="polite" hidden></div>
+
+<section class="card mv-passo"><h2><span class="mv-n">1</span> De onde</h2>
+<label for="deCodigo">Posição, palete ou lote</label>
+<div class="mv-entrada"><input id="deCodigo" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ex.: FAB-1.1.1, PA-26246-07-P1 ou AK-2026-000576" enterkeyhint="go"><button class="btn ghost" id="btnCamDe" type="button" title="Ler com a câmera">📷 Ler</button></div>
+<div class="mv-atalhos"><button class="btn ghost" id="btnMapaDe" type="button">🗺️ Escolher no mapa</button><button class="btn ghost" id="btnDoca" type="button">🚚 Doca</button></div>
+<div id="deEscolhido" class="mv-escolhido"></div><div id="deConteudo"></div>
+</section>
+
+<section class="card mv-passo" id="passoOque" hidden><h2><span class="mv-n">2</span> O que vai <small id="oqueResumo" class="mv-sub"></small></h2>
+<div id="oqueLista"></div></section>
+
+<section class="card mv-passo" id="passoPara" hidden><h2><span class="mv-n">3</span> Para onde</h2>
+<label for="paraCodigo">Posição de destino</label>
+<div class="mv-entrada"><input id="paraCodigo" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ex.: GAL-2.3.1" enterkeyhint="go"><button class="btn ghost" id="btnCamPara" type="button" title="Ler com a câmera">📷 Ler</button></div>
+<div class="mv-atalhos"><button class="btn ghost" id="btnMapaPara" type="button">🗺️ Escolher no mapa</button><button class="btn ghost" id="btnParaDoca" type="button">🚚 Levar para a Doca</button></div>
+<div id="paraSugestoes" class="mv-sugestoes"></div>
+<div id="paraEscolhido" class="mv-escolhido"></div><div id="paraSituacao" class="mv-situacao" hidden></div>
+</section>
+
+<section class="card mv-passo" id="passoConfirmar" hidden><h2><span class="mv-n">4</span> Confirmar</h2>
+<label for="motivo">Motivo</label><select id="motivo"></select>
+<p id="confResumo" class="mv-resumo"></p><ul id="confErros" class="mv-erros"></ul>
+<button class="btn mv-grande" id="btnMover" type="button" disabled>Mover</button>
+</section>
+
+<section class="card"><h2>Últimas movimentações</h2><div class="table-wrap"><table class="mv-tabela"><thead><tr><th>Quando</th><th>Item</th><th>De → Para</th><th class="num">Quantidade</th><th>Motivo</th><th>Quem</th></tr></thead><tbody id="ultimas"><tr><td colspan="6">Carregando…</td></tr></tbody></table></div></section>
+
+<section class="card"><details><summary><h2 style="display:inline">🏷️ Etiquetas de endereço</h2></summary>
+<p class="sub">Etiqueta para colar na posição: código grande, código de barras e QR (testados para leitura em impressora térmica e celular). Com ela, os passos 1 e 3 são só apontar a câmera ou o leitor.</p>
+<div class="mv-atalhos"><div><label for="etArea">Área</label><select id="etArea"></select></div><div><label for="etFormato">Formato</label><select id="etFormato"><option value="endereco">Impressora de etiqueta (100 × 50 mm)</option><option value="endereco-a4">Folha A4 (10 por folha)</option></select></div><div><label for="etRua">Rua (vazio = todas)</label><input id="etRua" type="number" min="1" style="width:110px"></div><button class="btn" id="btnEtiquetas" type="button">🏷️ Imprimir etiquetas</button></div>
+</details></section>
+
+<div id="camera" class="mv-camera" hidden><video id="cameraVideo" playsinline muted></video><p>Aponte para o código de barras ou QR</p><button class="btn" id="cameraFechar" type="button">Fechar</button></div>
+</main>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script><script src="shared/movimentar-tela.js"></script>
+</body></html>

@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/etiquetas-wms.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/calendario-logistica.js"></script>
@@ -1252,30 +1253,15 @@ function incrementarEstoque(itensRecebidos, origemTipo, origemRef) {
   }));
 }
 
-function escaparEtiqueta(valor) {
-  return String(valor == null ? '' : valor).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; });
-}
+// Etiqueta do lote recebido (AK-…): modelo único do armazém em
+// shared/etiquetas-wms.js desde 29/09 -- código de barras na largura toda,
+// com margem branca, e QR ao lado do número (lê em térmica e celular,
+// ver run_etiquetas_leitura_test.js).
 function imprimirEtiquetasRecebimento(lotes) {
   if (!lotes || !lotes.length) return;
-  var janela = window.open('', '_blank', 'width=900,height=700');
-  if (!janela) { showAlert('O navegador bloqueou a janela de etiquetas. Libere pop-ups e use Reimprimir no Histórico.', 'danger'); return; }
-  var etiquetas = [];
-  lotes.forEach(function(l) { for (var v = 1; v <= (Number(l.qtdVolumes) || 1); v++) etiquetas.push({lote:l, volume:v, total:Number(l.qtdVolumes) || 1}); });
-  var cards = etiquetas.map(function(et) {
-    var l = et.lote;
-    return '<section><div class="status">QUARENTENA</div><h1>' + escaparEtiqueta(l.loteInterno) + '</h1>' +
-      '<h2>' + escaparEtiqueta(l.materialCodigo) + ' — ' + escaparEtiqueta(l.materialNome) + '</h2>' +
-      '<div class="grid"><b>Lote fornecedor</b><span>' + escaparEtiqueta(l.loteOrigem) + '</span>' +
-      '<b>Fornecedor</b><span>' + escaparEtiqueta(l.fornecedorNome || '—') + '</span>' +
-      '<b>Quantidade</b><span>' + escaparEtiqueta(l.quantidade) + ' ' + escaparEtiqueta(l.unidade) + '</span>' +
-      '<b>Volume</b><span>' + et.volume + ' de ' + et.total + '</span>' +
-      '<b>Recebimento / NF</b><span>' + escaparEtiqueta(l.dataRecebimento) + ' · ' + escaparEtiqueta(l.notaFiscal) + '</span>' +
-      '<b>Validade</b><span>' + escaparEtiqueta(l.dataValidade || 'Não se aplica') + '</span>' +
-      '<b>Endereço</b><span>' + escaparEtiqueta(l.enderecoCodigo || '—') + '</span></div>' +
-      '<div class="codes">' + code39Svg(l.loteInterno, 10, 0.25) + qrCodeSvg(l.loteInterno, 18) + '</div></section>';
-  }).join('');
-  janela.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas de recebimento</title><style>@page{size:100mm 70mm;margin:4mm}body{font-family:Arial,sans-serif;margin:0;color:#111}section{width:92mm;min-height:62mm;border:2px solid #111;border-radius:8px;padding:5mm;box-sizing:border-box;page-break-after:always;position:relative}.status{position:absolute;right:5mm;top:5mm;background:#f59e0b;color:#111;padding:3px 8px;border-radius:12px;font-size:10px;font-weight:800}h1{font-size:24px;margin:0 0 5px}h2{font-size:12px;margin:0 0 9px;max-width:66mm}.grid{display:grid;grid-template-columns:30mm 1fr;gap:3px;font-size:10px}.codes{display:flex;align-items:center;justify-content:space-between;margin-top:5px;height:18mm}.codes svg{max-width:68mm}@media print{section:last-child{page-break-after:auto}}</style></head><body>' + cards + '<script>window.onload=function(){window.print()}<\/script></body></html>');
-  janela.document.close();
+  if (!EtiquetasWMS.imprimir('recebimento', lotes, 'Etiquetas de recebimento')) {
+    showAlert('O navegador bloqueou a janela de etiquetas. Libere pop-ups e use Reimprimir no Histórico.', 'danger');
+  }
 }
 
 // Fluxo vigente: o navegador apenas coleta os dados. O servidor gera os AKs
