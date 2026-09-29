@@ -99,6 +99,26 @@ const titulo = (page, re) => page.waitForFunction((src) => new RegExp(src).test(
   const browser = await chromium.launch({headless: true, channel: 'chrome'});
   try {
     const {page, errors} = await abrir(browser, 'cq', 'qualidade_historico.html');
+    // ── Semana (padrão): pipeline da semana anterior completa ──
+    await page.waitForFunction(() => /Semana de 21\/09 a 27\/09/.test(document.getElementById('semTitulo').textContent), null, {timeout: 8000});
+    assert.match(await page.locator('#semRot').textContent(), /semana anterior/);
+    const fluxo = await page.locator('#semFluxo').innerText();
+    // 0 em aberto + 6 entraram (2 MP decididas, 1 MP em quarentena, 1 embalagem, 2 ciclos de bulk) − 5 decididas = 1.
+    assert.match(fluxo, /0\s*Em aberto no início[\s\S]*6\s*Entraram[\s\S]*5\s*Decididas[\s\S]*1\s*Em aberto no fim/);
+    assert.match(fluxo, /\+6 vs semana anterior \(0\)/);
+    assert.match(await page.locator('#semDecisoes').innerText(), /Aprovado: 2[\s\S]*Aprovado c\/ concessão: 1[\s\S]*Reprovado: 2/);
+    assert.match(await page.locator('#semTipos').innerText(), /Matéria-prima\s*0\s*3\s*2\s*50%\s*1/);
+    assert.equal(await page.locator('#semLista tr').count(), 5, 'as análises decididas na semana');
+    assert.equal(await page.locator('#semProx').isDisabled(), false);
+    // Avança para a semana atual: herda o que ficou em aberto.
+    await page.click('#semProx');
+    await page.waitForFunction(() => /em andamento/.test(document.getElementById('semRot').textContent));
+    assert.match(await page.locator('#semFluxo').innerText(), /1\s*Em aberto no início[\s\S]*0\s*Entraram[\s\S]*0\s*Decididas[\s\S]*1\s*Em aberto no fim \(até agora\)/);
+    assert.equal(await page.locator('#semProx').isDisabled(), true, 'não vai para o futuro');
+    await page.click('#semAnt');
+
+    // ── Período ──
+    await page.click('.aba[data-aba="dash"]');
     await page.waitForFunction(() => /Análises decididas/.test(document.getElementById('tiles').innerText), null, {timeout: 8000});
     const tiles = await page.locator('#tiles').innerText();
     // 5 análises: 2 MP, 1 embalagem, 2 ciclos de bulk.
@@ -121,6 +141,11 @@ const titulo = (page, re) => page.waitForFunction((src) => new RegExp(src).test(
     await page.waitForFunction(() => /^1\s*Análises decididas/.test(document.getElementById('tiles').innerText));
     assert.equal(await page.locator('#tbTipos tr').count(), 1);
     await page.selectOption('#fTipo', '');
+    // Clique na barra da semana abre o pipeline daquela semana.
+    await page.locator('#graf .graf-col').nth(6).click();
+    await page.waitForFunction(() => document.getElementById('p-sem').classList.contains('on'));
+    assert.match(await page.locator('#semTitulo').textContent(), /Semana de 21\/09 a 27\/09/);
+    assert.equal(await page.locator('#semLista tr').count(), 5);
 
     // ── Histórico: busca sem acento, resultado, link do laudo ──
     await page.click('.aba[data-aba="hist"]');
@@ -143,7 +168,7 @@ const titulo = (page, re) => page.waitForFunction((src) => new RegExp(src).test(
     // O menu da Qualidade leva à página.
     assert.equal(await page.locator('.kt-sidebar a[href="qualidade_historico.html"]').count(), 1);
     if (process.env.QH_SCREENSHOT) {
-      await page.click('.aba[data-aba="dash"]');
+      await page.click('.aba[data-aba="sem"]');
       await page.screenshot({path: process.env.QH_SCREENSHOT, fullPage: true});
     }
     assert.deepEqual(errors, [], 'erros: ' + errors.join(' | '));

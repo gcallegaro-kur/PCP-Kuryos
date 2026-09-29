@@ -127,13 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Pipeline semanal da Qualidade (2026-09-29).** Aba
-  "Semana" em `qualidade_historico.html`: em aberto no início → entraram →
-  decididas → em aberto no fim, com Δ contra a semana anterior; clique na
-  barra do gráfico abre a semana. **Arquivos ativos:**
-  `public/qualidade_historico.html`, `public/shared/qualidade-historico.js`,
-  `run_qualidade_historico_test.js`, `run_qualidade_historico_ui_test.js`,
-  `public/manual_qualidade.html`.
+- **PUBLICADO — Pipeline semanal da Qualidade (2026-09-29).** Aba "Semana"
+  (padrão) em `qualidade_historico.html`: abre na semana anterior completa;
+  em aberto no início + entraram − decididas = em aberto no fim, com Δ vs
+  semana anterior; decisões por resultado, por tipo, lista da semana; ◀ ▶.
+  "Período" = indicadores de antes; clique na barra do gráfico abre a semana.
+  Motor: `itensFluxo` (decididas + quarentena + bulk AGUARDANDO_CQ) e
+  `pipelineSemana`. Na base a conta fecha em todas as semanas: 14/09 entraram
+  18 e nada decidido; 21/09 entraram 35 (32 paletes), 26 em aberto no fim;
+  28/09 (até agora) 30 decididas, 2 em aberto. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Histórico e indicadores da Qualidade (2026-09-29).**
   `qualidade_historico.html` (menu Qualidade › Histórico e Indicadores; página

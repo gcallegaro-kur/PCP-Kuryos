@@ -141,6 +141,36 @@ const por = (id) => A.find((x) => x.id === id);
   assert.strictEqual(Q.filtrar(A, {busca: 'lia'}).length, 3);
 }
 
+// ── Pipeline semanal: aberto no início + entraram − decididas = aberto no fim
+{
+  const itens = Q.itensFluxo(estoque, ops, ctx);
+  assert.strictEqual(itens.length, 11, '8 decididas + 3 em aberto (MP em quarentena, palete, bulk aguardando)');
+  const agora = new Date(H('2026-09-29T09:00')).getTime();
+  const semAnt = Q.semanaAnterior(agora);
+  assert.strictEqual(semAnt, Q.inicioDaSemana(new Date(H('2026-09-23T12:00')).getTime()), 'a semana completa anterior é a de 21/09');
+  const p = Q.pipelineSemana(itens, semAnt);
+  const s = p.semana;
+  assert.deepStrictEqual([s.abertoInicio, s.entraram, s.decididas, s.abertoFim], [0, 11, 8, 3]);
+  assert.strictEqual(s.abertoInicio + s.entraram - s.decididas, s.abertoFim, 'a conta fecha');
+  assert.deepStrictEqual([s.APROVADO, s.CONCESSAO, s.REPROVADO, s.RETIDO], [4, 1, 2, 1]);
+  assert.strictEqual(s.taxaAprovacao, 5 / 8);
+  assert.strictEqual(s.analises.length, 8, 'as análises decididas na semana, para o detalhe');
+  assert.ok(s.analises.every((a, i) => i === 0 || s.analises[i - 1].em >= a.em));
+  assert.deepStrictEqual([p.anterior.entraram, p.anterior.decididas], [0, 0], 'semana de 14/09 vazia');
+  // Por tipo, a mesma conta.
+  const mp = p.porTipo.mp;
+  assert.deepStrictEqual([mp.abertoInicio, mp.entraram, mp.decididas, mp.abertoFim], [0, 3, 2, 1]);
+  assert.strictEqual(p.porTipo.bulk.abertoFim, 1);
+  // A semana corrente herda o que ficou em aberto.
+  const atual = Q.pipelineSemana(itens, agora);
+  assert.deepStrictEqual([atual.semana.abertoInicio, atual.semana.entraram, atual.semana.decididas, atual.semana.abertoFim], [3, 0, 0, 3]);
+  assert.strictEqual(atual.anterior.decididas, 8, 'a anterior da corrente é a de 21/09');
+  // Filtro por tipo.
+  const soPa = Q.pipelineSemana(itens, semAnt, {tipo: 'pa'});
+  assert.deepStrictEqual([soPa.semana.entraram, soPa.semana.decididas, soPa.semana.abertoFim], [3, 2, 1]);
+  assert.deepStrictEqual(Object.keys(soPa.porTipo), ['pa']);
+}
+
 // ── Utilitários ────────────────────────────────────────────────────────
 assert.strictEqual(Q.quantil([10, 1, 5], 0.5), 5);
 assert.strictEqual(Q.quantil([], 0.5), null);

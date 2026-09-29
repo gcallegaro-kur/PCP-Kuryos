@@ -251,9 +251,77 @@
     });
   }
 
+  /* ── Pipeline semanal (29/09) ──
+     Pedido do usuário: "um pipeline semanal, acompanhando como foi a semana
+     anterior". Cada coisa que passou pela Qualidade é um item com ENTRADA
+     (chegou para análise) e, se já decidida, DECISÃO. Numa semana:
+       em aberto no início + entraram − decididas = em aberto no fim
+     A conta fecha por construção: um item que entrou e foi decidido na
+     mesma semana está nas duas parcelas do meio. */
+  function itensFluxo(estoqueLotes, ops, ctx) {
+    var itens = coletar(estoqueLotes, ops, ctx).map(function(a) {
+      // Decidido sem data de entrada conhecida: conta como entrou e saiu
+      // no mesmo instante -- aparece nas decisões sem inventar fila.
+      return {id: a.id, tipo: a.tipo, entrada: a.entrada != null ? a.entrada : a.em, decisao: a.em, resultado: a.resultado, analise: a};
+    });
+    var c = ctx || {};
+    Object.keys(estoqueLotes || {}).forEach(function(ik) {
+      Object.keys(estoqueLotes[ik] || {}).forEach(function(lk) {
+        var l = estoqueLotes[ik][lk];
+        if (!l || l.status !== 'QUARENTENA') return;
+        var e = entradaDoLote(l);
+        if (e != null) itens.push({id: ik + '/' + lk, tipo: tipoDoLote(l, c.materiais), entrada: e, decisao: null, resultado: null});
+      });
+    });
+    Object.keys(ops || {}).forEach(function(k) {
+      var f = (ops[k] || {}).manipulacao;
+      if (!f || f.status !== 'AGUARDANDO_CQ') return;
+      var e = ms((f.manipulacao || {}).fim);
+      if (e != null) itens.push({id: k + '#c' + (parseInt(f.ciclo || 1, 10) || 1), tipo: 'bulk', entrada: e, decisao: null, resultado: null});
+    });
+    return itens;
+  }
+
+  function contarSemana(itens, ini, fim) {
+    var r = {abertoInicio: 0, entraram: 0, decididas: 0, abertoFim: 0,
+      APROVADO: 0, CONCESSAO: 0, REPROVADO: 0, RETIDO: 0, tempos: [], analises: []};
+    itens.forEach(function(it) {
+      var aberto = function(t) { return it.entrada < t && (it.decisao == null || it.decisao >= t); };
+      if (aberto(ini)) r.abertoInicio++;
+      if (it.entrada >= ini && it.entrada < fim) r.entraram++;
+      if (it.decisao != null && it.decisao >= ini && it.decisao < fim) {
+        r.decididas++; r[it.resultado]++;
+        if (it.analise) { r.analises.push(it.analise); if (it.analise.leadHoras != null) r.tempos.push(it.analise.leadHoras); }
+      }
+      if (aberto(fim)) r.abertoFim++;
+    });
+    r.taxaAprovacao = r.decididas ? (r.APROVADO + r.CONCESSAO) / r.decididas : null;
+    r.tempoMedianoH = quantil(r.tempos, 0.5);
+    delete r.tempos;
+    r.analises.sort(function(a, b) { return b.em - a.em; });
+    return r;
+  }
+
+  /* A semana que começa em `inicioSemana` (segunda 00:00), no total e por
+     tipo, e a anterior para comparação. opts.tipo filtra. */
+  function pipelineSemana(itens, inicioSemana, opts) {
+    var o = opts || {};
+    var lista = o.tipo ? itens.filter(function(i) { return i.tipo === o.tipo; }) : itens;
+    var ini = inicioDaSemana(inicioSemana), fim = ini + 7 * 86400000, iniAnt = ini - 7 * 86400000;
+    var porTipo = {};
+    ORDEM_TIPOS.forEach(function(t) {
+      if (o.tipo && t !== o.tipo) return;
+      porTipo[t] = contarSemana(itens.filter(function(i) { return i.tipo === t; }), ini, fim);
+    });
+    return {inicio: ini, fim: fim, semana: contarSemana(lista, ini, fim), anterior: contarSemana(lista, iniAnt, ini), porTipo: porTipo};
+  }
+  // A última semana COMPLETA antes de `agora` (a "semana anterior").
+  function semanaAnterior(agora) { return inicioDaSemana(agora) - 7 * 86400000; }
+
   return {
     TIPOS: TIPOS, ORDEM_TIPOS: ORDEM_TIPOS, RESULTADOS: RESULTADOS, resultadoDe: resultadoDe,
     tipoDoLote: tipoDoLote, coletar: coletar, pendentes: pendentes, kpis: kpis, filtrar: filtrar,
-    quantil: quantil, inicioDaSemana: inicioDaSemana
+    quantil: quantil, inicioDaSemana: inicioDaSemana,
+    itensFluxo: itensFluxo, pipelineSemana: pipelineSemana, semanaAnterior: semanaAnterior
   };
 });

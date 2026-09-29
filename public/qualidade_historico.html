@@ -76,6 +76,26 @@
     .legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
     #dica{position:fixed;z-index:50;pointer-events:none;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.16);padding:8px 10px;font-size:12px;display:none;min-width:150px}
     .nota{font-size:12px;color:var(--muted);line-height:1.5}
+    /* Pipeline semanal (29/09) */
+    .sem-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+    .sem-nav button{min-width:40px;min-height:38px;border:1.5px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:16px;cursor:pointer}
+    .sem-nav button:disabled{opacity:.35;cursor:default}
+    .sem-nav .titulo{font-size:17px;font-weight:800}
+    .sem-nav .rot{font-size:12px;color:var(--muted);font-weight:600}
+    .fluxo{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;align-items:stretch;gap:8px;margin-bottom:14px}
+    .fluxo .etapa{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px}
+    .fluxo .etapa .v{font-size:30px;font-weight:800;letter-spacing:-.02em}
+    .fluxo .etapa .l{font-size:12.5px;font-weight:700;color:var(--text)}
+    .fluxo .etapa .d{font-size:11.5px;color:var(--muted);margin-top:4px}
+    .fluxo .op{align-self:center;font-size:20px;font-weight:800;color:var(--muted)}
+    .fluxo .etapa.fim{border:2px solid var(--primary)}
+    .split{display:flex;height:14px;gap:2px;margin:8px 0 6px}
+    .split div{height:100%}
+    .split div:first-child{border-radius:4px 0 0 4px}.split div:last-child{border-radius:0 4px 4px 0}
+    .split div:only-child{border-radius:4px}
+    .graf-col{cursor:pointer}.graf-col:hover .graf-pilha{opacity:.8}
+    .graf-col.sel .graf-tot{color:var(--primary)}
+    @media(max-width:900px){.fluxo{grid-template-columns:1fr 1fr}.fluxo .op{display:none}}
     @media(max-width:980px){ .header{padding-left:62px} }
     @media(max-width:700px){
       .header h1{font-size:22px}
@@ -102,11 +122,12 @@
 <div class="main">
   <div class="alert" id="alertBox"></div>
   <div class="abas">
-    <button class="aba on" data-aba="dash">Indicadores</button>
+    <button class="aba on" data-aba="sem">Semana</button>
+    <button class="aba" data-aba="dash">Período</button>
     <button class="aba" data-aba="hist">Histórico de análises</button>
   </div>
   <div class="filtros">
-    <select id="fPeriodo" aria-label="Período">
+    <select id="fPeriodo" aria-label="Período" style="display:none">
       <option value="30">Últimos 30 dias</option>
       <option value="90" selected>Últimos 90 dias</option>
       <option value="180">Últimos 180 dias</option>
@@ -129,11 +150,43 @@
     <input type="search" id="fBusca" placeholder="Buscar item, lote, fornecedor, cliente, analista, RNC…" autocomplete="off" style="display:none">
   </div>
 
-  <!-- ══════════ INDICADORES ══════════ -->
-  <div class="painel on" id="p-dash">
+  <!-- ══════════ SEMANA: pipeline (29/09) ══════════
+       "Um pipeline semanal, acompanhando como foi a semana anterior":
+       em aberto no início + entraram − decididas = em aberto no fim. -->
+  <div class="painel on" id="p-sem">
+    <div class="sem-nav">
+      <button type="button" id="semAnt" title="Semana anterior">◀</button>
+      <div><div class="titulo" id="semTitulo">—</div><div class="rot" id="semRot"></div></div>
+      <button type="button" id="semProx" title="Próxima semana">▶</button>
+    </div>
+    <div class="fluxo" id="semFluxo"></div>
+    <div class="grade2">
+      <div class="card">
+        <div class="card-header"><h3>Decisões da semana</h3><span class="sub" id="semAprov"></span></div>
+        <div class="card-body" id="semDecisoes"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Por tipo de análise</h3></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Tipo</th><th class="num">Aberto no início</th><th class="num">Entraram</th><th class="num">Decididas</th><th class="num">Aprovação</th><th class="num">Aberto no fim</th></tr></thead>
+          <tbody id="semTipos"></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 id="semListaTit">Análises decididas na semana</h3></div>
+      <div style="overflow-x:auto"><table class="resp">
+        <thead><tr><th>Decidido em</th><th>Tipo</th><th>Item</th><th>Lote</th><th>Fornecedor / cliente</th><th>Resultado</th><th>Analista</th><th class="num">Tempo</th><th>RNC</th><th></th></tr></thead>
+        <tbody id="semLista"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- ══════════ PERÍODO ══════════ -->
+  <div class="painel" id="p-dash">
     <div class="tiles" id="tiles"><div class="no-data">Carregando…</div></div>
     <div class="card">
-      <div class="card-header"><h3>Análises por semana</h3><span class="sub" id="grafSub"></span></div>
+      <div class="card-header"><h3>Análises por semana</h3><span class="sub"><span id="grafSub"></span> · clique numa semana para abrir o pipeline</span></div>
       <div class="card-body">
         <div class="legenda" id="legenda"></div>
         <div class="graf" id="graf"></div>
@@ -192,7 +245,8 @@ var db = firebase.database();
 /* Histórico e indicadores da Qualidade (29/09). Motor em
    shared/qualidade-historico.js; aqui só a tela. Nada é gravado. */
 var dados = {estoque: null, ops: null, materiais: null, pedidosCompra: null, rncs: null};
-var analises = [], pend = null, abaAtual = 'dash';
+var analises = [], pend = null, itens = [], abaAtual = 'sem';
+var semanaSel = null; // início (ms) da semana aberta no pipeline; padrão: a anterior completa
 var Q = QualidadeHistorico;
 var ROT_RES = {APROVADO: 'Aprovado', CONCESSAO: 'Aprovado c/ concessão', REPROVADO: 'Reprovado', RETIDO: 'Retido'};
 
@@ -229,12 +283,13 @@ function recalcular() {
   if (!pronto()) return;
   var ctx = {materiais: dados.materiais, pedidosCompra: dados.pedidosCompra, rncs: dados.rncs};
   analises = Q.coletar(dados.estoque, dados.ops, ctx);
+  itens = Q.itensFluxo(dados.estoque, dados.ops, ctx);
   pend = Q.pendentes(dados.estoque, dados.ops, ctx, new Date());
   render();
 }
 function render() {
   if (!pronto()) return;
-  if (abaAtual === 'dash') renderDash(); else renderHist();
+  if (abaAtual === 'sem') renderSemana(); else if (abaAtual === 'dash') renderDash(); else renderHist();
 }
 
 function tile(v, l, s) {
@@ -289,6 +344,7 @@ function renderDash() {
       dica.style.top = (ev.clientY + 14) + 'px';
     };
     col.onmouseleave = function() { dica.style.display = 'none'; };
+    col.onclick = function() { dica.style.display = 'none'; semanaSel = s.inicio; irParaAba('sem'); };
   });
 
   document.getElementById('tbTipos').innerHTML = Q.ORDEM_TIPOS.filter(function(t) { return !f.tipo || t === f.tipo; }).map(function(t) {
@@ -320,7 +376,10 @@ function renderHist() {
   document.getElementById('histTitulo').textContent = 'Análises (' + lista.length + ')';
   var tb = document.getElementById('tbHist');
   if (!lista.length) { tb.innerHTML = '<tr><td colspan="10" class="no-data">Nenhuma análise com esses filtros.</td></tr>'; return; }
-  tb.innerHTML = lista.slice(0, 400).map(function(a) {
+  tb.innerHTML = lista.slice(0, 400).map(linhaAnalise).join('') +
+    (lista.length > 400 ? '<tr><td colspan="10" class="no-data">Mostrando as 400 mais recentes — refine a busca.</td></tr>' : '');
+}
+function linhaAnalise(a) {
     var acoes = [];
     // Laudo impresso: só lote em estoque (MP, embalagem, palete) tem laudo emitível.
     if (a.tipo !== 'bulk') acoes.push('<a href="qualidade.html?emitir=' + encodeURIComponent(a.itemCodigo) + '&lote=' + encodeURIComponent(a.loteKey) + '">Laudo</a>');
@@ -334,21 +393,65 @@ function renderHist() {
       '<td>' + escapeHtml(a.por || '—') + '</td><td class="num">' + tempo(a.leadHoras) + '</td>' +
       '<td>' + (a.rnc ? '<a href="qualidade.html?tab=rnc" style="color:var(--primary);font-weight:700;text-decoration:none">' + escapeHtml(a.rnc) + '</a>' : '—') + '</td>' +
       '<td class="acoes">' + acoes.join('') + '</td></tr>';
-  }).join('') + (lista.length > 400 ? '<tr><td colspan="10" class="no-data">Mostrando as 400 mais recentes — refine a busca.</td></tr>' : '');
 }
 
-document.querySelectorAll('.aba').forEach(function(b) {
-  b.onclick = function() {
-    abaAtual = b.getAttribute('data-aba');
-    document.querySelectorAll('.aba').forEach(function(x) { x.classList.toggle('on', x === b); });
-    document.getElementById('p-dash').classList.toggle('on', abaAtual === 'dash');
-    document.getElementById('p-hist').classList.toggle('on', abaAtual === 'hist');
-    // Resultado e busca só fazem sentido no histórico.
-    document.getElementById('fResultado').style.display = abaAtual === 'hist' ? '' : 'none';
-    document.getElementById('fBusca').style.display = abaAtual === 'hist' ? '' : 'none';
-    render();
-  };
-});
+/* ── Pipeline da semana ── */
+function delta(v, ant) {
+  var d = v - ant;
+  return d === 0 ? 'igual à semana anterior (' + ant + ')' : (d > 0 ? '+' : '−') + Math.abs(d) + ' vs semana anterior (' + ant + ')';
+}
+function ddmm(ms) { var d = new Date(ms); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
+function renderSemana() {
+  var agora = Date.now();
+  if (semanaSel == null) semanaSel = Q.semanaAnterior(agora);
+  var f = filtros();
+  var p = Q.pipelineSemana(itens, semanaSel, {tipo: f.tipo});
+  var s = p.semana, a = p.anterior;
+  var corrente = p.inicio === Q.inicioDaSemana(agora);
+  document.getElementById('semTitulo').textContent = 'Semana de ' + ddmm(p.inicio) + ' a ' + ddmm(p.fim - 86400000);
+  document.getElementById('semRot').textContent = corrente ? 'semana atual, em andamento' :
+    (p.inicio === Q.semanaAnterior(agora) ? 'semana anterior' : '') + (f.tipo ? (p.inicio === Q.semanaAnterior(agora) ? ' · ' : '') + Q.TIPOS[f.tipo].rotulo : '');
+  document.getElementById('semProx').disabled = corrente;
+  var etapa = function(v, l, d, cls) { return '<div class="etapa' + (cls ? ' ' + cls : '') + '"><div class="v">' + fmtNum(v) + '</div><div class="l">' + l + '</div><div class="d">' + d + '</div></div>'; };
+  document.getElementById('semFluxo').innerHTML =
+    etapa(s.abertoInicio, 'Em aberto no início', 'o que vinha da semana anterior') + '<div class="op">+</div>' +
+    etapa(s.entraram, 'Entraram', delta(s.entraram, a.entraram)) + '<div class="op">−</div>' +
+    etapa(s.decididas, 'Decididas', delta(s.decididas, a.decididas)) + '<div class="op">=</div>' +
+    etapa(s.abertoFim, 'Em aberto no fim' + (corrente ? ' (até agora)' : ''), delta(s.abertoFim, a.abertoFim), 'fim');
+
+  var ordem = ['APROVADO', 'CONCESSAO', 'REPROVADO', 'RETIDO'];
+  document.getElementById('semAprov').textContent = s.decididas ? 'aprovação ' + pct(s.taxaAprovacao) + (a.decididas ? ' (anterior ' + pct(a.taxaAprovacao) + ')' : '') : '';
+  document.getElementById('semDecisoes').innerHTML = s.decididas
+    ? '<div class="split" role="img" aria-label="Decisões por resultado">' + ordem.filter(function(r) { return s[r]; }).map(function(r) {
+        return '<div class="c-' + r + '" style="flex:' + s[r] + '" title="' + ROT_RES[r] + ': ' + s[r] + '"></div>';
+      }).join('') + '</div>' +
+      '<div class="legenda">' + ordem.map(function(r) { return '<span><i class="c-' + r + '"></i>' + ROT_RES[r] + ': <b>' + s[r] + '</b></span>'; }).join('') + '</div>' +
+      '<div class="nota">Tempo mediano da entrada à decisão: <b>' + tempo(s.tempoMedianoH) + '</b>' +
+        (a.tempoMedianoH != null ? ' (anterior ' + tempo(a.tempoMedianoH) + ')' : '') + '.</div>'
+    : '<div class="no-data">Nenhuma decisão nesta semana.</div>';
+  document.getElementById('semTipos').innerHTML = Q.ORDEM_TIPOS.filter(function(t) { return p.porTipo[t]; }).map(function(t) {
+    var r = p.porTipo[t];
+    return '<tr><td><b>' + Q.TIPOS[t].rotulo + '</b></td><td class="num">' + r.abertoInicio + '</td><td class="num">' + r.entraram +
+      '</td><td class="num">' + r.decididas + '</td><td class="num">' + pct(r.taxaAprovacao) + '</td><td class="num"><b>' + r.abertoFim + '</b></td></tr>';
+  }).join('');
+  document.getElementById('semListaTit').textContent = 'Análises decididas na semana (' + s.analises.length + ')';
+  document.getElementById('semLista').innerHTML = s.analises.length ? s.analises.map(linhaAnalise).join('')
+    : '<tr><td colspan="10" class="no-data">Nenhuma análise decidida nesta semana.</td></tr>';
+}
+document.getElementById('semAnt').onclick = function() { semanaSel -= 7 * 86400000; renderSemana(); };
+document.getElementById('semProx').onclick = function() { semanaSel += 7 * 86400000; renderSemana(); };
+
+function irParaAba(aba) {
+  abaAtual = aba;
+  document.querySelectorAll('.aba').forEach(function(x) { x.classList.toggle('on', x.getAttribute('data-aba') === aba); });
+  ['sem', 'dash', 'hist'].forEach(function(k) { document.getElementById('p-' + k).classList.toggle('on', k === aba); });
+  // Período vale para Período e Histórico; resultado e busca, só no Histórico.
+  document.getElementById('fPeriodo').style.display = aba === 'sem' ? 'none' : '';
+  document.getElementById('fResultado').style.display = aba === 'hist' ? '' : 'none';
+  document.getElementById('fBusca').style.display = aba === 'hist' ? '' : 'none';
+  render();
+}
+document.querySelectorAll('.aba').forEach(function(b) { b.onclick = function() { irParaAba(b.getAttribute('data-aba')); }; });
 ['fPeriodo', 'fTipo', 'fResultado'].forEach(function(id) { document.getElementById(id).addEventListener('change', render); });
 var _busca = null;
 document.getElementById('fBusca').addEventListener('input', function() { clearTimeout(_busca); _busca = setTimeout(render, 200); });
@@ -357,7 +460,8 @@ db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ?
 [['estoque_lotes', 'estoque'], ['ops', 'ops'], ['materiais', 'materiais'], ['pedidos_compra', 'pedidosCompra'], ['nao_conformidades', 'rncs']].forEach(function(p) {
   dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
 });
-if (new URLSearchParams(location.search).get('aba') === 'historico') document.querySelector('.aba[data-aba="hist"]').click();
+var abaUrl = new URLSearchParams(location.search).get('aba');
+if (abaUrl === 'historico') irParaAba('hist'); else if (abaUrl === 'periodo') irParaAba('dash');
 </script>
 </body>
 </html>
