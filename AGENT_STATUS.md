@@ -127,6 +127,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Controle de OPs menos poluído (2026-09-29, opção A do usuário).**
+  `ops.html`: lista principal só com o que pede ação. OP concluída sai da
+  principal para a aba nova **Encerradas** (consulta, busca, link do Dossiê)
+  quando o PCP confirmou e todo o PA está liberado; com PA em quarentena/
+  reprovado ou conferência de PA aberta (ou confirmada há <7 dias sem
+  conferência) continua na principal, seção "Concluídas, com produto acabado
+  pendente". A situação é sempre calculada (`shared/situacao-op.js`), então a
+  OP volta sozinha se chegar devolução em quarentena. "Aguardando emissão de
+  OP" deixou de listar pedido já atendido (≥95%). Linha da OP: selos de
+  pendência (falta linha, divergência, transferência, sem pedido, Qualidade,
+  reprovado); quem emitiu e previsão de término ficam em "detalhes".
+  Testes: `run_situacao_op_test.js`, `run_encerradas_ops_ui_test.js`.
+  **Próximo:** mesmo tratamento em `pedidos.html`. Não medi a base real
+  (leitura de produção negada nesta sessão). Arquivos ativos: `pedidos.html`
+  quando eu começar.
+
 - **Incidente de deploy (29/09, ~1 min):** Hosting publicado de um worktree
   sem `e899e27`/`c1846b3` (barra de PA do Controle de OPs, já publicada pela
   outra sessão) voltou `ops.html` e tirou `shared/progresso-op.js` do ar.

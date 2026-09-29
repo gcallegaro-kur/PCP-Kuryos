@@ -18,6 +18,7 @@
   <script src="shared/expedicao.js"></script>
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/progresso-op.js"></script>
+  <script src="shared/situacao-op.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -413,9 +414,10 @@
   <!-- OPs ativas x checklist de recebimento das ordens físicas são duas
        visões diferentes do mesmo dado -- mesmo padrão de abas já usado em
        Pedidos (SKUs para Produção x Pedidos Comerciais). -->
-  <div style="display:flex;gap:6px;background:#f3f4f6;padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;max-width:480px">
+  <div style="display:flex;gap:6px;background:#f3f4f6;padding:4px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;max-width:640px">
     <button type="button" class="btn-sync" id="tabBtnAtivas" onclick="switchOpsTab('ativas')" style="flex:1;background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)">⚙️ OPs Ativas</button>
     <button type="button" class="btn-sync" id="tabBtnChecklist" onclick="switchOpsTab('checklist')" style="flex:1;background:none;box-shadow:none;color:var(--muted)">✅ Checklist de Ordens</button>
+    <button type="button" class="btn-sync" id="tabBtnEncerradas" onclick="switchOpsTab('encerradas')" style="flex:1;background:none;box-shadow:none;color:var(--muted)">🗄️ Encerradas</button>
   </div>
 
   <div id="tabPanelAtivas">
@@ -463,6 +465,22 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- Encerradas: OP concluída pelo PCP e com todo o PA liberado pela
+       Qualidade (shared/situacao-op.js). Consulta -- nada aqui pede ação. -->
+  <div id="tabPanelEncerradas" style="display:none">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <input type="text" id="encBusca" placeholder="🔎 Buscar por OP, lote, produto, SKU ou cliente..." style="flex:1;min-width:240px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px">
+      <span id="encResumo" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="card"><div class="table-container"><table>
+      <thead><tr>
+        <th style="width:110px">OP / Lote</th><th>Cliente</th><th>Produto</th>
+        <th style="width:190px">Produto acabado</th><th style="width:120px">Confirmada em</th><th style="width:90px;text-align:center">Dossiê</th>
+      </tr></thead>
+      <tbody id="enc-tbody"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Carregando…</td></tr></tbody>
+    </table></div></div>
   </div>
 
   <div id="tabPanelChecklist" style="display:none">
@@ -869,6 +887,7 @@
   function recalculateAndRenderOps() {
     renderOpsPanel();
     renderChecklist(); // no-op se a aba Checklist não estiver visível no momento
+    renderEncerradas(); // idem, para a aba Encerradas
   }
   
   // Normaliza a parte numérica do id do pedido (antes do "__sku") removendo
@@ -972,20 +991,29 @@
       .filter(o => o && o.status === 'Aguardando Confirmação')
       .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
 
-    // Pedidos (SKU alocado no pedido comercial) que ainda não têm nenhuma OP
-    // emitida vinculada — o indicativo visual de "falta emitir OP". Só conta
-    // OP ATIVA (opEstaAtiva) -- uma OP cancelada não deve "esconder" o
-    // pedido da lista de pendentes, senão ninguém percebe que precisa
-    // reemitir.
+    // Pedidos (SKU alocado no pedido comercial) que ainda precisam de OP. Só
+    // conta OP ATIVA (opEstaAtiva) -- uma OP cancelada não deve "esconder" o
+    // pedido, senão ninguém percebe que precisa reemitir. E pedido já atendido
+    // (produzido ≥ 95%) não é "aguardando emissão", mesmo sem marcação de
+    // concluído: era ruído -- ver SituacaoOp.pedidoPrecisaOp.
     const linkedSkuKeys = new Set(
       activeOps.map(o => o.skuPedidoKey).filter(Boolean)
     );
     const pedidosSemOp = Object.keys(pedidosGlobal)
       .map(k => ({ key: k, ...pedidosGlobal[k] }))
-      .filter(p => !isConcluido(p) && !linkedSkuKeys.has(p.key));
+      .filter(p => !isConcluido(p) && SituacaoOp.pedidoPrecisaOp(p, linkedSkuKeys.has(p.key)));
 
-    if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. Todas as OPs concluídas!</td></tr>';
+    // Opção A: concluída pelo PCP mas ainda com PA na Qualidade/Logística
+    // continua aqui, com linha enxuta. Só dá para decidir com a conciliação
+    // carregada (situacaoDaOp devolve ENCERRADA-neutra antes disso e a lista
+    // fica vazia -- o painel redesenha quando ela chega).
+    const opsConcluidasPendentes = Object.keys(opsGlobal)
+      .map(k => ({ key: k, ...opsGlobal[k] }))
+      .filter(o => o.status === 'Concluído' && ['NA_QUALIDADE', 'AGUARDA_LOGISTICA'].includes(situacaoDaOp(o).estado))
+      .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
+
+    if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0 && opsConcluidasPendentes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. As OPs concluídas estão na aba Encerradas.</td></tr>';
       return;
     }
 
@@ -1006,6 +1034,10 @@
     if (activeOps.length) {
       html += '<tr class="group-header"><td colspan="8">⚙️ OPs Emitidas em Aberto (' + activeOps.length + ')</td></tr>';
       html += activeOps.map(renderOpRow).join('');
+    }
+    if (opsConcluidasPendentes.length) {
+      html += '<tr class="group-header pending"><td colspan="8">🧪 Concluídas, com produto acabado pendente (' + opsConcluidasPendentes.length + ')</td></tr>';
+      html += opsConcluidasPendentes.map(renderOpConcluidaPendenteRow).join('');
     }
     if (pedidosSemOp.length) {
       html += '<tr class="group-header pending"><td colspan="8">⚠️ Aguardando Emissão de OP (' + pedidosSemOp.length + ')</td></tr>';
@@ -1175,22 +1207,17 @@
   }
 
   function switchOpsTab(tab) {
-    const btnAtivas = document.getElementById('tabBtnAtivas');
-    const btnChecklist = document.getElementById('tabBtnChecklist');
-    const panelAtivas = document.getElementById('tabPanelAtivas');
-    const panelChecklist = document.getElementById('tabPanelChecklist');
-    if (tab === 'checklist') {
-      panelAtivas.style.display = 'none';
-      panelChecklist.style.display = 'block';
-      btnChecklist.style.background = 'var(--card)'; btnChecklist.style.boxShadow = '0 1px 3px rgba(0,0,0,.1)'; btnChecklist.style.color = 'var(--text)';
-      btnAtivas.style.background = 'none'; btnAtivas.style.boxShadow = 'none'; btnAtivas.style.color = 'var(--muted)';
-      renderChecklist();
-    } else {
-      panelChecklist.style.display = 'none';
-      panelAtivas.style.display = 'block';
-      btnAtivas.style.background = 'var(--card)'; btnAtivas.style.boxShadow = '0 1px 3px rgba(0,0,0,.1)'; btnAtivas.style.color = 'var(--text)';
-      btnChecklist.style.background = 'none'; btnChecklist.style.boxShadow = 'none'; btnChecklist.style.color = 'var(--muted)';
-    }
+    const abas = {ativas: ['tabBtnAtivas', 'tabPanelAtivas'], encerradas: ['tabBtnEncerradas', 'tabPanelEncerradas'], checklist: ['tabBtnChecklist', 'tabPanelChecklist']};
+    Object.keys(abas).forEach(k => {
+      const btn = document.getElementById(abas[k][0]), painel = document.getElementById(abas[k][1]);
+      const ativa = k === tab;
+      painel.style.display = ativa ? 'block' : 'none';
+      btn.style.background = ativa ? 'var(--card)' : 'none';
+      btn.style.boxShadow = ativa ? '0 1px 3px rgba(0,0,0,.1)' : 'none';
+      btn.style.color = ativa ? 'var(--text)' : 'var(--muted)';
+    });
+    if (tab === 'checklist') renderChecklist();
+    if (tab === 'encerradas') renderEncerradas();
   }
 
   function renderChecklist() {
@@ -1566,6 +1593,99 @@
     if (firstInput) firstInput.focus();
   }
 
+  // Situação de encerramento (opção A, shared/situacao-op.js). Enquanto a
+  // conciliação não chegou não dá para afirmar nada: fica ATIVA-neutra e a
+  // OP concluída simplesmente não aparece nas listas -- nunca "encerrada" por
+  // falta de dado.
+  function situacaoDaOp(op) {
+    if (conciliacaoPorOp === null) return {estado: 'ATIVA', motivo: null};
+    return SituacaoOp.situacao(op, qualidadePorOp[op.key], (conciliacaoFontes.conferencias_pa || {})[op.key] || null);
+  }
+
+  // Um selo por pendência, no lugar dos avisos espalhados pela linha.
+  function selosOpHtml(op, temPedido) {
+    const q = qualidadePorOp[op.key] || {};
+    const d = divergenciaCache[op.lote];
+    const selos = SituacaoOp.selos(op, {
+      temPedido: temPedido,
+      divergencia: !!(d && Math.abs(d.dif) >= 0.5),
+      transferenciaPendente: TransferenciaOP.transferenciaPendente(op),
+      pendenteQualidade: q.pendente, reprovado: q.reprovado
+    });
+    if (!selos.length) return '';
+    const cor = {aviso: '#b45309;background:#fef3c7', espera: '#1d4ed8;background:#dbeafe', erro: '#b91c1c;background:#fee2e2'};
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + selos.map(x =>
+      '<span style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:' + cor[x.tom] + '">' + escapeHtml(x.texto) + '</span>').join('') + '</div>';
+  }
+
+  // O que é secundário (quem emitiu, previsão de término) fica recolhido.
+  function detalhesOpHtml(op) {
+    const emitida = op.emitidoPor
+      ? '<div style="font-size:11px;color:var(--muted)" title="' + escapeAttr(op.dataEmissao ? new Date(op.dataEmissao).toLocaleString('pt-BR') : '') + '">Emitida por ' + escapeHtml(op.emitidoPor) + '</div>'
+      : '';
+    const previsao = previsaoTerminoHtml(op);
+    if (!emitida && !previsao) return '';
+    return '<details style="margin-top:3px"><summary style="font-size:10.5px;color:var(--muted);cursor:pointer">detalhes</summary>' + emitida + previsao + '</details>';
+  }
+
+  // OP já confirmada pelo PCP que ainda espera Qualidade/Logística: linha
+  // enxuta, sem os controles de produção (linha, programação, status).
+  function renderOpConcluidaPendenteRow(op) {
+    const sit = situacaoDaOp(op);
+    const selo = sit.estado === 'NA_QUALIDADE'
+      ? '<span class="badge-status aguardando-confirmacao">🧪 Na Qualidade</span>'
+      : '<span class="badge-status aguardando-confirmacao">📦 Aguardando Logística</span>';
+    return `
+      <tr>
+        <td><strong>${escapeHtml(op.lote || op.key || '-')}</strong></td>
+        <td>${escapeHtml(op.cliente || '-')}</td>
+        <td colspan="3">
+          <div style="font-weight:600">${escapeHtml(op.produto || '-')}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:1px">${escapeHtml(sit.motivo || '')}</div>
+        </td>
+        <td>${produzidoBreakdownHtml(op)}</td>
+        <td>${selo}</td>
+        <td style="text-align:center"><a class="btn-edit-inline" style="text-decoration:none;opacity:1" title="Abrir o dossiê do lote" href="dossie_lote.html?op=${encodeURIComponent(op.key)}" target="_blank" rel="noopener">📂</a></td>
+      </tr>`;
+  }
+
+  // Aba Encerradas: consulta. Mais recentes primeiro, limitada para não
+  // desenhar mil linhas; a busca alcança todas.
+  const ENC_LIMITE = 100;
+  function renderEncerradas() {
+    const tbody = document.getElementById('enc-tbody');
+    const painel = document.getElementById('tabPanelEncerradas');
+    if (!tbody || !painel || painel.style.display === 'none') return;
+    if (conciliacaoPorOp === null) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Carregando…</td></tr>';
+      return;
+    }
+    const busca = (document.getElementById('encBusca').value || '').toLowerCase().trim();
+    let todas = Object.keys(opsGlobal).map(k => ({ key: k, ...opsGlobal[k] }))
+      .filter(o => o.status === 'Concluído' && situacaoDaOp(o).estado === 'ENCERRADA');
+    const total = todas.length;
+    if (busca) todas = todas.filter(o => [o.lote, o.key, o.produto, o.sku, o.cliente].filter(Boolean).join(' ').toLowerCase().indexOf(busca) !== -1);
+    todas.sort((a, b) => String(b.confirmadoEm || b.dataEmissao || '').localeCompare(String(a.confirmadoEm || a.dataEmissao || '')) || String(b.lote || b.key).localeCompare(String(a.lote || a.key)));
+    const mostradas = todas.slice(0, ENC_LIMITE);
+    document.getElementById('encResumo').textContent = todas.length > ENC_LIMITE
+      ? 'Mostrando ' + ENC_LIMITE + ' de ' + todas.length + ' — refine a busca'
+      : todas.length + ' de ' + total + ' encerrada' + (total === 1 ? '' : 's');
+    if (!mostradas.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:30px">Nenhuma OP encerrada encontrada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = mostradas.map(o => {
+      const prog = ProgressoOp.calcular(o, conciliacaoPorOp[o.key] || null, false, qualidadePorOp[o.key]);
+      const conf = o.confirmadoEm ? new Date(o.confirmadoEm).toLocaleDateString('pt-BR') : '—';
+      return '<tr><td><strong>' + escapeHtml(o.lote || o.key) + '</strong></td><td>' + escapeHtml(o.cliente || '-') + '</td>' +
+        '<td><div style="font-weight:600">' + escapeHtml(o.produto || '-') + '</div><div style="font-size:11.5px;color:var(--muted)">SKU: ' + escapeHtml(o.sku || '-') + '</div></td>' +
+        '<td title="' + escapeAttr(ProgressoOp.tooltip(prog)) + '" style="cursor:help">' + prog.pa.toLocaleString('pt-BR') + ' / ' + prog.planejado.toLocaleString('pt-BR') + ' un <span style="color:var(--muted)">(' + prog.pct + '%)</span></td>' +
+        '<td>' + conf + '</td>' +
+        '<td style="text-align:center"><a class="btn-edit-inline" style="text-decoration:none;opacity:1" title="Abrir o dossiê do lote" href="dossie_lote.html?op=' + encodeURIComponent(o.key) + '" target="_blank" rel="noopener">📂</a></td></tr>';
+    }).join('');
+  }
+  document.getElementById('encBusca').addEventListener('input', renderEncerradas);
+
   function renderOpRow(op) {
     const isAdmin = currentRole === 'admin' || currentRole === 'pcp';
     let optionsHtml = `<option value="" ${!op.linha ? 'selected' : ''}>Sem linha</option>`;
@@ -1609,7 +1729,8 @@
         <td>
           <div style="font-weight: 600;">${escapedProduto}</div>
           <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">SKU: ${escapedSku}</div>
-          ${op.emitidoPor ? `<div style="font-size: 11px; color: var(--muted); margin-top: 1px;" title="${escapeAttr(op.dataEmissao ? new Date(op.dataEmissao).toLocaleString('pt-BR') : '')}">Emitida por ${escapeHtml(op.emitidoPor)}</div>` : ``}
+          ${selosOpHtml(op, !!derivedParentId)}
+          ${detalhesOpHtml(op)}
         </td>
         <td>
           ${isAdmin
@@ -1627,7 +1748,7 @@
               : ``}
           </div>
         </td>
-        <td>${produzidoBreakdownHtml(op)}${previsaoTerminoHtml(op)}${divergenciaProduzidoHtml(op, escapedKeyAttr, isAdmin)}</td>
+        <td>${produzidoBreakdownHtml(op)}${divergenciaProduzidoHtml(op, escapedKeyAttr, isAdmin)}</td>
         <td>
           ${isCancelada
             ? `<span class="badge-status cancelado" title="${escapeAttr('Cancelada' + (op.motivoCancelamento ? ': ' + op.motivoCancelamento : ''))}">Cancelada</span>`
