@@ -127,6 +127,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Histórico e dashboard da Qualidade (2026-09-29).** Página
+  nova `qualidade_historico.html` (Dashboard + Histórico de laudos), motor
+  `shared/qualidade-historico.js`. **Arquivos ativos:** esses dois (novos),
+  `public/qualidade.html` (só link profundo para emitir laudo),
+  `public/auth_check.js` (página no módulo Qualidade + menu),
+  `run_qualidade_historico_test.js`, `run_qualidade_historico_ui_test.js` (novos),
+  `public/manual_qualidade.html`.
+
 - **PUBLICADO — Controle de OPs menos poluído (2026-09-29, opção A do usuário).**
   `ops.html`: lista principal só com o que pede ação. OP concluída sai da
   principal para a aba nova **Encerradas** (consulta, busca, link do Dossiê)
