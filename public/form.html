@@ -29,6 +29,9 @@
     body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
     .header{background:transparent;color:var(--text);padding:24px 20px 8px;position:static;box-shadow:none}
     .header-top{display:flex;justify-content:space-between;align-items:center;max-width:500px;margin:0 auto}
+    /* Celular/tablet: o botão de menu (.kt-hamburger, fixo em 14px/14px, 40px)
+       cobria o começo do título. */
+    @media (max-width:980px){ .header{padding-left:64px} }
     .header h1{font-size:24px;font-weight:700;letter-spacing:-.01em}
     .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
     .status-bar{display:flex;align-items:center;gap:8px;background:color-mix(in srgb, var(--text) 6%, transparent);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
@@ -164,6 +167,11 @@
     .turno-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
     .turno-card-empty { border:1.5px dashed var(--border); border-radius:16px; padding:18px 14px; text-align:center; color:var(--muted); font-size:13px; background:var(--card); }
     .turno-badge { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:999px; text-transform:uppercase; letter-spacing:.02em; }
+    .setor-tabs { display:flex; gap:8px; margin:0 0 14px; }
+    .setor-tab { flex:1; padding:12px 10px; border:1.5px solid var(--border); border-radius:12px; background:var(--card); color:var(--text); font-size:15px; font-weight:800; cursor:pointer; }
+    .setor-tab.ativo { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .setor-tab.ativo.rotulagem { background:var(--success); border-color:var(--success); }
+    .modal > form { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
     .turno-badge.linha { background:color-mix(in srgb, var(--primary) 12%, transparent); color:var(--primary); }
     .turno-badge.rotulagem { background:color-mix(in srgb, var(--success) 15%, transparent); color:var(--success); }
     .turno-badge.posto { background:color-mix(in srgb, #7c3aed 15%, transparent); color:#7c3aed; }
@@ -334,6 +342,14 @@
     </div>
 
     <div id="turnoConfirmBox" style="display:none;margin-bottom:16px"></div>
+
+    <!-- Envase x Rotulagem (29/09): quem trabalha nos dois setores escolhe a
+         área; cada uma mostra só os seus cards. Quem tem um setor só não vê
+         as abas -- já cai direto na sua área. -->
+    <div class="setor-tabs" id="setorTabs" style="display:none">
+      <button type="button" class="setor-tab" data-setor-visao="envase">🏭 Envase</button>
+      <button type="button" class="setor-tab rotulagem" data-setor-visao="rotulagem">🏷️ Rotulagem</button>
+    </div>
 
     <div id="secaoTurnoLinhas">
       <div class="turno-group-label">Linhas de produção</div>
@@ -1102,9 +1118,18 @@ function renderMotivosParadaOptions() {
 // resto do formulário), não mais de pedidos genéricos -- selecionar a OP já
 // resolve produto/lote junto, então não precisa mais de um campo de Lote
 // separado nem do parsing antigo (parseOpId/parseProductFromOpDatalist).
-function openStopModal(linha) {
+// Setor do recurso pelo cadastro: rotuladora x linha de envase. Vai gravado
+// na parada para os indicadores de envase (ritmo da OP, disponibilidade do
+// turno) não contarem a rotuladora parada como linha parada.
+function setorDoRecurso(nome, tipo) {
+  if (tipo === 'rotulagem' || tipo === 'linha') return tipo;
+  return (configRotulagem || []).indexOf(nome) >= 0 ? 'rotulagem' : 'linha';
+}
+function openStopModal(linha, tipo) {
   if (RetrabalhosTela.avisar(linha)) return;
+  var setor = setorDoRecurso(linha, tipo);
   document.getElementById('andonLineName').value = linha;
+  document.getElementById('andonModalTitle').textContent = setor === 'rotulagem' ? '🛑 Registrar Parada da Rotulagem' : '🛑 Registrar Parada de Linha';
   document.getElementById('andonModalSubtitle').textContent = 'Selecione o motivo e a OP em andamento pra confirmar a parada da ' + linha + '.';
 
   var selectOP = document.getElementById('andonPedido');
@@ -1129,7 +1154,7 @@ function openStopModal(linha) {
   // atualizada quando uma OP é trocada ad-hoc via "Alocar OP" no painel --
   // isso deixava o dropdown pré-selecionado com a OP antiga, e quem clicava
   // "Parar" sem reparar/trocar registrava a parada com o produto errado.
-  var opAtualLinha = (typeof opAlocadoEm === 'function') ? opAlocadoEm(linha, 'linha') : null;
+  var opAtualLinha = (typeof opAlocadoEm === 'function') ? opAlocadoEm(linha, setor) : null;
   var scheduledLote = opAtualLinha ? opAtualLinha.lote : null;
 
   if (!scheduledLote) {
@@ -1207,6 +1232,7 @@ function resumeLine(linha, state) {
 
   var stopRecord = {
     linha: linha,
+    setor: state.setor || setorDoRecurso(linha),
     pedidoId: state.pedidoId || '',
     produto: state.produto || '',
     lote: state.lote || '',
@@ -1374,8 +1400,10 @@ document.getElementById('andonStopForm').addEventListener('submit', function(e) 
 
   // update() -- preserva estado_linhas/{linha}/opAtual (ver comentário em
   // "Retomar Produção"): parar a linha não pode fazer a linha esquecer a OP.
+  var setorParada = setorDoRecurso(linha);
   db.ref('estado_linhas/' + lineKey).update({
     status: 'parada',
+    setor: setorParada,
     inicioParada: new Date().toISOString(),
     motivoParada: motivo,
     pedidoId: pedidoId,
@@ -1383,7 +1411,7 @@ document.getElementById('andonStopForm').addEventListener('submit', function(e) 
     lote: lote || ''
   }).then(function() {
     closeAndonModal();
-    showSuccess('Linha Parada!', linha + ' foi colocada em estado de parada.');
+    showSuccess(setorParada === 'rotulagem' ? 'Rotulagem Parada!' : 'Linha Parada!', linha + ' foi colocada em estado de parada.');
   });
 });
 
@@ -4429,17 +4457,43 @@ function setoresDoApontamento() {
   if (!s.producao && !s.rotulagem) return {linha: true, rotulagem: true};
   return {linha: !!s.producao, rotulagem: !!s.rotulagem};
 }
+// Área escolhida por quem tem os dois setores (lembrada no aparelho). Quem
+// tem um setor só fica sempre na sua área.
+var setorVisaoEscolhida = (function() { try { return localStorage.getItem('apontamento.setorVisao') || 'envase'; } catch (e) { return 'envase'; } })();
+function setorVisao() {
+  var st = setoresDoApontamento();
+  if (!st.linha) return 'rotulagem';
+  if (!st.rotulagem) return 'envase';
+  return setorVisaoEscolhida === 'rotulagem' ? 'rotulagem' : 'envase';
+}
+function escolherSetorVisao(setor) {
+  setorVisaoEscolhida = setor === 'rotulagem' ? 'rotulagem' : 'envase';
+  try { localStorage.setItem('apontamento.setorVisao', setorVisaoEscolhida); } catch (e) {}
+  renderPainelTurno();
+  window.scrollTo(0, 0);
+}
 function aplicarRestricaoRotulagem() {
   var st = setoresDoApontamento();
-  var soRotulagem = !st.linha;
+  var visao = setorVisao();
+  var soRotulagem = visao === 'rotulagem';
   var secaoLinhas = document.getElementById('secaoTurnoLinhas');
   var secaoPostos = document.getElementById('secaoTurnoPostos');
   var secaoRot = document.getElementById('secaoTurnoRotulagem');
   var modoAvancado = document.getElementById('modoAvancadoDetails');
   if (secaoLinhas) secaoLinhas.style.display = soRotulagem ? 'none' : '';
   if (secaoPostos) secaoPostos.style.display = soRotulagem ? 'none' : '';
-  if (secaoRot) secaoRot.style.display = st.rotulagem ? '' : 'none';
+  if (secaoRot) secaoRot.style.display = soRotulagem ? '' : 'none';
   if (modoAvancado) modoAvancado.style.display = soRotulagem ? 'none' : '';
+  var abas = document.getElementById('setorTabs');
+  if (abas) {
+    abas.style.display = st.linha && st.rotulagem ? '' : 'none';
+    abas.querySelectorAll('[data-setor-visao]').forEach(function(b) {
+      b.classList.toggle('ativo', b.getAttribute('data-setor-visao') === visao);
+      b.onclick = function() { escolherSetorVisao(b.getAttribute('data-setor-visao')); };
+    });
+  }
+  var h1 = document.querySelector('.header h1');
+  if (h1) h1.textContent = soRotulagem ? 'Registro de Produção — Rotulagem' : 'Registro de Produção';
 }
 
 function renderPainelTurno() {
@@ -4470,7 +4524,7 @@ function renderPainelTurno() {
   }
 
   renderTurnoGrupo('turnoGridLinhas', configLinhas, 'linha', true);
-  renderTurnoGrupo('turnoGridRotulagem', configRotulagem, 'rotulagem', false);
+  renderTurnoGrupo('turnoGridRotulagem', configRotulagem, 'rotulagem', true);
   renderTurnoGridPostos();
 }
 
@@ -4509,7 +4563,7 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
           '<button type="button" class="andon-btn btn-resume" data-resume="' + escapeHtml(nome) + '" style="margin-bottom:10px">▶️ Retomar Produção</button>';
       }
     } else if (comParada) {
-      html += '<button type="button" class="andon-btn btn-stop" data-parar="' + escapeHtml(nome) + '" style="margin-bottom:10px">🛑 Parar linha</button>';
+      html += '<button type="button" class="andon-btn btn-stop" data-parar="' + escapeHtml(nome) + '" data-parar-tipo="' + tipo + '" style="margin-bottom:10px">🛑 ' + (tipo === 'rotulagem' ? 'Parar rotuladora' : 'Parar linha') + '</button>';
     }
 
     if (!op) {
@@ -4525,18 +4579,18 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
       if (emSetup) {
         html += '<div class="turno-badge posto" style="margin-bottom:8px">🔧 Em setup</div>' +
           '<div class="turno-stat-line">Setup desde ' + horasTxt + '</div>' +
-          '<button type="button" class="andon-btn btn-resume" data-fim-setup="' + escapeHtml(op.lote) + '" data-fim-setup-tipo="' + tipo + '" style="margin-bottom:8px">Fim de Setup → iniciar envase</button>';
+          '<button type="button" class="andon-btn btn-resume" data-fim-setup="' + escapeHtml(op.lote) + '" data-fim-setup-tipo="' + tipo + '" style="margin-bottom:8px">Fim de Setup → iniciar ' + (tipo === 'rotulagem' ? 'rotulagem' : 'envase') + '</button>';
       } else {
         html += '<div class="turno-progress-wrap"><div class="turno-progress-fill" style="width:' + pct + '%"></div></div>' +
           '<div class="turno-progress-nums"><span>' + fmtNum(getProduzido(op, tipo)) + ' / ' + fmtNum(op.qtdPlanejada || 0) + ' un.</span><span>' + pct + '%</span></div>' +
-          '<div class="turno-stat-line">Envase há ' + horasTxt + '</div>';
+          '<div class="turno-stat-line">' + (tipo === 'rotulagem' ? 'Rotulando há ' : 'Envase há ') + horasTxt + '</div>';
       }
       html += '<button type="button" class="andon-btn btn-resume" data-encerrar-op="' + escapeHtml(op.lote) + '" data-encerrar-nome="' + escapeHtml(nome) + '" data-encerrar-tipo="' + tipo + '">✅ Encerrar OP</button>' +
         // Achado do agente de UX: parecido demais com "🛑 Parar linha" (mesmo
         // card, botão full-width logo acima) -- gente confundia achando que
         // registra uma parada de linha de verdade. Isto aqui só salva
         // "quanto foi produzido até agora", a linha continua rodando/aberta.
-        '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar a linha -- diferente de &quot;Parar linha&quot;" data-intervalo-nome="' + escapeHtml(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
+        '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar -- diferente de &quot;Parar&quot;" data-intervalo-nome="' + escapeHtml(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
     }
 
     if (op && tipo === 'linha' && window.currentUser && window.currentUser.role === 'admin') {
@@ -4564,7 +4618,7 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
     btn.onclick = function() { encerrarSetup(btn.getAttribute('data-fim-setup'), btn.getAttribute('data-fim-setup-tipo')); };
   });
   container.querySelectorAll('[data-parar]').forEach(function(btn) {
-    btn.onclick = function() { openStopModal(btn.getAttribute('data-parar')); };
+    btn.onclick = function() { openStopModal(btn.getAttribute('data-parar'), btn.getAttribute('data-parar-tipo')); };
   });
   container.querySelectorAll('[data-resume]').forEach(function(btn) {
     btn.onclick = function() { askResumeLine(btn.getAttribute('data-resume')); };
@@ -4885,7 +4939,7 @@ function encerrarSetup(lote, tipo) {
   upd[campoSetupFim(tipo)] = agora;
   upd[campoAberturaInicio(tipo)] = agora; // reseta a base do ritmo -- daqui pra frente só conta envase
   db.ref('ops/' + sanitizeKey(lote)).update(upd).then(function() {
-    showSuccess('Setup encerrado!', 'Envase começando agora em ' + (op[campoAberturaNome(tipo)] || '') + '.');
+    showSuccess('Setup encerrado!', (tipo === 'rotulagem' ? 'Rotulagem' : 'Envase') + ' começando agora em ' + (op[campoAberturaNome(tipo)] || '') + '.');
   }).catch(function(err) {
     alert('Erro ao encerrar setup: ' + err.message);
   });
@@ -5483,7 +5537,7 @@ function confirmarFechamentoTurno(itens, opts) {
       // turno" por cima apagaria a causa verdadeira do histórico
       // (paradas_historico só grava no Retomar, então o motivo real se
       // perderia pra sempre, virando uma parada gigante rotulada errado).
-      if (it.tipo === 'linha') {
+      if (it.tipo === 'linha' || it.tipo === 'rotulagem') {
         var lineKey = sanitizeKey(it.nome);
         var estadoAtual = latestAndonStates[lineKey];
         var jaTemParadaReal = estadoAtual && estadoAtual.status === 'parada' && estadoAtual.motivoParada &&
@@ -5494,6 +5548,7 @@ function confirmarFechamentoTurno(itens, opts) {
             // set() ele zerava a OP lembrada de todas elas, todo dia.
             return db.ref('estado_linhas/' + lineKey).update({
               status: 'parada',
+              setor: it.tipo,
               inicioParada: new Date().toISOString(),
               motivoParada: isIntervalo ? 'Intervalo' : 'Fim de turno',
               pedidoId: '', produto: it.op ? (it.op.produto || '') : '', lote: it.lote || ''

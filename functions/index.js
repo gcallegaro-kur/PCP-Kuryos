@@ -741,9 +741,10 @@ async function checkLinhasParadas(config, destinatarios) {
     const key = `parada_${linhaKey}_${info.inicioParada}`;
     if (!(await cooldownOk(key))) continue;
 
-    const assunto = `🔴 Linha parada há ${Math.floor(minutosParada)} min — ${info.motivoParada || "motivo não informado"}`;
+    const recurso = info.setor === "rotulagem" ? "Rotuladora" : "Linha";
+    const assunto = `🔴 ${recurso} parada há ${Math.floor(minutosParada)} min — ${info.motivoParada || "motivo não informado"}`;
     const corpo =
-      `A linha (chave: ${linhaKey}) está parada há ${Math.floor(minutosParada)} minutos.\n\n` +
+      `${recurso === "Linha" ? "A linha" : "A rotuladora"} (chave: ${linhaKey}) está parada há ${Math.floor(minutosParada)} minutos.\n\n` +
       `Motivo: ${info.motivoParada || "não informado"}\n` +
       `OP: #${info.pedidoId || "—"}\n` +
       `Produto: ${info.produto || "—"}\n` +
@@ -1352,7 +1353,11 @@ exports.onTurnoEncerrado = onValueCreated(
     // (mesmo dia) -- aproximação simples, não lida com turno que atravessa
     // meia-noite (nenhum turno cadastrado hoje faz isso).
     const turnoInicioHm = (config.turnoHorarios && config.turnoHorarios[turnoNome]) || null;
-    const paradasDoTurno = turnoInicioHm ? paradasHoje.filter((p) => localHm(p.inicio) >= turnoInicioHm) : paradasHoje;
+    // Disponibilidade é das LINHAS de envase: parada de rotuladora (29/09, com
+    // setor gravado; antigas pelo cadastro) entra no pareto, não aqui.
+    const ehRotulagem = (p) => p.setor === "rotulagem" || classificarLinha(p.linha, config) === "rotulagem";
+    const paradasDoTurno = (turnoInicioHm ? paradasHoje.filter((p) => localHm(p.inicio) >= turnoInicioHm) : paradasHoje)
+      .filter((p) => !ehRotulagem(p));
     const paradasDoTurnoMin = paradasDoTurno.reduce((s, p) => s + (p.duracao || 0), 0);
     const disponibilidadeTurno = disponibilidadePct(turnoInicioHm, new Date(), paradasDoTurnoMin);
 

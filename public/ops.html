@@ -790,6 +790,8 @@
     var total = 0;
     Object.values(paradasHistoricoGlobal).forEach(function(p) {
       if (!p || p.lote !== lote || !p.inicio) return;
+      // Rotuladora parada (29/09) não desconta o ritmo do ENVASE da OP.
+      if (p.setor === 'rotulagem') return;
       var inicioMs = new Date(p.inicio).getTime();
       if (isNaN(inicioMs) || inicioMs < desdeMs) return;
       total += p.duracao || 0;

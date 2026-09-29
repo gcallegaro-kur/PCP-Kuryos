@@ -371,11 +371,68 @@ async function textoOperacao(page) {
       const vis = (id) => { const el = document.getElementById(id); return !!el && el.style.display !== 'none'; };
       return {linhas: vis('secaoTurnoLinhas'), postos: vis('secaoTurnoPostos'), rotulagem: vis('secaoTurnoRotulagem')};
     });
-    for (const [uid, esperado] of [['rot', {linhas: false, postos: false, rotulagem: true}],
-      ['soLinha', {linhas: true, postos: true, rotulagem: false}], ['prod', {linhas: true, postos: true, rotulagem: true}]]) {
+    // Quem tem os dois setores (29/09) escolhe a área em abas; abre no Envase.
+    for (const [uid, esperado, abas] of [['rot', {linhas: false, postos: false, rotulagem: true}, false],
+      ['soLinha', {linhas: true, postos: true, rotulagem: false}, false], ['prod', {linhas: true, postos: true, rotulagem: false}, true]]) {
       const {page} = await abrir(browser, uid, null, 'form.html');
       if (typeof (await page.evaluate(() => typeof renderPainelTurno)) === 'string') await page.evaluate(() => renderPainelTurno());
       assert.deepEqual(await secoes(page), esperado, 'seções do painel de turno para ' + uid);
+      assert.equal(await page.locator('#setorTabs').isVisible(), abas, 'abas Envase/Rotulagem para ' + uid);
+      if (uid === 'rot') assert.equal(await page.locator('.header h1').innerText(), 'Registro de Produção — Rotulagem');
+      await page.close();
+    }
+
+    // ── 5b. Rotulagem como área própria, com parada ─────────────────────
+    {
+      const est = dados();
+      Object.assign(est.ops['26260-01'], {abertaRotulagem: 'Rotuladora 1', abertaDesdeRot: new Date(Date.now() - 30 * 60000).toISOString(),
+        setupInicioRot: new Date(Date.now() - 40 * 60000).toISOString(), setupFimRot: new Date(Date.now() - 30 * 60000).toISOString()});
+      Object.assign(est.ops['26261-01'], {abertaRotulagem: 'Rotuladora 2', abertaDesdeRot: new Date().toISOString(), setupInicioRot: new Date().toISOString()});
+      est.config.rotulagem = ['Rotuladora 1', 'Rotuladora 2'];
+      const {page, errors} = await abrir(browser, 'prod', est, 'form.html', {width: 390, height: 844});
+      await page.click('[data-setor-visao="rotulagem"]');
+      assert.deepEqual(await secoes(page), {linhas: false, postos: false, rotulagem: true}, 'aba Rotulagem mostra só a rotulagem');
+      assert.equal(await page.locator('.header h1').innerText(), 'Registro de Produção — Rotulagem');
+      assert.equal(await page.locator('#modoAvancadoDetails').isVisible(), false);
+      const cards = await page.locator('#turnoGridRotulagem .andon-card').allInnerTexts();
+      assert.match(cards[0], /Rotuladora 1[\s\S]*Parar rotuladora[\s\S]*OP 26260\/01[\s\S]*Rotulando há/);
+      assert.doesNotMatch(cards[0], /envase|Envase|Parar linha/);
+      assert.match(cards[1], /Fim de Setup → iniciar rotulagem/);
+
+      // Parar a rotuladora: modal da rotulagem, OP da rotuladora já escolhida, grava com setor.
+      await page.locator('#turnoGridRotulagem [data-parar="Rotuladora 1"]').click();
+      await page.waitForSelector('#andonStopModal.open');
+      assert.equal(await page.locator('#andonModalTitle').innerText(), '🛑 Registrar Parada da Rotulagem');
+      assert.equal(await page.inputValue('#andonPedido'), '26260/01', 'OP alocada na rotuladora (não a da linha)');
+      await page.selectOption('#andonMotivo', 'Falta de Material');
+      await page.click('#andonStopForm button[type="submit"]');
+      await page.waitForFunction(() => (window.__db.estado_linhas['Rotuladora_1'] || {}).status === 'parada');
+      const estado = await page.evaluate(() => window.__db.estado_linhas['Rotuladora_1']);
+      assert.equal(estado.setor, 'rotulagem');
+      assert.equal(estado.motivoParada, 'Falta de Material');
+      assert.equal(estado.lote, '26260/01');
+      assert.match(await page.locator('#turnoGridRotulagem .andon-card').first().innerText(), /Parada: Falta de Material/);
+      assert.equal(await page.locator('#turnoGridRotulagem .andon-card').first().evaluate((el) => el.classList.contains('stopped')), true);
+
+      // Retomar: grava o histórico da parada com o setor.
+      await page.locator('#turnoGridRotulagem [data-resume="Rotuladora 1"]').click();
+      await page.locator('#turnoGridRotulagem [data-resume-yes="Rotuladora 1"]').click();
+      await page.waitForFunction(() => Object.values(window.__db.paradas_historico || {}).length === 1);
+      const hist = await page.evaluate(() => Object.values(window.__db.paradas_historico)[0]);
+      assert.equal(hist.setor, 'rotulagem');
+      assert.equal(hist.linha, 'Rotuladora 1');
+      assert.equal(hist.lote, '26260/01');
+      assert.equal((await page.evaluate(() => window.__db.estado_linhas['Rotuladora_1'])).status, 'ativa');
+
+      // A escolha fica lembrada no aparelho.
+      await page.reload();
+      await page.waitForFunction(() => window.currentUser && window.currentUser.nome);
+      await page.evaluate(() => renderPainelTurno());
+      assert.deepEqual(await secoes(page), {linhas: false, postos: false, rotulagem: true}, 'volta na Rotulagem');
+      await page.click('[data-setor-visao="envase"]');
+      assert.deepEqual(await secoes(page), {linhas: true, postos: true, rotulagem: false});
+      assert.match(await page.locator('#turnoGridLinhas').innerText(), /Parar linha/);
+      assert.deepEqual(errors, []);
       await page.close();
     }
 
