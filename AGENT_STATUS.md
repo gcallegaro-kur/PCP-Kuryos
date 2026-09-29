@@ -127,6 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Expedição separada em três telas (2026-09-29).** Pedido do
+  usuário: agendamento e faturamento conflitavam na mesma tela. Montar carga
+  (`expedicao.html`) → Faturamento (`faturamento.html`, novo) → Acompanhamento
+  de cargas (`cargas.html`, novo: NF quando emitida, carregamento, saída,
+  histórico). Sem mudança de Functions/regras. **Arquivos ativos:**
+  `public/expedicao.html`, `public/shared/expedicao-grade-tela.js`,
+  `public/faturamento.html`, `public/cargas.html`, `public/shared/cargas-pa.js`,
+  `public/shared/faturamento-tela.js`, `public/shared/cargas-tela.js`,
+  `public/shared/agenda-pa-tela.js`, `public/logistica.html` (links),
+  `public/auth_check.js` (menu/páginas), `public/manual_logistica.html`,
+  `run_expedicao_ui_test.js`, `run_agenda_expedicao_ui_test.js`,
+  `run_carga_parcial_ui_test.js`, `run_cargas_pa_test.js` (novo).
+
 - **Publicado — faixa do granel grava na especificação (2026-09-29).** Commit
   `9582204`, Hosting por worktree novo do origin/main; arquivos idênticos
   (inclui Planejamento e Relatório de Pedido). Ensaio SEM faixa na spec do
