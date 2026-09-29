@@ -383,9 +383,18 @@ function opcoesPesagem(f) {
   return {dispensaFoto: Manipulacao.dispensaFoto(f), correcao: Manipulacao.ehCorrecao(f)};
 }
 
+/* OP concluída continua aqui enquanto o BULK dela estiver aberto (29/09, OP
+   26267/01): a produção encerrou a OP com a manipulação ainda "Em
+   manipulação"; a tela escondia toda OP Concluída, ninguém conseguia fechar
+   a manipulação e o bulk nunca chegava à Qualidade para ser liberado. Sai da
+   lista quando o bulk vai para a análise (AGUARDANDO_CQ em diante). */
+var FASES_ABERTAS_MANIPULACAO = {AGUARDANDO_PESAGEM: 1, PESADO: 1, CONFERIDO: 1, EM_MANIPULACAO: 1, CORRECAO_ABERTA: 1};
+function bulkAberto(o) {
+  return !!(o && o.manipulacao) && !!FASES_ABERTAS_MANIPULACAO[Manipulacao.estado(o)];
+}
 function opsAtivas() {
   return Object.keys(allOps).map(function(k) { return Object.assign({key: k}, allOps[k]); })
-    .filter(function(o) { return o && o.lote && o.status !== 'Cancelado' && o.status !== 'Concluído'; })
+    .filter(function(o) { return o && o.lote && o.status !== 'Cancelado' && (o.status !== 'Concluído' || bulkAberto(o)); })
     .sort(function(a, b) { return String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')); })
     .slice(0, 60);
 }

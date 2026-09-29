@@ -127,11 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — OP concluída com bulk aberto sumia da Manipulação
+- **PUBLICADO — OP concluída com bulk aberto sumia da Manipulação
   (2026-09-29).** Caso 26267/01: OP encerrada com a manipulação em
-  EM_MANIPULACAO; `manipulacao.html` esconde OP Concluída, ninguém fecha a
-  manipulação e o bulk nunca chega à Qualidade. **Arquivos ativos:**
-  `public/manipulacao.html`, `run_manipulacao_ui_test.js`.
+  EM_MANIPULACAO; `manipulacao.html` escondia toda OP Concluída, ninguém
+  fechava a manipulação e o bulk nunca chegava à Qualidade. Agora OP
+  Concluída fica na lista enquanto a fase estiver aberta (AGUARDANDO_PESAGEM
+  até EM_MANIPULACAO, e CORRECAO_ABERTA). Na base, das OPs sob o portão do
+  bulk (emitidas desde 24/09): 26267/02 e /03 LIBERADO (o fluxo funciona),
+  26267/01 presa. Teste: `run_manipulacao_ui_test.js`. **Pendente, do
+  usuário:** aplicar a correção de apontamento da 26267/01 (rotulagem →
+  envase) -- gravação em produção bloqueada nesta sessão; arquivo gerado
+  para revisão. Arquivos ativos: nenhum.
 
 - **Publicado — Movimentar (WMS) + etiquetas que leem (2026-09-29).** Commit
   `c071a09`, Hosting por worktree novo do origin/main; arquivos idênticos

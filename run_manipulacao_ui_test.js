@@ -19,7 +19,13 @@ function dados() {
       '26260-01': {lote: '26260/01', sku: 'MRARBS04', produto: 'BODY SPLASH NÉCTAR DAS TAMARAS',
         cliente: 'MISS RÔSE', status: 'Programado', qtdPlanejada: 1000, dataEmissao: '2026-09-17T08:00:00'},
       '26260-02': {lote: '26260/02', sku: 'MRARBS04', produto: 'BODY SPLASH NÉCTAR DAS TAMARAS',
-        cliente: 'MISS RÔSE', status: 'Concluído', qtdPlanejada: 500}
+        cliente: 'MISS RÔSE', status: 'Concluído', qtdPlanejada: 500},
+      // Caso 26267/01 (29/09): OP encerrada com a manipulação ainda aberta.
+      '26260-03': {lote: '26260/03', sku: 'MRARBS04', produto: 'CREME TESTE',
+        cliente: 'TAWUS', status: 'Concluído', qtdPlanejada: 500, dataEmissao: '2026-09-16T08:00:00',
+        manipulacao: {status: 'EM_MANIPULACAO', manipulacao: {inicio: '2026-09-17T09:00:00', por: 'Ana'}}},
+      '26260-04': {lote: '26260/04', sku: 'MRARBS04', produto: 'CREME TESTE',
+        cliente: 'TAWUS', status: 'Concluído', qtdPlanejada: 500, manipulacao: {status: 'LIBERADO'}}
     },
     produtos: {MRARBS04: {sku: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR DAS TAMARAS', cliente: 'MISS RÔSE',
       clienteKey: 'MISS', volume: 200, unidadeVolume: 'ml', densidadeGranel: 0.9}},
@@ -171,6 +177,9 @@ async function campo(page, seletor, valor) {
     await linha.waitFor({timeout: 8000});
     assert.match(await linha.innerText(), /sem fase/);
     assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/02'}).count(), 0, 'OP concluída não aparece');
+    assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/03'}).count(), 1,
+      'OP concluída com bulk ainda em manipulação continua na lista, senão ninguém fecha e a Qualidade nunca recebe');
+    assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/04'}).count(), 0, 'bulk já liberado: sai da lista');
     // Dossiê é ferramenta de gestão (Qualidade/PCP): o operador não vê.
     assert.equal(await page.locator('.kt-sidebar a[href="dossie_lote.html"]').count(), 0, 'operador sem Dossiê no menu');
     assert.equal(await page.locator('#mDossie').count(), 0, 'sem botão de dossiê na tela do operador');
