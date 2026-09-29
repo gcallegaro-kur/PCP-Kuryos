@@ -127,7 +127,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **COMMITADO — Sequência por setor e Próximas Ordens (2026-09-29).**
+- **PUBLICADO — Sequência por setor e Próximas Ordens (2026-09-29).**
+  Commit `7656081`, Hosting + RTDB (regra `sequenciamento`) do worktree limpo;
+  6 arquivos públicos idênticos ao commit por HTTP.
   PCP ordena a fila de cada setor no Planejamento (aba "Sequência por setor",
   um bloco por setor: Separação, Manipulação, Envase por linha, Rotulagem por
   rotuladora); cada setor consulta a sua em `proximas_ordens.html?setor=`
