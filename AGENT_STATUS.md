@@ -127,6 +127,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Incidente de deploy (29/09, ~1 min):** Hosting publicado de um worktree
+  sem `e899e27`/`c1846b3` (barra de PA do Controle de OPs, já publicada pela
+  outra sessão) voltou `ops.html` e tirou `shared/progresso-op.js` do ar.
+  Corrigido no deploy seguinte, a partir do `origin/main` atualizado; todos os
+  arquivos conferidos por HTTP. Lição: `git fetch` e comparar HEAD com
+  `origin/main` IMEDIATAMENTE antes do deploy, não só antes do commit.
+
 - **PUBLICADO — Controle de OPs: barra principal = produto acabado + hover por
   etapa (2026-09-29).** `ops.html`: a barra mostrava o que a rotulagem apontou;
   agora mostra PA conferido (estoque + expedido, mesma conta da Conciliação de
@@ -142,7 +149,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   depois do portão do bulk); OP antiga não tem dado e fica sem a linha.
   Arquivos ativos: nenhum.
 
-- **COMMITADO, DEPLOY PENDENTE — Qualidade: fila separada por tipo de análise
+- **PUBLICADO — Qualidade: fila separada por tipo de análise
   (2026-09-29).** `qualidade.html`, aba Fila: abas Matéria-prima / Embalagem /
   Bulk / Produto acabado com contador (tipo por `roteiroDoLote`; bulk = granel
   aguardando análise + reprovado aguardando correção); "Ver tudo" consolidado
@@ -154,7 +161,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   histórico + dashboard da Qualidade, depois da Manipulação.
   Arquivos ativos: nenhum.
 
-- **COMMITADO, DEPLOY PENDENTE — edição no Histórico falhava com "set"
+- **PUBLICADO — edição no Histórico falhava com "set"
   (2026-09-29).** `historico.html`: ajustes do total da OP (transactions) e
   `saveOpDatasReais` (update na mesma OP) agora em FILA -- em paralelo o SDK
   abortava as transactions ("set"), o registro já estava alterado e o total
@@ -168,7 +175,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   linha "Linha 3" + `correcaoApontamento`; pedido 0023 7.970 → 9.911
   (incremento). Backups no scratchpad da sessão. **NÃO usar "Reconciliar
   Pedidos" no 0023**: ele soma só OPs vinculadas (4.672) e apagaria a produção
-  antiga sem OP. Deploy de `43eb16b` e `dd2413d` ainda pendente.
+  antiga sem OP. Publicados em 29/09 junto com `63b38bc`.
   Arquivos ativos: nenhum.
 
 - **PUBLICADO — OP concluída com bulk aberto sumia da Manipulação
