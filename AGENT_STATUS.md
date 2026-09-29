@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — edição no Histórico falha com "set" (2026-09-29).** Editar
+  registro que troca setor/quantidade dispara ajustes da OP (transaction) e
+  `saveOpDatasReais` (update na mesma OP) em paralelo; o update aborta as
+  transactions ("set"). Caso 26267/01 ficou parcial. **Arquivos ativos:**
+  `public/historico.html`, `run_historico_apontamentos_ui_test.js`.
+
 - **PUBLICADO — OP concluída com bulk aberto sumia da Manipulação
   (2026-09-29).** Caso 26267/01: OP encerrada com a manipulação em
   EM_MANIPULACAO; `manipulacao.html` escondia toda OP Concluída, ninguém
