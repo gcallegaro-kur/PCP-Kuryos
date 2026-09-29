@@ -104,7 +104,7 @@ function dados() {
     assert.match(det, /Saída de produto acabado/);
     assert.match(det, /WIKE MAKE/);
     assert.match(det, /Aguardando embarque\s*40 un/);
-    assert.equal(await page.locator('#calDetalhe a[href="expedicao.html?agenda=ag2"]').count(), 1);
+    assert.equal(await page.locator('#calDetalhe a[href="cargas.html?carga=ag2"]').count(), 1);
     await page.locator('#calDetalhe [data-fechar]').click();
 
     // ── Detalhe: entrada → ação abre o modal de agendamento existente ──

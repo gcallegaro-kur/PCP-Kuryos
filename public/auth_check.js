@@ -108,7 +108,7 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
+                  paginas: ['logistica.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
@@ -678,7 +678,11 @@ function renderUnifiedNavbar(user) {
   // lado a lado, e "Cadastros" fica só com dado mestre (ver acima).
   const logisticaGroup = grupo('Logística', [
     temMod('logistica') && ktLink('logistica.html', 'truck', 'Agendamentos', activePage),
-    temMod('logistica') && ktLink('expedicao.html', 'truck', 'Expedição de Vendas', activePage),
+    // Expedição de vendas em três telas (29/09): montar carga → faturamento →
+    // acompanhamento (NF, carregamento e saída).
+    temMod('logistica') && ktLink('expedicao.html', 'truck', 'Expedição — Montar carga', activePage),
+    temMod('logistica') && ktLink('faturamento.html', 'clipboard', 'Expedição — Faturamento', activePage),
+    temMod('logistica') && ktLink('cargas.html', 'truck', 'Expedição — Acompanhamento', activePage),
     temMod('logistica') && ktLink('relatorio_expedicao.html', 'clipboard', 'Relatório de Expedição', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
