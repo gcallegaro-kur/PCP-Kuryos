@@ -127,11 +127,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — edição no Histórico falha com "set" (2026-09-29).** Editar
-  registro que troca setor/quantidade dispara ajustes da OP (transaction) e
-  `saveOpDatasReais` (update na mesma OP) em paralelo; o update aborta as
-  transactions ("set"). Caso 26267/01 ficou parcial. **Arquivos ativos:**
-  `public/historico.html`, `run_historico_apontamentos_ui_test.js`.
+- **COMMITADO, DEPLOY PENDENTE — edição no Histórico falhava com "set"
+  (2026-09-29).** `historico.html`: ajustes do total da OP (transactions) e
+  `saveOpDatasReais` (update na mesma OP) agora em FILA -- em paralelo o SDK
+  abortava as transactions ("set"), o registro já estava alterado e o total
+  ficava pela metade; repetir o salvamento com o registro velho em memória
+  descontava de novo. Em erro, a lista recarrega. Seletor de linha da edição
+  passa a listar as rotuladoras. Teste: simulador com transaction assíncrona
+  que aborta em set/update no mesmo nó (`run_historico_apontamentos_ui_test.js`).
+  **26267/01 na base, estado parcial:** registro 28/09 já é Linha 3 · 1.056
+  (qtdTotalOP 2000); OP envasado 0 / rotulado 0; pedido 0023 = 7.970. Falta:
+  OP linha 1.941 / rot 1.760, novo registro 29/09 Linha 3 · 885, pedido +1.941.
+  Gravação em produção bloqueada nesta sessão. Arquivos ativos: nenhum.
 
 - **PUBLICADO — OP concluída com bulk aberto sumia da Manipulação
   (2026-09-29).** Caso 26267/01: OP encerrada com a manipulação em

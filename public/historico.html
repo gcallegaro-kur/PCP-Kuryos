@@ -1842,7 +1842,9 @@
   function fillEditLinhaSelect(currentVal) {
     var sel = document.getElementById('eLinha');
     sel.innerHTML = '<option value="">— Selecione —</option>';
-    var opts = configLinhasH.concat(configPostosH);
+    // Rotuladoras também: um registro de envase lançado na rotulagem (ou o
+    // contrário) precisa poder trocar de setor nos dois sentidos.
+    var opts = configLinhasH.concat(configRotulagemH, configPostosH);
     if (!opts.length) opts = ['Linha 1', 'Linha 2', 'Linha 3']; // config ainda não carregou
     if (currentVal && opts.indexOf(currentVal) < 0) opts = opts.concat([currentVal]);
     opts.forEach(function(l) {
@@ -2155,22 +2157,36 @@
         var _loteNew = data.lote || '';
         var _setorOld = orig ? setorDoRegistro(orig) : 'linha';
         var _setorNew = setorDoRegistro(data);
+        /* Tudo que escreve em ops/{lote} vai EM FILA (29/09, OP 26267/01).
+           Em paralelo, o update das datas reais (saveOpDatasReais) chegava
+           enquanto as transactions do total ainda estavam pendentes, e o SDK
+           ABORTA transaction quando há set/update no mesmo nó -- a tela
+           mostrava só "set", o registro já tinha sido alterado e o total da
+           OP ficava pela metade. */
+        var filaOp = Promise.resolve();
+        var naOp = function(fn) { filaOp = filaOp.then(fn); };
         if (_loteOld === _loteNew && _setorOld === _setorNew) {
           var _dOp = qtyNew - qtyOld;
-          if (_loteNew && _dOp) tasks.push(ajustarProduzidoOp(db, _loteNew, _setorNew, _dOp));
+          if (_loteNew && _dOp) naOp(function() { return ajustarProduzidoOp(db, _loteNew, _setorNew, _dOp); });
         } else {
-          if (_loteOld && qtyOld) tasks.push(ajustarProduzidoOp(db, _loteOld, _setorOld, -qtyOld));
-          if (_loteNew && qtyNew) tasks.push(ajustarProduzidoOp(db, _loteNew, _setorNew, qtyNew));
+          if (_loteOld && qtyOld) naOp(function() { return ajustarProduzidoOp(db, _loteOld, _setorOld, -qtyOld); });
+          if (_loteNew && qtyNew) naOp(function() { return ajustarProduzidoOp(db, _loteNew, _setorNew, qtyNew); });
         }
-
-        tasks.push(saveOpDatasReais());
+        naOp(saveOpDatasReais);
+        tasks.push(filaOp);
 
         Promise.all(tasks).then(function() {
           btn.disabled = false; btn.textContent = 'Salvar';
           closeEditModal();
           showAlert('Registro atualizado.', 'success');
           loadRegistros(); // reload period
-        }).catch(function(e){ btn.disabled = false; btn.textContent = 'Salvar'; showEditAlert(e.message); });
+        }).catch(function(e){
+          btn.disabled = false; btn.textContent = 'Salvar';
+          // Parte pode ter gravado. Recarrega já: salvar de novo com o
+          // registro antigo em memória descontaria a quantidade outra vez.
+          showEditAlert('Não foi possível concluir a gravação (' + e.message + '). A lista foi recarregada: confira o registro e os totais da OP antes de salvar de novo.');
+          loadRegistros();
+        });
       } else {
         // New record
         var qtyNew = parseFloat(data.quantidade) || 0;

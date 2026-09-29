@@ -50,6 +50,15 @@ async function abrir(browser, largura) {
     window.__iniciado = false;
     const exige = q => { if (!window.__iniciado) throw new Error("No Firebase App '[DEFAULT]' has been created (" + q + ')'); };
     let pushN = 0;
+    // Fiel ao SDK do RTDB (29/09, erro "set" na 26267/01): transaction é
+    // assíncrona, e um set/update no mesmo caminho (ou acima/abaixo) ABORTA
+    // a transaction pendente com Error('set').
+    const pendentes = [];
+    const cruza = (a, b) => a === b || a.startsWith(b + '/') || b.startsWith(a + '/');
+    const abortar = (p) => pendentes.slice().forEach(t => {
+      if (cruza(t.path, p)) { pendentes.splice(pendentes.indexOf(t), 1); t.rej(new Error('set')); }
+    });
+    const abortarEm = (path, v) => { if (path) abortar(path); else Object.keys(v || {}).forEach(abortar); };
     const grava = (op, path, valor) => { window.__writes.push({op, path: path || '/', valor: JSON.parse(JSON.stringify(valor === undefined ? null : valor))}); return Promise.resolve(); };
     window.firebase = {
       initializeApp(cfg) { if (!cfg || !cfg.databaseURL) throw new Error('sem databaseURL'); window.__iniciado = true; },
@@ -67,8 +76,22 @@ async function abrir(browser, largura) {
             on(ev, cb) { setTimeout(() => cb(snap), 0); return cb; },
             off() {}, child() { return this; }, orderByChild() { return this; }, equalTo() { return this; },
             push(v) { const key = 'novo' + (++pushN); if (v !== undefined) grava('push', path + '/' + key, v); return {key, then: f => Promise.resolve().then(f)}; },
-            set(v) { return grava('set', path, v); }, update(v) { return grava('update', path, v); }, remove() { return grava('remove', path, null); },
-            transaction(fn) { const r = fn(structuredClone(snap.val())); grava('transaction', path, r); return Promise.resolve({committed: true, snapshot: {exists: () => r != null, val: () => r}}); }};
+            set(v) { abortarEm(path, v); return grava('set', path, v); }, update(v) { abortarEm(path, v); return grava('update', path, v); },
+            remove() { abortarEm(path); return grava('remove', path, null); },
+            transaction(fn) {
+              return new Promise((res, rej) => {
+                const t = {path, rej};
+                pendentes.push(t);
+                setTimeout(() => {
+                  const i = pendentes.indexOf(t);
+                  if (i < 0) return;
+                  pendentes.splice(i, 1);
+                  const r = fn(structuredClone(snap.val()));
+                  grava('transaction', path, r);
+                  res({committed: true, snapshot: {exists: () => r != null, val: () => r}});
+                }, 30);
+              });
+            }};
         }};
       }
     };
@@ -205,6 +228,24 @@ async function abrir(browser, largura) {
     assert.equal(mov[novaChave].horasTrabalhadas, 8, 'mantém a 1h de pausa descontada');
     assert.equal(mov[novaChave].data, '2026-09-12');
     ok('mudar de dia move o registro com período e horas');
+
+    // ── Trocar o setor do registro (26267/01, 29/09): salvava com "set" ──
+    // Rotulagem → envase (ou o contrário) ajusta a OP em DUAS transactions e
+    // grava as datas reais na mesma OP; em paralelo, a gravação abortava as
+    // transactions e o total da OP ficava pela metade.
+    await page.locator('#tableBody [data-key="troca"][data-action="edit"]').click();
+    await page.waitForSelector('#editModalBg.open');
+    await page.selectOption('#eLinha', 'Rotulagem 01');
+    await page.fill('#eQtd', '4000');
+    await page.evaluate(() => { window.__writes = []; });
+    await page.click('#editBtnSave');
+    await page.waitForFunction(() => !document.getElementById('editModalBg').classList.contains('open') ||
+      document.getElementById('editAlertBox').classList.contains('show'), null, {timeout: 5000});
+    assert.equal(await page.locator('#editAlertBox').isVisible(), false, 'salva sem erro');
+    const wOp = (await page.evaluate(() => window.__writes)).filter(w => w.path === 'ops/26219-03');
+    assert.deepEqual(wOp.map(w => w.op), ['transaction', 'transaction', 'update'],
+      'as duas correções do total entram antes da gravação das datas, uma de cada vez');
+    ok('trocar o setor do registro ajusta a OP inteira, sem o erro "set"');
 
     // ── Aba Por OP: horas trabalhadas e produção por hora ──
     await page.click('#tabOP');
