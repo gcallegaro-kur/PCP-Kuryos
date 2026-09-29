@@ -45,7 +45,7 @@ assert.strictEqual(SO.pedidoPrecisaOp({produzido: 5}, false), true, 'sem quantid
 // 8. Selos: um por pendência, nenhum em OP cancelada.
 const ctxOk = {temPedido: true};
 assert.deepStrictEqual(SO.selos({status: 'Em Produção', linha: 'Linha 1'}, ctxOk), []);
-assert.deepStrictEqual(SO.selos({status: 'Programado'}, ctxOk).map(x => x.chave), ['sem-linha']);
+assert.deepStrictEqual(SO.selos({status: 'Programado'}, ctxOk), [], 'OP só programada sem linha é normal: sem selo');
 assert.deepStrictEqual(SO.selos({status: 'Em Produção', linha: 'L'}, {temPedido: false, divergencia: true, transferenciaPendente: true, pendenteQualidade: 10, reprovado: 2}).map(x => x.chave),
   ['divergencia', 'transferencia', 'sem-pedido', 'qualidade', 'reprovado']);
 assert.deepStrictEqual(SO.selos({status: 'Cancelado'}, {temPedido: false, divergencia: true}), []);

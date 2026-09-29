@@ -154,9 +154,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   pendência (falta linha, divergência, transferência, sem pedido, Qualidade,
   reprovado); quem emitiu e previsão de término ficam em "detalhes".
   Testes: `run_situacao_op_test.js`, `run_encerradas_ops_ui_test.js`.
-  **Próximo:** mesmo tratamento em `pedidos.html`. Não medi a base real
-  (leitura de produção negada nesta sessão). Arquivos ativos: `pedidos.html`
-  quando eu começar.
+  **Medido na base real (29/09, leitura autorizada):** das 1.315 OPs
+  concluídas, 1.302 vão para Encerradas, 2 ficam na Qualidade e 11 esperam a
+  Logística. Correções vindas da medição: sem selo "falta linha" (59 de 65 OPs
+  ativas não têm linha, é normal) e "Aguardando emissão de OP" recolhida por
+  padrão (60 itens de demanda real; 72 antes do filtro de ≥95%).
+- **PUBLICADO — Pedidos menos poluído (2026-09-29).** `pedidos.html`: filtro
+  padrão "Pedem ação" = em andamento (<95%) + produzido com PA no estoque
+  esperando expedir (selo "📦 Aguardando expedição"); "Finalizados
+  (consulta)" = o resto. Na base: 71 em andamento + 11 aguardando expedição
+  (antes 71); as ~200 concluídas sem saldo (legado sem registro/já expedidas)
+  saem do padrão. Colunas 15 → 12: Data Prod., Data Pedido e Qtd Total saíram
+  (datas no hover de "Em aberto há"; quantidade no Progresso). Teste:
+  `run_pedidos_conciliacao_ui_test.js` (padrão, finalizados, 12 colunas).
+  Arquivos ativos: nenhum.
 
 - **Incidente de deploy (29/09, ~1 min):** Hosting publicado de um worktree
   sem `e899e27`/`c1846b3` (barra de PA do Controle de OPs, já publicada pela

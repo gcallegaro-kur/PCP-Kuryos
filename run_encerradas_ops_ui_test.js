@@ -13,7 +13,7 @@ const AMANHA = new Date(HOJE.getTime() + 86400000);
 function dados() {
   const dia = (n) => new Date(Date.now() - n * 86400000).toISOString();
   const op = (lote, extra) => Object.assign({lote: lote, sku: 'SKU1', produto: 'PRODUTO ' + lote, cliente: 'CLIENTE X',
-    skuPedidoKey: '1__SKU1', qtdPlanejada: 1000, produzidoLinha: 1000, produzido: 1000, linha: 'Linha 1'}, extra);
+    skuPedidoKey: '0001__SKU1', qtdPlanejada: 1000, produzidoLinha: 1000, produzido: 1000, linha: 'Linha 1'}, extra);
   const pal = (opKey, saldo, status) => ({itemTipo: 'produto', opKey: opKey, saldoLote: saldo, status: status, origemTipo: 'conferencia_pa', skuPedidoKey: '1__SKU1'});
   return {
     usuarios: {u1: {nome: 'Gustavo', email: 'g@kuryos.com', role: 'admin'}},
@@ -125,7 +125,10 @@ async function abrir(browser, pagina) {
     assert.match(principal, /Aguardando Logística/);
     // Pedido já atendido não é "aguardando emissão"; o que falta produzir é.
     assert.doesNotMatch(principal, /PEDIDO JA ATENDIDO/);
-    assert.match(principal, /PEDIDO SEM OP/);
+    assert.doesNotMatch(principal, /PEDIDO SEM OP/, 'backlog de emissão vem recolhido');
+    assert.match(principal, /Aguardando Emissão de OP \(1\)/i);
+    await page.click('#hdrSemOp');
+    await page.waitForFunction(() => /PEDIDO SEM OP/.test(document.getElementById('ops-tbody').innerText));
     // Secundário recolhido: previsão/emitido por ficam dentro de <details>.
     assert.ok(await page.locator('#ops-tbody tr', {hasText: 'A/01'}).count() >= 1);
 

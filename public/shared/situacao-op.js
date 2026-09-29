@@ -63,7 +63,8 @@
     ctx = ctx || {};
     var out = [];
     if (op.status !== 'Cancelado') {
-      if (!op.linha && (op.status === 'Programado' || op.status === 'Não Iniciado' || !op.status)) out.push({chave: 'sem-linha', texto: 'Falta linha', tom: 'aviso'});
+      // Sem "falta linha": na base real 59 de 65 OPs ativas não têm linha (só
+      // programadas) -- o selo apareceria em quase todas e deixaria de dizer algo.
       if (ctx.divergencia) out.push({chave: 'divergencia', texto: 'Divergência de apontamento', tom: 'aviso'});
       if (ctx.transferenciaPendente) out.push({chave: 'transferencia', texto: 'Transferência pendente', tom: 'aviso'});
       if (!ctx.temPedido) out.push({chave: 'sem-pedido', texto: 'Sem pedido', tom: 'aviso'});

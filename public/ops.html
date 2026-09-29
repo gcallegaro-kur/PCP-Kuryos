@@ -971,6 +971,9 @@
       }).join('');
   }
 
+  let semOpAberto = false;
+  function alternarSemOp() { semOpAberto = !semOpAberto; renderOpsPanel(); }
+
   function renderOpsPanel() {
     if (!opsFiltroEstaNoModoPadrao()) { renderOpsListaFiltrada(); return; }
     const tbody = document.getElementById('ops-tbody');
@@ -1040,8 +1043,11 @@
       html += opsConcluidasPendentes.map(renderOpConcluidaPendenteRow).join('');
     }
     if (pedidosSemOp.length) {
-      html += '<tr class="group-header pending"><td colspan="8">⚠️ Aguardando Emissão de OP (' + pedidosSemOp.length + ')</td></tr>';
-      html += pedidosSemOp.map(renderPendingRow).join('');
+      // É backlog de demanda (60 itens na base real), não trabalho do dia:
+      // recolhido por padrão, um clique abre. A emissão em si é na tela Emitir OP.
+      html += '<tr class="group-header pending" id="hdrSemOp" style="cursor:pointer" onclick="alternarSemOp()" title="Clique para ' + (semOpAberto ? 'recolher' : 'ver a lista') + '"><td colspan="8">' +
+        (semOpAberto ? '▾' : '▸') + ' ⚠️ Aguardando Emissão de OP (' + pedidosSemOp.length + ')' + (semOpAberto ? '' : ' — clique para ver') + '</td></tr>';
+      if (semOpAberto) html += pedidosSemOp.map(renderPendingRow).join('');
     }
     tbody.innerHTML = html;
   }
