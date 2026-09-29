@@ -127,13 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Análise do granel: NA, faixas editáveis, só resultado
-  (2026-09-29).** Assumido da outra sessão (encerrou por limite). Cada ensaio
-  ganha NA; pH/densidade/teor com faixa mín–máx editável vinda da especificação
-  do produto (produto sem especificação: a faixa digitada vira a v1); numérico
-  = só o resultado, C/NC automático. **Arquivos ativos:** `public/qualidade.html`,
-  `public/shared/analise-granel.js` (novo), `public/shared/laudo-pa-resultados.js`,
-  `run_analise_granel_test.js` (novo), testes de UI que abrem o granel.
+- **Publicado — Análise do granel: NA, faixa editável, só o resultado
+  (2026-09-29).** Commit `8ac1fb8`, Hosting por worktree novo do origin/main;
+  arquivos idênticos (inclui Planejamento/ajuste-grade e Relatório de Pedido).
+  Motor `shared/analise-granel.js`: NA em todo ensaio (`aplicavel:false` na
+  spec começa em NA); faixa mín–máx editável vinda da especificação
+  (colunas ou TEXTO: 282 linhas reais só tinham "5,5 – 6,5"/"180g-198g" no
+  texto; agora 533/709 numéricas chegam preenchidas); numérico = só resultado,
+  C/NC automático; faixa editada = `faixaAlterada` só no lote; produto sem
+  especificação ganha `especificacoes/{sku}__v1` (origem ANALISE_GRANEL).
+  Ensaios gravados mantêm os campos lidos por laudo de PA/INMETRO/dossiê
+  (+ minimo, maximo, faixaAlterada, na; `cnc` 'NA'). Laudo de PA imprime
+  N/A e número com vírgula. Testes: `run_analise_granel_test.js` (46),
+  UI de manipulação/correção atualizadas + regressões. Arquivos ativos: nenhum.
 
 - **PUBLICADO — botão "Ajustar a grade" a partir do desvio (2026-09-29).**
   Na Sequência, OP com desvio contra a grade de Quantidades tem o botão:
