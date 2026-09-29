@@ -135,10 +135,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   descontava de novo. Em erro, a lista recarrega. Seletor de linha da edição
   passa a listar as rotuladoras. Teste: simulador com transaction assíncrona
   que aborta em set/update no mesmo nó (`run_historico_apontamentos_ui_test.js`).
-  **26267/01 na base, estado parcial:** registro 28/09 já é Linha 3 · 1.056
-  (qtdTotalOP 2000); OP envasado 0 / rotulado 0; pedido 0023 = 7.970. Falta:
-  OP linha 1.941 / rot 1.760, novo registro 29/09 Linha 3 · 885, pedido +1.941.
-  Gravação em produção bloqueada nesta sessão. Arquivos ativos: nenhum.
+  **26267/01 CORRIGIDA NA BASE (29/09, autorizada pelo usuário):** registros
+  28/09 Linha 3 · 1.056 e 29/09 Linha 3 · 885 (novo, `-P2corr26267x01L3`),
+  rotulagem 29/09 · 1.760 mantida; OP envasado 1.941 / rotulado 1.760 /
+  linha "Linha 3" + `correcaoApontamento`; pedido 0023 7.970 → 9.911
+  (incremento). Backups no scratchpad da sessão. **NÃO usar "Reconciliar
+  Pedidos" no 0023**: ele soma só OPs vinculadas (4.672) e apagaria a produção
+  antiga sem OP. Deploy de `43eb16b` e `dd2413d` ainda pendente.
+  Arquivos ativos: nenhum.
 
 - **PUBLICADO — OP concluída com bulk aberto sumia da Manipulação
   (2026-09-29).** Caso 26267/01: OP encerrada com a manipulação em
