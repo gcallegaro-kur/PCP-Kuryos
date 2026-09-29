@@ -127,6 +127,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Controle de OPs: barra principal = produto acabado + hover por
+  etapa (2026-09-29).** `ops.html`: a barra mostrava o que a rotulagem apontou;
+  agora mostra PA conferido (estoque + expedido, mesma conta da Conciliação de
+  pedidos, `porOp`) / planejado. Hover lista Manipulação (kg, rendimento ou
+  pesado / previsto), Envase, Rotulagem, Posto (se houver), PA e Expedido.
+  Enquanto a conciliação carrega, mostra "carregando" (nunca zero falso).
+  Novo `shared/progresso-op.js` (puro) + `run_progresso_op_test.js` e
+  `run_progresso_op_ui_test.js`. Achado no ensaio: campo ausente dava NaN%.
+  Arquivos ativos: nenhum.
+
 - **COMMITADO, DEPLOY PENDENTE — Qualidade: fila separada por tipo de análise
   (2026-09-29).** `qualidade.html`, aba Fila: abas Matéria-prima / Embalagem /
   Bulk / Produto acabado com contador (tipo por `roteiroDoLote`; bulk = granel

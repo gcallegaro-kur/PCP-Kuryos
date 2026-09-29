@@ -14,6 +14,10 @@
   <script src="shared/transferencia-op.js"></script>
   <script src="shared/retrabalho-op.js"></script>
   <script src="shared/impacto-pedido-ops.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/expedicao.js"></script>
+  <script src="shared/conciliacao-pedidos.js"></script>
+  <script src="shared/progresso-op.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -446,7 +450,7 @@
               <th style="width: 120px;" data-sort="linha">Linha</th>
               <th style="width: 170px;">Programação</th>
               <th style="width: 150px;">Pedido Comercial</th>
-              <th style="width: 180px;">Progresso Realizado</th>
+              <th style="width: 180px;" title="Produto acabado conferido pela Logística (estoque + expedido). Passe o mouse na barra para ver cada etapa.">Produto Acabado</th>
               <th style="width: 160px;" data-sort="status">Status da OP</th>
               <th style="width: 60px; text-align: center;">Ações</th>
             </tr>
@@ -669,6 +673,7 @@
     dbOnValue(database.ref('pedidos'), pedSnap => {
       pedidosGlobal = pedSnap.val() || {};
       globalPedidos = pedSnap.val() || {};
+      agendarConciliacaoOps();
       recalculateAndRenderOps();
     });
 
@@ -681,6 +686,7 @@
       // (o nó de registros é grande) e redesenha quando termina, pra o aviso
       // de divergência aparecer sem travar o carregamento da tela.
       conferirDivergencias().then(function() { recalculateAndRenderOps(); });
+      agendarConciliacaoOps();
       recalculateAndRenderOps();
       renderPendenciasPcp();
     });
@@ -700,6 +706,38 @@
       paradasHistoricoGlobal = pSnap.val() || {};
       recalculateAndRenderOps();
     });
+
+    // Produto acabado da barra de progresso: a mesma conta da Conciliação de
+    // pedidos (Produzido = Expedido + Em estoque), por OP. Enquanto alguma
+    // fonte não chegou a barra mostra "carregando" em vez de um zero falso.
+    Object.keys(conciliacaoFontes).forEach(no => {
+      dbOnValue(database.ref(no), snap => {
+        conciliacaoFontes[no] = snap.val() || {};
+        agendarConciliacaoOps();
+      });
+    });
+  }
+  const conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
+  let conciliacaoPorOp = null;   // opKey -> bucket `porOp` da conciliação
+  let _conciliacaoOpsT = null;
+  function agendarConciliacaoOps() {
+    clearTimeout(_conciliacaoOpsT);
+    _conciliacaoOpsT = setTimeout(() => {
+      if (Object.keys(conciliacaoFontes).some(k => conciliacaoFontes[k] === null)) return;
+      try {
+        const r = ConciliacaoPedidos.calcular(Object.assign({pedidos: pedidosGlobal, ops: opsGlobal}, conciliacaoFontes));
+        const idx = {};
+        Object.keys(r.porPedido).forEach(pk => {
+          const porOp = r.porPedido[pk].porOp || {};
+          Object.keys(porOp).forEach(ok => { if (porOp[ok].opKey) idx[porOp[ok].opKey] = porOp[ok]; });
+        });
+        conciliacaoPorOp = idx;
+      } catch (e) {
+        console.error('Falha ao calcular o produto acabado das OPs:', e);
+        conciliacaoPorOp = null;
+      }
+      recalculateAndRenderOps();
+    }, 200);
   }
   let paradasHistoricoGlobal = {};
   let pendenciasPcpGlobal = {};
@@ -1449,25 +1487,25 @@
     }).catch(function(err) { showToast('Erro ao recalcular: ' + err.message); });
   };
 
+  // Barra principal = PRODUTO ACABADO (conferido pela Logística: em estoque +
+  // expedido), não o que a rotulagem apontou. O detalhe de cada etapa está no
+  // hover (shared/progresso-op.js). Linha/Rotulagem/Posto continuam sendo
+  // somatórias distintas, nunca somadas -- só que agora ficam no tooltip.
   function produzidoBreakdownHtml(op) {
-    var planned = op.qtdPlanejada || 0;
-    var setores = [
-      { tipo: 'linha', label: 'Linha' },
-      { tipo: 'rotulagem', label: 'Rotulagem' },
-      { tipo: 'posto', label: 'Posto' }
-    ].map(function(s) { return { label: s.label, produced: getProduzido(op, s.tipo) }; })
-      .filter(function(s) { return s.produced > 0; });
-    if (!setores.length) setores = [{ label: 'Linha', produced: 0 }];
-
-    return setores.map(function(s) {
-      var pct = planned > 0 ? Math.min(100, Math.round(s.produced / planned * 100)) : 0;
-      return '<div style="margin-bottom:4px">' +
-        (setores.length > 1 ? '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">' + escapeHtml(s.label) + '</div>' : '') +
-        '<div style="display:flex;justify-content:space-between;font-weight:600;font-size:11.5px">' +
-        '<span>' + s.produced.toLocaleString('pt-BR') + ' / ' + planned.toLocaleString('pt-BR') + ' un</span><span>' + pct + '%</span></div>' +
-        '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
-        '</div>';
-    }).join('');
+    const prog = ProgressoOp.calcular(op, conciliacaoPorOp ? (conciliacaoPorOp[op.key] || null) : null, conciliacaoPorOp === null);
+    const planned = prog.planejado;
+    const dica = escapeAttr(ProgressoOp.tooltip(prog));
+    if (prog.carregando) {
+      return '<div title="' + dica + '" style="cursor:help"><div style="font-size:11.5px;color:var(--muted)">Produto acabado: carregando…</div>' +
+        '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:0%"></div></div></div>';
+    }
+    const pct = Math.min(100, prog.pct);
+    return '<div title="' + dica + '" style="cursor:help">' +
+      '<div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase">Produto acabado</div>' +
+      '<div style="display:flex;justify-content:space-between;font-weight:600;font-size:11.5px">' +
+      '<span>' + prog.pa.toLocaleString('pt-BR') + ' / ' + planned.toLocaleString('pt-BR') + ' un</span><span>' + prog.pct + '%</span></div>' +
+      '<div class="progress-bar-container"><div class="progress-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '</div>';
   }
 
   // Fase 2 do plano de Planejamento/PCP (PLANO_PLANEJAMENTO_PCP.md): os
