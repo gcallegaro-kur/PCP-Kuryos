@@ -127,18 +127,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Expedição separada em três telas (2026-09-29).** Pedido do
-  usuário: agendamento e faturamento conflitavam na mesma tela. Montar carga
-  (`expedicao.html`) → Faturamento (`faturamento.html`, novo) → Acompanhamento
-  de cargas (`cargas.html`, novo: NF quando emitida, carregamento, saída,
-  histórico). Sem mudança de Functions/regras. **Arquivos ativos:**
-  `public/expedicao.html`, `public/shared/expedicao-grade-tela.js`,
-  `public/faturamento.html`, `public/cargas.html`, `public/shared/cargas-pa.js`,
-  `public/shared/faturamento-tela.js`, `public/shared/cargas-tela.js`,
-  `public/shared/agenda-pa-tela.js`, `public/logistica.html` (links),
-  `public/auth_check.js` (menu/páginas), `public/manual_logistica.html`,
-  `run_expedicao_ui_test.js`, `run_agenda_expedicao_ui_test.js`,
-  `run_carga_parcial_ui_test.js`, `run_cargas_pa_test.js` (novo).
+- **Publicado — Expedição de vendas em três telas (2026-09-29).** Commit
+  `c80f48b`, Hosting por worktree novo do origin/main; 14 arquivos públicos
+  idênticos (inclui qualidade/planejamento/relatório de pedido). Sem mudança
+  de Functions/regras (mesmas callables). `expedicao.html` = Montar carga
+  (grade + transporte + Agendar; `?agenda=K` redireciona a `cargas.html`);
+  `faturamento.html` = solicitar faturamento e registrar NF na página;
+  `cargas.html` = acompanhamento (etapas, NF quando emitida, carregamento/
+  saída com viagens parciais e recuperação de tentativa em
+  `sessionStorage['cargasPA-tentativa']`, transporte, cancelar, linha do
+  tempo, histórico). Saída só com NF registrada (`CargasPA.acoes().carregar`).
+  Régua pura `shared/cargas-pa.js`; faixa `shared/cargas-fluxo.js`; agenda da
+  Logística perdeu NF/solicitar (código removido), ganhou atalhos. Base real:
+  1 carga ativa (Miss Rose, faturamento não solicitado), 338 saídas legado.
+  Testes: `run_cargas_pa_test.js` (23), UI de carga parcial/agenda/expedição
+  reescritos para as três telas, calendário atualizado + regressões.
+  Arquivos ativos: nenhum.
 
 - **Publicado — faixa do granel grava na especificação (2026-09-29).** Commit
   `9582204`, Hosting por worktree novo do origin/main; arquivos idênticos
