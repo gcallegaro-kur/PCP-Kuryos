@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — faixa do granel grava na especificação (2026-09-29).**
+  Ensaio sem faixa na especificação do produto + faixa digitada na análise =
+  nova versão da especificação com a lacuna preenchida. **Arquivos ativos:**
+  `public/qualidade.html`, `public/shared/analise-granel.js`,
+  `run_analise_granel_test.js`, `run_manipulacao_ui_test.js`, `public/manual_qualidade.html`.
+
 - **Publicado — Análise do granel: NA, faixa editável, só o resultado
   (2026-09-29).** Commit `8ac1fb8`, Hosting por worktree novo do origin/main;
   arquivos idênticos (inclui Planejamento/ajuste-grade e Relatório de Pedido).
