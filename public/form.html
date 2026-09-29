@@ -209,15 +209,23 @@
     /* Modal (mesmo padrão .modal-overlay/.modal/.modal-hdr/.modal-body/.modal-footer
        já usado em ops.html e outras páginas reformadas, mapeado pros tokens
        locais desta página) */
-    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999; align-items:center; justify-content:center; padding:16px; }
+    /* z-index acima do botão de menu do celular (.kt-hamburger, 10001, auth_check.js),
+       que ficava por cima do título do modal; abaixo da tela de carregamento (99999). */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:10002; align-items:center; justify-content:center; padding:16px; }
+    @media (max-width:480px) { .modal-overlay { padding:8px; } .modal { max-height:calc(100vh - 16px); max-height:calc(100dvh - 16px); border-radius:16px; } .modal-body { padding:14px 14px; } }
     .modal-overlay.open { display:flex; }
-    .modal { background:var(--card); border-radius:20px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,.2); overflow:hidden; text-align:left; }
-    .modal-hdr { padding:18px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+    .modal { background:var(--card); border-radius:20px; width:100%; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,.2); overflow:hidden; text-align:left;
+      /* Nunca mais alto que a tela: com a perda item a item (25/09) o Encerrar
+         OP passou da altura do celular e o botão ficava fora, sem rolagem.
+         Cabeçalho e botões fixos; só o meio rola. dvh acompanha a barra do
+         navegador do celular; vh é o recuo para navegador antigo. */
+      max-height:calc(100vh - 32px); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; }
+    .modal-hdr { flex:none; padding:18px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
     .modal-ttl { font-size:16px; font-weight:800; }
     .modal-sub { font-size:12.5px; color:var(--muted); margin-top:3px; }
     .modal-close { border:none; background:none; font-size:20px; line-height:1; cursor:pointer; color:var(--muted); padding:0; }
-    .modal-body { padding:18px 20px; }
-    .modal-footer { padding:14px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
+    .modal-body { padding:18px 20px; flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+    .modal-footer { flex:none; padding:14px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
     .btn-cancel { background:color-mix(in srgb, var(--text) 8%, transparent); color:var(--text); padding:9px 16px; border:none; border-radius:8px; cursor:pointer; font-weight:700; font-size:13px; }
     .btn-cancel:hover { background:color-mix(in srgb, var(--text) 14%, transparent); }
     .btn-confirm-danger { background:var(--danger); color:white; padding:9px 16px; border:none; border-radius:8px; cursor:pointer; font-weight:700; font-size:13px; }

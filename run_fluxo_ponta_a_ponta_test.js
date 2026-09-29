@@ -458,6 +458,25 @@ async function fechar(page, errors, etapa) {
     // ...e o primeiro insumo da lista (vem do BOM da OP) teve 12 perdidos.
     const insumoPerdido = await page.locator('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod]').first().getAttribute('data-cod');
     await page.fill('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod="' + insumoPerdido + '"] .pe-qtd', '12');
+    // Celular pequeno (29/09): com a lista de perdas o modal passava da tela e
+    // o botão "Encerrar OP" ficava inalcançável. Botões fixos, o meio rola.
+    await page.setViewportSize({width: 375, height: 667});
+    const geo = await page.evaluate(() => {
+      const b = document.getElementById('btnConfirmarEncerrarOpTurno').getBoundingClientRect();
+      const corpo = document.querySelector('#encerrarOpTurnoModal .modal-body');
+      return {topo: b.top, base: b.bottom, altura: window.innerHeight, rola: corpo.scrollHeight > corpo.clientHeight,
+        overflow: getComputedStyle(corpo).overflowY};
+    });
+    assert.ok(geo.topo >= 0 && geo.base <= geo.altura, 'botão Encerrar OP dentro da tela do celular: ' + JSON.stringify(geo));
+    assert.equal(geo.overflow, 'auto');
+    assert.ok(geo.rola, 'o conteúdo maior que a tela rola dentro do modal');
+    const cobre = await page.evaluate(() => {
+      const t = document.querySelector('#encerrarOpTurnoModal .modal-ttl').getBoundingClientRect();
+      const el = document.elementFromPoint(t.left + 4, t.top + t.height / 2);
+      return el && !!el.closest('#encerrarOpTurnoModal');
+    });
+    assert.ok(cobre, 'nada (botão de menu) fica por cima do título do modal');
+    console.log('   celular 375x667: botão Encerrar OP visível, lista rola dentro do modal');
     await page.click('#btnConfirmarEncerrarOpTurno');
     await page.waitForTimeout(800);
     if (dialogos.length) console.log('   AVISOS da tela: ' + dialogos.join(' | '));
