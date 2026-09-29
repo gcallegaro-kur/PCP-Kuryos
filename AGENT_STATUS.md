@@ -127,6 +127,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Análise do granel: NA, faixas editáveis, só resultado
+  (2026-09-29).** Assumido da outra sessão (encerrou por limite). Cada ensaio
+  ganha NA; pH/densidade/teor com faixa mín–máx editável vinda da especificação
+  do produto (produto sem especificação: a faixa digitada vira a v1); numérico
+  = só o resultado, C/NC automático. **Arquivos ativos:** `public/qualidade.html`,
+  `public/shared/analise-granel.js` (novo), `public/shared/laudo-pa-resultados.js`,
+  `run_analise_granel_test.js` (novo), testes de UI que abrem o granel.
+
 - **EM ANDAMENTO — botão "Ajustar a grade" a partir do desvio (2026-09-29).**
   Na Sequência, OP com desvio contra a grade de Quantidades ganha um botão
   que acrescenta (ou libera) horas SÓ daquele pedido e empurra o que vem
