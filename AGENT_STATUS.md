@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **Publicado — modal do apontamento cabe no celular (2026-09-29).** Commit
+  `a16b747`, Hosting por worktree novo; `form.html` idêntico ao commit. Com a
+  perda item a item o Encerrar OP passava da tela e o botão ficava fora (sem
+  rolagem). Modais de `form.html`: altura ≤ 100dvh, cabeçalho/botões fixos,
+  corpo rola; z-index 10002 (acima do botão de menu, que cobria o título).
+  Teste em 375×667 no `run_fluxo_ponta_a_ponta_test.js`. Outras páginas com
+  modal de z-index 9999 podem ter o mesmo botão de menu por cima no celular —
+  não verificado. Arquivos ativos: nenhum.
+
 - **Publicado — resultados do laudo de PA no sistema (2026-09-28).** Commit
   `6e80660`, Hosting por worktree novo do origin/main; 7 arquivos públicos
   idênticos (inclui Relatório de Pedido e Manipulação). Laudo do palete ganhou
