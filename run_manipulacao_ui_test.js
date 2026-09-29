@@ -487,7 +487,11 @@ async function campo(page, seletor, valor) {
     await cq.page.waitForFunction(() => /Informe a faixa/.test(document.querySelector('[data-granel-status="e3"] span').title));
     await cq.page.fill('[data-granel-min="e3"]', '0,85');
     await cq.page.fill('[data-granel-max="e3"]', '0,95');
-    await cq.page.waitForFunction(() => /Faixa diferente da especificação em: DENSIDADE/i.test(document.getElementById('qGranelFaixaAviso').innerText));
+    // Densidade sem faixa na especificação: a faixa digitada vai para ela.
+    await cq.page.waitForFunction(() => /Sem faixa na especificação: DENSIDADE[\s\S]*nova versão/i.test(document.getElementById('qGranelFaixaAviso').innerText));
+    // pH COM faixa ajustado: só o lote.
+    await cq.page.fill('[data-granel-max="e2"]', '7,2');
+    await cq.page.waitForFunction(() => /Faixa diferente da especificação em: PH/i.test(document.getElementById('qGranelFaixaAviso').innerText));
     // NA: marca e desmarca -- o campo trava e volta.
     await cq.page.check('[data-granel-na="e1"]');
     await cq.page.waitForFunction(() => document.querySelector('[data-granel-cnc="e1"]').disabled);
@@ -503,9 +507,16 @@ async function campo(page, seletor, valor) {
     assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e2.valor), '6');
     assert.equal(String(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e3.valor), '0.872', 'densidade do bulk gravada para a pesagem do PA');
     const e3 = dbCq.ops['26260-01'].manipulacao.analise.ensaios.e3;
-    assert.deepEqual([e3.minimo, e3.maximo, e3.faixaAlterada, e3.cnc], [0.85, 0.95, true, 'C'], 'faixa usada e alteração registradas');
+    assert.deepEqual([e3.minimo, e3.maximo, e3.faixaNova, e3.faixaAlterada, e3.cnc], [0.85, 0.95, true, false, 'C'], 'faixa nova registrada');
+    assert.equal(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e2.faixaAlterada, true, 'pH ajustado fica só no lote');
     assert.equal(dbCq.ops['26260-01'].manipulacao.analise.ensaios.e1.na, false);
-    assert.equal(Object.keys(dbCq.especificacoes).length, 1, 'produto COM especificação: a faixa do lote não reescreve o cadastro');
+    const v2 = dbCq.especificacoes.MRARBS04__v2;
+    assert.ok(v2, 'lacuna de faixa gravada numa nova versão da especificação');
+    assert.deepEqual([v2.itens.e3.minimo, v2.itens.e3.maximo, v2.baseadaEm, v2.faixasPreenchidas], [0.85, 0.95, 'MRARBS04__v1', ['DENSIDADE']]);
+    assert.deepEqual([v2.itens.e2.minimo, v2.itens.e2.maximo], [5, 7], 'o ajuste do pH no lote não vai para a especificação');
+    assert.equal(dbCq.especificacoes.MRARBS04__v1.itens.e3.minimo, undefined, 'a versão anterior fica intacta');
+    assert.equal(dbCq.ops['26260-01'].manipulacao.analise.especificacaoKey, 'MRARBS04__v1', 'o lote aponta para a versão com que foi analisado');
+    assert.equal(dbCq.ops['26260-01'].manipulacao.analise.especificacaoGerada, 'MRARBS04__v2');
     assert.ok(!avisosCq.some((m) => /densidade do bulk não foi apontada/.test(m)), 'com densidade, não pergunta');
     assert.deepEqual(cq.errors, [], 'erros na tela da Qualidade: ' + cq.errors.join(' | '));
     await cq.page.close();

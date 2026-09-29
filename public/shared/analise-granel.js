@@ -13,6 +13,9 @@
    - numérico = tem faixa na especificação ou é pH/densidade/teor/álcool;
    - faixa editada na análise vale para ESTE lote e fica marcada
      (`faixaAlterada`) -- a especificação cadastrada não muda por baixo;
+   - ensaio SEM faixa na especificação (nem colunas nem texto) e faixa
+     digitada: vira nova versão da especificação com a lacuna preenchida
+     (usuário, 29/09: "gravando nas especificações"). Preenche, nunca troca;
    - produto SEM especificação: a faixa digitada nasce como a v1 da
      especificação (mesma decisão da MP em 23/09: "o cadastro acontece na
      análise"), para o próximo lote já vir preenchido;
@@ -106,7 +109,12 @@
       var editouMax = Object.prototype.hasOwnProperty.call(r, 'maximo');
       var min = editouMin ? num(r.minimo) : l.minimo;
       var max = editouMax ? num(r.maximo) : l.maximo;
-      var faixaAlterada = l.numerico && (min !== l.minimo || max !== l.maximo);
+      var tinhaFaixa = l.minimo != null || l.maximo != null;
+      var mudou = l.numerico && (min !== l.minimo || max !== l.maximo);
+      // Com faixa na especificação: ajuste do lote. Sem: faixa nova, que vai
+      // para a especificação.
+      var faixaAlterada = mudou && tinhaFaixa;
+      var faixaNova = mudou && !tinhaFaixa && (min != null || max != null);
       var valor = num(r.valor);
       var conforme = null, status, motivo = '';
       if (na) { status = 'NA'; motivo = 'Não se aplica.'; }
@@ -123,14 +131,15 @@
         else { status = 'PENDENTE'; motivo = 'Marque C ou NC.'; }
       }
       return Object.assign({}, l, {na: na, minimoUsado: min, maximoUsado: max, faixa: faixaTexto(min, max),
-        faixaAlterada: !na && faixaAlterada, valor: valor, cnc: l.numerico ? null : (r.cnc || null),
+        faixaAlterada: !na && faixaAlterada, faixaNova: !na && faixaNova, valor: valor, cnc: l.numerico ? null : (r.cnc || null),
         conforme: conforme, status: status, motivo: motivo});
     });
     var c = {C: 0, NC: 0, NA: 0, PENDENTE: 0};
     out.forEach(function(l) { c[l.status]++; });
     return {linhas: out, conformes: c.C, naoConformes: c.NC, na: c.NA, pendentes: c.PENDENTE,
       bloqueia: out.some(function(l) { return l.critico && l.conforme === false; }),
-      faixasAlteradas: out.filter(function(l) { return l.faixaAlterada; }).map(function(l) { return l.ensaio; })};
+      faixasAlteradas: out.filter(function(l) { return l.faixaAlterada; }).map(function(l) { return l.ensaio; }),
+      faixasNovas: out.filter(function(l) { return l.faixaNova; }).map(function(l) { return l.ensaio; })};
   }
 
   /* O que vai em ops/{op}/manipulacao/analise/ensaios. Mantém os campos que
@@ -145,7 +154,7 @@
         ensaio: l.ensaio, especificacaoTexto: l.especificacaoTexto || null, metodo: l.metodo || null,
         critico: l.critico, faixa: l.faixa || null,
         minimo: l.na ? null : l.minimoUsado, maximo: l.na ? null : l.maximoUsado,
-        faixaAlterada: !!l.faixaAlterada,
+        faixaAlterada: !!l.faixaAlterada, faixaNova: !!l.faixaNova,
         valor: l.na ? null : l.valor,
         cnc: l.na ? NA : l.numerico ? (l.conforme === true ? 'C' : l.conforme === false ? 'NC' : null) : l.cnc,
         na: !!l.na, conforme: l.na ? null : l.conforme
@@ -181,6 +190,38 @@
     return {updates: u, chave: chave};
   }
 
-  return {NA: NA, num: num, faixaDoTexto: faixaDoTexto, linhas: linhas, avaliar: avaliar, registro: registro,
+  /* Nova versão da especificação EXISTENTE com as lacunas de faixa
+     preenchidas pela análise. `espec` = especificacaoVigente(...)
+     ({key, versao, registro}). Copia a versão vigente inteira e só completa
+     minimo/maximo (e o texto, quando era vazio/"-"/"N/A") dos ensaios que não
+     tinham faixa -- o resto fica como estava. A versão anterior continua
+     gravada: o laudo antigo aponta para ela. */
+  function especificacaoComLacunas(espec, aval, contexto) {
+    var c = contexto || {};
+    var novas = ((aval && aval.linhas) || []).filter(function(l) { return l.faixaNova; });
+    if (!espec || !espec.registro || !novas.length) return null;
+    var reg = JSON.parse(JSON.stringify(espec.registro));
+    reg.itens = reg.itens || {};
+    novas.forEach(function(l) {
+      var it = reg.itens[l.key] || (reg.itens[l.key] = {ensaio: l.ensaio, metodo: l.metodo || null});
+      it.minimo = l.minimoUsado; it.maximo = l.maximoUsado;
+      var tx = texto(it.especificacaoTexto);
+      if (/^(N\/?A|N\.A\.?|-)?$/i.test(tx.replace(/\s/g, ''))) it.especificacaoTexto = l.faixa;
+      if (it.aplicavel === false) it.aplicavel = true;
+    });
+    var sku = String(espec.key).split('__v')[0];
+    var versao = (parseInt(espec.versao, 10) || 1) + 1;
+    var chave = sku + '__v' + versao;
+    reg.versao = 'v' + versao;
+    reg.origem = 'ANALISE_GRANEL';
+    reg.baseadaEm = espec.key;
+    reg.faixasPreenchidas = novas.map(function(l) { return l.ensaio; });
+    reg.criadoEm = c.agora || null; reg.criadoPor = c.por || null; reg.loteOrigem = c.lote || null;
+    var u = {};
+    u['especificacoes/' + chave] = reg;
+    return {updates: u, chave: chave, ensaios: reg.faixasPreenchidas};
+  }
+
+  return {NA: NA, especificacaoComLacunas: especificacaoComLacunas, num: num, faixaDoTexto: faixaDoTexto, linhas: linhas, avaliar: avaliar, registro: registro,
     especificacaoDaAnalise: especificacaoDaAnalise, faixaTexto: faixaTexto};
 });

@@ -1362,10 +1362,13 @@ function atualizarLinhasGranel() {
     '<span class="badge badge-gray">' + aval.pendentes + ' pend.</span>';
   var aviso = document.getElementById('qGranelFaixaAviso');
   var msgs = [];
-  if (aval.faixasAlteradas.length) {
-    msgs.push(temEspecGranel()
-      ? 'Faixa diferente da especificação em: ' + aval.faixasAlteradas.join(', ') + '. Vale só para este lote e fica registrada na análise.'
-      : 'Este produto não tem especificação: as faixas informadas viram a especificação v1 dele ao registrar a análise.');
+  if (!temEspecGranel()) {
+    if (aval.faixasNovas.length) msgs.push('Este produto não tem especificação: as faixas informadas viram a especificação v1 dele ao registrar a análise.');
+  } else {
+    if (aval.faixasNovas.length) msgs.push('Sem faixa na especificação: ' + aval.faixasNovas.join(', ') +
+      '. Ao registrar, a faixa informada vai para a especificação do produto (nova versão).');
+    if (aval.faixasAlteradas.length) msgs.push('Faixa diferente da especificação em: ' + aval.faixasAlteradas.join(', ') +
+      '. Vale só para este lote e fica registrada na análise.');
   }
   aviso.style.display = msgs.length ? '' : 'none';
   aviso.textContent = msgs.join(' ');
@@ -1414,6 +1417,17 @@ function decidirGranel(decisao) {
       Object.assign(u, specNova.updates);
       u['ops/' + granelAtual.opKey + '/manipulacao/analise/especificacaoKey'] = specNova.chave;
     }
+  } else if (temEspecGranel()) {
+    // Especificação com ensaio sem faixa: a faixa digitada preenche a
+    // lacuna numa nova versão (usuário, 29/09: "gravando nas
+    // especificações"). O lote segue apontando para a versão com que foi
+    // analisado; a nova fica em especificacaoGerada.
+    specNova = AnaliseGranel.especificacaoComLacunas(granelAtual.espec, aval,
+      {agora: new Date().toISOString(), por: currentUserNome(), lote: granelAtual.op.lote || null});
+    if (specNova) {
+      Object.assign(u, specNova.updates);
+      u['ops/' + granelAtual.opKey + '/manipulacao/analise/especificacaoGerada'] = specNova.chave;
+    }
   }
   var op = granelAtual.op;
   var rncCorrecao = Manipulacao.ehCorrecao(op.manipulacao) ? ((op.manipulacao.correcao || {}).rncNumero || null) : null;
@@ -1431,7 +1445,8 @@ function decidirGranel(decisao) {
   }).then(function(rnc) {
     fecharModalGranel();
     showAlert(decisao === 'LIBERAR'
-      ? 'Granel liberado. O envase deste lote já pode ser alocado.'
+      ? 'Granel liberado. O envase deste lote já pode ser alocado.' +
+        (specNova ? ' Faixas gravadas na especificação ' + specNova.chave.replace('__v', ' · versão ') + '.' : '')
       : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + (rnc.existente ? ' (a mesma da correção).' : ' aberta.') : '') +
         ' Se der para corrigir, abra a correção em "Bulk reprovado".',
       decisao === 'LIBERAR' ? 'success' : 'danger');

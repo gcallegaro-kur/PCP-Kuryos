@@ -93,4 +93,28 @@ const prox = G.linhas(it, S.PLANO_MP);
 eq(prox.find(l => l.key === 'ph').minimo, 5);
 eq(prox.find(l => l.key === 'teor_alcoolico').naEspec, true);
 
+// 7. Especificação existente com lacuna (29/09: "gravando nas especificações").
+const especV = {key: 'PRF-2__v3', versao: 3, registro: {codProduto: 'PRF-2', versao: 'v3', status: 'APROVADA', itens: {
+  ph: {ensaio: 'PH', especificacaoTexto: '5,5 – 6,5', metodo: 'PA01'},
+  dens: {ensaio: 'DENSIDADE', especificacaoTexto: '-', metodo: 'PA02'},
+  teor: {ensaio: 'TEOR DE ÁLCOOL', especificacaoTexto: 'N/A'},
+  asp: {ensaio: 'ASPECTO', especificacaoTexto: 'LÍQUIDO'}}}};
+const LV = G.linhas(especV.registro.itens, S.PLANO_MP);
+let av7 = G.avaliar(LV, {ph: {valor: '6', maximo: '7'}, dens: {valor: '0,9', minimo: '0,85', maximo: '0,95'}, teor: {na: true}, asp: {cnc: 'C'}});
+eq(av7.faixasNovas, ['DENSIDADE'], 'densidade sem faixa: faixa nova');
+eq(av7.faixasAlteradas, ['PH'], 'pH com faixa: ajuste só do lote');
+eq(G.registro(av7).dens.faixaNova, true);
+const lac = G.especificacaoComLacunas(especV, av7, {agora: 'T', por: 'CQ', lote: '9/9'});
+eq(lac.chave, 'PRF-2__v4', 'nova versão');
+const v4 = lac.updates['especificacoes/PRF-2__v4'];
+eq([v4.itens.dens.minimo, v4.itens.dens.maximo, v4.itens.dens.especificacaoTexto], [0.85, 0.95, '0,85 – 0,95'], 'lacuna preenchida');
+eq(v4.itens.ph, especV.registro.itens.ph, 'pH ajustado no lote NÃO muda na especificação');
+eq(v4.itens.teor, especV.registro.itens.teor, 'NA no lote não muda a especificação');
+eq([v4.versao, v4.baseadaEm, v4.origem, v4.faixasPreenchidas, v4.status], ['v4', 'PRF-2__v3', 'ANALISE_GRANEL', ['DENSIDADE'], 'APROVADA']);
+eq(especV.registro.itens.dens.minimo, undefined, 'versão vigente não é mutada');
+eq(G.especificacaoComLacunas(especV, G.avaliar(LV, {ph: {valor: '6'}}), {}), null, 'sem lacuna preenchida, sem versão nova');
+// Próximo lote: a faixa já vem.
+eq(G.linhas(v4.itens, S.PLANO_MP).find(l => l.key === 'dens').minimo, 0.85);
+eq(G.avaliar(G.linhas(v4.itens, S.PLANO_MP), {}).faixasNovas, [], 'nada mais a preencher');
+
 console.log('run_analise_granel_test: ' + n + ' verificações OK');
