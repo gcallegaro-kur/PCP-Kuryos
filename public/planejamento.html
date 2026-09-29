@@ -10,6 +10,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/perdas-etapa.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/sequencia-setor.js"></script>
+  <script src="shared/sequencia-setor-tela.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -319,6 +323,7 @@
     <button class="top-tab active" data-tab="grade">📅 Planejamento de Quantidades</button>
     <button class="top-tab" data-tab="ops">📦 Planejamento de OPs</button>
     <button class="top-tab" data-tab="agendamento">📋 Agendamento</button>
+    <button class="top-tab" data-tab="sequencia">🧭 Sequência por setor</button>
     <button class="top-tab" data-tab="config">⚙️ Configurações</button>
   </div>
 
@@ -470,6 +475,19 @@
       </select>
     </div>
     <div class="ped-queue" id="pedQueue"><div style="color:var(--muted);font-size:13px;padding:20px">Carregando...</div></div>
+  </div>
+
+  <!-- SEQUÊNCIA POR SETOR (29/09): o PCP ordena a fila de cada setor --
+       Separação, Manipulação, Envase por linha, Rotulagem por rotuladora --
+       e cada setor consulta a sua em Próximas Ordens. Um bloco por setor,
+       tudo nesta aba (pedido do usuário). Tela em shared/sequencia-setor-tela.js. -->
+  <div class="tab-content" id="tabSequencia">
+    <div style="font-size:13px;color:var(--muted);line-height:1.5;margin:4px 0 14px">
+      Ordene com ↑ ↓ a fila de cada recurso. A estimativa encadeia as ordens pelo ritmo e pelo horário de turno e se refaz a cada apontamento.
+      No envase, OP já programada na grade horária segue a grade; o ritmo é o menor entre o do produto (prodHoraRef) e o da linha, se informado.
+      Cada setor vê a sua fila em <b>Próximas Ordens</b>.
+    </div>
+    <div id="sequenciaSetores"><div style="color:var(--muted);font-size:13px;padding:20px">Carregando...</div></div>
   </div>
 
   <!-- CONFIG -->
@@ -836,8 +854,26 @@ function setupTabBar(){
       document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
       this.classList.add('active');
       document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.add('active');
+      if(tab==='sequencia') abrirSequenciaSetor();
     });
   });
+  // Próximas Ordens manda o PCP direto para cá (?tab=sequencia).
+  var pedida=new URLSearchParams(location.search).get('tab');
+  var btnPedido=pedida&&document.querySelector('.top-tab[data-tab="'+pedida+'"]');
+  if(btnPedido) btnPedido.click();
+}
+/* Sequência por setor: monta na primeira abertura da aba (os listeners de
+   ops/produtos só custam para quem usa). Só o PCP ordena -- a mesma regra
+   do nó sequenciamento no banco: papel admin/pcp ou Emitir OP marcado. */
+var sequenciaTela=null;
+function podeOrdenarSequencia(){
+  var u=window.currentUser;
+  return !!u&&(u.role==='admin'||u.role==='pcp'||!!(u.modulos&&u.modulos.emitir_op===true));
+}
+function abrirSequenciaSetor(){
+  if(sequenciaTela) return;
+  if(!window.currentUser){setTimeout(abrirSequenciaSetor,300);return;}
+  sequenciaTela=SequenciaSetorTela.montar(document.getElementById('sequenciaSetores'),{db:db,podeEditar:podeOrdenarSequencia()});
 }
 
 // Log de ajustes automáticos de planejamento (Fase B) — mostra o que o

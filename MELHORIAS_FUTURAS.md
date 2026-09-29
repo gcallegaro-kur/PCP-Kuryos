@@ -22,6 +22,36 @@ se for um gap que o modelo não tem, acrescente-o lá também.
 
 ---
 
+## Sequência por setor / Próximas Ordens — o que ficou para depois (2026-09-29)
+
+Entregue: o PCP ordena a fila de cada setor no Planejamento (aba *Sequência por
+setor*) e cada setor consulta a sua em `proximas_ordens.html`. Motor em
+`public/shared/sequencia-setor.js`, tela em `shared/sequencia-setor-tela.js`,
+decisão do PCP em `sequenciamento/{ordem,ritmos}`. Passo PCP (planejamento).
+Adiado:
+
+- **Programação por reator.** Pedido do usuário ("futuramente podemos pensar em
+  uma programação por reator"). Hoje a manipulação é UMA fila (recurso único
+  `Manipulação`). Para virar por reator: cadastrar os reatores (capacidade em
+  litros — `emitir_op.html` já calcula o volume do batch) em `config`, tratar
+  `manipulacao` como setor de recursos múltiplos em `SETORES` (tirar
+  `recursoUnico`) e checar volume do batch ≤ capacidade do reator ao mover.
+- **Ritmo demonstrado para rotuladora e manipulação.** O ritmo é digitado pelo
+  PCP. Os apontamentos da rotulagem (`produzidoRotulagem`, `setupFimRot`) e as
+  fases da manipulação (`manipulacao/inicio` → `fim`) permitem sugerir um valor
+  — usar sempre o percentil conservador, como `kuryosRitmoDemonstrado`.
+- **Tempo da análise do bulk pela Qualidade** não entra no encadeamento
+  (manipulação → envase). Não há dado de duração; medir `analise/em` −
+  `manipulacao/fim` quando houver amostra.
+- **A sequência não escreve na grade horária do envase.** OP na grade segue a
+  grade; as demais seguem a posição do PCP. Unificar exigiria gerar slots de
+  `programacao` a partir da sequência — decisão de produto antes de código.
+- **Ordem de retrabalho na fila.** O modelo de `PLANO_GESTAO_RETRABALHOS.md`
+  (ordens de fabricação/envase/rotulagem de retrabalho) deve entrar como etapa
+  lida pelo mesmo motor (`etapa()`), não como fila paralela. Hoje a OP de
+  retrabalho entra no envase/rotulagem como qualquer OP e fica fora da
+  manipulação.
+
 ## Gaps levantados na modelagem de fluxos (2026-09-23)
 
 Apareceram ao modelar os fluxos por área e não tinham item neste backlog. Detalhe,

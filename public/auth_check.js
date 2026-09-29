@@ -84,18 +84,18 @@ const KURYOS_MODULOS = {
   // `apontamento` continua sendo a da Produção de propósito: as regras do
   // banco e os `modulos` já gravados usam esse nome.
   apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html'] },
   manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
-                  paginas: ['manipulacao.html', 'estoque_setor.html'] },
+                  paginas: ['manipulacao.html', 'estoque_setor.html', 'proximas_ordens.html'] },
   rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html'] },
   // Quem pode conferir a pesagem enquanto a chave "Conferência de Pesagem"
   // (Ajustes) estiver ligada -- Qualidade e P&D. Dá acesso só à tela da
   // Manipulação; conferir é a única ação que a tela oferece a quem só tem isto.
   conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
                   paginas: ['manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
@@ -108,7 +108,7 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html'] },
+                  paginas: ['logistica.html', 'expedicao.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
@@ -683,6 +683,8 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=conferenciapa', 'clipboard', 'Conferência de PA', activePage),
+    // Próximas Ordens (29/09): a fila da Separação na ordem do PCP.
+    temMod('logistica') && ktLink('proximas_ordens.html?setor=separacao', 'list', 'Próximas Separações', activePage),
     temMod('logistica') && ktLink('separacao_materiais.html', 'clipboard', 'Separação de Materiais', activePage),
     temMod('logistica') && ktLink('descarte.html', 'clipboard', 'Descarte e Reversa', activePage),
     temMod('logistica') && !temMod('comercial') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage)
@@ -714,16 +716,20 @@ function renderUnifiedNavbar(user) {
   };
   const apontaEm = setores.producao ? 'Produção' : 'Rotulagem';
   const producaoGroup = grupo('Operação', [
+    // Próximas Ordens (29/09): a fila de cada setor, na ordem do PCP.
     sub('Produção', [
+      setores.producao && ktLink('proximas_ordens.html?setor=envase', 'list', 'Próximas Ordens', activePage),
       setores.producao && ktLink('form.html', 'pencil', 'Apontamento', activePage),
       setores.producao && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
       setores.producao && ktLink('estoque_setor.html?setor=producao', 'warehouse', 'Estoque da Fábrica', activePage)
     ]),
     sub('Manipulação', [
+      setores.manipulacao && ktLink('proximas_ordens.html?setor=manipulacao', 'list', 'Próximas Ordens', activePage),
       (setores.manipulacao || temMod('conferencia_pesagem')) && ktLink('manipulacao.html', 'flask', setores.manipulacao ? 'Pesagem e Manipulação' : 'Conferência de Pesagem', activePage),
       setores.manipulacao && ktLink('estoque_setor.html?setor=manipulacao', 'warehouse', 'Estoque da Manipulação', activePage)
     ]),
     sub('Rotulagem', [
+      setores.rotulagem && ktLink('proximas_ordens.html?setor=rotulagem', 'list', 'Próximas Ordens', activePage),
       // Com Produção junto, o apontamento/histórico já estão no link acima.
       setores.rotulagem && apontaEm === 'Rotulagem' && ktLink('form.html', 'pencil', 'Apontamento', activePage),
       setores.rotulagem && apontaEm === 'Rotulagem' && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),

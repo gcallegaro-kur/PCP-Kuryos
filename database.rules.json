@@ -176,6 +176,36 @@
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))"
     },
+    // Sequencia por setor (29/09): so a decisao do PCP -- ordem e recurso de
+    // cada OP por setor e o ritmo de cada recurso. O estado da etapa vem da
+    // propria OP. Todo autenticado le (cada setor consulta a sua fila).
+    "sequenciamento": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('emitir_op').val() == true)",
+      "ordem": {
+        "$setor": {
+          ".validate": "$setor == 'separacao' || $setor == 'manipulacao' || $setor == 'envase' || $setor == 'rotulagem'",
+          "$opKey": {
+            "posicao": {".validate": "newData.isNumber() && newData.val() >= 1"},
+            "recurso": {".validate": "newData.isString() && newData.val().length <= 80"},
+            "$outro": {".validate": false}
+          }
+        }
+      },
+      "ritmos": {
+        "$setor": {
+          "$recurso": {
+            "unPorHora": {".validate": "newData.isNumber() && newData.val() > 0"},
+            "horasPorLote": {".validate": "newData.isNumber() && newData.val() > 0"},
+            "horasPorOp": {".validate": "newData.isNumber() && newData.val() > 0"},
+            "$outro": {".validate": false}
+          }
+        }
+      },
+      "atualizadoEm": {".validate": "newData.isString()"},
+      "atualizadoPor": {".validate": "newData.isString()"},
+      "$outro": {".validate": false}
+    },
     "ops": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('emitir_op').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))",

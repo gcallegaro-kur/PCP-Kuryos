@@ -127,15 +127,26 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Sequência por setor e Próximas Ordens (2026-09-29).**
-  PCP ordena as OPs por setor/recurso (Separação; Manipulação; Envase por
-  linha; Rotulagem por rotuladora) numa aba nova do Planejamento; cada setor
-  consulta a sua fila em `proximas_ordens.html`, com início/fim estimados que
-  se atualizam pelos apontamentos. Etapas derivadas da OP (sem ficha nova).
-  **Arquivos ativos:** `public/shared/sequencia-setor.js` (novo),
-  `public/proximas_ordens.html` (novo), `public/planejamento.html`,
-  `public/auth_check.js`, `database.rules.json`, `run_sequencia_setor_test.js`
-  (novo), `run_proximas_ordens_ui_test.js` (novo), `MELHORIAS_FUTURAS.md`.
+- **COMMITADO — Sequência por setor e Próximas Ordens (2026-09-29).**
+  PCP ordena a fila de cada setor no Planejamento (aba "Sequência por setor",
+  um bloco por setor: Separação, Manipulação, Envase por linha, Rotulagem por
+  rotuladora); cada setor consulta a sua em `proximas_ordens.html?setor=`
+  (só leitura; Logística vê a Separação). Etapas LIDAS da OP (sem ficha nova):
+  `separacaoConcluida`, fase da manipulação (sai do setor em AGUARDANDO_CQ),
+  `produzidoLinha`, `produzidoRotulagem` (rotulagem só se a OP tem rótulo em
+  `materiaisConsumo`). O que roda vence o plano (`abertaLinha`/
+  `abertaRotulagem`); OP na grade horária segue a grade. Estimativa encadeada
+  por recurso nas horas de turno (mesma regra de `horasEPausasDoDia`), espera
+  a etapa anterior da mesma OP (separação → manipulação → envase; rotulagem em
+  paralelo). Ritmo: envase = menor entre `prodHoraRef` e o da linha; os demais
+  informados pelo PCP. Gravado só `sequenciamento/{ordem,ritmos}`, caminhos
+  planos; regra nova: escreve admin/pcp ou `modulos.emitir_op`, todos leem.
+  Menu: "Próximas Ordens" em cada setor da Operação e "Próximas Separações" na
+  Logística. Testes: `run_sequencia_setor_test.js`,
+  `run_proximas_ordens_ui_test.js`, `run_sequencia_setor_rules_test.js`
+  (emulador, `--project demo-sequencia`) + regras antigas no emulador +
+  varredura. Adiados (reator, ritmo demonstrado, tempo do CQ) em
+  `MELHORIAS_FUTURAS.md`. Arquivos ativos: nenhum.
 
 - **Publicado — Rotulagem como área própria no apontamento (2026-09-29).**
   Commit `20e09b9`, Hosting + Functions `onTurnoEncerrado` e
