@@ -127,16 +127,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Movimentar (WMS) (2026-09-29).** Tela própria, para o
-  celular, De onde → O quê → Para onde → Confirmar: posição, palete ou lote
-  por código digitado, leitor (teclado) ou câmera; palete inteiro, lote ou
-  parte; destino livre/ocupada/doca/bloqueada explícito; últimas
-  movimentações; etiquetas de endereço (Code39 + QR). **Arquivos ativos:**
-  `public/movimentar.html` (novo), `public/shared/movimentacao-wms.js` (novo),
-  `public/shared/movimentar-tela.js` (novo), `public/shared/utils.js`
-  (`separarParcialLoteEndereco`: origem configurável), `public/auth_check.js`,
-  `public/manual_logistica.html`, `run_movimentacao_wms_test.js`,
-  `run_movimentar_ui_test.js`.
+- **Publicado — Movimentar (WMS) + etiquetas que leem (2026-09-29).** Commit
+  `c071a09`, Hosting por worktree novo do origin/main; arquivos idênticos
+  (inclui cargas/faturamento/qualidade). `movimentar.html` (De onde → O quê →
+  Para onde → Confirmar; motor `shared/movimentacao-wms.js`; PA só inteiro;
+  `separarParcialLoteEndereco` com `opcoes.origemTipo`). Etiquetas medidas com
+  ZXing (`run_etiquetas_leitura_test.js`, precisa `ZXING_DIR` com
+  @zxing/library + pngjs): **Code39 tinha '.' e '/' errados em utils.js**
+  (endereço e lote de OP não liam) — corrigido; quiet zone em Code39/EAN;
+  EAN da caixa 0,40 x 13 mm; `shared/etiquetas-wms.js` (recebimento, palete,
+  endereço térmica/A4) — Recebimento da Logística usa o modelo novo. 24/24
+  leituras a 8 e 6 px/mm. Backlog: etiqueta automática na Conferência de PA;
+  leitor no iPhone. Arquivos ativos: nenhum.
 
 - **Publicado — Expedição de vendas em três telas (2026-09-29).** Commit
   `c80f48b`, Hosting por worktree novo do origin/main; 14 arquivos públicos
