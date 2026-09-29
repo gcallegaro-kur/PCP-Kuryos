@@ -127,13 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Sequência herda a grade de Quantidades + aviso de desvio
-  (2026-09-29).** OP sem decisão do PCP entra na linha e na ordem em que o
-  pedido foi planejado na grade (só sugestão); a Sequência avisa quando o
-  término estimado passa do planejado. **Arquivos ativos:**
-  `public/shared/sequencia-setor.js`, `public/shared/sequencia-setor-tela.js`,
-  `run_sequencia_setor_test.js`, `run_proximas_ordens_ui_test.js`,
-  `public/manual_pcp.html`, `MELHORIAS_FUTURAS.md`.
+- **PUBLICADO — Sequência herda a grade de Quantidades + aviso de desvio
+  (2026-09-29).** `sugestoesDaGrade` lê `programacao` (janela de 14 dias
+  para trás): OP sem decisão do PCP e sem `linha` entra na linha do pedido
+  (`skuPedidoKey`; slot com o `lote` da OP vale mais) e na ordem do primeiro
+  horário dele -- só sugestão, a decisão do PCP e a linha da OP vencem.
+  Desvio (`desvioHoras`, ≥ 1 h) contra `dataFimPlanejada` da OP ou o fim do
+  pedido na grade; mostrado só ao PCP. Tolerância de 1 min no fim de cada
+  hora (segundos de sobra jogavam o término para depois da pausa). Só
+  Hosting. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Sequência por setor e Próximas Ordens (2026-09-29).**
   Commit `7656081`, Hosting + RTDB (regra `sequenciamento`) do worktree limpo;

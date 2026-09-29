@@ -33,6 +33,8 @@
     '.sq-est{font-size:12px;margin-top:3px}' +
     '.sq-est b{font-weight:800}' +
     '.sq-sem{color:var(--warning,#c9910a);font-weight:600}' +
+    '.sq-atraso{color:var(--danger,#d03b3b);font-weight:700}' +
+    '.sq-adiante{color:var(--success,#0ca30c);font-weight:600}' +
     '.sq-acoes{display:flex;flex-direction:column;gap:4px;align-items:flex-end}' +
     '.sq-acoes .sq-btns{display:flex;gap:4px}' +
     '.sq-acoes button{min-width:34px;min-height:32px;border:1.5px solid var(--border);background:var(--card);color:var(--text);border-radius:7px;cursor:pointer;font-size:14px}' +
@@ -81,7 +83,7 @@
     injetarCss();
     var o = opts || {};
     var db = o.db;
-    var dados = {ops: {}, ordem: {}, ritmos: {}, config: {}, calPlan: {}, prodHora: {}};
+    var dados = {ops: {}, ordem: {}, ritmos: {}, config: {}, calPlan: {}, prodHora: {}, programacao: {}};
     var prontos = {};
     var pendente = null;
 
@@ -93,7 +95,8 @@
           return root.PerdasEtapa.embalagensDaOp(op, null, null).some(function(i) { return i.tipo === 'Rótulos'; });
         },
         rotuloManipulacao: root.Manipulacao ? root.Manipulacao.rotulo : null,
-        prodHoraRef: function(it) { return dados.prodHora[String(it.sku || '').toUpperCase()]; }
+        prodHoraRef: function(it) { return dados.prodHora[String(it.sku || '').toUpperCase()]; },
+        sugestoes: S.sugestoesDaGrade(dados.programacao, dados.config.linhas || [])
       };
     }
     function calendario() {
@@ -111,8 +114,8 @@
       if (pendente) return;
       pendente = setTimeout(function() { pendente = null; render(); }, 40);
     }
-    function ouvir(caminho, nome, transformar) {
-      root.dbOnValue(db.ref(caminho), function(snap) {
+    function ouvir(caminho, nome, transformar, consulta) {
+      root.dbOnValue(consulta || db.ref(caminho), function(snap) {
         var v = snap.val() || {};
         dados[nome] = transformar ? transformar(v) : v;
         prontos[nome] = true;
@@ -124,6 +127,13 @@
     ouvir('sequenciamento/ritmos', 'ritmos');
     ouvir('config', 'config');
     ouvir('config/planejamento', 'calPlan');
+    // Grade de Quantidades: sugere a linha e a ordem da OP e é o "planejado"
+    // contra o qual se mede o desvio. Janela a partir de 14 dias atrás --
+    // pedido planejado na semana passada e não feito ainda é o mais urgente.
+    var desde = new Date(o.agora ? new Date(o.agora) : new Date());
+    desde.setDate(desde.getDate() - 14);
+    var desdeYmd = desde.getFullYear() + '-' + String(desde.getMonth() + 1).padStart(2, '0') + '-' + String(desde.getDate()).padStart(2, '0');
+    ouvir('programacao', 'programacao', null, db.ref('programacao').orderByKey().startAt(desdeYmd));
     ouvir('produtos', 'prodHora', function(v) {
       var m = {};
       Object.keys(v).forEach(function(k) {
@@ -168,6 +178,17 @@
         (atual == null ? '' : String(atual).replace('.', ',')) + '" placeholder="' + (setor === 'envase' ? 'cadastro' : '—') + '"> ' + cfg.ritmoRotulo + '</label>';
     }
 
+    /* Desvio contra o planejado (Planejamento de OPs, senão a grade de
+       Quantidades do pedido) -- só para o PCP, que é quem replaneja. É o
+       aviso de que a execução descolou do plano ANTES de o prazo estourar. */
+    function htmlDesvio(it) {
+      if (!o.podeEditar || it.desvioHoras == null) return '';
+      var h = Math.abs(it.desvioHoras).toLocaleString('pt-BR', {maximumFractionDigits: 1});
+      var ref = it.origemPlano === 'OP' ? 'programado na OP' : 'planejado na grade';
+      return it.desvioHoras > 0
+        ? '<div class="sq-meta sq-atraso">⚠ ' + h + ' h depois do ' + ref + '</div>'
+        : '<div class="sq-meta sq-adiante">' + h + ' h antes do ' + ref + '</div>';
+    }
     // Quem só consulta não tem o que "informar": diz de quem é a pendência.
     function motivoSemEstimativa(m) {
       if (o.podeEditar || !m) return m || '';
@@ -184,12 +205,14 @@
         var falta = it.unidade === 'un' ? root.fmtNum(Math.round(it.restante)) + ' un a fazer' + (it.qtdPlanejada && it.restante !== it.qtdPlanejada ? ' de ' + root.fmtNum(it.qtdPlanejada) : '') : '';
         var badge = it.emAndamento ? '<span class="sq-badge verde">' + root.escapeHtml(it.status) + '</span>'
           : it.naGrade ? '<span class="sq-badge azul">na grade</span> <span class="sq-badge">' + root.escapeHtml(it.status) + '</span>'
+          : it.linhaSugerida && o.podeEditar ? '<span class="sq-badge azul" title="Linha e ordem vêm do pedido na grade de Quantidades. Mude à vontade: a sua decisão vence.">sugerida pela grade</span> <span class="sq-badge">' + root.escapeHtml(it.status) + '</span>'
           : '<span class="sq-badge">' + root.escapeHtml(it.status) + '</span>';
         var est = it.inicioEstimado
           ? '<div class="sq-est">' + (it.emAndamento ? 'Termina <b>' + quando(it.fimEstimado, agora) + '</b>'
               : 'Começa <b>' + quando(it.inicioEstimado, agora) + '</b> · termina <b>' + quando(it.fimEstimado, agora) + '</b>') +
             ' <span class="sq-meta">(' + duracaoTxt(it.horas) + ')</span>' +
             (it.aguarda ? '<div class="sq-meta">Aguarda a ' + root.escapeHtml(it.aguarda) + ' desta OP</div>' : '') +
+            htmlDesvio(it) +
             (it.ressalva ? '<div class="sq-meta sq-sem">Estimativa ' + root.escapeHtml(it.ressalva) + '</div>' : '') + '</div>'
           : '<div class="sq-est sq-sem">Sem estimativa: ' + root.escapeHtml(motivoSemEstimativa(it.semEstimativa)) + '</div>';
         var acoes = '';

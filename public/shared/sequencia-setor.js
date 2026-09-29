@@ -89,13 +89,64 @@
     return null;
   }
 
+  /* ── Sugestão da grade de Quantidades (29/09) ──
+     O PCP planeja o PEDIDO na grade (programacao/{data}/{HH_MM}/env{n} =
+     {pedidoKey, lote?, mediaPorHora}); a OP emitida contra ele nascia sem
+     linha e sem posição, e o PCP decidia a linha duas vezes. Decisão do
+     usuário: a grade só SUGERE -- a OP entra na linha onde o pedido foi
+     planejado e na ordem do primeiro horário dele; o PCP muda na Sequência
+     quando quiser, e a decisão dele vence.
+     Slot marcado com o lote da OP (writeLoteIntoWeekSlots) vale mais que o
+     do pedido: um pedido de 10.000 vira 10 OPs, e cada uma tem o seu pedaço.
+     Devolve {porPedido, porLote}: {linha, inicio, fim} em ms. */
+  function sugestoesDaGrade(programacao, linhasCfg) {
+    var porPedido = {}, porLote = {};
+    function somar(mapa, k, linha, ini) {
+      if (!k) return;
+      var g = mapa[k];
+      if (!g) { mapa[k] = {linha: linha, inicio: ini, fim: ini + 3600000}; return; }
+      if (ini < g.inicio) { g.inicio = ini; g.linha = linha; }
+      if (ini + 3600000 > g.fim) g.fim = ini + 3600000;
+    }
+    Object.keys(programacao || {}).forEach(function(data) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return;
+      var dia = programacao[data] || {};
+      Object.keys(dia).forEach(function(hk) {
+        var m = /^(\d{2})[_:](\d{2})$/.exec(hk);
+        if (!m) return;
+        var hora = dia[hk] || {};
+        var p = data.split('-');
+        var ini = new Date(+p[0], +p[1] - 1, +p[2], +m[1], +m[2]).getTime();
+        Object.keys(hora).forEach(function(k) {
+          var e = /^env(\d+)$/.exec(k);
+          var slot = hora[k];
+          if (!e || !slot || typeof slot !== 'object' || !slot.pedidoKey) return;
+          var i = +e[1];
+          var linha = txt(hora['linha' + i]) || txt((linhasCfg || [])[i - 1]) || ('Linha ' + i);
+          somar(porPedido, slot.pedidoKey, linha, ini);
+          somar(porLote, txt(slot.lote), linha, ini);
+        });
+      });
+    });
+    return {porPedido: porPedido, porLote: porLote};
+  }
+  function sugestaoParaOp(op, sug) {
+    if (!op || !sug) return null;
+    return sug.porLote[txt(op.lote)] || sug.porPedido[txt(op.skuPedidoKey)] || null;
+  }
+
   /* Recurso onde a ordem está. O que está RODANDO vence o plano: se a
-     rotuladora 2 abriu a OP que o PCP pôs na 1, a fila mostra a 2. */
-  function recursoDe(setor, op, decisao) {
+     rotuladora 2 abriu a OP que o PCP pôs na 1, a fila mostra a 2. Depois
+     vem a decisão do PCP na Sequência, a linha da OP (Planejamento de OPs)
+     e, por último, a sugestão da grade de Quantidades. */
+  function recursoDe(setor, op, decisao, sugestao) {
     var d = decisao || {};
     var cfg = SETORES[setor];
     if (cfg.recursoUnico) return txt(d.recurso) || cfg.recursoUnico;
-    if (setor === 'envase') return (op.abertaDesde && txt(op.abertaLinha)) || txt(d.recurso) || txt(op.linha) || cfg.semRecurso;
+    if (setor === 'envase') {
+      return (op.abertaDesde && txt(op.abertaLinha)) || txt(d.recurso) || txt(op.linha) ||
+        (sugestao && txt(sugestao.linha)) || cfg.semRecurso;
+    }
     return (op.abertaDesdeRot && txt(op.abertaRotulagem)) || txt(d.recurso) || cfg.semRecurso;
   }
 
@@ -109,6 +160,9 @@
     }
     var pa = a.posicao == null ? Infinity : a.posicao, pb = b.posicao == null ? Infinity : b.posicao;
     if (pa !== pb) return pa - pb;
+    // Sem posição do PCP: a ordem em que o pedido foi planejado na grade.
+    var sa = a.inicioGrade == null ? Infinity : a.inicioGrade, sb = b.inicioGrade == null ? Infinity : b.inicioGrade;
+    if (sa !== sb) return sa - sb;
     var ea = txt(a.dataEmissao), eb = txt(b.dataEmissao);
     if (ea !== eb) return ea < eb ? -1 : 1;
     return a.lote < b.lote ? -1 : a.lote > b.lote ? 1 : 0;
@@ -126,13 +180,21 @@
       var e = etapa(setor, op, c);
       if (!e) return;
       var d = decisoes[opKey] || {};
-      var recurso = recursoDe(setor, op, d);
+      var sug = setor === 'envase' && c.sugestoes ? sugestaoParaOp(op, c.sugestoes) : null;
+      var recurso = recursoDe(setor, op, d, sug);
       var naGrade = setor === 'envase' && !e.emAndamento && !!txt(op.dataInicioPlanejada);
+      // Contra o que medir o desvio: o fim programado da OP (Planejamento
+      // de OPs) é mais preciso que o fim do pedido na grade de Quantidades.
+      var fimOp = setor === 'envase' && txt(op.dataFimPlanejada) ? new Date(op.dataFimPlanejada).getTime() : NaN;
+      var fimPlanejado = !isNaN(fimOp) ? fimOp : (sug ? sug.fim : null);
       (porRecurso[recurso] = porRecurso[recurso] || []).push({
         opKey: opKey, lote: txt(op.lote) || opKey, produto: txt(op.produto || op.produtoNome), sku: txt(op.sku),
         cliente: txt(op.cliente), qtdPlanejada: n(op.qtdPlanejada) || 0,
         restante: e.restante, unidade: e.unidade, emAndamento: e.emAndamento, status: e.status,
         recurso: recurso, posicao: n(d.posicao), naGrade: naGrade,
+        inicioGrade: sug ? sug.inicio : null,
+        linhaSugerida: !!(sug && !txt(d.recurso) && !txt(op.linha) && !(op.abertaDesde && txt(op.abertaLinha)) && recurso === txt(sug.linha)),
+        fimPlanejado: fimPlanejado, origemPlano: !isNaN(fimOp) ? 'OP' : (sug ? 'grade' : null),
         dataInicioPlanejada: txt(op.dataInicioPlanejada) || null, dataEmissao: txt(op.dataEmissao) || null
       });
     });
@@ -251,6 +313,9 @@
         if (slotFim <= t) continue;
         var s = slotIni > t ? slotIni : t;
         var livre = (slotFim - s) / 60000;
+        // Sobra de segundos não atravessa a pausa: terminar 12:00:05 não é
+        // "13:00" (o relógio anda alguns segundos entre um cálculo e outro).
+        if (resto <= livre + 1 && resto > 0) return new Date(Math.min(s.getTime() + resto * 60000, slotFim.getTime()));
         if (resto <= livre) return new Date(s.getTime() + resto * 60000);
         resto -= livre;
         t = slotFim;
@@ -269,7 +334,7 @@
     var cursor = agora, quebrou = null;
     grupo.itens.forEach(function(it) {
       it.inicioEstimado = null; it.fimEstimado = null; it.semEstimativa = null; it.fonteRitmo = null;
-      it.aguarda = null; it.ressalva = null;
+      it.aguarda = null; it.ressalva = null; it.desvioHoras = null;
       if (quebrou) { it.semEstimativa = 'depende de ' + quebrou; return; }
       var d = duracao(setor, it, ritmos, ctx);
       if (!d) {
@@ -292,6 +357,12 @@
       var fim = ini && avancar(ini, d.horas, cal);
       if (!ini || !fim) { it.semEstimativa = 'sem turno cadastrado'; quebrou = 'turno'; return; }
       it.inicioEstimado = ini; it.fimEstimado = fim; it.horas = d.horas; it.fonteRitmo = d.fonte;
+      // Desvio contra o planejado: positivo = termina depois. Menos de 1 h
+      // é ruído de arredondamento da grade (slots de hora cheia).
+      if (it.fimPlanejado != null) {
+        var dh = (fim.getTime() - it.fimPlanejado) / 3600000;
+        if (Math.abs(dh) >= 1) it.desvioHoras = Math.round(dh * 10) / 10;
+      }
       cursor = fim;
     });
     return grupo;
@@ -323,7 +394,8 @@
   }
 
   return {
-    SETORES: SETORES, estimarTudo: estimarTudo, ORDEM_SETORES: ORDEM_SETORES, chave: chave,
+    SETORES: SETORES, estimarTudo: estimarTudo,
+    sugestoesDaGrade: sugestoesDaGrade, sugestaoParaOp: sugestaoParaOp, ORDEM_SETORES: ORDEM_SETORES, chave: chave,
     opAtiva: opAtiva, etapa: etapa, recursoDe: recursoDe, fila: fila,
     mover: mover, trocarRecurso: trocarRecurso, duracao: duracao,
     horasUteisDoDia: horasUteisDoDia, avancar: avancar, estimar: estimar

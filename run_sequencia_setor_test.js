@@ -119,6 +119,8 @@ const ops = {
   assert.strictEqual(hm(S.avancar(new Date(2026, 9, 2, 15, 0), 2, cal)), '05/10 08:00', 'sexta até 16h, pula o fim de semana');
   assert.strictEqual(hm(S.avancar(new Date(2026, 9, 9, 15, 0), 2, cal)), '13/10 08:00', 'sexta 15h: 1 h na sexta, pula fim de semana e feriado de segunda');
   assert.strictEqual(S.avancar(new Date(2026, 8, 29), 1, {turnos: []}), null, 'sem turno não inventa prazo');
+  // Segundos de sobra não jogam o término para depois do almoço.
+  assert.strictEqual(hm(S.avancar(new Date(2026, 8, 29, 10, 0, 5), 2, cal)), '29/9 12:00');
 }
 
 // ── Estimativa encadeada por recurso ────────────────────────────────────
@@ -188,6 +190,66 @@ const ops = {
   // Em andamento não espera ninguém: já começou.
   const rodando = S.estimarTudo({m: {...opsE.m, abertaDesde: 'x'}}, {}, ritmos, cal, ctx, new Date(2026, 8, 29, 8, 0));
   assert.strictEqual(hm(rodando.envase[0].itens[0].inicioEstimado), '29/9 08:00');
+}
+
+// ── Grade de Quantidades sugere linha e ordem (29/09) ──────────────────
+{
+  const prog = {
+    '2026-09-30': {
+      '08_00': {env2: {pedidoKey: 'PED1__SKU1', mediaPorHora: 500}, linha2: 'Linha 2'},
+      '09_00': {env2: {pedidoKey: 'PED1__SKU1', mediaPorHora: 500}},
+      '10_00': {env1: {pedidoKey: 'PED2__SKU2', mediaPorHora: 300, lote: '26400/07'}}
+    },
+    '2026-09-29': {'14_00': {env1: {pedidoKey: 'PED3__SKU1'}}},
+    'lixo': {'08_00': {env1: {pedidoKey: 'X'}}}
+  };
+  const sug = S.sugestoesDaGrade(prog, ['Linha 1', 'Linha 2']);
+  assert.deepStrictEqual(sug.porPedido['PED1__SKU1'], {linha: 'Linha 2',
+    inicio: new Date(2026, 8, 30, 8).getTime(), fim: new Date(2026, 8, 30, 10).getTime()});
+  assert.strictEqual(sug.porLote['26400/07'].linha, 'Linha 1');
+  assert.strictEqual(sug.porPedido.X, undefined, 'chave de data inválida ignorada');
+
+  const opsG = {
+    a: {lote: '26400/01', skuPedidoKey: 'PED1__SKU1', sku: 'SKU1', status: 'Programado', qtdPlanejada: 1000, dataEmissao: '2026-09-01'},
+    b: {lote: '26400/02', skuPedidoKey: 'PED3__SKU1', sku: 'SKU1', status: 'Programado', qtdPlanejada: 500, dataEmissao: '2026-09-25'},
+    c: {lote: '26400/07', skuPedidoKey: 'PED2__SKU2', sku: 'SKU2', status: 'Programado', qtdPlanejada: 300, dataEmissao: '2026-09-02'},
+    d: {lote: '26400/08', skuPedidoKey: 'PED9__SKU1', sku: 'SKU1', status: 'Programado', qtdPlanejada: 100, dataEmissao: '2026-08-01'}
+  };
+  const c2 = {...ctx, sugestoes: sug};
+  const f = S.fila('envase', opsG, {}, c2);
+  const por = (r) => f.find((g) => g.recurso === r).itens.map((i) => i.opKey);
+  assert.deepStrictEqual(por('Linha 2'), ['a'], 'OP sem linha entra onde o pedido foi planejado');
+  // Linha 1: b (pedido planejado 29/09 14h) antes de c (30/09 10h), mesmo emitida depois.
+  assert.deepStrictEqual(por('Linha 1'), ['b', 'c'], 'ordem do primeiro horário do pedido na grade');
+  assert.deepStrictEqual(por('Sem linha'), ['d'], 'pedido fora da grade continua sem linha');
+  assert.strictEqual(f.find((g) => g.recurso === 'Linha 2').itens[0].linhaSugerida, true);
+
+  // Só sugere: a decisão do PCP e a linha da OP vencem.
+  const f2 = S.fila('envase', {...opsG, a: {...opsG.a, linha: 'Linha 1'}}, {c: {recurso: 'Linha 2', posicao: 1}}, c2);
+  assert.deepStrictEqual(f2.find((g) => g.recurso === 'Linha 1').itens.map((i) => i.opKey), ['b', 'a']);
+  assert.deepStrictEqual(f2.find((g) => g.recurso === 'Linha 2').itens.map((i) => i.opKey), ['c']);
+  assert.strictEqual(f2.find((g) => g.recurso === 'Linha 1').itens[1].linhaSugerida, false);
+
+  // ── Desvio: execução mais lenta ou mais rápida que o planejado ──────
+  // Pedido PED1 planejado 30/09 08–10 (1000 un). Hoje 30/09 08:00, ritmo 500:
+  // termina 10:00, no plano.
+  const noPlano = S.estimarTudo({a: opsG.a}, {}, {}, cal, c2, new Date(2026, 8, 30, 8, 0)).envase.find((g) => g.recurso === 'Linha 2').itens[0];
+  assert.strictEqual(hm(noPlano.fimEstimado), '30/9 10:00');
+  assert.strictEqual(noPlano.desvioHoras, null);
+  // Mais lento: às 10:00 só 400 feitos → faltam 600 = 1,2 h → 11:12, 1,2 h depois.
+  const lento = S.estimarTudo({a: {...opsG.a, produzidoLinha: 400, abertaDesde: 'x', abertaLinha: 'Linha 2'}}, {}, {}, cal, c2,
+    new Date(2026, 8, 30, 10, 0)).envase.find((g) => g.recurso === 'Linha 2').itens[0];
+  assert.strictEqual(hm(lento.fimEstimado), '30/9 11:12');
+  assert.strictEqual(lento.desvioHoras, 1.2, 'atraso aparece antes de estourar o prazo');
+  // Mais rápido: 08:30 já com 900 → faltam 100 → 08:42, 1,3 h antes.
+  const rapido = S.estimarTudo({a: {...opsG.a, produzidoLinha: 900, abertaDesde: 'x', abertaLinha: 'Linha 2'}}, {}, {}, cal, c2,
+    new Date(2026, 8, 30, 8, 30)).envase.find((g) => g.recurso === 'Linha 2').itens[0];
+  assert.strictEqual(rapido.desvioHoras, -1.3);
+  // Fim programado da OP (Planejamento de OPs) vale mais que o do pedido.
+  const comFimOp = S.fila('envase', {a: {...opsG.a, dataFimPlanejada: '2026-09-30T12:00:00'}}, {}, c2)
+    .find((g) => g.recurso === 'Linha 2').itens[0];
+  assert.strictEqual(comFimOp.origemPlano, 'OP');
+  assert.strictEqual(comFimOp.fimPlanejado, new Date(2026, 8, 30, 12).getTime());
 }
 
 console.log('run_sequencia_setor_test.js: OK');

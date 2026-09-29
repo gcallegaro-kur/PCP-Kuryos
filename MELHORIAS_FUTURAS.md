@@ -46,6 +46,18 @@ Adiado:
 - **A sequência não escreve na grade horária do envase.** OP na grade segue a
   grade; as demais seguem a posição do PCP. Unificar exigiria gerar slots de
   `programacao` a partir da sequência — decisão de produto antes de código.
+- **Ritmo real da OP em andamento.** A estimativa de quem está rodando usa o
+  ritmo planejado sobre o que FALTA; o atraso aparece a cada apontamento
+  (o que falta não diminuiu como devia), não antes. Medir o ritmo real da
+  própria OP esbarra no apontamento por período (checkpoint de intervalo/fim
+  de turno): entre dois checkpoints `produzidoLinha` fica parado e o ritmo
+  medido cairia a zero. Caminho: usar os `registros` da OP com
+  `periodoInicio/periodoFim` (sessões limpas, como `kuryosSessoesLimpas`) e
+  só confiar a partir de uma amostra mínima; valor conservador.
+- **Grade de Quantidades não acompanha a execução.** O auto-ajuste
+  (`autoAjustarPlanejamento`) está pausado a pedido do PCP; a Sequência mostra
+  o desvio (`desvioHoras`) mas não mexe na grade. Se o PCP quiser, um botão
+  "empurrar o restante do pedido" na grade a partir do desvio.
 - **Ordem de retrabalho na fila.** O modelo de `PLANO_GESTAO_RETRABALHOS.md`
   (ordens de fabricação/envase/rotulagem de retrabalho) deve entrar como etapa
   lida pelo mesmo motor (`etapa()`), não como fila paralela. Hoje a OP de

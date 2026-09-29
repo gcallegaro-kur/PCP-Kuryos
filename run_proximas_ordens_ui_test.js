@@ -37,10 +37,21 @@ function dados() {
         qtdPlanejada: 500, dataEmissao: '2026-09-21', linha: 'Linha 1', separacaoConcluida: true,
         materiaisConsumo: {a: {origem: 'bom', mpCodigo: 'EP-2', mpNome: 'POTE 100G'}}},
       '26300-03': {lote: '26300/03', sku: 'BS01', produto: 'BODY SPLASH 200ML', cliente: 'MISS RÔSE', status: 'Em Produção',
-        qtdPlanejada: 2000, produzidoLinha: 1500, abertaDesde: '2026-09-29T07:00:00', abertaLinha: 'Linha 1', separacaoConcluida: true,
+        qtdPlanejada: 2000, produzidoLinha: 1500, abertaDesde: '2026-09-29T07:00:00', abertaLinha: 'Linha 1', separacaoConcluida: true, skuPedidoKey: 'PED5__BS01',
         produzidoRotulagem: 1400, abertaDesdeRot: '2026-09-29T07:10:00', abertaRotulagem: 'Rotuladora 1',
         materiaisConsumo: {a: {origem: 'bom', mpCodigo: 'ES-1', mpNome: 'ROTULO BS 200ML'}}},
+      '26300-04': {lote: '26300/04', sku: 'CR02', produto: 'CREME 100G', cliente: 'TAWUS', status: 'Programado',
+        qtdPlanejada: 500, dataEmissao: '2026-09-28', skuPedidoKey: 'PED7__CR02', separacaoConcluida: true},
       '26300-09': {lote: '26300/09', sku: 'BS01', status: 'Concluído', qtdPlanejada: 10}
+    },
+    // Grade de Quantidades: PED7 planejado na Linha 2 às 13h-15h; o pedido da
+    // 26300/03 (rodando) estava planejado para acabar às 08:00.
+    programacao: {
+      '2026-09-29': {
+        '07_00': {env1: {pedidoKey: 'PED5__BS01', mediaPorHora: 500}},
+        '13_00': {env2: {pedidoKey: 'PED7__CR02', mediaPorHora: 250}},
+        '14_00': {env2: {pedidoKey: 'PED7__CR02', mediaPorHora: 250}}
+      }
     }
   };
 }
@@ -123,8 +134,15 @@ const ordemNaTela = (page, setor, recurso) => page.evaluate(({setor, recurso}) =
     const blocos = await p.$$eval('#tabSequencia [data-sq-setor]', (els) => els.map((e) => e.getAttribute('data-sq-setor')));
     assert.deepEqual(blocos, ['separacao', 'manipulacao', 'envase', 'rotulagem']);
     const recursosEnv = await p.$$eval('[data-sq-setor="envase"] [data-sq-recurso]', (els) => els.map((e) => e.getAttribute('data-sq-recurso')));
-    assert.deepEqual(recursosEnv, ['Linha 1'], 'Linha 2 vazia aparece sem itens (sem data-sq-recurso), a 1 com a fila');
-    assert.match(await p.locator('[data-sq-setor="envase"]').innerText(), /Linha 2[\s\S]*Nenhuma ordem/);
+    assert.deepEqual(recursosEnv, ['Linha 1', 'Linha 2']);
+    // OP emitida sem linha herda a do pedido na grade de Quantidades (só sugestão).
+    assert.deepEqual(await ordemNaTela(p, 'envase', 'Linha 2'), ['26300-04']);
+    const sugerida = await p.locator('[data-sq-item="26300-04"]').innerText();
+    assert.match(sugerida, /sugerida pela grade/);
+    // Mais rápido que o plano: 500 a 250 un/h a partir de 08:00 → 10:00, contra 15:00 na grade.
+    assert.match(sugerida, /Começa hoje 08:00 · termina hoje 10:00[\s\S]*5 h antes do planejado na grade/);
+    // Mais lento: o pedido da 26300/03 devia ter acabado às 08:00; a estimativa diz 09:00.
+    assert.match(await p.locator('[data-sq-setor="envase"] [data-sq-item="26300-03"]').innerText(), /⚠ 1 h depois do planejado na grade/);
     // Rodando primeiro; depois emissão.
     assert.deepEqual(await ordemNaTela(p, 'envase', 'Linha 1'), ['26300-03', '26300-01', '26300-02']);
     const envTxt = await p.locator('[data-sq-setor="envase"]').innerText();
@@ -152,7 +170,8 @@ const ordemNaTela = (page, setor, recurso) => page.evaluate(({setor, recurso}) =
     // ── 3. Trocar de linha ────────────────────────────────────────────────
     await p.selectOption('[data-sq-setor="envase"] [data-sq-recurso-op="26300-01"]', 'Linha 2');
     await p.waitForFunction(() => window.__db.sequenciamento.ordem.envase['26300-01'].recurso === 'Linha 2');
-    await esperarOrdem(p, 'envase', 'Linha 2', ['26300-01']);
+    // A decisão do PCP vence a sugestão: a 26300/01 posicionada vem antes da sugerida.
+    await esperarOrdem(p, 'envase', 'Linha 2', ['26300-01', '26300-04']);
     // Envase não finge que a manipulação já aconteceu: sem ritmo nela, avisa.
     assert.match(await p.locator('[data-sq-setor="envase"] [data-sq-item="26300-01"]').innerText(),
       /Estimativa sem contar a manipulação, que está sem estimativa/);
@@ -181,6 +200,7 @@ const ordemNaTela = (page, setor, recurso) => page.evaluate(({setor, recurso}) =
     assert.deepEqual(await ordemNaTela(r, 'rotulagem', 'Rotuladora 1'), ['26300-03']);
     assert.match(await r.locator('#fila').innerText(), /26300\/03[\s\S]*Rotulando[\s\S]*600 un a fazer de 2\.000/);
     assert.match(await r.locator('#fila').innerText(), /Sem rotuladora[\s\S]*a definir pelo PCP/, 'instrução do PCP não aparece para o setor');
+    assert.doesNotMatch(await r.locator('#fila').innerText(), /planejado na grade|sugerida pela grade/, 'desvio é informação do PCP');
     assert.doesNotMatch(await r.locator('#fila').innerText(), /Mover para|informe o ritmo/);
     // O menu leva à fila do setor.
     assert.equal(await r.locator('.kt-sidebar a[href="proximas_ordens.html?setor=rotulagem"]').count(), 1);
