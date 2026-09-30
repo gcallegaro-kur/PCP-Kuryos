@@ -155,8 +155,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   copiava `mpNome`/`materialNome` do instantâneo da fórmula/BOM (nome de quando foi
   aprovada). Agora `nomeMaterialAtual` (`emitir_op.html`) usa o cadastro, com o nome da
   fórmula só se o material sumiu. Medido: 16 materiais com nome divergente em 38
-  fórmulas; 18 OPs ativas com nome antigo em `materiaisConsumo` — **dado NÃO corrigido**
-  (gravação em produção depende do usuário). Fórmulas aprovadas não foram reescritas.
+  fórmulas; 18 OPs ativas com nome antigo em `materiaisConsumo`. **Dado corrigido
+  com autorização do usuário (30/09):** 44 campos `mpNome` (41 em `materiaisConsumo`, 3 em
+  `manipulacao/previstos`) por caminho plano; piloto na 26271/02, depois o resto; conferido
+  44/44 e nenhum outro campo alterado. Backup local em
+  `backups/nomes-materiais-ops-antes-20260930.json`. OPs encerradas mantidas como histórico. Fórmulas aprovadas não foram reescritas.
   `run_fluxo_ponta_a_ponta_test.js` cobre. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Onde está a OP indisponível no apontamento (2026-09-30).** Pedido do
