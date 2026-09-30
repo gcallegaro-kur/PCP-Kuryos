@@ -1217,4 +1217,16 @@ e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
   "ocupada" no dado. Decidir com o chão de fábrica antes de limpar em massa:
   liberar `abertaDesde*`/`aberta*` ao confirmar a conclusão no `ops.html` e
   varrer as 24 existentes (backup + um registro primeiro).
+- **Dashboard Diário: manipulação, qualidade e rotulagem do DIA (pedido do usuário, 30/09).**
+  O Andon (tempo real) já mostra rotuladoras, postos, a cadeia do lote e a fila da
+  Qualidade (`shared/andon-cadeia.js`). Falta a parte "dia fechado" no mesmo
+  dashboard: manipulação (kg manipulados, lotes fechados, rendimento e perda de
+  processo — `Manipulacao.resumoManipulacao`), qualidade (análises concluídas,
+  liberadas/reprovadas, tempo médio de fila — `lote.qualidade.inspecionadoEm` e
+  `manipulacao.analise.em`) e rotulagem por rotuladora (produção e paradas com
+  `paradas_historico.setor === 'rotulagem'`). A rotulagem não tem meta por hora
+  cadastrada: mostrar produção e parada, sem "% da meta". Os limites de espera
+  que colorem a faixa (8 h pesado/conferido, 12 h em manipulação, 24 h bulk,
+  48 h Qualidade/Logística) são chutes razoáveis, não metas da fábrica:
+  `AndonCadeia.LIMITES_H`; ajustar com a operação.
 

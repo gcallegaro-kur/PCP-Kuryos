@@ -13,6 +13,10 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <script src="shared/utils.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/progresso-op.js"></script>
+  <script src="shared/situacao-op.js"></script>
+  <script src="shared/andon-cadeia.js"></script>
   <script src="auth_check.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <style>
@@ -150,6 +154,28 @@
     .andon-db-op-bar-bg { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; margin-bottom: 5px }
     .andon-db-op-bar-fill { height: 100%; border-radius: 999px }
     .andon-db-op-nums { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between }
+    .andon-db-card.livre .andon-db-status { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted); }
+    /* Cadeia do lote: por padrão só números; o detalhe abre por clique. */
+    .cadeia-faixa { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .cadeia-chip { flex: 1 1 130px; text-align: left; border: 1.5px solid var(--border, #e5e7eb); background: var(--card); color: var(--text); border-radius: 14px; padding: 10px 12px; cursor: pointer; font: inherit; }
+    .cadeia-chip .rot { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .cadeia-chip .n { font-size: 24px; font-weight: 800; line-height: 1.1; display: block; }
+    .cadeia-chip small { font-size: 11px; color: var(--muted); }
+    .cadeia-chip.zero { opacity: .55; }
+    .cadeia-chip.atencao { border-color: var(--warning, #d97706); background: color-mix(in srgb, var(--warning, #d97706) 10%, var(--card)); }
+    .cadeia-chip.atencao small { color: var(--warning, #b45309); font-weight: 700; }
+    .cadeia-chip.on { box-shadow: 0 0 0 2px var(--primary); }
+    .cadeia-seta { align-self: center; color: var(--muted); font-weight: 700; }
+    .cadeia-detalhe { margin-top: 10px; font-size: 12.5px; }
+    .cadeia-detalhe table { width: 100%; border-collapse: collapse; }
+    .cadeia-detalhe td, .cadeia-detalhe th { padding: 5px 8px; text-align: left; border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
+    .cadeia-detalhe th { font-size: 10.5px; text-transform: uppercase; color: var(--muted); }
+    .cadeia-fila { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .cadeia-fila .q { border: 1px solid var(--border, #e5e7eb); background: var(--card); color: var(--text); border-radius: 999px; padding: 3px 11px; cursor: pointer; font: inherit; font-size: 12px; }
+    .cadeia-fila .q.atencao { border-color: var(--warning, #d97706); color: var(--warning, #b45309); font-weight: 700; }
+    .cadeia-fila .q.on { box-shadow: 0 0 0 2px var(--primary); }
+    .postos-andon { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+    .postos-andon .p { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--text); border-radius: 999px; padding: 3px 11px; }
     .andon-db-empty { font-size: 12px; color: var(--muted); font-style: italic }
     .andon-db-setup-badge { display: inline-block; font-size: 10px; font-weight: 700; background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); border-radius: 999px; padding: 2px 8px; margin-bottom: 6px }
 
@@ -211,6 +237,17 @@
 </div>
 
 <div class="main">
+  <!-- CADEIA DO LOTE: onde as OPs estão esperando (Manipulação → Qualidade → Envase → Rotulagem → Conferência → Qualidade) -->
+  <div class="card" id="cadeiaCard" style="margin-bottom: 20px;">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <span>🔗 Cadeia do lote · onde está esperando</span>
+      <span id="cadeiaResumo" style="font-size:11.5px; font-weight:600; color:var(--muted)">carregando…</span>
+    </div>
+    <div class="cadeia-faixa" id="cadeiaFaixa"></div>
+    <div class="cadeia-fila" id="cadeiaFila"></div>
+    <div class="cadeia-detalhe" id="cadeiaDetalhe"></div>
+  </div>
+
   <!-- PAINEL ANDON REALTIME (STATUS DAS LINHAS) -->
   <div class="card" style="margin-bottom: 20px;">
     <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
@@ -220,6 +257,16 @@
     <div class="andon-dashboard-grid">
       <!-- Gerado dinamicamente -->
     </div>
+  </div>
+
+  <!-- ANDON DA ROTULAGEM E POSTOS -->
+  <div class="card" id="rotulagemAndonCard" style="margin-bottom: 20px; display:none">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+      <span>🏷️ Rotulagem e Postos de Trabalho</span>
+      <span style="font-size:11px; background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:12px; font-weight:700; animation: pulse 2.5s infinite;">Tempo Real</span>
+    </div>
+    <div class="andon-dashboard-grid" id="rotulagemGrid"></div>
+    <div class="postos-andon" id="postosAndon"></div>
   </div>
 
   <style>
@@ -1492,6 +1539,7 @@ function updateAndonUI() {
 dbOnValue(db.ref('estado_linhas'), function(snap) {
   latestAndonStates = snap.val() || {};
   updateAndonUI();
+  agendarAndonExtra();
 });
 
 db.ref('.info/connected').on('value', function(snap) {
@@ -1501,6 +1549,7 @@ db.ref('.info/connected').on('value', function(snap) {
 dbOnValue(db.ref('config'), function(snap) {
   cfg = snap.val() || {};
   rebuildAndonDashboardGrid();
+  agendarAndonExtra();
   renderMetaDiaria(regsData);
   renderFechamentoDoDia(regsData);
   updateStackedMetas();
@@ -1532,8 +1581,119 @@ dbOnValue(db.ref('ops'), function(snap) {
   opsCache = snap.val() || {};
   renderPedidos(regsData);
   updateAndonUI();
+  agendarAndonExtra();
   renderFechamentoDoDia(regsData);
 });
+
+// ── Andon da rotulagem, postos e cadeia do lote ─────────────────────
+// Regra inteira em shared/andon-cadeia.js (funções puras, testadas em
+// run_andon_cadeia_test.js). Aqui só carrega as fontes e desenha. Por padrão
+// só números e o que está esperando além do normal; o detalhe abre por clique.
+var lotesAndonCache = null, confPaAndonCache = null, rncsAndonCache = null, postosAndonCache = {};
+var cadeiaAbertaK = null;
+var _andonExtraT = null;
+function agendarAndonExtra() {
+  clearTimeout(_andonExtraT);
+  _andonExtraT = setTimeout(renderAndonExtra, 150);
+}
+function renderAndonExtra() {
+  try { renderRotulagemAndon(); } catch (e) { console.error('Andon da rotulagem:', e); }
+  try { renderCadeia(); } catch (e) { console.error('Cadeia do lote:', e); }
+}
+
+function renderRotulagemAndon() {
+  var card = document.getElementById('rotulagemAndonCard');
+  var nomes = (cfg && cfg.rotulagem) || [];
+  var postos = AndonCadeia.postos(postosAndonCache, Date.now());
+  card.style.display = (nomes.length || postos.length) ? '' : 'none';
+  var lista = AndonCadeia.rotuladoras(nomes, opsCache, latestAndonStates, Date.now(), sanitizeKey);
+  document.getElementById('rotulagemGrid').innerHTML = lista.map(function(r) {
+    var classe = r.estado === 'parada' ? 'stopped' : r.estado === 'livre' ? 'livre' : 'active';
+    var status = r.estado === 'parada' ? '🔴 PARADA: ' + escapeHtml(r.parada.motivo) : r.estado === 'livre' ? '⚪ LIVRE' : '🟢 OPERANDO';
+    var corpo = '';
+    if (r.parada && r.parada.desdeMin != null) corpo += '<div style="color:#b91c1c;font-weight:700;font-size:12px;margin-bottom:4px">Parada há ' + AndonCadeia.rotuloTempo(r.parada.desdeMin / 60) + '</div>';
+    if (r.op) {
+      var cor = r.op.pct >= 80 ? 'var(--success)' : r.op.pct >= 40 ? 'var(--warning)' : 'var(--primary)';
+      corpo += (r.op.emSetup ? '<span class="andon-db-setup-badge">🔧 Em setup</span>' : '') +
+        '<div class="andon-db-op-produto">OP ' + escapeHtml(r.op.lote || '') + ' — ' + escapeHtml(r.op.produto) + '</div>' +
+        '<div class="andon-db-op-bar-bg"><div class="andon-db-op-bar-fill" style="width:' + r.op.pct + '%;background:' + cor + '"></div></div>' +
+        '<div class="andon-db-op-nums"><span>' + fmtNum(r.op.produzido) + ' / ' + fmtNum(r.op.planejado) + ' un.</span><span>' + r.op.pct + '%</span></div>';
+    } else if (!r.parada) {
+      corpo += '<div class="andon-db-empty">Sem OP alocada</div>';
+    } else if (r.parada.lote) {
+      corpo += '<div class="andon-db-empty">OP ' + escapeHtml(r.parada.lote) + '</div>';
+    }
+    return '<div class="andon-db-card ' + classe + '"><div class="andon-db-title">' + escapeHtml(r.nome) + '</div>' +
+      '<div class="andon-db-status">' + status + '</div><div class="andon-db-info"><div style="width:100%">' + corpo + '</div></div></div>';
+  }).join('');
+  document.getElementById('postosAndon').innerHTML = postos.length
+    ? '<span>Postos abertos agora:</span>' + postos.map(function(p) {
+        return '<span class="p" title="' + escapeAttr((p.operador ? p.operador + ' · ' : '') + 'há ' + AndonCadeia.rotuloTempo((p.desdeMin || 0) / 60)) + '">' + escapeHtml(p.nome) + '</span>';
+      }).join('')
+    : '<span>Nenhum posto de trabalho aberto agora.</span>';
+}
+
+function linhaDetalheCadeia(i, extra) {
+  return '<tr><td><b>' + escapeHtml(i.lote || i.codigo || '—') + '</b></td><td>' + escapeHtml(i.produto || i.nome || '') + '</td><td>' +
+    escapeHtml(i.etapa || i.motivo || extra || '') + '</td><td>' + AndonCadeia.rotuloTempo(i.horas) + '</td></tr>';
+}
+
+function renderCadeia() {
+  var resumo = document.getElementById('cadeiaResumo');
+  if (lotesAndonCache === null || confPaAndonCache === null || rncsAndonCache === null) { resumo.textContent = 'carregando…'; return; }
+  var c = AndonCadeia.cadeia({ops: opsCache, estoqueLotes: lotesAndonCache, conferenciasPa: confPaAndonCache, rncs: rncsAndonCache}, Date.now());
+  var nAt = c.etapas.filter(function(e) { return e.atencao; }).length + ['mp', 'embalagem', 'pa'].filter(function(k) { return c.fila[k].atencao; }).length;
+  resumo.textContent = nAt ? '⚠ ' + nAt + (nAt === 1 ? ' ponto' : ' pontos') + ' esperando além do normal' : '✅ Nada esperando além do normal';
+  resumo.style.color = nAt ? 'var(--warning, #b45309)' : 'var(--success)';
+
+  document.getElementById('cadeiaFaixa').innerHTML = c.etapas.map(function(e, i) {
+    var maisAntigo = e.itens.reduce(function(m, x) { return Math.max(m, x.horas || 0); }, 0);
+    return (i ? '<span class="cadeia-seta">›</span>' : '') +
+      '<button type="button" class="cadeia-chip' + (e.total ? '' : ' zero') + (e.atencao ? ' atencao' : '') + (cadeiaAbertaK === e.k ? ' on' : '') + '" data-cadeia="' + e.k + '">' +
+      '<span class="rot">' + escapeHtml(e.rot) + '</span><span class="n">' + e.total + '</span>' +
+      '<small>' + (e.total ? (e.atencao ? '⚠ ' : 'mais antiga ') + AndonCadeia.rotuloTempo(maisAntigo) : 'nada esperando') + '</small></button>';
+  }).join('');
+
+  var f = c.fila;
+  document.getElementById('cadeiaFila').innerHTML = '<span>Fila da Qualidade:</span>' +
+    [['mp', f.mp], ['embalagem', f.embalagem], ['pa', f.pa]].map(function(par) {
+      var x = par[1];
+      return '<button type="button" class="q' + (x.atencao ? ' atencao' : '') + (cadeiaAbertaK === 'fila:' + par[0] ? ' on' : '') + '" data-cadeia="fila:' + par[0] + '">' +
+        escapeHtml(x.rot) + ' ' + x.total + (x.total ? ' · ' + AndonCadeia.rotuloTempo(x.maisAntigoH) : '') + '</button>';
+    }).join('') +
+    '<a href="qualidade.html" style="margin-left:auto;color:var(--primary);text-decoration:none;font-weight:600">' + f.rncAbertas + ' RNC' + (f.rncAbertas === 1 ? '' : 's') + ' aberta' + (f.rncAbertas === 1 ? '' : 's') + ' · abrir Qualidade ↗</a>';
+
+  document.querySelectorAll('#cadeiaFaixa [data-cadeia], #cadeiaFila [data-cadeia]').forEach(function(b) {
+    b.onclick = function() {
+      var k = b.getAttribute('data-cadeia');
+      cadeiaAbertaK = cadeiaAbertaK === k ? null : k;
+      renderCadeia();
+    };
+  });
+
+  var det = document.getElementById('cadeiaDetalhe');
+  if (!cadeiaAbertaK) { det.innerHTML = ''; return; }
+  var titulo = '', itens = [], cab = ['OP / Item', 'Produto', 'Situação', 'Espera'];
+  if (cadeiaAbertaK.indexOf('fila:') === 0) {
+    var kf = cadeiaAbertaK.slice(5);
+    titulo = 'Fila da Qualidade — ' + f[kf].rot;
+    itens = f[kf].itens.map(function(i) { return {lote: i.codigo, produto: i.nome, motivo: i.saldo ? fmtNum(i.saldo) + ' un/kg' : '', horas: i.horas}; });
+  } else {
+    var e = c.etapas.filter(function(x) { return x.k === cadeiaAbertaK; })[0];
+    titulo = e ? e.rot : '';
+    itens = e ? e.itens : [];
+  }
+  det.innerHTML = '<div style="font-weight:700;margin-bottom:6px">' + escapeHtml(titulo) + ' (' + itens.length + ')</div>' +
+    (itens.length ? '<table><thead><tr>' + cab.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      itens.map(function(i) { return linhaDetalheCadeia(i); }).join('') + '</tbody></table>' : '<div style="color:var(--muted)">Nada esperando aqui.</div>');
+}
+
+dbOnValue(db.ref('estoque_lotes'), function(snap) { lotesAndonCache = snap.val() || {}; agendarAndonExtra(); });
+dbOnValue(db.ref('conferencias_pa'), function(snap) { confPaAndonCache = snap.val() || {}; agendarAndonExtra(); });
+dbOnValue(db.ref('nao_conformidades'), function(snap) { rncsAndonCache = snap.val() || {}; agendarAndonExtra(); });
+dbOnValue(db.ref('atividadesPosto'), function(snap) { postosAndonCache = snap.val() || {}; agendarAndonExtra(); });
+// As esperas crescem com o relógio: redesenha a cada minuto mesmo sem dado novo.
+setInterval(agendarAndonExtra, 60000);
 
 function linhasDoPedido(pedidoKey) {
   var linhas = [];

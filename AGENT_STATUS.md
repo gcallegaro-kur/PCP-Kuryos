@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Andon: rotulagem, manipulação e qualidade (2026-09-30).** `dashboard.html`
+  ganhou (1) a faixa "Cadeia do lote" — Manipulação → Qualidade do bulk → Envase →
+  Rotulagem → Conferência de PA → Qualidade do PA, com contagem e a espera mais antiga
+  de cada etapa, colorida quando passa do limite; (2) a fila da Qualidade por tipo
+  (matéria-prima, embalagem, PA) e RNCs abertas; (3) cards das rotuladoras (operando/
+  parada/livre, OP, %) e os postos abertos agora. O detalhe abre por clique. Tudo em
+  `shared/andon-cadeia.js` (puro) + `run_andon_cadeia_test.js` e
+  `run_andon_dashboard_ui_test.js`. Ensaiado contra a base real (achou que as 11 OPs da
+  Logística deixam a faixa sempre em atenção — é o real). **Falta** a parte do dia
+  fechado do Dashboard Diário (MELHORIAS_FUTURAS.md). Arquivos ativos: nenhum.
+
 - **PUBLICADO — OP leva o nome do material do cadastro (2026-09-30).** Relato: MPES-00094
   no cadastro é "ESSENCIA LILAH ECO HS - GF49767", na OP saía sem o GF. Causa: Emitir OP
   copiava `mpNome`/`materialNome` do instantâneo da fórmula/BOM (nome de quando foi
