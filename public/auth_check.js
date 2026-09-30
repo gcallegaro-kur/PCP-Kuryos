@@ -287,7 +287,12 @@ window.currentUser = null;
        aberta por um botão hamburger fixo — sem isso a navegação simplesmente
        sumia abaixo de 980px, sem nenhuma forma alternativa de trocar de tela. */
     @media (max-width: 980px) {
-      .kt-sidebar { transform: translateX(-100%); box-shadow: 0 0 0 transparent; }
+      .kt-sidebar { transform: translateX(-100%); box-shadow: 0 0 0 transparent; width: min(300px, 86vw); gap: 14px; }
+      /* Toque de dedo (29/09): alvo mínimo de 44 px no celular. */
+      .kt-nav-cap { min-height: 44px; font-size: 12px; }
+      /* O botão do menu fica por cima do canto: a logo abre espaço para ele. */
+      .kt-sidebar .kt-brand { padding-left: 52px; }
+      .kt-nav-link { min-height: 44px; font-size: 15px; }
       .kt-sidebar.open { transform: translateX(0); box-shadow: 8px 0 32px rgba(0,0,0,.18); }
       .kt-hamburger {
         display: flex; align-items: center; justify-content: center;
@@ -316,7 +321,22 @@ window.currentUser = null;
     }
     :root[data-theme="dark"] .kt-brand-logo { filter: brightness(0) invert(1); }
     .kt-nav-group { display: flex; flex-direction: column; gap: 2px; }
-    .kt-nav-cap { font-size: 11px; font-weight: 600; color: var(--ink-mute, #86868b); text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px 4px; }
+    /* Menu em sanfona (29/09): "os menus ficaram muito grandes, condensados e
+       abrir caso a caso". O título do bloco é um botão; o corpo abre e fecha. */
+    .kt-nav-cap { font-size: 11px; font-weight: 600; color: var(--ink-mute, #86868b); text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px 4px;
+      display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; border-radius: 8px; }
+    .kt-nav-cap:hover { color: var(--ink, #1d1d1f); }
+    .kt-nav-cap .kt-cap-txt { flex: 1; }
+    .kt-nav-cap .kt-cap-n { font-size: 10.5px; font-weight: 700; letter-spacing: 0; min-width: 18px; text-align: center; padding: 0 5px; border-radius: 9px;
+      background: color-mix(in srgb, var(--ink, #1d1d1f) 7%, transparent); color: var(--ink-mute, #86868b); }
+    .kt-nav-cap .kt-cap-chev { width: 14px; height: 14px; flex: none; transition: transform .18s ease; }
+    .kt-nav-group.fechado .kt-cap-chev { transform: rotate(-90deg); }
+    .kt-nav-group:not(.fechado) .kt-cap-n { display: none; }
+    .kt-nav-group.tem-ativo > .kt-nav-cap { color: var(--accent, #2456d6); }
+    .kt-nav-body { display: flex; flex-direction: column; gap: 2px; }
+    .kt-nav-group.fechado .kt-nav-body { display: none; }
+    .kt-sanfona-off .kt-nav-cap, .kt-nav-group.fixo .kt-nav-cap { cursor: default; }
+    .kt-sanfona-off .kt-cap-chev, .kt-sanfona-off .kt-cap-n, .kt-nav-group.fixo .kt-cap-chev, .kt-nav-group.fixo .kt-cap-n { display: none; }
     .kt-nav-sub { font-size: 11.5px; font-weight: 700; color: var(--ink-soft, #515154); padding: 6px 12px 2px; }
     .kt-nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 9px; color: var(--ink-soft, #6e6e73); font-size: 13.5px; font-weight: 500; cursor: pointer; text-decoration: none; }
     .kt-nav-link svg { width: 18px; height: 18px; flex: none; }
@@ -599,8 +619,15 @@ function renderUnifiedNavbar(user) {
   // sobra uma legenda flutuando sem nada embaixo (defeito já visto aqui
   // antes, ao testar com o papel 'production').
   const grupo = function(titulo, links) {
-    const corpo = links.filter(Boolean).join('');
-    return corpo ? '<div class="kt-nav-group"><div class="kt-nav-cap">' + titulo + '</div>' + corpo + '</div>' : '';
+    const itens = links.filter(Boolean);
+    const corpo = itens.join('');
+    if (!corpo) return '';
+    const n = (corpo.match(/class="kt-nav-link/g) || []).length;
+    return '<div class="kt-nav-group" data-grupo="' + titulo + '">' +
+      '<button type="button" class="kt-nav-cap" aria-expanded="true"><span class="kt-cap-txt">' + titulo + '</span>' +
+      '<span class="kt-cap-n">' + n + '</span>' +
+      '<svg class="kt-cap-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
+      '</button><div class="kt-nav-body">' + corpo + '</div></div>';
   };
   const initials = (user.nome || '?').trim().split(/\s+/).slice(0, 2).map(function(s) { return s[0]; }).join('').toUpperCase();
 
@@ -832,6 +859,8 @@ function renderUnifiedNavbar(user) {
   // Fecha a gaveta ao navegar (toque num link) pra não reabrir já aberta na próxima página
   sidebar.addEventListener('click', function(e) { if (e.target.closest('.kt-nav-link')) closeDrawer(); });
 
+  montarSanfona(sidebar, user);
+
   // Insere sidebar, hamburger e fundo escurecido no início do body
   body.insertBefore(backdrop, body.firstChild);
   body.insertBefore(sidebar, body.firstChild);
@@ -841,6 +870,49 @@ function renderUnifiedNavbar(user) {
   if (oldHeader && oldHeader !== sidebar) {
     oldHeader.remove();
   }
+}
+
+/* Menu em sanfona (29/09). Pedido do usuário: "os menus acabaram ficando muito
+   grandes; condensados e abrir caso a caso". Regras:
+   - quem tem pouco no menu (até 10 links) vê tudo aberto, sem sanfona --
+     esconder 6 links atrás de cliques só atrapalha;
+   - senão, abre o bloco da tela atual e o último que a pessoa abriu (lembrado
+     neste aparelho, por usuário); os outros ficam fechados, com o número de
+     links no título;
+   - abrir um bloco fecha os demais (fora o da tela atual): o menu continua
+     curto, o que importa no celular. */
+var KT_SANFONA_MIN_LINKS = 11;
+function montarSanfona(sidebar, user) {
+  var grupos = Array.prototype.slice.call(sidebar.querySelectorAll('.kt-nav-group'));
+  var total = sidebar.querySelectorAll('.kt-nav-link').length;
+  var chave = 'kt.menu.aberto.' + ((user && (user.uid || user.email)) || '');
+  grupos.forEach(function(g) {
+    if (g.querySelector('.kt-nav-link.active')) g.classList.add('tem-ativo');
+    // Bloco de um link só não fecha: esconder um link atrás de outro toque não condensa nada.
+    if (g.querySelectorAll('.kt-nav-link').length <= 1) g.classList.add('fixo');
+  });
+  if (total < KT_SANFONA_MIN_LINKS) { sidebar.classList.add('kt-sanfona-off'); return; }
+  var lembrado = null;
+  try { lembrado = localStorage.getItem(chave); } catch (e) { /* sem armazenamento: segue sem lembrar */ }
+  function aplicar(abertoNome) {
+    grupos.forEach(function(g) {
+      var aberto = g.classList.contains('tem-ativo') || g.classList.contains('fixo') || g.getAttribute('data-grupo') === abertoNome;
+      g.classList.toggle('fechado', !aberto);
+      g.querySelector('.kt-nav-cap').setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    });
+  }
+  aplicar(lembrado);
+  grupos.forEach(function(g) {
+    g.querySelector('.kt-nav-cap').addEventListener('click', function() {
+      var nome = g.getAttribute('data-grupo');
+      // O bloco da tela atual não fecha: é onde a pessoa está.
+      if (g.classList.contains('tem-ativo') || g.classList.contains('fixo')) return;
+      var abrir = g.classList.contains('fechado');
+      var alvo = abrir ? nome : null;
+      try { if (alvo) localStorage.setItem(chave, alvo); else localStorage.removeItem(chave); } catch (e) { /* idem */ }
+      aplicar(alvo);
+    });
+  });
 }
 
 // Configura o planejamento para modo Somente Leitura para a Produção

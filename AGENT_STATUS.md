@@ -127,11 +127,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Menu lateral em sanfona + revisão de celular (2026-09-29).**
-  Blocos do menu viram cabeçalhos que abrem/fecham (aberto: o da tela atual;
-  lembra o último aberto por usuário); alvos de toque maiores na gaveta do
-  celular. Depois, revisão do Apontamento em 375 px. **Arquivos ativos:**
-  `public/auth_check.js`, `run_menu_sanfona_ui_test.js` (novo).
+- **PUBLICADO — Menu em sanfona + celular em todas as telas (2026-09-29).**
+  `auth_check.js`: cada bloco do menu é um botão que abre/fecha; aberto o da
+  tela atual + o último que a pessoa abriu (localStorage por usuário), um de
+  cada vez; bloco de 1 link fica sempre aberto; menu com < 11 links fica sem
+  sanfona. Celular: gaveta `min(300px, 86vw)`, alvos de 44 px, logo livre do
+  botão. `shared/theme.css` (≤980 px): `body.has-sidebar` ganha
+  `padding-top:58px` (o botão do menu cobria o título de ~30 telas) — recuos
+  esquerdos por página removidos (form, estoque_setor, proximas_ordens,
+  qualidade_historico); barras de abas rolam de lado (`:has(> .tab/.top-tab)`
+  e `div.tabs`); `.header` quebra linha. Auditoria automática de todas as
+  páginas em 375 px: zero rolagem horizontal e nenhum título coberto (antes:
+  Estoque 761 px, Compras 288, Planejamento 268…). Teste novo
+  `run_menu_sanfona_ui_test.js`; `run_operacao_ui_test.js` lê o bloco pelo
+  `data-grupo`. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Pipeline semanal da Qualidade (2026-09-29).** Aba "Semana"
   (padrão) em `qualidade_historico.html`: abre na semana anterior completa;

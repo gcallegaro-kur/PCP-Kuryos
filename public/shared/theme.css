@@ -88,7 +88,21 @@ body.kuryos-theme {
 body.has-sidebar { padding-left: 232px; }
 @media (max-width: 980px) {
   .kt-main { padding: 20px 16px 40px; }
-  body.has-sidebar { padding-left: 0; }
+  /* Celular/tablet (29/09): o botão do menu é fixo no canto (14px + 40px).
+     O conteúdo começa abaixo dele -- antes cobria o título de ~30 telas, e
+     cada página tentava resolver com um recuo próprio. */
+  body.has-sidebar { padding-left: 0; padding-top: 58px; }
+  /* Barra de abas (Compras, Estoque/WMS, Planejamento, Logística...) não cabe
+     em 375px e empurrava a página inteira para o lado. No celular ela rola de
+     lado dentro dela mesma -- o padrão de aba em app. */
+  body.has-sidebar :is(div, nav):has(> .tab, > .top-tab, > button.tab), body.has-sidebar div.tabs {
+    flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; max-width: 100%;
+    -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+  }
+  body.has-sidebar :is(div, nav):has(> .tab, > .top-tab) > :is(.tab, .top-tab), body.has-sidebar div.tabs > button { flex: none; white-space: nowrap; }
+  /* Cabeçalho das telas (título + selo "Conectado" + atalhos): quebra linha
+     em vez de empurrar a página. */
+  body.has-sidebar .header { flex-wrap: wrap; row-gap: 8px; }
 }
 
 /* ── Componentes comuns ── */

@@ -175,8 +175,9 @@ async function linksDoMenu(page) {
 }
 async function textoOperacao(page) {
   return page.$$eval('.kt-nav-group', (gs) => {
-    const g = gs.find((x) => (x.querySelector('.kt-nav-cap') || {}).textContent === 'Operação');
-    return g ? g.innerText : '';
+    // Menu em sanfona (29/09): o bloco pode estar fechado -- lê o conteúdo, não o visível.
+    const g = gs.find((x) => x.getAttribute('data-grupo') === 'Operação');
+    return g ? g.textContent : '';
   });
 }
 
