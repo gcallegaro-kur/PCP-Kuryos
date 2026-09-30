@@ -16,6 +16,7 @@
   <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/onde-op.js"></script>
   <script src="shared/perdas-etapa.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
@@ -199,6 +200,14 @@
     .alocar-op-card-prod { font-size:12.5px; color:var(--text); margin-top:2px; }
     .alocar-op-card-sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
     .alocar-op-empty { text-align:center; color:var(--muted); font-size:13px; padding:20px 10px; }
+    /* OP indisponível (30/09): aparece na lista dizendo onde está, sem poder ser escolhida. */
+    .alocar-op-card.indisponivel { cursor:default; background:var(--bg); border-style:dashed; opacity:.85; }
+    .alocar-op-card.indisponivel:hover { border-color:var(--border); }
+    .alocar-op-onde { display:inline-block; margin-top:5px; font-size:12px; font-weight:700; color:var(--warning, #b45309); background:color-mix(in srgb, var(--warning, #b45309) 12%, transparent); border-radius:8px; padding:3px 8px; line-height:1.35; }
+    .alocar-op-indisp { margin-top:4px; }
+    .alocar-op-indisp > summary { cursor:pointer; font-size:13px; font-weight:700; color:var(--muted); padding:12px 4px; min-height:44px; box-sizing:border-box; list-style-position:inside; }
+    .alocar-op-indisp-lista { display:flex; flex-direction:column; gap:8px; }
+    .alocar-op-indisp-cap { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:10px 2px 2px; }
     .turno-popup-list button { text-align:left; padding:10px 12px; border-radius:10px; border:1.5px solid var(--border); background:var(--card); font-weight:600; font-size:13px; cursor:pointer; }
     .turno-popup-list button:hover { background:color-mix(in srgb, var(--primary) 6%, transparent); border-color:var(--primary); }
     details#modoAvancadoDetails > summary { cursor:pointer; font-size:12.5px; color:var(--muted); font-weight:700; padding:10px 0; list-style:none; }
@@ -1979,7 +1988,9 @@ function bloquearSeBulkNaoLiberado(op, acao) {
   if (!op || typeof Manipulacao === 'undefined') return false;
   var r = Manipulacao.podeEnvasar(op);
   if (r.ok) return false;
-  alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'envasar') + ': ' + r.motivo);
+  var sit = typeof OndeOp !== 'undefined' ? OndeOp.onde(op, {tipo: 'linha'}) : null;
+  alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'envasar') + ': ' + r.motivo +
+    (sit && !sit.disponivel ? '\n\nOnde está agora: ' + sit.texto + '.' : ''));
   return true;
 }
 
@@ -4745,6 +4756,9 @@ function renderTurnoGridPostos() {
 // o único lugar que escreve em #alocarOpLote.
 var alocarOpLivresAtual = [];
 var alocarOpBloqueadasAtual = [];
+// Todas as OPs com lote que NÃO podem ser alocadas aqui (bloqueadas, abertas
+// em outro posto, encerradas), para dizer onde estão quando alguém procurar.
+var alocarOpIndisponiveisAtual = [];
 
 // Achado do usuário: "na alocação de OP, ele não esta puxando pela
 // programação, indicando qual a proxima OP deve entrar na linha em
@@ -4811,6 +4825,49 @@ function updatePedidosDatalistTurno(tipo) {
   var travaBulk = tipo !== 'rotulagem';
   alocarOpBloqueadasAtual = travaBulk ? livres.filter(function(o) { return !Manipulacao.podeEnvasar(o).ok; }) : [];
   alocarOpLivresAtual = travaBulk ? livres.filter(function(o) { return Manipulacao.podeEnvasar(o).ok; }) : livres;
+  var livreSet = {};
+  alocarOpLivresAtual.forEach(function(o) { livreSet[String(o.lote)] = true; });
+  alocarOpIndisponiveisAtual = Object.values(opsCache).filter(function(o) {
+    return o && o.lote && !livreSet[String(o.lote)];
+  }).map(function(o) {
+    return {op: o, sit: OndeOp.onde(o, {tipo: tipo})};
+  }).filter(function(x) { return !x.sit.disponivel; });
+}
+
+/* "Onde está a OP" (pedido do usuário, 30/09). Sem busca: as OPs ativas que
+   ainda não dá pra alocar ficam num bloco recolhido no fim, com o resumo por
+   setor no título. Com busca: as que batem com o texto aparecem abertas,
+   inclusive encerradas/canceladas -- quem digita o número quer saber dela. */
+function htmlOpIndisponivel(x) {
+  var o = x.op;
+  return '<div class="alocar-op-card indisponivel" aria-disabled="true">' +
+    '<div class="alocar-op-card-top"><span class="alocar-op-card-lote">OP ' + escapeHtml(String(o.lote)) + '</span></div>' +
+    '<div class="alocar-op-card-prod">' + escapeHtml(o.produto || '?') + (o.sku ? ' <span style="color:var(--muted)">[' + escapeHtml(o.sku) + ']</span>' : '') + '</div>' +
+    '<div class="alocar-op-onde">⏸ ' + escapeHtml(x.sit.texto) + '</div>' +
+  '</div>';
+}
+
+function htmlOpsIndisponiveis(termo) {
+  if (termo) {
+    var achadas = alocarOpIndisponiveisAtual.filter(function(x) {
+      var o = x.op;
+      return normalizeSearch(String(o.lote) + ' ' + (o.produto || '') + ' ' + (o.sku || '')).indexOf(termo) !== -1;
+    });
+    // Ativas primeiro (é o que se procura); encerradas depois.
+    achadas.sort(function(a, b) {
+      return (opEstaAtiva(a.op) ? 0 : 1) - (opEstaAtiva(b.op) ? 0 : 1) ||
+        String(b.op.lote).localeCompare(String(a.op.lote), undefined, {numeric: true});
+    });
+    if (!achadas.length) return '';
+    return '<div class="alocar-op-indisp-cap">Não disponíveis aqui agora</div>' +
+      '<div class="alocar-op-indisp-lista">' + achadas.slice(0, 6).map(htmlOpIndisponivel).join('') + '</div>' +
+      (achadas.length > 6 ? '<div class="alocar-op-empty" style="padding:8px">e mais ' + (achadas.length - 6) + ' — refine a busca.</div>' : '');
+  }
+  var ativas = alocarOpIndisponiveisAtual.filter(function(x) { return opEstaAtiva(x.op); });
+  if (!ativas.length) return '';
+  return '<details class="alocar-op-indisp"><summary>⏸ ' + ativas.length + ' OP(s) ainda não disponíveis — ' +
+    escapeHtml(OndeOp.resumo(ativas.map(function(x) { return x.sit; }))) + '</summary>' +
+    '<div class="alocar-op-indisp-lista">' + ativas.map(htmlOpIndisponivel).join('') + '</div></details>';
 }
 
 function renderAlocarOpLista(filtroTexto) {
@@ -4821,15 +4878,9 @@ function renderAlocarOpLista(filtroTexto) {
     var alvo = normalizeSearch(String(o.lote) + ' ' + (o.produto || '') + ' ' + (o.sku || ''));
     return alvo.indexOf(termo) !== -1;
   });
-  var avisoGranel = alocarOpBloqueadasAtual.length
-    ? '<div class="alocar-op-empty" style="text-align:left">⏸ ' + alocarOpBloqueadasAtual.length +
-      ' OP(s) com granel não liberado pela Qualidade: ' +
-      alocarOpBloqueadasAtual.slice(0, 4).map(function(o) {
-        return escapeHtml(String(o.lote)) + ' (' + escapeHtml(Manipulacao.estado(o) ? Manipulacao.rotulo(Manipulacao.estado(o)).toLowerCase() : 'bulk ainda não passou pela Manipulação') + ')';
-      }).join(', ') + (alocarOpBloqueadasAtual.length > 4 ? ' e outras' : '') + '.</div>'
-    : '';
+  var avisoGranel = htmlOpsIndisponiveis(termo);
   if (!itens.length) {
-    cont.innerHTML = '<div class="alocar-op-empty">' + (alocarOpLivresAtual.length ? 'Nenhuma OP corresponde ao filtro.' : 'Nenhuma OP disponível pra alocar aqui no momento.') + '</div>' + avisoGranel;
+    cont.innerHTML = (termo && avisoGranel ? '' : '<div class="alocar-op-empty">' + (alocarOpLivresAtual.length ? 'Nenhuma OP corresponde ao filtro.' : 'Nenhuma OP disponível pra alocar aqui no momento.') + '</div>') + avisoGranel;
     return;
   }
   var loteSelecionado = document.getElementById('alocarOpLote').value;
@@ -4891,7 +4942,7 @@ function setSelecaoAlocarOp(lote) {
 
 document.getElementById('alocarOpLista').addEventListener('click', function(e) {
   var card = e.target.closest('.alocar-op-card');
-  if (!card) return;
+  if (!card || card.classList.contains('indisponivel')) return;
   setSelecaoAlocarOp(card.getAttribute('data-op-lote'));
 });
 

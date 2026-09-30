@@ -399,9 +399,13 @@ async function fechar(page, errors, etapa) {
     // 2a. Sem bulk liberado, a OP não aparece para a linha de envase.
     await page.locator('[data-alocar-nome="Linha 1"]').click();
     await page.waitForSelector('#alocarOpModal.open', {timeout: 6000});
-    // Só os cartões contam: o aviso das travadas, na mesma lista, cita o lote.
-    const cartoesAloc = (await page.locator('#alocarOpLista .alocar-op-card').allInnerTexts()).join(' | ');
-    assert.match(await page.locator('#alocarOpLista').innerText(), /granel não liberado/, 'a lista avisa por que a OP não está disponível');
+    // Só os cartões escolhíveis contam: as travadas aparecem, mas indisponíveis
+    // e dizendo onde estão.
+    const cartoesAloc = (await page.locator('#alocarOpLista .alocar-op-card:not(.indisponivel)').allInnerTexts()).join(' | ');
+    assert.match(await page.locator('#alocarOpLista').innerText(), /ainda não disponíveis/, 'a lista avisa que há OP não disponível');
+    const travada = await page.locator('#alocarOpLista .alocar-op-card.indisponivel').evaluateAll((cs) => cs.map((c) => c.textContent).join(' | '));
+    const cartaoOp = travada.split(' | ').find((t) => t.indexOf(op.lote) >= 0) || '';
+    assert.match(cartaoOp, /Ainda não entrou na Manipulação/, 'a OP travada diz onde está: ' + travada);
     if (cartoesAloc.indexOf(op.lote) >= 0) {
       registrar('Manipulação → Envase',
         'OP com fórmula e sem bulk liberado aparece para envase: o portão do bulk não está barrando.');
@@ -417,7 +421,7 @@ async function fechar(page, errors, etapa) {
     }, opKey);
     await page.waitForFunction((lote) => [...document.querySelectorAll('#alocarOpLista .alocar-op-card')].some((c) => c.innerText.indexOf(lote) >= 0), op.lote, {timeout: 6000});
     console.log('   bulk liberado: OP disponível para envase');
-    await page.locator('.alocar-op-card').first().click();
+    await page.locator('.alocar-op-card:not(.indisponivel)').first().click();
     await page.click('#btnConfirmarAlocarOp');
     await page.waitForFunction((lote) => {
       const o = Object.values(window.__db.ops || {}).find((x) => x.lote === lote);

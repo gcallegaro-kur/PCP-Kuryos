@@ -127,11 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Onde está a OP indisponível no apontamento (2026-09-30).** Pedido do
-  usuário: ao tentar apontar/alocar OP no envase que não está disponível, mostrar
-  onde ela está (manipulando, aguardando Qualidade...). Arquivos ativos:
-  `public/form.html`, `public/shared/situacao-op.js` (novo), `run_situacao_op_test.js`
-  (novo), `public/manual_producao.html`, `AGENT_STATUS.md`.
+- **PUBLICADO — Onde está a OP indisponível no apontamento (2026-09-30).** Pedido do
+  usuário: ao tentar alocar OP no envase que não está disponível, mostrar onde ela
+  está. Antes a OP bloqueada sumia da lista (só um aviso com 4 lotes). Agora, no
+  modal Alocar OP (`form.html`), as indisponíveis aparecem tracejadas e não
+  selecionáveis com "onde está": sem bulk iniciado (+ situação da separação),
+  pesagem/conferência/manipulação, bulk aguardando análise ou reprovado, aberta em
+  outra linha, aguardando PCP, concluída, cancelada. Sem busca: bloco recolhido com
+  resumo por setor; com busca: as que batem aparecem abertas (inclusive encerradas).
+  O alerta do portão do bulk também diz "Onde está agora". Regra em
+  `shared/onde-op.js` (`OndeOp.onde/resumo`, usa `Manipulacao.podeEnvasar`; NÃO
+  confundir com `shared/situacao-op.js`, que é do Controle de OPs), teste
+  `run_onde_op_test.js`; `run_fluxo_ponta_a_ponta_test.js` ajustado. Manual:
+  `manual_apontamento.html`. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Encerrar num setor não encerra a OP inteira (2026-09-30).** Relato do
   usuário: a rotulagem encerrou "a mesma OP" que seguia no envase. Causa
