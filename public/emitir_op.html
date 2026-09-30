@@ -646,7 +646,7 @@ function montarMateriaisConsumo() {
     var percentualUsado = (prev && prev.editado) ? prev.percentual : (it.percentualMM || 0);
     materiaisConsumo[key] = {
       mpCodigo: prev ? prev.mpCodigo : it.mpCodigo,
-      mpNome: prev ? prev.mpNome : it.mpNome,
+      mpNome: prev ? prev.mpNome : nomeMaterialAtual(it.mpCodigo, it.mpNome),
       quantidade: Math.round((calc.massaLoteKg * percentualUsado / 100) * 1000) / 1000,
       unidade: 'kg', origem: 'formula', percentual: percentualUsado,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null,
@@ -678,7 +678,7 @@ function montarMateriaisConsumo() {
     // a partir de qtdPorPeca de novo) até uma nova substituição.
     materiaisConsumo[key] = {
       mpCodigo: prev ? prev.mpCodigo : it.materialCodigo,
-      mpNome: prev ? prev.mpNome : it.materialNome,
+      mpNome: prev ? prev.mpNome : nomeMaterialAtual(it.materialCodigo, it.materialNome),
       quantidade: (prev && prev.editado) ? prev.quantidade : qtdCalculadaBom,
       unidade: unidadeBom, origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null,
@@ -738,6 +738,16 @@ function recomputarItemAjuste() {
   itemAjuste.editado = false;
   itemAjuste.ajusteAutomatico = true;
 }
+/* Nome do material vem do CADASTRO na emissão, não da fórmula/BOM (usuário,
+   30/09: "no cadastro está ESSENCIA LILAH ECO HS - GF49767, pq não leva o GF
+   para a OP?"). A fórmula guarda o nome de quando foi aprovada; o cadastro
+   ganhou depois o código do fornecedor, que é o que se confere no tambor na
+   pesagem. O nome da fórmula só vale se o material sumiu do cadastro. */
+function nomeMaterialAtual(codigo, nomeDaFormula) {
+  var m = codigo ? findMaterialByCodigo(codigo) : null;
+  return (m && String(m.mpNome || '').trim()) || nomeDaFormula || '';
+}
+
 function findMaterialByCodigo(codigo) {
   return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
 }

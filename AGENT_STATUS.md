@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — OP leva o nome do material do cadastro (2026-09-30).** Relato: MPES-00094
+  no cadastro é "ESSENCIA LILAH ECO HS - GF49767", na OP saía sem o GF. Causa: Emitir OP
+  copiava `mpNome`/`materialNome` do instantâneo da fórmula/BOM (nome de quando foi
+  aprovada). Agora `nomeMaterialAtual` (`emitir_op.html`) usa o cadastro, com o nome da
+  fórmula só se o material sumiu. Medido: 16 materiais com nome divergente em 38
+  fórmulas; 18 OPs ativas com nome antigo em `materiaisConsumo` — **dado NÃO corrigido**
+  (gravação em produção depende do usuário). Fórmulas aprovadas não foram reescritas.
+  `run_fluxo_ponta_a_ponta_test.js` cobre. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Onde está a OP indisponível no apontamento (2026-09-30).** Pedido do
   usuário: ao tentar alocar OP no envase que não está disponível, mostrar onde ela
   está. Antes a OP bloqueada sumia da lista (só um aviso com 4 lotes). Agora, no

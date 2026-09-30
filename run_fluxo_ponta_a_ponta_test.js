@@ -39,7 +39,7 @@ let BANCO = {
       msAnvisa: 'MS 2.0000.0000'},
   },
   materiais: {
-    m1: {mpCodigo: 'MPGR-001', mpNome: 'ÁGUA', tipo: 'MPGR', unidade: 'kg'},
+    m1: {mpCodigo: 'MPGR-001', mpNome: 'ÁGUA DEIONIZADA - FORN123', tipo: 'MPGR', unidade: 'kg'},
     m2: {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML', tipo: 'EP', unidade: 'un'},
   },
   formulas: {
@@ -375,6 +375,10 @@ async function fechar(page, errors, etapa) {
     db = await page.evaluate(() => window.__db);
     const opKey = Object.keys(db.ops)[0];
     const op = db.ops[opKey];
+    // Nome do material vem do cadastro, não do instantâneo da fórmula
+    // (caso real: MPES-00094 ganhou o código do fornecedor depois de aprovada).
+    const nomesOp = Object.values(op.materiaisConsumo || {}).map((m) => m.mpCodigo + '=' + m.mpNome);
+    assert.ok(nomesOp.includes('MPGR-001=ÁGUA DEIONIZADA - FORN123'), 'OP leva o nome do cadastro: ' + nomesOp.join(', '));
     console.log('   OP emitida: ' + op.lote + ' · ' + op.qtdPlanejada + ' un.');
     assert.ok(op.materiaisConsumo, 'a OP precisa nascer com os materiais do BOM/fórmula');
     assert.equal(op.sku, 'MRARBS04');
