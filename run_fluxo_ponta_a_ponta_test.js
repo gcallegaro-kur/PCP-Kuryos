@@ -41,6 +41,7 @@ let BANCO = {
   materiais: {
     m1: {mpCodigo: 'MPGR-001', mpNome: 'ÁGUA DEIONIZADA - FORN123', tipo: 'MPGR', unidade: 'kg'},
     m2: {mpCodigo: 'EP-00106', mpNome: 'FRASCO 200ML', tipo: 'EP', unidade: 'un'},
+    m3: {mpCodigo: 'EP-00200', mpNome: 'TAMPA 24/410', tipo: 'EP', unidade: 'un'},
   },
   formulas: {
     MRARBS04__v1: {codProduto: 'MRARBS04', versao: 'v1', status: 'APROVADA', somaPercentual: 100,
@@ -48,7 +49,9 @@ let BANCO = {
   },
   bom: {
     MRARBS04__v1: {codProduto: 'MRARBS04', versao: 'v1', status: 'APROVADA',
-      itens: {b1: {materialCodigo: 'EP-00106', materialNome: 'FRASCO 200ML', qtdPorPeca: 1, posicao: 1}}},
+      itens: {b1: {materialCodigo: 'EP-00106', materialNome: 'FRASCO 200ML', qtdPorPeca: 1, posicao: 1},
+        // Linha da importação sem material vinculado: a OP não pode sair com ela.
+        b2: {materialCodigo: '', materialNome: '', pendente: true, qtdPorPeca: 1, posicao: 2, textoOriginalGeradorOPs: 'TAMPA 24/410'}}},
   },
   especificacoes: {
     MRARBS04__v1: {codProduto: 'MRARBS04', versao: 'v1', status: 'APROVADA',
@@ -369,6 +372,15 @@ async function fechar(page, errors, etapa) {
     await page.fill('#fPecasDesejadas', '1000');
     await page.locator('#fPecasDesejadas').dispatchEvent('change');
     await page.waitForSelector('#cardEmissao', {state: 'visible', timeout: 6000});
+    // Item fora do cadastro trava a emissão e se resolve com "Substituir".
+    await page.click('#btnEmitir');
+    await page.waitForFunction(() => /fora do cadastro de materiais/.test(document.body.innerText), null, {timeout: 6000});
+    assert.equal(Object.keys(await page.evaluate(() => window.__db.ops || {})).length, 0, 'OP com item fora do cadastro não pode ser emitida');
+    assert.match(await page.locator('#materiaisBody').innerText(), /TAMPA 24\/410", da importação/);
+    console.log('   item sem material do cadastro: emissão travada');
+    await page.locator('#materiaisBody tr', {hasText: 'substitua para emitir'}).locator('.subst-btn').click();
+    await page.locator('#substLista .subst-opt[data-codigo="EP-00200"]').click();
+    await page.click('#substConfirmarBtn');
     await page.click('#btnEmitir');
     await page.waitForFunction(() => Object.keys(window.__db.ops || {}).length > 0, null, {timeout: 8000});
 

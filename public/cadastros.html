@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/itens-cadastro.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -4450,12 +4451,17 @@ document.addEventListener('DOMContentLoaded', function() {
       var f = registroComponente('formulas', key);
       if (Math.abs((f.somaPercentual || 0) - 100) >= 0.0005) return 'Soma da fórmula precisa fechar em 100% antes de aprovar';
       if (Object.values(f.itens || {}).some(function(it) { return it.pendente; })) return 'Há item de Fórmula ainda pendente de revisão (vindo da importação)';
+      // Item fora do cadastro não entra em fórmula aprovada (usuário, 30/09).
+      var foraF = ItensCadastro.problemas(f.itens, allMateriais, 'mpCodigo');
+      if (foraF.length) return ItensCadastro.mensagem(foraF, 'A Fórmula tem');
       if (f.revisado === false) return 'Marque a Fórmula como "Revisado" antes de aprovar';
       return '';
     }
     if (tipo === 'bom') {
       var b = registroComponente('bom', key);
       if (Object.values(b.itens || {}).some(function(it) { return it.pendente; })) return 'Há item de BOM ainda pendente de revisão (vindo da importação)';
+      var foraB = ItensCadastro.problemas(b.itens, allMateriais, 'materialCodigo');
+      if (foraB.length) return ItensCadastro.mensagem(foraB, 'O BOM tem');
       return '';
     }
     if (especCriticaSemFaixa(key)) return 'Há ensaio crítico sem faixa mínima/máxima definida';

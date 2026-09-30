@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/itens-cadastro.js"></script>
   <script src="shared/qrcode-lib.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -742,7 +743,8 @@ function recomputarItemAjuste() {
    30/09: "no cadastro está ESSENCIA LILAH ECO HS - GF49767, pq não leva o GF
    para a OP?"). A fórmula guarda o nome de quando foi aprovada; o cadastro
    ganhou depois o código do fornecedor, que é o que se confere no tambor na
-   pesagem. O nome da fórmula só vale se o material sumiu do cadastro. */
+   pesagem. Item fora do cadastro nem chega a emitir (problemasCadastroOp);
+   o nome da fórmula aqui é só para a tabela mostrar o que a linha era. */
 function nomeMaterialAtual(codigo, nomeDaFormula) {
   var m = codigo ? findMaterialByCodigo(codigo) : null;
   return (m && String(m.mpNome || '').trim()) || nomeDaFormula || '';
@@ -790,6 +792,8 @@ function renderMateriaisTable() {
     return;
   }
   var somaPct = entries.reduce(function(s, e) { return s + (e[1].origem === 'formula' ? (e[1].percentual || 0) : 0); }, 0);
+  var foraCadastro = {};
+  problemasCadastroOp().forEach(function(p) { foraCadastro[p.chave] = p; });
   tbody.innerHTML = entries.map(function(entry) {
     var key = entry[0], it = entry[1];
     var origemBadge = it.origem === 'formula' ? '<span class="badge badge-green">Fórmula</span>' : '<span class="badge badge-orange">Embalagem</span>';
@@ -797,8 +801,10 @@ function renderMateriaisTable() {
     // Item marcado em Cadastros como "Ajuste (QSP)" desta fórmula -- seu %
     // é sempre calculado (ver recomputarItemAjuste), nunca digitado.
     var ajusteLabel = it.ajusteAutomatico ? ' <span class="badge badge-blue" title="Percentual recalculado automaticamente pra fechar 100%">🧪 Ajuste (QSP)</span>' : '';
-    return '<tr>' +
-      '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + ajusteLabel + '</td>' +
+    var fora = foraCadastro[key];
+    var foraLabel = fora ? '<div style="color:var(--danger);font-weight:700;font-size:12px">⚠ ' + escapeHtml(fora.texto) + ' — substitua para emitir</div>' : '';
+    return '<tr' + (fora ? ' style="background:rgba(220,38,38,.06)"' : '') + '>' +
+      '<td>' + escapeHtml(it.mpCodigo) + ' — ' + escapeHtml(it.mpNome || '') + subLabel + ajusteLabel + foraLabel + '</td>' +
       '<td>' + origemBadge + '</td>' +
       '<td class="num">' + (it.origem === 'formula' ? fmtPct3(it.percentual) + '%' : '—') + '</td>' +
       '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + fmtBomHint(it) + '</td>' +
@@ -1027,9 +1033,29 @@ function confirmarSubstituicao() {
 // e o empenho de estoque (que lê materiaisConsumo direto) usaria esse
 // número errado. Chamado só na hora de emitir -- a tabela já mostra o
 // TOTAL em vermelho antes disso, como aviso cedo.
+/* Item fora do cadastro (sem material vinculado, código inexistente ou
+   material inativo) não sai numa OP -- usuário, 30/09. Resolve-se aqui mesmo
+   com "Substituir", ou corrigindo a fórmula/BOM em Cadastros. O texto original
+   da importação vem da fórmula/BOM, para a pessoa saber o que era a linha. */
+function problemasCadastroOp() {
+  var itens = {};
+  Object.keys(materiaisConsumo).forEach(function(key) {
+    var it = materiaisConsumo[key];
+    var orig = key.indexOf('f_') === 0 ? ((formulaEscolhida && formulaEscolhida.itens) || {})[key.slice(2)]
+      : ((bomEscolhido && bomEscolhido.itens) || {})[key.slice(2)];
+    itens[key] = {mpCodigo: it.mpCodigo, textoOriginalGeradorOPs: it.mpCodigo ? '' : (orig && orig.textoOriginalGeradorOPs) || ''};
+  });
+  return ItensCadastro.problemas(itens, allMateriais, 'mpCodigo');
+}
+
 function validarMateriaisConsumo() {
   var entries = Object.values(materiaisConsumo);
   if (!entries.length) return '';
+  var foraCadastro = problemasCadastroOp();
+  if (foraCadastro.length) {
+    return ItensCadastro.mensagem(foraCadastro, 'A OP não pode ser emitida: há') +
+      ' Use "Substituir" na tabela de materiais ou corrija a fórmula/BOM em Cadastros.';
+  }
   var negativo = entries.find(function(it) {
     return (it.quantidade || 0) < 0 || (it.origem === 'formula' && (it.percentual || 0) < 0);
   });

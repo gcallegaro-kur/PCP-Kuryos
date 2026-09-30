@@ -127,6 +127,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Item fora do cadastro não entra em fórmula aprovada nem em OP (2026-09-30).**
+  Usuário: "se o item não existir no cadastro, não deveria aparecer na fórmula". Medido:
+  fórmulas APROVADAS limpas, mas 80 dos 183 produtos com fórmula usam versão rascunho com
+  item sem código (250 linhas da importação) ou material inativo (7), e o Emitir OP aceita
+  rascunho; 15 desses têm pedido aberto ou OP recente. Módulo `shared/itens-cadastro.js`
+  (`problemas`/`mensagem`, teste `run_itens_cadastro_test.js`): trava a aprovação de
+  Fórmula e BOM (`cadastros.html`, `bloqueioAprovacaoComponente`) e a emissão
+  (`emitir_op.html`, `validarMateriaisConsumo`), com a linha marcada em vermelho e
+  resolução por "Substituir" na própria tela — não para a fábrica.
+  `run_fluxo_ponta_a_ponta_test.js` cobre trava + substituição. Manuais PCP e Cadastros.
+  Arquivos ativos: nenhum.
+
 - **PUBLICADO — Andon: rotulagem, manipulação e qualidade (2026-09-30).** `dashboard.html`
   ganhou (1) a faixa "Cadeia do lote" — Manipulação → Qualidade do bulk → Envase →
   Rotulagem → Conferência de PA → Qualidade do PA, com contagem e a espera mais antiga
