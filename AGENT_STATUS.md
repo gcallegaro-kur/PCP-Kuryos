@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Menu lateral em sanfona + revisão de celular (2026-09-29).**
+  Blocos do menu viram cabeçalhos que abrem/fecham (aberto: o da tela atual;
+  lembra o último aberto por usuário); alvos de toque maiores na gaveta do
+  celular. Depois, revisão do Apontamento em 375 px. **Arquivos ativos:**
+  `public/auth_check.js`, `run_menu_sanfona_ui_test.js` (novo).
+
 - **PUBLICADO — Pipeline semanal da Qualidade (2026-09-29).** Aba "Semana"
   (padrão) em `qualidade_historico.html`: abre na semana anterior completa;
   em aberto no início + entraram − decididas = em aberto no fim, com Δ vs
