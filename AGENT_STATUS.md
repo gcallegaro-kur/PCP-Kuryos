@@ -127,6 +127,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Encerrar num setor não encerra a OP inteira (2026-09-30).** Relato do
+  usuário: a rotulagem encerrou "a mesma OP" que seguia no envase. Causa
+  (`form.html`, `updateOpRecordOnApontamento`): a transação gravava `Aguardando
+  Confirmação` em QUALQUER fechamento, sem olhar o outro setor; e o cálculo
+  automático (envase ≥95%) também rodava a partir de apontamento de rotulagem.
+  Agora o status só vai ao PCP quando o fechamento deixa a OP sem alocação aberta
+  (`abertaDesde` Linha / `abertaDesdeRot` Rotulagem), e o cálculo automático só
+  vale a partir de apontamento de envase com nada mais aberto. A mensagem ao
+  operador diz "Etapa encerrada — a OP continua aberta no envase". Teste
+  (`run_apontamento_encerramento_test.js`) reproduz o defeito no código antigo.
+  **DADO NÃO CORRIGIDO:** OP 26267/02 segue `Aguardando Confirmação`/override manual
+  com a Linha 1 aberta (960 de 1760); gravação em produção negada nesta sessão;
+  backup em `backups/correcao-status-op-26267-02-*.json`. Pendente do usuário.
+  Arquivos ativos: nenhum.
+
 - **PUBLICADO — Entrega (PCP) e Prioridade (2026-09-30).** `pedidos/{chave}.dataEntregaPcp`
   (+ `Por`/`Em`): data por item, digitada por admin/pcp na coluna nova "Entrega (PCP)"
   de Pedidos (com selo de atraso e a previsão do Comercial ao lado, ⚠ quando o PCP

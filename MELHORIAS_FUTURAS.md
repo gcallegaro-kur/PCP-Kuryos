@@ -1207,3 +1207,14 @@ e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
   maior data de chegada entre os insumos críticos da BOM e mostrar como sugestão
   ao lado do campo. Hoje só 1 de 377 pedidos e 9 de 76 comerciais tinham data
   de entrega. Dia útil ignora feriado (não há calendário no sistema).
+- **Alocações abertas em OP já concluída (medido em 30/09).** Na base, 24 OPs
+  `Concluído`/`Aguardando Confirmação` ainda trazem `abertaDesde` (Linha) ou
+  `abertaDesdeRot` (Rotulagem) preenchido: 9 com rotulagem alocada
+  (26204/04-v2, 26217/01·02·04, 26219/04…) e o resto com a Linha (26212/05,
+  26215/04, 26216/01, 26224/01…). A maioria vem do fluxo antigo/da confirmação
+  manual do PCP, que não libera a alocação. Não é o defeito de 30/09 (esse está
+  corrigido em `updateOpRecordOnApontamento`), mas deixa a linha/rotuladora
+  "ocupada" no dado. Decidir com o chão de fábrica antes de limpar em massa:
+  liberar `abertaDesde*`/`aberta*` ao confirmar a conclusão no `ops.html` e
+  varrer as 24 existentes (backup + um registro primeiro).
+

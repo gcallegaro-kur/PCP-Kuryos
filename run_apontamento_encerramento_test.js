@@ -169,5 +169,39 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   if (queued[0].type !== 'apontamento_total' || !queued[0].efeitosOp.manterAberta) throw new Error('Pausa deixou de ser checkpoint');
   if (queued[1].type !== 'fechamento_op' || queued[1].registro.tipo !== 'fechamento_op' || !queued[1].efeitosOp.aguardarConfirmacao) throw new Error('Encerramento do Painel não é fechamento real');
 
-  console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento; densidade inválida não inverte estoque');
+  // ── Encerrar num setor não encerra a OP com outro setor aberto (30/09) ──
+  data.ops['26264-07'] = {
+    lote: '26264/07', produzido: 500, produzidoLinha: 500, produzidoRotulagem: 300,
+    qtdPlanejada: 2000, status: 'Em Produção',
+    abertaDesde: '2026-09-24T10:00:00.000Z', abertaLinha: 'Linha 1',
+    abertaDesdeRot: '2026-09-24T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1'
+  };
+  const efRot = { tipoEvento: 'fechamento_op', encerrarAlocacao: true, campoInicio: 'abertaDesdeRot', campoNome: 'abertaRotulagem', aguardarConfirmacao: true };
+  const efLin = { tipoEvento: 'fechamento_op', encerrarAlocacao: true, campoInicio: 'abertaDesde', campoNome: 'abertaLinha', aguardarConfirmacao: true };
+  await ctx.updateOpRecordOnApontamento('26264/07', 200, 0, '2026-09-24T11:00:00.000Z', 'rotulagem', '2026-09-24T13:00:00.000Z', 500, 'rot-1', efRot);
+  let o2 = data.ops['26264-07'];
+  if (o2.status !== 'Em Produção') throw new Error('Fechar a rotulagem encerrou a OP que segue no envase: ' + o2.status);
+  if (o2.abertaDesdeRot !== null || o2.abertaRotulagem !== null) throw new Error('A rotulagem deveria ter sido liberada');
+  if (!o2.abertaDesde || o2.abertaLinha !== 'Linha 1') throw new Error('A alocação do envase foi mexida pelo fechamento da rotulagem');
+  if (o2.produzidoRotulagem !== 500) throw new Error('Total da rotulagem não foi somado');
+  // Agora o envase fecha: sem mais nenhum setor aberto, a OP vai para o PCP.
+  await ctx.updateOpRecordOnApontamento('26264/07', 1500, 0, '2026-09-24T10:00:00.000Z', 'linha', '2026-09-24T15:00:00.000Z', 2000, 'lin-1', efLin);
+  o2 = data.ops['26264-07'];
+  if (o2.status !== 'Aguardando Confirmação' || o2.abertaDesde !== null) throw new Error('Último setor fechado deveria encaminhar a OP ao PCP');
+  // Inverso: fechar o envase com a rotulagem ainda aberta também não encerra a OP.
+  data.ops['26264-08'] = { lote: '26264/08', produzido: 100, produzidoLinha: 100, qtdPlanejada: 1000, status: 'Em Produção',
+    abertaDesde: '2026-09-24T10:00:00.000Z', abertaLinha: 'Linha 1', abertaDesdeRot: '2026-09-24T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };
+  await ctx.updateOpRecordOnApontamento('26264/08', 900, 0, '2026-09-24T10:00:00.000Z', 'linha', '2026-09-24T15:00:00.000Z', 1000, 'lin-2', efLin);
+  if (data.ops['26264-08'].status !== 'Em Produção') throw new Error('Fechar o envase com a rotulagem aberta encerrou a OP');
+  // Apontamento de rotulagem nunca conclui a OP pelo cálculo automático de envase.
+  data.ops['26264-09'] = { lote: '26264/09', produzido: 1000, produzidoLinha: 1000, qtdPlanejada: 1000, status: 'Em Produção',
+    abertaDesde: '2026-09-24T10:00:00.000Z', abertaLinha: 'Linha 1', abertaDesdeRot: '2026-09-24T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };
+  ctx.computeOpStatus = op => (op.produzidoLinha || 0) / op.qtdPlanejada >= 0.95 ? 'Aguardando Confirmação' : 'Em Produção';
+  await ctx.updateOpRecordOnApontamento('26264/09', 100, 0, '2026-09-24T11:00:00.000Z', 'rotulagem', '2026-09-24T12:00:00.000Z', null, 'rot-2', { tipoEvento: 'registro', manterAberta: true, campoInicio: 'abertaDesdeRot', campoNome: 'abertaRotulagem' });
+  if (data.ops['26264-09'].status !== 'Em Produção') throw new Error('Apontamento de rotulagem encerrou a OP pelo cálculo de envase');
+  await ctx.updateOpRecordOnApontamento('26264/09', 1, 0, '2026-09-24T12:00:00.000Z', 'linha', '2026-09-24T12:30:00.000Z', null, 'lin-3', { tipoEvento: 'registro', manterAberta: true, campoInicio: 'abertaDesde', campoNome: 'abertaLinha' });
+  if (data.ops['26264-09'].status !== 'Em Produção') throw new Error('Com a rotulagem aberta, nem o cálculo de envase encerra a OP');
+  ctx.computeOpStatus = op => op.status === 'Aguardando Confirmação' ? op.status : 'Em Produção';
+
+  console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento; densidade inválida não inverte estoque; fechar um setor não encerra a OP com outro aberto');
 })().catch(err => { console.error(err); process.exit(1); });

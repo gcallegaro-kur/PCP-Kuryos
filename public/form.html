@@ -2878,6 +2878,14 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     }
     // Produção + liberação/continuidade da OP pertencem à mesma transaction.
     // Nunca mais limpamos a linha antes de confirmar que o total foi gravado.
+    // Encerrar a OP num setor NÃO encerra a OP inteira enquanto outro setor
+    // ainda estiver trabalhando nela. Relato do usuário (30/09): a rotulagem
+    // encerrou "a mesma OP" que continuava alocada no envase, e a OP foi para
+    // Aguardando Confirmação -- saiu das listas de alocação/Andon e o PCP podia
+    // confirmar (abrindo a Conferência de PA) com o envase ainda rodando. Agora
+    // o status só vai para Aguardando quando o fechamento deixa a OP sem
+    // nenhuma alocação aberta (Linha = abertaDesde, Rotulagem = abertaDesdeRot).
+    var outroSetorAberto = false;
     if (efeitosOp) {
       if (efeitosOp.manterAberta) {
         op[efeitosOp.campoInicio] = efeitosOp.reinicioEm || tsFim;
@@ -2885,7 +2893,10 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
         op[efeitosOp.campoInicio] = null;
         op[efeitosOp.campoNome] = null;
       }
-      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído') {
+      outroSetorAberto = ['abertaDesde', 'abertaDesdeRot'].some(function(c) {
+        return c !== efeitosOp.campoInicio && !!op[c];
+      });
+      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !outroSetorAberto) {
         op.status = 'Aguardando Confirmação';
       }
     }
@@ -2898,7 +2909,15 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       if (isNaN(fimMs) || tsFimMs > fimMs) op.dataFimReal = tsFim;
     }
     if (op.status !== 'Concluído' && op.status !== 'Cancelado') {
-      op.status = computeOpStatus(op);
+      var statusCalculado = computeOpStatus(op);
+      // O cálculo automático (envase ≥95% da meta) só pode encerrar a OP a
+      // partir de um apontamento de ENVASE: um apontamento de rotulagem/posto,
+      // ou um fechamento com outro setor ainda aberto, não conclui a OP.
+      if (statusCalculado === 'Aguardando Confirmação' && op.status !== statusCalculado &&
+          (campo !== 'produzidoLinha' || outroSetorAberto)) {
+        statusCalculado = op.status;
+      }
+      op.status = statusCalculado;
     }
     // Só o apontamento por total calcula um ritmo real (qtd ÷ horas
     // informadas) -- o apontamento horário não passa novaMedia, então este
@@ -5148,7 +5167,12 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');
     // Fase 7 do plano: conclusão é 100% manual pelo PCP -- avisa aqui que
     // ainda falta essa confirmação.
-    showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + alvoEncerramento.nome + ' · Aguardando confirmação do PCP');
+    var outroAberto = alvoEncerramento.tipo === 'rotulagem' ? opAlvo.abertaDesde : opAlvo.abertaDesdeRot;
+    if (outroAberto) {
+      showSuccess('Etapa encerrada!', fmtNum(res.delta) + ' un. · ' + alvoEncerramento.nome + ' · A OP continua aberta no ' + (alvoEncerramento.tipo === 'rotulagem' ? 'envase' : 'setor de rotulagem') + ' e só vai ao PCP quando o último setor encerrar');
+    } else {
+      showSuccess('OP encerrada!', fmtNum(res.delta) + ' un. · ' + alvoEncerramento.nome + ' · Aguardando confirmação do PCP');
+    }
     if (encerrarOpAlvoAtual && encerrarOpAlvoAtual.lote === alvoEncerramento.lote) encerrarOpAlvoAtual = null;
   }).catch(function(err) {
     btn.disabled = false;
