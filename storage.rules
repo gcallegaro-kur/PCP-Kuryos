@@ -11,6 +11,17 @@ service firebase.storage {
               && request.resource.contentType.matches('image/.*')));
     }
 
+    // Fotos das análises da Qualidade (laudo de insumo/embalagem/PA, bulk e RNC):
+    // até 6 por registro, só imagem, menor que 10 MB. Um nível de pasta:
+    // qualidade/{contexto}_{chave}/{arquivo} (shared/fotos-qualidade.js).
+    match /qualidade/{pasta}/{arquivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && (request.resource == null
+          || (request.resource.size < 10 * 1024 * 1024
+              && request.resource.contentType.matches('image/.*')));
+    }
+
     match /comercial/{documento}/{arquivo} {
       allow read: if request.auth != null;
       allow write: if request.auth != null

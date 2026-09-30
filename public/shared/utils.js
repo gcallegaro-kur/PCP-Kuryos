@@ -2127,7 +2127,11 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       // entrada da Logística não captura, e o checklist de embalagem.
       recebimentoCq: laudo.recebimentoCq || null,
       embalagem: laudo.embalagem || null,
-      resumoEmbalagem: laudo.resumoEmbalagem || null
+      resumoEmbalagem: laudo.resumoEmbalagem || null,
+      // Fotos da análise (shared/fotos-qualidade.js): até 6, no Storage; aqui só
+      // o registro. fotosDispensadas = reprovação sem o que fotografar.
+      fotos: (laudo.fotos && laudo.fotos.length) ? laudo.fotos : null,
+      fotosDispensadas: laudo.fotosDispensadas ? true : null
     };
     // ── Pendência de endereçamento definitivo ──
     // Levantado pelo usuário (2026-09-08): "o correto não seria ir para
@@ -2554,7 +2558,11 @@ function abrirRnc(dbRef, dados, autor) {
         pedidoNumero: d.pedidoNumero || null,
         opLote: d.opLote || null,
         acaoImediata: d.acaoImediata || null,
-        automatica: !!d.automatica
+        automatica: !!d.automatica,
+        // Fotos da abertura (shared/fotos-qualidade.js). A RNC automática de um
+        // laudo reprovado herda as fotos do laudo: é a prova para o fornecedor.
+        fotos: (d.fotos && d.fotos.length) ? d.fotos : null,
+        fotosDispensadas: d.fotosDispensadas ? true : null
       };
       return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
         if (atual) return; // já existe -- aborta e tentamos o próximo número
@@ -2596,6 +2604,8 @@ function encerrarRnc(dbRef, numero, dados, autor) {
     atual.disposicao = d.disposicao;
     atual.encerradaEm = agora;
     atual.encerradaPor = autor || null;
+    // Evidência da ação corretiva (opcional).
+    atual.fotosEncerramento = (d.fotos && d.fotos.length) ? d.fotos : null;
     return atual;
   }).then(function(res) {
     if (!res || !res.committed) {
@@ -2651,7 +2661,9 @@ function registrarLaudoComRnc(dbRef, itemCodigo, loteKey, laudo, autor, contexto
       pedidoKey: ctx.pedidoKey || null, pedidoNumero: ctx.pedidoNumero || null,
       opLote: ctx.opLote || null,
       acaoImediata: 'Lote bloqueado para uso.',
-      automatica: true
+      automatica: true,
+      fotos: laudo.fotos || null,
+      fotosDispensadas: laudo.fotosDispensadas || false
     }, autor).then(function(rr) {
       r.rnc = rr.ok ? rr.numero : null;
       r.rncErro = rr.ok ? null : rr.erro;

@@ -127,6 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Fotos em todas as análises da Qualidade (2026-09-30).** Pedido da
+  Qualidade: foto na análise de insumos. Decisões do usuário: vale para qualquer análise
+  (laudo de MP/embalagem/PA, bulk, RNC), até 6 fotos, reprovação exige pelo menos uma.
+  Saída explícita "Não há o que fotografar" (fica gravada em `fotosDispensadas`; o motivo
+  escrito continua obrigatório). `shared/fotos-qualidade.js` (regras puras + seletor +
+  galeria); Storage `qualidade/{contexto}_{chave}/` (regra nova em `storage.rules`);
+  gravação em `estoque_lotes/.../qualidade/fotos`, `ops/.../manipulacao/analise/fotos`,
+  `nao_conformidades/{n}/fotos` e `fotosEncerramento`; a RNC automática herda as fotos do
+  laudo. Upload só ao salvar (sem arquivo órfão). Aparece no histórico da Qualidade, nas RNCs
+  e no Dossiê do Lote. Tocou `utils.js` (registrarLaudoQualidade, abrirRnc, encerrarRnc,
+  registrarLaudoComRnc), `qualidade.html`, `dossie_lote.html`, manual. Testes:
+  `run_fotos_qualidade_test.js`, `run_fotos_qualidade_ui_test.js`. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Item fora do cadastro não entra em fórmula aprovada nem em OP (2026-09-30).**
   Usuário: "se o item não existir no cadastro, não deveria aparecer na fórmula". Medido:
   fórmulas APROVADAS limpas, mas 80 dos 183 produtos com fórmula usam versão rascunho com

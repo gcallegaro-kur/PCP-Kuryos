@@ -9,7 +9,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/anexos.js"></script>
+  <script src="shared/fotos-qualidade.js"></script>
   <script src="shared/inspecao-pa.js"></script>
   <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script><script src="shared/analise-granel.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
@@ -497,6 +500,10 @@
         <label>Observação</label>
         <textarea id="qGranelObs" rows="2" placeholder="Resultado, ajuste realizado, motivo da reprovação..."></textarea>
       </div>
+      <div class="form-group">
+        <label>Fotos da análise <span class="field-hint" style="font-weight:400">(até 6 · na reprovação, pelo menos uma)</span></label>
+        <div id="qFotosGranel"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="qGranelCancelar">Cancelar</button>
@@ -783,6 +790,10 @@
         <label>Observação</label>
         <textarea id="qObservacao" rows="2" placeholder="Laudo, nº de análise, motivo da reprovação..."></textarea>
       </div>
+      <div class="form-group">
+        <label>Fotos da análise <span class="field-hint" style="font-weight:400">(até 6 · na reprovação, pelo menos uma)</span></label>
+        <div id="qFotosLaudo"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="modalLaudoCancel">Cancelar</button>
@@ -891,6 +902,10 @@
           <label>Ação imediata</label>
           <input type="text" id="rncAcaoImediata" placeholder="O que foi feito na hora (segregar, parar linha, bloquear lote...)">
         </div>
+        <div class="form-group">
+          <label>Fotos da não conformidade <span class="field-hint" style="font-weight:400">(até 6)</span></label>
+          <div id="rncFotosAbertura"></div>
+        </div>
       </div>
 
       <!-- Encerramento -->
@@ -928,6 +943,10 @@
             o que se faz com o material. Registrá-la aqui não movimenta o estoque — a saída
             (devolução ou descarte) continua sendo lançada em Estoque, com movimento próprio.
           </div>
+        </div>
+        <div class="form-group">
+          <label>Fotos da evidência <span class="field-hint" style="font-weight:400">(opcional, até 6)</span></label>
+          <div id="rncFotosEncerramento"></div>
         </div>
       </div>
     </div>
@@ -967,6 +986,7 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
+var storage = (typeof firebase.storage === "function") ? firebase.storage() : null;  // SDK do Storage; só as fotos dependem dele
 
 // norm() vem de shared/utils.js -- normalização única do sistema (minúscula,
 // sem acento). Havia uma cópia local aqui, e as 12 cópias divergiam entre si.
@@ -1291,7 +1311,8 @@ function renderFila() {
         '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
         '<td><span class="badge ' + badgeStatusLote(q.decisao) + '">' + escapeHtml(rotuloStatusLote(q.decisao)) + '</span>' +
           (q.autorizadoPor ? '<br><span class="field-hint">aut. ' + escapeHtml(q.autorizadoPor) + '</span>' : '') +
-          (q.resumoPlano ? '<br><span class="field-hint">' + escapeHtml(q.resumoPlano) + '</span>' : '') + '</td>' +
+          (q.resumoPlano ? '<br><span class="field-hint">' + escapeHtml(q.resumoPlano) + '</span>' : '') +
+          (q.fotos ? '<br>' + FotosQualidade.botao(q.fotos, (l.itemCodigo || '') + ' · lote ' + (l.loteOrigem || x.loteKey)) : '') + '</td>' +
         '<td>' + escapeHtml(q.inspecionadoPor || '—') + '<br><span class="field-hint">' + fmtDataHora(q.inspecionadoEm) + '</span></td>' +
         '<td>' + (rnc ? '<a href="#" class="ir-rnc" data-rnc="' + escapeAttr(rnc) + '">' + escapeHtml(rnc) + '</a>' : '<span class="field-hint">—</span>') + '</td>' +
         // Reimpressao: o laudo inteiro ja esta gravado em
@@ -1380,6 +1401,8 @@ function abrirLaudoGranel(opKey) {
         ' · <a href="dossie_lote.html?op=' + encodeURIComponent(granelAtual.opKey) + '" target="_blank" rel="noopener">abrir dossiê do lote</a>';
     })();
   document.getElementById('qGranelObs').value = '';
+  if (fotosGranel) fotosGranel.limpar();
+  fotosGranel = FotosQualidade.montar(document.getElementById('qFotosGranel'), {permiteDispensa: true});
   renderPlanoGranel();
   document.getElementById('modalGranelBg').classList.add('open');
 }
@@ -1491,12 +1514,15 @@ document.getElementById('modalGranelClose').addEventListener('click', fecharModa
 document.getElementById('qGranelCancelar').addEventListener('click', fecharModalGranel);
 
 function decidirGranel(decisao) {
-  if (!granelAtual) return;
+  if (!granelAtual || decidindoGranel) return;
   var obs = document.getElementById('qGranelObs').value.trim();
   if (decisao === 'REPROVAR' && !obs) {
     showAlert('Descreva o motivo — ele vira a descrição da não conformidade.', 'danger');
     return;
   }
+  var dispensadaGranel = !!(fotosGranel && fotosGranel.dispensada());
+  var exigFotoG = FotosQualidade.exigencia(decisao, fotosGranel ? fotosGranel.total() : 0, dispensadaGranel);
+  if (!exigFotoG.ok) { showAlert(exigFotoG.erro, 'danger'); return; }
   var aval = avaliacaoGranel();
   var ensaios = AnaliseGranel.registro(aval);
   if (decisao === 'LIBERAR' && aval.bloqueia &&
@@ -1540,7 +1566,14 @@ function decidirGranel(decisao) {
   }
   var op = granelAtual.op;
   var rncCorrecao = Manipulacao.ehCorrecao(op.manipulacao) ? ((op.manipulacao.correcao || {}).rncNumero || null) : null;
-  db.ref().update(u).then(function() {
+  decidindoGranel = true;
+  FotosQualidade.enviar(storage, fotosGranel ? fotosGranel.pendentes() : [], {
+    contexto: 'bulk', chave: sanitizeKey(granelAtual.opKey), autor: currentUserNome()
+  }).then(function(fotosEnviadas) {
+    u['ops/' + granelAtual.opKey + '/manipulacao/analise/fotos'] = fotosEnviadas.length ? fotosEnviadas : null;
+    u['ops/' + granelAtual.opKey + '/manipulacao/analise/fotosDispensadas'] = dispensadaGranel ? true : null;
+    return db.ref().update(u).then(function() { return {fotos: fotosEnviadas}; });
+  }).then(function(salvo) {
     if (decisao !== 'REPROVAR') return null;
     // Correção reprovada: a não conformidade é a mesma, já tem RNC. Uma nova
     // correção (outro ciclo) volta a apontar para ela.
@@ -1549,9 +1582,11 @@ function decidirGranel(decisao) {
       classificacao: 'MAIOR', origem: 'PRODUCAO',
       descricao: 'Granel do lote ' + (op.lote || granelAtual.opKey) + ' reprovado: ' + obs,
       itemTipo: 'produto', itemCodigo: op.sku || null, itemNome: op.produto || null,
-      opLote: op.lote || null, acaoImediata: 'Envase bloqueado para este lote.', automatica: true
+      opLote: op.lote || null, acaoImediata: 'Envase bloqueado para este lote.', automatica: true,
+      fotos: salvo.fotos, fotosDispensadas: dispensadaGranel
     }, currentUserNome()).catch(function(e) { return {ok: false, erro: e.message}; });
   }).then(function(rnc) {
+    decidindoGranel = false;
     fecharModalGranel();
     showAlert(decisao === 'LIBERAR'
       ? 'Granel liberado. O envase deste lote já pode ser alocado.' +
@@ -1559,7 +1594,7 @@ function decidirGranel(decisao) {
       : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + (rnc.existente ? ' (a mesma da correção).' : ' aberta.') : '') +
         ' Se der para corrigir, abra a correção em "Bulk reprovado".',
       decisao === 'LIBERAR' ? 'success' : 'danger');
-  }).catch(function(e) { showAlert('Erro ao registrar a análise: ' + e.message, 'danger'); });
+  }).catch(function(e) { decidindoGranel = false; showAlert('Erro ao registrar a análise: ' + e.message, 'danger'); });
 }
 document.getElementById('qGranelLiberar').addEventListener('click', function() { decidirGranel('LIBERAR'); });
 document.getElementById('qGranelReprovar').addEventListener('click', function() { decidirGranel('REPROVAR'); });
@@ -1592,7 +1627,7 @@ function renderFilaCorrecao() {
       '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
       '<td>' + escapeHtml(an.por || '—') + '<div class="field-hint">' + fmtDataHora(an.em) + '</div></td>' +
       '<td style="text-align:right">' + (man.rendimento != null ? fmtNum(man.rendimento) + ' kg' : '—') + '</td>' +
-      '<td>' + escapeHtml(an.observacao || '—') + '</td>' +
+      '<td>' + escapeHtml(an.observacao || '—') + (an.fotos ? '<br>' + FotosQualidade.botao(an.fotos, 'Bulk ' + (o.lote || o.key)) : '') + '</td>' +
       '<td style="text-align:right">' + (pode
         ? '<button class="btn btn-danger btn-sm" data-corrigir="' + escapeAttr(o.key) + '">Abrir correção</button>'
         : '<span class="field-hint">Só a Qualidade abre</span>') + '</td></tr>';
@@ -1823,6 +1858,8 @@ function abrirLaudo(itemCodigo, loteKey) {
     ? 'Condições e certificado vieram da conferência da Logística e não podem ser alterados no laudo.'
     : 'Entrada anterior ao novo formulário: complete os dados disponíveis durante o laudo.';
   document.getElementById('qObservacao').value = '';
+  if (fotosLaudo) fotosLaudo.limpar();
+  fotosLaudo = FotosQualidade.montar(document.getElementById('qFotosLaudo'), {permiteDispensa: true});
   var rec = entrada || {};
   document.getElementById('qQtdPorEmb').value = rec.qtdPorEmbalagem || '';
   document.getElementById('qDescEmb').value = rec.descricaoEmbalagem || '';
@@ -2325,6 +2362,7 @@ function botoesLaudo() {
   return ['qBtnLiberar', 'qBtnReprovar', 'qBtnConcessao', 'qBtnReter'].map(function(id) { return document.getElementById(id); });
 }
 
+var fotosLaudo = null, fotosGranel = null, fotosRncAbertura = null, fotosRncEncerramento = null, decidindoGranel = false;
 function salvarLaudo(decisao) {
   if (!laudoAtual) return;
   var obs = document.getElementById('qObservacao').value.trim();
@@ -2335,6 +2373,10 @@ function salvarLaudo(decisao) {
     showAlert('Descreva o motivo na observação — ele vira a descrição da não conformidade.', 'danger');
     return;
   }
+  // Reprovação: pelo menos uma foto, ou "Não há o que fotografar" (decisão do usuário, 30/09).
+  var dispensadaLaudo = !!(fotosLaudo && fotosLaudo.dispensada());
+  var exigFoto = FotosQualidade.exigencia(decisao, fotosLaudo ? fotosLaudo.total() : 0, dispensadaLaudo);
+  if (!exigFoto.ok) { showAlert(exigFoto.erro, 'danger'); return; }
   var autorizadoPor = null;
   if (decisao === 'APROVADO_CONCESSAO') {
     autorizadoPor = prompt('Aprovação com concessão libera material fora de especificação.\n\nQuem autorizou? (nome completo)');
@@ -2426,8 +2468,14 @@ function salvarLaudo(decisao) {
   var num = function(id) { var v = document.getElementById(id).value; return v === '' ? null : Number(v); };
   var f = laudoAtual.fornecedor || {};
 
-  registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, {
+  // As fotos sobem agora, na hora de salvar: análise cancelada não deixa arquivo órfão.
+  FotosQualidade.enviar(storage, fotosLaudo ? fotosLaudo.pendentes() : [], {
+    contexto: 'laudo', chave: sanitizeKey(laudoAtual.itemCodigo) + '_' + laudoAtual.loteKey, autor: currentUserNome()
+  }).then(function(fotosEnviadas) {
+  return registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, {
     decisao: decisao,
+    fotos: fotosEnviadas,
+    fotosDispensadas: dispensadaLaudo,
     dataInspecao: document.getElementById('qDataInspecao').value || null,
     qtdAmostrada: num('qQtdAmostrada'),
     certificadoFornecedor: document.getElementById('qCertificado').checked,
@@ -2462,6 +2510,7 @@ function salvarLaudo(decisao) {
     fornecedorKey: f.fornecedorKey || null, fornecedorNome: f.fornecedorNome || null,
     pedidoKey: f.pedidoKey || null, pedidoNumero: f.pedidoNumero || null,
     origem: laudoAtual.itemTipo === 'produto' ? 'PRODUCAO' : 'RECEBIMENTO'
+  });
   }).then(function(r) {
     btns.forEach(function(b) { b.disabled = false; });
     if (!r.ok) { showAlert(r.erro, 'danger'); return; }
@@ -3004,7 +3053,9 @@ function renderRncs() {
       '<td><span class="badge ' + cls.badge + '">' + escapeHtml(cls.rotulo) + '</span></td>' +
       '<td>' + escapeHtml(RNC_ORIGEM[r.origem] || r.origem || '—') + '</td>' +
       '<td>' + (r.itemCodigo ? '<b>' + escapeHtml(r.itemCodigo) + '</b> ' : '') +
-        '<span class="field-hint">' + escapeHtml(String(r.descricao || '').slice(0, 90)) + (String(r.descricao || '').length > 90 ? '…' : '') + '</span></td>' +
+        '<span class="field-hint">' + escapeHtml(String(r.descricao || '').slice(0, 90)) + (String(r.descricao || '').length > 90 ? '…' : '') + '</span>' +
+        (r.fotos ? ' ' + FotosQualidade.botao(r.fotos, r.numero + ' · abertura') : '') +
+        (r.fotosEncerramento ? ' ' + FotosQualidade.botao(r.fotosEncerramento, r.numero + ' · evidência do encerramento') : '') + '</td>' +
       '<td>' + escapeHtml(r.fornecedorNome || '—') + '</td>' +
       '<td>' + fmtData(r.abertaEm) + (dias != null && (RNC_STATUS[r.status] || {}).aberta ? '<br><span class="badge ' + (dias > 30 ? 'badge-red' : dias > 15 ? 'badge-orange' : 'badge-gray') + '">há ' + dias + 'd</span>' : '') + '</td>' +
       '<td><span class="badge ' + st.badge + '">' + escapeHtml(st.rotulo) + '</span></td>' +
@@ -3077,6 +3128,8 @@ function abrirModalNovaRnc() {
   });
   document.getElementById('rncFornecedor').value = '';
   document.getElementById('rncItemHint').textContent = '';
+  if (fotosRncAbertura) fotosRncAbertura.limpar();
+  fotosRncAbertura = FotosQualidade.montar(document.getElementById('rncFotosAbertura'), {});
   document.getElementById('modalRncBg').classList.add('open');
 }
 function abrirModalEncerrarRnc(numero) {
@@ -3097,6 +3150,8 @@ function abrirModalEncerrarRnc(numero) {
     document.getElementById(id).value = '';
   });
   document.getElementById('rncDisposicao').value = '';
+  if (fotosRncEncerramento) fotosRncEncerramento.limpar();
+  fotosRncEncerramento = FotosQualidade.montar(document.getElementById('rncFotosEncerramento'), {});
   document.getElementById('modalRncBg').classList.add('open');
 }
 function fecharModalRnc() { document.getElementById('modalRncBg').classList.remove('open'); }
@@ -3126,21 +3181,31 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
     showAlert(msgOk(r), 'success');
   };
   if (rncModo === 'ENCERRAR') {
-    encerrarRnc(db, rncAlvo, {
-      causaRaiz: document.getElementById('rncCausaRaiz').value,
-      acaoCorretiva: document.getElementById('rncAcaoCorretiva').value,
-      responsavelAcao: document.getElementById('rncResponsavel').value.trim() || null,
-      prazoAcao: document.getElementById('rncPrazo').value || null,
-      disposicao: document.getElementById('rncDisposicao').value
-    }, currentUserNome())
-      .then(function(r) { terminar(r, function() { return rncAlvo + ' encerrada.'; }); })
+    var alvoEnc = rncAlvo;
+    FotosQualidade.enviar(storage, fotosRncEncerramento ? fotosRncEncerramento.pendentes() : [], {
+      contexto: 'rnc-encerramento', chave: alvoEnc, autor: currentUserNome()
+    }).then(function(fotosEnviadas) {
+      return encerrarRnc(db, alvoEnc, {
+        causaRaiz: document.getElementById('rncCausaRaiz').value,
+        acaoCorretiva: document.getElementById('rncAcaoCorretiva').value,
+        responsavelAcao: document.getElementById('rncResponsavel').value.trim() || null,
+        prazoAcao: document.getElementById('rncPrazo').value || null,
+        disposicao: document.getElementById('rncDisposicao').value,
+        fotos: fotosEnviadas
+      }, currentUserNome());
+    })
+      .then(function(r) { terminar(r, function() { return alvoEnc + ' encerrada.'; }); })
       .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
     return;
   }
   var fornKey = document.getElementById('rncFornecedor').value;
   var codigo = document.getElementById('rncItemCodigo').value.trim();
   var qtd = document.getElementById('rncQtd').value;
-  abrirRnc(db, {
+  FotosQualidade.enviar(storage, fotosRncAbertura ? fotosRncAbertura.pendentes() : [], {
+    contexto: 'rnc', chave: 'nova-' + Date.now(), autor: currentUserNome()
+  }).then(function(fotosEnviadas) {
+  return abrirRnc(db, {
+    fotos: fotosEnviadas,
     classificacao: document.getElementById('rncClassificacao').value,
     origem: document.getElementById('rncOrigem').value,
     descricao: document.getElementById('rncDescricao').value,
@@ -3151,7 +3216,8 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
     opLote: document.getElementById('rncOp').value.trim() || null,
     fornecedorKey: fornKey || null,
     fornecedorNome: fornKey ? ((allFornecedores[fornKey] || {}).nome || null) : null
-  }, currentUserNome())
+  }, currentUserNome());
+  })
     .then(function(r) { terminar(r, function(x) { return 'Não conformidade ' + x.numero + ' aberta.'; }); })
     .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
 });

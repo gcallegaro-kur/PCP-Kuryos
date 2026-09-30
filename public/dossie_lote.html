@@ -11,6 +11,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/anexos.js"></script>
+  <script src="shared/fotos-qualidade.js"></script>
   <script src="shared/dossie-lote.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -258,7 +260,7 @@ function renderDossie() {
       campo(corr ? 'Correção prevista / pesada' : 'Previsto / pesado', fmtNum(r.previstoTotal) + ' / ' + fmtNum(r.pesadoTotal) + ' kg') +
       campo('Rendimento', r.rendimento != null ? fmtNum(r.rendimento) + ' kg (' + r.rendimentoPct + '%)' : '—') +
       campo('Perda de processo', r.perdaProcesso != null ? fmtNum(r.perdaProcesso) + ' kg (' + r.perdaProcessoPct + '%)' : '—') +
-      campo('Análise do granel', an ? escapeHtml(an.decisao || '—') + '<div class="hint">' + escapeHtml(an.por || '') + ' · ' + quando(an.em) + '</div>' : '—') +
+      campo('Análise do granel', an ? escapeHtml(an.decisao || '—') + '<div class="hint">' + escapeHtml(an.por || '') + ' · ' + quando(an.em) + '</div>' + (an.fotos ? '<div>' + FotosQualidade.botao(an.fotos, 'Análise do granel · ' + (op.lote || '')) + '</div>' : '') : '—') +
     '</div>' +
     (man.observacao ? '<div class="hint" style="margin-bottom:10px"><b>Observação da manipulação:</b> ' + escapeHtml(man.observacao) + '</div>' : '') +
     (an && an.observacao ? '<div class="hint" style="margin-bottom:10px"><b>Observação da Qualidade:</b> ' + escapeHtml(an.observacao) + '</div>' : '');
@@ -338,12 +340,12 @@ function renderDossie() {
         '<td>' + escapeHtml(l.enderecoCodigo || '—') + '</td>' +
         '<td>' + (cf.conferidoEm ? quando(cf.conferidoEm) + '<div class="hint">' + escapeHtml(cf.conferidoPor || '') + '</div>' : '—') + '</td>' +
         '<td>' + escapeHtml(l.status || '—') + (q.decisao ? '<div class="hint">' + escapeHtml(q.decisao) + ' · ' + escapeHtml(q.inspecionadoPor || '') + ' · ' + quando(q.inspecionadoEm) +
-          (q.resumoCk7 ? ' · CK-7' : '') + (q.observacao ? ' · ' + escapeHtml(q.observacao) : '') + '</div>' : '') + '</td></tr>';
+          (q.resumoCk7 ? ' · CK-7' : '') + (q.observacao ? ' · ' + escapeHtml(q.observacao) : '') + '</div>' : '') + (q.fotos ? '<div>' + FotosQualidade.botao(q.fotos, 'Laudo do palete ' + (l.identificadorPalete || l.id)) + '</div>' : '') + '</td></tr>';
     }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhum palete de produto acabado registrado.</div>';
   var cont = d.contagensPa.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Conferência de PA (Logística)</h4><div class="rolagem"><table><thead><tr><th>Quando</th><th>Por</th><th class="num">Contado</th><th class="num">Diferença</th></tr></thead><tbody>' +
     d.contagensPa.map(function(c) { return '<tr><td>' + quando(c.contadoEm) + '</td><td>' + escapeHtml(c.contadoPor || '—') + '</td><td class="num">' + fmtNum(c.total || 0) + '</td><td class="num">' + fmtNum(c.diferenca || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
   var rnc = d.rncs.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Não conformidades</h4><div class="rolagem"><table><thead><tr><th>RNC</th><th>Aberta</th><th>Classificação</th><th>Descrição</th><th>Situação</th></tr></thead><tbody>' +
-    d.rncs.map(function(x) { return '<tr><td><b>' + escapeHtml(x.numero || x.id) + '</b></td><td>' + quando(x.abertaEm) + '<div class="hint">' + escapeHtml(x.abertaPor || '') + '</div></td><td>' + escapeHtml(x.classificacao || '—') + '</td><td>' + escapeHtml(x.descricao || '') + '</td><td>' + (x.encerradaEm ? 'encerrada ' + quando(x.encerradaEm) : escapeHtml(x.status || 'aberta')) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
+    d.rncs.map(function(x) { return '<tr><td><b>' + escapeHtml(x.numero || x.id) + '</b></td><td>' + quando(x.abertaEm) + '<div class="hint">' + escapeHtml(x.abertaPor || '') + '</div></td><td>' + escapeHtml(x.classificacao || '—') + '</td><td>' + escapeHtml(x.descricao || '') + (x.fotos ? ' ' + FotosQualidade.botao(x.fotos, (x.numero || x.id) + ' · abertura') : '') + (x.fotosEncerramento ? ' ' + FotosQualidade.botao(x.fotosEncerramento, (x.numero || x.id) + ' · evidência do encerramento') : '') + '</td><td>' + (x.encerradaEm ? 'encerrada ' + quando(x.encerradaEm) : escapeHtml(x.status || 'aberta')) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
   h += secao('Produto acabado e Qualidade', '<span class="hint">' + d.paletes.length + ' palete(s)</span>', pal + cont + rnc);
 
   // 6. Linha do tempo
