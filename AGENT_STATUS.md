@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Onde está a OP indisponível no apontamento (2026-09-30).** Pedido do
+  usuário: ao tentar apontar/alocar OP no envase que não está disponível, mostrar
+  onde ela está (manipulando, aguardando Qualidade...). Arquivos ativos:
+  `public/form.html`, `public/shared/situacao-op.js` (novo), `run_situacao_op_test.js`
+  (novo), `public/manual_producao.html`, `AGENT_STATUS.md`.
+
 - **PUBLICADO — Encerrar num setor não encerra a OP inteira (2026-09-30).** Relato do
   usuário: a rotulagem encerrou "a mesma OP" que seguia no envase. Causa
   (`form.html`, `updateOpRecordOnApontamento`): a transação gravava `Aguardando
