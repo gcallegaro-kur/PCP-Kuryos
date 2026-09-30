@@ -1098,16 +1098,34 @@ function consolidarMateriaisDeSkus(explosoes) {
 }
 
 function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCache) {
-  var volInfo = volumeNominalEmLitros(produto);
-  if (!volInfo.ok) return { ok: false, erro: 'Produto cadastrado com unidade de volume "' + (volInfo.unidade || '—') + '" -- só sei calcular a partir de ml ou L.' };
-  var densidade = parseFloat(produto.densidadeGranel) || 0;
-  if (!volInfo.litros || !densidade || !pecas) return { ok: false, erro: 'Faltam dados pra calcular (volume nominal, densidade de granel ou quantidade).' };
-
   var overfillPct = parseFloat(produto.overfillPct) || 0;
   var perdaProcessoPct = parseFloat(produto.perdaProcessoPct) || 0;
-  var volumeTeoricoFinalMlPorUn = (volInfo.litros * (1 + overfillPct / 100)) * 1000;
-  var volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
-  var massaLoteKg = volumeGranelL * densidade;
+  var densidade = parseFloat(produto.densidadeGranel) || 0;
+  var unidade = String(produto.unidadeVolume || 'ml').toLowerCase();
+  var volumeGranelL, massaLoteKg;
+
+  if (unidade === 'g' || unidade === 'kg') {
+    // Produto rotulado em MASSA (hidratante 200g, esfoliante 150g). Mesma conta
+    // do Emitir OP (dimensaoNominalDoProduto / recalcular): a massa do lote sai
+    // direto do peso nominal -- a densidade se cancela (volume = massa / densidade,
+    // massa = volume x densidade), então ela NÃO é necessária aqui. Antes só
+    // ml e L eram aceitos: a sugestão de compra de 33 produtos cadastrados em g
+    // quebrava com "só sei calcular a partir de ml ou L", enquanto a OP deles
+    // emitia normalmente. O volume do granel só existe se houver densidade.
+    var massaNominalG = (parseFloat(produto.volume) || 0) * (unidade === 'kg' ? 1000 : 1);
+    if (!massaNominalG || !pecas) return { ok: false, erro: 'Faltam dados pra calcular (peso nominal ou quantidade).' };
+    massaLoteKg = pecas * massaNominalG * (1 + overfillPct / 100) * (1 + perdaProcessoPct / 100) / 1000;
+    volumeGranelL = densidade > 0 ? massaLoteKg / densidade : null;
+  } else {
+    var volInfo = volumeNominalEmLitros(produto);
+    if (!volInfo.ok) return { ok: false, erro: 'Produto cadastrado com unidade de volume "' + (volInfo.unidade || '—') + '" -- só sei calcular a partir de ml, L, g ou kg.' };
+    // densidade > 0, não só "preenchida": -1 é a marca de "não cadastrada" e, como
+    // número, é truthy -- passava e gerava quantidade de material NEGATIVA.
+    if (!volInfo.litros || !(densidade > 0) || !pecas) return { ok: false, erro: 'Faltam dados pra calcular (volume nominal, densidade de granel ou quantidade).' };
+    var volumeTeoricoFinalMlPorUn = (volInfo.litros * (1 + overfillPct / 100)) * 1000;
+    volumeGranelL = pecas * volumeTeoricoFinalMlPorUn * (1 + perdaProcessoPct / 100) / 1000;
+    massaLoteKg = volumeGranelL * densidade;
+  }
 
   var itens = [];
   Object.values((formula && formula.itens) || {}).forEach(function(it) {
@@ -1126,7 +1144,7 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
     });
   });
 
-  return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: Math.round(volumeGranelL * 1000) / 1000 };
+  return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: volumeGranelL == null ? null : Math.round(volumeGranelL * 1000) / 1000 };
 }
 
 // ── Ajuste de saldo de estoque (Fase 4) ─────────────────────────────────

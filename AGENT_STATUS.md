@@ -127,6 +127,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Sugestão de compra de produto em g/kg (2026-09-30).** Erro reportado ao
+  gerar solicitação de compra: "HDR-MISS-0005: unidade de volume "g" -- só sei calcular a
+  partir de ml ou L". `explodirMateriaisNecessarios` (`shared/utils.js`) só aceitava ml/L,
+  enquanto o Emitir OP (`dimensaoNominalDoProduto`) já calcula g/kg. Agora a massa do lote
+  sai do peso nominal (densidade se cancela, não é exigida; volume do granel fica nulo sem
+  densidade) — mesma conta do Emitir OP, conferida em `run_explosao_massa_test.js`.
+  Base real: 33 produtos cadastrados em g/kg; todos calculam (14 sem fórmula cadastrada).
+  De quebra: ml com densidade -1 (truthy) passava e dava quantidade NEGATIVA; agora exige
+  densidade > 0. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Fotos em todas as análises da Qualidade (2026-09-30).** Pedido da
   Qualidade: foto na análise de insumos. Decisões do usuário: vale para qualquer análise
   (laudo de MP/embalagem/PA, bulk, RNC), até 6 fotos, reprovação exige pelo menos uma.
