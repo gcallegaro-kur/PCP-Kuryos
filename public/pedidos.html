@@ -14,6 +14,7 @@
   <script src="shared/expedicao.js"></script>
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/situacao-op.js"></script>
+  <script src="shared/entrega-pcp.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -261,6 +262,7 @@
             <th style="min-width:200px" data-col="produto">Produto</th>
             <th style="min-width:70px" data-col="linha">Linha</th>
             <th style="min-width:100px" data-col="diasAberto" title="Dias corridos desde a data do pedido comercial vinculado">Em aberto há</th>
+            <th style="min-width:130px" data-col="entrega" title="Data de entrega definida pelo PCP para este item (a do Comercial aparece abaixo, quando existe)">Entrega (PCP)</th>
             <th style="min-width:70px;text-align:right" data-col="produzido">Produzido</th>
             <th style="min-width:130px" data-col="pct">Progresso</th>
             <th style="min-width:130px" data-col="expedido" title="Expedido (de fato, furto ou descarte) sobre a quantidade do pedido">Expedido</th>
@@ -271,7 +273,7 @@
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="12" class="no-data">Carregando...</td></tr>
+          <tr><td colspan="13" class="no-data">Carregando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -320,10 +322,11 @@
               <th style="min-width:130px" data-col="conferencia" title="Produzido = Expedido + Em estoque, somado dos itens. A situação é a do pior item.">Conferência</th>
               <th style="min-width:88px" data-col="data">Data do pedido</th>
               <th style="min-width:100px" data-col="diasAberto" title="Dias corridos desde a data do pedido">Em aberto há</th>
+              <th style="min-width:130px" data-col="entrega" title="Pedido inteiro = a maior data de entrega dos itens (definida pelo PCP em cada item)">Entrega (PCP)</th>
             </tr>
           </thead>
           <tbody id="pcTableBody">
-            <tr><td colspan="10" class="no-data">Carregando...</td></tr>
+            <tr><td colspan="11" class="no-data">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -615,13 +618,34 @@
 
   var pcSortCol = null, pcSortDir = 1;
 
+  // Pedido inteiro = a MAIOR data de entrega entre os itens. Item sem data
+  // não some: fica contado, porque o pedido só tem prazo firme quando todos têm.
+  function entregaDoPedidoComercial(id, itens) {
+    var datas = (itens || []).map(function(it) {
+      var p = allPedidos[id + '__' + sanitizeKey(it.sku || '')];
+      return p ? p.dataEntregaPcp : null;
+    });
+    var r = EntregaPcp.doPedido(datas);
+    r.detalhe = (itens || []).map(function(it, i) {
+      return (it.descricao || it.sku || '?') + ': ' + (EntregaPcp.ehData(datas[i]) ? fmtDate(datas[i]) : 'sem data');
+    }).join('\n');
+    return r;
+  }
+  function entregaPedidoCellHtml(r) {
+    var e = r.entregaInfo;
+    if (!e.data) return '<span style="color:var(--muted)" title="' + escapeAttr(e.detalhe || '') + '">—</span>';
+    var prazo = EntregaPcp.estadoPrazo(e.data, todayLocal(), r.categoria === 'completo');
+    var falta = e.semData > 0 ? '<div style="font-size:10.5px;color:#b45309">' + e.semData + (e.semData === 1 ? ' item sem data' : ' itens sem data') + '</div>' : '';
+    return '<div style="cursor:help" title="' + escapeAttr(e.detalhe) + '">' + escapeHtml(fmtDate(e.data)) + '</div>' + seloPrazoHtml(prazo) + falta;
+  }
+
   function renderPedidosComerciais() {
     var tbody = document.getElementById('pcTableBody');
     if (!tbody || document.getElementById('tabPanelComerciais').style.display === 'none') return;
 
     var ids = Object.keys(pedidosComerciaisCache);
     if (!ids.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="no-data">Nenhum pedido comercial ainda — nasce automaticamente quando o Comercial gera um pedido no Gerador de Pedidos.</td></tr>';
       document.getElementById('pcStatTotal').textContent = '0';
       document.getElementById('pcStatAberto').textContent = '0';
       document.getElementById('pcStatParcial').textContent = '0';
@@ -721,6 +745,8 @@
         conferencia: ordemConferencia(conciliacaoPc),
         data: pc.dataPedido || '',
         diasAberto: diasDesde(pc.dataPedido),
+        entregaInfo: entregaDoPedidoComercial(id, itens),
+        entrega: entregaDoPedidoComercial(id, itens).data || '',
         categoria: categoria
       });
     });
@@ -729,6 +755,7 @@
     if (pcSortCol) {
       var col = pcSortCol;
       rows.sort(function(a, b) {
+        if (col === 'entrega') { if (!a.entrega || !b.entrega) return a.entrega ? -1 : b.entrega ? 1 : 0; return a.entrega.localeCompare(b.entrega) * pcSortDir; }
         if (col === 'itensCount' || col === 'qtdPedida' || col === 'produzido' || col === 'pct' || col === 'diasAberto' || col === 'expedido' || col === 'conferencia') {
           return (a[col] - b[col]) * pcSortDir;
         }
@@ -752,10 +779,11 @@
         '<td>' + celulaConferencia(r.conciliacao, 'pc:' + r.id, 'Pedido #' + r.id + ' — ' + r.cliente) + '</td>' +
         '<td>' + escapeHtml(fmtDate(r.data) || '-') + '</td>' +
         '<td>' + fmtDiasAberto(r) + '</td>' +
+        '<td>' + entregaPedidoCellHtml(r) + '</td>' +
       '</tr>';
     }).join('');
 
-    tbody.innerHTML = html || '<tr><td colspan="10" class="no-data">Nenhum pedido comercial nesse filtro.</td></tr>';
+    tbody.innerHTML = html || '<tr><td colspan="11" class="no-data">Nenhum pedido comercial nesse filtro.</td></tr>';
     document.getElementById('pcTableCount').textContent = rows.length + ' de ' + ids.length + ' Pedido(s) Comercial(is)';
     document.getElementById('pcStatTotal').textContent = fmtNum(ids.length);
     document.getElementById('pcStatAberto').textContent = fmtNum(nAberto);
@@ -1016,6 +1044,54 @@
     return pedidoStatus(p) === 'andamento' || pedidoAguardaExpedicao(p);
   }
 
+  // ── Entrega (PCP) ───────────────────────────────────────────────
+  // Data por ITEM (pedidos/{chave}.dataEntregaPcp), digitada pelo PCP. A
+  // previsão do Comercial (pedidos_comerciais.previsaoComercialEntrega) fica
+  // abaixo, só para comparar -- os dois números podem discordar de verdade.
+  function podeEditarEntrega() {
+    var u = window.currentUser;
+    return !!u && (u.role === 'admin' || u.role === 'pcp');
+  }
+  var ROTULO_PRAZO = {ATRASADO: ['#b91c1c', '#fee2e2'], HOJE: ['#b45309', '#fef3c7'], PROXIMO: ['#b45309', '#fef3c7'], NO_PRAZO: ['#166534', '#dcfce7']};
+  function seloPrazoHtml(prazo) {
+    if (!ROTULO_PRAZO[prazo.estado]) return '';
+    var txt = prazo.estado === 'ATRASADO' ? prazo.dias + (prazo.dias === 1 ? ' dia' : ' dias') + ' em atraso' :
+              prazo.estado === 'HOJE' ? 'vence hoje' : 'em ' + prazo.dias + (prazo.dias === 1 ? ' dia' : ' dias');
+    return '<div style="margin-top:2px"><span style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:' + ROTULO_PRAZO[prazo.estado][0] + ';background:' + ROTULO_PRAZO[prazo.estado][1] + '">' + txt + '</span></div>';
+  }
+  function previsaoComercialDe(p) {
+    var pc = pedidosComerciaisCache[p.parentPedidoId];
+    var d = pc && pc.previsaoComercialEntrega;
+    return EntregaPcp.ehData(d) ? d : null;
+  }
+  function entregaCellHtml(p) {
+    var d = EntregaPcp.ehData(p.dataEntregaPcp) ? p.dataEntregaPcp : '';
+    var prazo = EntregaPcp.estadoPrazo(d, todayLocal(), !pedidoPedeAcao(p));
+    var com = previsaoComercialDe(p);
+    var campo = podeEditarEntrega()
+      ? '<input type="date" class="entrega-input" data-key="' + escapeAttr(p._key) + '" value="' + escapeAttr(d) + '" style="font-size:12px;padding:2px 4px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--text);max-width:128px" title="Data de entrega do PCP para este item. Apague para limpar.">'
+      : (d ? '<span>' + escapeHtml(fmtDate(d)) + '</span>' : '<span style="color:var(--muted)">—</span>');
+    var comHtml = com
+      ? '<div style="font-size:10.5px;color:' + (d && d > com ? '#b45309' : 'var(--muted)') + '" title="Previsão do Comercial' + (d && d > com ? ' — o PCP entrega DEPOIS do que o Comercial previu' : '') + '">Comercial: ' + escapeHtml(fmtDate(com)) + (d && d > com ? ' ⚠' : '') + '</div>'
+      : '';
+    return campo + seloPrazoHtml(prazo) + comHtml;
+  }
+  document.getElementById('tableBody').addEventListener('change', function(e) {
+    var inp = e.target.closest('.entrega-input');
+    if (!inp || !podeEditarEntrega()) return;
+    var v = EntregaPcp.validar(inp.value);
+    if (!v.ok) { showAlert(v.erro, 'danger'); return; }
+    var quem = (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido';
+    var k = inp.dataset.key;
+    var up = {};
+    up['pedidos/' + k + '/dataEntregaPcp'] = v.data;
+    up['pedidos/' + k + '/dataEntregaPcpPor'] = v.data ? quem : null;
+    up['pedidos/' + k + '/dataEntregaPcpEm'] = v.data ? new Date().toISOString() : null;
+    db.ref().update(up).then(function() {
+      showAlert(v.data ? 'Entrega do PCP gravada: ' + fmtDate(v.data) + '.' : 'Entrega do PCP removida.', 'success');
+    }).catch(function(err) { showAlert('Não foi possível gravar a entrega: ' + err.message, 'danger'); });
+  });
+
   function renderOpRow(p) {
     var pc = pct(p);
     var st = pedidoStatus(p);
@@ -1042,6 +1118,7 @@
       '<td><div class="prod-cell" title="' + (p.produto||'') + '">' + (p.produto||'—') + clientBadge + '</div></td>' +
       '<td>' + (p.linha||'—') + '</td>' +
       '<td>' + fmtDiasAbertoOp(p) + '</td>' +
+      '<td>' + entregaCellHtml(p) + '</td>' +
       '<td class="produzido-cell" data-op-key="' + escapeAttr(p._key) + '" style="text-align:right;color:var(--muted);cursor:help">' + ((p.produzido||0).toLocaleString('pt-BR')) + '</td>' +
       '<td>' +
         '<div class="prog-wrap">' +
@@ -1099,6 +1176,8 @@
         // Crescente = o que pede atenção primeiro: diferença maior no topo.
         if (col === 'conferencia') return (ordemConferencia(conciliacaoDoPedido(a._key)) - ordemConferencia(conciliacaoDoPedido(b._key))) * opsSortDir;
         if (col === 'diasAberto') return (diasDesde(opDataPedido(a)) - diasDesde(opDataPedido(b))) * opsSortDir;
+        // Sem data vai sempre para o fim, em qualquer sentido.
+        if (col === 'entrega') { var ea = a.dataEntregaPcp || '', eb = b.dataEntregaPcp || ''; if (!ea || !eb) return ea ? -1 : eb ? 1 : 0; return ea.localeCompare(eb) * opsSortDir; }
         return String(a[col]||'').localeCompare(String(b[col]||''), undefined, {numeric:true}) * opsSortDir;
       });
     } else {
@@ -1126,7 +1205,7 @@
 
     var tbody = document.getElementById('tableBody');
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="12" class="no-data">Nenhum pedido encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" class="no-data">Nenhum pedido encontrado</td></tr>';
       return;
     }
 
@@ -1158,7 +1237,7 @@
     groupOrder.sort(function(a, b) { return groups[a].titulo.localeCompare(groups[b].titulo, 'pt-BR', {numeric:true, sensitivity:'base'}); });
     var html = '';
     groupOrder.forEach(function(g) {
-      html += '<tr class="group-header"><td colspan="12">' + escapeHtml(groups[g].titulo) + ' (' + groups[g].itens.length + ')</td></tr>';
+      html += '<tr class="group-header"><td colspan="13">' + escapeHtml(groups[g].titulo) + ' (' + groups[g].itens.length + ')</td></tr>';
       html += groups[g].itens.map(renderOpRow).join('');
     });
     tbody.innerHTML = html;

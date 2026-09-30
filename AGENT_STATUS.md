@@ -127,6 +127,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Entrega (PCP) e Prioridade (2026-09-30).** `pedidos/{chave}.dataEntregaPcp`
+  (+ `Por`/`Em`): data por item, digitada por admin/pcp na coluna nova "Entrega (PCP)"
+  de Pedidos (com selo de atraso e a previsão do Comercial ao lado, ⚠ quando o PCP
+  entrega depois); aba Pedidos Comerciais mostra a MAIOR data dos itens e quantos
+  itens estão sem data. Controle de OPs ganhou colunas "Prio." e "Entrega (PCP)"
+  (leitura). Módulo `shared/entrega-pcp.js`; a sugestão dos 30 dias (corridos, com
+  opção de úteis) existe como função pura e **não está ligada** (estoque/MRP ainda
+  não confiáveis) — ver MELHORIAS_FUTURAS.md. Testes: `run_entrega_pcp_test.js`,
+  `run_pedidos_conciliacao_ui_test.js`, `run_encerradas_ops_ui_test.js` (Pedidos agora
+  13 colunas SKU / 11 comerciais). Arquivos ativos: nenhum.
+
 - **PUBLICADO — Menu em sanfona + celular em todas as telas (2026-09-29).**
   `auth_check.js`: cada bloco do menu é um botão que abre/fecha; aberto o da
   tela atual + o último que a pessoa abriu (localStorage por usuário), um de

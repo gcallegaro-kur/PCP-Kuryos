@@ -19,6 +19,7 @@
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/progresso-op.js"></script>
   <script src="shared/situacao-op.js"></script>
+  <script src="shared/entrega-pcp.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -452,6 +453,8 @@
               <th style="width: 120px;" data-sort="linha">Linha</th>
               <th style="width: 170px;">Programação</th>
               <th style="width: 150px;">Pedido Comercial</th>
+              <th style="width: 44px; text-align:center;" title="Prioridade do pedido (1 = primeiro). Definida em Pedidos.">Prio.</th>
+              <th style="width: 120px;" title="Data de entrega definida pelo PCP para o item deste pedido (editável em Pedidos).">Entrega (PCP)</th>
               <th style="width: 180px;" title="Produto acabado conferido pela Logística (estoque + expedido). Passe o mouse na barra para ver cada etapa.">Produto Acabado</th>
               <th style="width: 160px;" data-sort="status">Status da OP</th>
               <th style="width: 60px; text-align: center;">Ações</th>
@@ -459,7 +462,7 @@
           </thead>
           <tbody id="ops-tbody">
             <tr>
-              <td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
+              <td colspan="11" style="text-align: center; color: var(--muted); padding: 30px;">Carregando controle de OPs...</td>
             </tr>
           </tbody>
         </table>
@@ -949,7 +952,7 @@
     todasOps = opsSortable.applySort(todasOps, function(o, field) { return o[field]; });
 
     if (!todasOps.length) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma OP encontrada com esse filtro.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 30px;">Nenhuma OP encontrada com esse filtro.</td></tr>';
       return;
     }
     const plural = todasOps.length === 1 ? '' : 's';
@@ -963,7 +966,7 @@
        Expedição não enxerga. Achado pelo teste de fluxo ponta a ponta
        (run_fluxo_ponta_a_ponta_test.js). */
     tbody.innerHTML =
-      '<tr class="group-header"><td colspan="8">🔎 ' + todasOps.length + ' OP' + plural + ' encontrada' + plural + '</td></tr>' +
+      '<tr class="group-header"><td colspan="10">🔎 ' + todasOps.length + ' OP' + plural + ' encontrada' + plural + '</td></tr>' +
       todasOps.map(function(o) {
         return o.status === 'Aguardando Confirmação'
           ? renderOpAguardandoConfirmacaoRow(o)
@@ -1016,7 +1019,7 @@
       .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
 
     if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0 && opsConcluidasPendentes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. As OPs concluídas estão na aba Encerradas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. As OPs concluídas estão na aba Encerradas.</td></tr>';
       return;
     }
 
@@ -1031,21 +1034,21 @@
 
     let html = '';
     if (opsAguardandoConfirmacao.length) {
-      html += '<tr class="group-header pending"><td colspan="8">⏳ Aguardando Confirmação do PCP (' + opsAguardandoConfirmacao.length + ')</td></tr>';
+      html += '<tr class="group-header pending"><td colspan="10">⏳ Aguardando Confirmação do PCP (' + opsAguardandoConfirmacao.length + ')</td></tr>';
       html += opsAguardandoConfirmacao.map(renderOpAguardandoConfirmacaoRow).join('');
     }
     if (activeOps.length) {
-      html += '<tr class="group-header"><td colspan="8">⚙️ OPs Emitidas em Aberto (' + activeOps.length + ')</td></tr>';
+      html += '<tr class="group-header"><td colspan="10">⚙️ OPs Emitidas em Aberto (' + activeOps.length + ')</td></tr>';
       html += activeOps.map(renderOpRow).join('');
     }
     if (opsConcluidasPendentes.length) {
-      html += '<tr class="group-header pending"><td colspan="8">🧪 Concluídas, com produto acabado pendente (' + opsConcluidasPendentes.length + ')</td></tr>';
+      html += '<tr class="group-header pending"><td colspan="10">🧪 Concluídas, com produto acabado pendente (' + opsConcluidasPendentes.length + ')</td></tr>';
       html += opsConcluidasPendentes.map(renderOpConcluidaPendenteRow).join('');
     }
     if (pedidosSemOp.length) {
       // É backlog de demanda (60 itens na base real), não trabalho do dia:
       // recolhido por padrão, um clique abre. A emissão em si é na tela Emitir OP.
-      html += '<tr class="group-header pending" id="hdrSemOp" style="cursor:pointer" onclick="alternarSemOp()" title="Clique para ' + (semOpAberto ? 'recolher' : 'ver a lista') + '"><td colspan="8">' +
+      html += '<tr class="group-header pending" id="hdrSemOp" style="cursor:pointer" onclick="alternarSemOp()" title="Clique para ' + (semOpAberto ? 'recolher' : 'ver a lista') + '"><td colspan="10">' +
         (semOpAberto ? '▾' : '▸') + ' ⚠️ Aguardando Emissão de OP (' + pedidosSemOp.length + ')' + (semOpAberto ? '' : ' — clique para ver') + '</td></tr>';
       if (semOpAberto) html += pedidosSemOp.map(renderPendingRow).join('');
     }
@@ -1078,7 +1081,7 @@
           <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;">${produzido.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un. (${pct}%)</div>
         </td>
         <td><span class="badge-status aguardando-confirmacao">⏳ Aguardando confirmação</span></td>
-        <td colspan="2" style="text-align:center; white-space:nowrap">
+        <td colspan="4" style="text-align:center; white-space:nowrap">
           ${canConfirmOp()
             ? `<button class="btn-confirm-op" onclick="confirmarConclusaoOp('${escapedKeyAttr}')" title="Confirmar que essa OP está de fato concluída">✅ Confirmar conclusão</button>`
             : `<span style="font-size:11.5px;color:var(--muted)">Aguardando PCP</span>`}
@@ -1651,7 +1654,7 @@
         </td>
         <td>${produzidoBreakdownHtml(op)}</td>
         <td>${selo}</td>
-        <td style="text-align:center"><a class="btn-edit-inline" style="text-decoration:none;opacity:1" title="Abrir o dossiê do lote" href="dossie_lote.html?op=${encodeURIComponent(op.key)}" target="_blank" rel="noopener">📂</a></td>
+        <td colspan="3" style="text-align:center"><a class="btn-edit-inline" style="text-decoration:none;opacity:1" title="Abrir o dossiê do lote" href="dossie_lote.html?op=${encodeURIComponent(op.key)}" target="_blank" rel="noopener">📂</a></td>
       </tr>`;
   }
 
@@ -1691,6 +1694,23 @@
     }).join('');
   }
   document.getElementById('encBusca').addEventListener('input', renderEncerradas);
+
+  // Prioridade e entrega vêm do item do pedido (pedidos/{skuPedidoKey}) --
+  // aqui é só leitura; quem edita é a tela Pedidos.
+  function prioridadeOpHtml(ped) {
+    const n = ped && Number(ped.priority);
+    if (!n || n >= 999) return '<span style="color:var(--muted)">—</span>';
+    return '<span title="Prioridade do pedido" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--primary);color:white;font-size:11px;font-weight:800">' + n + '</span>';
+  }
+  function entregaOpHtml(ped, op) {
+    const d = ped && EntregaPcp.ehData(ped.dataEntregaPcp) ? ped.dataEntregaPcp : '';
+    if (!d) return '<span style="color:var(--muted)" title="Sem data de entrega do PCP. Defina em Pedidos.">—</span>';
+    const prazo = EntregaPcp.estadoPrazo(d, toLocalISODate(new Date()), op.status === 'Concluído' || op.status === 'Cancelado');
+    const cor = {ATRASADO: '#b91c1c', HOJE: '#b45309', PROXIMO: '#b45309'}[prazo.estado] || 'inherit';
+    const nota = prazo.estado === 'ATRASADO' ? '<div style="font-size:10.5px;font-weight:700;color:#b91c1c">' + prazo.dias + (prazo.dias === 1 ? ' dia' : ' dias') + ' em atraso</div>'
+      : prazo.estado === 'HOJE' ? '<div style="font-size:10.5px;font-weight:700;color:#b45309">vence hoje</div>' : '';
+    return '<div style="color:' + cor + ';font-weight:600">' + escapeHtml(d.split('-').reverse().join('/')) + '</div>' + nota;
+  }
 
   function renderOpRow(op) {
     const isAdmin = currentRole === 'admin' || currentRole === 'pcp';
@@ -1754,6 +1774,8 @@
               : ``}
           </div>
         </td>
+        <td style="text-align:center">${prioridadeOpHtml(linkedPedido)}</td>
+        <td>${entregaOpHtml(linkedPedido, op)}</td>
         <td>${produzidoBreakdownHtml(op)}${divergenciaProduzidoHtml(op, escapedKeyAttr, isAdmin)}</td>
         <td>
           ${isCancelada
@@ -2126,7 +2148,7 @@
         <td>—</td>
         <td>${p.parentPedidoId ? '#' + escapeHtml(String(p.parentPedidoId)) : '—'}</td>
         <td>${planned.toLocaleString('pt-BR')} un planejadas</td>
-        <td colspan="2" style="color: var(--muted); font-size: 12px;">Rodar o Gerador de OPs pra este item</td>
+        <td colspan="4" style="color: var(--muted); font-size: 12px;">Rodar o Gerador de OPs pra este item</td>
       </tr>
     `;
   }

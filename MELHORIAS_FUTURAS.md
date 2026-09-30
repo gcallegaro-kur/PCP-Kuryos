@@ -1197,3 +1197,13 @@ e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
   Safari/iOS. No iPhone o campo aceita digitação e leitor Bluetooth; se virar
   necessidade, embutir um leitor em JS (ex.: ZXing) — o mesmo já validado em
   `run_etiquetas_leitura_test.js`.
+- **Entrega sugerida = último insumo crítico + 30 dias (decisão do usuário, 30/09).**
+  O campo `pedidos/{chave}.dataEntregaPcp` (por item, digitado pelo PCP; pedido
+  inteiro = maior data dos itens) está no ar. A sugestão automática existe só
+  como função pura (`EntregaPcp.sugerirEntrega`, `shared/entrega-pcp.js`, 30 dias
+  corridos, `{uteis: true}` para úteis) e **não está ligada a nenhuma tela**:
+  depende de saldo confiável (Dia D), lead time nos materiais e data prevista nos
+  pedidos de compra. Ligar quando o MRP tiver esses dados: pegar, por item, a
+  maior data de chegada entre os insumos críticos da BOM e mostrar como sugestão
+  ao lado do campo. Hoje só 1 de 377 pedidos e 9 de 76 comerciais tinham data
+  de entrega. Dia útil ignora feriado (não há calendário no sistema).

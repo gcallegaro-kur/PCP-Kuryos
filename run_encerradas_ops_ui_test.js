@@ -26,7 +26,7 @@ function dados() {
       'E-ANTIGA': op('E/01', {status: 'Concluído'})
     },
     pedidos: {
-      '0001__SKU1': {id: '0001', sku: 'SKU1', produto: 'P', cliente: 'CLIENTE X', parentPedidoId: '0001', qtdTotal: 5000, produzido: 300, status: 'Em Produção'},
+      '0001__SKU1': {id: '0001', sku: 'SKU1', produto: 'P', cliente: 'CLIENTE X', parentPedidoId: '0001', qtdTotal: 5000, produzido: 300, status: 'Em Produção', priority: 3, dataEntregaPcp: '2026-09-20'},
       '0002__ATENDIDO': {id: '0002', sku: 'ATENDIDO', produto: 'PEDIDO JA ATENDIDO', cliente: 'CLIENTE Y', parentPedidoId: '0002', qtdTotal: 1000, produzido: 1000},
       '0003__FALTA': {id: '0003', sku: 'FALTA', produto: 'PEDIDO SEM OP', cliente: 'CLIENTE Z', parentPedidoId: '0003', qtdTotal: 2000, produzido: 0}
     },
@@ -129,6 +129,12 @@ async function abrir(browser, pagina) {
     assert.match(principal, /Aguardando Emissão de OP \(1\)/i);
     await page.click('#hdrSemOp');
     await page.waitForFunction(() => /PEDIDO SEM OP/.test(document.getElementById('ops-tbody').innerText));
+    // Prioridade e entrega do PCP vêm do item do pedido (leitura).
+    const linhaA = page.locator('#ops-tbody tr', {hasText: 'A/01'});
+    assert.equal((await linhaA.locator('td').nth(6).innerText()).trim(), '3', 'coluna Prio.');
+    assert.match(await linhaA.locator('td').nth(7).innerText(), /20\/09\/2026/);
+    assert.match(await linhaA.locator('td').nth(7).innerText(), /em atraso/);
+    assert.ok((await page.locator('#opsThead th').allInnerTexts()).some(t => /Entrega \(PCP\)/i.test(t)));
     // Secundário recolhido: previsão/emitido por ficam dentro de <details>.
     assert.ok(await page.locator('#ops-tbody tr', {hasText: 'A/01'}).count() >= 1);
 

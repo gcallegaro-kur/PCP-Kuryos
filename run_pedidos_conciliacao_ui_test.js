@@ -11,7 +11,7 @@ function dados() {
   return {
     'usuarios/u1': {nome: 'Gustavo', email: 'g@kuryos.com', role: 'admin'},
     pedidos: {
-      '0019__GLMKAM04': {id: '0019', produto: 'GLOW MICELAR', qtdTotal: 1000, produzido: 1000, parentPedidoId: '0019', linha: 'Linha 1'},
+      '0019__GLMKAM04': {id: '0019', produto: 'GLOW MICELAR', qtdTotal: 1000, produzido: 1000, parentPedidoId: '0019', linha: 'Linha 1', dataEntregaPcp: '2026-09-20'},
       '0017__PRF-AFEE-0014': {id: '0017', produto: 'ZAFIYR 30ML', qtdTotal: 3000, produzido: 2916, parentPedidoId: '0017', linha: 'Linha 2'},
       '0017__NADA': {id: '0017', produto: 'ITEM SEM SAIDA', qtdTotal: 1000, produzido: 500, parentPedidoId: '0017', linha: 'Linha 2'},
       '0021__DIV': {id: '0021', produto: 'ITEM DIVERGENTE', qtdTotal: 200, produzido: 100, parentPedidoId: '0021', linha: 'Linha 1'},
@@ -19,7 +19,7 @@ function dados() {
       '0022__FIM': {id: '0022', produto: 'ITEM FINALIZADO', qtdTotal: 100, produzido: 100, parentPedidoId: '0022', linha: 'Linha 1'}
     },
     pedidos_comerciais: {
-      '0019': {cliente: 'GLOW MAKE UP', dataPedido: '2026-08-01', total_qtd: 1000, itens: [{sku: 'GLMKAM04', descricao: 'GLOW MICELAR', qtd: 1000}]},
+      '0019': {cliente: 'GLOW MAKE UP', dataPedido: '2026-08-01', previsaoComercialEntrega: '2026-09-10', total_qtd: 1000, itens: [{sku: 'GLMKAM04', descricao: 'GLOW MICELAR', qtd: 1000}]},
       '0017': {cliente: 'AFEER', dataPedido: '2026-08-02', total_qtd: 4000,
         itens: [{sku: 'PRF-AFEE-0014', descricao: 'ZAFIYR 30ML', qtd: 3000}, {sku: 'NADA', descricao: 'ITEM SEM SAIDA', qtd: 1000}]},
       '0021': {cliente: 'OUTRO', dataPedido: '2026-08-03', total_qtd: 200, itens: [{sku: 'DIV', descricao: 'ITEM DIVERGENTE', qtd: 200}]}
@@ -69,7 +69,7 @@ async function abrir(browser, opts) {
             once(ev, cb) { if (cb) cb(snap); return Promise.resolve(snap); },
             on(ev, cb) { if (segurar && path === segurar) return cb; setTimeout(() => cb(snap), 0); return cb; },
             off() {}, child() { return this; }, orderByChild() { return this; }, equalTo() { return this; },
-            set() { return Promise.resolve(); }, update() { return Promise.resolve(); }, remove() { return Promise.resolve(); }};
+            set() { return Promise.resolve(); }, update(o) { (window.__updates = window.__updates || []).push(o); return Promise.resolve(); }, remove() { return Promise.resolve(); }};
         }};
       }
     };
@@ -102,6 +102,24 @@ const linha = (page, texto) => page.locator('#tableBody tr', {hasText: texto});
     assert.match(padrao, /ZAFIYR 30ML/);
     assert.match(padrao, /ITEM SEM SAIDA/, 'em andamento continua');
     assert.doesNotMatch(padrao, /ITEM FINALIZADO/, 'concluído sem estoque sai da lista de ação');
+    // ── Entrega (PCP): data por item, atraso, previsão do Comercial ao lado ──
+    const glowPad = page.locator('#tableBody tr', {hasText: 'GLOW MICELAR'});
+    assert.equal(await glowPad.locator('input.entrega-input').inputValue(), '2026-09-20');
+    assert.match(await glowPad.innerText(), /em atraso/);
+    assert.match(await glowPad.innerText(), /Comercial: 10\/09\/2026 ⚠/, 'PCP entrega depois do Comercial: aviso');
+    const semData = page.locator('#tableBody tr', {hasText: 'ITEM SEM SAIDA'}).locator('input.entrega-input');
+    assert.equal(await semData.inputValue(), '');
+    await semData.fill('2099-01-01');
+    await semData.dispatchEvent('change');
+    const ups = await page.evaluate(() => window.__updates || []);
+    const up = ups.find(u => 'pedidos/0017__NADA/dataEntregaPcp' in u);
+    assert.ok(up, 'gravou a data no item: ' + JSON.stringify(ups));
+    assert.equal(up['pedidos/0017__NADA/dataEntregaPcp'], '2099-01-01');
+    assert.ok(up['pedidos/0017__NADA/dataEntregaPcpPor'], 'registra quem definiu');
+    await semData.fill('');
+    await semData.dispatchEvent('change');
+    const ups2 = await page.evaluate(() => window.__updates || []);
+    assert.equal(ups2[ups2.length - 1]['pedidos/0017__NADA/dataEntregaPcp'], null, 'apagar limpa o campo');
     await page.selectOption('#filterStatus', 'finalizados');
     await page.waitForFunction(() => /ITEM FINALIZADO/.test(document.querySelector('#tableBody').innerText));
     const fin = await page.locator('#tableBody').innerText();
@@ -112,8 +130,8 @@ const linha = (page, texto) => page.locator('#tableBody tr', {hasText: texto});
     // ── 0. Cabeçalho e colspans casam ──────────────────────────────────
     const ths = (await page.locator('#tabPanelOps thead th').allTextContents()).map(t => t.trim());
     assert.ok(ths.includes('Expedido') && ths.includes('Conferência'), 'colunas novas no cabeçalho: ' + ths.join('|'));
-    assert.equal(ths.length, 12, 'a tabela por SKU tem 12 colunas');
-    assert.equal(await page.locator('#tableBody tr').first().locator('td').count(), 12, 'linha com o mesmo número de colunas do cabeçalho');
+    assert.equal(ths.length, 13, 'a tabela por SKU tem 13 colunas');
+    assert.equal(await page.locator('#tableBody tr').first().locator('td').count(), 13, 'linha com o mesmo número de colunas do cabeçalho');
 
     // ── 1. OK exato, com expedido de fato + furto e estoque no WMS ─────
     const glow = linha(page, 'GLOW MICELAR');
@@ -153,15 +171,20 @@ const linha = (page, texto) => page.locator('#tableBody tr', {hasText: texto});
 
     // ── 6. Agrupado por linha: cabeçalho de grupo cobre todas as colunas ─
     await page.selectOption('#groupBySel', 'linha');
-    assert.equal(await page.locator('#tableBody tr.group-header td').first().getAttribute('colspan'), '12');
+    assert.equal(await page.locator('#tableBody tr.group-header td').first().getAttribute('colspan'), '13');
     await page.selectOption('#groupBySel', '');
 
     // ── 7. Pedidos Comerciais: soma dos itens, situação do pior item ────
     await page.evaluate(() => switchPedidosTab('comerciais'));
     await page.selectOption('#filterStatusComercial', '');
     const thsPc = await page.locator('#tabPanelComerciais thead th').allInnerTexts();
-    assert.equal(thsPc.length, 10);
-    assert.equal(await page.locator('#pcTableBody tr').first().locator('td').count(), 10);
+    assert.equal(thsPc.length, 11);
+    assert.equal(await page.locator('#pcTableBody tr').first().locator('td').count(), 11);
+    // Entrega do pedido inteiro = maior data dos itens; o pedido 0019 tem 1 item com 20/09.
+    assert.match(await page.locator('#pcTableBody tr', {hasText: '#0019'}).innerText(), /20\/09\/2026/);
+    assert.doesNotMatch(await page.locator('#pcTableBody tr', {hasText: '#0019'}).innerText(), /em atraso/, 'pedido atendido não cobra prazo');
+    // Pedido 0017 tem 2 itens e nenhuma data: sem data, sem inventar.
+    assert.doesNotMatch(await page.locator('#pcTableBody tr', {hasText: '#0017'}).innerText(), /em atraso|sem data/);
     const pc17 = page.locator('#pcTableBody tr', {hasText: '#0017'});
     assert.match(await pc17.innerText(), /1\.020 \/ 4\.000/);
     assert.match(await pc17.innerText(), /Sem registro de saída/, 'um item OK e outro sem registro: vale o pior');
