@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — "Mudar de linha / trocar OPs" também para o PCP (2026-10-01).** Era só admin
+  em três pontos, todos ajustados para `admin` + `pcp`: botão no Painel de Turno
+  (`form.html`), abertura do modal (`shared/rearranjo-linhas-tela.js`) e o servidor
+  (`rearranjarLinhas` em `functions/index.js` + `functions/rearranjo_linhas.js`). Qualquer
+  outro perfil continua recusado. Testes: `run_rearranjo_linhas_test.js` (PCP rearranja e
+  preserva totais; produção/qualidade/usuário inexistente recusados) e
+  `run_rearranjo_linhas_ui_test.js` (PCP vê e abre; produção e qualidade não veem).
+  Arquivos ativos: nenhum.
+
 - **PUBLICADO — Rotulagem antes do envase não manda a OP ao PCP (2026-10-01).** Relato:
   Controle de OPs pedia para confirmar OPs que só tinham rotulagem. Medido: 26273/03
   (rot 1750, envase 0) e 26273/04 (rot 559, envase 0) em `Aguardando Confirmação`.

@@ -2,7 +2,7 @@
   var modal, atual;
   function el(tag,text){var n=document.createElement(tag);if(text)n.textContent=text;return n;}
   window.abrirRearranjoLinhas=function(origem,lote){
-    if(!window.currentUser || window.currentUser.role!=='admin') return;
+    if(!window.currentUser || ['admin','pcp'].indexOf(window.currentUser.role)<0) return;
     if(modal)modal.remove();
     atual={origem:origem,lote:lote,operacaoId:'rl_'+Date.now()+'_'+Math.random().toString(36).slice(2)};
     modal=el('div');modal.className='modal-overlay open';modal.id='rearranjoLinhasModal';

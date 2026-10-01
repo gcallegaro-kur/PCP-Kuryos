@@ -2,7 +2,7 @@
 const key = v => String(v || '').trim().replace(/[.\/[\]#$]/g, '-').replace(/\s+/g, '_').slice(0, 60);
 function rearranjar(base, data, uid, agora) {
   const fail = message => { throw new Error(message); };
-  if (!base.usuarios || !base.usuarios[uid] || base.usuarios[uid].role !== 'admin') fail('Somente administradores podem rearranjar linhas.');
+  if (!base.usuarios || !base.usuarios[uid] || !['admin', 'pcp'].includes(base.usuarios[uid].role)) fail('Somente PCP ou administradores podem rearranjar linhas.');
   const id = String(data.operacaoId || '');
   if (!/^[a-zA-Z0-9_-]{12,100}$/.test(id)) fail('Identificador de operação inválido.');
   const anterior = (base.rearranjos_linhas || {})[id];

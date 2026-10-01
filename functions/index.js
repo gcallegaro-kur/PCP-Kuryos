@@ -2228,11 +2228,11 @@ async function checkNotificacoesComercial(destinatarios) {
   }
 }
 
-// Rearranjo administrativo: alocações e pausas mudam juntas; registros permanecem na linha original.
+// Rearranjo (admin e PCP): alocações e pausas mudam juntas; registros permanecem na linha original.
 exports.rearranjarLinhas = onCall({timeoutSeconds:120,memory:'512MiB'}, async request => {
   if (!request.auth) throw new HttpsError('unauthenticated','Faça login.');
   const uid=request.auth.uid;
-  if ((await db.ref('usuarios/'+uid+'/role').get()).val() !== 'admin') throw new HttpsError('permission-denied','Somente administradores podem rearranjar linhas.');
+  if (!['admin','pcp'].includes((await db.ref('usuarios/'+uid+'/role').get()).val())) throw new HttpsError('permission-denied','Somente PCP ou administradores podem rearranjar linhas.');
   const agora=new Date().toISOString();
   let evento, falha;
   await db.ref().once('value');

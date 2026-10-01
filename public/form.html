@@ -4630,7 +4630,8 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
         '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar -- diferente de &quot;Parar&quot;" data-intervalo-nome="' + escapeHtml(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
     }
 
-    if (op && tipo === 'linha' && window.currentUser && window.currentUser.role === 'admin') {
+    // Admin e PCP (pedido do usuário, 01/10): quem reorganiza a fila é o PCP, não só o administrador.
+    if (op && tipo === 'linha' && window.currentUser && ['admin', 'pcp'].indexOf(window.currentUser.role) >= 0) {
       html += '<button type="button" class="andon-btn btn-neutral" data-rearranjar-lote="' + escapeHtml(op.lote) + '" data-rearranjar-origem="' + escapeHtml(nome) + '">⇄ Mudar de linha / trocar OPs</button>';
     }
     card.innerHTML = html;
