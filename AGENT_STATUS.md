@@ -134,9 +134,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   linha nova. Motivo: 26273/03 e /04 serão lançadas pelo retroativo (envase já fechado no
   chão). Teste em `run_apontamento_encerramento_test.js`. **Dado (autorizado em 01/10):**
   26273/03 gravada (status `Não Iniciado` + `confirmacaoEtapas/rotulagem` AGUARDANDO 1750,
-  fechadoEm 2026-09-30T14:54:15Z) — CLI confirmou, mas a releitura de conferência foi
-  bloqueada pelo classificador de permissões; 26273/04 (559) NÃO gravada, ficou com o
-  usuário. Backups em `backups/op-26273-0{3,4}-antes-20261001.json`. Arquivos ativos: nenhum.
+  fechadoEm 2026-09-30T14:54:15Z) e 26273/04 (559, fechadoEm 2026-09-30T17:55:08Z) gravadas
+  com autorização explícita do usuário; releitura conferida contra o backup: só `status` e
+  `confirmacaoEtapas` mudaram, rotulagem 1750/559 e envase 0 intactos. Próximo passo é do
+  chão: turno retroativo do envase das duas. Backups em `backups/op-26273-0{3,4}-antes-20261001.json`. Arquivos ativos: nenhum.
 
 - **PUBLICADO — PCP confirma cada encerramento de setor (2026-10-01).** Pedido: "neste
   momento, o PCP confirme cada apontamento, de rotulagem e de envase". Cada fechamento
