@@ -7,8 +7,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude — Consulta de Estoque + intermediários x embalagens (01/10/2026)
 
-- **Escopo:** nova tela `public/consulta_estoque.html` (consulta rápida, drawer de detalhe, filtros dinâmicos) e a aba "Intermediários e envase" (bulk liberado/retido x embalagens em estoque). Módulo puro `public/shared/consulta-estoque.js` + testes `run_consulta_estoque_*`. Entrada no menu em `public/auth_check.js` (só a lista de páginas do módulo logística/operação e o link).
-- **Arquivos ativos:** `public/consulta_estoque.html`, `public/shared/consulta-estoque.js`, `run_consulta_estoque_test.js`, `run_consulta_estoque_ui_test.js`, `public/auth_check.js` (linhas do menu), `AGENT_STATUS.md`. **Não toca** em `estoque.html` (continua sendo a tela de operação do WMS).
+- **PUBLICADO (`9df9603`, Hosting, 01/10):** `consulta_estoque.html` (menu Logística › Consulta de Estoque; PCP e Compras também) — só leitura, não toca `estoque.html`. Busca por palavras (nome/código/lote/endereço/cliente), filtros com contagem viva (tipo, situação, cliente, "já contado no Dia D"), drawer com lotes FEFO, empenhos por OP, dono, onde é usado, link ao Kardex, CSV, atalhos (`/`, setas, Esc), estado na URL. Aba **Intermediários e envase**: bulk manipulado x embalagem utilizável por OP (casamento por BOM da OP/BOM vigente; estoque de outro cliente e empenho de outras OPs não contam; material sem "Controla estoque" nunca trava), gargalo, e retidos da produção (`material_processo`).
+- **Arquivos:** `public/consulta_estoque.html`, `public/shared/consulta-estoque.js` (regras puras), `public/shared/consulta-estoque-tela.js`, `public/auth_check.js` (páginas dos módulos logistica/pedidos/planejamento/compras + links), `public/manual_estoque.html` (§5b), `run_consulta_estoque_test.js`, `run_consulta_estoque_ui_test.js`. Todos liberados; sem arquivos ativos.
+- **Validação:** teste de regras, teste de tela (Firebase simulado), ensaio contra a base real (182 itens, 10 OPs com 4.921 kg de bulk, render 27 ms, sem erros), regressões de menu (operação, movimentar, relatório de expedição, material em processo) e transações null. Hashes ao vivo = repo.
+- **Observação de dado:** hoje todas as 10 OPs aparecem "travadas por embalagem" porque o Dia D ainda não contou as embalagens (saldo 0/negativo). A tela diz isso; muda sozinha conforme os ajustes entrarem.
 
 ### Codex — rearranjo de linhas e retrabalho 21–22/09/2026
 
