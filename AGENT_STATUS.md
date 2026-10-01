@@ -127,6 +127,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Caixa por "unidades por caixa", consumo inteiro e material sem controle de
+  estoque (2026-10-01).** Arquivos ativos: `public/shared/utils.js`, `public/form.html`,
+  `public/manipulacao.html`, `public/emitir_op.html`, `public/cadastros.html`,
+  `public/estoque.html`, `public/separacao_materiais.html`, `public/insumos.html`, testes novos
+  e `AGENT_STATUS.md`.
+
 - **PUBLICADO — Estoque: coluna "Onde é usado" (2026-10-01).** Pedido: mostrar em quais
   BOMs/produtos o item é usado. `shared/onde-usado.js` (`OndeUsado.indice`): por produto
   ativo, só a versão vigente (maior, fora OBSOLETA) da fórmula (`mpCodigo`, %) e do BOM
