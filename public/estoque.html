@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
+  <script src="shared/onde-usado.js"></script>
   <script src="shared/seletor-endereco.js"></script>
   <script src="shared/expedicao-grade.js"></script>
   <script src="shared/conteudo-posicao.js"></script>
@@ -212,10 +213,11 @@
             <th data-sort="saldoAtual" style="text-align:right">Saldo Atual</th>
             <th data-sort="saldoEmpenhado" style="text-align:right">Empenhado</th>
             <th data-sort="saldoDisponivel" style="text-align:right">Disponível</th>
+            <th data-sort="usos" title="Produtos cuja fórmula ou BOM vigente usa este material">Onde é usado</th>
             <th data-sort="ultimaAtualizacao">Última Atualização</th>
             <th style="min-width:130px">Ações</th>
           </tr></thead>
-          <tbody id="esBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+          <tbody id="esBody"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -814,6 +816,33 @@ var allEstoqueLotes = {};   // itemKey -> {loteKey: lote}
 var allEnderecosEstoque = {};
 var motivosMovEstoqueAtivos = [];
 var expandedKeys = {}; // materialKey -> true, drill-down da aba Saldo Agregado
+// Onde é usado (01/10): mpCodigo -> usos nas fórmulas/BOMs vigentes (shared/onde-usado.js).
+var allFormulasEs = null, allBomEs = null, indiceUsos = {};
+function recalcularUsos() {
+  if (allFormulasEs === null || allBomEs === null) return;
+  indiceUsos = OndeUsado.indice({formulas: allFormulasEs, bom: allBomEs, produtos: allProdutos});
+  renderEstoqueAgregado();
+}
+function usosDe(e, key) { return indiceUsos[(e && e.materialCodigo) || key] || []; }
+function ondeUsadoCelula(e, key) {
+  var prods = OndeUsado.produtosDistintos(usosDe(e, key));
+  if (allFormulasEs === null || allBomEs === null) return '<span style="color:var(--muted)">…</span>';
+  if (!prods.length) return '<span style="color:var(--muted)">Nenhum produto</span>';
+  return '<button class="btn btn-ghost btn-sm es-expandir es-usos" data-key="' + escapeAttr(key) + '" title="Ver todos os produtos">' +
+    '<b>' + prods.length + ' produto' + (prods.length > 1 ? 's' : '') + '</b></button>' +
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' + prods.slice(0, 2).map(function(u) { return escapeHtml(u.sku); }).join(', ') + (prods.length > 2 ? ' e +' + (prods.length - 2) : '') + '</div>';
+}
+function ondeUsadoDrillHtml(e, key) {
+  var usos = usosDe(e, key);
+  if (!usos.length) return '<div class="empty-hint" style="margin-top:10px">Nenhuma fórmula ou BOM vigente usa este material.</div>';
+  return '<div style="font-weight:700;margin:12px 0 4px">Onde é usado (' + OndeUsado.produtosDistintos(usos).length + ' produto(s))</div>' +
+    '<table><thead><tr><th>Produto</th><th>Cliente</th><th>Em</th><th>Versão</th><th style="text-align:right">Quantidade</th></tr></thead><tbody>' +
+    usos.map(function(u) {
+      return '<tr><td><b>' + escapeHtml(u.sku) + '</b> — ' + escapeHtml(u.descricao) + '</td><td>' + escapeHtml(u.cliente || '—') + '</td>' +
+        '<td>' + escapeHtml(u.via) + '</td><td>' + escapeHtml(u.versao) + ' <span class="badge ' + (u.status === 'APROVADA' ? 'badge-green' : 'badge-gray') + '">' + escapeHtml(u.status === 'APROVADA' ? 'aprovada' : 'rascunho') + '</span></td>' +
+        '<td style="text-align:right">' + fmtNum(u.quantidade) + ' ' + escapeHtml(u.unidadeQtd) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    Aba: Saldo Agregado (MP/Embalagem) -- migrado de compras.html (a aba
@@ -829,17 +858,19 @@ function renderEstoqueAgregado() {
   var search = norm(document.getElementById('esSearch').value);
   var rows = Object.entries(allEstoque).filter(function(e) {
     if (!search) return true;
-    return (norm(e[1].materialCodigo) + ' ' + norm(e[1].materialNome)).indexOf(search) !== -1;
+    // Também acha pelo produto que usa o material (SKU, descrição, cliente).
+    return (norm(e[1].materialCodigo) + ' ' + norm(e[1].materialNome) + ' ' + norm(OndeUsado.textoBusca(usosDe(e[1], e[0])))).indexOf(search) !== -1;
   });
   rows = esSortable.applySort(rows, function(entry, field) {
     if (field === 'saldoDisponivel') return (entry[1].saldoAtual || 0) - (entry[1].saldoEmpenhado || 0);
+    if (field === 'usos') return OndeUsado.produtosDistintos(usosDe(entry[1], entry[0])).length;
     return entry[1][field];
   });
 
   document.getElementById('esCount').textContent = 'Estoque (' + rows.length + ' material(is) com movimento)';
   var tbody = document.getElementById('esBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">' + (Object.keys(allEstoque).length ? 'Nenhum material encontrado com esse filtro.' : 'Nenhum material com movimento de estoque ainda -- o saldo aparece aqui a partir do primeiro recebimento em Logística.') + '</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(function(entry) {
@@ -851,10 +882,11 @@ function renderEstoqueAgregado() {
       '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + partesDonoHtml(e) + '</td>' +
       '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
       '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
+      '<td>' + ondeUsadoCelula(e, key) + '</td>' +
       '<td style="font-size:12px">' + fmtData(e.ultimaAtualizacao) + '</td>' +
       '<td><button class="btn btn-ghost btn-sm es-ajustar" data-key="' + escapeAttr(key) + '">⚖️ Ajustar</button></td>' +
     '</tr>';
-    if (expandedKeys[key]) linhas += '<tr class="row-lotes"><td colspan="6"><div class="row-lotes-inner">' + renderLotesDrillDownHtml(key) + '</div></td></tr>';
+    if (expandedKeys[key]) linhas += '<tr class="row-lotes"><td colspan="7"><div class="row-lotes-inner">' + renderLotesDrillDownHtml(key) + ondeUsadoDrillHtml(e, key) + '</div></td></tr>';
     return linhas;
   }).join('');
   tbody.querySelectorAll('.es-ajustar').forEach(function(btn) {
@@ -2691,7 +2723,10 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutos = snap.val() || {};
       renderConferenciaPA();
+      recalcularUsos();
     });
+    dbOnValue(db.ref('formulas'), function(snap) { allFormulasEs = snap.val() || {}; recalcularUsos(); });
+    dbOnValue(db.ref('bom'), function(snap) { allBomEs = snap.val() || {}; recalcularUsos(); });
     dbOnValue(db.ref('ops'), function(snap) {
       allOps = snap.val() || {};
       renderConferenciaPA();

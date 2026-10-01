@@ -17,7 +17,10 @@ function dados() {
     'usuarios/u1': {nome: 'Gustavo', email: 'g@kuryos.com', role: 'admin'},
     config: {},
     clientes: {MRAR: {nome: 'MISS ROSE', ativo: true}, SEUNO: {nome: 'SEUNOURA BEAUTY LTDA', ativo: true}},
-    produtos: {MRARBS05: {clienteKey: 'MRAR', cliente: 'MISS RÔSE'}, MRARBS08: {clienteKey: 'MRAR'}, 'BSP-SEUN-0001': {cliente: 'SEUNOURA', clienteKey: 'SEUNO'}},
+    produtos: {MRARBS05: {sku: 'MRARBS05', descricao: 'BODY SPLASH 200ML', clienteKey: 'MRAR', cliente: 'MISS RÔSE'}, MRARBS08: {clienteKey: 'MRAR'}, 'BSP-SEUN-0001': {cliente: 'SEUNOURA', clienteKey: 'SEUNO'}},
+    // Onde é usado (01/10): a válvula está no BOM vigente do MRARBS05.
+    formulas: {},
+    bom: {MRARBS05__v1: {codProduto: 'MRARBS05', versao: 'v1', status: 'APROVADA', itens: {v: {materialCodigo: 'VAL-1', qtdPorPeca: 1}}}},
     pedidos: {
       '0006__MRARBS05': {id: '0006', parentPedidoId: '0006', sku: 'MRARBS05', cliente: 'MISS RÔSE', status: 'Produção Parcial', qtdTotal: 10, produzido: 1},
       '0011__MRARBS08': {id: '0011', parentPedidoId: '0011', sku: 'MRARBS08', cliente: 'MISS RÔSE', status: 'Concluído', qtdTotal: 10, produzido: 10},
@@ -262,6 +265,17 @@ async function abrir(browser, pagina, host) {
     p = e.page;
     await p.waitForSelector('#esBody tr');
     assert.match(await p.locator('#esBody tr').first().innerText(), /Kuryos 70 · MISS ROSE 100/);
+    // Onde é usado: contagem na coluna, lista completa ao abrir a linha, busca pelo produto.
+    await p.waitForFunction(() => /1 produto/.test(document.querySelector('#esBody tr').innerText));
+    assert.match(await p.locator('#esBody tr').first().innerText(), /1 produto\s*MRARBS05/);
+    await p.locator('#esBody .es-usos').first().click();
+    assert.match(await p.locator('#esBody .row-lotes').innerText(), /Onde é usado \(1 produto\(s\)\)[\s\S]*MRARBS05 — BODY SPLASH 200ML[\s\S]*MISS RÔSE[\s\S]*BOM[\s\S]*v1[\s\S]*aprovada[\s\S]*1 por peça/);
+    await p.fill('#esSearch', 'MRARBS05');
+    await p.waitForFunction(() => /VAL-1/.test(document.getElementById('esBody').innerText));
+    await p.fill('#esSearch', 'produto-que-nao-existe');
+    await p.waitForFunction(() => /Nenhum material encontrado/.test(document.getElementById('esBody').innerText));
+    await p.fill('#esSearch', '');
+    ok('estoque mostra onde o material é usado e acha pelo produto');
     await p.selectOption('#propCliente', 'MRAR');
     await p.waitForSelector('#esCardCliente:not([style*="none"])');
     let cli = await p.locator('#esBodyCliente').innerText();

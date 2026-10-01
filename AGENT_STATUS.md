@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Estoque: coluna "Onde é usado" (2026-10-01).** Pedido: mostrar em quais
+  BOMs/produtos o item é usado. `shared/onde-usado.js` (`OndeUsado.indice`): por produto
+  ativo, só a versão vigente (maior, fora OBSOLETA) da fórmula (`mpCodigo`, %) e do BOM
+  (`materialCodigo`, por peça). `estoque.html` aba Estoque: coluna com nº de produtos +
+  2 SKUs, lista completa no drill-down da linha, ordenação e busca por SKU/descrição/
+  cliente do produto. Base: 144 de 151 materiais com saldo têm uso; água em 169 produtos.
+  Testes `run_onde_usado_test.js` e caso novo em `run_propriedade_estoque_ui_test.js`.
+  Arquivos ativos: nenhum.
+
 - **PUBLICADO — Kardex: contagens, aba Histórico e itemTipo (2026-10-01).** Pendências do
   kardex resolvidas: (1) `contagens_inventario` vira linha informativa "Contagem de
   inventário" no item (contado × sistema, diferença, ajuste aplicado ou não) e coluna
