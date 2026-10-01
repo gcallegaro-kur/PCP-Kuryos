@@ -139,6 +139,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **DADO — Regularização de PA expedido fora do sistema (2026-10-01).** Pedido do usuário
+  (lista da Expedição): baixar todo PA em estoque exceto 26258/02-04, 26264/06, /07, /13,
+  /17, 26273/03, /04 e 26267/03. Com autorização: 60 paletes de 50 lotes (110.948 un)
+  zerados como a saída real faz (`saldoLote 0`, `status EXPEDIDO`, `expedicaoId
+  regularizacao_20261001`, expedidoEm/Por) + `movimentos_estoque/{sku}/regularizacao_20261001_{lote}`
+  (`expedicao_pa`, "SAÍDA DE PA FORA DO SISTEMA (REGULARIZAÇÃO)"); carga Glow Make Up
+  `73eac72c…` (AGENDADO, 18 paletes, todos na baixa) CANCELADA com motivo. Piloto + resto,
+  conferido: 425 caminhos, nenhum outro lote mudou, 13 paletes dos 10 lotes ficaram, kardex
+  concilia. **Pedidos NÃO alterados** (usuário: "só estoque, mas conferir os pedidos"):
+  26 pedidos com `expedido` 0; 6 com saída+estoque > produzido (PED-0008 MRARBS07, PED-0002
+  MRARBS04, 0019 GLMKAM01/03, 0020 KUBPBA01-2, 26 ESF-SEUN-0001); 4 paletes sem pedido
+  (PEL-SEUN-0001, PRF-AFEE-0032, KUBPBA02, PRF-PROP-0001); skuPedidoKey dos paletes sem zeros
+  ("19__" × "0019__"). Backups em `backups/estoque_lotes-antes-regularizacao-20261001.json`
+  e `backups/carga-73eac72c-antes-cancelamento-20261001.json`.
+
 - **PUBLICADO — "1 a cada N peças", consumo inteiro e material sem controle de estoque
   (2026-10-01).** Pedidos: caixa de papelão como unidades por caixa em vez de 0,020833;
   consumo/estoque nunca em fração; itens como água sem controle de estoque. `utils.js`:
