@@ -178,7 +178,9 @@ var db = firebase.database();
 
 /* Kardex de estoque (01/10). Motor em shared/kardex.js; aqui só a tela.
    Nada é gravado. */
-var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: null, produtos: null, enderecos: null};
+var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: null, produtos: null, enderecos: null, bombonas: null, materialProcesso: null};
+// dados + material em processo (bombonas e sobras) convertido em movimentos.
+var base = null;
 var catalogoAtual = {}, itemSel = null, abaAtual = 'item', concAtual = [];
 
 function setStatus(on, txt) {
@@ -214,8 +216,9 @@ function nomeEndereco(l) {
 
 function recalcular() {
   if (!prontos()) return;
-  catalogoAtual = Kardex.catalogo(dados);
-  concAtual = Kardex.conciliacao(dados);
+  base = Kardex.comMaterialProcesso(dados);
+  catalogoAtual = Kardex.catalogo(base);
+  concAtual = Kardex.conciliacao(base);
   if (abaAtual === 'conc') renderConc();
   if (itemSel) renderItem();
   var alvo = new URLSearchParams(location.search).get('item');
@@ -286,7 +289,7 @@ function renderItem() {
   if (!itemSel || !prontos()) return;
   var it = catalogoAtual[itemSel] || {codigo: itemSel};
   var p = periodo();
-  var r = Kardex.montar({movimentos: dados.movimentos[itemSel], estoqueItem: dados.estoque[itemSel], lotes: dados.estoqueLotes[itemSel], desde: p.desde, ate: p.ate});
+  var r = Kardex.montar(Object.assign(Kardex.opcoesDoItem(base, itemSel), {desde: p.desde, ate: p.ate}));
   resultadoAtual = r;
   var un = it.unidade || '';
   var nat = document.getElementById('fNatureza').value;
@@ -298,7 +301,7 @@ function renderItem() {
   }).slice().reverse(); // mais recente em cima
   var t = r.periodo.totais;
   var saidas = t.SAIDA + t.CONSUMO + t.PERDA;
-  var razaoTxt = r.razao === 'item' ? 'Saldo do item (estoque agregado)' : 'Soma dos lotes';
+  var razaoTxt = base.processo && base.processo[itemSel] ? 'Material em processo (bombonas e sobras)' : r.razao === 'item' ? 'Saldo do item (estoque agregado)' : 'Soma dos lotes';
 
   var html = '<div class="item-cab"><div><h2>' + esc(it.codigo) + (it.nome ? ' — ' + esc(it.nome) : '') + '</h2>' +
     '<div class="sub">' + esc(ROT_GRUPO[grupoDoItem(it)]) + ' · ' + esc(razaoTxt) + (un ? ' · ' + esc(un) : '') + '</div></div>' +
@@ -450,7 +453,7 @@ var _cb = null;
 document.getElementById('cBusca').addEventListener('input', function() { clearTimeout(_cb); _cb = setTimeout(renderConc, 200); });
 
 db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ? 'Conectado' : 'Reconectando...'); });
-[['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos']].forEach(function(p) {
+[['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos'], ['bombonas_bulk', 'bombonas'], ['material_processo', 'materialProcesso']].forEach(function(p) {
   dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
 });
 if (new URLSearchParams(location.search).get('aba') === 'conciliacao') irParaAba('conc');

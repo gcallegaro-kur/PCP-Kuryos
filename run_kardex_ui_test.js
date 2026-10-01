@@ -28,6 +28,10 @@ function dados() {
       },
       'BULK-26270-01': {B1: {itemTipo: 'intermediario', itemCodigo: 'BULK-26270/01', itemNome: 'BULK BODY SPLASH', unidade: 'kg', saldoLote: 480}}
     },
+    bombonas_bulk: {'BB-0007': {codigo: 'BB-0007', tipo: 'BOMBONA', conteudo: {lote: '26280/01', produto: 'BODY SPLASH IDOLA', kg: 120}, historico: {
+      h1: {tipo: 'ENCHER', kgAntes: 0, kgDepois: 200, lote: '26280/01', opKey: '26280-01', origem: 'MANIPULACAO', por: 'Léo', em: H('2026-09-30T15:00')},
+      h2: {tipo: 'AJUSTE', kgAntes: 200, kgDepois: 120, lote: '26280/01', motivo: 'retirada para envase', por: 'Léo', em: H('2026-10-01T08:00')}}}},
+    material_processo: {},
     movimentos_estoque: {
       'EP-00095': {
         a: {tipo: 'recebimento_pc', motivo: 'RECEBIMENTO', qtd: 5000, saldoApos: null, ref: 'PC-0012', loteKey: 'L1', enderecoKey: 'e1', itemTipo: 'material', itemCodigo: 'EP-00095', autor: 'Ana', em: H('2026-09-10T08:00')},
@@ -149,12 +153,23 @@ const linhasMov = (page) => page.locator('#itemConteudo table').first().locator(
     assert.match(await page.locator('#itemConteudo').textContent(), /Lotes com saldo \(2\)[\s\S]*Soma: 2\.661/);
 
     // ── Intermediário sem cadastro aparece pela busca ──
-    await page.fill('#fItem', 'bulk');
+    await page.fill('#fItem', 'BULK-26270');
     await page.waitForSelector('.sug');
     assert.match(await page.locator('.sug').first().innerText(), /BULK-26270\/01[\s\S]*Intermediário/);
     await page.locator('.sug').first().click();
     await cab(page, 'BULK-26270');
     assert.match(await page.locator('#itemConteudo').innerText(), /Intermediário[\s\S]*Conciliado[\s\S]*480/);
+
+    // ── Bulk em bombona (Material em Processo) ──
+    await page.fill('#fItem', '26280');
+    await page.waitForSelector('.sug');
+    assert.match(await page.locator('.sug').first().innerText(), /BULK 26280\/01 — Bulk — BODY SPLASH IDOLA[\s\S]*Intermediário/);
+    await page.locator('.sug').first().click();
+    await cab(page, 'BULK 26280');
+    assert.match(await page.locator('.item-cab').innerText(), /Material em processo \(bombonas e sobras\)[\s\S]*Conciliado/);
+    const lb = await linhasMov(page);
+    assert.match(lb[0], /Ajuste de kg na bombona[\s\S]*retirada para envase[\s\S]*BB-0007[\s\S]*Léo[\s\S]*80[\s\S]*120/);
+    assert.match(lb[1], /Bulk na bombona[\s\S]*26280-01[\s\S]*200/);
 
     // ── Material com saldo anterior ao log ──
     await page.fill('#fItem', 'EP-00051');
@@ -168,14 +183,14 @@ const linhasMov = (page) => page.locator('#itemConteudo table').first().locator(
     // ── Conciliação ──
     await page.click('.aba[data-aba="conc"]');
     await page.waitForFunction(() => /Itens \(/.test(document.getElementById('cTitulo').textContent));
-    assert.match(await page.locator('#cTiles').innerText(), /4\s*Itens com saldo ou movimento[\s\S]*3\s*Conciliados[\s\S]*1\s*Com saldo sem movimento/);
+    assert.match(await page.locator('#cTiles').innerText(), /5\s*Itens com saldo ou movimento[\s\S]*4\s*Conciliados[\s\S]*1\s*Com saldo sem movimento/);
     assert.equal(await page.locator('#cBody tr').count(), 1, 'padrão: só divergentes');
     assert.match(await page.locator('#cBody').innerText(), /EP-00051[\s\S]*-377/);
     await page.selectOption('#cSituacao', '');
-    assert.equal(await page.locator('#cBody tr').count(), 4);
+    assert.equal(await page.locator('#cBody tr').count(), 5);
     await page.selectOption('#cTipo', 'INT');
-    assert.equal(await page.locator('#cBody tr').count(), 1);
-    await page.locator('#cBody [data-abrir]').click();
+    assert.equal(await page.locator('#cBody tr').count(), 2, 'bulk do lote e bulk em bombona');
+    await page.locator('#cBody tr', {hasText: 'BULK-26270'}).locator('[data-abrir]').click();
     await page.waitForFunction(() => document.getElementById('pItem').classList.contains('on') && /BULK-26270/.test(document.querySelector('.item-cab h2').textContent));
 
     // ── Celular: nada vaza para o lado ──

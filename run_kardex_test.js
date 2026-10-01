@@ -100,6 +100,45 @@ assert.equal(linhasCsv.length, 3);
 assert.match(linhasCsv[2], /"a;b"/);
 assert.match(linhasCsv[2], /-1,5;-1,5$/);
 
+// ── 9. Material em processo (bombonas_bulk + material_processo, sessão "Material em Processo").
+const mp = K.comMaterialProcesso({
+  movimentos: {},
+  bombonas: {
+    'BB-0001': {codigo: 'BB-0001', conteudo: {lote: '26270/01', produto: 'BODY SPLASH', kg: 150}, historico: {
+      h1: {tipo: 'ENCHER', kgAntes: 0, kgDepois: 200, lote: '26270/01', opKey: '26270-01', origem: 'MANIPULACAO', por: 'Léo', em: '2026-10-01T10:00:00Z'},
+      h2: {tipo: 'AJUSTE', kgAntes: 200, kgDepois: 150, lote: '26270/01', motivo: 'retirada para envase', por: 'Léo', em: '2026-10-01T14:00:00Z'}}},
+    'BB-0002': {codigo: 'BB-0002', conteudo: null, historico: {
+      h1: {tipo: 'ENCHER', kgAntes: 0, kgDepois: 80, lote: '26265/02', em: '2026-09-30T10:00:00Z'},
+      h2: {tipo: 'ESVAZIAR', kgAntes: 80, kgDepois: 0, lote: '26265/02', motivo: 'envasado', em: '2026-10-01T09:00:00Z'}}}
+  },
+  materialProcesso: {
+    s1: {tipo: 'FRASCO_ROTULADO', sku: 'SKU-9', produto: 'BODY SPLASH', lote: '26267/04', qtd: 1200, unidade: 'un', status: 'EM_PROCESSO', em: '2026-09-30T18:00:00Z', declaradoPor: 'Ana', donoNome: 'MISS RÔSE'},
+    s2: {tipo: 'FRASCO_ROTULADO', sku: 'SKU-9', produto: 'BODY SPLASH', lote: '26260/01', qtd: 300, unidade: 'un', status: 'USADO', em: '2026-09-20T18:00:00Z', baixa: {por: 'PCP', em: '2026-09-25T10:00:00Z', motivo: 'usado na 26267/04'}},
+    s3: {tipo: 'BULK', lote: '26270/01', qtd: 40, unidade: 'kg', status: 'EM_PROCESSO', recipienteCodigo: 'BB-0001', em: '2026-10-01T15:00:00Z'},
+    s4: {tipo: 'BULK', lote: '26271/01', produto: 'ÁGUA MICELAR', qtd: 12, unidade: 'kg', status: 'EM_PROCESSO', em: '2026-10-01T15:00:00Z'}
+  }
+});
+const catMp = K.catalogo(mp);
+assert.equal(catMp['proc_bulk_26270-01'].itemTipo, 'intermediario');
+assert.equal(catMp['proc_bulk_26270-01'].nome, 'Bulk — BODY SPLASH');
+r = K.montar(K.opcoesDoItem(mp, 'proc_bulk_26270-01'));
+assert.equal(r.saldoSistema, 150, 'kg na bombona; a sobra com recipiente não conta duas vezes');
+assert.equal(r.conciliado, true, JSON.stringify(r.alertas));
+assert.deepEqual(r.linhas.map((l) => l.rotulo + ' ' + l.efeito), ['Bulk na bombona/tanque 200', 'Ajuste de kg na bombona -50']);
+assert.equal(r.linhas[0].enderecoCodigo, 'BB-0001');
+r = K.montar(K.opcoesDoItem(mp, 'proc_bulk_26265-02'));
+assert.equal(r.saldoSistema, 0);
+assert.equal(r.conciliado, true);
+assert.equal(r.linhas[1].natureza, 'SAIDA');
+r = K.montar(K.opcoesDoItem(mp, 'proc_rot_SKU-9'));
+assert.equal(r.saldoSistema, 1200);
+assert.equal(r.conciliado, true);
+assert.deepEqual(r.linhas.map((l) => l.tipo), ['mp_sobra', 'mp_usado', 'mp_sobra']);
+assert.equal(r.linhas[2].cliente, 'MISS RÔSE');
+r = K.montar(K.opcoesDoItem(mp, 'proc_bulk_26271-01'));
+assert.equal(r.saldoSistema, 12, 'bulk sem bombona entra pela sobra');
+assert.ok(K.conciliacao(mp).every((x) => x.conciliado));
+
 // ── Ensaio contra a base (lição do MRP: dado real acha o que asserção sintética não acha).
 const base = process.env.KARDEX_BASE;
 if (base) {

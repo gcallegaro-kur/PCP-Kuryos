@@ -55,7 +55,18 @@
     qualidade:                 {rotulo: 'Laudo da Qualidade',         natureza: 'QUALIDADE', razao: 'nenhuma'},
     // Sintético (não existe no banco): lote importado da planilha antiga,
     // que nunca teve movimento de entrada no log.
-    implantacao_lote:          {rotulo: 'Saldo implantado (planilha)', natureza: 'AJUSTE',  razao: 'lote'}
+    implantacao_lote:          {rotulo: 'Saldo implantado (planilha)', natureza: 'AJUSTE',  razao: 'lote'},
+    // Material em processo (sessão "Material em Processo", 01/10): bombonas e
+    // tanques de bulk (bombonas_bulk/{cod}/historico) e sobras/retidos
+    // (material_processo/). Não passam por movimentos_estoque; o kardex os
+    // converte em movimentos (movimentosMaterialProcesso, abaixo).
+    mp_encher:                 {rotulo: 'Bulk na bombona/tanque',      natureza: 'ENTRADA',  razao: 'ambas'},
+    mp_ajuste:                 {rotulo: 'Ajuste de kg na bombona',     natureza: 'AJUSTE',   razao: 'ambas'},
+    mp_esvaziar:               {rotulo: 'Bombona esvaziada',           natureza: 'SAIDA',    razao: 'ambas'},
+    mp_sobra:                  {rotulo: 'Sobra declarada na OP',       natureza: 'ENTRADA',  razao: 'ambas'},
+    mp_usado:                  {rotulo: 'Sobra reaproveitada',         natureza: 'CONSUMO',  razao: 'ambas'},
+    mp_descartado:             {rotulo: 'Sobra descartada',            natureza: 'PERDA',    razao: 'ambas'},
+    mp_devolvido:              {rotulo: 'Sobra devolvida ao estoque',  natureza: 'SAIDA',    razao: 'ambas'}
   };
   var ORIGENS_SEM_LOG = {legado_planilha: 'planilha antiga'};
   var NATUREZAS = {
@@ -91,7 +102,8 @@
   function montar(o) {
     var opts = o || {};
     var razao = opts.razao || razaoDoItem(opts.estoqueItem);
-    var saldoSistema = razao === 'item' ? arred(num(opts.estoqueItem && opts.estoqueItem.saldoAtual)) : saldoDosLotes(opts.lotes);
+    var saldoSistema = opts.saldoSistema != null ? arred(num(opts.saldoSistema))
+      : razao === 'item' ? arred(num(opts.estoqueItem && opts.estoqueItem.saldoAtual)) : saldoDosLotes(opts.lotes);
     var movs = Object.keys(opts.movimentos || {}).map(function(id) {
       var m = opts.movimentos[id] || {};
       return Object.assign({id: id}, m);
@@ -212,6 +224,12 @@
       var e = d.estoque[k] || {};
       por(k, {codigo: e.materialCodigo || k, nome: e.materialNome, unidade: e.unidade, itemTipo: 'material'});
     });
+    // Material em processo antes do log: os movimentos sintéticos não trazem
+    // itemCodigo, e o primeiro a preencher o código vence.
+    Object.keys(d.processo || {}).forEach(function(k) {
+      var p = d.processo[k];
+      por(k, {codigo: p.codigo, nome: p.nome, unidade: p.unidade, itemTipo: 'intermediario', grupo: p.grupo});
+    });
     [d.estoqueLotes || {}, d.movimentos || {}].forEach(function(fonte) {
       Object.keys(fonte).forEach(function(k) {
         if (k.charAt(0) === '_') return; // movimentos_estoque/_enderecos etc.
@@ -222,9 +240,16 @@
     });
     Object.keys(out).forEach(function(k) {
       out[k].temMovimento = !!(d.movimentos && d.movimentos[k]);
-      out[k].temSaldo = !!((d.estoque && d.estoque[k]) || (d.estoqueLotes && d.estoqueLotes[k]));
+      out[k].temSaldo = !!((d.estoque && d.estoque[k]) || (d.estoqueLotes && d.estoqueLotes[k]) || (d.processo && d.processo[k]));
     });
     return out;
+  }
+
+  // Opções de montar() para um item, inclusive material em processo.
+  function opcoesDoItem(d, k) {
+    var proc = d.processo && d.processo[k];
+    return {movimentos: (d.movimentos || {})[k], estoqueItem: (d.estoque || {})[k], lotes: (d.estoqueLotes || {})[k],
+      razao: proc ? 'lote' : undefined, saldoSistema: proc ? proc.saldo : undefined};
   }
 
   /* Conciliação geral (auditoria): um resumo por item que tem saldo ou
@@ -233,7 +258,7 @@
     var d = c || {};
     var cat = catalogo(d);
     return Object.keys(cat).filter(function(k) { return cat[k].temMovimento || cat[k].temSaldo; }).map(function(k) {
-      var r = montar({movimentos: (d.movimentos || {})[k], estoqueItem: (d.estoque || {})[k], lotes: (d.estoqueLotes || {})[k]});
+      var r = montar(opcoesDoItem(d, k));
       var ultimo = r.linhas.length ? r.linhas[r.linhas.length - 1].em : null;
       return {key: k, codigo: cat[k].codigo, nome: cat[k].nome || '', itemTipo: cat[k].itemTipo, unidade: cat[k].unidade || '',
         razao: r.razao, saldoSistema: r.saldoSistema, saldoLog: r.saldoLog, semOrigem: r.semOrigem,
@@ -243,6 +268,82 @@
       return (a.conciliado ? 1 : 0) - (b.conciliado ? 1 : 0) || Math.abs(b.semOrigem) - Math.abs(a.semOrigem) ||
         String(a.codigo).localeCompare(String(b.codigo));
     });
+  }
+
+  /* Material em processo -> movimentos do kardex.
+     Itens (chave com prefixo "proc_", que não colide com cadastro):
+       bulk de um lote  -> proc_bulk_{lote}: bombonas (histórico ENCHER/AJUSTE/
+                           ESVAZIAR, delta = kgDepois − kgAntes) + sobra de BULK
+                           sem recipiente (com recipiente, a bombona já conta);
+       frasco rotulado  -> proc_rot_{sku|produto};
+       componente       -> proc_comp_{materialCodigo}.
+     Sobra: entrada em `em`; baixa (USADO/DESCARTADO/DEVOLVIDO) sai em baixa.em.
+     Saldo do sistema = kg nas bombonas do lote + sobras EM_PROCESSO. */
+  function movimentosMaterialProcesso(o) {
+    var d = o || {};
+    var movimentos = {}, itens = {};
+    function sk(v) { return String(v || '').replace(/[.#$\[\]\/\s]/g, '-'); }
+    function item(key, info) {
+      itens[key] = itens[key] || Object.assign({key: key, itemTipo: 'intermediario', saldo: 0}, info);
+      return itens[key];
+    }
+    function mov(key, id, m) { (movimentos[key] = movimentos[key] || {})[id] = m; }
+    Object.keys(d.bombonas || {}).forEach(function(cod) {
+      var rec = d.bombonas[cod] || {};
+      var c = rec.conteudo || null;
+      if (c && c.lote) {
+        var it = item('proc_bulk_' + sk(c.lote), {codigo: 'BULK ' + c.lote, nome: 'Bulk' + (c.produto ? ' — ' + c.produto : ''), unidade: 'kg', grupo: 'BULK'});
+        it.saldo = arred(it.saldo + num(c.kg));
+      }
+      Object.keys(rec.historico || {}).forEach(function(hid) {
+        var h = rec.historico[hid] || {};
+        if (!h.lote || !h.em) return;
+        var key = 'proc_bulk_' + sk(h.lote);
+        item(key, {codigo: 'BULK ' + h.lote, nome: 'Bulk', unidade: 'kg', grupo: 'BULK'});
+        var tipo = h.tipo === 'ENCHER' ? 'mp_encher' : h.tipo === 'ESVAZIAR' ? 'mp_esvaziar' : 'mp_ajuste';
+        mov(key, cod + '_' + hid, {tipo: tipo, qtd: arred(num(h.kgDepois) - num(h.kgAntes)), em: h.em, ref: h.opKey || null,
+          motivo: h.motivo || (h.origem ? 'Origem: ' + h.origem : ''), enderecoCodigo: cod, autor: h.por || null,
+          itemTipo: 'intermediario', unidade: 'kg'});
+      });
+    });
+    Object.keys(d.materialProcesso || {}).forEach(function(id) {
+      var r = d.materialProcesso[id] || {};
+      if (!r.tipo || !r.em) return;
+      var key, info;
+      if (r.tipo === 'BULK') {
+        if (r.recipienteCodigo) return; // a bombona já registra este bulk
+        key = 'proc_bulk_' + sk(r.lote);
+        info = {codigo: 'BULK ' + r.lote, nome: 'Bulk' + (r.produto ? ' — ' + r.produto : ''), unidade: r.unidade || 'kg', grupo: 'BULK'};
+      } else if (r.tipo === 'FRASCO_ROTULADO') {
+        key = 'proc_rot_' + sk(r.sku || r.produto);
+        info = {codigo: 'ROTULADO ' + (r.sku || r.produto || ''), nome: 'Frascos rotulados' + (r.produto ? ' — ' + r.produto : ''), unidade: r.unidade || 'un', grupo: 'ROTULADO'};
+      } else {
+        key = 'proc_comp_' + sk(r.materialCodigo || r.descricao);
+        info = {codigo: 'EM PROCESSO ' + (r.materialCodigo || ''), nome: (r.descricao || 'Componente') + ' (sobra em processo)', unidade: r.unidade || '', grupo: 'COMPONENTE'};
+      }
+      var it = item(key, info);
+      if (r.produto && /^Bulk$/.test(it.nome)) it.nome = 'Bulk — ' + r.produto;
+      var q = arred(num(r.qtd));
+      mov(key, id + '_e', {tipo: 'mp_sobra', qtd: q, em: r.em, ref: r.lote || r.opKey || null, motivo: r.descricao || '',
+        autor: r.declaradoPor || null, itemTipo: 'intermediario', unidade: info.unidade,
+        propriedade: r.donoNome ? {clienteNome: r.donoNome} : null});
+      if (r.status && r.status !== 'EM_PROCESSO') {
+        var b = r.baixa || {};
+        mov(key, id + '_s', {tipo: r.status === 'USADO' ? 'mp_usado' : r.status === 'DESCARTADO' ? 'mp_descartado' : 'mp_devolvido',
+          qtd: -q, em: b.em || r.em, ref: r.lote || r.opKey || null, motivo: b.motivo || '', autor: b.por || null,
+          itemTipo: 'intermediario', unidade: info.unidade});
+      } else {
+        it.saldo = arred(it.saldo + q);
+      }
+    });
+    return {movimentos: movimentos, itens: itens};
+  }
+
+  /* Junta o material em processo aos dados do kardex, em cópias (o banco não
+     é tocado): movimentos sintéticos + d.processo com o saldo de cada item. */
+  function comMaterialProcesso(d) {
+    var mp = movimentosMaterialProcesso({bombonas: d.bombonas, materialProcesso: d.materialProcesso});
+    return Object.assign({}, d, {movimentos: Object.assign({}, d.movimentos || {}, mp.movimentos), processo: mp.itens});
   }
 
   function csv(item, r) {
@@ -259,5 +360,6 @@
   }
 
   return {TIPOS: TIPOS, NATUREZAS: NATUREZAS, tipoInfo: tipoInfo, conta: conta, razaoDoItem: razaoDoItem,
-    saldoDosLotes: saldoDosLotes, montar: montar, catalogo: catalogo, conciliacao: conciliacao, csv: csv};
+    saldoDosLotes: saldoDosLotes, montar: montar, opcoesDoItem: opcoesDoItem,
+    movimentosMaterialProcesso: movimentosMaterialProcesso, comMaterialProcesso: comMaterialProcesso, catalogo: catalogo, conciliacao: conciliacao, csv: csv};
 });
