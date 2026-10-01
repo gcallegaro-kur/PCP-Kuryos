@@ -2907,7 +2907,13 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       outroSetorAberto = ['abertaDesde', 'abertaDesdeRot'].some(function(c) {
         return c !== efeitosOp.campoInicio && !!op[c];
       });
-      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !outroSetorAberto) {
+      // Rotulagem antes do envase (01/10): 26273/03 e /04 foram ao PCP com a
+      // rotulagem encerrada e ZERO envasado -- nada estava aberto porque o
+      // envase nem tinha começado. Fechar a rotulagem só encaminha a OP se o
+      // envase já aconteceu; senão a OP segue esperando a linha. Posto
+      // (kit/bancada) continua podendo encerrar sozinho.
+      var aguardaEnvase = tipo === 'rotulagem' && !((op.produzidoLinha || 0) > 0);
+      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !outroSetorAberto && !aguardaEnvase) {
         op.status = 'Aguardando Confirmação';
       }
     }

@@ -127,6 +127,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Rotulagem antes do envase não manda a OP ao PCP (2026-10-01).** Relato:
+  Controle de OPs pedia para confirmar OPs que só tinham rotulagem. Medido: 26273/03
+  (rot 1750, envase 0) e 26273/04 (rot 559, envase 0) em `Aguardando Confirmação`.
+  Causa: a correção de 30/09 (`25c8f63`) só olhava se o OUTRO setor estava aberto; com o
+  envase ainda nem iniciado, nada estava aberto e o fechamento da rotulagem encaminhava a
+  OP. Agora (`form.html`, `updateOpRecordOnApontamento`, `aguardaEnvase`) fechar a
+  rotulagem só encaminha com `produzidoLinha > 0`; posto segue podendo encerrar sozinho.
+  `run_apontamento_encerramento_test.js` cobre os dois sentidos (falha no código antigo).
+  **Dado NÃO corrigido** (aguarda autorização): as duas OPs voltarem a `Não Iniciado`.
+  Fora do escopo, só apontado: 26251/16 `Aguardando Confirmação` desde 14/09 com a
+  Linha 3 ainda alocada. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Sugestão de compra de produto em g/kg (2026-09-30).** Erro reportado ao
   gerar solicitação de compra: "HDR-MISS-0005: unidade de volume "g" -- só sei calcular a
   partir de ml ou L". `explodirMateriaisNecessarios` (`shared/utils.js`) só aceitava ml/L,

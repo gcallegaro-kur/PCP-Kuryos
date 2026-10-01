@@ -203,5 +203,23 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   if (data.ops['26264-09'].status !== 'Em Produção') throw new Error('Com a rotulagem aberta, nem o cálculo de envase encerra a OP');
   ctx.computeOpStatus = op => op.status === 'Aguardando Confirmação' ? op.status : 'Em Produção';
 
+  // ── Rotulagem antes do envase (01/10, OPs 26273/03 e /04) ──
+  // Rotulou tudo, envase nem começou: fechar a rotulagem não manda a OP ao PCP.
+  data.ops['26273-03'] = { lote: '26273/03', produzidoLinha: 0, produzidoRotulagem: 0, qtdPlanejada: 1750, status: 'Não Iniciado',
+    abertaDesdeRot: '2026-09-30T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };
+  await ctx.updateOpRecordOnApontamento('26273/03', 1750, 0, '2026-09-30T11:00:00.000Z', 'rotulagem', '2026-09-30T14:54:00.000Z', 1750, 'rot-3', efRot);
+  let o3 = data.ops['26273-03'];
+  if (o3.status === 'Aguardando Confirmação') throw new Error('Rotulagem fechada sem envase mandou a OP ao PCP');
+  if (o3.produzidoRotulagem !== 1750 || o3.abertaDesdeRot !== null) throw new Error('Rotulagem deveria somar e liberar a rotuladora');
+  // Depois o envase roda e fecha: aí sim vai ao PCP.
+  data.ops['26273-03'].abertaDesde = '2026-10-01T10:00:00.000Z'; data.ops['26273-03'].abertaLinha = 'Linha 2';
+  await ctx.updateOpRecordOnApontamento('26273/03', 1750, 0, '2026-10-01T10:00:00.000Z', 'linha', '2026-10-01T14:00:00.000Z', 1750, 'lin-4', efLin);
+  if (data.ops['26273-03'].status !== 'Aguardando Confirmação') throw new Error('Envase fechado depois da rotulagem deveria ir ao PCP');
+  // Envase já feito e fechado, rotulagem fecha por último: vai ao PCP.
+  data.ops['26273-05'] = { lote: '26273/05', produzidoLinha: 900, produzido: 900, produzidoRotulagem: 0, qtdPlanejada: 900, status: 'Em Produção',
+    abertaDesdeRot: '2026-09-30T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };
+  await ctx.updateOpRecordOnApontamento('26273/05', 900, 0, '2026-09-30T11:00:00.000Z', 'rotulagem', '2026-09-30T15:00:00.000Z', 900, 'rot-4', efRot);
+  if (data.ops['26273-05'].status !== 'Aguardando Confirmação') throw new Error('Rotulagem fechando por último, com envase feito, deveria ir ao PCP');
+
   console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento; densidade inválida não inverte estoque; fechar um setor não encerra a OP com outro aberto');
 })().catch(err => { console.error(err); process.exit(1); });
