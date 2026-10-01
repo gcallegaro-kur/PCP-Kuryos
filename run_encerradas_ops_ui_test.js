@@ -19,7 +19,7 @@ function dados() {
     usuarios: {u1: {nome: 'Gustavo', email: 'g@kuryos.com', role: 'admin'}},
     config: {linhas: ['Linha 1']},
     ops: {
-      'A-ATIVA': op('A/01', {status: 'Em Produção', produzidoLinha: 300, produzido: 300}),
+      'A-ATIVA': op('A/01', {status: 'Em Produção', produzidoLinha: 300, produzido: 300, emFila: {desde: dia(1), setor: 'linha', linhaAnterior: 'Linha 2', motivo: 'Falta de componente — válvulas', por: 'Ana'}}),
       'B-ENCERRADA': op('B/01', {status: 'Concluído', confirmadoEm: dia(20)}),
       'C-QUALIDADE': op('C/01', {status: 'Concluído', confirmadoEm: dia(20)}),
       'D-LOGISTICA': op('D/01', {status: 'Concluído', confirmadoEm: dia(1)}),
@@ -40,6 +40,7 @@ function dados() {
       'B-ENCERRADA': {finalizadoEm: dia(19)}, 'C-QUALIDADE': {finalizadoEm: dia(19)},
       'D-LOGISTICA': {contagens: {x: {qtd: 10}}}
     },
+    material_processo: {m1: {opKey: 'A-ATIVA', tipo: 'BULK', qtd: 330, unidade: 'kg', status: 'EM_PROCESSO'}, m2: {opKey: 'A-ATIVA', tipo: 'FRASCO_ROTULADO', qtd: 1200, unidade: 'un', status: 'EM_PROCESSO'}, m3: {opKey: 'A-ATIVA', tipo: 'BULK', qtd: 99, unidade: 'kg', status: 'USADO'}},
     expedicoes_comerciais: {}, solicitacoes_descarte: {}, devolucoes_cliente: {}, produtos: {}, enderecos_estoque: {}, paradas_historico: {}
   };
 }
@@ -135,6 +136,12 @@ async function abrir(browser, pagina) {
     assert.match(await linhaA.locator('td').nth(7).innerText(), /20\/09\/2026/);
     assert.match(await linhaA.locator('td').nth(7).innerText(), /em atraso/);
     assert.ok((await page.locator('#opsThead th').allInnerTexts()).some(t => /Entrega \(PCP\)/i.test(t)));
+    // OP devolvida à fila e material retido aparecem como chips na linha da OP.
+    const chips = await linhaA.innerText();
+    assert.match(chips, /Em fila: Falta de componente/);
+    assert.match(chips, /330 kg de bulk/);
+    assert.match(chips, /1\.200 frascos rotulados/);
+    assert.doesNotMatch(chips, /99 kg/, 'o que já teve baixa não conta como retido');
     // Secundário recolhido: previsão/emitido por ficam dentro de <details>.
     assert.ok(await page.locator('#ops-tbody tr', {hasText: 'A/01'}).count() >= 1);
 

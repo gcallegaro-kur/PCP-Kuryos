@@ -127,6 +127,21 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO (parte 2 de 2) — Material em Processo: sobras no encerramento e "Devolver OP à
+  fila" (2026-10-01).** `form.html` + novo `shared/material-processo-form.js`: (1) **contagem de
+  sobras OBRIGATÓRIA** nas três formas de encerrar a OP (Encerrar OP do Painel de Turno, Apontamento
+  por Total, Fechar Lote): toda linha do BOM + frascos rotulados + bulk (só OP com fase de bulk) pede
+  número (0 = não sobrou; branco não passa), dono cliente/Kuryos por linha, bulk exige bombona (vazia
+  ou do mesmo lote). Grava `ops/{op}/contagemSobras`, `material_processo/` e acerta a bombona
+  (`bombonas_bulk`, com histórico). (2) **⏸ Devolver OP à fila** (botão em todo card com OP, todos os
+  papéis do painel): a OP sai da linha/rotuladora SEM encerrar (`abertaDesde`/`abertaLinha` saem,
+  `emFila` entra; produção e status intactos), pausa fechada em `paradas_historico`, `estado_linhas`
+  liberada, itens retidos declarados (origem PAUSA); **+ Alocar OP** limpa `emFila` e continua de onde
+  parou. (3) `ops.html`: chips "⏸ Em fila: motivo" e "📦 retidos: …" na linha da OP. Ensaio: o
+  fluxo ponta a ponta (`run_fluxo_ponta_a_ponta_test.js`) agora conta as sobras. Testes novos:
+  `run_devolver_fila_ui_test.js`; atualizados `run_fluxo_ponta_a_ponta_test.js`,
+  `run_encerradas_ops_ui_test.js`. Manual do apontador atualizado. Arquivos ativos: nenhum.
+
 - **EM ANDAMENTO — Etiqueta de caixa de embarque padrão (2026-10-01).** Pedido: etiqueta emitida com a OP, campos obrigatórios nesta ordem: logo/nome do cliente, nome do SKU, código do cliente, qtde/cx, lote, validade, peso da cx, lote interno, código de barras DUN-14 (ITF-14). Arquivos ativos: `public/shared/etiqueta-caixa.js` (novo), `public/emitir_op.html`, `public/ops.html`, `public/cadastros.html` (só logo do cliente), `storage.rules`, `public/shared/utils.js`, `public/manual_*.html` afetados, `run_etiqueta_caixa_test.js` (novo), `run_etiquetas_leitura_test.js`, `AGENT_STATUS.md`.
 
 - **PUBLICADO (parte 1 de 2) — Material em Processo: bombonas e tanques (2026-10-01).** Pedido do

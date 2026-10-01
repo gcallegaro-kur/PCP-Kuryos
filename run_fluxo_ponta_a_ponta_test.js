@@ -478,6 +478,14 @@ async function fechar(page, errors, etapa) {
     // ...e o primeiro insumo da lista (vem do BOM da OP) teve 12 perdidos.
     const insumoPerdido = await page.locator('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod]').first().getAttribute('data-cod');
     await page.fill('#encerrarOpTurnoPerdasEtapa .pe-linha[data-cod="' + insumoPerdido + '"] .pe-qtd', '12');
+    // Contagem de sobras (01/10): obrigatória ao encerrar. Primeiro tenta sem preencher: a tela barra.
+    assert.ok(await page.locator('#encerrarOpTurnoSobras .mpf-row').count() >= 2, 'a contagem lista o BOM e os frascos rotulados');
+    await page.click('#btnConfirmarEncerrarOpTurno');
+    await page.waitForTimeout(400);
+    assert.ok(dialogos.some((m) => /Contagem de sobras/.test(m)), 'sem contagem a tela não encerra: ' + dialogos.join('|'));
+    dialogos.length = 0;
+    // Agora conta: tudo zero, menos 25 frascos já rotulados que sobraram.
+    await page.evaluate(() => document.querySelectorAll('#encerrarOpTurnoSobras .qtd').forEach((i) => { i.value = i.closest('.mpf-row').dataset.chave === 'frascos_rotulados' ? '25' : '0'; }));
     // Celular pequeno (29/09): com a lista de perdas o modal passava da tela e
     // o botão "Encerrar OP" ficava inalcançável. Botões fixos, o meio rola.
     await page.setViewportSize({width: 375, height: 667});
@@ -509,6 +517,19 @@ async function fechar(page, errors, etapa) {
     const opDepois = db.ops[opKey];
     console.log('   encerrada: ' + opDepois.produzidoLinha + ' un., status ' + opDepois.status);
     assert.equal(opDepois.produzidoLinha, 960, 'a produção precisa ficar gravada na OP');
+    // A contagem foi gravada: auditoria na OP e o item retido em material_processo.
+    await page.waitForFunction((k) => window.__db.ops[k].contagemSobras, opKey, {timeout: 8000});
+    db = await page.evaluate(() => window.__db);
+    const cs = Object.values(db.ops[opKey].contagemSobras)[0];
+    assert.equal(cs.semSobras, false);
+    assert.equal(cs.itens.length, 1);
+    assert.equal(cs.itens[0].qtd, 25);
+    const retido = Object.values(db.material_processo || {})[0];
+    assert.equal(retido.tipo, 'FRASCO_ROTULADO');
+    assert.equal(retido.qtd, 25);
+    assert.equal(retido.status, 'EM_PROCESSO');
+    assert.equal(retido.origem, 'ENCERRAMENTO');
+    console.log('   sobras: 25 frascos rotulados registrados em Material em Processo');
     // Perdas item a item: gravadas no lote com o material; só o insumo baixa estoque.
     await page.waitForFunction((k) => window.__db.perdas && window.__db.perdas[k], opKey, {timeout: 8000});
     db = await page.evaluate(() => window.__db);

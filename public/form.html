@@ -11,6 +11,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
   <script src="shared/rearranjo-linhas-tela.js"></script>
+  <script src="shared/material-processo.js"></script>
+  <script src="shared/material-processo-form.js"></script>
   <script src="shared/retrabalho-op.js"></script>
   <script src="shared/retrabalhos-gestao.js"></script>
   <script src="shared/retrabalhos-tela.js"></script>
@@ -450,6 +452,10 @@
           <label>Operador</label>
           <input type="text" id="encerrarOpTurnoOperador" placeholder="Nome do operador..." autocomplete="off">
         </div>
+        <div class="form-group">
+          <label>📦 Contagem de sobras <span style="color:var(--danger)">(obrigatória)</span></label>
+          <div id="encerrarOpTurnoSobras"></div>
+        </div>
         <div class="parada-section" style="margin-bottom:14px">
           <div class="parada-section-header">
             <span class="parada-section-title">Perdas — item a item</span>
@@ -758,6 +764,10 @@
           <input type="text" id="tOperador" placeholder="Nome do operador..." required autocomplete="off">
         </div>
         <div class="form-group">
+          <label>📦 Contagem de sobras <span style="color:var(--danger)">(obrigatória)</span></label>
+          <div id="tSobras"></div>
+        </div>
+        <div class="form-group">
           <label>Observacoes (opcional)</label>
           <textarea id="tObs" placeholder="Anotacoes adicionais..."></textarea>
         </div>
@@ -816,6 +826,10 @@
         <div class="form-group" id="opJustificaWrap" style="display:none; margin-top:12px;">
           <label style="color:var(--danger);font-weight:700">Justificativa do Desvio (Obrigatório)</label>
           <textarea id="opJustificativa" rows="3" placeholder="Explique o motivo do desvio (ex: quebras de embalagens, rendimento do lote de bulk, refugo, etc.)" style="width:100%;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;color:var(--text);background:var(--card);font-family:inherit;resize:vertical;"></textarea>
+        </div>
+        <div class="form-group">
+          <label>📦 Contagem de sobras <span style="color:var(--danger)">(obrigatória)</span></label>
+          <div id="opSobras"></div>
         </div>
         <button type="submit" class="btn-retro" id="btnFinalizarOP" style="background:var(--success)">&#127937; Finalizar OP</button>
       </form>
@@ -1281,6 +1295,31 @@ firebase.initializeApp(firebaseConfig);
 db = firebase.database();
 
 var latestAndonStates = {};
+
+// Material em processo (01/10): contagem de sobras ao encerrar a OP e "Devolver OP
+// à fila". Regras em shared/material-processo.js; tela em shared/material-processo-form.js.
+MaterialProcessoForm.iniciar(db, {
+  findOpByLote: function(l) { return findOpByLote(l); },
+  getEstadoLinhas: function() { return latestAndonStates; },
+  sanitizeKey: sanitizeKey,
+  showSuccess: function(t, m) { showSuccess(t, m); }
+});
+var sobrasCtl = {turno: null, total: null, lote: null};
+// A contagem é EXIGIDA: todo campo com número (0 = não sobrou).
+function validarSobrasOuAvisar(ctl) {
+  if (!ctl) return {ok: true, itens: []};
+  var v = ctl.validar();
+  if (!v.ok) alert('Contagem de sobras (obrigatória ao encerrar a OP):\n- ' + v.erros.join('\n- '));
+  return v;
+}
+// Depois que o servidor confirmou o encerramento. Se a gravação das sobras falhar,
+// a OP já está encerrada: avisa e manda registrar à mão em Material em Processo.
+function gravarSobrasPosEncerramento(lote, opAntes, setor, itens, autor) {
+  return MaterialProcessoForm.gravarContagem(sanitizeKey(lote), opAntes || {lote: lote}, setor, itens, 'ENCERRAMENTO', autor || 'Desconhecido', {})
+    .catch(function(err) {
+      alert('A OP foi encerrada, mas NÃO foi possível gravar a contagem de sobras: ' + err.message + '\nRegistre as sobras em Material em Processo.');
+    });
+}
 
 function rebuildAndonFormGrid() {
   var grid = document.querySelector('.andon-grid');
@@ -2414,6 +2453,8 @@ function prepararEncerrarOP(lote) {
   document.getElementById('tQtdTotal').value = getProduzido(op, 'linha');
   document.getElementById('tOperador').value = '';
   document.getElementById('tObs').value = '';
+  sobrasCtl.total = MaterialProcessoForm.renderContagem(document.getElementById('tSobras'), op, 'linha',
+    {ajuda: 'Conte o que sobrou fisicamente. Escreva 0 no que não sobrou.'});
   document.getElementById('tQtdHint').textContent = 'Já registrado: ' + fmtNum(getProduzido(op, 'linha')) + ' un.' + (op.qtdPlanejada ? ' de ' + fmtNum(op.qtdPlanejada) + ' un. planejadas' : '');
   updateRitmoHint();
   document.getElementById('encerrarCard').style.display = 'block';
@@ -3984,6 +4025,8 @@ function preencheFechamentoForm(linha, lote, produto, pedidoId, apontadoHoje) {
   var noPerdasMsg = document.getElementById('noPerdasMsg');
   if (noPerdasMsg) noPerdasMsg.style.display = '';
   renderPerdasEtapa('opPerdasEtapa', findOpByLote(lote), 'linha', 'opSemPerda');
+  sobrasCtl.lote = MaterialProcessoForm.renderContagem(document.getElementById('opSobras'), findOpByLote(lote) || {lote: lote}, 'linha',
+    {ajuda: 'Conte o que sobrou fisicamente. Escreva 0 no que não sobrou.'});
 
   // Reset desvio
   document.getElementById('opJustificativa').value = '';
@@ -4258,6 +4301,9 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   var colPerdas = collectPerdasEtapa('opPerdasEtapa', 'perdasList', 'opSemPerda');
   if (!colPerdas.ok) { btn.disabled = false; btn.textContent = '🏁 Finalizar OP'; alert(colPerdas.erros.join('\n')); return; }
   var perdas    = colPerdas.perdas;
+  var contagemLote = validarSobrasOuAvisar(sobrasCtl.lote);
+  if (!contagemLote.ok) { btn.disabled = false; btn.textContent = '🏁 Finalizar OP'; return; }
+  var opAntesLote = findOpByLote(lote);
 
   var qtdFinal = Math.max(qtdTotal - apontado, 0);
 
@@ -4352,6 +4398,7 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
     var deltaConfirmado = syncResult && syncResult.item && syncResult.item.deltaConfirmado;
     if (deltaConfirmado == null) deltaConfirmado = qtdFinal;
     btn.disabled = false; btn.textContent = '🏁 Finalizar OP';
+    gravarSobrasPosEncerramento(lote, opAntesLote, 'linha', contagemLote.itens, (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || '');
     document.getElementById('opForm').style.display = 'none';
     // Fase 7 do plano: conclusão é 100% manual pelo PCP -- deixa claro aqui
     // que ainda falta essa confirmação, pra não parecer que já terminou de
@@ -4384,6 +4431,9 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
   var qtdTotal = parseInt(document.getElementById('tQtdTotal').value) || 0;
   var operador = document.getElementById('tOperador').value.trim();
   var obs      = document.getElementById('tObs').value.trim();
+  var contagemTotal = validarSobrasOuAvisar(sobrasCtl.total);
+  if (!contagemTotal.ok) { reenable(); return; }
+  var opAntesTotal = op;
   var inicioISO = op.abertaDesde;
   var fimISO    = new Date().toISOString();
   var horas    = horasDesde(inicioISO);
@@ -4460,6 +4510,7 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
     var deltaConfirmado = syncResult && syncResult.item && syncResult.item.deltaConfirmado;
     if (deltaConfirmado == null) deltaConfirmado = delta;
     reenable();
+    gravarSobrasPosEncerramento(lote, opAntesTotal, 'linha', contagemTotal.itens, operador);
     formTotal.reset();
     document.getElementById('encerrarCard').style.display = 'none';
     encerrandoLote = null;
@@ -4664,6 +4715,12 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
         '<button type="button" class="andon-btn btn-neutral" title="Salva a produção até agora sem parar nem encerrar -- diferente de &quot;Parar&quot;" data-intervalo-nome="' + escapeHtml(nome) + '" data-intervalo-tipo="' + tipo + '">📝 Apontar intervalo (sem parar)</button>';
     }
 
+    // Devolver a OP à fila (01/10): a OP sai da linha SEM encerrar, mantém o que produziu e o
+    // líder declara o que ficou retido (frascos rotulados, bulk em bombona...).
+    if (op) {
+      html += '<button type="button" class="andon-btn btn-neutral" title="Tira a OP desta ' + (tipo === 'rotulagem' ? 'rotuladora' : 'linha') + ' sem encerrar: tudo que ela produziu fica; você declara o que ficou retido" data-devolver-lote="' + escapeHtml(op.lote) + '" data-devolver-nome="' + escapeHtml(nome) + '" data-devolver-tipo="' + tipo + '">⏸ Devolver OP à fila</button>';
+    }
+
     // Admin e PCP (pedido do usuário, 01/10): quem reorganiza a fila é o PCP, não só o administrador.
     if (op && tipo === 'linha' && window.currentUser && ['admin', 'pcp'].indexOf(window.currentUser.role) >= 0) {
       html += '<button type="button" class="andon-btn btn-neutral" data-rearranjar-lote="' + escapeHtml(op.lote) + '" data-rearranjar-origem="' + escapeHtml(nome) + '">⇄ Mudar de linha / trocar OPs</button>';
@@ -4672,6 +4729,9 @@ function renderTurnoGrupo(containerId, nomes, tipo, comParada) {
     container.appendChild(card);
   });
 
+  container.querySelectorAll('[data-devolver-lote]').forEach(function(btn) {
+    btn.onclick = function() { MaterialProcessoForm.abrirDevolucao(btn.getAttribute('data-devolver-nome'), btn.getAttribute('data-devolver-tipo'), btn.getAttribute('data-devolver-lote')); };
+  });
   container.querySelectorAll('[data-rearranjar-lote]').forEach(function(btn) {
     btn.onclick = function() { abrirRearranjoLinhas(btn.getAttribute('data-rearranjar-origem'), btn.getAttribute('data-rearranjar-lote')); };
   });
@@ -5025,6 +5085,7 @@ document.getElementById('btnConfirmarAlocarOp').addEventListener('click', functi
   alocUpdate[campoAberturaNome(tipoAlvo)] = alocarOpAlvoAtual.nome;
   alocUpdate[campoSetupInicio(tipoAlvo)] = agora;
   alocUpdate[campoSetupFim(tipoAlvo)] = null;
+  alocUpdate.emFila = null;   // voltou da fila (Devolver OP à fila): sai do estado de espera
   if (tipoAlvo !== 'rotulagem') alocUpdate.linha = alocarOpAlvoAtual.nome;
   db.ref('ops/' + sanitizeKey(lote)).update(alocUpdate).then(function() {
     // Mantém a "OP lembrada" (estado_linhas/{linha}/opAtual) em sincronia --
@@ -5152,6 +5213,8 @@ function abrirEncerrarOpModal(nome, tipo, lote) {
   perdasList.querySelectorAll('.perda-entry').forEach(function(el) { el.remove(); });
   document.getElementById('encerrarOpTurnoNoPerdasMsg').style.display = '';
   renderPerdasEtapa('encerrarOpTurnoPerdasEtapa', opAtual, tipo, 'encerrarOpTurnoSemPerda');
+  sobrasCtl.turno = MaterialProcessoForm.renderContagem(document.getElementById('encerrarOpTurnoSobras'), opAtual, tipo,
+    {ajuda: 'Conte o que sobrou fisicamente: frascos, rótulos, frascos já rotulados e o bulk. Escreva 0 no que não sobrou.'});
   document.getElementById('encerrarOpTurnoJustificaWrap').style.display = 'none';
   document.getElementById('encerrarOpTurnoJustificativa').value = '';
   document.getElementById('encerrarOpTurnoModal').classList.add('open');
@@ -5234,6 +5297,8 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontadoAlvo) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
     return;
   }
+  var contagemSobras = validarSobrasOuAvisar(sobrasCtl.turno);
+  if (!contagemSobras.ok) return;
   var btn = this;
   // Achado do agente de auditoria (4a rodada): só `disabled=true` não dá
   // sinal visível nenhum aqui (a classe .btn-confirm-danger não tem regra
@@ -5255,6 +5320,7 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     manterAberta: false, forcarConcluido: true, tipo: alvoEncerramento.tipo,
     justificativa: hasDeviation ? justificativa : '', perdas: perdas
   }).then(function(res) {
+    gravarSobrasPosEncerramento(alvoEncerramento.lote, opAlvo, alvoEncerramento.tipo, contagemSobras.itens, operador);
     btn.disabled = false;
     btn.textContent = textoOriginal;
     document.getElementById('encerrarOpTurnoModal').classList.remove('open');

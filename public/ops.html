@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/qrcode-lib.js"></script>
+  <script src="shared/etiqueta-caixa.js"></script>
   <script src="shared/transferencia-op.js"></script>
   <script src="shared/retrabalho-op.js"></script>
   <script src="shared/impacto-pedido-ops.js"></script>
@@ -21,6 +22,7 @@
   <script src="shared/situacao-op.js"></script>
   <script src="shared/confirmacao-etapas.js"></script>
   <script src="shared/entrega-pcp.js"></script>
+  <script src="shared/material-processo.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -732,6 +734,10 @@
     // Produto acabado da barra de progresso: a mesma conta da Conciliação de
     // pedidos (Produzido = Expedido + Em estoque), por OP. Enquanto alguma
     // fonte não chegou a barra mostra "carregando" em vez de um zero falso.
+    dbOnValue(database.ref('material_processo'), snap => {
+      materialProcessoGlobal = snap.val() || {};
+      recalculateAndRenderOps();
+    });
     Object.keys(conciliacaoFontes).forEach(no => {
       dbOnValue(database.ref(no), snap => {
         conciliacaoFontes[no] = snap.val() || {};
@@ -739,6 +745,8 @@
       });
     });
   }
+  // Material retido por OP (sobras e itens declarados ao devolver a OP à fila): chips na linha.
+  let materialProcessoGlobal = {};
   const conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
   let qualidadePorOp = {};       // opKey -> {liberado, pendente, reprovado} do estoque de PA
   let conciliacaoPorOp = null;   // opKey -> bucket `porOp` da conciliação
@@ -1683,9 +1691,18 @@
       transferenciaPendente: TransferenciaOP.transferenciaPendente(op),
       pendenteQualidade: q.pendente, reprovado: q.reprovado
     });
-    if (!selos.length) return '';
+    const extras = [];
+    if (op.emFila) {
+      const f = op.emFila;
+      extras.push('<a href="proximas_ordens.html" style="text-decoration:none"><span title="' + escapeAttr('Saiu de ' + (f.linhaAnterior || 'linha') + ' em ' + (f.desde ? new Date(f.desde).toLocaleString('pt-BR') : '—') + (f.por ? ' · por ' + f.por : '') + (f.motivo ? ' — ' + f.motivo : '')) + '" style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:#1d4ed8;background:#dbeafe">⏸ Em fila' + (f.motivo ? ': ' + escapeHtml(String(f.motivo).slice(0, 38)) : '') + '</span></a>');
+    }
+    const retidos = MaterialProcesso.resumoRetidos(Object.keys(materialProcessoGlobal).map(k => materialProcessoGlobal[k]).filter(r => r && r.opKey === op.key));
+    if (retidos.length) {
+      extras.push('<a href="material_processo.html?aba=sobras" style="text-decoration:none"><span title="Material retido desta OP. Clique para ver e dar baixa." style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:#b45309;background:#fef3c7">📦 ' + escapeHtml(retidos.map(MaterialProcesso.rotuloResumo).join(' · ')) + '</span></a>');
+    }
+    if (!selos.length && !extras.length) return '';
     const cor = {aviso: '#b45309;background:#fef3c7', espera: '#1d4ed8;background:#dbeafe', erro: '#b91c1c;background:#fee2e2'};
-    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + selos.map(x =>
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">' + extras.join('') + selos.map(x =>
       '<span style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:' + cor[x.tom] + '">' + escapeHtml(x.texto) + '</span>').join('') + '</div>';
   }
 
@@ -2027,8 +2044,10 @@
       showToast('Esta OP foi emitida pelo Excel -- não tem os dados que as etiquetas precisam.');
       return;
     }
-    document.getElementById('printArea').innerHTML = montarEtiquetasCaixa(op);
-    window.print();
+    // Produto atual completa o que a OP antiga não fotografou (código do
+    // cliente, peso, DUN-14) -- ver shared/etiqueta-caixa.js.
+    const produto = Object.values(produtosGlobal || {}).find(p => p && p.sku === op.sku) || null;
+    EtiquetaCaixa.abrirDialogo({op, opKey, produto, db: database});
   }
 
   // Transferência de OP entre pedidos (shared/transferencia-op.js). Antes o
