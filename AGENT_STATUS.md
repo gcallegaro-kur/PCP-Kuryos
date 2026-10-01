@@ -127,6 +127,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Etiqueta de caixa de embarque padrão (2026-10-01).** Pedido: etiqueta emitida com a OP, campos obrigatórios nesta ordem: logo/nome do cliente, nome do SKU, código do cliente, qtde/cx, lote, validade, peso da cx, lote interno, código de barras DUN-14 (ITF-14). Arquivos ativos: `public/shared/etiqueta-caixa.js` (novo), `public/emitir_op.html`, `public/ops.html`, `public/cadastros.html` (só logo do cliente), `storage.rules`, `public/shared/utils.js`, `public/manual_*.html` afetados, `run_etiqueta_caixa_test.js` (novo), `run_etiquetas_leitura_test.js`, `AGENT_STATUS.md`.
+
 - **PUBLICADO (parte 1 de 2) — Material em Processo: bombonas e tanques (2026-10-01).** Pedido do
   usuário sobre semiacabados: bulk e frascos rotulados em primeiro lugar; líder declara; contagem
   de sobras exigida no fim da OP; bombona identificada com etiqueta (lote, validade); dono às
