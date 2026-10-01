@@ -2856,6 +2856,7 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // apontamento ficou na fila offline (mas antes de sincronizar), este é
     // o único lugar que ainda vê isso a tempo. Aborta sem escrever nada.
     if (op.status === 'Cancelado') return;
+    var statusAntes = op.status;
     // Linha/Rotulagem/Posto são somatórias SEMPRE distintas -- nunca soma
     // (ver campoProduzido/getProduzido em shared/utils.js). campo legado
     // `produzido` fica espelhando produzidoLinha, de rede de segurança pra
@@ -2949,6 +2950,17 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
         statusCalculado = op.status;
       }
       op.status = statusCalculado;
+      // Envase que chega à meta sem "encerrar" (apontamento horário ou turno
+      // retroativo, 01/10: 26273/03 e /04 serão lançadas pelo retroativo)
+      // também fica para o PCP confirmar como etapa de envase.
+      if (statusAntes !== 'Aguardando Confirmação' && op.status === 'Aguardando Confirmação' && campo === 'produzidoLinha') {
+        var etapasAuto = op.confirmacaoEtapas || {};
+        if (!etapasAuto.envase || etapasAuto.envase.status !== 'AGUARDANDO') {
+          etapasAuto.envase = {status: 'AGUARDANDO', quantidade: op.produzidoLinha || 0, fechadoEm: tsFim,
+            local: null, operador: null, automatico: true};
+          op.confirmacaoEtapas = etapasAuto;
+        }
+      }
     }
     // Só o apontamento por total calcula um ritmo real (qtd ÷ horas
     // informadas) -- o apontamento horário não passa novaMedia, então este

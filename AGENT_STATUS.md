@@ -127,6 +127,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Envase que bate a meta sem encerrar também vira etapa a confirmar (2026-10-01).**
+  Turno retroativo e apontamento horário não "encerram" (sem `efeitosOp`), mas o cálculo
+  de 95% leva a OP a `Aguardando Confirmação`; agora isso grava também
+  `confirmacaoEtapas/envase` AGUARDANDO (`automatico: true`), para o PCP confirmar pela
+  linha nova. Motivo: 26273/03 e /04 serão lançadas pelo retroativo (envase já fechado no
+  chão). Teste em `run_apontamento_encerramento_test.js`. **Dado pendente de autorização:**
+  as duas OPs voltarem a `Não Iniciado` (senão o retroativo é bloqueado) + etapa de
+  rotulagem AGUARDANDO. Arquivos ativos: nenhum.
+
 - **PUBLICADO — PCP confirma cada encerramento de setor (2026-10-01).** Pedido: "neste
   momento, o PCP confirme cada apontamento, de rotulagem e de envase". Cada fechamento
   (`aguardarConfirmacao`, exceto posto) grava `ops/{op}/confirmacaoEtapas/{envase|rotulagem}`

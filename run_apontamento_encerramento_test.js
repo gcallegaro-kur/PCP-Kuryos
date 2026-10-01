@@ -225,6 +225,18 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   const et3 = data.ops['26273-03'].confirmacaoEtapas;
   if (!et3 || et3.rotulagem.status !== 'AGUARDANDO' || et3.rotulagem.quantidade !== 1750 || et3.rotulagem.local !== 'Rotuladora 1') throw new Error('Fechamento da rotulagem não ficou para o PCP confirmar: ' + JSON.stringify(et3));
   if (et3.envase.status !== 'AGUARDANDO' || et3.envase.quantidade !== 1750 || et3.envase.local !== 'Linha 2') throw new Error('Fechamento do envase não ficou para o PCP confirmar');
+  // Turno retroativo (registro sem efeitos) que leva o envase à meta: a OP vai
+  // ao PCP e o envase fica como etapa a confirmar (01/10).
+  ctx.computeOpStatus = op => op.status === 'Aguardando Confirmação' ? op.status : ((op.produzidoLinha || 0) / op.qtdPlanejada >= 0.95 ? 'Aguardando Confirmação' : 'Em Produção');
+  data.ops['26273-04'] = { lote: '26273/04', produzidoLinha: 0, produzidoRotulagem: 559, qtdPlanejada: 959, status: 'Não Iniciado',
+    confirmacaoEtapas: { rotulagem: { status: 'AGUARDANDO', quantidade: 559 } } };
+  await ctx.updateOpRecordOnApontamento('26273/04', 950, 0, '2026-09-29T08:00:00.000Z', 'linha', '2026-09-29T16:00:00.000Z', null, 'retro-1', null);
+  const o4 = data.ops['26273-04'];
+  if (o4.status !== 'Aguardando Confirmação') throw new Error('Retroativo que bate a meta deveria ir ao PCP: ' + o4.status);
+  if (!o4.confirmacaoEtapas.envase || o4.confirmacaoEtapas.envase.status !== 'AGUARDANDO' || o4.confirmacaoEtapas.envase.quantidade !== 950) throw new Error('Envase do retroativo não ficou para o PCP confirmar');
+  if (o4.confirmacaoEtapas.rotulagem.status !== 'AGUARDANDO') throw new Error('Rotulagem pendente foi mexida');
+  ctx.computeOpStatus = op => op.status === 'Aguardando Confirmação' ? op.status : 'Em Produção';
+
   // Checkpoint (pausa, manterAberta) não pede confirmação.
   if (data.ops['26264-09'].confirmacaoEtapas) throw new Error('Apontamento parcial não deveria pedir confirmação');
 
