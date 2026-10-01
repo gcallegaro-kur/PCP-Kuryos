@@ -146,12 +146,6 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   regras da parte 2. Testes: `run_material_processo_test.js`, `run_material_processo_ui_test.js`,
   `run_material_processo_rules_test.js`. Arquivos ativos para a parte 2: `form.html`, `ops.html`.
 
-- **EM ANDAMENTO — Kardex de estoque (2026-10-01).** Pedido: histórico kardex por item
-  (entrou/saiu/consumido/ajustado, log de tudo), incluindo intermediários (outra sessão),
-  e auditoria de inventário. Arquivos ativos: `public/kardex.html` (novo),
-  `public/shared/kardex.js` (novo), `run_kardex_test.js`, `run_kardex_ui_test.js` (novos),
-  `public/auth_check.js` (registro da página e link no menu), `public/manual_estoque.html`,
-  `AGENT_STATUS.md`.
 - **PUBLICADO — Kardex de estoque (2026-10-01).** Pedido: histórico kardex por item
   (entrou/saiu/consumido/ajustado, log de tudo), incluindo intermediários, e auditoria de
   inventário. `public/kardex.html` (menu Logística › Kardex, módulo `logistica`) sobre
@@ -170,6 +164,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   com sinal, `em`, `ref`, `loteKey`; ajustarEstoque fixa `itemTipo: 'material'` (aviso da
   sessão "Arquitetura de novo módulo e custos") — para agregado, aceitar itemTipo por extras.
   Testes `run_kardex_test.js` (+ ensaio com KARDEX_BASE) e `run_kardex_ui_test.js`.
+  **Material em processo** (`6a90ddd`, bombonas): o kardex também lê
+  `bombonas_bulk/{cod}/historico` (ENCHER/AJUSTE/ESVAZIAR, delta kgDepois−kgAntes) e
+  `material_processo/` (sobra = entrada; baixa USADO/DESCARTADO/DEVOLVIDO = saída), como
+  movimentos sintéticos (`Kardex.comMaterialProcesso`): itens `proc_bulk_{lote}`,
+  `proc_rot_{sku}`, `proc_comp_{codigo}`; sobra de BULK com `recipienteCodigo` não conta
+  duas vezes. Se esse módulo mudar o formato do histórico, ajustar
+  `movimentosMaterialProcesso` em `shared/kardex.js`.
   Manual: `manual_estoque.html` §6. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Envase que bate a meta sem encerrar também vira etapa a confirmar (2026-10-01).**
