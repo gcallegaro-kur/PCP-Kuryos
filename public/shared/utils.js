@@ -1220,7 +1220,9 @@ function ajustarEstoque(dbRef, materialCodigo, delta, tipoMovimentacao, ref, ext
       tipo: tipoMovimentacao || null,
       motivo: motivoPadraoPorTipoMovimentacao(tipoMovimentacao),
       qtd: delta, saldoApos: novoSaldo, ref: ref || null,
-      itemTipo: 'material', itemCodigo: materialCodigo,
+      // Item intermediário (bulk, frasco rotulado) com saldo agregado passa
+      // extras.itemTipo; sem ele, material, como sempre (Kardex, 01/10).
+      itemTipo: extras.itemTipo || 'material', itemCodigo: materialCodigo,
       itemNome: extras.materialNome || null, unidade: extras.unidade || null,
       // Quanto saiu/entrou da parte do cliente e quanto do geral.
       propriedade: (repartido && repartido.clienteKey) ? repartido : null,

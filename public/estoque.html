@@ -296,22 +296,15 @@
     </div>
   </div>
 
-  <!-- ═══ Aba: Histórico de Movimentações ═══ -->
+  <!-- ═══ Aba: Histórico de Movimentações → Kardex (01/10). A lista antiga
+       somava movimento do saldo do item com o do lote (o consumo aparecia duas
+       vezes) e não fechava com o saldo; o Kardex separa as duas coisas. ═══ -->
   <div class="tab-panel" id="tab-historico">
     <div class="kt-toolbar">
       <div class="kt-search"><span class="icon">🔍</span><input type="text" id="hmCodigo" placeholder="Código do material ou SKU do produto..."></div>
-      <button class="btn btn-primary" id="btnBuscarHistorico">Buscar</button>
+      <button class="btn btn-primary" id="btnBuscarHistorico">Abrir no Kardex</button>
     </div>
-    <div class="section-note">Busque pelo código exato do material (ex: MPAL001) ou SKU do produto -- o histórico é por item, não uma lista geral (evita carregar todo o histórico do sistema de uma vez).</div>
-    <div class="card">
-      <div class="card-title" id="hmCount">Histórico de movimentações</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Data</th><th>Tipo</th><th>Motivo</th><th style="text-align:right">Qtd</th><th style="text-align:right">Saldo após</th><th>Endereço</th><th>Autor</th></tr></thead>
-          <tbody id="hmBody"><tr><td colspan="7" class="no-data">Busque um item acima pra ver o histórico.</td></tr></tbody>
-        </table>
-      </div>
-    </div>
+    <div class="section-note">O histórico de movimentações agora fica no <a href="kardex.html"><b>Kardex</b></a>: cada entrada, saída, consumo e ajuste com saldo corrido, período, exportação e a conciliação de todos os itens. Digite o código e abra.</div>
   </div>
 
   <!-- ═══ Aba: Estrutura de Ruas -- pedido do usuário: 3 telas paralelas
@@ -1411,35 +1404,7 @@ function renderLotesVencendo() {
    ═══════════════════════════════════════════════════════════════════ */
 function buscarHistorico() {
   var codigo = document.getElementById('hmCodigo').value.trim();
-  if (!codigo) { showAlert('Informe o código do material ou SKU.', 'danger'); return; }
-  var itemKey = sanitizeKey(codigo);
-  document.getElementById('hmBody').innerHTML = '<tr><td colspan="7" class="no-data">Buscando...</td></tr>';
-  db.ref('movimentos_estoque/' + itemKey).once('value').then(function(snap) {
-    renderHistorico(snap.val() || {});
-  }).catch(function(err) {
-    showAlert('Erro ao buscar histórico: ' + err.message, 'danger');
-    document.getElementById('hmBody').innerHTML = '<tr><td colspan="7" class="no-data">Erro ao buscar.</td></tr>';
-  });
-}
-function renderHistorico(movimentos) {
-  var linhas = Object.values(movimentos).sort(function(a, b) { return new Date(b.em) - new Date(a.em); });
-  document.getElementById('hmCount').textContent = 'Histórico de movimentações (' + linhas.length + ')';
-  var tbody = document.getElementById('hmBody');
-  if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhuma movimentação encontrada pra esse item.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = linhas.map(function(m) {
-    return '<tr>' +
-      '<td style="font-size:12px">' + fmtDataHora(m.em) + '</td>' +
-      '<td><span class="badge badge-gray">' + escapeHtml(m.tipo || '—') + '</span></td>' +
-      '<td>' + escapeHtml(m.motivo || '—') + '</td>' +
-      '<td style="text-align:right' + ((m.qtd || 0) < 0 ? ';color:var(--danger)' : ';color:var(--tint-green-fg)') + ';font-weight:700">' + (m.qtd > 0 ? '+' : '') + fmtNum(m.qtd || 0) + ' ' + escapeHtml(m.unidade || '') + '</td>' +
-      '<td style="text-align:right">' + (m.saldoApos != null ? fmtNum(m.saldoApos) : '—') + '</td>' +
-      '<td>' + escapeHtml(m.enderecoKey ? (allEnderecosEstoque[m.enderecoKey] ? allEnderecosEstoque[m.enderecoKey].codigo : m.enderecoKey) : '—') + '</td>' +
-      '<td>' + escapeHtml(m.autor || '—') + '</td>' +
-    '</tr>';
-  }).join('');
+  location.href = 'kardex.html' + (codigo ? '?item=' + encodeURIComponent(codigo) : '');
 }
 
 /* ═══════════════════════════════════════════════════════════════════

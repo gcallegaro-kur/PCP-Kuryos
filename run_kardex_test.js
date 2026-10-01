@@ -139,6 +139,35 @@ r = K.montar(K.opcoesDoItem(mp, 'proc_bulk_26271-01'));
 assert.equal(r.saldoSistema, 12, 'bulk sem bombona entra pela sobra');
 assert.ok(K.conciliacao(mp).every((x) => x.conciliado));
 
+// ── 10. Contagens do inventário rotativo: linha informativa + última contagem.
+const bc = K.prepararBase({
+  movimentos: {'EP-1': {a: {tipo: 'ajuste_manual', qtd: 100, saldoApos: 100, em: '2026-09-01T00:00:00Z'},
+    b: {tipo: 'inventario', qtd: -4, em: '2026-10-02T10:01:00Z', loteKey: 'L'}}},
+  estoque: {'EP-1': {saldoAtual: 100}},
+  contagens: {
+    c1: {enderecoCodigo: 'MP-A-01', contadoEm: '2026-09-20T10:00:00Z', contadoPor: 'Lia', ajusteAplicado: false,
+      linhas: [{itemCodigo: 'EP-1', saldoEsperado: 100, qtdContada: 100, diferenca: 0, tipo: 'ok'}]},
+    c2: {enderecoCodigo: 'MP-A-01', contadoEm: '2026-10-02T10:00:00Z', contadoPor: 'Lia', ajusteAplicado: true,
+      linhas: {0: {itemCodigo: 'EP-1', saldoEsperado: 100, qtdContada: 96, diferenca: -4, tipo: 'falta'},
+        1: {itemCodigo: 'EP-NOVO', itemNome: 'TAMPA ACHADA', saldoEsperado: 0, qtdContada: 5, diferenca: 5, tipo: 'sobra'}}}
+  }
+});
+r = K.montar(K.opcoesDoItem(bc, 'EP-1'));
+assert.equal(r.saldoSistema, 100);
+assert.equal(r.conciliado, true, 'contagem não muda o saldo; o ajuste de lote não conta no saldo do item');
+const cont = r.linhas.filter((l) => l.tipo === 'contagem');
+assert.equal(cont.length, 2);
+assert.equal(cont[0].conta, false);
+assert.match(cont[0].motivo, /Contado 100 · sistema 100 · confere/);
+assert.match(cont[1].motivo, /Contado 96 · sistema 100 · falta 4 \(ajuste aplicado\)/);
+assert.equal(cont[1].autor, 'Lia');
+assert.equal(cont[1].enderecoCodigo, 'MP-A-01');
+const concC = K.conciliacao(bc);
+const ep1 = concC.find((x) => x.key === 'EP-1');
+assert.equal(ep1.ultimaContagem.diferenca, -4);
+assert.equal(ep1.ultimaContagem.em, '2026-10-02T10:00:00Z');
+assert.equal(K.catalogo(bc)['EP-NOVO'].nome, 'TAMPA ACHADA', 'item achado na contagem entra no catálogo com nome');
+
 // ── Ensaio contra a base (lição do MRP: dado real acha o que asserção sintética não acha).
 const base = process.env.KARDEX_BASE;
 if (base) {

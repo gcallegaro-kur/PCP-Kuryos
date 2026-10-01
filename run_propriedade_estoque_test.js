@@ -246,6 +246,12 @@ assert.ok(ctx.PropriedadeEstoque, 'módulo carregado como global no navegador');
     assert.deepEqual(mov.propriedade, {clienteKey: 'MRAR', doCliente: 300, geral: 50});
     await ctx.ajustarEstoque(db, 'VAL-1', -100, 'consumo_producao', 'X', {});
     assert.equal(db.dados.estoque['VAL-1'].saldoAtual, 550, 'sem cliente: só o total, como sempre');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(Object.values(db.dados.movimentos_estoque['VAL-1'])[1].itemTipo, 'material', 'sem itemTipo: material');
+    // Kardex (01/10): intermediário com saldo agregado registra o próprio tipo.
+    await ctx.ajustarEstoque(db, 'BULK-1', 200, 'producao_intermediario', '26270/01', {itemTipo: 'intermediario'});
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(Object.values(db.dados.movimentos_estoque['BULK-1'])[0].itemTipo, 'intermediario');
   });
 
   t('FEFO: material de cliente só para ele, e antes do geral; sem cliente, fica de fora', () => {

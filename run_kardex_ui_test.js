@@ -32,6 +32,8 @@ function dados() {
       h1: {tipo: 'ENCHER', kgAntes: 0, kgDepois: 200, lote: '26280/01', opKey: '26280-01', origem: 'MANIPULACAO', por: 'Léo', em: H('2026-09-30T15:00')},
       h2: {tipo: 'AJUSTE', kgAntes: 200, kgDepois: 120, lote: '26280/01', motivo: 'retirada para envase', por: 'Léo', em: H('2026-10-01T08:00')}}}},
     material_processo: {},
+    contagens_inventario: {c1: {enderecoKey: 'e1', enderecoCodigo: 'MP-A-01', contadoEm: H('2026-09-30T17:00'), contadoPor: 'Lia', ajusteAplicado: false,
+      linhas: [{itemCodigo: 'EP-00095', saldoEsperado: 4100, qtdContada: 4100, diferenca: 0, tipo: 'ok'}]}},
     movimentos_estoque: {
       'EP-00095': {
         a: {tipo: 'recebimento_pc', motivo: 'RECEBIMENTO', qtd: 5000, saldoApos: null, ref: 'PC-0012', loteKey: 'L1', enderecoKey: 'e1', itemTipo: 'material', itemCodigo: 'EP-00095', autor: 'Ana', em: H('2026-09-10T08:00')},
@@ -117,14 +119,16 @@ const linhasMov = (page) => page.locator('#itemConteudo table').first().locator(
     assert.match(tiles, /-1\.000\s*Saídas, consumos e perdas/);
     assert.match(tiles, /\+100\s*Ajustes/);
     const linhas = await linhasMov(page);
-    assert.equal(linhas.length, 5, linhas.join('\n---\n'));
+    assert.equal(linhas.length, 6, linhas.join('\n---\n'));
+    assert.match(linhas[0], /Contagem de inventário[\s\S]*Contado 4100 · sistema 4100 · confere[\s\S]*MP-A-01[\s\S]*Lia/);
+    linhas.shift();
     assert.match(linhas[0], /Ajuste[\s\S]*Gustavo[\s\S]*100[\s\S]*4\.100/, 'mais recente em cima, saldo final = sistema');
     assert.match(linhas[1], /Transferência[\s\S]*não altera o saldo \(\+300 no lote\)/);
     assert.match(linhas[1], /MP-A-01 → PA-B-02/, 'endereços pelo código, não pela chave');
     assert.match(linhas[2], /Baixa do lote \(FEFO\)[\s\S]*não altera o saldo/);
     assert.match(linhas[3], /Consumo na produção[\s\S]*26271\/02[\s\S]*1\.000[\s\S]*4\.000/);
     assert.match(linhas[4], /Recebimento[\s\S]*PC-0012[\s\S]*FR-1[\s\S]*MP-A-01[\s\S]*Ana[\s\S]*5\.000/);
-    assert.equal(await page.locator('#itemConteudo tr.info').count(), 2, 'as duas linhas que não mudam o saldo ficam em cinza');
+    assert.equal(await page.locator('#itemConteudo tr.info').count(), 3, 'transferência, baixa do lote e contagem não mudam o saldo: cinza');
     // Sem informativos.
     await page.uncheck('#fInfo');
     assert.equal((await linhasMov(page)).length, 3);
@@ -185,9 +189,10 @@ const linhasMov = (page) => page.locator('#itemConteudo table').first().locator(
     await page.waitForFunction(() => /Itens \(/.test(document.getElementById('cTitulo').textContent));
     assert.match(await page.locator('#cTiles').innerText(), /5\s*Itens com saldo ou movimento[\s\S]*4\s*Conciliados[\s\S]*1\s*Com saldo sem movimento/);
     assert.equal(await page.locator('#cBody tr').count(), 1, 'padrão: só divergentes');
-    assert.match(await page.locator('#cBody').innerText(), /EP-00051[\s\S]*-377/);
+    assert.match(await page.locator('#cBody').innerText(), /EP-00051[\s\S]*-377[\s\S]*nunca contado/);
     await page.selectOption('#cSituacao', '');
     assert.equal(await page.locator('#cBody tr').count(), 5);
+    assert.match(await page.locator('#cBody tr', {hasText: 'EP-00095'}).innerText(), /30\/09\/26 17:00 · confere/);
     await page.selectOption('#cTipo', 'INT');
     assert.equal(await page.locator('#cBody tr').count(), 2, 'bulk do lote e bulk em bombona');
     await page.locator('#cBody tr', {hasText: 'BULK-26270'}).locator('[data-abrir]').click();

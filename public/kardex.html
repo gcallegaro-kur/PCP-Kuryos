@@ -63,6 +63,7 @@
     .n-CONSUMO{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
     .n-PERDA{background:var(--tint-red-bg);color:var(--tint-red-fg)}
     .n-AJUSTE{background:var(--tint-purple-bg);color:var(--purple)}
+    .n-CONTAGEM{background:var(--tint-blue-bg);color:var(--primary)}
     .n-TRANSFERENCIA,.n-QUALIDADE,.n-OUTRO{background:var(--tint-gray-bg);color:var(--muted)}
     .ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
     .div{background:var(--tint-red-bg);color:var(--tint-red-fg)}
@@ -154,8 +155,8 @@
     <div class="card">
       <div class="card-header"><h3 id="cTitulo">Itens</h3><button class="btn" id="cCsv">Exportar CSV</button></div>
       <div class="rolagem"><table>
-        <thead><tr><th>Item</th><th>Tipo</th><th class="num">Saldo no sistema</th><th class="num">Soma do log</th><th class="num">Sem movimento registrado</th><th class="num">Movimentos</th><th>Último</th><th></th></tr></thead>
-        <tbody id="cBody"><tr><td colspan="8" class="no-data">Carregando…</td></tr></tbody>
+        <thead><tr><th>Item</th><th>Tipo</th><th class="num">Saldo no sistema</th><th class="num">Soma do log</th><th class="num">Sem movimento registrado</th><th class="num">Movimentos</th><th>Último</th><th>Última contagem</th><th></th></tr></thead>
+        <tbody id="cBody"><tr><td colspan="9" class="no-data">Carregando…</td></tr></tbody>
       </table></div>
     </div>
     <p class="nota"><b>Como ler:</b> "Saldo no sistema" é o saldo do item (materiais) ou a soma dos lotes (produtos e itens só com lote). "Soma do log" é o que os movimentos registrados explicam. A diferença é saldo que entrou ou saiu sem movimento no log — por exemplo, consumo anterior a 03/09, quando o log começou. Lotes importados da planilha antiga entram como "Saldo implantado".</p>
@@ -178,10 +179,10 @@ var db = firebase.database();
 
 /* Kardex de estoque (01/10). Motor em shared/kardex.js; aqui só a tela.
    Nada é gravado. */
-var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: null, produtos: null, enderecos: null, bombonas: null, materialProcesso: null};
+var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: null, produtos: null, enderecos: null, bombonas: null, materialProcesso: null, contagens: null};
 // dados + material em processo (bombonas e sobras) convertido em movimentos.
 var base = null;
-var catalogoAtual = {}, itemSel = null, abaAtual = 'item', concAtual = [];
+var catalogoAtual = {}, itemSel = null, abaAtual = 'item', concAtual = [], buscaUrlFeita = false;
 
 function setStatus(on, txt) {
   document.getElementById('sDot').classList.toggle('on', !!on);
@@ -216,7 +217,7 @@ function nomeEndereco(l) {
 
 function recalcular() {
   if (!prontos()) return;
-  base = Kardex.comMaterialProcesso(dados);
+  base = Kardex.prepararBase(dados);
   catalogoAtual = Kardex.catalogo(base);
   concAtual = Kardex.conciliacao(base);
   if (abaAtual === 'conc') renderConc();
@@ -225,6 +226,12 @@ function recalcular() {
   if (alvo && !itemSel) {
     var key = Object.keys(catalogoAtual).find(function(k) { return k === alvo || catalogoAtual[k].codigo === alvo; });
     if (key) selecionar(key);
+    else if (!buscaUrlFeita) {
+      // Código digitado na aba antiga do Estoque que não bate exato: abre a busca com ele.
+      buscaUrlFeita = true;
+      document.getElementById('fItem').value = alvo;
+      renderSugestoes();
+    }
   }
 }
 
@@ -355,7 +362,7 @@ function linhaHtml(l) {
     return lt ? (lt.loteInterno || lt.loteOrigem || lt.lote || l.loteKey) : l.loteKey;
   })() : '';
   var end = l.enderecoCodigo || (l.enderecoKey && dados.enderecos[l.enderecoKey] && dados.enderecos[l.enderecoKey].codigo) || l.enderecoKey || '';
-  var cls = l.sintetico ? 'sintetico' : (!l.conta ? 'info' : '');
+  var cls = l.tipo === 'contagem' ? 'info' : l.sintetico ? 'sintetico' : (!l.conta ? 'info' : '');
   var q = l.conta ? l.efeito : l.qtdInformada;
   var motivo = l.motivo && l.motivo.toUpperCase() !== String(l.rotulo).toUpperCase() ? l.motivo : '';
   return '<tr class="' + cls + '"><td class="sub" style="white-space:nowrap">' + dataHora(l.em) + '</td>' +
@@ -422,8 +429,9 @@ function renderConc() {
       '<td class="num">' + (Math.abs(x.semOrigem) > 0.001 ? '<span class="badge div">' + fmtSinal(x.semOrigem) + '</span>' : '<span class="badge ok">✓ 0</span>') + '</td>' +
       '<td class="num">' + fmt(x.movimentos) + '</td>' +
       '<td class="sub" style="white-space:nowrap">' + (x.ultimo ? dataHora(x.ultimo) : '—') + '</td>' +
+      '<td class="sub" style="white-space:nowrap">' + (x.ultimaContagem ? dataHora(x.ultimaContagem.em) + (x.ultimaContagem.diferenca ? ' · <span class="sai">' + fmtSinal(x.ultimaContagem.diferenca) + '</span>' : ' · confere') : 'nunca contado') + '</td>' +
       '<td><button class="link" data-abrir="' + esc(x.key) + '">Abrir kardex →</button></td></tr>';
-  }).join('') : '<tr><td colspan="8" class="no-data">Nenhum item com esse filtro.</td></tr>';
+  }).join('') : '<tr><td colspan="9" class="no-data">Nenhum item com esse filtro.</td></tr>';
 }
 document.getElementById('cBody').addEventListener('click', function(e) {
   var b = e.target.closest('[data-abrir]'); if (b) selecionar(b.getAttribute('data-abrir'));
@@ -431,10 +439,11 @@ document.getElementById('cBody').addEventListener('click', function(e) {
 document.getElementById('cCsv').onclick = function() {
   var q = function(v) { var s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   var n = function(v) { return String(v).replace('.', ','); };
-  var linhas = ['Código;Nome;Tipo;Razão;Saldo no sistema;Soma do log;Sem movimento registrado;Movimentos;Último movimento'];
+  var linhas = ['Código;Nome;Tipo;Razão;Saldo no sistema;Soma do log;Sem movimento registrado;Movimentos;Último movimento;Última contagem;Diferença na contagem'];
   filtrarConc().forEach(function(x) {
     linhas.push([x.codigo, x.nome, ROT_GRUPO[grupoDoItem(catalogoAtual[x.key] || x)], x.razao === 'item' ? 'saldo do item' : 'soma dos lotes',
-      n(x.saldoSistema), n(x.saldoLog), n(x.semOrigem), x.movimentos, x.ultimo || ''].map(q).join(';'));
+      n(x.saldoSistema), n(x.saldoLog), n(x.semOrigem), x.movimentos, x.ultimo || '',
+      x.ultimaContagem ? x.ultimaContagem.em : '', x.ultimaContagem ? n(x.ultimaContagem.diferenca) : ''].map(q).join(';'));
   });
   baixar('conciliacao-estoque.csv', linhas.join('\n'));
 };
@@ -453,7 +462,7 @@ var _cb = null;
 document.getElementById('cBusca').addEventListener('input', function() { clearTimeout(_cb); _cb = setTimeout(renderConc, 200); });
 
 db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ? 'Conectado' : 'Reconectando...'); });
-[['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos'], ['bombonas_bulk', 'bombonas'], ['material_processo', 'materialProcesso']].forEach(function(p) {
+[['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos'], ['bombonas_bulk', 'bombonas'], ['material_processo', 'materialProcesso'], ['contagens_inventario', 'contagens']].forEach(function(p) {
   dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
 });
 if (new URLSearchParams(location.search).get('aba') === 'conciliacao') irParaAba('conc');

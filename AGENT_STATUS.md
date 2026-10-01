@@ -127,6 +127,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Kardex: contagens, aba Histórico e itemTipo (2026-10-01).** Pendências do
+  kardex resolvidas: (1) `contagens_inventario` vira linha informativa "Contagem de
+  inventário" no item (contado × sistema, diferença, ajuste aplicado ou não) e coluna
+  "Última contagem" na Conciliação (`Kardex.movimentosContagens`/`prepararBase`); (2) aba
+  Histórico do `estoque.html` virou atalho para `kardex.html?item=` (a lista antiga somava
+  movimento de item e de lote); (3) `ajustarEstoque` (utils.js) aceita `extras.itemTipo`
+  (padrão `material`), teste em `run_propriedade_estoque_test.js`. Arquivos ativos: nenhum.
+
 - **PUBLICADO (parte 2 de 2) — Material em Processo: sobras no encerramento e "Devolver OP à
   fila" (2026-10-01).** `form.html` + novo `shared/material-processo-form.js`: (1) **contagem de
   sobras OBRIGATÓRIA** nas três formas de encerrar a OP (Encerrar OP do Painel de Turno, Apontamento

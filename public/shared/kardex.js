@@ -66,12 +66,15 @@
     mp_sobra:                  {rotulo: 'Sobra declarada na OP',       natureza: 'ENTRADA',  razao: 'ambas'},
     mp_usado:                  {rotulo: 'Sobra reaproveitada',         natureza: 'CONSUMO',  razao: 'ambas'},
     mp_descartado:             {rotulo: 'Sobra descartada',            natureza: 'PERDA',    razao: 'ambas'},
-    mp_devolvido:              {rotulo: 'Sobra devolvida ao estoque',  natureza: 'SAIDA',    razao: 'ambas'}
+    mp_devolvido:              {rotulo: 'Sobra devolvida ao estoque',  natureza: 'SAIDA',    razao: 'ambas'},
+    // Sintético: contagem do inventário rotativo (contagens_inventario). Só
+    // informa -- o ajuste, quando aplicado, já vem como movimento 'inventario'.
+    contagem:                  {rotulo: 'Contagem de inventário',      natureza: 'CONTAGEM', razao: 'nenhuma'}
   };
   var ORIGENS_SEM_LOG = {legado_planilha: 'planilha antiga'};
   var NATUREZAS = {
     ENTRADA: 'Entrada', SAIDA: 'Saída', CONSUMO: 'Consumo', PERDA: 'Perda',
-    AJUSTE: 'Ajuste', TRANSFERENCIA: 'Transferência', QUALIDADE: 'Qualidade', OUTRO: 'Outro'
+    AJUSTE: 'Ajuste', TRANSFERENCIA: 'Transferência', QUALIDADE: 'Qualidade', CONTAGEM: 'Contagem', OUTRO: 'Outro'
   };
 
   function num(v) { var x = Number(v); return isFinite(x) ? x : 0; }
@@ -165,7 +168,7 @@
         saldo: saldo, saldoApos: m.saldoApos != null ? num(m.saldoApos) : null,
         ref: m.ref || null, loteKey: m.loteKey || null,
         enderecoKey: m.enderecoKey || null, enderecoCodigo: m.enderecoCodigo || null,
-        autor: m.autor || null, rnc: m.rncNumero || null, sintetico: !!m.sintetico,
+        autor: m.autor || null, rnc: m.rncNumero || null, sintetico: !!m.sintetico, contagem: m.contagem || null,
         cliente: (m.propriedade && (m.propriedade.clienteNome || m.propriedade.clienteKey)) || null
       };
     });
@@ -263,6 +266,9 @@
       return {key: k, codigo: cat[k].codigo, nome: cat[k].nome || '', itemTipo: cat[k].itemTipo, unidade: cat[k].unidade || '',
         razao: r.razao, saldoSistema: r.saldoSistema, saldoLog: r.saldoLog, semOrigem: r.semOrigem,
         elos: r.alertas.filter(function(a) { return a.tipo === 'ELO'; }).length,
+        ultimaContagem: (r.linhas.filter(function(l) { return l.tipo === 'contagem'; }).slice(-1)[0] || {}).contagem
+          ? Object.assign({em: r.linhas.filter(function(l) { return l.tipo === 'contagem'; }).slice(-1)[0].em},
+              r.linhas.filter(function(l) { return l.tipo === 'contagem'; }).slice(-1)[0].contagem) : null,
         movimentos: r.linhas.length, ultimo: ultimo, conciliado: r.conciliado};
     }).sort(function(a, b) {
       return (a.conciliado ? 1 : 0) - (b.conciliado ? 1 : 0) || Math.abs(b.semOrigem) - Math.abs(a.semOrigem) ||
@@ -346,6 +352,43 @@
     return Object.assign({}, d, {movimentos: Object.assign({}, d.movimentos || {}, mp.movimentos), processo: mp.itens});
   }
 
+  /* Contagens do inventário rotativo -> linhas informativas no kardex de cada
+     item contado. contagens_inventario/{id} = {enderecoKey, enderecoCodigo,
+     contadoEm, contadoPor, ajusteAplicado, linhas: [{itemCodigo, saldoEsperado,
+     qtdContada, diferenca, tipo}]}. */
+  function movimentosContagens(contagens) {
+    var movimentos = {};
+    function sk(v) { return String(v || '').replace(/[.#$\[\]\/]/g, '-'); }
+    Object.keys(contagens || {}).forEach(function(id) {
+      var c = contagens[id] || {};
+      if (!c.contadoEm) return;
+      var linhas = Array.isArray(c.linhas) ? c.linhas : Object.keys(c.linhas || {}).map(function(k) { return c.linhas[k]; });
+      linhas.forEach(function(l, i) {
+        if (!l || !l.itemCodigo) return;
+        var dif = arred(num(l.diferenca));
+        var resumo = 'Contado ' + num(l.qtdContada) + ' · sistema ' + num(l.saldoEsperado) +
+          (dif === 0 ? ' · confere' : ' · ' + (dif > 0 ? 'sobra ' : 'falta ') + Math.abs(dif) + (c.ajusteAplicado ? ' (ajuste aplicado)' : ' (ajuste NÃO aplicado)'));
+        (movimentos[sk(l.itemCodigo)] = movimentos[sk(l.itemCodigo)] || {})['~contagem_' + id + '_' + i] = {
+          tipo: 'contagem', qtd: dif, em: c.contadoEm, motivo: resumo, ref: 'Inventário rotativo',
+          enderecoKey: c.enderecoKey || null, enderecoCodigo: c.enderecoCodigo || null, autor: c.contadoPor || null,
+          itemCodigo: l.itemCodigo, itemNome: l.itemNome || null, unidade: l.unidade || null,
+          sintetico: true, contagem: {contado: num(l.qtdContada), esperado: num(l.saldoEsperado), diferenca: dif, ajusteAplicado: !!c.ajusteAplicado}
+        };
+      });
+    });
+    return movimentos;
+  }
+
+  /* Base completa do kardex: log + material em processo + contagens. As
+     fontes extras entram em cópias; o banco não é tocado. */
+  function prepararBase(d) {
+    var b = comMaterialProcesso(d);
+    var cont = movimentosContagens(d.contagens);
+    var movs = Object.assign({}, b.movimentos);
+    Object.keys(cont).forEach(function(k) { movs[k] = Object.assign({}, movs[k] || {}, cont[k]); });
+    return Object.assign({}, b, {movimentos: movs});
+  }
+
   function csv(item, r) {
     var cab = ['Data/hora', 'Movimento', 'Natureza', 'Motivo', 'Referência', 'Lote', 'Endereço', 'Cliente', 'Autor', 'Qtd informada', 'Efeito no saldo', 'Saldo'];
     function q(v) { var s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -361,5 +404,6 @@
 
   return {TIPOS: TIPOS, NATUREZAS: NATUREZAS, tipoInfo: tipoInfo, conta: conta, razaoDoItem: razaoDoItem,
     saldoDosLotes: saldoDosLotes, montar: montar, opcoesDoItem: opcoesDoItem,
-    movimentosMaterialProcesso: movimentosMaterialProcesso, comMaterialProcesso: comMaterialProcesso, catalogo: catalogo, conciliacao: conciliacao, csv: csv};
+    movimentosMaterialProcesso: movimentosMaterialProcesso, comMaterialProcesso: comMaterialProcesso,
+    movimentosContagens: movimentosContagens, prepararBase: prepararBase, catalogo: catalogo, conciliacao: conciliacao, csv: csv};
 });
