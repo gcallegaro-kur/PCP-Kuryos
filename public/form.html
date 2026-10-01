@@ -4559,6 +4559,14 @@ function aplicarRestricaoRotulagem() {
   if (h1) h1.textContent = soRotulagem ? 'Registro de Produção — Rotulagem' : 'Registro de Produção';
 }
 
+// O papel do usuário (admin/pcp) chega DEPOIS do primeiro desenho do painel
+// (auth_check.js avisa por este evento). Sem redesenhar aqui, o botão
+// "Mudar de linha / trocar OPs" sumia até o próximo dado mudar -- relato do
+// usuário em 01/10: "o botão sumiu, até para mim, que sou admin".
+window.addEventListener('kuryos-auth-pronto', function() {
+  try { renderPainelTurno(); } catch (e) { console.error('Painel de Turno após o login:', e); }
+});
+
 function renderPainelTurno() {
   if (!document.getElementById('tabPanelTurno')) return;
   aplicarRestricaoRotulagem();

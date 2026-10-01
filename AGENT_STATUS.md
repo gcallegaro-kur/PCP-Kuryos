@@ -148,6 +148,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   segue ativa, `cab15a9`). Módulo `shared/confirmacao-etapas.js`, testes
   `run_confirmacao_etapas_test.js`, `run_apontamento_encerramento_test.js`,
   `run_fluxo_ponta_a_ponta_test.js`. Arquivos ativos: nenhum.
+- **PUBLICADO — Botão de rearranjo que "sumia" (2026-10-01).** Relato: "o botão sumiu, até
+  para mim, que sou admin". Causa (`form.html`): o Painel de Turno desenhava os cards ANTES de
+  o papel do usuário chegar (`window.currentUser` ainda null), então a condição admin/PCP dava
+  falso e o botão só voltava quando algum dado mudasse (o próprio `auth_check.js` documenta
+  essa corrida e dispara `kuryos-auth-pronto`, que o form.html não escutava). Agora o painel
+  redesenha nesse evento. O botão continua só nos cards de LINHA com OP alocada (hoje, na
+  base, só a Linha 2: 26258/05). Teste novo `run_painel_rearranjo_ui_test.js` (tela real,
+  login imediato e atrasado; admin/PCP veem, produção/qualidade não) — falhava antes.
+  Arquivos ativos: nenhum.
 
 - **PUBLICADO — "Mudar de linha / trocar OPs" também para o PCP (2026-10-01).** Era só admin
   em três pontos, todos ajustados para `admin` + `pcp`: botão no Painel de Turno
