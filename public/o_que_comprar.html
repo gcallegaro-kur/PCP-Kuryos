@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O que comprar</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script>
+<script src="shared/propriedade-estoque.js"></script>
+<script src="auth_check.js"></script>
+<script src="shared/necessidade-pedidos.js"></script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+:root{--c-est:#12967d;--c-cam:#2e6bd6;--c-and:#e5a100;--c-fal:#d03b3b;--ok-bg:#e3f6ea;--ok:#0a7d3c;--warn-bg:#fff1d6;--warn:#a15c00;--bad-bg:#fde8e8;--bad:#c42b2b;--info-bg:#e6edfc;--info:#1f4fb8;--mute-bg:#f0f0f3;--sel:#eaf0ff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--c-est:#3fd0b0;--c-cam:#6a9bff;--c-and:#ffc83d;--c-fal:#ff7b7b;--ok-bg:rgba(60,200,120,.16);--ok:#6fe3a0;--warn-bg:rgba(250,178,25,.16);--warn:#ffcb6b;--bad-bg:rgba(240,80,80,.18);--bad:#ff8f8f;--info-bg:rgba(94,131,234,.2);--info:#9db7ff;--mute-bg:rgba(255,255,255,.08);--sel:rgba(94,131,234,.18)}}
+:root[data-theme="dark"]{--c-est:#3fd0b0;--c-cam:#6a9bff;--c-and:#ffc83d;--c-fal:#ff7b7b;--ok-bg:rgba(60,200,120,.16);--ok:#6fe3a0;--warn-bg:rgba(250,178,25,.16);--warn:#ffcb6b;--bad-bg:rgba(240,80,80,.18);--bad:#ff8f8f;--info-bg:rgba(94,131,234,.2);--info:#9db7ff;--mute-bg:rgba(255,255,255,.08);--sel:rgba(94,131,234,.18)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
+.pg{max-width:1360px;margin:0 auto;padding:24px 22px 110px}
+h1{margin:0;font-size:28px;letter-spacing:-.02em}
+.sub{font-size:13px;color:var(--ink-soft);margin-top:4px;max-width:780px;line-height:1.45}
+.head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.pill{display:inline-flex;align-items:center;gap:6px;background:var(--mute-bg);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink-soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:var(--good)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--radius-sm);padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;gap:6px;align-items:center;text-decoration:none}
+.btn:hover{border-color:var(--accent)}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.sm{padding:4px 9px;font-size:12px}.btn:disabled{opacity:.45;cursor:not-allowed}
+.passo{display:flex;align-items:center;gap:10px;margin:26px 0 10px}
+.passo .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}
+.passo h2{margin:0;font-size:17px}.passo .d{font-size:12.5px;color:var(--ink-soft)}
+.card{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:16px 18px}
+/* escolha de pedidos */
+.barra{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.busca{position:relative;flex:1;min-width:220px}
+.busca input{width:100%;padding:11px 14px 11px 38px;font-size:14px;border:1.5px solid var(--line);border-radius:var(--radius-md);background:var(--panel);color:var(--ink);font-family:inherit}
+.busca input:focus{outline:none;border-color:var(--accent)}
+.busca span{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--ink-mute)}
+.sel{padding:9px 11px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-size:13px;font-family:inherit;max-width:240px}
+.pgrade{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;max-height:340px;overflow:auto;padding:2px}
+.pc{all:unset;box-sizing:border-box;cursor:pointer;border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:9px 11px;background:var(--panel);display:block;position:relative}
+.pc:hover{border-color:var(--seq-300)}
+.pc:focus-visible{outline:2px solid var(--accent)}
+.pc.on{border-color:var(--accent);background:var(--sel)}
+.pc.on::after{content:'✓';position:absolute;right:9px;top:7px;color:var(--accent);font-weight:800}
+.pc b{font-size:13px}.pc .l{font-size:12px;color:var(--ink-soft);margin-top:2px;line-height:1.35}
+.pc .m{font-size:11.5px;color:var(--ink-mute);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+.pc.nao{opacity:.62}
+.tg{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.tg.ok{background:var(--ok-bg);color:var(--ok)}.tg.warn{background:var(--warn-bg);color:var(--warn)}.tg.bad{background:var(--bad-bg);color:var(--bad)}.tg.info{background:var(--info-bg);color:var(--info)}.tg.mute{background:var(--mute-bg);color:var(--ink-soft)}
+.cesta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.vazio{padding:46px 20px;text-align:center;color:var(--ink-soft)}.vazio b{display:block;font-size:16px;color:var(--ink);margin-bottom:6px}
+/* resumo */
+.hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px}
+@media(max-width:900px){.hero{grid-template-columns:1fr}}
+.hero h3{margin:0 0 4px;font-size:19px;letter-spacing:-.01em}
+.stack{display:flex;height:16px;border-radius:9px;overflow:hidden;background:var(--mute-bg);margin:12px 0 8px}
+.stack i{display:block;height:100%;min-width:2px}
+.legenda{display:flex;gap:8px;flex-wrap:wrap}
+.lg{all:unset;cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink-soft)}
+.lg:hover{border-color:var(--seq-300)}.lg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.lg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.lg b{font-variant-numeric:tabular-nums}
+.pedcards{display:grid;gap:8px}
+.ped{border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.ped .ord{grid-row:span 3;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;align-self:start}
+.ped .t{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.ped .t b{font-size:13.5px}
+.ped .mv{display:inline-flex;gap:2px}
+.ped .mv button{all:unset;cursor:pointer;padding:0 6px;border-radius:5px;color:var(--ink-mute);font-size:13px}.ped .mv button:hover{background:var(--mute-bg);color:var(--ink)}
+.prog{height:8px;border-radius:5px;background:var(--mute-bg);overflow:hidden;display:flex}
+.prog i{display:block;height:100%}
+.ped .tx{font-size:12px;color:var(--ink-soft);line-height:1.4}
+.aviso{border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;margin-top:12px;line-height:1.45}
+.aviso.warn{background:var(--warn-bg);color:var(--warn)}.aviso.info{background:var(--info-bg);color:var(--info)}.aviso.bad{background:var(--bad-bg);color:var(--bad)}
+.aviso ul{margin:6px 0 0;padding-left:18px}
+/* materiais */
+.mfil{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.mat{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);margin-bottom:8px;overflow:hidden;border-left:5px solid var(--line)}
+.mat.falta{border-left-color:var(--c-fal)}.mat.andamento{border-left-color:var(--c-and)}.mat.caminho{border-left-color:var(--c-cam)}.mat.coberto{border-left-color:var(--c-est)}
+.mhd{all:unset;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.6fr) 150px;gap:14px;align-items:center;padding:12px 16px;cursor:pointer;width:100%;box-sizing:border-box}
+.mhd:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+@media(max-width:900px){.mhd{grid-template-columns:1fr;gap:8px}}
+.mhd .nm{font-weight:650;line-height:1.3}.mhd .cd{font-size:11.5px;color:var(--ink-mute);margin-top:2px}
+.mbar{display:flex;height:14px;border-radius:8px;overflow:hidden;background:var(--mute-bg)}
+.mbar i{display:block;height:100%}
+.mleg{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-soft);margin-top:5px;font-variant-numeric:tabular-nums}
+.mleg span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--cor)}
+.mres{text-align:right}
+.mres b{display:block;font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mres small{font-size:11.5px;color:var(--ink-mute)}
+.mres.falta b{color:var(--c-fal)}.mres.coberto b{color:var(--ok)}.mres.caminho b{color:var(--c-cam)}.mres.andamento b{color:var(--warn)}
+.det{padding:4px 18px 16px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--mute-bg) 40%,transparent)}
+.det h4{margin:14px 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute)}
+.det table{width:100%;border-collapse:collapse;font-size:12.5px}
+.det th{text-align:left;font-size:10.5px;text-transform:uppercase;color:var(--ink-mute);padding:5px 6px;border-bottom:1px solid var(--line)}
+.det td{padding:7px 6px;border-bottom:1px solid color-mix(in srgb,var(--line) 50%,transparent);font-variant-numeric:tabular-nums}
+.det .n{text-align:right}
+.exp{font-size:13px;line-height:1.5;color:var(--ink-soft)}
+.grp{margin:20px 2px 8px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-mute);font-weight:700}
+.acao{position:fixed;left:232px;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px 24px;display:flex;gap:12px;align-items:center;justify-content:space-between;z-index:20;box-shadow:0 -8px 24px -16px rgba(0,0,0,.3)}
+.acao[hidden]{display:none}
+@media(max-width:1000px){.acao{left:0}}
+.acao .t{font-size:13.5px}.acao .t b{font-size:15px}
+/* modal */
+.mfundo{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10040;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:var(--panel);border-radius:16px;max-width:680px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px}
+.modal h3{margin:0 0 4px}
+.sl{display:grid;grid-template-columns:auto 1fr 110px 40px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.sl input[type=number]{width:100%;padding:7px 8px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:inherit;font-size:13px}
+.sl small{display:block;color:var(--ink-mute);font-size:11px}
+.modal textarea{width:100%;margin-top:6px;padding:8px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:inherit;font-size:13px}
+.modal .ac{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.toast{position:fixed;top:18px;right:18px;z-index:10050;background:var(--ok);color:#fff;padding:12px 16px;border-radius:10px;font-size:13.5px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.erro{background:var(--bad)}
+@media(max-width:760px){.pg{padding:16px 12px 120px}h1{font-size:23px}}
+</style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<main class="pg">
+  <div class="head">
+    <div>
+      <h1>O que comprar</h1>
+      <div class="sub">Escolha um ou mais pedidos. Para cada material, a tela mostra quanto o pedido precisa, quanto já temos, quanto está chegando, quanto já está em compra e <b>quanto ainda falta comprar</b>. Quando dois pedidos disputam o mesmo material, o estoque vai primeiro para o que entrega antes.</div>
+    </div>
+    <span class="pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando…</span></span>
+  </div>
+
+  <div class="passo"><span class="n">1</span><div><h2>Escolha os pedidos</h2><div class="d" id="passo1d">Clique nos pedidos que quer atender. Dá para marcar vários.</div></div></div>
+  <div class="card">
+    <div class="barra">
+      <div class="busca"><span>🔍</span><input type="search" id="q" placeholder="Pedido, produto, SKU ou cliente…" autocomplete="off" aria-label="Buscar pedido"></div>
+      <select class="sel" id="fCli" aria-label="Cliente"></select>
+      <button type="button" class="btn sm" id="btnTodos">Marcar os que calculam</button>
+      <button type="button" class="btn sm" id="btnNenhum">Limpar escolha</button>
+    </div>
+    <div class="pgrade" id="pgrade"><div class="vazio"><b>Carregando pedidos…</b></div></div>
+  </div>
+
+  <div id="resultado"></div>
+</main>
+<div class="acao" id="acao" hidden></div>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script>
+<script src="shared/necessidade-pedidos-tela.js"></script>
+</body>
+</html>

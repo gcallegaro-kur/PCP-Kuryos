@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — "O que comprar" por pedido (01/10/2026)
+
+- **Escopo:** nova tela `public/o_que_comprar.html` + `public/shared/necessidade-pedidos.js` (motor puro; usa a MESMA `explodirMateriaisNecessarios`) + `public/shared/necessidade-pedidos-tela.js`; menu em `public/auth_check.js` (PCP e Compras); manual (`manual_compras.html` §1a); testes `run_necessidade_pedidos_test.js` e `run_necessidade_pedidos_ui_test.js`. Não toca `insumos.html` (MRP/Matriz seguem como estão). Única escrita: solicitação de compra pendente (`solicitacoes_compra`, com `pedidoKeys`, `origemTela: 'o_que_comprar'`).
+- **Arquivos ativos:** os acima + `AGENT_STATUS.md`.
+
 ### Claude — Consulta de Estoque + intermediários x embalagens (01/10/2026)
 
 - **PUBLICADO (`9df9603`, Hosting, 01/10):** `consulta_estoque.html` (menu Logística › Consulta de Estoque; PCP e Compras também) — só leitura, não toca `estoque.html`. Busca por palavras (nome/código/lote/endereço/cliente), filtros com contagem viva (tipo, situação, cliente, "já contado no Dia D"), drawer com lotes FEFO, empenhos por OP, dono, onde é usado, link ao Kardex, CSV, atalhos (`/`, setas, Esc), estado na URL. Aba **Intermediários e envase**: bulk manipulado x embalagem utilizável por OP (casamento por BOM da OP/BOM vigente; estoque de outro cliente e empenho de outras OPs não contam; material sem "Controla estoque" nunca trava), gargalo, e retidos da produção (`material_processo`).
