@@ -172,6 +172,23 @@
         ".write": "((auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))) && !data.child('retrabalhoId').exists() && !newData.child('retrabalhoId').exists()"
       }
     },
+    // Material em processo (01/10): bulk em bombona/tanque, sobras e itens retidos
+    // quando a OP sai da linha. Quem opera a fábrica grava; todo logado lê.
+    "bombonas_bulk": {
+      ".read": "auth != null",
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))"
+    },
+    "contador_bombonas": {
+      ".read": "auth != null",
+      "$prefixo": {
+        ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))",
+        ".validate": "newData.isNumber() && (!data.exists() || newData.val() > data.val())"
+      }
+    },
+    "material_processo": {
+      ".read": "auth != null",
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))"
+    },
     "perdas": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))"

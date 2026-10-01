@@ -38,6 +38,8 @@
     // Térmica 100 x 70 mm (a mesma do recebimento de sempre).
     recebimento: {pagina: '100mm 70mm', largura: 94, altura: 64},
     palete: {pagina: '100mm 70mm', largura: 94, altura: 64},
+    // Bombona/tanque de bulk (01/10): mesma térmica do palete.
+    bombona: {pagina: '100mm 70mm', largura: 94, altura: 64},
     // Térmica 100 x 50 mm, uma por posição.
     endereco: {pagina: '100mm 50mm', largura: 94, altura: 44},
     // Folha A4, 2 x 5 por folha, para quem não tem impressora de etiqueta.
@@ -73,6 +75,23 @@
       (rotStatus ? '<b>Situação</b><span>' + esc(rotStatus) + '</span>' : '') + '</div>' +
       '<div class="bar">' + barras(id, util(fmt), 10, 0.4) + '</div></section>';
   }
+  /* Bombona/tanque de bulk (pedido do usuário, 01/10): "emitir uma etiqueta
+     pra que seja colada e identificada, tratando lote, validade e etc.".
+     Recipiente VAZIO sai só com o código (para colar já e preencher depois). */
+  function cartaoBombona(b, fmt) {
+    var vazia = !!b.vazia;
+    var dono = b.donoTipo === 'KURYOS' ? 'KURYOS' : (b.donoNome || '—');
+    return '<section class="etq"><div class="topo"><div class="tx"><span class="tag' + (vazia ? '' : ' q') + '">' + esc((b.tipoRotulo || 'BOMBONA').toUpperCase()) + ' · BULK' + (vazia ? ' · VAZIA' : '') + '</span>' +
+      '<div class="big">' + esc(b.codigo) + '</div>' +
+      '<div class="nome">' + (vazia ? 'Preencher ao receber o bulk' : esc(b.produto || '') + (b.sku ? ' (' + esc(b.sku) + ')' : '')) + '</div></div>' + qrCodeSvg(b.codigo, 20) + '</div>' +
+      (vazia
+        ? '<div class="grid"><b>Capacidade</b><span>' + (b.capacidadeKg ? num(b.capacidadeKg) + ' kg' : '—') + '</span></div>'
+        : '<div class="grid"><b>Lote</b><span>' + esc(b.lote || '—') + '</span>' +
+          '<b>Quantidade</b><span>' + num(b.kg) + ' kg</span>' +
+          '<b>Fabricação</b><span>' + esc(data(b.fabricadoEm)) + '</span><b>Validade</b><span>' + esc(data(b.validade)) + '</span>' +
+          '<b>Dono</b><span>' + esc(dono) + '</span><b>Local</b><span>' + esc(b.local || '—') + '</span></div>') +
+      '<div class="bar">' + barras(b.codigo, util(fmt), 10, 0.4) + '</div></section>';
+  }
   function cartaoEndereco(e, fmt) {
     var c = e.codigo || e.key || '';
     return '<section class="etq end"><div class="topo"><div class="tx"><div class="huge">' + esc(c) + '</div>' +
@@ -97,12 +116,14 @@
   }
 
   /* HTML completo de uma folha de etiquetas. tipo: recebimento | palete |
-     endereco | endereco-a4. `lista`: lotes (recebimento/palete) ou endereços. */
+     bombona | endereco | endereco-a4. `lista`: lotes (recebimento/palete), bombonas
+     (MaterialProcesso.dadosEtiqueta) ou endereços. */
   function pagina(tipo, lista) {
     var fmt = FORMATOS[tipo] || FORMATOS.palete, cards = [];
     (lista || []).forEach(function(x) {
       if (tipo === 'recebimento') { var tot = Number(x.qtdVolumes) || 1; for (var v = 1; v <= tot; v++) cards.push(cartaoRecebimento(x, v, tot, fmt)); }
       else if (tipo === 'palete') cards.push(cartaoPalete(x, fmt));
+      else if (tipo === 'bombona') cards.push(cartaoBombona(x, fmt));
       else cards.push(cartaoEndereco(x, fmt));
     });
     return '<style>' + css(fmt) + '</style>' + (fmt.grade ? '<div class="folha">' + cards.join('') + '</div>' : cards.join(''));

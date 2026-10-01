@@ -84,18 +84,18 @@ const KURYOS_MODULOS = {
   // `apontamento` continua sendo a da Produção de propósito: as regras do
   // banco e os `modulos` já gravados usam esse nome.
   apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
-                  paginas: ['manipulacao.html', 'estoque_setor.html', 'proximas_ordens.html'] },
+                  paginas: ['manipulacao.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   // Quem pode conferir a pesagem enquanto a chave "Conferência de Pesagem"
   // (Ajustes) estiver ligada -- Qualidade e P&D. Dá acesso só à tela da
   // Manipulação; conferir é a única ação que a tela oferece a quem só tem isto.
   conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
                   paginas: ['manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
@@ -108,9 +108,9 @@ const KURYOS_MODULOS = {
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
                   paginas: ['compras.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html'] },
+                  paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html'] },
+                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -770,6 +770,8 @@ function renderUnifiedNavbar(user) {
       setores.rotulagem && apontaEm === 'Rotulagem' && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
       setores.rotulagem && ktLink('estoque_setor.html?setor=rotulagem', 'warehouse', 'Estoque dos Rótulos', activePage)
     ]),
+    // Material em Processo (01/10): bulk em bombona e sobras. Quem opera, quem guarda e quem libera.
+    (setores.producao || setores.manipulacao || setores.rotulagem || temMod('logistica') || temMod('qualidade') || temMod('planejamento')) && ktLink('material_processo.html', 'warehouse', 'Material em Processo', activePage),
     // Gestão sem nenhum setor marcado continua achando o histórico aqui.
     !setores.producao && !setores.rotulagem && temMod('planejamento') && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage)
   ]);

@@ -127,6 +127,23 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO (parte 1 de 2) — Material em Processo: bombonas e tanques (2026-10-01).** Pedido do
+  usuário sobre semiacabados: bulk e frascos rotulados em primeiro lugar; líder declara; contagem
+  de sobras exigida no fim da OP; bombona identificada com etiqueta (lote, validade); dono às
+  vezes cliente, às vezes Kuryos. **Parte 1 (no ar):** página `material_processo.html` (menu
+  Operação › Material em Processo) com (a) Bombonas e tanques: cadastro em lote com código
+  BB-0001/TQ-0001 (contador `contador_bombonas`), registrar bulk (OP, kg, dono, validade, local;
+  lote diferente não se mistura, capacidade vale, complemento do mesmo lote soma), ajustar kg /
+  esvaziar com motivo e histórico, **etiqueta** (`EtiquetasWMS` formato `bombona`: código, lote,
+  kg, fabricação, validade, dono, local, barras e QR); lista "Bulk sem bombona identificada"
+  (ensaio na base: 6 OPs, ~2.950 kg manipulados sem recipiente); (b) aba Sobras e retidos
+  (`material_processo/`, baixa com motivo). Regras novas no banco (`bombonas_bulk`,
+  `contador_bombonas`, `material_processo`; teste de regras no emulador com `--project demo-mp`).
+  **Parte 2 (a fazer):** "Devolver OP à fila" + contagem de sobras exigida no Encerrar OP
+  (`form.html`) + selo no Controle de OPs. Módulo puro `shared/material-processo.js` já traz as
+  regras da parte 2. Testes: `run_material_processo_test.js`, `run_material_processo_ui_test.js`,
+  `run_material_processo_rules_test.js`. Arquivos ativos para a parte 2: `form.html`, `ops.html`.
+
 - **EM ANDAMENTO — Kardex de estoque (2026-10-01).** Pedido: histórico kardex por item
   (entrou/saiu/consumido/ajustado, log de tudo), incluindo intermediários (outra sessão),
   e auditoria de inventário. Arquivos ativos: `public/kardex.html` (novo),

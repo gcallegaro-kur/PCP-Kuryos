@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Material em Processo</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script>
+<script src="auth_check.js"></script>
+<script src="shared/qrcode-lib.js"></script>
+<script src="shared/etiquetas-wms.js"></script>
+<script src="shared/material-processo.js"></script>
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+body{margin:0;background:#f5f6fa;font-family:var(--font-ui);color:#182230}
+.wrap{max-width:1280px;margin:auto;padding:26px 18px}
+h1{margin:0}h2{font-size:17px;margin:0 0 10px}.sub{font-size:13px;color:#667085;margin-top:5px}
+.card{background:#fff;border-radius:15px;padding:18px;margin-top:16px;border:1px solid #eaecf0}
+.abas{display:flex;gap:6px;background:#eef0f4;padding:4px;border-radius:10px;margin-top:16px;max-width:520px}
+.abas button{flex:1;border:0;background:none;border-radius:7px;padding:9px;font-weight:700;cursor:pointer;color:#667085;font-size:13px}
+.abas button.on{background:#fff;color:#182230;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.barra{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.barra input[type=search],.barra select{padding:8px 11px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:13px;background:#fff}
+.barra input[type=search]{flex:1;min-width:200px}
+.btn{border:0;border-radius:8px;padding:9px 13px;background:#0a1c69;color:#fff;font-weight:700;cursor:pointer;font-size:13px}
+.btn.ghost{background:#eef2ff;color:#17479e}.btn.sm{padding:5px 9px;font-size:12px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.perigo{background:#fee4e2;color:#b42318}
+.chips{display:flex;gap:10px;flex-wrap:wrap}.chip{background:#f9fafb;border:1px solid #eaecf0;border-radius:12px;padding:10px 14px}
+.chip b{display:block;font-size:22px}.chip span{font-size:11.5px;color:#667085}
+table{width:100%;border-collapse:collapse;font-size:13px}th{font-size:11px;text-transform:uppercase;color:#667085;text-align:left;padding:8px;border-bottom:1px solid #eaecf0}
+td{padding:9px 8px;border-bottom:1px solid #f2f4f7;vertical-align:top}td.num,th.num{text-align:right}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px}
+.tag.cheia{background:#dcfae6;color:#067647}.tag.vazia{background:#f2f4f7;color:#475467}.tag.alerta{background:#fef0c7;color:#b54708}
+.dica{font-size:12px;color:#667085}
+.aviso{border-radius:10px;padding:11px 14px;margin-top:12px;font-size:13px}
+.aviso.ok{background:#ecfdf3;color:#067647}.aviso.erro{background:#fef3f2;color:#b42318}.aviso.alerta{background:#fffaeb;color:#93370d}
+.modal-fundo{position:fixed;inset:0;background:rgba(16,24,40,.5);z-index:10040;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px}
+.modal label{display:block;font-size:12px;font-weight:700;margin:12px 0 4px;color:#344054}
+.modal input,.modal select,.modal textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d0d5dd;border-radius:8px;font-size:14px;font-family:inherit}
+.modal .acoes{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.hist{font-size:12px;color:#475467;margin:6px 0 0;padding-left:16px}
+.table-wrap{overflow-x:auto}
+@media(max-width:700px){.wrap{padding:16px 12px}}
+</style></head><body class="kuryos-theme has-sidebar"><main class="wrap">
+<h1>Material em Processo</h1>
+<p class="sub">O que está entre uma etapa e outra: <b>bulk em bombona ou tanque</b> (com etiqueta de lote e validade) e as <b>sobras e itens retidos</b> quando uma OP termina ou sai da linha.</p>
+<div id="aviso" class="aviso" hidden role="status" aria-live="polite"></div>
+
+<div class="abas" role="tablist">
+  <button type="button" id="abaBombonas" class="on" role="tab">🛢️ Bombonas e tanques</button>
+  <button type="button" id="abaSobras" role="tab">📦 Sobras e retidos</button>
+</div>
+
+<section id="painelBombonas">
+  <div class="card"><div class="chips" id="resumoBombonas"></div></div>
+  <div class="card" id="cardSemRecipiente" hidden>
+    <h2>⚠️ Bulk sem bombona identificada</h2>
+    <p class="dica">OPs com bulk manipulado cujos kg ainda não estão em nenhuma bombona ou tanque registrado. Sem registro não há etiqueta, lote nem validade colados no recipiente.</p>
+    <div class="table-wrap"><table><thead><tr><th>OP</th><th>Produto</th><th class="num">Manipulado</th><th class="num">Já envasado</th><th class="num">Sem recipiente</th><th></th></tr></thead><tbody id="corpoSemRecipiente"></tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="barra">
+      <input type="search" id="buscaBombona" placeholder="🔎 Buscar por código, lote, produto, cliente...">
+      <select id="filtroBombona"><option value="">Todas</option><option value="CHEIA">Com bulk</option><option value="VAZIA">Vazias</option></select>
+      <button type="button" class="btn" id="btnNovas">+ Cadastrar bombonas / tanques</button>
+      <button type="button" class="btn ghost" id="btnRegistrar">⬇ Registrar bulk em recipiente</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Código</th><th>Situação</th><th>Conteúdo</th><th class="num">Kg</th><th>Validade</th><th>Dono</th><th>Local</th><th></th></tr></thead><tbody id="corpoBombonas"><tr><td colspan="8" class="dica">Carregando…</td></tr></tbody></table></div>
+  </div>
+</section>
+
+<section id="painelSobras" hidden>
+  <div class="card">
+    <div class="barra">
+      <input type="search" id="buscaSobra" placeholder="🔎 Buscar por OP, produto, item, cliente...">
+      <select id="filtroSobra"><option value="EM_PROCESSO">Em processo</option><option value="">Todos os status</option><option value="USADO">Usado</option><option value="DESCARTADO">Descartado</option><option value="DEVOLVIDO">Devolvido ao estoque</option></select>
+      <span class="dica" id="resumoSobras"></span>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Item</th><th>OP</th><th class="num">Quantidade</th><th>Dono</th><th>Onde</th><th>Declarado</th><th>Situação</th><th></th></tr></thead><tbody id="corpoSobras"><tr><td colspan="8" class="dica">Carregando…</td></tr></tbody></table></div>
+  </div>
+</section>
+</main>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script>
+<script src="shared/material-processo-tela.js"></script>
+</body></html>
