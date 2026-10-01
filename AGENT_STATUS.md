@@ -140,9 +140,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   pulam o sem-controle. Cadastros: checkbox "Controla estoque" no material e "1 a cada N
   peças" no BOM (grava pecasPorUnidade + qtdPorPeca=1/N). Estoque: selo "sem controle".
   Testes `run_consumo_inteiro_test.js`, `run_apontamento_encerramento_test.js` (34+36=70
-  caixas). **Dado pendente de autorização:** 11 materiais "un" com saldo fracionado
-  (ET-00003/12/18/29/47/51/57/67, MPGR-00038/47/50) e marcar a água (MPGR-00132) como sem
-  controle. Arquivos ativos: nenhum.
+  caixas). **Dados (01/10):** água sem controle e unidade das MPGR-00038/47/50 (un→kg)
+  ajustados pelo próprio usuário no cadastro; 8 caixas ET com saldo fracionado arredondadas
+  para baixo com autorização (ex.: ET-00012 −2.231,798 → −2.232), cada uma com `ajustes/
+  arred_20261001` e `movimentos_estoque/{k}/arred_20261001` (ajuste_manual, aparece no
+  kardex); conferido: só saldo/última movimentação/ajustes mudaram, empenhos intactos.
+  Backups em `backups/estoque-ET-*-antes-arredondamento-20261001.json`. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Estoque: coluna "Onde é usado" (2026-10-01).** Pedido: mostrar em quais
   BOMs/produtos o item é usado. `shared/onde-usado.js` (`OndeUsado.indice`): por produto
