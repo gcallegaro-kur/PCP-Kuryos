@@ -127,6 +127,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Kardex de estoque (2026-10-01).** Pedido: histórico kardex por item
+  (entrou/saiu/consumido/ajustado, log de tudo), incluindo intermediários (outra sessão),
+  e auditoria de inventário. Arquivos ativos: `public/kardex.html` (novo),
+  `public/shared/kardex.js` (novo), `run_kardex_test.js`, `run_kardex_ui_test.js` (novos),
+  `public/auth_check.js` (registro da página e link no menu), `public/manual_estoque.html`,
+  `AGENT_STATUS.md`.
+
 - **PUBLICADO — Envase que bate a meta sem encerrar também vira etapa a confirmar (2026-10-01).**
   Turno retroativo e apontamento horário não "encerram" (sem `efeitosOp`), mas o cálculo
   de 95% leva a OP a `Aguardando Confirmação`; agora isso grava também
