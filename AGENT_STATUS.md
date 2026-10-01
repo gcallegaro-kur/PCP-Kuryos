@@ -152,6 +152,25 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   `public/shared/kardex.js` (novo), `run_kardex_test.js`, `run_kardex_ui_test.js` (novos),
   `public/auth_check.js` (registro da página e link no menu), `public/manual_estoque.html`,
   `AGENT_STATUS.md`.
+- **PUBLICADO — Kardex de estoque (2026-10-01).** Pedido: histórico kardex por item
+  (entrou/saiu/consumido/ajustado, log de tudo), incluindo intermediários, e auditoria de
+  inventário. `public/kardex.html` (menu Logística › Kardex, módulo `logistica`) sobre
+  `shared/kardex.js`, que lê só `movimentos_estoque` + `estoque` + `estoque_lotes`.
+  **Duas razões no mesmo log:** material (tem `estoque/{key}`) usa o saldo do item —
+  contam recebimento_pc, consumo_producao, consumo_manipulacao, perda, ajuste_manual,
+  cancelamento_recebimento, devolucao_fornecedor; item só com lote (PA, intermediário) usa
+  a soma dos lotes — contam conferencia_pa, expedicao_pa, devolucao_cliente, saida_manual,
+  descarte, inventario, producao_op, recebimento_pc, consumo (FEFO). `transferencia` e
+  `qualidade` nunca contam (divisão de lote grava qtd POSITIVA). Tipo desconhecido conta
+  pelo sinal. Lote `origemTipo: legado_planilha` vira linha sintética "Saldo implantado".
+  `saldoApos` só confere elo (null tolerado). Ensaio na base: 178 itens, 151 conciliados,
+  27 com saldo sem movimento registrado (todos materiais com consumo de 01–02/09, antes do
+  log), 0 elos quebrados. **Contrato p/ intermediários (sessão não identificada):** gravar
+  em `movimentos_estoque/{sanitizeKey(codigo)}` com `itemTipo: 'intermediario'`, `qtd`
+  com sinal, `em`, `ref`, `loteKey`; ajustarEstoque fixa `itemTipo: 'material'` (aviso da
+  sessão "Arquitetura de novo módulo e custos") — para agregado, aceitar itemTipo por extras.
+  Testes `run_kardex_test.js` (+ ensaio com KARDEX_BASE) e `run_kardex_ui_test.js`.
+  Manual: `manual_estoque.html` §6. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Envase que bate a meta sem encerrar também vira etapa a confirmar (2026-10-01).**
   Turno retroativo e apontamento horário não "encerram" (sem `efeitosOp`), mas o cálculo

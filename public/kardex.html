@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kardex de estoque</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/kardex.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-blue-fg:#1e40af;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c;--tint-purple-bg:#f3e8ff;--purple:#7c3aed}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-blue-fg:#a5b4fc;--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--purple:#a78bfa}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-blue-fg:#a5b4fc;--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74;--tint-purple-bg:rgba(167,139,250,.18);--purple:#a78bfa}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:12px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .status-pill{display:flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--text) 6%,transparent);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+    .dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:var(--success)}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .abas{display:flex;gap:6px;margin:10px 0 12px;border-bottom:1px solid var(--border)}
+    .aba{padding:10px 14px;border:none;background:none;font-weight:700;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;min-height:44px}
+    .aba.on{color:var(--primary);border-bottom-color:var(--primary)}
+    .painel{display:none}.painel.on{display:block}
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+    .filtros select,.filtros input{padding:9px 11px;border:1.5px solid var(--border);border-radius:9px;font-size:14px;background:var(--card);color:var(--text);min-height:42px}
+    .filtros label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+    .busca{position:relative;flex:1;min-width:min(320px,100%)}
+    .busca input{width:100%}
+    .sugestoes{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.14);z-index:20;max-height:340px;overflow:auto;display:none}
+    .sugestoes.on{display:block}
+    .sug{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--tint-gray-bg);font-size:13.5px}
+    .sug:hover,.sug.ativo{background:var(--surface-2)}
+    .sug b{font-weight:700}
+    .item-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:4px 0 12px}
+    .item-cab h2{font-size:20px;font-weight:700;letter-spacing:-.01em}
+    .item-cab .sub{margin-top:2px}
+    .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+    .tile{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;min-width:0}
+    .tile .v{font-size:22px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tile .l{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+    .card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);margin-bottom:14px;min-width:0}
+    .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:0}
+    .rolagem{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0}
+    td{padding:8px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .sub{font-size:11.5px;color:var(--muted)}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13px}
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .n-ENTRADA{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .n-SAIDA{background:var(--tint-blue-bg);color:var(--tint-blue-fg)}
+    .n-CONSUMO{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .n-PERDA{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .n-AJUSTE{background:var(--tint-purple-bg);color:var(--purple)}
+    .n-TRANSFERENCIA,.n-QUALIDADE,.n-OUTRO{background:var(--tint-gray-bg);color:var(--muted)}
+    .ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .div{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .ent{color:var(--tint-green-fg);font-weight:700}
+    .sai{color:var(--danger);font-weight:700}
+    tr.info td{color:var(--muted)}
+    tr.info .badge{opacity:.8}
+    tr.sem-origem td{background:var(--tint-orange-bg)}
+    tr.sintetico td{background:color-mix(in srgb,var(--purple) 6%,transparent)}
+    .alertas{list-style:none;display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+    .alertas li{background:var(--tint-orange-bg);color:var(--tint-orange-fg);border-radius:10px;padding:9px 12px;font-size:13px;line-height:1.45}
+    .btn{padding:9px 14px;border-radius:9px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:13px;cursor:pointer;min-height:42px}
+    .btn:hover{border-color:var(--primary);color:var(--primary)}
+    .link{color:var(--primary);font-weight:700;text-decoration:none;cursor:pointer;background:none;border:none;font-size:13px;padding:6px 0;min-height:32px}
+    .nota{font-size:12px;color:var(--muted);line-height:1.5}
+    .vazio{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:28px 20px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+    @media (max-width:640px){
+      .header h1{font-size:23px}
+      .tile .v{font-size:19px}
+      td,thead th{padding:7px 8px}
+    }
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Kardex de estoque</h1>
+    <div class="header-sub">Cada entrada, saída, consumo e ajuste de um item, com saldo corrido e conciliação com o saldo do sistema</div>
+  </div>
+  <div class="status-pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando...</span></div>
+</div>
+
+<div class="main">
+  <div class="abas">
+    <button class="aba on" data-aba="item">Kardex do item</button>
+    <button class="aba" data-aba="conc">Conciliação (auditoria)</button>
+  </div>
+
+  <!-- ── Kardex do item ── -->
+  <div class="painel on" id="pItem">
+    <div class="filtros">
+      <div class="busca">
+        <input type="search" id="fItem" placeholder="Buscar item: código ou nome (material, produto, intermediário)" autocomplete="off" aria-label="Buscar item">
+        <div class="sugestoes" id="sugestoes" role="listbox"></div>
+      </div>
+      <select id="fPeriodo" aria-label="Período">
+        <option value="">Todo o histórico</option>
+        <option value="7">Últimos 7 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="custom">Escolher datas…</option>
+      </select>
+      <input type="date" id="fDesde" aria-label="De" style="display:none">
+      <input type="date" id="fAte" aria-label="Até" style="display:none">
+      <select id="fNatureza" aria-label="Tipo de movimento">
+        <option value="">Todos os movimentos</option>
+        <option value="ENTRADA">Entradas</option>
+        <option value="SAIDA">Saídas</option>
+        <option value="CONSUMO">Consumos</option>
+        <option value="PERDA">Perdas</option>
+        <option value="AJUSTE">Ajustes</option>
+      </select>
+      <label><input type="checkbox" id="fInfo" checked> Mostrar informativos</label>
+    </div>
+    <div id="itemConteudo">
+      <div class="vazio">Busque um item para ver o kardex.<br><span class="nota">Também dá para abrir pela aba <b>Conciliação</b>, que lista todos os itens com saldo ou movimento.</span></div>
+    </div>
+  </div>
+
+  <!-- ── Conciliação ── -->
+  <div class="painel" id="pConc">
+    <div class="filtros">
+      <input type="search" id="cBusca" placeholder="Filtrar por código ou nome" aria-label="Filtrar" style="flex:1;min-width:min(260px,100%)">
+      <select id="cTipo" aria-label="Tipo de item">
+        <option value="">Todos os tipos</option>
+        <option value="MP">Matéria-prima</option>
+        <option value="EMB">Embalagem</option>
+        <option value="PA">Produto acabado</option>
+        <option value="INT">Intermediário</option>
+        <option value="OUT">Outros</option>
+      </select>
+      <select id="cSituacao" aria-label="Situação">
+        <option value="div">Só divergentes</option>
+        <option value="">Todos</option>
+        <option value="ok">Só conciliados</option>
+      </select>
+    </div>
+    <div class="tiles" id="cTiles"></div>
+    <div class="card">
+      <div class="card-header"><h3 id="cTitulo">Itens</h3><button class="btn" id="cCsv">Exportar CSV</button></div>
+      <div class="rolagem"><table>
+        <thead><tr><th>Item</th><th>Tipo</th><th class="num">Saldo no sistema</th><th class="num">Soma do log</th><th class="num">Sem movimento registrado</th><th class="num">Movimentos</th><th>Último</th><th></th></tr></thead>
+        <tbody id="cBody"><tr><td colspan="8" class="no-data">Carregando…</td></tr></tbody>
+      </table></div>
+    </div>
+    <p class="nota"><b>Como ler:</b> "Saldo no sistema" é o saldo do item (materiais) ou a soma dos lotes (produtos e itens só com lote). "Soma do log" é o que os movimentos registrados explicam. A diferença é saldo que entrou ou saiu sem movimento no log — por exemplo, consumo anterior a 03/09, quando o log começou. Lotes importados da planilha antiga entram como "Saldo implantado".</p>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+/* Kardex de estoque (01/10). Motor em shared/kardex.js; aqui só a tela.
+   Nada é gravado. */
+var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: null, produtos: null, enderecos: null};
+var catalogoAtual = {}, itemSel = null, abaAtual = 'item', concAtual = [];
+
+function setStatus(on, txt) {
+  document.getElementById('sDot').classList.toggle('on', !!on);
+  document.getElementById('sTxt').textContent = txt;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
+function fmt(n) { return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('pt-BR', {maximumFractionDigits: 3}); }
+function fmtSinal(n) { return (n > 0 ? '+' : '') + fmt(n); }
+function dataHora(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  var p = function(n) { return String(n).padStart(2, '0'); };
+  return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function prontos() { return Object.keys(dados).every(function(k) { return dados[k] !== null; }); }
+
+// Grupo do item para filtro e selo.
+var GRUPOS = {MPGR: 'MP', MPES: 'MP', EP: 'EMB', ES: 'EMB', ET: 'EMB', MU: 'OUT', PA: 'PA'};
+var ROT_GRUPO = {MP: 'Matéria-prima', EMB: 'Embalagem', PA: 'Produto acabado', INT: 'Intermediário', OUT: 'Outro'};
+function grupoDoItem(it) {
+  if (!it) return 'OUT';
+  if (it.itemTipo === 'intermediario') return 'INT';
+  if (it.itemTipo === 'produto') return 'PA';
+  var g = it.grupo || String(it.codigo || '').split('-')[0];
+  return GRUPOS[g] || 'OUT';
+}
+function nomeEndereco(l) {
+  if (l.enderecoCodigo) return l.enderecoCodigo;
+  var e = l.enderecoKey && dados.enderecos && dados.enderecos[l.enderecoKey];
+  return (e && e.codigo) || l.enderecoKey || '';
+}
+
+function recalcular() {
+  if (!prontos()) return;
+  catalogoAtual = Kardex.catalogo(dados);
+  concAtual = Kardex.conciliacao(dados);
+  if (abaAtual === 'conc') renderConc();
+  if (itemSel) renderItem();
+  var alvo = new URLSearchParams(location.search).get('item');
+  if (alvo && !itemSel) {
+    var key = Object.keys(catalogoAtual).find(function(k) { return k === alvo || catalogoAtual[k].codigo === alvo; });
+    if (key) selecionar(key);
+  }
+}
+
+/* ── Busca de item ── */
+var sugIdx = -1, sugLista = [];
+function buscarItens(termo) {
+  var t = (typeof normalizeSearch === 'function' ? normalizeSearch(termo) : termo.toLowerCase()).trim();
+  if (!t) return [];
+  return Object.keys(catalogoAtual).map(function(k) { return catalogoAtual[k]; }).filter(function(it) {
+    var alvo = (typeof normalizeSearch === 'function' ? normalizeSearch : function(x) { return String(x).toLowerCase(); })((it.codigo || '') + ' ' + (it.nome || ''));
+    return alvo.indexOf(t) !== -1;
+  }).sort(function(a, b) {
+    return (b.temMovimento ? 1 : 0) - (a.temMovimento ? 1 : 0) || String(a.codigo).localeCompare(String(b.codigo));
+  }).slice(0, 30);
+}
+function renderSugestoes() {
+  var box = document.getElementById('sugestoes');
+  sugLista = buscarItens(document.getElementById('fItem').value);
+  if (!sugLista.length) { box.classList.remove('on'); box.innerHTML = ''; return; }
+  box.innerHTML = sugLista.map(function(it, i) {
+    return '<div class="sug' + (i === sugIdx ? ' ativo' : '') + '" role="option" data-key="' + esc(it.key) + '"><span><b>' + esc(it.codigo) + '</b> — ' + esc(it.nome || '') + '</span>' +
+      '<span class="sub">' + esc(ROT_GRUPO[grupoDoItem(it)]) + (it.temMovimento ? '' : ' · sem movimento') + '</span></div>';
+  }).join('');
+  box.classList.add('on');
+}
+document.getElementById('fItem').addEventListener('input', function() { sugIdx = -1; renderSugestoes(); });
+document.getElementById('fItem').addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowDown') { sugIdx = Math.min(sugIdx + 1, sugLista.length - 1); renderSugestoes(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { sugIdx = Math.max(sugIdx - 1, 0); renderSugestoes(); e.preventDefault(); }
+  else if (e.key === 'Enter' && sugLista.length) { selecionar(sugLista[Math.max(sugIdx, 0)].key); e.preventDefault(); }
+  else if (e.key === 'Escape') document.getElementById('sugestoes').classList.remove('on');
+});
+document.getElementById('sugestoes').addEventListener('click', function(e) {
+  var s = e.target.closest('.sug'); if (s) selecionar(s.getAttribute('data-key'));
+});
+document.addEventListener('click', function(e) { if (!e.target.closest('.busca')) document.getElementById('sugestoes').classList.remove('on'); });
+
+function selecionar(key) {
+  itemSel = key;
+  var it = catalogoAtual[key] || {codigo: key};
+  document.getElementById('fItem').value = it.codigo + (it.nome ? ' — ' + it.nome : '');
+  document.getElementById('sugestoes').classList.remove('on');
+  var u = new URL(location.href); u.searchParams.set('item', it.codigo || key); history.replaceState(null, '', u);
+  irParaAba('item');
+  renderItem();
+}
+
+function periodo() {
+  var v = document.getElementById('fPeriodo').value;
+  document.getElementById('fDesde').style.display = v === 'custom' ? '' : 'none';
+  document.getElementById('fAte').style.display = v === 'custom' ? '' : 'none';
+  if (v === 'custom') {
+    var d = document.getElementById('fDesde').value, a = document.getElementById('fAte').value;
+    return {desde: d ? new Date(d + 'T00:00:00').toISOString() : null, ate: a ? new Date(a + 'T23:59:59').toISOString() : null};
+  }
+  return {desde: v ? new Date(Date.now() - Number(v) * 86400000).toISOString() : null, ate: null};
+}
+
+var resultadoAtual = null;
+function renderItem() {
+  var cont = document.getElementById('itemConteudo');
+  if (!itemSel || !prontos()) return;
+  var it = catalogoAtual[itemSel] || {codigo: itemSel};
+  var p = periodo();
+  var r = Kardex.montar({movimentos: dados.movimentos[itemSel], estoqueItem: dados.estoque[itemSel], lotes: dados.estoqueLotes[itemSel], desde: p.desde, ate: p.ate});
+  resultadoAtual = r;
+  var un = it.unidade || '';
+  var nat = document.getElementById('fNatureza').value;
+  var mostrarInfo = document.getElementById('fInfo').checked;
+  var linhas = r.periodo.linhas.filter(function(l) {
+    if (nat && l.natureza !== nat) return false;
+    if (!mostrarInfo && !l.conta) return false;
+    return true;
+  }).slice().reverse(); // mais recente em cima
+  var t = r.periodo.totais;
+  var saidas = t.SAIDA + t.CONSUMO + t.PERDA;
+  var razaoTxt = r.razao === 'item' ? 'Saldo do item (estoque agregado)' : 'Soma dos lotes';
+
+  var html = '<div class="item-cab"><div><h2>' + esc(it.codigo) + (it.nome ? ' — ' + esc(it.nome) : '') + '</h2>' +
+    '<div class="sub">' + esc(ROT_GRUPO[grupoDoItem(it)]) + ' · ' + esc(razaoTxt) + (un ? ' · ' + esc(un) : '') + '</div></div>' +
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge ' + (r.conciliado ? 'ok' : 'div') + '">' + (r.conciliado ? '✓ Conciliado' : '⚠ Divergente') + '</span>' +
+    '<button class="btn" id="btnCsv">Exportar CSV</button></div></div>';
+
+  html += '<div class="tiles">' +
+    tile(fmt(r.saldoSistema) + ' ' + esc(un), 'Saldo no sistema') +
+    tile(fmt(r.periodo.saldoInicial), p.desde ? 'Saldo no início do período' : 'Saldo antes do 1º registro') +
+    tile('<span class="ent">' + fmtSinal(t.ENTRADA) + '</span>', 'Entradas') +
+    tile('<span class="sai">' + fmtSinal(saidas) + '</span>', 'Saídas, consumos e perdas') +
+    tile(fmtSinal(t.AJUSTE + t.OUTRO), 'Ajustes') +
+    tile(fmt(r.periodo.saldoFinal), p.desde || p.ate ? 'Saldo no fim do período' : 'Saldo pelo kardex') +
+    '</div>';
+
+  if (r.alertas.length) {
+    html += '<ul class="alertas">' + r.alertas.map(function(a) {
+      if (a.tipo === 'SEM_ORIGEM') return '<li>⚠ <b>' + fmtSinal(a.diferenca) + ' ' + esc(un) + '</b> no saldo sem movimento registrado — entrou ou saiu antes do log (que começou em 03/09) ou por um caminho que não grava log. Aparece como a primeira linha do kardex.</li>';
+      return '<li>⚠ Elo quebrado em ' + dataHora(a.em) + ': o saldo mudou <b>' + fmtSinal(a.diferenca) + '</b> além do que os movimentos registrados explicam.</li>';
+    }).join('') + '</ul>';
+  }
+
+  html += '<div class="card"><div class="card-header"><h3>Movimentos (' + linhas.length + ')</h3><span class="sub">Mais recente em cima · linhas em cinza não mudam o ' + (r.razao === 'item' ? 'saldo do item (movimento de lote/endereço)' : 'saldo') + '</span></div>' +
+    '<div class="rolagem"><table><thead><tr><th>Data</th><th>Movimento</th><th>Referência</th><th>Lote / endereço</th><th>Autor</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>';
+  if (!linhas.length) html += '<tr><td colspan="8" class="no-data">Nenhum movimento ' + (p.desde || p.ate || nat ? 'com esse filtro.' : 'registrado para este item.') + '</td></tr>';
+  html += linhas.map(linhaHtml).join('');
+  // "Sem origem" fica no fim (é o mais antigo) quando não há filtro de período.
+  if (Math.abs(r.semOrigem) > 0.001 && !p.desde && !nat) {
+    html += '<tr class="sem-origem"><td class="sub">antes de ' + (r.linhas.length ? dataHora(r.linhas[0].em) : 'hoje') + '</td><td><span class="badge n-AJUSTE">Sem movimento registrado</span><div class="sub">Saldo que não tem origem no log</div></td><td></td><td></td><td></td>' +
+      '<td class="num ent">' + (r.semOrigem > 0 ? fmt(r.semOrigem) : '') + '</td><td class="num sai">' + (r.semOrigem < 0 ? fmt(-r.semOrigem) : '') + '</td><td class="num"><b>' + fmt(r.semOrigem) + '</b></td></tr>';
+  }
+  html += '</tbody></table></div></div>';
+
+  // Lotes atuais.
+  var lotes = dados.estoqueLotes[itemSel] || {};
+  var lks = Object.keys(lotes).filter(function(k) { return lotes[k] && Number(lotes[k].saldoLote) > 0; });
+  if (lks.length) {
+    html += '<div class="card"><div class="card-header"><h3>Lotes com saldo (' + lks.length + ')</h3><span class="sub">Soma: ' + fmt(Kardex.saldoDosLotes(lotes)) + ' ' + esc(un) + '</span></div><div class="rolagem"><table><thead><tr><th>Lote</th><th>Endereço</th><th>Situação</th><th>Validade</th><th>Origem</th><th class="num">Saldo</th></tr></thead><tbody>' +
+      lks.map(function(k) {
+        var l = lotes[k];
+        return '<tr><td><b>' + esc(l.loteInterno || l.loteOrigem || l.lote || k) + '</b></td><td>' + esc(nomeEndereco(l) || '—') + '</td><td>' + esc(l.status || '—') + '</td><td>' + esc(l.dataValidade || '—') + '</td><td class="sub">' + esc((l.origemTipo || '').replace(/_/g, ' ') || '—') + '</td><td class="num">' + fmt(l.saldoLote) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+  cont.innerHTML = html;
+  document.getElementById('btnCsv').onclick = function() { baixar('kardex-' + (it.codigo || itemSel) + '.csv', Kardex.csv(it, r)); };
+}
+function tile(v, l) { return '<div class="tile"><div class="v">' + v + '</div><div class="l">' + esc(l) + '</div></div>'; }
+function linhaHtml(l) {
+  var lote = l.loteKey ? (function() {
+    var lt = (dados.estoqueLotes[itemSel] || {})[l.loteKey];
+    return lt ? (lt.loteInterno || lt.loteOrigem || lt.lote || l.loteKey) : l.loteKey;
+  })() : '';
+  var end = l.enderecoCodigo || (l.enderecoKey && dados.enderecos[l.enderecoKey] && dados.enderecos[l.enderecoKey].codigo) || l.enderecoKey || '';
+  var cls = l.sintetico ? 'sintetico' : (!l.conta ? 'info' : '');
+  var q = l.conta ? l.efeito : l.qtdInformada;
+  var motivo = l.motivo && l.motivo.toUpperCase() !== String(l.rotulo).toUpperCase() ? l.motivo : '';
+  return '<tr class="' + cls + '"><td class="sub" style="white-space:nowrap">' + dataHora(l.em) + '</td>' +
+    '<td><span class="badge n-' + esc(l.natureza) + '">' + esc(Kardex.NATUREZAS[l.natureza] || l.natureza) + '</span> ' + esc(l.rotulo) +
+      (motivo ? '<div class="sub">' + esc(motivo) + '</div>' : '') + (l.cliente ? '<div class="sub">Cliente: ' + esc(l.cliente) + '</div>' : '') +
+      (!l.conta && !l.sintetico ? '<div class="sub">não altera o saldo' + (l.qtdInformada ? ' (' + fmtSinal(l.qtdInformada) + ' no lote)' : '') + '</div>' : '') + '</td>' +
+    '<td>' + esc(refLegivel(l) || '—') + (l.rnc ? '<div class="sub">RNC ' + esc(l.rnc) + '</div>' : '') + '</td>' +
+    '<td>' + esc(lote || '—') + (end ? '<div class="sub">' + esc(end) + '</div>' : '') + '</td>' +
+    '<td>' + esc(l.autor || (l.sintetico ? 'importação' : '—')) + '</td>' +
+    '<td class="num ent">' + (l.conta && q > 0 ? fmt(q) : '') + '</td>' +
+    '<td class="num sai">' + (l.conta && q < 0 ? fmt(-q) : '') + '</td>' +
+    '<td class="num">' + (l.conta ? '<b>' + fmt(l.saldo) + '</b>' : '<span class="sub">' + fmt(l.saldo) + '</span>') + '</td></tr>';
+}
+
+// Transferência grava "enderecoKey -> enderecoKey": mostra os códigos.
+function refLegivel(l) {
+  if (!l.ref || l.tipo !== 'transferencia') return l.ref;
+  return String(l.ref).split(' -> ').map(function(k) {
+    var e = dados.enderecos && dados.enderecos[k.trim()];
+    return (e && e.codigo) || k;
+  }).join(' → ');
+}
+
+function baixar(nome, texto) {
+  var blob = new Blob(['﻿' + texto], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click();
+  setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ── Conciliação ── */
+function filtrarConc() {
+  var t = (typeof normalizeSearch === 'function' ? normalizeSearch : function(x) { return String(x).toLowerCase(); })(document.getElementById('cBusca').value || '').trim();
+  var tipo = document.getElementById('cTipo').value, sit = document.getElementById('cSituacao').value;
+  return concAtual.filter(function(x) {
+    var it = catalogoAtual[x.key] || x;
+    if (tipo && grupoDoItem(it) !== tipo) return false;
+    if (sit === 'div' && x.conciliado) return false;
+    if (sit === 'ok' && !x.conciliado) return false;
+    if (t) {
+      var alvo = (typeof normalizeSearch === 'function' ? normalizeSearch : function(y) { return String(y).toLowerCase(); })(x.codigo + ' ' + x.nome);
+      if (alvo.indexOf(t) === -1) return false;
+    }
+    return true;
+  });
+}
+function renderConc() {
+  if (!prontos()) return;
+  var lista = filtrarConc();
+  var divergentes = concAtual.filter(function(x) { return !x.conciliado; });
+  document.getElementById('cTiles').innerHTML =
+    tile(fmt(concAtual.length), 'Itens com saldo ou movimento') +
+    tile('<span class="ent">' + fmt(concAtual.length - divergentes.length) + '</span>', 'Conciliados') +
+    tile('<span class="sai">' + fmt(divergentes.length) + '</span>', 'Com saldo sem movimento registrado') +
+    tile(fmt(concAtual.reduce(function(s, x) { return s + x.movimentos; }, 0)), 'Movimentos no log');
+  document.getElementById('cTitulo').textContent = 'Itens (' + lista.length + ')';
+  document.getElementById('cBody').innerHTML = lista.length ? lista.map(function(x) {
+    var it = catalogoAtual[x.key] || x;
+    return '<tr><td><b>' + esc(x.codigo) + '</b><div class="sub">' + esc(x.nome) + '</div></td>' +
+      '<td><span class="sub">' + esc(ROT_GRUPO[grupoDoItem(it)]) + '</span></td>' +
+      '<td class="num">' + fmt(x.saldoSistema) + ' <span class="sub">' + esc(x.unidade) + '</span></td>' +
+      '<td class="num">' + fmt(x.saldoLog) + '</td>' +
+      '<td class="num">' + (Math.abs(x.semOrigem) > 0.001 ? '<span class="badge div">' + fmtSinal(x.semOrigem) + '</span>' : '<span class="badge ok">✓ 0</span>') + '</td>' +
+      '<td class="num">' + fmt(x.movimentos) + '</td>' +
+      '<td class="sub" style="white-space:nowrap">' + (x.ultimo ? dataHora(x.ultimo) : '—') + '</td>' +
+      '<td><button class="link" data-abrir="' + esc(x.key) + '">Abrir kardex →</button></td></tr>';
+  }).join('') : '<tr><td colspan="8" class="no-data">Nenhum item com esse filtro.</td></tr>';
+}
+document.getElementById('cBody').addEventListener('click', function(e) {
+  var b = e.target.closest('[data-abrir]'); if (b) selecionar(b.getAttribute('data-abrir'));
+});
+document.getElementById('cCsv').onclick = function() {
+  var q = function(v) { var s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  var n = function(v) { return String(v).replace('.', ','); };
+  var linhas = ['Código;Nome;Tipo;Razão;Saldo no sistema;Soma do log;Sem movimento registrado;Movimentos;Último movimento'];
+  filtrarConc().forEach(function(x) {
+    linhas.push([x.codigo, x.nome, ROT_GRUPO[grupoDoItem(catalogoAtual[x.key] || x)], x.razao === 'item' ? 'saldo do item' : 'soma dos lotes',
+      n(x.saldoSistema), n(x.saldoLog), n(x.semOrigem), x.movimentos, x.ultimo || ''].map(q).join(';'));
+  });
+  baixar('conciliacao-estoque.csv', linhas.join('\n'));
+};
+
+function irParaAba(aba) {
+  abaAtual = aba;
+  document.querySelectorAll('.aba').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-aba') === aba); });
+  document.getElementById('pItem').classList.toggle('on', aba === 'item');
+  document.getElementById('pConc').classList.toggle('on', aba === 'conc');
+  if (aba === 'conc') renderConc();
+}
+document.querySelectorAll('.aba').forEach(function(b) { b.onclick = function() { irParaAba(b.getAttribute('data-aba')); }; });
+['fPeriodo', 'fDesde', 'fAte', 'fNatureza', 'fInfo'].forEach(function(id) { document.getElementById(id).addEventListener('change', renderItem); });
+['cTipo', 'cSituacao'].forEach(function(id) { document.getElementById(id).addEventListener('change', renderConc); });
+var _cb = null;
+document.getElementById('cBusca').addEventListener('input', function() { clearTimeout(_cb); _cb = setTimeout(renderConc, 200); });
+
+db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ? 'Conectado' : 'Reconectando...'); });
+[['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos']].forEach(function(p) {
+  dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
+});
+if (new URLSearchParams(location.search).get('aba') === 'conciliacao') irParaAba('conc');
+</script>
+</body>
+</html>

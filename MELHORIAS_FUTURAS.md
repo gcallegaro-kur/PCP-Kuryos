@@ -690,6 +690,21 @@ nenhuma decisão já tomada na conversa:
 
 ## Estoque / Produção
 
+### Kardex — o que ficou para depois (2026-10-01)
+
+- **`ajustarEstoque` aceitar `itemTipo`** (`shared/utils.js`, ~linha 1223 grava
+  `itemTipo: 'material'` fixo). Item intermediário com saldo agregado entraria no log
+  como material. Aceitar `extras.itemTipo` e revisar os leitores que assumem
+  `|| 'material'` (estoque-setor.js:65, seletor-endereco.js:51, utils.js ~1981/2189/2292/
+  2674/3074) — levantado pela sessão "Arquitetura de novo módulo e custos".
+- **Aba "Histórico" do `estoque.html` → Kardex.** A aba antiga lista o log cru, somando
+  movimentos de lote com os do item. Trocar por um link para `kardex.html?item=`.
+- **Contagem do inventário no kardex.** `contagens_inventario` está vazio hoje; quando o
+  Dia D acontecer, mostrar cada contagem (contado × sistema) na linha do tempo do item.
+- **Os 27 materiais com saldo sem movimento registrado** são consumos de 01–02/09, antes do
+  log. Não se corrigem com código: o inventário do Dia D zera essa diferença com ajuste
+  registrado.
+
 - ~~**Sem estoque de produto acabado**~~ — **FEITO** (conferido em
   2026-09-23): a Conferência de PA cria paletes endereçados em `estoque_lotes`
   (QUARENTENA → laudo CK-7 → Expedição). O que continua aberto é o gate "menor
