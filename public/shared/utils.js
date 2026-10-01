@@ -3955,7 +3955,9 @@ function imprimirComNome(nome) {
   window.print();
 }
 
-/* ── Etiqueta de caixa de embarque ──
+/* ── Códigos de barras e QR (etiquetas) ──
+   Histórico: começaram com a etiqueta de caixa de embarque (hoje em
+   shared/etiqueta-caixa.js); ficam aqui porque o WMS também usa. ──
    Pedido do usuário: "minimizaria muitos dos erros que temos hoje, de
    impressão errada de etiqueta" -- em vez de exigir que alguém digite os
    dados da caixa à mão de novo (fonte do erro), a etiqueta é gerada
@@ -4110,59 +4112,9 @@ function qrCodeSvg(texto, tamanhoMm) {
   return svg.replace('<svg ', '<svg width="' + tamanhoMm + 'mm" height="' + tamanhoMm + 'mm" ');
 }
 
-// Quantas etiquetas gerar -- 1 por caixa de embarque, calculado a partir
-// do que já está gravado na OP (peças ÷ peças-por-caixa do cadastro do
-// produto, arredondado pra cima -- mesmo princípio "nunca falta caixa"
-// já aplicado ao consumo de embalagem). Sem peças-por-caixa cadastrado,
-// gera 1 etiqueta só (fallback honesto, não inventa uma contagem).
-function totalCaixasDaOP(op) {
-  var pecasPorCaixa = op.pecasPorCaixa || 0;
-  if (!pecasPorCaixa || !op.qtdPlanejada) return 1;
-  return Math.max(1, Math.ceil(op.qtdPlanejada / pecasPorCaixa));
-}
-
-// Pedido do usuário: "a etiqueta tem que ser com codigo de barras do
-// produto" (EAN13) + "um qr code que identifique o lote". "Vamos
-// colocar o codigo de barras das que possuem registro... As que não
-// tiverem, deixa o espaço vazio -- fica pro comercial levantar esses
-// pontos junto ao cliente" -- confirmado via Firebase CLI: hoje 28 dos
-// 373 produtos têm EAN13/DUM14 cadastrado (os DOIS sempre juntos, nunca
-// um sem o outro) -- só o EAN13 é usado aqui (DUM14 é outro padrão de
-// código de barras, ITF-14, não implementado -- ver MELHORIAS_FUTURAS.md
-// se algum dia existir produto com DUM14 mas sem EAN13).
-function paginaEtiquetaCaixa(op, numeroCaixa, totalCaixas) {
-  var qtdNestaCaixa = op.pecasPorCaixa
-    ? (numeroCaixa < totalCaixas ? op.pecasPorCaixa : (op.qtdPlanejada - op.pecasPorCaixa * (totalCaixas - 1)))
-    : op.qtdPlanejada;
-  // EAN a 121% do nominal GS1 (módulo 0,40 mm; mínimo 0,264; máximo 0,66) e 13 mm de
-  // altura. Era 0,24 mm x 8 mm e NÃO lia no teste de leitura (29/09).
-  var eanSvg = ean13Svg(op.ean13 || '', 13, 0.4);
-  var qrSvg = qrCodeSvg(op.lote || '', 14);
-  return '<div class="etiqueta-page">' +
-    '<div class="etq-header"><b>' + escapeHtml(op.cliente || '—') + '</b><span>Caixa ' + numeroCaixa + ' de ' + totalCaixas + '</span></div>' +
-    '<div class="etq-produto">' + escapeHtml(op.produto || '—') + '</div>' +
-    '<div class="etq-grid">' +
-      '<div><span class="etq-lbl">SKU</span><span class="etq-val">' + escapeHtml(op.sku || '—') + '</span></div>' +
-      '<div><span class="etq-lbl">Lote</span><span class="etq-val">' + escapeHtml(op.lote || '—') + '</span></div>' +
-      '<div><span class="etq-lbl">Qtde. nesta caixa</span><span class="etq-val">' + fmtNum(qtdNestaCaixa) + ' un.</span></div>' +
-      '<div><span class="etq-lbl">Validade</span><span class="etq-val">' + (op.validade ? new Date(op.validade).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }) : '—') + '</span></div>' +
-    '</div>' +
-    '<div class="etq-codigos">' +
-      '<div class="etq-ean">' + (eanSvg || '<div class="etq-ean-vazio">EAN não cadastrado</div>') + (eanSvg ? '<div class="etq-codigo-txt">' + escapeHtml(op.ean13) + '</div>' : '') + '</div>' +
-      '<div class="etq-qr">' + qrSvg + '<div class="etq-codigo-txt">' + escapeHtml(op.lote || '') + '</div></div>' +
-    '</div>' +
-  '</div>';
-}
-
-// Ponto de entrada -- 1 página por caixa, cada uma com "Caixa X de Y" pra
-// quem confere na expedição saber se falta alguma.
-function montarEtiquetasCaixa(op) {
-  if (!op) return '';
-  var total = totalCaixasDaOP(op);
-  var paginas = '';
-  for (var i = 1; i <= total; i++) paginas += paginaEtiquetaCaixa(op, i, total);
-  return paginas;
-}
+// A etiqueta de caixa de embarque em si mudou para shared/etiqueta-caixa.js
+// (padrão de 01/10/2026: logo/cliente, SKU, cód. cliente, qtde/cx, lote,
+// validade, peso, lote interno e DUN-14 em ITF-14).
 
 // ══════════════════════════════════════════════════════════════════════
 // ORÇAMENTO DE COTAÇÃO — custo comparável entre fornecedores

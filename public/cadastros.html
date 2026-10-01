@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/itens-cadastro.js"></script>
   <script src="auth_check.js"></script>
@@ -190,7 +191,7 @@
     .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
     .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
-<script src="shared/contatos-cliente.js"></script><script src="shared/espelho-cadastro.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script>
+<script src="shared/contatos-cliente.js"></script><script src="shared/espelho-cadastro.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script><script src="shared/etiqueta-caixa.js"></script>
 </head>
 <body class="kuryos-theme has-sidebar">
 
@@ -1112,6 +1113,17 @@
               <input type="hidden" id="cliFornecedorVinculadoKey-cli">
               <div style="margin-top:8px"><button type="button" class="btn btn-ghost btn-sm" id="cliVirarFornecedor-cli">📋 Criar o cadastro de fornecedor com estes dados</button></div>
               <div class="field-hint" id="cliVirarFornecedorHint-cli">Abre o cadastro de fornecedor já preenchido com o que dá para aproveitar. Você confere, completa o que falta e salva; o vínculo entre os dois é gravado junto.</div>
+            </div>
+          </div>
+          <div class="section-label">Logo para etiquetas</div>
+          <div class="form-grid">
+            <div class="form-group full">
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                <div id="logoPrev-cli" style="width:180px;height:60px;border:1px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;background:#fff;color:#888;font-size:12px;overflow:hidden">sem logo</div>
+                <input type="file" id="fLogo-cli" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Escolher arquivo do logo">
+                <button type="button" class="btn btn-ghost" id="logoRemover-cli">Remover logo</button>
+              </div>
+              <div class="field-hint">Sai no topo da etiqueta de caixa de embarque. Sem logo, a etiqueta usa o nome do cliente. PNG ou JPG com fundo branco imprimem melhor na térmica.</div>
             </div>
           </div>
           <div class="section-label">Status</div>
@@ -2503,6 +2515,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fSite-cli').value = c.site || '';
     document.getElementById('fDetentorAnvisa-cli').value = c.detentorAnvisa === 'kuryos' ? 'kuryos' : 'cliente';
     document.getElementById('fAtivo-cli').value = c.ativo === false ? 'inativo' : 'ativo';
+    logoCli = {url: c.logoEtiquetaUrl || '', novo: null};
+    document.getElementById('fLogo-cli').value = '';
+    mostrarLogoCli();
 
     refreshCliVinculoItems(); // depende de editingKey já atualizado, ver topo da função
     var matrizAtual = c.matrizKey ? allClientes[c.matrizKey] : null;
@@ -2516,6 +2531,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('modalBg-cli').classList.add('open');
   }
   var editorContatosCliente;
+  /* Logo do cliente para a etiqueta de caixa (01/10, shared/etiqueta-caixa.js).
+     O arquivo é reduzido no navegador e vai para o Storage só no Salvar;
+     o cadastro guarda apenas a URL (logoEtiquetaUrl). */
+  var logoCli = {url: '', novo: null};
+  function mostrarLogoCli() {
+    var box = document.getElementById('logoPrev-cli');
+    var src = logoCli.novo ? logoCli.novo.preview : logoCli.url;
+    box.innerHTML = src ? '<img src="' + escapeAttr(src) + '" alt="Logo do cliente" style="max-width:100%;max-height:100%;object-fit:contain">' : 'sem logo';
+    document.getElementById('logoRemover-cli').style.display = src ? '' : 'none';
+  }
   function closeModal() {
     document.getElementById('modalBg-cli').classList.remove('open');
     editingKey = null;
@@ -2614,8 +2639,26 @@ document.addEventListener('DOMContentLoaded', function() {
       fornecedorVinculadoKey: document.getElementById('cliFornecedorVinculadoKey-cli').value || null
     };
     try { Object.assign(data, editorContatosCliente.dados()); } catch(err) { showAlert(err.message, 'danger'); return; }
+    data.logoEtiquetaUrl = logoCli.url || null;
     document.getElementById('modalSaveBtn-cli').disabled = true;
 
+    var promise = logoCli.novo
+      ? firebase.storage().ref('clientes_logo/' + key + '_' + Date.now() + '.png').put(logoCli.novo.blob, {contentType: 'image/png'})
+          .then(function(snap) { return snap.ref.getDownloadURL(); })
+          .then(function(url) { data.logoEtiquetaUrl = url; })
+      : Promise.resolve();
+    promise = promise.then(function() { return gravarCliente(key, data); });
+    promise
+      .then(function() {
+        showAlert(espelhoOrigemForn ? 'Cliente salvo e vinculado ao fornecedor.' : 'Cliente salvo com sucesso!', 'success');
+        espelhoOrigemForn = null;
+        closeModal();
+      })
+      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
+      .finally(function() { document.getElementById('modalSaveBtn-cli').disabled = false; });
+  }
+
+  function gravarCliente(key, data) {
     var promise;
     if (editingKey && editingKey !== key) {
       var updates = {};
@@ -2632,17 +2675,19 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       promise = db.ref('clientes/' + key).update(data);
     }
-    promise
-      .then(function() {
-        showAlert(espelhoOrigemForn ? 'Cliente salvo e vinculado ao fornecedor.' : 'Cliente salvo com sucesso!', 'success');
-        espelhoOrigemForn = null;
-        closeModal();
-      })
-      .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
-      .finally(function() { document.getElementById('modalSaveBtn-cli').disabled = false; });
+    return promise;
   }
 
   document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('fLogo-cli').addEventListener('change', function() {
+      var arq = this.files && this.files[0];
+      if (!arq) return;
+      EtiquetaCaixa.prepararLogo(arq).then(function(r) { logoCli.novo = r; mostrarLogoCli(); })
+        .catch(function(err) { document.getElementById('fLogo-cli').value = ''; showAlert(err.message, 'danger'); });
+    });
+    document.getElementById('logoRemover-cli').addEventListener('click', function() {
+      logoCli = {url: '', novo: null}; document.getElementById('fLogo-cli').value = ''; mostrarLogoCli();
+    });
     document.getElementById('btnNovo-cli').addEventListener('click', function() { openModal(null); });
     document.getElementById('modalClose-cli').addEventListener('click', closeModal);
     document.getElementById('modalCancelBtn-cli').addEventListener('click', closeModal);

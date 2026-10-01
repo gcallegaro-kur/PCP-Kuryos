@@ -29,7 +29,9 @@ function ler(png, formato) {
 // Etiquetas a verificar: [nome, função que devolve {html, css}, códigos esperados]
 const CASOS = [
   ['Recebimento (lote AK)', 'recebimento', [['CODE_39', 'AK-2026-000576'], ['QR_CODE', 'AK-2026-000576']]],
-  ['Caixa da OP', 'caixa', [['EAN_13', '7899999000015'], ['QR_CODE', '26246/07']]],
+  // Caixa de embarque (01/10): DUN-14 em ITF-14 (shared/etiqueta-caixa.js).
+  ['Caixa da OP', 'caixa', [['ITF', '17908420116816']]],
+  ['EAN-13 (utils.js)', 'ean', [['EAN_13', '7899999000015']]],
   ['Endereço (térmica)', 'endereco', [['CODE_39', 'FAB-1.1.1'], ['QR_CODE', 'FAB-1.1.1']]],
   ['Palete de PA', 'palete', [['CODE_39', 'PA-26246-07-P1'], ['QR_CODE', 'PA-26246-07-P1']]],
   ['Endereço (folha A4)', 'endereco-a4', [['CODE_39', 'GAL-12.3.4'], ['QR_CODE', 'GAL-12.3.4']]],
@@ -53,11 +55,12 @@ const CASOS = [
       });
       await page.emulateMedia({media: 'print'});
       await page.goto('https://etq.test/');
-      for (const s of ['shared/utils.js', 'shared/qrcode-lib.js', 'shared/etiquetas-wms.js']) if (fs.existsSync('public/' + s)) await page.addScriptTag({url: 'https://etq.test/' + s});
+      for (const s of ['shared/utils.js', 'shared/qrcode-lib.js', 'shared/etiquetas-wms.js', 'shared/etiqueta-caixa.js']) if (fs.existsSync('public/' + s)) await page.addScriptTag({url: 'https://etq.test/' + s});
       for (const [nome, tipo, codigos] of CASOS) {
         const html = await page.evaluate(([tipo, cssFichas]) => {
           // O CSS de impressão das fichas de OP só vale para a etiqueta de caixa (sai junto delas).
-          if (tipo === 'caixa') return '<style>' + cssFichas + '</style><div id="printArea" class="imprimir">' + montarEtiquetasCaixa({cliente: 'MISS RÔSE', produto: 'BODY SPLASH', sku: 'MRARBS04', lote: '26246/07', ean13: '7899999000015', pecasPorCaixa: 24, qtdPlanejada: 24, validade: '2028-09-01'}) + '</div>';
+          if (tipo === 'caixa') return EtiquetaCaixa.pagina(EtiquetaCaixa.dados({cliente: 'MISS RÔSE', produto: 'BODY SPLASH', sku: 'MRARBS04', lote: '26246/07', ean13: '7899999000015', pecasPorCaixa: 24, qtdPlanejada: 24, validade: '2028-09-01', codCliente: 'MR-04', kgCaixa: 6.2, dum14: '17908420116816'}, {}, {}), {cheias: 1});
+          if (tipo === 'ean') return '<div style="padding:5mm">' + ean13Svg('7899999000015', 13, 0.4) + '</div>';
           if (!window.EtiquetasWMS) return '';
           if (tipo === 'recebimento') return EtiquetasWMS.pagina('recebimento', [{loteInterno: 'AK-2026-000576', materialCodigo: 'MPGR-001', materialNome: 'ÁLCOOL', loteOrigem: 'F123', fornecedorNome: 'Fornecedor', quantidade: 180, unidade: 'kg', qtdVolumes: 1, dataRecebimento: '2026-09-29', notaFiscal: '123', dataValidade: '2027-06-30', enderecoCodigo: 'DOC-1.1.1'}]);
           if (tipo === 'endereco') return EtiquetasWMS.pagina('endereco', [{codigo: 'FAB-1.1.1', area: 'FÁBRICA', rua: 1, predio: 1, nivel: 1}]);

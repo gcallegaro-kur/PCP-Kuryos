@@ -388,7 +388,8 @@
   .modal-bg .btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
   @media(max-width:600px){.modal-bg .form-grid{grid-template-columns:1fr}}
 
-  /* Impressão das fichas de OP + etiquetas de caixa: shared/fichas-op.css
+  /* Impressão das fichas de OP: shared/fichas-op.css (etiquetas de caixa:
+       shared/etiqueta-caixa.js, janela própria)
      (bloco único, compartilhado com emitir_op.html). */
 
 </style>
@@ -2033,10 +2034,9 @@
     });
   }
 
-  // Reimprime as etiquetas de caixa de embarque -- não depende de
-  // formulas/especificacoes (só do que já está na própria OP:
-  // pecasPorCaixa, lote, sku, produto, cliente, validade), então não
-  // precisa nem buscar nada no Firebase, diferente de reimprimirFichas.
+  // Reimprime as etiquetas de caixa de embarque (padrão de 01/10,
+  // shared/etiqueta-caixa.js): abre o diálogo com pré-visualização,
+  // campos que faltam no cadastro, quantidade e lote do cliente.
   function reimprimirEtiquetas(opKey) {
     const op = opsGlobal[opKey];
     if (!op) return;

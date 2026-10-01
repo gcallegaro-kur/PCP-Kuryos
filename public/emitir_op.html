@@ -12,6 +12,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/itens-cadastro.js"></script>
   <script src="shared/qrcode-lib.js"></script>
+  <script src="shared/etiqueta-caixa.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -97,7 +98,8 @@
     .subst-opt-det{color:var(--muted);font-size:11px;margin-top:2px}
     .subst-opt-un{font-size:11px;color:var(--muted);white-space:nowrap}
 
-    /* Impressão das fichas de OP + etiquetas de caixa: shared/fichas-op.css
+    /* Impressão das fichas de OP: shared/fichas-op.css (etiquetas de caixa:
+       shared/etiqueta-caixa.js, janela própria)
        (bloco único, compartilhado com ops.html -- ver o comentário lá). */
     @media(max-width:600px){.form-grid{grid-template-columns:1fr}.resumo-grid{grid-template-columns:1fr 1fr}}
   </style>
@@ -1188,7 +1190,10 @@ function montarDadosOP(lote, janela) {
     bomVersao: formulaEscolhida ? formulaEscolhida.versao : null,
     massaLoteKg: calc.massaLoteKg, volumeGranelL: calc.volumeGranelL,
     pesoTeoricoUnG: calc.pesoTeoricoUnG, volumeTeoricoUnMl: calc.volumeTeoricoUnMl,
-    pecasPorCaixa: produtoSelecionado.unCx || 0, // pra gerar as etiquetas de caixa de embarque (ver montarEtiquetasCaixa em shared/utils.js)
+    pecasPorCaixa: produtoSelecionado.unCx || 0, // pra gerar as etiquetas de caixa de embarque (shared/etiqueta-caixa.js)
+    // Fotografia dos demais campos obrigatórios da etiqueta de caixa (01/10).
+    codCliente: produtoSelecionado.codCliente || '', kgCaixa: parseFloat(produtoSelecionado.kgCaixa) || 0,
+    dum14: produtoSelecionado.dum14 || '', clienteKey: produtoSelecionado.clienteKey || '',
     // Snapshot do EAN13 do produto na hora da emissão -- mesmo raciocínio
     // do pecasPorCaixa acima: reimpressão (ops.html) não depende de
     // buscar o cadastro do produto de novo. Pedido do usuário: "a
@@ -1404,8 +1409,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   document.getElementById('btnImprimirEtiquetas').addEventListener('click', function() {
     if (!opJaEmitida) return;
-    document.getElementById('printArea').innerHTML = montarEtiquetasCaixa(opJaEmitida);
-    window.print();
+    EtiquetaCaixa.abrirDialogo({op: opJaEmitida, opKey: sanitizeKey(opJaEmitida.lote), produto: produtoSelecionado, db: db});
   });
   document.getElementById('btnNovaOp').addEventListener('click', function() { location.reload(); });
 
