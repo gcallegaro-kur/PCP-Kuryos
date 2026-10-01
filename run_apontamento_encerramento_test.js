@@ -221,5 +221,12 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   await ctx.updateOpRecordOnApontamento('26273/05', 900, 0, '2026-09-30T11:00:00.000Z', 'rotulagem', '2026-09-30T15:00:00.000Z', 900, 'rot-4', efRot);
   if (data.ops['26273-05'].status !== 'Aguardando Confirmação') throw new Error('Rotulagem fechando por último, com envase feito, deveria ir ao PCP');
 
+  // Cada fechamento de setor fica à espera do PCP, com o total do setor (01/10).
+  const et3 = data.ops['26273-03'].confirmacaoEtapas;
+  if (!et3 || et3.rotulagem.status !== 'AGUARDANDO' || et3.rotulagem.quantidade !== 1750 || et3.rotulagem.local !== 'Rotuladora 1') throw new Error('Fechamento da rotulagem não ficou para o PCP confirmar: ' + JSON.stringify(et3));
+  if (et3.envase.status !== 'AGUARDANDO' || et3.envase.quantidade !== 1750 || et3.envase.local !== 'Linha 2') throw new Error('Fechamento do envase não ficou para o PCP confirmar');
+  // Checkpoint (pausa, manterAberta) não pede confirmação.
+  if (data.ops['26264-09'].confirmacaoEtapas) throw new Error('Apontamento parcial não deveria pedir confirmação');
+
   console.log('OK apontamento: 864 + 797 = 1.661; retry idempotente; pausa=checkpoint; encerramento=fechamento; densidade inválida não inverte estoque; fechar um setor não encerra a OP com outro aberto');
 })().catch(err => { console.error(err); process.exit(1); });

@@ -19,6 +19,7 @@
   <script src="shared/conciliacao-pedidos.js"></script>
   <script src="shared/progresso-op.js"></script>
   <script src="shared/situacao-op.js"></script>
+  <script src="shared/confirmacao-etapas.js"></script>
   <script src="shared/entrega-pcp.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -939,6 +940,10 @@
 
     if (opsFiltroState.status === 'ativas') {
       todasOps = todasOps.filter(o => opEstaAtiva(o));
+    } else if (opsFiltroState.status === 'Aguardando Confirmação') {
+      // Inclui a OP ativa com setor encerrado esperando o PCP (01/10).
+      todasOps = todasOps.filter(o => o.status === 'Aguardando Confirmação' ||
+        (o.status !== 'Cancelado' && ConfirmacaoEtapas.etapasPendentes(o).length));
     } else if (opsFiltroState.status !== 'todos') {
       todasOps = todasOps.filter(o => o.status === opsFiltroState.status);
     }
@@ -968,9 +973,13 @@
     tbody.innerHTML =
       '<tr class="group-header"><td colspan="10">🔎 ' + todasOps.length + ' OP' + plural + ' encontrada' + plural + '</td></tr>' +
       todasOps.map(function(o) {
-        return o.status === 'Aguardando Confirmação'
-          ? renderOpAguardandoConfirmacaoRow(o)
-          : renderOpRow(o);
+        // Etapas (envase/rotulagem) esperando o PCP têm linha própria; OP
+        // pronta sem etapa pendente mantém o botão de conclusão.
+        const etapas = o.status === 'Cancelado' ? [] : ConfirmacaoEtapas.pendentes({[o.key]: o});
+        if (o.status === 'Aguardando Confirmação') {
+          return etapas.length ? etapas.map(renderEtapaAConfirmarRow).join('') : renderOpAguardandoConfirmacaoRow(o);
+        }
+        return renderOpRow(o) + etapas.map(renderEtapaAConfirmarRow).join('');
       }).join('');
   }
 
@@ -992,9 +1001,14 @@
     // "não ativa" (correto pra Alocar OP/Andon/etc, já que a linha já foi
     // liberada), então essas OPs NÃO aparecem em activeOps -- precisam da
     // própria seção, senão ficam invisíveis e ninguém nunca confirma nada.
+    // Cada encerramento de setor (envase, rotulagem) é confirmado à parte
+    // pelo PCP (01/10, shared/confirmacao-etapas.js). A OP inteira só aparece
+    // sozinha aqui quando está pronta e não tem etapa pendente (fechada antes
+    // desta mudança): aí vale o botão de conclusão de sempre.
+    const etapasAConfirmar = ConfirmacaoEtapas.pendentes(opsGlobal);
     const opsAguardandoConfirmacao = Object.keys(opsGlobal)
       .map(k => ({ key: k, ...opsGlobal[k] }))
-      .filter(o => o && o.status === 'Aguardando Confirmação')
+      .filter(o => ConfirmacaoEtapas.precisaConclusaoAvulsa(o))
       .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
 
     // Pedidos (SKU alocado no pedido comercial) que ainda precisam de OP. Só
@@ -1018,7 +1032,7 @@
       .filter(o => o.status === 'Concluído' && ['NA_QUALIDADE', 'AGUARDA_LOGISTICA'].includes(situacaoDaOp(o).estado))
       .sort((a, b) => String(a.lote || a.key).localeCompare(String(b.lote || b.key)));
 
-    if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0 && opsConcluidasPendentes.length === 0) {
+    if (activeOps.length === 0 && pedidosSemOp.length === 0 && opsAguardandoConfirmacao.length === 0 && etapasAConfirmar.length === 0 && opsConcluidasPendentes.length === 0) {
       tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--muted); padding: 30px;">🎉 Nada pendente no momento. As OPs concluídas estão na aba Encerradas.</td></tr>';
       return;
     }
@@ -1033,8 +1047,9 @@
     pedidosSemOp.sort((a, b) => String(a.cliente || '').localeCompare(String(b.cliente || '')));
 
     let html = '';
-    if (opsAguardandoConfirmacao.length) {
-      html += '<tr class="group-header pending"><td colspan="10">⏳ Aguardando Confirmação do PCP (' + opsAguardandoConfirmacao.length + ')</td></tr>';
+    if (opsAguardandoConfirmacao.length || etapasAConfirmar.length) {
+      html += '<tr class="group-header pending"><td colspan="10">⏳ Aguardando Confirmação do PCP (' + (etapasAConfirmar.length + opsAguardandoConfirmacao.length) + ')</td></tr>';
+      html += etapasAConfirmar.map(renderEtapaAConfirmarRow).join('');
       html += opsAguardandoConfirmacao.map(renderOpAguardandoConfirmacaoRow).join('');
     }
     if (activeOps.length) {
@@ -1062,6 +1077,53 @@
   // admin completo.
   function canConfirmOp() {
     return currentRole === 'admin' || currentRole === 'pcp';
+  }
+
+  function fmtDataHoraCurta(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const p = n => String(n).padStart(2, '0');
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  // Uma linha por encerramento de setor (envase ou rotulagem) esperando o PCP.
+  function renderEtapaAConfirmarRow(p) {
+    const op = p.op;
+    const escapedKeyAttr = escapeAttr(p.opKey);
+    const planned = op.qtdPlanejada || 0;
+    const pct = planned > 0 ? Math.round(p.quantidade / planned * 100) : 0;
+    const detalhe = [p.local, p.fechadoEm ? 'encerrado ' + fmtDataHoraCurta(p.fechadoEm) : '', p.operador ? 'por ' + p.operador : '']
+      .filter(Boolean).join(' · ');
+    const rotBotao = p.concluiOp ? '✅ Confirmar ' + p.rotulo.toLowerCase() + ' e concluir OP' : '✅ Confirmar ' + p.rotulo.toLowerCase();
+    return `
+      <tr data-etapa="${escapeAttr(p.etapa)}" data-op="${escapedKeyAttr}">
+        <td><strong>${escapeHtml(op.lote || p.opKey)}</strong></td>
+        <td>${escapeHtml(op.cliente || '-')}</td>
+        <td colspan="3">
+          <div style="font-weight: 600;">${escapeHtml(op.produto || '-')}</div>
+          <div style="font-size: 11.5px; color: var(--muted); margin-top: 1px;"><b>${escapeHtml(p.rotulo)}:</b> ${p.quantidade.toLocaleString('pt-BR')} / ${planned.toLocaleString('pt-BR')} un. (${pct}%)${detalhe ? ' · ' + escapeHtml(detalhe) : ''}</div>
+        </td>
+        <td><span class="badge-status aguardando-confirmacao">⏳ ${escapeHtml(p.rotulo)} a confirmar</span></td>
+        <td colspan="4" style="text-align:center; white-space:nowrap">
+          ${canConfirmOp()
+            ? `<button class="btn-confirm-op" onclick="confirmarEtapaOp('${escapedKeyAttr}', '${escapeAttr(p.etapa)}')" title="Confirmar a quantidade encerrada neste setor">${rotBotao}</button>`
+            : `<span style="font-size:11.5px;color:var(--muted)">Aguardando PCP</span>`}
+          <button class="btn-edit-inline" onclick="abrirApontamentoParaEdicao('${escapedKeyAttr}')" title="Abrir esta OP no Histórico de Apontamentos pra corrigir algum lançamento antes de confirmar">📝</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function confirmarEtapaOp(opKey, etapa) {
+    if (!canConfirmOp()) return;
+    const op = opsGlobal[opKey];
+    if (!op) return;
+    const conclui = ConfirmacaoEtapas.concluiAoConfirmar(op, etapa);
+    const quem = (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido';
+    database.ref().update(ConfirmacaoEtapas.updatesConfirmacao(opKey, etapa, quem, new Date().toISOString())).then(() => {
+      showToast((ConfirmacaoEtapas.ROTULOS[etapa] || etapa) + ' da OP ' + (op.lote || opKey) + ' confirmado.');
+      if (conclui) confirmarConclusaoOp(opKey);
+    }).catch(err => showToast('Erro ao confirmar: ' + err.message));
   }
 
   function renderOpAguardandoConfirmacaoRow(op) {

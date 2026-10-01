@@ -549,8 +549,11 @@ async function fechar(page, errors, etapa) {
     // ══ 4. PCP CONFIRMA A CONCLUSÃO ════════════════════════════════════
     console.log('\n4. PCP confirma a conclusão (Controle de OPs)');
     ({page, errors} = await abrirTela(browser, 'ops.html'));
-    // Na visão padrão ("Ativas") existe o grupo "Aguardando Confirmação do PCP".
-    await page.waitForSelector('[onclick^="confirmarConclusaoOp"]', {timeout: 8000});
+    // Na visão padrão ("Ativas") existe o grupo "Aguardando Confirmação do PCP",
+    // com o encerramento do envase a confirmar (PCP confirma cada setor, 01/10).
+    const BTN_CONF = '[onclick^="confirmarEtapaOp"], [onclick^="confirmarConclusaoOp"]';
+    await page.waitForSelector('[onclick^="confirmarEtapaOp"]', {timeout: 8000});
+    assert.match(await page.locator('[onclick^="confirmarEtapaOp"]').first().innerText(), /Confirmar envase e concluir OP/);
     console.log('   botão de confirmar visível na visão padrão');
 
     /* Mas o PCP que FILTRA por "Aguardando Confirmação" -- o caminho natural
@@ -558,7 +561,7 @@ async function fechar(page, errors, etapa) {
     for (const filtro of ['Aguardando Confirmação', 'todos']) {
       await page.selectOption('#opsFiltroStatus', filtro);
       await page.waitForTimeout(400);
-      const visivel = await page.locator('[onclick^="confirmarConclusaoOp"]').count();
+      const visivel = await page.locator(BTN_CONF).count();
       if (!visivel) {
         registrar('Confirmação do PCP',
           'ao filtrar o Controle de OPs por "' + filtro + '", o botão "Confirmar conclusão" DESAPARECE. ' +
@@ -566,11 +569,11 @@ async function fechar(page, errors, etapa) {
       }
     }
     await page.selectOption('#opsFiltroStatus', 'ativas');
-    await page.waitForSelector('[onclick^="confirmarConclusaoOp"]', {timeout: 6000});
-    await page.locator('[onclick^="confirmarConclusaoOp"]').first().click();
+    await page.waitForSelector(BTN_CONF, {timeout: 6000});
+    await page.locator(BTN_CONF).first().click();
     await page.waitForFunction((lote) => {
       const o = Object.values(window.__db.ops || {}).find((x) => x.lote === lote);
-      return o && o.status === 'Concluído';
+      return o && o.status === 'Concluído' && o.confirmacaoEtapas && o.confirmacaoEtapas.envase.status === 'CONFIRMADO';
     }, op.lote, {timeout: 8000});
     console.log('   OP confirmada: Concluído');
     await fechar(page, errors, 'Confirmação do PCP');

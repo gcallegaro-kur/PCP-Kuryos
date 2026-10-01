@@ -2898,6 +2898,7 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
     // nenhuma alocação aberta (Linha = abertaDesde, Rotulagem = abertaDesdeRot).
     var outroSetorAberto = false;
     if (efeitosOp) {
+      var localFechado = efeitosOp.campoNome ? (op[efeitosOp.campoNome] || null) : null;
       if (efeitosOp.manterAberta) {
         op[efeitosOp.campoInicio] = efeitosOp.reinicioEm || tsFim;
       } else if (efeitosOp.encerrarAlocacao) {
@@ -2915,6 +2916,19 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       var aguardaEnvase = tipo === 'rotulagem' && !((op.produzidoLinha || 0) > 0);
       if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !outroSetorAberto && !aguardaEnvase) {
         op.status = 'Aguardando Confirmação';
+      }
+      // PCP confirma CADA encerramento de setor (usuário, 01/10: "neste
+      // momento, o PCP confirme cada apontamento, de rotulagem e de envase").
+      // O fechamento grava a etapa como AGUARDANDO com o total do setor; o
+      // Controle de OPs lista uma linha por etapa (ConfirmacaoEtapas). Um novo
+      // fechamento do mesmo setor substitui o anterior, pendente de novo.
+      if (efeitosOp.aguardarConfirmacao && tipo !== 'posto') {
+        var etapas = op.confirmacaoEtapas || {};
+        etapas[tipo === 'rotulagem' ? 'rotulagem' : 'envase'] = {
+          status: 'AGUARDANDO', quantidade: op[campo] || 0, fechadoEm: tsFim,
+          local: localFechado, operador: efeitosOp.operador || null
+        };
+        op.confirmacaoEtapas = etapas;
       }
     }
     if (!isNaN(tsMs)) {
@@ -5085,7 +5099,8 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
       campoInicio: campoInicio,
       campoNome: campoNome,
       reinicioEm: fimISO,
-      aguardarConfirmacao: ehFechamento
+      aguardarConfirmacao: ehFechamento,
+      operador: operador || null
     },
     // setor (linha/rotulagem) já sabido aqui (opts.tipo) -- sem isso, a
     // OP fica com produzido errado ao sincronizar.

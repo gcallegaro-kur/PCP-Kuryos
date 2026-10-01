@@ -127,6 +127,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — PCP confirma cada encerramento de setor (2026-10-01).** Pedido: "neste
+  momento, o PCP confirme cada apontamento, de rotulagem e de envase". Cada fechamento
+  (`aguardarConfirmacao`, exceto posto) grava `ops/{op}/confirmacaoEtapas/{envase|rotulagem}`
+  = {status AGUARDANDO, quantidade (total do setor), fechadoEm, local, operador} na mesma
+  transaction (`form.html`); novo fechamento do setor substitui o anterior. Controle de OPs
+  (`ops.html`) lista uma linha por etapa no grupo "Aguardando Confirmação do PCP" (e no
+  filtro de mesmo nome); confirmar grava CONFIRMADO/por/em por caminho plano; a última etapa
+  de OP já `Aguardando Confirmação` conclui a OP (`confirmarConclusaoOp`). OP pronta sem
+  etapa pendente mantém o botão antigo. Status da OP inalterado (rotulagem antes do envase
+  segue ativa, `cab15a9`). Módulo `shared/confirmacao-etapas.js`, testes
+  `run_confirmacao_etapas_test.js`, `run_apontamento_encerramento_test.js`,
+  `run_fluxo_ponta_a_ponta_test.js`. Arquivos ativos: nenhum.
+
 - **PUBLICADO — "Mudar de linha / trocar OPs" também para o PCP (2026-10-01).** Era só admin
   em três pontos, todos ajustados para `admin` + `pcp`: botão no Painel de Turno
   (`form.html`), abertura do modal (`shared/rearranjo-linhas-tela.js`) e o servidor
