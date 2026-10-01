@@ -83,11 +83,11 @@
 
   /* ── Render: filtros ── */
   var TAGS = [
-    {t: 'comSaldo', r: 'Com saldo'}, {t: 'contado', r: '📋 Já contado (Dia D)'}, {t: 'naoContado', r: 'Ainda não contado'}, {t: 'ok', r: '✓ Tudo certo'}, {t: 'empenhado', r: 'Empenhado'}, {t: 'falta', r: 'Empenho maior que o saldo'},
+    {t: 'comSaldo', r: 'Com saldo'}, {t: 'contado', r: '📋 Já contado (Dia D)'}, {t: 'naoContado', r: 'Ainda não contado'}, {t: 'semControle', r: 'Sem controle de estoque'}, {t: 'ok', r: '✓ Tudo certo'}, {t: 'empenhado', r: 'Empenhado'}, {t: 'falta', r: 'Empenho maior que o saldo'},
     {t: 'negativo', r: 'Saldo negativo'}, {t: 'zerado', r: 'Zerado'}, {t: 'quarentena', r: 'Em quarentena'}, {t: 'vencendo', r: 'Vencendo'}, {t: 'vencido', r: 'Vencido'}
   ];
-  var CLASSE_TAG = {negativo: 'bad', falta: 'bad', vencido: 'bad', zerado: 'mute', vencendo: 'warn', quarentena: 'info', empenhado: 'mute', ok: 'ok'};
-  var ROTULO_TAG = {negativo: 'Negativo', falta: 'Empenho > saldo', vencido: 'Vencido', zerado: 'Zerado', vencendo: 'Vencendo', quarentena: 'Quarentena', empenhado: 'Empenhado', ok: 'OK'};
+  var CLASSE_TAG = {semControle: 'mute', negativo: 'bad', falta: 'bad', vencido: 'bad', zerado: 'mute', vencendo: 'warn', quarentena: 'info', empenhado: 'mute', ok: 'ok'};
+  var ROTULO_TAG = {semControle: 'Sem controle', negativo: 'Negativo', falta: 'Empenho > saldo', vencido: 'Vencido', zerado: 'Zerado', vencendo: 'Vencendo', quarentena: 'Quarentena', empenhado: 'Empenhado', ok: 'OK'};
 
   function filtroAtual() { return {busca: estado.q, grupo: estado.grupo, tag: estado.tag, cliente: estado.cliente}; }
 
@@ -198,7 +198,8 @@
       '<div class="tile"><b>' + fmt(r.empenhado) + '</b><span>Empenhado para OPs</span></div>' +
       '<div class="tile' + (r.disponivel < 0 ? ' bad' : '') + '"><b>' + fmt(r.disponivel) + '</b><span>Disponível</span></div></div>';
     // Recado em português claro: o que a situação significa e o que fazer.
-    if (r.atual < 0) h += '<div class="alerta bad"><b>Saldo negativo.</b> O sistema já baixou mais do que entrou. Quase sempre é entrada que nunca foi lançada: conte o físico e faça um <b>Ajuste de saldo</b> no Estoque/WMS.</div>';
+    if (r.semControle) h += '<div class="alerta info"><b>Este material não controla estoque</b> (ex.: água). Continua na fórmula e na pesagem, mas não dá baixa, não é reservado e não entra na compra.</div>';
+    else if (r.atual < 0) h += '<div class="alerta bad"><b>Saldo negativo.</b> O sistema já baixou mais do que entrou. Quase sempre é entrada que nunca foi lançada: conte o físico e faça um <b>Ajuste de saldo</b> no Estoque/WMS.</div>';
     else if (r.disponivel < 0) h += '<div class="alerta bad"><b>As OPs reservaram ' + fmt(r.empenhado) + ' e só há ' + fmt(r.atual) + '.</b> Faltam ' + fmt(-r.disponivel) + ' ' + e(u) + ' para atender tudo o que está programado.</div>';
     if (r.vencido > 0) h += '<div class="alerta bad"><b>' + fmt(r.vencido) + ' ' + e(u) + ' vencidos.</b> Não podem ser usados: verifique o descarte.</div>';
     else if (r.vencendo > 0) h += '<div class="alerta warn"><b>' + fmt(r.vencendo) + ' ' + e(u) + ' vencem em até ' + CE.DIAS_VENCENDO + ' dias.</b> Use primeiro (a lista de lotes abaixo já está na ordem de validade).</div>';

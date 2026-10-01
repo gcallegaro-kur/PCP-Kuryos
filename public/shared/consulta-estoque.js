@@ -132,6 +132,8 @@
   /* Etiquetas de situação: o que a pessoa precisa notar sem abrir a linha. */
   function etiquetas(r) {
     var t = [];
+    // Material sem "Controla estoque" (ex.: água): não dá baixa nem é reservado, então saldo/falta não se aplicam.
+    if (r.semControle) return ['semControle'];
     if (r.atual < 0) t.push('negativo');
     else if (r.disponivel < 0) t.push('falta');
     if (!r.semRegistro && r.atual === 0) t.push('zerado');
@@ -183,6 +185,7 @@
         unidade: txt((reg && reg.unidade) || (mat && mat.unidade)) || 'un',
         produto: !!ehProduto,
         semRegistro: !reg && !lotesItem.length,
+        semControle: !ehProduto && !!mat && mat.controlaEstoque === false,
         atual: arred(atual), empenhado: arred(empenhado), disponivel: arred(atual - empenhado),
         liberado: arred(ehProduto ? rs.liberado : (atual - rs.quarentena - rs.reprovado)),
         quarentena: arred(rs.quarentena), reprovado: arred(rs.reprovado),
@@ -281,7 +284,7 @@
   function contagens(rows, f) {
     var c = {grupo: {}, tag: {}, total: 0};
     ORDEM_GRUPOS.forEach(function(g) { c.grupo[g] = 0; });
-    ['comSaldo', 'contado', 'naoContado', 'ok', 'empenhado', 'falta', 'negativo', 'zerado', 'quarentena', 'vencendo', 'vencido'].forEach(function(t) { c.tag[t] = 0; });
+    ['comSaldo', 'contado', 'naoContado', 'semControle', 'ok', 'empenhado', 'falta', 'negativo', 'zerado', 'quarentena', 'vencendo', 'vencido'].forEach(function(t) { c.tag[t] = 0; });
     rows.forEach(function(r) {
       if (passa(r, f, 'grupo')) c.grupo[r.grupo] = (c.grupo[r.grupo] || 0) + 1;
       if (passa(r, f, 'tag')) {
@@ -410,14 +413,16 @@
     var alvo = porBulk == null ? restante : Math.min(porBulk, restante);
     var itens = embs.map(function(e) {
       var tipo = grupoDoTipo((materiais[e.codigo] && materiais[e.codigo].tipo) || (/^[A-Z]+/.exec(e.codigo) || [''])[0]);
+      var semControle = !!materiais[e.codigo] && materiais[e.codigo].controlaEstoque === false;
       var u = usavelParaOp(e.codigo, estoque, o.clienteKey, o.opKey);
-      var cabe = e.porPeca > 0 ? Math.floor(u.usavel / e.porPeca + 1e-9) : Infinity;
+      var cabe = e.porPeca > 0 && !semControle ? Math.floor(u.usavel / e.porPeca + 1e-9) : Infinity;
       var precisa = isFinite(alvo) ? Math.ceil(alvo * e.porPeca - 1e-9) : 0;
       return {
         codigo: e.codigo, nome: e.nome || (materiais[e.codigo] && materiais[e.codigo].mpNome) || e.codigo, grupo: tipo,
         porPeca: e.porPeca, usavel: arred(u.usavel), atual: arred(u.atual), outrosEmpenhos: arred(u.outrosEmpenhos),
-        deOutroCliente: arred(u.deOutroCliente), cabe: cabe, precisa: precisa, falta: Math.max(0, precisa - Math.floor(u.usavel)),
-        bloqueia: tipo === 'EP' || tipo === 'ES'   // a caixa de embarque entra depois do envase
+        deOutroCliente: arred(u.deOutroCliente), cabe: cabe, precisa: precisa, falta: semControle ? 0 : Math.max(0, precisa - Math.floor(u.usavel)),
+        semControle: semControle,
+        bloqueia: !semControle && (tipo === 'EP' || tipo === 'ES')   // a caixa de embarque entra depois do envase; sem controle nunca trava
       };
     });
     var bloqueantes = itens.filter(function(i) { return i.bloqueia; });

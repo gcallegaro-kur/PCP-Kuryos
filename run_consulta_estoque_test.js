@@ -126,6 +126,16 @@ assert.equal(m.estado, 'sem_peso');
 m = CE.casar({bulkKg: 10, pesoG: 100, restante: 100, embalagens: [{codigo: 'ET-1', nome: 'x', porPeca: 1}].map((e) => Object.assign({}, e, {codigo: 'ET-1'})), estoque, materiais, clienteKey: 'X', opKey: 'OP-A'});
 assert.equal(m.itens[0].usavel, 0);
 
+// ── material sem controle de estoque (água): sem saldo/falta, e nunca trava o envase ──
+const mat2 = Object.assign({}, materiais, {'MPGR-AGUA': {tipo: 'EP', mpNome: 'ÁGUA', controlaEstoque: false, unidade: 'un'}});
+const est2 = Object.assign({}, estoque, {'MPGR-AGUA': {materialCodigo: 'MPGR-AGUA', saldoAtual: -900, saldoEmpenhado: 500, unidade: 'un'}});
+const r2 = CE.linhas({estoque: est2, materiais: mat2, lotes, hoje: HOJE}).find((r) => r.codigo === 'MPGR-AGUA');
+assert.deepEqual(r2.tags, ['semControle']);
+assert.equal(r2.nivel, 'ok');
+m = CE.casar({bulkKg: 100, pesoG: 100, restante: 1000, embalagens: [{codigo: 'MPGR-AGUA', nome: 'ÁGUA', porPeca: 1}, embs[1]], estoque: est2, materiais: mat2, clienteKey: 'MISS', opKey: 'OP-NOVA'});
+assert.equal(m.pode, 1000, 'item sem controle de estoque não limita');
+assert.equal(m.estado, 'pronto');
+
 // ── peso da peça ──
 assert.deepEqual(CE.pesoDaPeca({pesoTeoricoUnG: 107.2}, {}, 0), {g: 107.2, fonte: 'OP'});
 assert.deepEqual(CE.pesoDaPeca({}, {volume: 200, unidadeVolume: 'g'}, 0), {g: 200, fonte: 'cadastro'});
