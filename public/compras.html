@@ -1600,6 +1600,8 @@ function gerarSolicitacaoDosSelecionados() {
     var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriais);
     if (!calc.ok) { erros.push(p.sku + ': ' + calc.erro); return; }
+    // Sem controle de estoque (ex.: água) não se compra (01/10).
+    calc.itens = calc.itens.filter(function(it) { return !materialSemControleEstoque(it.mpCodigo, allMateriais); });
     if (!calc.itens.length) { erros.push(p.sku + ': a Fórmula/BOM não tem itens cadastrados.'); return; }
     if (!achado.temAprovada) semAprovada.push(p.sku);
     explosoes.push({ sku: p.sku, produto: p.produto || '', saldo: saldo, itens: calc.itens });

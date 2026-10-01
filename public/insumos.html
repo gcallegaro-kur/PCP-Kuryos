@@ -1606,6 +1606,7 @@
     if (!saldo) return { ok: false, erro: 'Este pedido não tem saldo em aberto (tudo já produzido).' };
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
     if (!calc.ok) return calc;
+    calc.itens = calc.itens.filter(function(it) { return !materialSemControleEstoque(it.mpCodigo, allMateriaisIns); });
     if (!calc.itens.length) return { ok: false, erro: 'A Fórmula/BOM deste produto não tem nenhum item cadastrado.' };
     // temAprovada vem de melhorFormulaDoProduto: quando nenhuma versão está
     // APROVADA ele cai na mais recente de qualquer status. compras.html já
@@ -2637,6 +2638,8 @@ function mrpDemandaPorMaterial() {
       ? PropriedadeEstoque.clienteKeyDoSku(p.sku, allProdutosIns, null, p.cliente) : null;
 
     calc.itens.forEach(function(it) {
+      // Sem controle de estoque (ex.: água) não gera necessidade de compra (01/10).
+      if (materialSemControleEstoque(it.mpCodigo, allMateriaisIns)) return;
       (out[it.mpCodigo] = out[it.mpCodigo] || []).push({
         data: datas[key] || null,
         qtd: it.quantidade,

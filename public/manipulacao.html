@@ -1227,7 +1227,9 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
   // Saldo agregado: uma baixa por MP (o total). Lotes do WMS: uma baixa por
   // lote pesado, saindo do lote que o operador usou -- e, dentro dele, do
   // pedaço que a Separação levou para esta OP.
-  var agregadas = val.linhas.filter(function(l) { return l.pesado > 0; }).map(function(l) {
+  // Material sem controle de estoque (ex.: água) é pesado e registrado, mas não baixa (01/10).
+  var semControle = function(c) { return materialSemControleEstoque(c, allMateriais); };
+  var agregadas = val.linhas.filter(function(l) { return l.pesado > 0 && !semControle(l.mpCodigo); }).map(function(l) {
     return Promise.resolve()
       .then(function() {
         return ajustarEstoque(db, l.mpCodigo, -Math.abs(l.pesado), 'consumo_manipulacao', op.lote,
@@ -1237,7 +1239,7 @@ document.getElementById('mBtnFecharPesagem').addEventListener('click', function(
   });
   // Em sequência: dois lotes da mesma MP em paralelo disputariam o mesmo
   // lote do WMS quando um deles cai no FEFO.
-  var porLote = Manipulacao.baixasPorLote(previstos, pesagemAtual).reduce(function(cadeia, b) {
+  var porLote = Manipulacao.baixasPorLote(previstos, pesagemAtual).filter(function(b) { return !semControle(b.mpCodigo); }).reduce(function(cadeia, b) {
     return cadeia.then(function() {
       return baixarLotesFefo(db, 'material', b.mpCodigo, Math.abs(b.qtd), 'CONSUMO DE MANIPULAÇÃO', autor, op.lote,
         {clienteKey: clienteKey || null, loteInterno: b.loteMaterial || null, separadoPara: op.lote});

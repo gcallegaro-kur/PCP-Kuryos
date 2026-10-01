@@ -1137,14 +1137,71 @@ function explodirMateriaisNecessarios(produto, pecas, formula, bom, materiaisCac
   });
   Object.values((bom && bom.itens) || {}).forEach(function(it) {
     var matCadastrado = materiaisCache ? (materiaisCache[sanitizeKey(it.materialCodigo)] || Object.values(materiaisCache).find(function(m) { return m.mpCodigo === it.materialCodigo; })) : null;
+    var unidadeBom = (matCadastrado && matCadastrado.unidade) || 'un';
     itens.push({
       mpCodigo: it.materialCodigo, mpNome: it.materialNome,
-      quantidade: Math.round((pecas * (it.qtdPorPeca || 0)) * 1000) / 1000,
-      unidade: (matCadastrado && matCadastrado.unidade) || 'un', origem: 'bom'
+      // Unidade discreta (caixa, frasco, rótulo) sai inteira, para cima.
+      quantidade: qtdBomParaPecas(it, pecas, unidadeBom),
+      unidade: unidadeBom, origem: 'bom'
     });
   });
 
   return { ok: true, itens: itens, massaLoteKg: Math.round(massaLoteKg * 1000) / 1000, volumeGranelL: volumeGranelL == null ? null : Math.round(volumeGranelL * 1000) / 1000 };
+}
+
+/* ── Consumo inteiro e "unidades por caixa" (usuário, 01/10) ──────────────
+   "Na caixa de papelão, ao invés de número decimal, um racional de unidades
+   por caixa. O consumo sempre deve ser em unidades inteiras; o estoque não
+   pode apresentar fração." Antes, a caixa de 48 era 0,020833 por peça e cada
+   apontamento baixava 797 × 0,020833 = 16,604 caixas -- daí 11 materiais em
+   "un" com saldo quebrado (ET-00012 em −2.231,798).
+   - BOM guarda `pecasPorUnidade` (48 = 1 caixa a cada 48 peças); `qtdPorPeca`
+     continua gravado (1/48) para quem ainda lê só ele.
+   - Material em unidade contínua (kg, g, L, ml) consome fração normalmente;
+     qualquer outra unidade (un, rolo, cx...) é DISCRETA: consome inteiro. */
+var UNIDADES_CONTINUAS = { kg: 1, g: 1, mg: 1, l: 1, lt: 1, litro: 1, ml: 1, m: 1, m2: 1, m3: 1, cm: 1 };
+function ehUnidadeDiscreta(unidade) {
+  return !UNIDADES_CONTINUAS[String(unidade || 'un').trim().toLowerCase()];
+}
+// Peças por unidade do item de BOM: o campo novo, ou o inverso de qtdPorPeca
+// quando ele é uma fração "redonda" (0,020833 -> 48). Null quando não é 1/N.
+function pecasPorUnidadeBom(it) {
+  if (!it) return null;
+  var n = Number(it.pecasPorUnidade);
+  if (n > 0) return n;
+  var q = Number(it.qtdPorPeca);
+  if (!(q > 0) || q >= 1) return null;
+  var inv = 1 / q;
+  return Math.abs(inv - Math.round(inv)) < 0.02 ? Math.round(inv) : null;
+}
+// Quantidade de um item de BOM para `pecas` peças. Discreto: inteiro, sempre
+// para cima (caixa começada é caixa gasta).
+function qtdBomParaPecas(it, pecas, unidade) {
+  var n = pecasPorUnidadeBom(it);
+  var bruto = n ? pecas / n : pecas * (Number(it && it.qtdPorPeca) || 0);
+  if (!ehUnidadeDiscreta(unidade)) return Math.round(bruto * 1000) / 1000;
+  return Math.ceil(Math.round(bruto * 1e6) / 1e6);
+}
+// Consumo de um apontamento que leva a OP de `antes` para `depois` peças:
+// diferença dos acumulados inteiros. Soma exata ao fim da OP (960 peças com
+// caixa de 48 = 20 caixas, em quantos apontamentos for) e nunca fração.
+function consumoBomIncremental(it, antes, depois, unidade) {
+  if (!ehUnidadeDiscreta(unidade)) return qtdBomParaPecas(it, depois - antes, unidade);
+  return qtdBomParaPecas(it, Math.max(depois, 0), unidade) - qtdBomParaPecas(it, Math.max(antes, 0), unidade);
+}
+
+/* Material sem controle de estoque (usuário, 01/10: "itens que não precisam
+   de controle de estoque, como por exemplo água"). Cadastro: materiais/{k}.
+   controlaEstoque === false. Continua na fórmula, na OP e na pesagem; não dá
+   baixa, não é reservado, não é separado e não entra na necessidade de compra. */
+function materialSemControleEstoque(codigo, materiais) {
+  if (!codigo || !materiais) return false;
+  var m = materiais[sanitizeKey(codigo)];
+  if (!m || m.mpCodigo !== codigo) {
+    var k = Object.keys(materiais).find(function(x) { return materiais[x] && materiais[x].mpCodigo === codigo; });
+    m = k ? materiais[k] : m;
+  }
+  return !!(m && m.controlaEstoque === false);
 }
 
 // ── Ajuste de saldo de estoque (Fase 4) ─────────────────────────────────

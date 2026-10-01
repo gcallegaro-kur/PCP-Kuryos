@@ -656,14 +656,9 @@ function montarMateriaisConsumo() {
       editado: prev ? !!prev.editado : false
     };
   });
-  // Achado do usuário: embalagem arredondada pro mais próximo (Math.round)
-  // podia arredondar PRA BAIXO -- numa caixa de embarque isso significa
-  // faltar caixa de verdade no fim da linha. Embalagem sempre arredonda
-  // PRA CIMA (Math.ceil) -- melhor sobrar um pouco do que faltar. Unidade
-  // discreta (não dá pra ter "meia caixa") arredonda pro inteiro; unidade
-  // contínua (kg/L/etc, onde fração faz sentido físico) arredonda só na
-  // 3ª casa decimal, mesma precisão de antes.
-  var UNIDADES_BOM_DISCRETAS = { un: 1, cx: 1, pct: 1, par: 1, rolo: 1 };
+  // Embalagem sempre arredonda PRA CIMA -- faltar caixa no fim da linha é
+  // pior que sobrar. Unidade discreta sai inteira; kg/L ficam com 3 casas
+  // (qtdBomParaPecas, shared/utils.js).
   var itensBom = (bomEscolhido && bomEscolhido.itens) || {};
   Object.keys(itensBom).forEach(function(itemKey) {
     var it = itensBom[itemKey];
@@ -674,8 +669,9 @@ function montarMateriaisConsumo() {
     // peso) -- usa a unidade real do cadastro, com 'un' só como fallback.
     var matCadastrado = findMaterialByCodigo(it.materialCodigo);
     var unidadeBom = (matCadastrado && matCadastrado.unidade) || 'un';
-    var qtdBrutaBom = calc.pecasPrevistas * (it.qtdPorPeca || 0);
-    var qtdCalculadaBom = UNIDADES_BOM_DISCRETAS[unidadeBom] ? Math.ceil(qtdBrutaBom) : Math.ceil(qtdBrutaBom * 1000) / 1000;
+    // Mesma regra do consumo no apontamento (qtdBomParaPecas, shared/utils.js):
+    // "unidades por caixa" quando cadastrado, inteiro para cima em unidade discreta.
+    var qtdCalculadaBom = qtdBomParaPecas(it, calc.pecasPrevistas, unidadeBom);
     // BOM não tem conceito de "percentual da fórmula" -- ao editar na
     // substituição, o valor absoluto digitado fica fixo (não é recalculado
     // a partir de qtdPorPeca de novo) até uma nova substituição.
@@ -683,7 +679,7 @@ function montarMateriaisConsumo() {
       mpCodigo: prev ? prev.mpCodigo : it.materialCodigo,
       mpNome: prev ? prev.mpNome : nomeMaterialAtual(it.materialCodigo, it.materialNome),
       quantidade: (prev && prev.editado) ? prev.quantidade : qtdCalculadaBom,
-      unidade: unidadeBom, origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0,
+      unidade: unidadeBom, origem: 'bom', qtdPorPeca: it.qtdPorPeca || 0, pecasPorUnidade: pecasPorUnidadeBom(it) || null,
       substituiMpCodigo: prev ? prev.substituiMpCodigo : null,
       editado: prev ? !!prev.editado : false
     };
@@ -761,9 +757,10 @@ function findMaterialByCodigo(codigo) {
 // bruta ("0,02083333 cx") não diz nada útil de cabeça -- vira "48un/cx",
 // que é como a operação realmente pensa nisso.
 function fmtBomHint(it) {
-  if (it.origem !== 'bom' || !it.qtdPorPeca || it.qtdPorPeca >= 1) return '';
-  var unPorEmbalagem = Math.round(1 / it.qtdPorPeca);
-  return ' <span class="field-hint">(' + fmtNum(unPorEmbalagem) + ' un./' + escapeHtml(it.unidade || 'un') + ')</span>';
+  var n = it.origem === 'bom' ? pecasPorUnidadeBom(it) : null;
+  var semControle = materialSemControleEstoque(it.mpCodigo, allMateriais) ? ' <span class="badge badge-gray" title="Não dá baixa nem é reservado">sem controle de estoque</span>' : '';
+  if (!n) return semControle;
+  return ' <span class="field-hint">(1 a cada ' + fmtNum(n) + ' peças)</span>' + semControle;
 }
 
 // A OP não decide nem trava pelo saldo (o inventário de abertura ainda está
@@ -1320,7 +1317,10 @@ function emitirOP() {
     // Reserva (empenha) no estoque cada material do consumo calculado --
     // best-effort, fora da transaction de emissão: a OP já existe e é o que
     // importa; o empenho é um reflexo dela, não pré-requisito pra emitir.
-    empenharMateriais(db, res.lote, res.data.sku, Object.values(res.data.materiaisConsumo || {})).catch(function(err) {
+    // Material sem controle de estoque (ex.: água) não é reservado (01/10).
+    empenharMateriais(db, res.lote, res.data.sku, Object.values(res.data.materiaisConsumo || {}).filter(function(it) {
+      return !materialSemControleEstoque(it.mpCodigo, allMateriais);
+    })).catch(function(err) {
       console.error('Falha ao empenhar materiais da OP ' + res.lote + ':', err);
     });
 

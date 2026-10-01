@@ -3132,6 +3132,31 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
     };
   }
   if (!calc.ok || !calc.itens.length) return Promise.resolve();
+  // Consumo inteiro (usuário, 01/10): caixa, frasco, rótulo saem em unidades
+  // inteiras. A conta é pelo ACUMULADO da OP -- antes e depois deste
+  // apontamento --, então a soma fecha exata no fim (960 peças com caixa de 48
+  // = 20 caixas) sem nunca baixar fração. Formula (kg) segue proporcional.
+  var depoisPecas = Number(op.produzidoLinha != null ? op.produzidoLinha : op.produzido) || qtdReal;
+  var antesPecas = Math.max(depoisPecas - qtdReal, 0);
+  var itensBomOp = Object.values((bom && bom.itens) || {});
+  calc.itens = calc.itens.map(function(it) {
+    if (it.origem !== 'bom') return it;
+    var q = itensBomOp.filter(function(b) { return b && b.materialCodigo === it.mpCodigo; })
+      .reduce(function(s, b) { return s + consumoBomIncremental(b, antesPecas, depoisPecas, it.unidade); }, 0);
+    return Object.assign({}, it, { quantidade: Math.round(q * 1000) / 1000 });
+  }).filter(function(it) {
+    // Sem controle de estoque (ex.: água): não baixa (usuário, 01/10).
+    return it.quantidade > 0 && !materialSemControleEstoque(it.mpCodigo, allMateriaisForm);
+  });
+  // explodirMateriaisNecessarios devolve uma linha por item de BOM: o mesmo
+  // material repetido já foi somado acima -- fica uma linha só.
+  var vistosBom = {};
+  calc.itens = calc.itens.filter(function(it) {
+    if (it.origem !== 'bom') return true;
+    if (vistosBom[it.mpCodigo]) return false;
+    vistosBom[it.mpCodigo] = 1; return true;
+  });
+  if (!calc.itens.length) return Promise.resolve();
   // Decisão do usuário (17/09): a matéria-prima do granel sai do estoque na
   // PESAGEM (manipulacao.html). Quando a OP tem essa fase com baixa aplicada,
   // o envase consome só a embalagem (BOM) -- senão a mesma MP sairia duas
@@ -4265,7 +4290,10 @@ function collectPerdasEtapa(containerId, livreId, semPerdaId) {
 // só com categoria genérica (sem materialCodigo) continua sendo registrada
 // como sempre foi, só não desconta nada (não tem como saber qual material).
 function baixarEstoquePerdas(perdas, ref) {
-  var comMaterial = (perdas || []).filter(function(p) { return p.materialCodigo && p.quantidade > 0; });
+  var comMaterial = (perdas || []).filter(function(p) {
+    // Material sem controle de estoque (ex.: água) fica registrado como perda, sem baixa.
+    return p.materialCodigo && p.quantidade > 0 && !materialSemControleEstoque(p.materialCodigo, allMateriaisForm);
+  });
   if (!comMaterial.length) return Promise.resolve();
   var autorPerda = (window.currentUser && window.currentUser.nome) || null;
   var clientePerda = clienteKeyDaOp(typeof findOpByLote === 'function' ? findOpByLote(ref) : null);

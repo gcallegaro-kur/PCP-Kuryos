@@ -127,11 +127,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Caixa por "unidades por caixa", consumo inteiro e material sem controle de
-  estoque (2026-10-01).** Arquivos ativos: `public/shared/utils.js`, `public/form.html`,
-  `public/manipulacao.html`, `public/emitir_op.html`, `public/cadastros.html`,
-  `public/estoque.html`, `public/separacao_materiais.html`, `public/insumos.html`, testes novos
-  e `AGENT_STATUS.md`.
+- **PUBLICADO — "1 a cada N peças", consumo inteiro e material sem controle de estoque
+  (2026-10-01).** Pedidos: caixa de papelão como unidades por caixa em vez de 0,020833;
+  consumo/estoque nunca em fração; itens como água sem controle de estoque. `utils.js`:
+  `ehUnidadeDiscreta` (kg/g/L/ml/m contínuos, o resto discreto), `pecasPorUnidadeBom`
+  (campo novo `bom/.../itens/{i}.pecasPorUnidade` ou 1/qtdPorPeca redondo — sem migração),
+  `qtdBomParaPecas` (discreto: ceil), `consumoBomIncremental` (diferença dos acumulados da
+  OP: inteiro e soma exata), `materialSemControleEstoque` (`materiais/{k}.controlaEstoque
+  === false`). `explodirMateriaisNecessarios` usa qtdBomParaPecas. Baixa do apontamento
+  (`form.html`) pelo acumulado `produzidoLinha`; perdas, pesagem (`manipulacao.html`),
+  empenho (`emitir_op.html`), MRP (`insumos.html`) e sugestão de compra (`compras.html`)
+  pulam o sem-controle. Cadastros: checkbox "Controla estoque" no material e "1 a cada N
+  peças" no BOM (grava pecasPorUnidade + qtdPorPeca=1/N). Estoque: selo "sem controle".
+  Testes `run_consumo_inteiro_test.js`, `run_apontamento_encerramento_test.js` (34+36=70
+  caixas). **Dado pendente de autorização:** 11 materiais "un" com saldo fracionado
+  (ET-00003/12/18/29/47/51/57/67, MPGR-00038/47/50) e marcar a água (MPGR-00132) como sem
+  controle. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Estoque: coluna "Onde é usado" (2026-10-01).** Pedido: mostrar em quais
   BOMs/produtos o item é usado. `shared/onde-usado.js` (`OndeUsado.indice`): por produto

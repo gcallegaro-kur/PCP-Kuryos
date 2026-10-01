@@ -840,7 +840,7 @@ function ondeUsadoDrillHtml(e, key) {
     usos.map(function(u) {
       return '<tr><td><b>' + escapeHtml(u.sku) + '</b> — ' + escapeHtml(u.descricao) + '</td><td>' + escapeHtml(u.cliente || '—') + '</td>' +
         '<td>' + escapeHtml(u.via) + '</td><td>' + escapeHtml(u.versao) + ' <span class="badge ' + (u.status === 'APROVADA' ? 'badge-green' : 'badge-gray') + '">' + escapeHtml(u.status === 'APROVADA' ? 'aprovada' : 'rascunho') + '</span></td>' +
-        '<td style="text-align:right">' + fmtNum(u.quantidade) + ' ' + escapeHtml(u.unidadeQtd) + '</td></tr>';
+        '<td style="text-align:right">' + (u.pecasPorUnidade ? '1 a cada ' + fmtNum(u.pecasPorUnidade) + ' peças' : fmtNum(u.quantidade) + ' ' + escapeHtml(u.unidadeQtd)) + '</td></tr>';
     }).join('') + '</tbody></table>';
 }
 
@@ -878,7 +878,8 @@ function renderEstoqueAgregado() {
     var empenhado = e.saldoEmpenhado || 0;
     var disponivel = (e.saldoAtual || 0) - empenhado;
     var linhas = '<tr>' +
-      '<td><button class="btn btn-ghost btn-sm es-expandir" data-key="' + escapeAttr(key) + '" title="Ver lotes/endereços">' + (expandedKeys[key] ? '▾' : '▸') + '</button> ' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') + '</td>' +
+      '<td><button class="btn btn-ghost btn-sm es-expandir" data-key="' + escapeAttr(key) + '" title="Ver lotes/endereços">' + (expandedKeys[key] ? '▾' : '▸') + '</button> ' + escapeHtml(e.materialCodigo || key) + ' — ' + escapeHtml(e.materialNome || '') +
+        (materialSemControleEstoque(e.materialCodigo || key, allMateriais) ? ' <span class="badge badge-gray" title="Cadastro: não controla estoque (não dá baixa nem é reservado)">sem controle de estoque</span>' : '') + '</td>' +
       '<td style="text-align:right;font-weight:700">' + fmtNum(e.saldoAtual || 0) + ' ' + escapeHtml(e.unidade || '') + partesDonoHtml(e) + '</td>' +
       '<td style="text-align:right' + (empenhado ? '' : ';color:var(--muted)') + '">' + (empenhado ? fmtNum(empenhado) + ' ' + escapeHtml(e.unidade || '') : '—') + '</td>' +
       '<td style="text-align:right;font-weight:700' + (disponivel < 0 ? ';color:var(--danger)' : '') + '">' + fmtNum(disponivel) + ' ' + escapeHtml(e.unidade || '') + '</td>' +
@@ -2719,6 +2720,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('materiais'), function(snap) {
       allMateriais = snap.val() || {};
       refreshAeItems();
+      renderEstoqueAgregado(); // selo "sem controle de estoque" vem do cadastro
     });
     dbOnValue(db.ref('produtos'), function(snap) {
       allProdutos = snap.val() || {};

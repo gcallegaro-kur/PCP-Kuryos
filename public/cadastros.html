@@ -574,6 +574,9 @@
             <div class="form-group">
               <label class="chk"><input type="checkbox" id="fAtivo-mat" checked> Ativo</label>
             </div>
+            <div class="form-group">
+              <label class="chk" title="Desmarque para itens como água: continuam na fórmula e na pesagem, mas não dão baixa, não são reservados e não entram na necessidade de compra"><input type="checkbox" id="fControlaEstoque-mat" checked> Controla estoque</label>
+            </div>
           </div>
 
           <div class="section-label" id="historicoMatLabel-mat" style="display:none">Histórico de alterações</div>
@@ -930,7 +933,7 @@
         <table>
           <thead><tr>
             <th style="min-width:160px">Material (Embalagem)</th>
-            <th style="width:140px">Qtd. por peça</th>
+            <th style="width:190px" title="Para caixa de embarque e afins, use &quot;1 a cada N peças&quot; em vez da fração">Qtd. por peça · ou 1 a cada N peças</th>
             <th style="width:40px"></th>
           </tr></thead>
           <tbody id="bomBody-form"></tbody>
@@ -2030,6 +2033,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('fControlado').checked = !!m.controlado;
     document.getElementById('fAtivo-mat').checked = m.ativo !== false;
+    document.getElementById('fControlaEstoque-mat').checked = m.controlaEstoque !== false;
 
     updateTipoFieldsVisibility();
     renderHistoricoMaterial(key);
@@ -2050,7 +2054,7 @@ document.addEventListener('DOMContentLoaded', function() {
     unidadeCompra: 'Unidade de compra', fatorConversao: 'Fator de conversão',
     pesoBrutoCompra: 'Peso bruto compra', pesoLiquidoCompra: 'Peso líquido compra',
     fornecedores: 'Fornecedores homologados',
-    controlado: 'Controlado', ativo: 'Ativo',
+    controlado: 'Controlado', ativo: 'Ativo', controlaEstoque: 'Controla estoque',
     inci: 'INCI', funcaoFormula: 'Função na fórmula', aparencia: 'Aparência', cor: 'Cor',
     densidade: 'Densidade', casaFragrancia: 'Casa de fragrância', inspiracao: 'Inspiração',
     custoTargetUsd: 'Custo target USD', formato: 'Formato', gargaloRosca: 'Gargalo/rosca',
@@ -2141,7 +2145,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var cv = codProdutoEVersao(key, b);
       Object.values(b.itens).forEach(function(it) {
         if (it && it.materialCodigo === mpCodigo) {
-          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: null, onde: 'BOM', proporcao: it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
+          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: null, onde: 'BOM', proporcao: pecasPorUnidadeBom(it) ? ('1 a cada ' + fmtNum(pecasPorUnidadeBom(it)) + ' peças') : it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
         }
       });
     });
@@ -2267,7 +2271,9 @@ document.addEventListener('DOMContentLoaded', function() {
       pesoLiquidoCompra: pesoLiquidoVal !== '' ? parseFloat(pesoLiquidoVal) : null,
       fornecedores: montarFornecedoresParaSalvar(tipo),
       controlado: document.getElementById('fControlado').checked,
-      ativo: document.getElementById('fAtivo-mat').checked
+      ativo: document.getElementById('fAtivo-mat').checked,
+      // Água e afins (01/10): sem baixa, sem reserva, fora da compra.
+      controlaEstoque: document.getElementById('fControlaEstoque-mat').checked
     }, coletarDadosPorTipo(tipo));
 
     document.getElementById('modalSaveBtn-mat').disabled = true;
@@ -4969,20 +4975,37 @@ document.addEventListener('DOMContentLoaded', function() {
       tbody.innerHTML = entries.map(function(entry) {
         var itemKey = entry[0], it = entry[1];
         if (!editavel) {
-          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + fmtNum(it.qtdPorPeca || 0) + '</td><td></td></tr>';
+          var nLeit = pecasPorUnidadeBom(it);
+          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + (nLeit ? '1 a cada ' + fmtNum(nLeit) + ' peças' : fmtNum(it.qtdPorPeca || 0)) + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
           '<td><input type="text" class="b-mat-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelDoMaterialForm(it.materialCodigo)) + '" autocomplete="off">' +
             '<input type="hidden" class="b-mat" data-item="' + escapeAttr(itemKey) + '" value="' + escapeAttr(it.materialCodigo || '') + '">' +
             linhaPendenciaHtml(it, 'b-usar-sugestao', 'data-item="' + escapeAttr(itemKey) + '"') + '</td>' +
-          '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (it.qtdPorPeca != null ? it.qtdPorPeca : '') + '"></td>' +
+          // "1 a cada N peças" (01/10): a caixa de 48 deixa de ser 0,020833.
+          // Preenchido a partir da fração antiga quando ela é 1/N redondo.
+          (function() {
+            var n = pecasPorUnidadeBom(it);
+            return '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (n ? '' : (it.qtdPorPeca != null ? it.qtdPorPeca : '')) + '"' + (n ? ' placeholder="—"' : '') + ' aria-label="Quantidade por peça">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)">ou 1 a cada <input type="number" class="b-pecas" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" style="width:72px" value="' + (n || '') + '" aria-label="Peças por unidade"> peças</div></td>';
+          })() +
           '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
       }).join('');
     }
     document.getElementById('btnAddBomItem-form').style.display = editavel ? 'inline-flex' : 'none';
     if (!editavel) return;
     document.querySelectorAll('#bomBody-form .b-qtd').forEach(function(el) {
-      el.addEventListener('change', function() { salvarItemBom(key, el.getAttribute('data-item')); });
+      el.addEventListener('change', function() {
+        // Digitou a quantidade por peça: vale ela, o "1 a cada N" é limpo.
+        var pc = el.closest('tr').querySelector('.b-pecas'); if (pc && el.value !== '') pc.value = '';
+        salvarItemBom(key, el.getAttribute('data-item'));
+      });
+    });
+    document.querySelectorAll('#bomBody-form .b-pecas').forEach(function(el) {
+      el.addEventListener('change', function() {
+        var q = el.closest('tr').querySelector('.b-qtd'); if (q && el.value !== '') q.value = '';
+        salvarItemBom(key, el.getAttribute('data-item'));
+      });
     });
     wireMaterialBuscaForm('#bomBody-form', 'b-mat-busca', 'b-mat', ['EP', 'ES', 'ET'], function(itemKey) { salvarItemBom(key, itemKey); });
     document.querySelectorAll('#bomBody-form .b-remove').forEach(function(btn) {
@@ -5012,8 +5035,16 @@ document.addEventListener('DOMContentLoaded', function() {
       materialCodigo: materialCodigo,
       materialNome: mat ? mat.mpNome : '',
       qtdPorPeca: parseFloat(row.querySelector('.b-qtd').value) || 0,
+      pecasPorUnidade: null,
       posicao: posicaoIdx + 1
     };
+    // "1 a cada N peças": N inteiro grava pecasPorUnidade e qtdPorPeca = 1/N
+    // (6 casas) para quem ainda lê só qtdPorPeca.
+    var nPecas = parseInt((row.querySelector('.b-pecas') || {}).value, 10);
+    if (nPecas > 0) {
+      data.pecasPorUnidade = nPecas;
+      data.qtdPorPeca = Math.round(1e6 / nPecas) / 1e6;
+    }
     // Mesmo raciocínio de salvarItemFormula: material escolhido resolve a
     // pendência sozinho; em branco preserva o texto original/sugestão.
     var itemAtual = ((allBom[key] || {}).itens || {})[itemKey] || {};

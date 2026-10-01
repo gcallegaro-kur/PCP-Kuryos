@@ -70,7 +70,10 @@
             produtoKey: prod, sku: (p && p.sku) || prod, descricao: (p && p.descricao) || '', cliente: (p && p.cliente) || '',
             via: cfg[1], versao: reg.versao || vig[prod].chave.split('__')[1] || '', status: reg.status || 'RASCUNHO',
             quantidade: cfg[0] === 'formulas' ? Number(it.percentualMM) || 0 : Number(it.qtdPorPeca) || 0,
-            unidadeQtd: cfg[0] === 'formulas' ? '%' : 'por peça'
+            unidadeQtd: cfg[0] === 'formulas' ? '%' : 'por peça',
+            // "1 a cada N peças" (caixa de embarque): N, quando cadastrado ou 1/N redondo.
+            pecasPorUnidade: cfg[0] === 'bom' ? (Number(it.pecasPorUnidade) > 0 ? Number(it.pecasPorUnidade)
+              : (Number(it.qtdPorPeca) > 0 && Number(it.qtdPorPeca) < 1 && Math.abs(1 / Number(it.qtdPorPeca) - Math.round(1 / Number(it.qtdPorPeca))) < 0.02 ? Math.round(1 / Number(it.qtdPorPeca)) : null)) : null
           });
         });
       });

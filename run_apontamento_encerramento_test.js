@@ -59,6 +59,12 @@ const db = { ref(path) { return {
 }; } };
 
 let baixas = 0;
+// shared/utils.js real, para as regras de consumo inteiro.
+const utilsReal = { console: { log() {}, warn() {}, error() {} }, window: {}, document: undefined, setTimeout, Promise };
+utilsReal.globalThis = utilsReal;
+vm.createContext(utilsReal);
+vm.runInContext(fs.readFileSync('public/shared/utils.js', 'utf8'), utilsReal, { filename: 'utils.js' });
+
 const ctx = {
   console, Promise, Date, Math, Number, String, Object,
   db,
@@ -122,6 +128,9 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
     chaveVersao: (sku, versao) => sku + '__' + versao,
     sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),
     explodirMateriaisNecessarios: () => { throw new Error('Não deveria explodir fórmula com densidade -1'); },
+    // Regras reais de consumo inteiro / sem controle de estoque (shared/utils.js, 01/10).
+    consumoBomIncremental: utilsReal.consumoBomIncremental,
+    materialSemControleEstoque: utilsReal.materialSemControleEstoque,
     ajustarEstoque: (db, codigo, delta, tipo, ref, extras) => { ajustes.push({ codigo, delta, cliente: extras && extras.clienteKeyConsumidor }); return Promise.resolve(); },
     baixarEmpenho: () => Promise.resolve(),
     baixaWmsSegura: (tipo, codigo, qtd, motivo, autor, ref, clienteKey) => { baixasWms.push(clienteKey); return Promise.resolve(); },
@@ -136,7 +145,20 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
     throw new Error('Consumo precisa levar o cliente da OP ao saldo agregado e ao FEFO (propriedade do estoque)');
   }
   const deltas = Object.fromEntries(ajustes.map(a => [a.codigo, a.delta]));
-  if (deltas['EP-00092'] !== -797 || deltas['EP-00069'] !== -797 || deltas['ET-00012'] !== -33.208) throw new Error('Consumo do BOM ficou incorreto');
+  // Caixa de 24 (0,041666 por peça): 797 peças = 34 caixas, inteiro (01/10).
+  if (deltas['EP-00092'] !== -797 || deltas['EP-00069'] !== -797 || deltas['ET-00012'] !== -34) throw new Error('Consumo do BOM ficou incorreto: ' + JSON.stringify(deltas));
+  // Apontamento seguinte (797 -> 1661): só as caixas novas, inteiras; soma fecha em ceil(1661/24) = 70.
+  ajustes.length = 0;
+  await consumptionCtx.baixarEstoqueConsumo({ sku: 'GLMKAM01', lote: '26247/06', produzidoLinha: 1661 }, 864, 'consumo_producao', '26247/06');
+  const d2 = Object.fromEntries(ajustes.map(a => [a.codigo, a.delta]));
+  if (d2['ET-00012'] !== -36) throw new Error('Segundo apontamento deveria baixar 36 caixas (70 − 34): ' + d2['ET-00012']);
+  // Material sem controle de estoque não baixa.
+  ajustes.length = 0;
+  consumptionCtx.allMateriaisForm = { 'EP-00069': { mpCodigo: 'EP-00069', controlaEstoque: false } };
+  await consumptionCtx.baixarEstoqueConsumo({ sku: 'GLMKAM01', lote: '26247/06', produzidoLinha: 1700 }, 39, 'consumo_producao', '26247/06');
+  if (ajustes.some(a => a.codigo === 'EP-00069')) throw new Error('Material sem controle de estoque não pode baixar');
+  if (!ajustes.some(a => a.codigo === 'EP-00092')) throw new Error('Os demais continuam baixando');
+  consumptionCtx.allMateriaisForm = {};
   if ('MPGR-00132' in deltas) throw new Error('Fórmula com densidade -1 não pode movimentar estoque');
 
   const totalForm = source.slice(source.indexOf("document.getElementById('totalForm')"), source.indexOf('// ════════════════════════════════════════════════', source.indexOf("document.getElementById('totalForm')")));
