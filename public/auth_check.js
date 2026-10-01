@@ -95,20 +95,20 @@ const KURYOS_MODULOS = {
   conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
                   paginas: ['manipulacao.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html', 'consulta_estoque.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
                   paginas: ['comercial.html', 'gestao_comercial.html', 'devolucoes.html', 'relatorio_pedido.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
-                  paginas: ['pedidos.html', 'insumos.html', 'relatorio_pedido.html'] },
+                  paginas: ['pedidos.html', 'insumos.html', 'relatorio_pedido.html', 'consulta_estoque.html'] },
   cadastros:    { rotulo: 'Cadastros',             desc: 'Produtos, materiais, clientes, fórmulas e BOM',
                   paginas: ['cadastros.html'] },  // produtos/materiais/clientes/formulas.html foram
                   // aposentados em 23/09: eram só redirecionamentos para as abas de cadastros.html
   compras:      { rotulo: 'Compras',               desc: 'Solicitações, cotações e pedidos de compra',
-                  paginas: ['compras.html'] },
+                  paginas: ['compras.html', 'consulta_estoque.html'] },
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
-                  paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
+                  paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'consulta_estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
@@ -654,7 +654,8 @@ function renderUnifiedNavbar(user) {
   ]);
 
   const comprasGroup = grupo('Compras', [
-    temMod('compras') && ktLink('compras.html', 'cart', 'Compras', activePage)
+    temMod('compras') && ktLink('compras.html', 'cart', 'Compras', activePage),
+    temMod('compras') && !temMod('logistica') && !temMod('pedidos') && !temMod('planejamento') && ktLink('consulta_estoque.html', 'warehouse', 'Consulta de Estoque', activePage)
   ]);
 
   const comercialGroup = grupo('Comercial', [
@@ -685,6 +686,8 @@ function renderUnifiedNavbar(user) {
     // de verdade fica pra quando o Estoque/Compras (Agendamentos) já
     // estiverem rodando -- registrado em MELHORIAS_FUTURAS.md.
     temMod('pedidos') && ktLink('insumos.html', 'box', 'Matriz de Insumos (MRP)', activePage),
+    // Quem não tem Logística também precisa consultar o estoque (PCP).
+    (temMod('pedidos') || temMod('planejamento')) && !temMod('logistica') && ktLink('consulta_estoque.html', 'warehouse', 'Consulta de Estoque', activePage),
     temMod('config') && ktLink('admin.html', 'sliders', 'Ajustes / Config', activePage),
     // Histórico de Apontamentos aparece TAMBÉM aqui, além de Produção
     // (confirmado pelo usuário: "aparece nos 2 blocos mesmo") -- PCP e
@@ -711,6 +714,8 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('faturamento.html', 'clipboard', 'Expedição — Faturamento', activePage),
     temMod('logistica') && ktLink('cargas.html', 'truck', 'Expedição — Acompanhamento', activePage),
     temMod('logistica') && ktLink('relatorio_expedicao.html', 'clipboard', 'Relatório de Expedição', activePage),
+    // Consulta de Estoque (01/10): busca rápida + intermediários x embalagens, só leitura.
+    temMod('logistica') && ktLink('consulta_estoque.html', 'warehouse', 'Consulta de Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
     temMod('logistica') && ktLink('kardex.html', 'list', 'Kardex', activePage),

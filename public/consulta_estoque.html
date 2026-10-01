@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta de Estoque</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script>
+<script src="auth_check.js"></script>
+<script src="shared/onde-usado.js"></script>
+<script src="shared/consulta-estoque.js"></script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+:root{--ce-ok:#0a7d3c;--ce-ok-bg:#e3f6ea;--ce-warn:#a15c00;--ce-warn-bg:#fff1d6;--ce-bad:#c42b2b;--ce-bad-bg:#fde8e8;--ce-info:#1f4fb8;--ce-info-bg:#e6edfc;--ce-mute-bg:#f0f0f3;--ce-hover:#f5f6fb;--ce-sel:#eaf0ff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ce-ok:#6fe3a0;--ce-ok-bg:rgba(60,200,120,.16);--ce-warn:#ffcb6b;--ce-warn-bg:rgba(250,178,25,.16);--ce-bad:#ff8f8f;--ce-bad-bg:rgba(240,80,80,.18);--ce-info:#9db7ff;--ce-info-bg:rgba(94,131,234,.2);--ce-mute-bg:rgba(255,255,255,.08);--ce-hover:rgba(255,255,255,.04);--ce-sel:rgba(94,131,234,.18)}}
+:root[data-theme="dark"]{--ce-ok:#6fe3a0;--ce-ok-bg:rgba(60,200,120,.16);--ce-warn:#ffcb6b;--ce-warn-bg:rgba(250,178,25,.16);--ce-bad:#ff8f8f;--ce-bad-bg:rgba(240,80,80,.18);--ce-info:#9db7ff;--ce-info-bg:rgba(94,131,234,.2);--ce-mute-bg:rgba(255,255,255,.08);--ce-hover:rgba(255,255,255,.04);--ce-sel:rgba(94,131,234,.18)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
+.ce{max-width:1500px;margin:0 auto;padding:24px 22px 60px}
+.ce-head{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.ce-head h1{margin:0;font-size:28px;letter-spacing:-.02em}
+.ce-sub{font-size:13px;color:var(--ink-soft);margin-top:4px;max-width:760px}
+.ce-acoes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;background:var(--ce-mute-bg);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--ink-soft);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}.dot.on{background:var(--good)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--radius-sm);padding:8px 13px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{padding:5px 10px;font-size:12px}
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin:18px 0 8px}
+.kpi{all:unset;box-sizing:border-box;cursor:pointer;background:var(--panel);border:1.5px solid transparent;border-radius:var(--radius-md);padding:13px 15px;box-shadow:var(--shadow);display:block}
+.kpi:hover{border-color:var(--seq-300)}
+.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kpi.on{border-color:var(--accent);background:var(--ce-sel)}
+.kpi b{display:block;font-size:26px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--ink-soft);font-weight:600}
+.kpi small{display:block;font-size:11px;color:var(--ink-mute);margin-top:2px}
+.kpi.bad b{color:var(--ce-bad)}.kpi.warn b{color:var(--ce-warn)}.kpi.ok b{color:var(--ce-ok)}
+/* abas */
+.abas{display:flex;gap:4px;margin:20px 0 14px;border-bottom:1px solid var(--line)}
+.aba{all:unset;cursor:pointer;padding:11px 16px;font-size:14px;font-weight:700;color:var(--ink-soft);border-bottom:3px solid transparent;margin-bottom:-1px;display:inline-flex;gap:8px;align-items:center}
+.aba.on{color:var(--accent);border-bottom-color:var(--accent)}
+.aba:focus-visible{outline:2px solid var(--accent);border-radius:6px}
+.aba .n{background:var(--ce-mute-bg);color:var(--ink-soft);border-radius:999px;padding:1px 8px;font-size:11.5px}
+.aba.on .n{background:var(--ce-info-bg);color:var(--ce-info)}
+/* busca e filtros */
+.busca{position:relative}
+.busca input{width:100%;font-size:16px;padding:14px 90px 14px 46px;border:1.5px solid var(--line);border-radius:var(--radius-md);background:var(--panel);color:var(--ink);font-family:inherit;box-shadow:var(--shadow)}
+.busca input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent)}
+.busca .lupa{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--ink-mute);pointer-events:none;font-size:17px}
+.busca kbd{position:absolute;right:14px;top:50%;transform:translateY(-50%);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 8px;font-size:12px;color:var(--ink-mute);background:var(--bg)}
+.busca .limpa{all:unset;position:absolute;right:48px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--ink-mute);padding:4px 8px;font-size:15px}
+.filtros{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.filtros .rot{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:700;margin-right:2px}
+.chip{all:unset;cursor:pointer;box-sizing:border-box;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600;color:var(--ink-soft);display:inline-flex;gap:6px;align-items:center}
+.chip:hover{border-color:var(--seq-300);color:var(--ink)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.on .c{background:rgba(255,255,255,.22);color:#fff}
+.chip .c{background:var(--ce-mute-bg);border-radius:999px;padding:0 7px;font-size:11px;font-variant-numeric:tabular-nums}
+.chip.vazio{opacity:.45}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sep{width:1px;height:20px;background:var(--line);margin:0 6px}
+.sel{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel);color:var(--ink);font-size:12.5px;font-family:inherit;max-width:230px}
+.resumo{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:14px 2px 8px;font-size:13px;color:var(--ink-soft);flex-wrap:wrap}
+.resumo b{color:var(--ink)}
+.linklike{all:unset;cursor:pointer;color:var(--ce-info);font-weight:600}
+.linklike:hover{text-decoration:underline}
+/* tabela */
+.tabela{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{position:sticky;top:0;background:var(--panel);z-index:2;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);padding:11px 12px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+thead th.num,td.num{text-align:right}
+thead th:hover{color:var(--ink)}
+thead th .seta{opacity:.9;margin-left:3px}
+tbody tr{cursor:pointer;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+tbody tr:hover{background:var(--ce-hover)}
+tbody tr.sel{background:var(--ce-sel)}
+tbody tr.foco{outline:2px solid var(--accent);outline-offset:-2px}
+td{padding:10px 12px;vertical-align:middle}
+body.denso td{padding:5px 12px}
+body.denso .sub2{display:none}
+.item{display:flex;gap:10px;align-items:center;min-width:240px}
+.barra-nivel{width:4px;align-self:stretch;border-radius:3px;background:var(--line);flex:none}
+.barra-nivel.critico{background:var(--ce-bad)}.barra-nivel.atencao{background:#e5a100}.barra-nivel.ok{background:var(--good)}
+.item .nome{font-weight:650;line-height:1.25}
+.item .cod{font-size:11.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums}
+.gp{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;margin-left:6px;color:#fff;vertical-align:1px}
+.saldo{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
+.saldo small{font-weight:500;color:var(--ink-mute);font-size:11px;margin-left:3px}
+.saldo.neg{color:var(--ce-bad)}
+.bar{height:5px;border-radius:3px;background:var(--ce-mute-bg);overflow:hidden;display:flex;margin-top:5px;min-width:90px}
+.bar i{display:block;height:100%}
+.bar .d{background:var(--good)}.bar .e{background:#e5a100}.bar .q{background:#3b6fe0}
+.tg{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;margin:1px 3px 1px 0;white-space:nowrap}
+.tg.ok{background:var(--ce-ok-bg);color:var(--ce-ok)}.tg.warn{background:var(--ce-warn-bg);color:var(--ce-warn)}.tg.bad{background:var(--ce-bad-bg);color:var(--ce-bad)}.tg.info{background:var(--ce-info-bg);color:var(--ce-info)}.tg.mute{background:var(--ce-mute-bg);color:var(--ink-soft)}
+.mut{color:var(--ink-mute)}
+.vazia{padding:56px 20px;text-align:center;color:var(--ink-soft)}
+.vazia b{display:block;font-size:16px;color:var(--ink);margin-bottom:6px}
+.mais{padding:14px;text-align:center}
+/* drawer */
+.fundo{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:10030;opacity:0;pointer-events:none;transition:opacity .18s}
+.fundo.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,100%);background:var(--panel);z-index:10031;box-shadow:-18px 0 40px -18px rgba(0,0,0,.35);transform:translateX(102%);transition:transform .22s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.dr-topo{padding:18px 20px 12px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.dr-topo h2{margin:0;font-size:19px;line-height:1.25;letter-spacing:-.01em}
+.dr-topo .cod{font-size:12px;color:var(--ink-mute);margin-top:3px}
+.dr-x{all:unset;cursor:pointer;font-size:22px;color:var(--ink-mute);padding:0 6px;margin-left:auto;line-height:1}
+.dr-x:hover{color:var(--ink)}
+.dr-corpo{padding:16px 20px 28px;overflow:auto;flex:1}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{background:var(--bg);border-radius:var(--radius-sm);padding:10px 12px}
+.tile b{display:block;font-size:20px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tile span{font-size:11px;color:var(--ink-soft);font-weight:600}
+.tile.bad b{color:var(--ce-bad)}
+.secao{margin-top:20px}
+.secao h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute)}
+.dica{font-size:12.5px;color:var(--ink-soft);line-height:1.45}
+.alerta{border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-top:12px;line-height:1.4}
+.alerta.bad{background:var(--ce-bad-bg);color:var(--ce-bad)}.alerta.warn{background:var(--ce-warn-bg);color:var(--ce-warn)}.alerta.info{background:var(--ce-info-bg);color:var(--ce-info)}.alerta.ok{background:var(--ce-ok-bg);color:var(--ce-ok)}
+.mini{width:100%;border-collapse:collapse;font-size:12.5px}
+.mini th{font-size:10.5px;text-transform:uppercase;color:var(--ink-mute);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);position:static;cursor:default}
+.mini td{padding:7px 6px;border-bottom:1px solid color-mix(in srgb,var(--line) 50%,transparent)}
+.mini tr{cursor:default}.mini tr:hover{background:none}
+.dr-links{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+/* intermediários */
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:14px}
+.cartao{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:16px 18px;border-left:5px solid var(--line)}
+.cartao.pronto{border-left-color:var(--good)}.cartao.parcial{border-left-color:#e5a100}.cartao.bloqueado{border-left-color:var(--ce-bad)}
+.cartao h4{margin:0;font-size:15px;line-height:1.3}
+.cartao .meta{font-size:12px;color:var(--ink-soft);margin-top:3px}
+.cartao .topo{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.prog{height:10px;background:var(--ce-mute-bg);border-radius:6px;overflow:hidden;margin:12px 0 4px}
+.prog i{display:block;height:100%;background:var(--good);border-radius:6px}
+.prog.parcial i{background:#e5a100}.prog.bloqueado i{background:var(--ce-bad)}
+.prog-leg{display:flex;justify-content:space-between;font-size:12.5px;font-variant-numeric:tabular-nums}
+.comp{margin-top:10px}
+.comp .l{display:grid;grid-template-columns:minmax(0,1fr) 92px 78px;gap:8px;align-items:center;font-size:12px;padding:4px 0}
+.comp .l .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.comp .l .b{height:6px;background:var(--ce-mute-bg);border-radius:4px;overflow:hidden}
+.comp .l .b i{display:block;height:100%;background:var(--good)}
+.comp .l.falta .b i{background:var(--ce-bad)}
+.comp .l .q{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.comp .l.falta .q{color:var(--ce-bad);font-weight:700}
+.comp .l.nb .n{color:var(--ink-mute)}
+.gargalo{margin-top:10px;border-radius:var(--radius-sm);padding:9px 11px;font-size:12.5px;background:var(--ce-bad-bg);color:var(--ce-bad);line-height:1.4}
+.gargalo.ok{background:var(--ce-ok-bg);color:var(--ce-ok)}
+.como{background:var(--ce-info-bg);color:var(--ce-info);border-radius:var(--radius-md);padding:12px 15px;font-size:13px;line-height:1.5;margin-bottom:14px}
+.como b{color:inherit}
+.sub-h{display:flex;align-items:center;gap:10px;margin:22px 2px 10px}
+.sub-h h3{margin:0;font-size:16px}
+.skel{height:44px;margin:8px 12px;border-radius:8px;background:linear-gradient(90deg,var(--ce-mute-bg),transparent,var(--ce-mute-bg));background-size:200% 100%;animation:sk 1.2s infinite}
+@keyframes sk{to{background-position:-200% 0}}
+@media (max-width:760px){.busca kbd{display:none}.busca input{padding-right:44px}.ce{padding:16px 12px 50px}.grade{grid-template-columns:1fr}.hide-m{display:none}.tiles{grid-template-columns:repeat(2,1fr)}.ce-head h1{font-size:23px}}
+@media (prefers-reduced-motion:reduce){.drawer,.fundo{transition:none}.skel{animation:none}}
+</style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<main class="ce">
+  <div class="ce-head">
+    <div>
+      <h1>Consulta de Estoque</h1>
+      <div class="ce-sub">Digite para achar qualquer item, lote ou endereço. Clique numa linha para ver tudo sobre ele. Esta tela só consulta; para mover, ajustar ou endereçar use o <a href="estoque.html" class="linklike">Estoque/WMS</a>.</div>
+    </div>
+    <div class="ce-acoes">
+      <span class="pill"><span class="dot" id="sDot"></span><span id="sTxt">Conectando…</span></span>
+      <button type="button" class="btn" id="btnCsv" title="Baixa em CSV o que está na tela agora">⬇ Exportar CSV</button>
+      <button type="button" class="btn" id="btnDens" title="Alterna entre linhas confortáveis e compactas">↕ Compacto</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis" role="group" aria-label="Resumo"></div>
+
+  <div class="abas" role="tablist">
+    <button type="button" class="aba on" id="abaItens" role="tab" aria-selected="true">📦 Itens em estoque <span class="n" id="nItens">…</span></button>
+    <button type="button" class="aba" id="abaInter" role="tab" aria-selected="false">🧪 Intermediários e envase <span class="n" id="nInter">…</span></button>
+  </div>
+
+  <section id="pItens">
+    <div class="busca">
+      <span class="lupa">🔍</span>
+      <input type="search" id="q" placeholder="Busque por nome, código, lote, endereço ou cliente…  ex.: valvula body, EP-00002, AK-2026-000577" autocomplete="off" aria-label="Buscar no estoque">
+      <button type="button" class="limpa" id="qLimpa" hidden aria-label="Limpar busca">✕</button>
+      <kbd>/</kbd>
+    </div>
+    <div class="filtros" id="fGrupo" role="group" aria-label="Tipo de item"></div>
+    <div class="filtros" id="fTag" role="group" aria-label="Situação"></div>
+    <div class="filtros">
+      <span class="rot">Cliente</span>
+      <select class="sel" id="fCliente" aria-label="Filtrar por cliente"></select>
+      <span class="sep"></span>
+      <span class="rot">Ordenar</span>
+      <select class="sel" id="fOrdem" aria-label="Ordenar por">
+        <option value="nome">Nome (A–Z)</option>
+        <option value="gravidade">Mais urgentes primeiro</option>
+        <option value="atual">Maior saldo</option>
+        <option value="disponivel">Menor disponível</option>
+        <option value="validade">Validade mais próxima</option>
+        <option value="atualizado">Mexidos há menos tempo</option>
+      </select>
+    </div>
+    <div class="resumo"><span id="resumoTxt"></span><span id="limparBox"></span></div>
+    <div class="tabela"><table>
+      <thead><tr>
+        <th data-o="nome">Item</th>
+        <th data-o="atual" class="num">Saldo</th>
+        <th data-o="disponivel" class="num hide-m" title="Saldo menos o que já está reservado (empenhado) para OPs">Disponível</th>
+        <th>Situação</th>
+        <th data-o="validade" class="hide-m">Validade</th>
+        <th class="hide-m">Onde</th>
+        <th data-o="atualizado" class="hide-m">Atualizado</th>
+      </tr></thead>
+      <tbody id="corpo"><tr><td colspan="7"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></td></tr></tbody>
+    </table></div>
+  </section>
+
+  <section id="pInter" hidden>
+    <div class="como" id="comoInter"></div>
+    <div class="busca">
+      <span class="lupa">🔍</span>
+      <input type="search" id="qI" placeholder="Busque por OP, produto, cliente ou embalagem que falta…" autocomplete="off" aria-label="Buscar intermediários">
+    </div>
+    <div class="filtros" id="fEstado" role="group" aria-label="Situação do envase"></div>
+    <div class="resumo"><span id="resumoInter"></span><span></span></div>
+    <div id="gradeInter" class="grade"></div>
+    <div class="sub-h"><h3>📦 Retidos pela produção</h3><span class="dica">O que foi declarado ao encerrar ou devolver OP à fila (bulk, frascos rotulados…). Dá baixa em Material em Processo.</span></div>
+    <div id="retidos"></div>
+  </section>
+</main>
+
+<div class="fundo" id="fundo"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="Detalhe do item"></aside>
+
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script>
+<script src="shared/consulta-estoque-tela.js"></script>
+</body>
+</html>

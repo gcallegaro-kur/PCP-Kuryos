@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Consulta de Estoque + intermediários x embalagens (01/10/2026)
+
+- **Escopo:** nova tela `public/consulta_estoque.html` (consulta rápida, drawer de detalhe, filtros dinâmicos) e a aba "Intermediários e envase" (bulk liberado/retido x embalagens em estoque). Módulo puro `public/shared/consulta-estoque.js` + testes `run_consulta_estoque_*`. Entrada no menu em `public/auth_check.js` (só a lista de páginas do módulo logística/operação e o link).
+- **Arquivos ativos:** `public/consulta_estoque.html`, `public/shared/consulta-estoque.js`, `run_consulta_estoque_test.js`, `run_consulta_estoque_ui_test.js`, `public/auth_check.js` (linhas do menu), `AGENT_STATUS.md`. **Não toca** em `estoque.html` (continua sendo a tela de operação do WMS).
+
 ### Codex — rearranjo de linhas e retrabalho 21–22/09/2026
 
 - **Publicado — rearranjo:** commit `3331fdb`, botão admin para transferir/trocar OPs pausadas, histórico e totais preservados. Hosting/RTDB/callable publicados e conferidos.
