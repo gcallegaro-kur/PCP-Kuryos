@@ -296,7 +296,7 @@
     el('resumoSobras').textContent = resumo.length ? 'Em processo agora: ' + resumo.map(MP.rotuloResumo).join(' · ') : 'Nada em processo agora.';
     var ro = somenteLeitura();
     el('corpoSobras').innerHTML = lista.length ? lista.map(function(r) {
-      var onde = r.recipienteCodigo ? e(r.recipienteCodigo) : (r.origem === 'PAUSA' ? 'OP fora da linha' : 'Sobra do encerramento');
+      var onde = r.recipienteCodigo ? e(r.recipienteCodigo) : (r.tipo === 'BULK' ? 'Sem bombona identificada' : (r.origem === 'PAUSA' ? 'OP fora da linha' : 'Sobra do encerramento'));
       return '<tr><td><b>' + e(r.descricao) + '</b><div class="dica">' + e((MP.TIPOS_ITEM[r.tipo] || {}).rotulo || r.tipo) + (r.materialCodigo ? ' · ' + e(r.materialCodigo) : '') + '</div></td>' +
         '<td><b>' + e(r.lote) + '</b><div class="dica">' + e(r.produto || '') + '</div></td>' +
         '<td class="num">' + kg(r.qtd) + ' ' + e(r.unidade) + '</td>' +

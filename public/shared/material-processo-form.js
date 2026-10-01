@@ -64,10 +64,9 @@
         (l.previsto ? 'previsto na OP: ' + fmt(l.previsto) + ' ' + e(l.unidade) : (l.tipo === 'BULK' ? 'kg em bombona' : e(l.unidade))) + '</small></div>' +
         '<input type="number" class="qtd" min="0" step="' + passo + '" inputmode="' + (l.unidade === 'un' ? 'numeric' : 'decimal') + '" placeholder="' + (o.opcional ? '—' : '0 se não sobrou') + '" aria-label="' + e(l.descricao) + '">' +
         '<select class="dono" title="De quem é o material"><option value="CLIENTE">' + e(donoCliente) + '</option><option value="KURYOS">KURYOS</option></select>' +
-        (l.exigeRecipiente ? '<div class="rec"><select class="recipiente" aria-label="Bombona ou tanque do bulk">' +
-          '<option value="">— em qual bombona/tanque está o bulk? —</option>' +
-          recs.map(function(r) { return '<option value="' + e(r.codigo) + '">' + e(r.codigo) + (r.conteudo ? ' (já tem ' + fmt(MP.kgAtual(r)) + ' kg deste lote)' : ' (vazia)') + '</option>'; }).join('') + '</select>' +
-          (recs.length ? '' : '<div class="mpf-aviso">Nenhuma bombona livre. Cadastre em <b>Material em Processo</b> antes de declarar bulk que sobrou.</div>') + '</div>' : '') +
+        (l.aceitaRecipiente ? '<div class="rec"><select class="recipiente" aria-label="Bombona ou tanque do bulk (opcional)">' +
+          '<option value="">Bombona/tanque: não identificar agora (opcional)</option>' +
+          recs.map(function(r) { return '<option value="' + e(r.codigo) + '">' + e(r.codigo) + (r.conteudo ? ' (já tem ' + fmt(MP.kgAtual(r)) + ' kg deste lote)' : ' (vazia)') + '</option>'; }).join('') + '</select></div>' : '') +
         '</div>';
     }).join('') + '</div>';
     return {
@@ -114,7 +113,7 @@
   function gravarContagem(opKey, op, setor, itens, origem, autor, extra) {
     var agora = agoraIso();
     var origemTexto = origem === 'PAUSA' ? 'OP devolvida à fila' : 'encerramento da OP';
-    var passos = itens.filter(function(i) { return i.tipo === 'BULK'; }).reduce(function(p, i) {
+    var passos = itens.filter(function(i) { return i.tipo === 'BULK' && i.recipienteCodigo; }).reduce(function(p, i) {
       return p.then(function() { return bulkNaBombona(i, op, opKey, autor, agora, origemTexto); });
     }, Promise.resolve());
     return passos.then(function() {
@@ -148,7 +147,7 @@
       '<div class="mpf-erro" id="mpfErro" hidden></div>' +
       '<div class="mpf-acoes"><button type="button" class="btn-cancel" id="mpfCancelar">Cancelar</button><button type="button" class="btn-confirm-danger" id="mpfConfirmar" style="background:var(--primary)">Devolver à fila</button></div></div>';
     document.body.appendChild(fundo);
-    var ctl = renderContagem(fundo.querySelector('#mpfContagem'), op, setor, {opcional: true, ajuda: 'Frascos já rotulados, componentes, bulk em bombona: o que está parado esperando esta OP voltar.'});
+    var ctl = renderContagem(fundo.querySelector('#mpfContagem'), op, setor, {opcional: true, ajuda: 'Frascos já rotulados, componentes, bulk: o que está parado esperando esta OP voltar. A bombona é opcional.'});
     function fechar() { if (fundo.parentNode) fundo.parentNode.removeChild(fundo); }
     function erro(t) { var x = fundo.querySelector('#mpfErro'); x.hidden = !t; x.textContent = t || ''; }
     fundo.querySelector('#mpfCancelar').onclick = fechar;

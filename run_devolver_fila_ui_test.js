@@ -17,7 +17,8 @@ function dados(role) {
         abertaDesde: h(5), abertaLinha: 'Linha 2', linha: 'Linha 2', setupInicio: h(6), setupFim: h(5.5), validade: '2029-09-24T10:00:00Z',
         manipulacao: {status: 'LIBERADO', manipulacao: {fim: h(30), rendimento: 500}},
         materiaisConsumo: {b_1: {mpCodigo: 'EP-00002', mpNome: 'VALVULA SPRAY', origem: 'bom', unidade: 'un', quantidade: 2820}, b_2: {mpCodigo: 'ES-00151', mpNome: 'ROTULO BODY SPLASH', origem: 'bom', unidade: 'un', quantidade: 2820}}},
-      '26264-11': {lote: '26264/11', produto: 'OUTRO', status: 'Em Produção', qtdPlanejada: 100, abertaDesde: h(1), abertaLinha: 'Linha 1'}
+      '26264-11': {lote: '26264/11', produto: 'OUTRO', cliente: 'GLOW', status: 'Em Produção', qtdPlanejada: 100, produzidoLinha: 10, abertaDesde: h(1), abertaLinha: 'Linha 1', validade: '2029-01-01T00:00:00Z',
+        manipulacao: {status: 'LIBERADO', manipulacao: {fim: h(30), rendimento: 100}}}
     },
     bombonas_bulk: {'BB-0001': {codigo: 'BB-0001', tipo: 'BOMBONA', capacidadeKg: 400, ativo: true, conteudo: null}, 'BB-0002': {codigo: 'BB-0002', tipo: 'BOMBONA', ativo: true,
       conteudo: {lote: 'OUTRO-LOTE', kg: 50, donoTipo: 'CLIENTE', donoNome: 'X'}}},
@@ -120,8 +121,6 @@ const db = (page) => page.evaluate(() => window.__db);
     await dentro(page, '#mpfMotivo').selectOption('Falta de componente');
     await dentro(page, '#mpfDetalhe').fill('faltam válvulas, cliente ainda não mandou');
     await page.evaluate(() => { document.querySelector('.mpf-fundo .mpf-row[data-chave="bulk"] .qtd').value = '330'; });
-    await page.getByRole('button', {name: 'Devolver à fila'}).click();
-    assert.match(await dentro(page, '#mpfErro').innerText(), /bombona ou tanque/);
     // A bombona com bulk de OUTRO lote não é oferecida; só a vazia.
     const opcoes = await page.locator('.mpf-fundo .recipiente option').allInnerTexts();
     assert.ok(opcoes.some((o) => /BB-0001/.test(o)) && !opcoes.some((o) => /BB-0002/.test(o)), opcoes.join(' | '));
@@ -176,6 +175,23 @@ const db = (page) => page.evaluate(() => window.__db);
     assert.ok(!d2.ops['26258-05'].emFila, 'saiu da fila');
     assert.equal(d2.ops['26258-05'].produzidoLinha, 900, 'continua de onde parou');
     assert.equal(Object.values(d2.material_processo).length, 2, 'o que ficou retido continua registrado até alguém dar baixa');
+
+    // ── 4. Bombona é OPCIONAL: a OP da Linha 1 devolve com 40 kg de bulk e NENHUM recipiente ──
+    await page.locator('[data-devolver-lote="26264/11"]').click();
+    await page.waitForSelector('.mpf-fundo');
+    assert.equal(await page.locator('.mpf-fundo .mpf-row[data-chave="bulk"]').count(), 1);
+    assert.match(await dentro(page, '.recipiente').innerText(), /não identificar agora \(opcional\)/);
+    await page.evaluate(() => { document.querySelector('.mpf-fundo .mpf-row[data-chave="bulk"] .qtd').value = '40'; });
+    await dentro(page, '#mpfConfirma').check();
+    await page.getByRole('button', {name: 'Devolver à fila'}).click();
+    await page.waitForFunction(() => !window.__db.ops['26264-11'].abertaDesde, null, {timeout: 8000});
+    const d3 = await db(page);
+    const bulkSem = Object.values(d3.material_processo).find((r) => r.lote === '26264/11' && r.tipo === 'BULK');
+    assert.equal(bulkSem.qtd, 40);
+    assert.equal(bulkSem.recipienteCodigo, null, 'sem bombona identificada');
+    assert.equal(bulkSem.donoNome, 'GLOW');
+    assert.deepEqual([d3.bombonas_bulk['BB-0001'].conteudo.kg, d3.bombonas_bulk['BB-0001'].conteudo.lote], [330, '26258/05'], 'as bombonas não foram tocadas');
+    assert.ok(!d3.bombonas_bulk['BB-0002'].conteudo.kg || d3.bombonas_bulk['BB-0002'].conteudo.kg === 50);
 
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
     console.log('OK Devolver OP à fila: validações, OP sai da linha mantendo a produção, pausa fechada, retidos e bulk em bombona, retomada limpa o marcador.');

@@ -158,7 +158,7 @@
 
   /* As linhas que o líder precisa contar ao encerrar `setor` ('linha' = envase,
      'rotulagem'). BOM da OP + frascos rotulados + bulk (só no envase, e só em OP
-     que tem fase de bulk). Cada linha tem uma chave estável. */
+     que tem fase de bulk; a bombona é opcional). Cada linha tem uma chave estável. */
   function linhasContagem(op, setor) {
     var linhas = [];
     var consumo = (op && op.materiaisConsumo) || {};
@@ -173,14 +173,14 @@
     });
     linhas.push({chave: 'frascos_rotulados', tipo: 'FRASCO_ROTULADO', materialCodigo: null, descricao: 'Frascos já rotulados que sobraram', unidade: 'un', previsto: null, classe: null});
     if (setor !== 'rotulagem' && op && (op.manipulacao || num(op.massaLoteKg) > 0)) {
-      linhas.push({chave: 'bulk', tipo: 'BULK', materialCodigo: null, descricao: 'Bulk que sobrou (kg)', unidade: 'kg', previsto: null, classe: null, exigeRecipiente: true});
+      linhas.push({chave: 'bulk', tipo: 'BULK', materialCodigo: null, descricao: 'Bulk que sobrou (kg)', unidade: 'kg', previsto: null, classe: null, aceitaRecipiente: true});
     }
     return linhas;
   }
 
   /* valores: {chave: {qtd: '12', recipiente: 'BB-0001', donoTipo: 'CLIENTE'|'KURYOS'}}.
      TODA linha precisa de número (0 = não sobrou): a contagem é exigida, e "em
-     branco" não pode passar por "zero". Bulk com sobra exige recipiente. */
+     branco" não pode passar por "zero". A bombona do bulk é opcional. */
   function validarContagem(linhas, valores, op) {
     var erros = [], itens = [];
     (linhas || []).forEach(function(l) {
@@ -190,11 +190,12 @@
       var q = Number(bruto);
       if (q < 0) { erros.push('"' + l.descricao + '": a quantidade não pode ser negativa.'); return; }
       if (l.unidade === 'un' && Math.floor(q) !== q) { erros.push('"' + l.descricao + '": use número inteiro de unidades.'); return; }
-      if (l.exigeRecipiente && q > 0 && !texto(v.recipiente)) { erros.push('Escolha em qual bombona ou tanque está o bulk que sobrou.'); return; }
+      // Bombona é OPCIONAL (usuário, 01/10: "não precisa cadastrar bombona hoje"): a sobra de
+      // bulk vale com ou sem recipiente identificado; com ele, a bombona é atualizada.
       if (q > 0) {
         var d = dono(v.donoTipo, op);
         itens.push({chave: l.chave, tipo: l.tipo, materialCodigo: l.materialCodigo, descricao: l.descricao, qtd: arred(q), unidade: l.unidade,
-          recipienteCodigo: l.exigeRecipiente ? texto(v.recipiente) : null, donoTipo: d.donoTipo, donoNome: d.donoNome});
+          recipienteCodigo: l.aceitaRecipiente ? (texto(v.recipiente) || null) : null, donoTipo: d.donoTipo, donoNome: d.donoNome});
       }
     });
     return {ok: !erros.length, erros: erros, itens: itens};

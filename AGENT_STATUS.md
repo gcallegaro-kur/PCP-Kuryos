@@ -135,6 +135,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   cliente do produto. Base: 144 de 151 materiais com saldo têm uso; água em 169 produtos.
   Testes `run_onde_usado_test.js` e caso novo em `run_propriedade_estoque_ui_test.js`.
   Arquivos ativos: nenhum.
+- **PUBLICADO — Bombona é opcional (2026-10-01).** Decisão do usuário: "não precisa cadastrar
+  bombona hoje". Declarar bulk que sobrou (encerramento e Devolver OP à fila) vale SEM identificar
+  recipiente: o seletor virou "não identificar agora (opcional)"; com bombona escolhida, ela segue
+  sendo atualizada; sem, só o registro em `material_processo` (`recipienteCodigo: null`). A página
+  Material em Processo trata "Bulk sem bombona" como informação opcional, não alerta. Regra em
+  `shared/material-processo.js` (`aceitaRecipiente`, sem `exigeRecipiente`); testes ajustados
+  (`run_material_processo_test.js`, `run_devolver_fila_ui_test.js` com caso sem bombona). Manual
+  do apontador atualizado. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Kardex: contagens, aba Histórico e itemTipo (2026-10-01).** Pendências do
   kardex resolvidas: (1) `contagens_inventario` vira linha informativa "Contagem de

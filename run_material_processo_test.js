@@ -99,7 +99,8 @@ const opCompleta = {
 let l = M.linhasContagem(opCompleta, 'linha');
 assert.deepStrictEqual(l.map((x) => x.chave), ['mat:EP-00002', 'mat:EP-00095', 'mat:ES-00151', 'mat:ET-00049', 'frascos_rotulados', 'bulk'],
   'envase: todo o BOM (não a fórmula) + frascos rotulados + bulk');
-assert.strictEqual(l[5].exigeRecipiente, true);
+assert.strictEqual(l[5].aceitaRecipiente, true);
+assert.ok(!l[5].exigeRecipiente, 'bombona é opcional');
 l = M.linhasContagem(opCompleta, 'rotulagem');
 assert.deepStrictEqual(l.map((x) => x.chave), ['mat:ES-00151', 'frascos_rotulados'], 'rotulagem: rótulos + frascos rotulados, sem bulk');
 l = M.linhasContagem({lote: 'X', materiaisConsumo: opCompleta.materiaisConsumo}, 'linha');
@@ -129,10 +130,16 @@ assert.ok(val.itens.every((i) => i.donoNome === 'WIKE MAKE'));
 // Dono Kuryos por linha.
 val = M.validarContagem(linhas, Object.assign({}, zeros, {'mat:EP-00095': {qtd: '40', donoTipo: 'KURYOS'}}), opCompleta);
 assert.strictEqual(val.itens[0].donoNome, 'KURYOS');
-// Bulk com sobra exige recipiente; negativo e fração de unidade recusados.
+// Bulk com sobra NÃO exige bombona (usuário, 01/10): vale sem recipiente; com ele, o código segue.
 val = M.validarContagem(linhas, Object.assign({}, zeros, {bulk: {qtd: '10'}}), opCompleta);
-assert.strictEqual(val.ok, false);
-assert.match(val.erros[0], /bombona ou tanque/);
+assert.strictEqual(val.ok, true, val.erros.join('|'));
+assert.deepStrictEqual([val.itens[0].tipo, val.itens[0].qtd, val.itens[0].recipienteCodigo], ['BULK', 10, null]);
+val = M.validarContagem(linhas, Object.assign({}, zeros, {bulk: {qtd: '10', recipiente: 'BB-0002'}}), opCompleta);
+assert.strictEqual(val.itens[0].recipienteCodigo, 'BB-0002');
+// Recipiente informado numa linha que não é de bulk é ignorado.
+val = M.validarContagem(linhas, Object.assign({}, zeros, {frascos_rotulados: {qtd: '5', recipiente: 'BB-0009'}}), opCompleta);
+assert.strictEqual(val.itens[0].recipienteCodigo, null);
+// Negativo e fração de unidade seguem recusados.
 assert.strictEqual(M.validarContagem(linhas, Object.assign({}, zeros, {frascos_rotulados: {qtd: '-3'}}), opCompleta).ok, false);
 assert.strictEqual(M.validarContagem(linhas, Object.assign({}, zeros, {frascos_rotulados: {qtd: '2.5'}}), opCompleta).ok, false);
 assert.strictEqual(M.validarContagem(linhas, Object.assign({}, zeros, {frascos_rotulados: {qtd: 'abc'}}), opCompleta).ok, false);
