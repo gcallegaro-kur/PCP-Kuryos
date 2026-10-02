@@ -139,6 +139,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Compras: "Confirmar rota e enviar" para quem não é admin (2026-10-02).** Relato:
+  PC nascido da cotação vem com `rota.statusConfirmacao` PENDENTE; só o Editar (admin,
+  `podeEditarPC`) confirmava, e o analista não conseguia "Marcar Enviado" — o usuário
+  editava toda vez. Agora `marcarPedidoEnviado` (`compras.html`) abre o modal
+  `modalRotaEnvio` (prefixo `pcEnv`, mesmo editor de rota) quando a rota está pendente;
+  grava, num update só, rota CONFIRMADA + transporte + status ENVIADO + dataEmissao +
+  enviadoPor. Itens/preços/condições não mudam; Editar segue só admin. Regra do banco já
+  permitia (módulo compras). Teste `run_pc_rota_envio_ui_test.js` (usuário não-admin).
+  Manual `manual_compras.html`. Arquivos ativos: nenhum.
+
 - **DADO — Regularização de PA expedido fora do sistema (2026-10-01).** Pedido do usuário
   (lista da Expedição): baixar todo PA em estoque exceto 26258/02-04, 26264/06, /07, /13,
   /17, 26273/03, /04 e 26267/03. Com autorização: 60 paletes de 50 lotes (110.948 un)

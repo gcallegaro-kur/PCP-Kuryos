@@ -690,6 +690,29 @@
   </div>
 </div>
 
+<!-- Confirmar rota e enviar (02/10). O PC nascido da cotação vem com a rota
+     pendente e só o "Editar" (admin) confirmava; quem compra ficava sem como
+     marcar enviado. Este modal mexe só na rota + envio, nada mais do pedido. -->
+<div class="modal-bg" id="modalRotaEnvio">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header purple">
+      <div><h2 id="pcEnvTitulo">Confirmar rota e enviar</h2><div style="font-size:11.5px;opacity:.85" id="pcEnvSub"></div></div>
+      <button class="modal-close" id="modalRotaEnvioClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-note" style="margin-bottom:12px">
+        Confira de onde o material sai e para onde vai. Itens, preços e condições não mudam aqui —
+        para corrigir o pedido, peça ao administrador.
+      </div>
+      <div id="pcEnvRotaEditor"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pcEnvCancelar">Cancelar</button>
+      <button class="btn btn-green" id="pcEnvSalvar">Confirmar rota e marcar como enviado</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: cancelar Pedido de Compra (só ADM) — ver shared/cancelamento-pc.js -->
 <div class="modal-bg" id="modalCancelarPC">
   <div class="modal" style="max-width:600px">
@@ -2853,9 +2876,11 @@ function fecharModalEditarPC() {
 
 function marcarPedidoEnviado(key) {
   var pc = allPedidosCompra[key];
-  var validacao = RotasPC.validarRota(pc && pc.rota);
-  if (!pc || !pc.rota || pc.rota.statusConfirmacao !== 'CONFIRMADA' || !validacao.pronto) {
-    showAlert('Antes de marcar como enviado, abra Editar e confirme a rota completa do Pedido de Compra' + (validacao.faltando.length ? ': ' + validacao.faltando.join(', ') : '') + '.', 'danger');
+  if (!pc) return;
+  var validacao = RotasPC.validarRota(pc.rota);
+  if (!pc.rota || pc.rota.statusConfirmacao !== 'CONFIRMADA' || !validacao.pronto) {
+    // Rota pendente: quem compra confirma aqui mesmo, sem precisar do Editar.
+    abrirModalRotaEnvio(key);
     return;
   }
   var vinculo = PropriedadeEstoque.validarVinculoPC(pc);
@@ -2868,6 +2893,66 @@ function marcarPedidoEnviado(key) {
   db.ref('pedidos_compra/' + key).update({status: 'ENVIADO', dataEmissao: new Date().toISOString()})
     .then(function() { showAlert('Pedido marcado como enviado.', 'success'); })
     .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); });
+}
+
+var pcEnvKey = null, pcEnvRotaBase = null;
+function abrirModalRotaEnvio(key) {
+  var pc = allPedidosCompra[key];
+  if (!pc || pc.status !== 'ABERTO') { showAlert('Só pedido em aberto pode ser enviado.', 'danger'); return; }
+  pcEnvKey = key;
+  document.getElementById('pcEnvTitulo').textContent = 'Confirmar rota e enviar ' + (pc.numeroFormatado || '');
+  document.getElementById('pcEnvSub').textContent = (pc.fornecedorNome || '') + ' · criado em ' + fmtData(pc.dataCriacao);
+  prepararEditorRota('pcEnv');
+  pcEnvRotaBase = RotasPC.rotaInicial(pc, allFornecedores[pc.fornecedorKey], locaisKuryosCadastro());
+  preencherEditorRota('pcEnv', pcEnvRotaBase);
+  document.getElementById('pcEnvRotaConfirmada').checked = false;
+  var falta = RotasPC.validarRota(pcEnvRotaBase).faltando;
+  document.getElementById('pcEnvRotaHint').textContent = falta.length
+    ? 'Falta preencher: ' + falta.join(', ') + '.'
+    : 'Confira os dados e marque a confirmação.';
+  document.getElementById('modalRotaEnvio').classList.add('open');
+}
+function fecharModalRotaEnvio() {
+  document.getElementById('modalRotaEnvio').classList.remove('open');
+  pcEnvKey = null;
+}
+function salvarRotaEnvio() {
+  var key = pcEnvKey, pc = allPedidosCompra[key];
+  if (!pc || pc.status !== 'ABERTO') { showAlert('Este pedido mudou de status enquanto você conferia.', 'danger'); fecharModalRotaEnvio(); return; }
+  // Natureza, responsável e incoterm são os do pedido (vindos da cotação);
+  // aqui só origem e destino são conferidos.
+  var freteTipo = (pc.frete && pc.frete.tipo) || pcEnvRotaBase.incoterm || null;
+  var responsavel = pcEnvRotaBase.responsavelTransporte || (freteTipo === 'FOB' ? 'KURYOS' : (freteTipo === 'CIF' ? 'REMETENTE' : ''));
+  var rota = lerRotaEditor('pcEnv', pcEnvRotaBase, pcEnvRotaBase.natureza || 'COMPRA_KURYOS', responsavel, freteTipo);
+  rota = confirmarRotaDoEditor('pcEnv', rota);
+  if (!rota) return;
+  var vinculo = PropriedadeEstoque.validarVinculoPC(pc);
+  if (!vinculo.ok) {
+    showAlert('Antes de enviar, defina de quem é o material e o cliente/pedido de cada item. ' + vinculo.pendencias.join(' '), 'danger');
+    fecharModalRotaEnvio();
+    abrirModalVinculoPC(key);
+    return;
+  }
+  var agora = new Date().toISOString();
+  var u = {};
+  u['pedidos_compra/' + key + '/rota'] = rota;
+  if (responsavel) {
+    u['pedidos_compra/' + key + '/transporte/responsavel'] = responsavel;
+    u['pedidos_compra/' + key + '/transporte/acaoLogistica'] = responsavel === 'KURYOS' ? 'PROGRAMAR_COLETA' : 'AGUARDAR_ENTREGA';
+  }
+  u['pedidos_compra/' + key + '/status'] = 'ENVIADO';
+  u['pedidos_compra/' + key + '/dataEmissao'] = agora;
+  u['pedidos_compra/' + key + '/enviadoPor'] = currentUserNome();
+  var btn = document.getElementById('pcEnvSalvar');
+  btn.disabled = true;
+  db.ref().update(u).then(function() {
+    btn.disabled = false;
+    fecharModalRotaEnvio();
+    showAlert('Rota confirmada e pedido marcado como enviado.', 'success');
+  }).catch(function(err) {
+    btn.disabled = false;
+    showAlert('Erro ao enviar: ' + err.message, 'danger');
+  });
 }
 
 function solicitacoesAprovadasDisponiveis() {
@@ -3659,6 +3744,9 @@ function salvarFiscal() {
 document.getElementById('modalEditarPCClose').addEventListener('click', fecharModalEditarPC);
 document.getElementById('pcEditCancelar').addEventListener('click', fecharModalEditarPC);
 document.getElementById('pcEditSalvar').addEventListener('click', salvarEdicaoPC);
+document.getElementById('modalRotaEnvioClose').addEventListener('click', fecharModalRotaEnvio);
+document.getElementById('pcEnvCancelar').addEventListener('click', fecharModalRotaEnvio);
+document.getElementById('pcEnvSalvar').addEventListener('click', salvarRotaEnvio);
 document.getElementById('modalCancelarPCClose').addEventListener('click', fecharModalCancelarPC);
 document.getElementById('pcCancVoltar').addEventListener('click', fecharModalCancelarPC);
 document.getElementById('pcCancConfirmar').addEventListener('click', confirmarCancelamentoPC);
