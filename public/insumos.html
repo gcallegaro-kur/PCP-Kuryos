@@ -1601,7 +1601,7 @@
     var achado = melhorFormulaDoProduto(p.sku, allFormulasIns);
     if (!achado) return { ok: false, erro: 'Esse produto não tem Fórmula/BOM cadastrada -- cadastre em Cadastros › Fórmulas/BOM antes de gerar.' };
     var formula = achado.registro;
-    var bom = allBomIns[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var bom = bomDaVersao(allBomIns, p.sku, formula.versao) || { itens: {} };
     var saldo = Math.max((p.qtdTotal || 0) - (p.produzido || 0), 0);
     if (!saldo) return { ok: false, erro: 'Este pedido não tem saldo em aberto (tudo já produzido).' };
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
@@ -2631,7 +2631,7 @@ function mrpDemandaPorMaterial() {
       ? melhorFormulaDoProduto(p.sku, allFormulasIns) : null;
     if (!produto || !achado) { semFormula.push(p.sku); return; }
     var formula = achado.registro;
-    var bom = allBomIns[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var bom = bomDaVersao(allBomIns, p.sku, formula.versao) || { itens: {} };
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriaisIns);
     if (!calc.ok) { semFormula.push(p.sku + ' (' + calc.erro + ')'); return; }
     var clienteKeyPedido = (typeof PropriedadeEstoque !== 'undefined')

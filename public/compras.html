@@ -1619,7 +1619,7 @@ function gerarSolicitacaoDosSelecionados() {
     var achado = melhorFormulaDoProduto(p.sku, allFormulasCompras);
     if (!produto || !achado) { erros.push(p.sku + ': ' + gpPendenciaDoSku(p.sku)); return; }
     var formula = achado.registro;
-    var bom = allBomCompras[chaveVersao(p.sku, formula.versao)] || { itens: {} };
+    var bom = bomDaVersao(allBomCompras, p.sku, formula.versao) || { itens: {} };
     var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
     var calc = explodirMateriaisNecessarios(produto, saldo, formula, bom, allMateriais);
     if (!calc.ok) { erros.push(p.sku + ': ' + calc.erro); return; }

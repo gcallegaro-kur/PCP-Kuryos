@@ -146,7 +146,7 @@
       else if (!achado) info.erro = 'Sem Fórmula/BOM cadastrada.';
       else {
         var f = achado.registro;
-        var b = (dados.bom || {})[fn.chaveVersao(p.sku, f.versao)] || {itens: {}};
+        var b = (fn.bomDaVersao ? fn.bomDaVersao(dados.bom || {}, p.sku, f.versao) : (dados.bom || {})[fn.chaveVersao(p.sku, f.versao)]) || {itens: {}};
         var calc = fn.explodir(produto, p.saldo, f, b, materiais);
         if (!calc.ok) info.erro = calc.erro;
         else {

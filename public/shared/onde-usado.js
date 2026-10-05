@@ -33,7 +33,7 @@
       var prod = produtoDaChave(chave, r);
       var atual = porProduto[prod];
       var preferida = preferidas && preferidas[prod];
-      if (preferida) { if (chave === preferida) porProduto[prod] = {chave: chave, r: r, fixa: true}; return; }
+      if (preferida) { if (chave === preferida || (!(atual && atual.fixa) && chave.toLowerCase() === preferida.toLowerCase())) porProduto[prod] = {chave: chave, r: r, fixa: true}; return; }
       if (atual && atual.fixa) return;
       var rank = function(x) { return (priorizarAprovada && x.r.status === 'APROVADA' ? 1e6 : 0) + versaoNum(x.r.versao || x.chave.split('__')[1]); };
       var cand = {chave: chave, r: r};

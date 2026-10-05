@@ -970,6 +970,18 @@ function makeSortableTable(theadEl, defaultField, defaultDir) {
 function parseVersaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
 function chaveVersao(codProduto, versao) { return codProduto + '__' + versao; }
 
+// BOM da versão da fórmula. A chave é "produto__versão" e a versão já existiu como "V1" e "v1" (importação x tela):
+// com a chave exata errada a conta usava BOM VAZIO, em silêncio (BBSJBS03-2 e DPHNPC01, 05/10). Tenta a chave
+// exata primeiro e só então a mesma chave sem diferenciar maiúsculas. Não adivinha outra versão.
+function bomDaVersao(allBom, codProduto, versao) {
+  if (!allBom) return null;
+  var k = chaveVersao(codProduto, versao);
+  if (allBom[k]) return allBom[k];
+  var alvo = String(k).toLowerCase();
+  var hit = Object.keys(allBom).filter(function(x) { return String(x).toLowerCase() === alvo; }).sort()[0];
+  return hit ? allBom[hit] : null;
+}
+
 // Prefere a versão APROVADA mais recente; sem nenhuma aprovada, cai pra
 // mais recente de qualquer status (com temAprovada:false pro chamador
 // decidir se avisa/bloqueia).

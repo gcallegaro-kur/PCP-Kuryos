@@ -39,7 +39,7 @@
   function agendar() { clearTimeout(t0); t0 = setTimeout(recalcular, 60); }
 
   function fnApp() {
-    return {explodir: explodirMateriaisNecessarios, melhorFormula: melhorFormulaDoProduto, chaveVersao: chaveVersao, semControle: materialSemControleEstoque};
+    return {explodir: explodirMateriaisNecessarios, melhorFormula: melhorFormulaDoProduto, chaveVersao: chaveVersao, bomDaVersao: bomDaVersao, semControle: materialSemControleEstoque};
   }
   function base(sel, ordem) {
     return {pedidos: D.pedidos, selecionados: sel, ordem: ordem, produtos: D.produtos, formulas: D.formulas, bom: D.bom, materiais: D.materiais, estoque: D.estoque,

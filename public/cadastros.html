@@ -2144,7 +2144,9 @@ document.addEventListener('DOMContentLoaded', function() {
       var chaveEmUso = achado ? chaveVersao(prod, achado.registro.versao) : null;
       if (chaveEmUso && allFormulasMat[chaveEmUso]) formulas[chaveEmUso] = true;
       else if (achado) Object.keys(allFormulasMat).forEach(function(k) { if (allFormulasMat[k] === achado.registro) formulas[k] = true; });
-      if (chaveEmUso && allBomMat[chaveEmUso]) { boms[chaveEmUso] = true; return; }
+      // mesma tolerância de caixa da bomDaVersao (utils.js): "X__v1" atende a fórmula "V1"
+      var chaveBomReal = chaveEmUso ? Object.keys(allBomMat || {}).filter(function(x) { return String(x).toLowerCase() === String(chaveEmUso).toLowerCase(); }).sort().sort(function(a, b) { return (a === chaveEmUso ? 0 : 1) - (b === chaveEmUso ? 0 : 1); })[0] : null;
+      if (chaveBomReal) { boms[chaveBomReal] = true; return; }
       var melhor = null, melhorN = -1;
       Object.keys(allBomMat || {}).forEach(function(k) {
         var r = allBomMat[k]; if (!r || r.status === 'OBSOLETA' || codProdutoEVersao(k, r).codProduto !== prod) return;

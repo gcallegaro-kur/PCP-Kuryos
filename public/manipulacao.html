@@ -361,7 +361,7 @@ function calcularPrevistos(op) {
   var achado = produto ? melhorFormulaDoProduto(produto.sku || op.sku, allFormulas) : null;
   if (!produto || !achado) return {};
   var formula = achado.registro;
-  var bom = allBom[chaveVersao(produto.sku || op.sku, formula.versao)] || {itens: {}};
+  var bom = bomDaVersao(allBom, produto.sku || op.sku, formula.versao) || {itens: {}};
   var calc = explodirMateriaisNecessarios(produto, Number(op.qtdPlanejada) || 0, formula, bom, allMateriais);
   if (!calc || !calc.ok) return {};
   var out = {};
