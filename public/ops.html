@@ -23,6 +23,7 @@
   <script src="shared/confirmacao-etapas.js"></script>
   <script src="shared/entrega-pcp.js"></script>
   <script src="shared/material-processo.js"></script>
+  <script src="shared/conciliacao-rotulagem.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <link rel="stylesheet" href="shared/fichas-op.css">
@@ -739,6 +740,11 @@
       materialProcessoGlobal = snap.val() || {};
       recalculateAndRenderOps();
     });
+    // Conciliação da rotulagem (05/10): perdas por lote, só leitura, sem trava.
+    dbOnValue(database.ref('perdas'), snap => {
+      perdasGlobal = snap.val() || {};
+      recalculateAndRenderOps();
+    });
     Object.keys(conciliacaoFontes).forEach(no => {
       dbOnValue(database.ref(no), snap => {
         conciliacaoFontes[no] = snap.val() || {};
@@ -748,6 +754,7 @@
   }
   // Material retido por OP (sobras e itens declarados ao devolver a OP à fila): chips na linha.
   let materialProcessoGlobal = {};
+  let perdasGlobal = {};
   const conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
   let qualidadePorOp = {};       // opKey -> {liberado, pendente, reprovado} do estoque de PA
   let conciliacaoPorOp = null;   // opKey -> bucket `porOp` da conciliação
@@ -1700,6 +1707,15 @@
     const retidos = MaterialProcesso.resumoRetidos(Object.keys(materialProcessoGlobal).map(k => materialProcessoGlobal[k]).filter(r => r && r.opKey === op.key));
     if (retidos.length) {
       extras.push('<a href="material_processo.html?aba=sobras" style="text-decoration:none"><span title="Material retido desta OP. Clique para ver e dar baixa." style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:#b45309;background:#fef3c7">📦 ' + escapeHtml(retidos.map(MaterialProcesso.rotuloResumo).join(' · ')) + '</span></a>');
+    }
+    // Conciliação da rotulagem: rotulado = envasado + perdas + sobra. Só informa (sem trava).
+    const retidosOp = Object.keys(materialProcessoGlobal).map(k => materialProcessoGlobal[k]).filter(r => r && r.opKey === op.key);
+    const perdasOp = Object.values(perdasGlobal[op.key] || {});
+    const conc = ConciliacaoRotulagem.conciliar(op, perdasOp, retidosOp);
+    if (conc.estado !== 'sem_dados') {
+      const rs = ConciliacaoRotulagem.resumo(conc);
+      const corC = {ok: '#047857;background:#d1fae5', info: '#1d4ed8;background:#dbeafe', aviso: '#b45309;background:#fef3c7', mute: '#475467;background:#f2f4f7'}[rs.tom];
+      extras.push('<span title="' + escapeAttr(rs.detalhe) + '" style="font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;color:' + corC + '">🏷 ' + escapeHtml(rs.texto) + '</span>');
     }
     if (!selos.length && !extras.length) return '';
     const cor = {aviso: '#b45309;background:#fef3c7', espera: '#1d4ed8;background:#dbeafe', erro: '#b91c1c;background:#fee2e2'};

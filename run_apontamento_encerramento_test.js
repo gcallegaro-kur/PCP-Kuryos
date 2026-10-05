@@ -126,6 +126,7 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
     allMateriaisForm: {},
     melhorFormulaDoProduto: () => ({ registro: consumptionCtx.allFormulasForm.f1 }),
     chaveVersao: (sku, versao) => sku + '__' + versao,
+    bomDaVersao: (allBom, sku, versao) => (allBom || {})[sku + '__' + versao] || null,
     sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),
     explodirMateriaisNecessarios: () => { throw new Error('Não deveria explodir fórmula com densidade -1'); },
     // Regras reais de consumo inteiro / sem controle de estoque (shared/utils.js, 01/10).
@@ -210,11 +211,14 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
   await ctx.updateOpRecordOnApontamento('26264/07', 1500, 0, '2026-09-24T10:00:00.000Z', 'linha', '2026-09-24T15:00:00.000Z', 2000, 'lin-1', efLin);
   o2 = data.ops['26264-07'];
   if (o2.status !== 'Aguardando Confirmação' || o2.abertaDesde !== null) throw new Error('Último setor fechado deveria encaminhar a OP ao PCP');
-  // Inverso: fechar o envase com a rotulagem ainda aberta também não encerra a OP.
+  // Paralelo (05/10, "pode confirmar as ordens em paralelo"): fechar o ENVASE com a rotulagem ainda
+  // aberta leva a OP ao PCP -- a rotulagem alimenta o envase e é conciliada à parte (sem trava).
   data.ops['26264-08'] = { lote: '26264/08', produzido: 100, produzidoLinha: 100, qtdPlanejada: 1000, status: 'Em Produção',
     abertaDesde: '2026-09-24T10:00:00.000Z', abertaLinha: 'Linha 1', abertaDesdeRot: '2026-09-24T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };
   await ctx.updateOpRecordOnApontamento('26264/08', 900, 0, '2026-09-24T10:00:00.000Z', 'linha', '2026-09-24T15:00:00.000Z', 1000, 'lin-2', efLin);
-  if (data.ops['26264-08'].status !== 'Em Produção') throw new Error('Fechar o envase com a rotulagem aberta encerrou a OP');
+  if (data.ops['26264-08'].status !== 'Aguardando Confirmação') throw new Error('Fechar o envase com a rotulagem aberta deveria levar a OP ao PCP');
+  if (!data.ops['26264-08'].abertaDesdeRot || data.ops['26264-08'].abertaRotulagem !== 'Rotuladora 1') throw new Error('A alocação da rotulagem não pode ser mexida pelo fechamento do envase');
+  if (!data.ops['26264-08'].confirmacaoEtapas || data.ops['26264-08'].confirmacaoEtapas.envase.status !== 'AGUARDANDO') throw new Error('O envase deveria ficar AGUARDANDO a confirmação do PCP');
   // Apontamento de rotulagem nunca conclui a OP pelo cálculo automático de envase.
   data.ops['26264-09'] = { lote: '26264/09', produzido: 1000, produzidoLinha: 1000, qtdPlanejada: 1000, status: 'Em Produção',
     abertaDesde: '2026-09-24T10:00:00.000Z', abertaLinha: 'Linha 1', abertaDesdeRot: '2026-09-24T11:00:00.000Z', abertaRotulagem: 'Rotuladora 1' };

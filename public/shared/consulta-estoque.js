@@ -548,6 +548,79 @@
     return {aguardando: aguardando, retidos: retidos, totais: t};
   }
 
+  /* ── Estoque de intermediários por produto (05/10) ──────────────────
+     Pedido do usuário: o PCP consulta com frequência o que há de intermediário
+     para decidir o que programar (e, no futuro, descontar na criação da OP):
+       - BULK: manipulado e ainda não envasado + bulk retido declarado pela produção;
+       - FRASCO ROTULADO: o que a rotulagem fez e o envase ainda não consumiu
+         (ConciliacaoRotulagem.saldoEmLinha) + a sobra declarada.
+     Cada quantidade vem separada em LIBERADA e AGUARDANDO a validação da Qualidade:
+       bulk = manipulacao.status === 'LIBERADO';
+       frasco rotulado = validacoes[opKey].status === 'LIBERADO' (REPROVADO sai da conta).
+     Para não contar duas vezes: OP com bulk retido declarado usa o retido, não o saldo da manipulação;
+     OP com sobra de frasco declarada usa a sobra, não o saldo calculado. */
+  function conciliador() {
+    if (typeof module === 'object' && module.exports) return require('./conciliacao-rotulagem.js');
+    return typeof globalThis !== 'undefined' ? globalThis.ConciliacaoRotulagem : (typeof window !== 'undefined' ? window.ConciliacaoRotulagem : null);
+  }
+  function estoqueIntermediario(d) {
+    var dados = d || {}, CR = conciliador();
+    var ops = dados.ops || {}, produtos = dados.produtos || {}, mp = dados.materialProcesso || {}, perdas = dados.perdas || {}, val = dados.validacoes || {};
+    var porSku = {};
+    function linha(op) {
+      var sku = txt(op.sku) || '—';
+      var p = produtos[sku] || {};
+      return porSku[sku] = porSku[sku] || {sku: sku, produto: txt(op.produto) || txt(p.descricao), cliente: txt(op.cliente) || txt(p.cliente),
+        bulkLiberadoKg: 0, bulkAguardandoKg: 0, frascosLiberados: 0, frascosAguardando: 0, frascosReprovados: 0, ops: []};
+    }
+    var retBulk = {}, retFrasco = {};
+    Object.keys(mp).forEach(function(k) {
+      var r = mp[k]; if (!r || r.status !== 'EM_PROCESSO') return;
+      if (r.tipo === 'BULK') (retBulk[r.opKey] = retBulk[r.opKey] || []).push(r);
+      if (r.tipo === 'FRASCO_ROTULADO') (retFrasco[r.opKey] = retFrasco[r.opKey] || []).push(r);
+    });
+    Object.keys(ops).forEach(function(k) {
+      var op = ops[k]; if (!op || op.status === 'Cancelado') return;
+      var ativa = op.status !== 'Concluído';
+      var man = op.manipulacao || {}, manLiberada = man.status === 'LIBERADO';
+      var det = {opKey: k, lote: txt(op.lote) || k, bulkKg: 0, bulkLiberado: manLiberada, frascos: 0, frascosStatus: (val[k] && val[k].status) || 'PENDENTE', origemFrascos: ''};
+      // BULK
+      if (retBulk[k]) retBulk[k].forEach(function(r) { det.bulkKg += num(r.unidade === 'kg' ? r.qtd : 0); });
+      else if (ativa) {
+        var rend = num(man.manipulacao && man.manipulacao.rendimento);
+        if (rend > 0) {
+          var peso = num(op.pesoTeoricoUnG);
+          var usado = peso > 0 ? num(op.produzidoLinha != null ? op.produzidoLinha : op.produzido) * peso / 1000 : 0;
+          det.bulkKg = Math.max(0, rend - usado);
+        }
+      }
+      // FRASCOS ROTULADOS
+      if (retFrasco[k]) { retFrasco[k].forEach(function(r) { det.frascos += num(r.qtd); }); det.origemFrascos = 'sobra declarada'; }
+      else if (ativa && CR) {
+        var c = CR.conciliar(op, Object.keys(perdas[k] || {}).map(function(x) { return perdas[k][x]; }), []);
+        if (c.estado === 'em_estoque' || c.estado === 'divergente') { det.frascos = c.saldoEmLinha; det.origemFrascos = 'saldo da rotulagem'; }
+      }
+      if (!(det.bulkKg > 0.0005) && !(det.frascos > 0)) return;
+      var l = linha(op);
+      if (det.bulkKg > 0.0005) { if (manLiberada) l.bulkLiberadoKg += det.bulkKg; else l.bulkAguardandoKg += det.bulkKg; }
+      if (det.frascos > 0) {
+        if (det.frascosStatus === 'LIBERADO') l.frascosLiberados += det.frascos;
+        else if (det.frascosStatus === 'REPROVADO') l.frascosReprovados += det.frascos;
+        else l.frascosAguardando += det.frascos;
+      }
+      l.ops.push(det);
+    });
+    var linhas = Object.keys(porSku).map(function(k) {
+      var l = porSku[k];
+      l.bulkLiberadoKg = arred(l.bulkLiberadoKg, 1); l.bulkAguardandoKg = arred(l.bulkAguardandoKg, 1);
+      return l;
+    }).sort(function(a, b) { return (b.bulkLiberadoKg + b.bulkAguardandoKg + b.frascosLiberados + b.frascosAguardando) - (a.bulkLiberadoKg + a.bulkAguardandoKg + a.frascosLiberados + a.frascosAguardando) || a.sku.localeCompare(b.sku); });
+    var t = {bulkLiberadoKg: 0, bulkAguardandoKg: 0, frascosLiberados: 0, frascosAguardando: 0};
+    linhas.forEach(function(l) { t.bulkLiberadoKg += l.bulkLiberadoKg; t.bulkAguardandoKg += l.bulkAguardandoKg; t.frascosLiberados += l.frascosLiberados; t.frascosAguardando += l.frascosAguardando; });
+    t.bulkLiberadoKg = arred(t.bulkLiberadoKg, 1); t.bulkAguardandoKg = arred(t.bulkAguardandoKg, 1);
+    return {linhas: linhas, totais: t};
+  }
+
   function fmt(n, casas) {
     var v = num(n), c = casas == null ? (Math.abs(v) < 100 && v % 1 ? 2 : 0) : casas;
     return v.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: c});
@@ -557,6 +630,6 @@
     GRUPOS: GRUPOS, ORDEM_GRUPOS: ORDEM_GRUPOS, STATUS_OK: STATUS_OK, DIAS_VENCENDO: DIAS_VENCENDO,
     grupoDoTipo: grupoDoTipo, diasAte: diasAte, dataLocal: dataLocal, norm: norm, fmt: fmt,
     linhas: linhas, filtrar: filtrar, contagens: contagens, ordenar: ordenar, kpis: kpis, clientesDoEstoque: clientesDoEstoque,
-    pesoDaPeca: pesoDaPeca, casar: casar, embalagensDaOp: embalagensDaOp, intermediarios: intermediarios
+    pesoDaPeca: pesoDaPeca, casar: casar, embalagensDaOp: embalagensDaOp, intermediarios: intermediarios, estoqueIntermediario: estoqueIntermediario
   };
 });

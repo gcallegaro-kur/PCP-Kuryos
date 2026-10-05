@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Intermediários, conciliação da rotulagem e BOM por versão (05/10/2026)
+
+- **Escopo/arquivos:** `public/shared/conciliacao-rotulagem.js` (+ chip em `public/ops.html`), `public/shared/consulta-estoque.js` (`estoqueIntermediario`) e `consulta-estoque-tela.js`/`consulta_estoque.html` (seção por produto), `public/shared/validacao-intermediarios-tela.js` + `public/material_processo.html` (validação da Qualidade), `database.rules.json` (`qualidade_intermediarios`), `public/form.html` (fechar o envase leva a OP ao PCP com a rotulagem aberta), `public/shared/utils.js` (`bomDaVersao`) e os pontos de leitura do BOM (`compras`, `emitir_op`, `form`, `insumos`, `manipulacao`, `cadastros`, `onde-usado`, `necessidade-pedidos`), testes `run_conciliacao_rotulagem_test`, `run_bom_versao_test`, `run_qualidade_intermediarios_rules_test`, `run_validacao_intermediarios_ui_test`, `scripts/aplicar-plano1.sh`.
+- **Dados:** 1 BOM de teste (`HDR-MISS-0001__v1`) foi marcado OBSOLETA; a escrita em massa foi bloqueada pelo classificador do Claude Code. Resto do plano 1 em `scripts/aplicar-plano1.sh` (rodar manualmente): 5 BOMs + 21 alocações abertas em OP Concluída. OP 26271/01 já estava em Aguardando Confirmação.
+
 ### Claude — "Usado em" só com a versão em uso (02/10/2026)
 
 - **Causa (EP-00106 x EP-00101):** `cadastros.html › Materiais › Usado em` listava TODO registro de `bom/`/`formulas/`: versões antigas (MRARBS11__v1) e duplicatas só na caixa da letra (`HDR-MISS-0001__V1` ao lado de `__v1`). As contas do app usam a fórmula de `melhorFormulaDoProduto` e o BOM de MESMA chave (`produto__versão`); o resto é sobra.

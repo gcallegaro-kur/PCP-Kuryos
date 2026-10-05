@@ -1229,3 +1229,31 @@ e a chave "Conferência de Pesagem" (Ajustes). Ficou para depois, nesta ordem:
   48 h Qualidade/Logística) são chutes razoáveis, não metas da fábrica:
   `AndonCadeia.LIMITES_H`; ajustar com a operação.
 
+## Intermediários, conciliação da rotulagem e cadastro de BOM (05/10/2026)
+
+Entregue em 05/10: conciliação da rotulagem **sem trava** (`shared/conciliacao-rotulagem.js`, chip em
+`ops.html`), estoque de intermediários por produto na Consulta de Estoque (bulk e frascos rotulados, liberado x
+aguardando a Qualidade), validação da Qualidade dos frascos rotulados (`qualidade_intermediarios/{opKey}`,
+tela em `material_processo.html`), fechar o envase leva a OP ao PCP mesmo com a rotulagem aberta (confirmação
+em paralelo), `bomDaVersao` (BOM `v1` atende fórmula `V1`). Fica para depois:
+
+- **Travas da conciliação (decisão do usuário: "em algum momento a ideia é criarmos travas").** Hoje só informa.
+  Quando for travar: usar `ConciliacaoRotulagem.tolerancia()` (0,5% do rotulado, mínimo 1 un, é só informativa) e
+  decidir quem conclui com diferença (sugestão: só o PCP, com justificativa). Gancho: `confirmarConclusaoOp` em
+  `ops.html` e o status da OP. Fluxo: GAP de rotulagem em `FLUXOS_DO_SISTEMA.md`.
+- **Descontar intermediário na criação da OP (decisão do usuário).** Ao emitir a OP, sugerir abater (a) o bulk já
+  em estoque e LIBERADO pela Qualidade da quantidade a manipular e (b) o saldo de frasco rotulado LIBERADO da
+  quantidade a rotular. Base pronta: `ConsultaEstoque.estoqueIntermediario` (por SKU, com liberado x aguardando).
+  Falta: o gancho em `emitir_op.html`, reservar o intermediário para a OP (senão duas OPs usam o mesmo saldo) e a
+  baixa quando a OP consumir. O PCP já consulta o estoque em Consulta de Estoque › Intermediários.
+- **Bulk validado pela Qualidade por lote.** Hoje o bulk usa `manipulacao.status === 'LIBERADO'` da OP de origem; o
+  bulk retido numa bombona herda esse status. Se a bombona misturar OPs, validar por bombona.
+- **Rotulagem sem apontamento.** A 26271/01 mostra envase 3.840 e rotulagem 0 (chip "rotulagem sem apontamento"):
+  é treinamento dos setores, não defeito; o chip deixa visível quem ainda não aponta.
+- **BOM da versão em uso inexistente (levantado em 05/10, `relatorios/boms-fora-de-uso-2026-10-05.csv`).** 9
+  perfumes PRF-AFEE (fórmula V2, BOM só v1) têm BOM vazio na conta: embalagem fica de fora de OP, compra e
+  consumo. Precisa de cadastro (criar/copiar o BOM V2), não de código. `bomDaVersao` só tolera a caixa da letra.
+- **Pedidos que não calculam (`relatorios/pedidos-que-nao-calculam-2026-10-05.csv`).** 62 de 82 pedidos abertos: 48
+  sem densidade/volume no produto, 9 sem fórmula/BOM, 5 com SKU fora do cadastro. Resolve o "O que comprar" e o MRP.
+- **Alocações abertas em OP Concluída (21 em 05/10, antes eram 24).** `scripts/aplicar-plano1.sh` libera; falta
+  ajustar `ops.html` para liberar `abertaDesde*` ao concluir a OP (hoje a confirmação do PCP não libera).

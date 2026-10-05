@@ -2950,13 +2950,20 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       outroSetorAberto = ['abertaDesde', 'abertaDesdeRot'].some(function(c) {
         return c !== efeitosOp.campoInicio && !!op[c];
       });
+      // Rotulagem e envase rodam em paralelo (ou um depois do outro) e o PCP confirma cada
+      // etapa (usuário, 05/10: "pode confirmar as ordens em paralelo"). A rotulagem fica aberta
+      // enquanto alimenta o envase e é conciliada à parte (ConciliacaoRotulagem, sem trava).
+      // Então fechar o ENVASE leva a OP ao PCP mesmo com a rotulagem aberta (a 26271/01 ficou
+      // presa assim). O contrário continua valendo: fechar a rotulagem com o envase rodando não
+      // encaminha a OP (defeito de 30/09).
+      var bloqueiaFechamento = outroSetorAberto && efeitosOp.campoInicio !== 'abertaDesde';
       // Rotulagem antes do envase (01/10): 26273/03 e /04 foram ao PCP com a
       // rotulagem encerrada e ZERO envasado -- nada estava aberto porque o
       // envase nem tinha começado. Fechar a rotulagem só encaminha a OP se o
       // envase já aconteceu; senão a OP segue esperando a linha. Posto
       // (kit/bancada) continua podendo encerrar sozinho.
       var aguardaEnvase = tipo === 'rotulagem' && !((op.produzidoLinha || 0) > 0);
-      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !outroSetorAberto && !aguardaEnvase) {
+      if (efeitosOp.aguardarConfirmacao && op.status !== 'Concluído' && !bloqueiaFechamento && !aguardaEnvase) {
         op.status = 'Aguardando Confirmação';
       }
       // PCP confirma CADA encerramento de setor (usuário, 01/10: "neste
@@ -3103,7 +3110,7 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   var achado = melhorFormulaDoProduto(op.sku, allFormulasForm);
   if (!achado) return Promise.resolve();
   var formula = achado.registro;
-  var bom = allBomForm[chaveVersao(op.sku, formula.versao)] || { itens: {} };
+  var bom = bomDaVersao(allBomForm, op.sku, formula.versao) || { itens: {} };
   var produto = allProdutosForm[op.sku];
   if (!produto) return Promise.resolve();
   var densidade = parseFloat(produto.densidadeGranel);
@@ -4190,7 +4197,7 @@ function bomItensDaOp(op) {
   if (!op || !op.sku) return [];
   var bom = null;
   var achado = typeof melhorFormulaDoProduto === 'function' ? melhorFormulaDoProduto(op.sku, allFormulasForm) : null;
-  if (achado && achado.registro) bom = allBomForm[chaveVersao(op.sku, achado.registro.versao)] || null;
+  if (achado && achado.registro) bom = bomDaVersao(allBomForm, op.sku, achado.registro.versao) || null;
   if (!bom) {
     // Sem fórmula: o BOM de versão mais alta do SKU.
     var ks = Object.keys(allBomForm).filter(function(k) { return allBomForm[k] && allBomForm[k].codProduto === op.sku; }).sort();

@@ -7,7 +7,8 @@
   var CE = ConsultaEstoque;
   var TAM_PAGINA = 150;
 
-  var dados = {estoque: null, materiais: null, lotes: null, ops: null, produtos: null, bom: null, formulas: null, mp: null, bombonas: null, clientes: null};
+  var dados = {estoque: null, materiais: null, lotes: null, ops: null, produtos: null, bom: null, formulas: null, mp: null, bombonas: null, clientes: null, perdas: {}, validacoes: {}};
+  var estInter = null;
   var rows = [], inter = null, usos = null, usosCarregando = false;
   var estado = {q: '', grupo: '', tag: '', cliente: '', ordem: 'nome', desc: false, aba: 'itens', denso: false, qI: '', estadoI: '', mostrar: TAM_PAGINA};
   var selecionado = null, focoIdx = -1, visiveis = [], ultimaCarga = null;
@@ -51,6 +52,7 @@
     if (dados.ops && dados.produtos && dados.bom) {
       inter = CE.intermediarios({ops: dados.ops, estoque: dados.estoque, materiais: dados.materiais, bom: dados.bom, produtos: dados.produtos, materialProcesso: dados.mp || {}, bombonas: dados.bombonas || {}});
     }
+    if (dados.ops && dados.produtos) estInter = CE.estoqueIntermediario({ops: dados.ops, produtos: dados.produtos, materialProcesso: dados.mp || {}, perdas: dados.perdas || {}, validacoes: dados.validacoes || {}});
     ultimaCarga = new Date();
     el('sDot').classList.add('on'); el('sTxt').textContent = 'Ao vivo';
     render();
@@ -281,6 +283,7 @@
   }
   function renderInter() {
     if (!inter) { el('gradeInter').innerHTML = '<div class="vazia"><b>Carregando OPs…</b>Cruzando manipulações com o estoque de embalagens.</div>'; return; }
+    renderEstInter();
     var t = inter.totais;
     el('comoInter').innerHTML = '<b>Como ler esta tela.</b> Cada cartão é uma OP cujo bulk já foi manipulado e ainda não virou produto. Tiro do bulk o que já foi envasado, converto os kg em peças pelo peso de cada uma e confronto com a BOM da OP: a <b>peça só fecha se TODA embalagem de envase (frasco, válvula, rótulo…) existir</b>. O que está reservado para outras OPs e o estoque que é de outro cliente <b>não entram</b>. A caixa de embarque aparece em cinza porque só entra depois. Lembrete: enquanto a contagem do “Dia D” não terminar, muita embalagem aparece como zero.';
     el('nInter').textContent = String(t.ops + inter.retidos.length);
@@ -298,6 +301,23 @@
     el('resumoInter').innerHTML = '<b>' + lista.length + '</b> ' + plural(lista.length, 'OP', 'OPs') + ' com bulk aguardando · <b>' + fmt(t.bulkKg, 0) + ' kg</b> no total';
     el('gradeInter').innerHTML = lista.length ? lista.map(cartaoInter).join('') : '<div class="vazia" style="grid-column:1/-1"><b>Nenhuma OP com bulk aguardando envase</b>Quando uma manipulação for liberada e ainda não envasada, ela aparece aqui já casada com as embalagens.</div>';
     renderRetidos();
+  }
+  function renderEstInter() {
+    var box = el('estInter'); if (!box) return;
+    if (!estInter) { box.innerHTML = '<div class="vazia"><b>Carregando…</b></div>'; return; }
+    var t = estInter.totais;
+    if (!estInter.linhas.length) { box.innerHTML = '<div class="tabela"><div class="vazia"><b>Nenhum intermediário em estoque</b>Aparece aqui o bulk manipulado e os frascos rotulados que ainda não foram envasados.</div></div>'; return; }
+    var kg = function(v) { return v > 0 ? fmt(v, 1) + ' kg' : '<span class="mut">—</span>'; };
+    var un = function(v) { return v > 0 ? fmt(v, 0) + ' un' : '<span class="mut">—</span>'; };
+    box.innerHTML = '<div class="kpis" style="margin:0 0 10px"><div class="kpi ok" style="cursor:default"><b>' + fmt(t.bulkLiberadoKg, 1) + ' kg</b><span>Bulk liberado</span><small>pronto para envasar</small></div>' +
+      '<div class="kpi warn" style="cursor:default"><b>' + fmt(t.bulkAguardandoKg, 1) + ' kg</b><span>Bulk aguardando Qualidade</span><small>ainda não liberado</small></div>' +
+      '<div class="kpi ok" style="cursor:default"><b>' + fmt(t.frascosLiberados, 0) + '</b><span>Frascos rotulados liberados</span><small>prontos para o envase</small></div>' +
+      '<div class="kpi warn" style="cursor:default"><b>' + fmt(t.frascosAguardando, 0) + '</b><span>Frascos rotulados aguardando Qualidade</span><small><a class="linklike" href="material_processo.html?aba=sobras">validar na Qualidade</a></small></div></div>' +
+      '<div class="tabela"><table><thead><tr><th>Produto</th><th>Cliente</th><th class="num">Bulk liberado</th><th class="num">Bulk aguardando</th><th class="num">Frascos liberados</th><th class="num">Frascos aguardando</th><th>De onde vem</th></tr></thead><tbody>' +
+      estInter.linhas.map(function(l) {
+        var ops = l.ops.map(function(o) { return '<span class="tg mute" title="' + e((o.bulkKg > 0 ? fmt(o.bulkKg, 1) + ' kg de bulk' : '') + (o.frascos > 0 ? ' · ' + fmt(o.frascos, 0) + ' frascos (' + o.origemFrascos + ')' : '')) + '">OP ' + e(o.lote) + '</span>'; }).join(' ');
+        return '<tr style="cursor:default"><td><b>' + e(l.produto || l.sku) + '</b><div class="mut" style="font-size:11.5px">' + e(l.sku) + '</div></td><td>' + e(l.cliente) + '</td><td class="num"><b>' + kg(l.bulkLiberadoKg) + '</b></td><td class="num">' + kg(l.bulkAguardandoKg) + '</td><td class="num"><b>' + un(l.frascosLiberados) + '</b></td><td class="num">' + un(l.frascosAguardando) + (l.frascosReprovados ? '<div class="tg bad" style="margin-top:3px">' + fmt(l.frascosReprovados, 0) + ' reprovados</div>' : '') + '</td><td>' + ops + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
   }
   var ROTULO_TIPO = {BULK: '🧪 Bulk', FRASCO_ROTULADO: '🏷️ Frascos rotulados', FRASCO_VAZIO: 'Frascos vazios', ROTULO: 'Rótulos', VALVULA: 'Válvulas'};
   function renderRetidos() {
@@ -392,6 +412,8 @@
   dbOnValue(db.ref('produtos'), function(s) { dados.produtos = s.val() || {}; recalcular(); });
   dbOnValue(db.ref('bom'), function(s) { dados.bom = s.val() || {}; recalcular(); });
   dbOnValue(db.ref('material_processo'), function(s) { dados.mp = s.val() || {}; recalcular(); });
+  dbOnValue(db.ref('perdas'), function(s) { dados.perdas = s.val() || {}; recalcular(); });
+  dbOnValue(db.ref('qualidade_intermediarios'), function(s) { dados.validacoes = s.val() || {}; recalcular(); });
   dbOnValue(db.ref('bombonas_bulk'), function(s) { dados.bombonas = s.val() || {}; recalcular(); });
   setInterval(function() { if (rows.length) { var c = el('resumoTxt'); if (c) renderTabela(); } }, 60000);
 })();

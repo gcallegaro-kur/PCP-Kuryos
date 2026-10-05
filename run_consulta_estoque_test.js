@@ -184,6 +184,39 @@ assert.equal(I.totais.retidoBulkKg, 20);
 assert.equal(I.totais.retidoFrascos, 300);
 assert.equal(I.totais.ops, 2);
 
+// ── estoque de intermediários por produto (05/10) ──
+const ops2 = {
+  'OP-B1': {lote: 'B/01', sku: 'SKU-X', produto: 'BODY X', cliente: 'MISS ROSE', status: 'Programado', pesoTeoricoUnG: 100, qtdPlanejada: 1000, manipulacao: {status: 'LIBERADO', manipulacao: {rendimento: 100}}},
+  'OP-B2': {lote: 'B/02', sku: 'SKU-X', produto: 'BODY X', cliente: 'MISS ROSE', status: 'Programado', pesoTeoricoUnG: 100, qtdPlanejada: 500, manipulacao: {status: 'AGUARDANDO_QUALIDADE', manipulacao: {rendimento: 40}}},
+  // rotulagem 1000, envasou 300, 20 de frasco perdido no envase -> 680 rotulados em estoque; OP ainda aberta
+  'OP-R1': {lote: 'R/01', sku: 'SKU-Y', produto: 'BODY Y', cliente: 'WIKE', status: 'Em Produção', produzidoRotulagem: 1000, produzidoLinha: 300, abertaDesde: 'x', abertaDesdeRot: 'y'},
+  // OP concluída com sobra de frasco rotulado declarada (70) e bulk retido 15 kg: vale o declarado, não o saldo calculado
+  'OP-C1': {lote: 'C/01', sku: 'SKU-Z', produto: 'BODY Z', cliente: 'WIKE', status: 'Concluído', produzidoRotulagem: 500, produzidoLinha: 430, contagemSobras: {a: {em: 'x'}}, manipulacao: {status: 'LIBERADO', manipulacao: {rendimento: 90}}, pesoTeoricoUnG: 100},
+  'OP-X9': {lote: 'X/09', sku: 'SKU-X', status: 'Cancelado', manipulacao: {status: 'LIBERADO', manipulacao: {rendimento: 999}}}
+};
+const mp2 = {
+  r1: {opKey: 'OP-C1', tipo: 'FRASCO_ROTULADO', qtd: 70, unidade: 'un', status: 'EM_PROCESSO'},
+  r2: {opKey: 'OP-C1', tipo: 'BULK', qtd: 15, unidade: 'kg', status: 'EM_PROCESSO'},
+  r3: {opKey: 'OP-C1', tipo: 'BULK', qtd: 99, unidade: 'kg', status: 'USADO'}
+};
+const perdas2 = {'OP-R1': {p1: {perdas: [{tipo: 'Frascos', quantidade: 20, etapa: 'envase'}]}}};
+let EI = CE.estoqueIntermediario({ops: ops2, produtos: {}, materialProcesso: mp2, perdas: perdas2, validacoes: {}});
+const sk = (s) => EI.linhas.find((l) => l.sku === s);
+assert.equal(sk('SKU-X').bulkLiberadoKg, 100, 'bulk liberado da OP B/01');
+assert.equal(sk('SKU-X').bulkAguardandoKg, 40, 'bulk ainda sem liberação da Qualidade');
+assert.equal(sk('SKU-X').ops.length, 2, 'OP cancelada fora');
+assert.equal(sk('SKU-Y').frascosAguardando, 680, '1000 − 300 envasados − 20 perdidos; sem validação = aguardando a Qualidade');
+assert.equal(sk('SKU-Z').frascosAguardando, 70, 'OP concluída: vale a sobra declarada');
+assert.equal(sk('SKU-Z').bulkLiberadoKg, 15, 'bulk retido declarado (o USADO não conta)');
+assert.equal(EI.totais.frascosLiberados, 0);
+// Qualidade libera os frascos da R/01 e reprova os da C/01
+EI = CE.estoqueIntermediario({ops: ops2, produtos: {}, materialProcesso: mp2, perdas: perdas2, validacoes: {'OP-R1': {status: 'LIBERADO'}, 'OP-C1': {status: 'REPROVADO'}}});
+assert.equal(sk('SKU-Y').frascosLiberados, 680);
+assert.equal(sk('SKU-Y').frascosAguardando, 0);
+assert.equal(sk('SKU-Z').frascosReprovados, 70);
+assert.equal(sk('SKU-Z').frascosAguardando, 0, 'reprovado não vira disponível');
+assert.equal(EI.totais.frascosLiberados, 680);
+
 // ── datas puras: 'YYYY-MM-DD' não pode andar um dia por causa do fuso ──
 assert.equal(CE.diasAte('2026-10-02', HOJE), 1);
 assert.equal(CE.diasAte('2026-09-30', HOJE), -1);

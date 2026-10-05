@@ -189,6 +189,15 @@
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem' || root.child('usuarios').child(auth.uid).child('role').val() == 'logistica')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('logistica').val() == true))"
     },
+    // Validação da Qualidade dos frascos rotulados (intermediário) por OP (05/10): o PCP só conta
+    // o estoque intermediário como utilizável depois do LIBERADO. Todo autenticado lê.
+    "qualidade_intermediarios": {
+      ".read": "auth != null",
+      "$opKey": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true)",
+        ".validate": "!newData.exists() || (newData.hasChildren(['status', 'por', 'em']) && (newData.child('status').val() == 'LIBERADO' || newData.child('status').val() == 'REPROVADO' || newData.child('status').val() == 'PENDENTE'))"
+      }
+    },
     "perdas": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))"
