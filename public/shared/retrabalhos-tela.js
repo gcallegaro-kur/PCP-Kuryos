@@ -30,11 +30,14 @@
     else c.appendChild(el('p','Carregando retrabalho…'));
     return c;
   }
+  // O perfil da rotulagem só vê as rotuladoras e o que rotulou (05/10): o bloco de Retrabalhos é do envase/linhas.
+  function oculto(){return typeof setorVisao==='function'&&setorVisao()==='rotulagem';}
+  function visibilidade(){var s=document.getElementById('retrabalhosPainel');if(s)s.style.display=Object.keys(cache).length&&!oculto()?'':'none';}
   function painel(){
     var linhas=document.getElementById('secaoTurnoLinhas');if(!linhas)return;
     var section=document.getElementById('retrabalhosPainel');
     if(!section){section=el('section',null,'card');section.id='retrabalhosPainel';linhas.after(section);}
-    section.replaceChildren();var ids=Object.keys(cache);section.style.display=ids.length?'':'none';
+    section.replaceChildren();var ids=Object.keys(cache);section.style.display=ids.length&&!oculto()?'':'none';
     section.appendChild(el('h3','Retrabalhos'));
     section.appendChild(el('p','Apontamentos próprios, sem somar novamente à produção da OP original. Para acompanhar os casos, ver a linha do tempo e registrar a avaliação da Qualidade, use a tela de Retrabalhos.'));
     var atalho=el('a','Abrir a tela de Retrabalhos','andon-btn btn-neutral');
@@ -118,7 +121,7 @@
   function iniciar(){if(ready)return;ready=true;dbOnValue(db.ref('retrabalhos'),function(snap){cache=snap.val() || {};painel();if(typeof renderPainelTurno==='function')renderPainelTurno();});}
   function bloqueada(linha){return !!(window.latestAndonStates && latestAndonStates[sanitizeKey(linha)] && latestAndonStates[sanitizeKey(linha)].retrabalhoId);}
   function avisar(linha){if(!bloqueada(linha))return false;alert('Esta linha está em retrabalho. Use “Ver retrabalho / apontamentos” no Painel de Turno.');return true;}
-  window.RetrabalhosTela={iniciar:iniciar,card:card,abrir:abrir,avisar:avisar,bloqueada:bloqueada};
+  window.RetrabalhosTela={iniciar:iniciar,card:card,abrir:abrir,avisar:avisar,bloqueada:bloqueada,visibilidade:visibilidade};
   document.addEventListener('DOMContentLoaded',function(){
     iniciar();
     [['prodForm','fLinha'],['retroForm','rLinha'],['opForm','opLinha']].forEach(function(pair){var form=document.getElementById(pair[0]);if(form)form.addEventListener('submit',function(e){var input=document.getElementById(pair[1]);if(input && avisar(input.value)){e.preventDefault();e.stopImmediatePropagation();}},true);});

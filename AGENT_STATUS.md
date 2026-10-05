@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Retrabalhos fora do perfil da rotulagem (05/10/2026)
+
+- **Pedido:** o perfil da rotulagem só vê rotuladoras e a rotulagem realizada; o bloco de Retrabalhos sai de lá.
+- **Ajuste:** `#retrabalhosPainel` (Painel de Turno) só aparece na área do envase; `RetrabalhosTela.visibilidade()` (`public/shared/retrabalhos-tela.js`) é chamada por `aplicarRestricaoRotulagem` (`public/form.html`). A tela `retrabalhos.html` já era só da Qualidade. Teste: `run_encerrar_turno_setor_ui_test.js`.
+
 ### Claude — Encerrar turno por setor (05/10/2026)
 
 - **Pedido:** envase e rotulagem têm perfis e telas diferentes; ao encerrar o turno no envase, o sistema pedia dados da rotulagem (já encerrada por outro perfil).

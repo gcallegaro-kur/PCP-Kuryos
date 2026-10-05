@@ -22,6 +22,7 @@ function dados(role) {
       '26272-01': {lote: '26272/01', produto: 'BODY B', cliente: 'WIKE', sku: 'B', status: 'Em Produção', qtdPlanejada: 1000, produzidoLinha: 300, abertaDesde: h(5), abertaLinha: 'Linha 2'},
       '26273-01': {lote: '26273/01', produto: 'BODY C', cliente: 'WIKE', sku: 'C', status: 'Em Produção', qtdPlanejada: 1000, produzidoRotulagem: 100, abertaDesdeRot: h(4), abertaRotulagem: 'Rotulagem 02'}
     },
+    retrabalhos: {r1: {id: 'r1', loteOriginal: '26271/01', linha: 'Linha 1', produto: 'BODY A', status: 'em_execucao'}},
     material_processo: {}, pedidos: {}, produtos: {}, registros: {}, programacao: {}, turnosIniciados: {}, turnosEncerrados: {}, atividadesPosto: {}, paradas_historico: {}
   };
 }
@@ -136,6 +137,15 @@ const nomesPendentes = (page) => page.evaluate(() => [...document.querySelectorA
     await page.click('#btnEncerrarTurno');
     await page.waitForSelector('#turnoConfirmBox .tp-name');
     assert.deepEqual(await nomesPendentes(page), ['Rotulagem 02 · OP 26273/01']);
+
+    // Retrabalhos é do envase: aparece lá e some na visão da rotulagem (05/10).
+    await page.evaluate(() => escolherSetorVisao('envase'));
+    await page.waitForSelector('#retrabalhosPainel', {state: 'attached'});
+    assert.equal(await page.locator('#retrabalhosPainel').isVisible(), true, 'envase vê o bloco de Retrabalhos');
+    await page.evaluate(() => escolherSetorVisao('rotulagem'));
+    assert.equal(await page.locator('#retrabalhosPainel').isVisible(), false, 'rotulagem não vê o bloco de Retrabalhos');
+    await page.evaluate(() => escolherSetorVisao('envase'));
+    assert.equal(await page.locator('#retrabalhosPainel').isVisible(), true, 'volta a aparecer no envase');
 
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
   } finally {
