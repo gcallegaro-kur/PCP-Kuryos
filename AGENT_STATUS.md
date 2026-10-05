@@ -5,6 +5,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Encerrar turno por setor (05/10/2026)
+
+- **Pedido:** envase e rotulagem têm perfis e telas diferentes; ao encerrar o turno no envase, o sistema pedia dados da rotulagem (já encerrada por outro perfil).
+- **Causa:** `turnoItensAtivos` (form.html) juntava linhas E rotuladoras para quem tem os dois setores (admin/gestão/perfil com os dois), sem olhar a área do painel, e perguntava de novo uma linha/rotuladora já fechada ("Fim de turno") e não retomada.
+- **Ajuste (`public/form.html`):** o Encerrar Turno fecha só a área em que a pessoa está (`setorVisao()`: envase = linhas + postos; rotulagem = rotuladoras) e pula o que já está `parada` por "Fim de turno" (avisa "Nada a fechar…"). Retomar Produção volta a perguntar. Intervalo por card não muda. Teste: `run_encerrar_turno_setor_ui_test.js`.
+- **Arquivos:** `public/form.html`, `run_encerrar_turno_setor_ui_test.js`, `AGENT_STATUS.md`.
+
 ### Claude — Intermediários, conciliação da rotulagem e BOM por versão (05/10/2026)
 
 - **Escopo/arquivos:** `public/shared/conciliacao-rotulagem.js` (+ chip em `public/ops.html`), `public/shared/consulta-estoque.js` (`estoqueIntermediario`) e `consulta-estoque-tela.js`/`consulta_estoque.html` (seção por produto), `public/shared/validacao-intermediarios-tela.js` + `public/material_processo.html` (validação da Qualidade), `database.rules.json` (`qualidade_intermediarios`), `public/form.html` (fechar o envase leva a OP ao PCP com a rotulagem aberta), `public/shared/utils.js` (`bomDaVersao`) e os pontos de leitura do BOM (`compras`, `emitir_op`, `form`, `insumos`, `manipulacao`, `cadastros`, `onde-usado`, `necessidade-pedidos`), testes `run_conciliacao_rotulagem_test`, `run_bom_versao_test`, `run_qualidade_intermediarios_rules_test`, `run_validacao_intermediarios_ui_test`, `scripts/aplicar-plano1.sh`.

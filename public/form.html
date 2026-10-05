@@ -5494,29 +5494,40 @@ function fecharAtividadePostoDefinitivo(id, qtd, operador, produto) {
 function turnoItensAtivos() {
   var itens = [];
   var st = setoresDoApontamento();
-  var isRotulagem = !st.linha;
-  // Cada setor só vê a sua seção no painel -- "Encerrar Turno" não pode
-  // arrastar junto o que essa pessoa nem enxerga na tela, senão fecharia o
-  // trabalho de outro supervisor sem querer.
-  if (!isRotulagem) {
+  // Cada perfil fecha SÓ a sua área (05/10: o envase pedia dados da rotulagem, que outro perfil já
+  // tinha encerrado). Quem tem os dois setores, ou nenhum marcado (gestão/admin), fecha a área que
+  // está olhando no painel (setorVisao); quem tem um só fica na dele.
+  var area = setorVisao();
+  var fechaLinha = !!st.linha && area === 'envase';
+  var fechaRotulagem = !!st.rotulagem && area === 'rotulagem';
+  if (fechaLinha) {
     configLinhas.forEach(function(nome) {
       var op = opAlocadoEm(nome, 'linha');
       if (op) itens.push({ tipo: 'linha', nome: nome, lote: op.lote, op: op });
     });
   }
-  if (st.rotulagem) {
+  if (fechaRotulagem) {
     configRotulagem.forEach(function(nome) {
       var op = opAlocadoEm(nome, 'rotulagem');
       if (op) itens.push({ tipo: 'rotulagem', nome: nome, lote: op.lote, op: op });
     });
   }
-  if (!isRotulagem) {
+  if (fechaLinha) {
     Object.keys(atividadesPostoCache).forEach(function(id) {
       var a = atividadesPostoCache[id];
       if (a) itens.push({ tipo: 'posto', nome: a.nome, id: id, atividade: a });
     });
   }
   return itens;
+}
+
+// A linha/rotuladora já foi fechada ("Fim de turno") por quem opera e ninguém retomou: não há
+// produção nova para apontar, então o Encerrar Turno não pergunta de novo. Retomar Produção
+// volta o status para "ativa" e a pergunta reaparece.
+function jaFechadaNoTurno(it) {
+  if (it.tipo !== 'linha' && it.tipo !== 'rotulagem') return false;
+  var est = latestAndonStates[sanitizeKey(it.nome)];
+  return !!(est && est.status === 'parada' && est.motivoParada === 'Fim de turno' && (!est.lote || est.lote === it.lote));
 }
 
 document.getElementById('btnEncerrarTurno').addEventListener('click', function() {
@@ -5571,9 +5582,15 @@ function abrirConfirmacaoTurno(opts) {
   if (opts.apenasNome) {
     itens = itens.filter(function(it) { return it.nome === opts.apenasNome && it.tipo === opts.apenasTipo; });
   }
+  var jaFechados = [];
+  if (!isIntervalo) {
+    jaFechados = itens.filter(jaFechadaNoTurno);
+    itens = itens.filter(function(it) { return !jaFechadaNoTurno(it); });
+  }
   var box = document.getElementById('turnoConfirmBox');
   if (!itens.length) {
-    alert(isIntervalo ? 'Nenhuma linha ou rotulagem aberta pra registrar intervalo.' : 'Nenhuma linha, rotulagem ou posto aberto pra fechar.');
+    if (jaFechados.length) alert('Nada a fechar: ' + jaFechados.map(function(it) { return it.nome; }).join(', ') + ' já foi fechada neste turno e ainda não foi retomada.');
+    else alert(isIntervalo ? 'Nenhuma linha ou rotulagem aberta pra registrar intervalo.' : (setorVisao() === 'rotulagem' ? 'Nenhuma rotuladora aberta pra fechar.' : 'Nenhuma linha ou posto aberto pra fechar.'));
     return;
   }
 
