@@ -21,17 +21,23 @@
   function versaoNum(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
   function produtoDaChave(chave, reg) { return txt(reg && reg.codProduto) || String(chave).split('__')[0]; }
 
-  // Versão vigente por produto: maior número, fora OBSOLETA.
-  function vigentes(colecao) {
+  // Versão vigente por produto: a que o app usa nas contas. Fórmula = a aprovada de maior número
+  // (sem nenhuma aprovada, a de maior número), como melhorFormulaDoProduto; BOM = o de MESMA chave
+  // da fórmula escolhida (produto__versão), senão o de maior número. OBSOLETA nunca vale. Empate
+  // (ex.: "X__V1" e "X__v1") resolve por chave, de forma estável, e a duplicata fica de fora.
+  function vigentes(colecao, preferidas, priorizarAprovada) {
     var porProduto = {};
-    Object.keys(colecao || {}).forEach(function(chave) {
+    Object.keys(colecao || {}).sort().forEach(function(chave) {
       var r = colecao[chave];
       if (!r || r.status === 'OBSOLETA') return;
       var prod = produtoDaChave(chave, r);
       var atual = porProduto[prod];
-      if (!atual || versaoNum(r.versao || chave.split('__')[1]) > versaoNum(atual.r.versao || atual.chave.split('__')[1])) {
-        porProduto[prod] = {chave: chave, r: r};
-      }
+      var preferida = preferidas && preferidas[prod];
+      if (preferida) { if (chave === preferida) porProduto[prod] = {chave: chave, r: r, fixa: true}; return; }
+      if (atual && atual.fixa) return;
+      var rank = function(x) { return (priorizarAprovada && x.r.status === 'APROVADA' ? 1e6 : 0) + versaoNum(x.r.versao || x.chave.split('__')[1]); };
+      var cand = {chave: chave, r: r};
+      if (!atual || rank(cand) > rank(atual)) porProduto[prod] = cand;
     });
     return porProduto;
   }
@@ -57,8 +63,10 @@
       if (ja) { ja.quantidade = (Number(ja.quantidade) || 0) + (Number(uso.quantidade) || 0); return; }
       lista.push(uso);
     }
+    var preferidasBom = {};
     [['formulas', 'Fórmula', 'mpCodigo'], ['bom', 'BOM', 'materialCodigo']].forEach(function(cfg) {
-      var vig = vigentes(dados[cfg[0]]);
+      var vig = vigentes(dados[cfg[0]], cfg[0] === 'bom' ? preferidasBom : null, cfg[0] === 'formulas');
+      if (cfg[0] === 'formulas') Object.keys(vig).forEach(function(pr) { preferidasBom[pr] = vig[pr].chave; });
       Object.keys(vig).forEach(function(prod) {
         var p = produtoInfo(prod);
         if (p && p.ativo === false) return;

@@ -5,6 +5,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — "Usado em" só com a versão em uso (02/10/2026)
+
+- **Causa (EP-00106 x EP-00101):** `cadastros.html › Materiais › Usado em` listava TODO registro de `bom/`/`formulas/`: versões antigas (MRARBS11__v1) e duplicatas só na caixa da letra (`HDR-MISS-0001__V1` ao lado de `__v1`). As contas do app usam a fórmula de `melhorFormulaDoProduto` e o BOM de MESMA chave (`produto__versão`); o resto é sobra.
+- **Código:** `public/cadastros.html` (`mapaVigencia`/`calcularUsoMaterial`, caixa "incluir versões antigas"), `public/shared/onde-usado.js` (mesma regra: fórmula aprovada de maior versão, BOM da chave da fórmula, desempate estável), `run_onde_usado_test.js`.
+- **Dados NÃO alterados:** 7 BOMs sobrando (`HDR-MISS-0001/2/3/6/7__v1`, `MRARBS10__v1`, `MRARBS11__v1`) aguardam autorização do usuário para virarem OBSOLETA (com backup). Não afetam cálculo.
+
 ### Claude — "O que comprar" por pedido (01/10/2026)
 
 - **Escopo:** nova tela `public/o_que_comprar.html` + `public/shared/necessidade-pedidos.js` (motor puro; usa a MESMA `explodirMateriaisNecessarios`) + `public/shared/necessidade-pedidos-tela.js`; menu em `public/auth_check.js` (PCP e Compras); manual (`manual_compras.html` §1a); testes `run_necessidade_pedidos_test.js` e `run_necessidade_pedidos_ui_test.js`. Não toca `insumos.html` (MRP/Matriz seguem como estão). Única escrita: solicitação de compra pendente (`solicitacoes_compra`, com `pedidoKeys`, `origemTela: 'o_que_comprar'`).

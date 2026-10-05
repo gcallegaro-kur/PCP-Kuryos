@@ -557,7 +557,7 @@
             </div>
           </div>
 
-          <div class="section-label" id="usoMatLabel-mat" style="display:none">Usado em (Fórmula / BOM)</div>
+          <div class="section-label" id="usoMatLabel-mat" style="display:none">Usado em (Fórmula / BOM) <label class="chk" style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:10px"><input type="checkbox" id="chkUsoAntigas-mat"> incluir versões antigas</label></div>
           <div class="section-note" id="usoMatNote-mat" style="display:none">Somente leitura -- levantado agora, a partir das Fórmulas e BOMs cadastradas (não é um vínculo gravado no material). Se você trocar este material aqui, os produtos abaixo NÃO mudam sozinhos -- edite a Fórmula/BOM de cada um, na aba ao lado.</div>
           <div class="table-wrap" style="margin-bottom:10px" id="usoMatWrap-mat">
             <table>
@@ -2126,30 +2126,62 @@ document.addEventListener('DOMContentLoaded', function() {
     var partes = String(key).split('__');
     return { codProduto: partes[0], versao: partes.slice(1).join('__') || null };
   }
-  function calcularUsoMaterial(mpCodigo) {
+  /* Versão EM USO de cada produto (01/10). O app calcula com a fórmula que
+     melhorFormulaDoProduto escolhe e com o BOM de MESMA chave (produto__versão);
+     qualquer outro registro em bom/ ou formulas/ é versão antiga ou duplicata
+     (ex.: "HDR-MISS-0001__v1" ao lado de "HDR-MISS-0001__V1") e não entra em
+     nenhuma conta. "Usado em" mostrava todos e contava o mesmo produto duas vezes.
+     Sem fórmula para o produto, vale o BOM de maior versão não obsoleta. */
+  var cacheVigencia = null;
+  function numVersaoUso(v) { return parseInt(String(v || 'v0').replace(/[^\d]/g, ''), 10) || 0; }
+  function mapaVigencia() {
+    if (cacheVigencia && cacheVigencia.f === allFormulasMat && cacheVigencia.b === allBomMat) return cacheVigencia;
+    var formulas = {}, boms = {}, porProduto = {};
+    Object.keys(allFormulasMat || {}).forEach(function(k) { var cv = codProdutoEVersao(k, allFormulasMat[k]); porProduto[cv.codProduto] = true; });
+    Object.keys(allBomMat || {}).forEach(function(k) { var cv = codProdutoEVersao(k, allBomMat[k]); porProduto[cv.codProduto] = true; });
+    Object.keys(porProduto).forEach(function(prod) {
+      var achado = melhorFormulaDoProduto(prod, allFormulasMat);
+      var chaveEmUso = achado ? chaveVersao(prod, achado.registro.versao) : null;
+      if (chaveEmUso && allFormulasMat[chaveEmUso]) formulas[chaveEmUso] = true;
+      else if (achado) Object.keys(allFormulasMat).forEach(function(k) { if (allFormulasMat[k] === achado.registro) formulas[k] = true; });
+      if (chaveEmUso && allBomMat[chaveEmUso]) { boms[chaveEmUso] = true; return; }
+      var melhor = null, melhorN = -1;
+      Object.keys(allBomMat || {}).forEach(function(k) {
+        var r = allBomMat[k]; if (!r || r.status === 'OBSOLETA' || codProdutoEVersao(k, r).codProduto !== prod) return;
+        var n = numVersaoUso(codProdutoEVersao(k, r).versao);
+        if (n > melhorN) { melhor = k; melhorN = n; }
+      });
+      if (melhor) boms[melhor] = true;
+    });
+    cacheVigencia = {f: allFormulasMat, b: allBomMat, formulas: formulas, boms: boms};
+    return cacheVigencia;
+  }
+  function calcularUsoMaterial(mpCodigo, incluirAntigas) {
     if (!mpCodigo) return [];
-    var usos = [];
+    var usos = [], vig = incluirAntigas ? null : mapaVigencia(), vigAll = mapaVigencia();
     Object.entries(allFormulasMat).forEach(function(entry) {
       var key = entry[0], f = entry[1];
       if (!f || !f.itens) return;
+      if (vig && !vig.formulas[key]) return;
       var cv = codProdutoEVersao(key, f);
       Object.values(f.itens).forEach(function(it) {
         if (it && it.mpCodigo === mpCodigo) {
-          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: f.status || null, onde: 'Fórmula', proporcao: it.percentualMM != null ? (fmtNum(it.percentualMM) + '%') : '—' });
+          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: f.status || null, onde: 'Fórmula', antiga: !vigAll.formulas[key], chave: key, proporcao: it.percentualMM != null ? (fmtNum(it.percentualMM) + '%') : '—' });
         }
       });
     });
     Object.entries(allBomMat).forEach(function(entry) {
       var key = entry[0], b = entry[1];
       if (!b || !b.itens) return;
+      if (vig && !vig.boms[key]) return;
       var cv = codProdutoEVersao(key, b);
       Object.values(b.itens).forEach(function(it) {
         if (it && it.materialCodigo === mpCodigo) {
-          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: null, onde: 'BOM', proporcao: pecasPorUnidadeBom(it) ? ('1 a cada ' + fmtNum(pecasPorUnidadeBom(it)) + ' peças') : it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
+          usos.push({ codProduto: cv.codProduto, versao: cv.versao, status: b.status || null, onde: 'BOM', antiga: !vigAll.boms[key], chave: key, proporcao: pecasPorUnidadeBom(it) ? ('1 a cada ' + fmtNum(pecasPorUnidadeBom(it)) + ' peças') : it.qtdPorPeca != null ? (fmtNum(it.qtdPorPeca) + '/peça') : '—' });
         }
       });
     });
-    usos.sort(function(a, b) { return norm(a.codProduto).localeCompare(norm(b.codProduto)) || a.onde.localeCompare(b.onde); });
+    usos.sort(function(a, b) { return norm(a.codProduto).localeCompare(norm(b.codProduto)) || a.onde.localeCompare(b.onde) || String(a.chave).localeCompare(String(b.chave)); });
     return usos;
   }
 
@@ -2162,9 +2194,10 @@ document.addEventListener('DOMContentLoaded', function() {
     label.style.display = ''; note.style.display = ''; wrap.style.display = '';
 
     var mpCodigo = (allMateriais[key] || {}).mpCodigo;
-    var usos = calcularUsoMaterial(mpCodigo);
+    var incluirAntigas = !!(document.getElementById('chkUsoAntigas-mat') || {}).checked;
+    var usos = calcularUsoMaterial(mpCodigo, incluirAntigas);
     if (!usos.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum produto usa este material em Fórmula ou BOM ainda.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum produto usa este material na Fórmula/BOM em uso' + (incluirAntigas ? '' : ' (marque "incluir versões antigas" para ver o histórico)') + '.</td></tr>';
       return;
     }
     tbody.innerHTML = usos.map(function(u) {
@@ -2176,10 +2209,15 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td>' + escapeHtml(prodLabel) + '</td>' +
         '<td>' + ondeBadge + '</td>' +
         '<td style="text-align:right">' + escapeHtml(u.proporcao) + '</td>' +
-        '<td>' + escapeHtml(u.versao || '—') + statusBadge + '</td>' +
+        '<td>' + escapeHtml(u.versao || '—') + statusBadge + (u.antiga ? ' <span class="badge badge-gray" style="font-size:10px" title="Esta versão não é a usada nas contas (versão antiga ou duplicada)">antiga</span>' : '') + '</td>' +
       '</tr>';
     }).join('');
   }
+
+  (function() {
+    var chk = document.getElementById('chkUsoAntigas-mat');
+    if (chk) chk.addEventListener('change', function() { if (editingKey) renderUsoMaterial(editingKey); });
+  })();
 
   function coletarDadosPorTipo(tipo) {
     var data = {};
