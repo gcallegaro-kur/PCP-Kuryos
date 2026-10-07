@@ -94,13 +94,17 @@
     el('conteudo').querySelectorAll('[data-cel]').forEach(function(b) {
       b.onclick = function() {
         var p = b.getAttribute('data-cel').split('|'), atual = (S.presenca[p[1]] || {})[p[0]] || '', prox = CICLO[(CICLO.indexOf(atual) + 1) % CICLO.length];
-        db.ref('rh_temporarios_presenca/' + p[1] + '/' + p[0]).set(prox || null).catch(function(er) { toast(er.message, true); });
+        var depois = JSON.parse(JSON.stringify(S.presenca)); (depois[p[1]] = depois[p[1]] || {})[p[0]] = prox || null;
+        var up = {}; up['rh_temporarios_presenca/' + p[1] + '/' + p[0]] = prox || null;
+        // "última vez que trabalhou": o Feedback da Semana só deixa avaliar temporário que trabalhou nos últimos 14 dias
+        if (prox === 'OK' || atual === 'OK') up['feedback_diretorio/' + p[0] + '/ultimoOk'] = FeedbackClima.ultimoOkDe(p[0], depois);
+        db.ref().update(up).catch(function(er) { toast(er.message, true); });
       };
     });
     el('conteudo').querySelectorAll('[data-todos]').forEach(function(b) {
       b.onclick = function() {
         var d = b.getAttribute('data-todos'), up = {}, n = 0;
-        Object.keys(S.temps).forEach(function(id) { if (S.temps[id].status === 'Ativo' && !((S.presenca[d] || {})[id])) { up['rh_temporarios_presenca/' + d + '/' + id] = 'OK'; n++; } });
+        Object.keys(S.temps).forEach(function(id) { if (S.temps[id].status === 'Ativo' && !((S.presenca[d] || {})[id])) { up['rh_temporarios_presenca/' + d + '/' + id] = 'OK'; n++; var ult = (FeedbackClima.ultimoOkDe(id, S.presenca) || ''); if (d > ult) up['feedback_diretorio/' + id + '/ultimoOk'] = d; } });
         if (!n) { toast('Todos os ativos já têm marcação neste dia.'); return; }
         db.ref().update(up).then(function() { toast(n + ' marcados como OK em ' + T.dataBR(d) + '.'); }).catch(function(er) { toast(er.message, true); });
       };
@@ -270,7 +274,10 @@
       var up = {}; Object.keys(o).forEach(function(k) { up[k] = o[k]; });
       if (id) ['idade', 'distanciaKm', 'telefone', 'documento', 'pix', 'setor', 'endereco', 'obs'].forEach(function(k) { if (!(k in o)) up[k] = null; });
       else up.criadoEm = new Date().toISOString();
-      (id ? ref.update(up) : ref.set(up)).then(function() { toast('Temporário salvo.'); fechar(); }).catch(function(err) { toast(err.message, true); });
+      var gravado = {}; Object.keys(S.temps[id] || {}).forEach(function(k) { gravado[k] = S.temps[id][k]; }); Object.keys(up).forEach(function(k) { if (up[k] == null) delete gravado[k]; else gravado[k] = up[k]; });
+      var chaveDir = ref.key, extra = {};
+      extra['feedback_diretorio/' + chaveDir] = FeedbackClima.entradaTemporario(gravado, FeedbackClima.ultimoOkDe(chaveDir, S.presenca));
+      (id ? ref.update(up) : ref.set(up)).then(function() { return db.ref().update(extra); }).then(function() { toast('Temporário salvo.'); fechar(); }).catch(function(err) { toast(err.message, true); });
     };
   }
 

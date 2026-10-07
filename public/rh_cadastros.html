@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/feedback-clima.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -228,11 +229,17 @@
               </select>
             </div>
             <div class="form-group"><label>Data de admissão</label><input type="date" id="fDataAdmissao-col"></div>
+            <div class="form-group">
+              <label>Setor</label>
+              <input type="text" id="fSetor-col" class="uc" list="dlSetores-col" placeholder="Ex: PRODUÇÃO" autocomplete="off">
+              <datalist id="dlSetores-col"></datalist>
+              <div class="field-hint">Define quem são os colegas que ele avalia no Feedback da Semana (mesmo setor). Em branco vale o setor do cargo.</div>
+            </div>
             <div class="form-group full">
-              <label>Login de Gestor vinculado (opcional)</label>
+              <label>Login vinculado (necessário para responder o Feedback da Semana)</label>
               <input type="text" id="fLogin-col" class="uc" placeholder="Digite pra buscar por nome/e-mail..." autocomplete="off">
               <input type="hidden" id="fLoginUid-col">
-              <div class="field-hint">Só preencha se este colaborador tiver login no módulo de RH com papel "Gestor de Linha" (criado em Usuários, no PCP) -- é o que permite ele avaliar quem reporta a ele, com a hierarquia verificada no servidor.</div>
+              <div class="field-hint">O login (criado em Usuários, no PCP) que esta pessoa usa. É o que permite responder o Feedback da Semana e, para o papel "Gestor de Linha", avaliar quem reporta a ele, com a hierarquia verificada no servidor.</div>
             </div>
           </div>
 
@@ -554,9 +561,15 @@ var allCargos = {};
   var cargoItems = [], gestorItems = [], loginItems = [];
   function refreshLoginItems() {
     loginItems = Object.entries(allUsuariosRH)
-      .filter(function(e) { return e[1].role === 'gestor'; })
+      .filter(function(e) { return e[1].role && e[1].role !== 'pending'; })
       .sort(function(a, b) { return norm(a[1].nome).localeCompare(norm(b[1].nome)); })
       .map(function(e) { var label = (e[1].nome || '—') + (e[1].email ? ' — ' + e[1].email : ''); return { key: e[0], value: label, label: label }; });
+  }
+  function setoresConhecidos() {
+    var set = {};
+    Object.keys(allCargos).forEach(function(k) { if (allCargos[k].setor) set[allCargos[k].setor.trim()] = true; });
+    Object.keys(allColaboradores).forEach(function(k) { if (allColaboradores[k].setor) set[allColaboradores[k].setor.trim()] = true; });
+    return Object.keys(set).sort();
   }
   function refreshCargoItems() {
     cargoItems = Object.entries(allCargos)
@@ -658,6 +671,8 @@ var allCargos = {};
 
     document.getElementById('fTipoContrato-col').value = c.tipoContrato || 'CLT';
     document.getElementById('fDataAdmissao-col').value = c.dataAdmissao || '';
+    document.getElementById('fSetor-col').value = c.setor || '';
+    document.getElementById('dlSetores-col').innerHTML = setoresConhecidos().map(function(x) { return '<option value="' + escapeAttr(x) + '">'; }).join('');
 
     refreshLoginItems();
     document.getElementById('fLogin-col').value = c.uidLogin ? ((allUsuariosRH[c.uidLogin] || {}).nome || '') : '';
@@ -702,6 +717,7 @@ var allCargos = {};
       uidLogin: document.getElementById('fLoginUid-col').value || null,
       tipoContrato: document.getElementById('fTipoContrato-col').value,
       dataAdmissao: document.getElementById('fDataAdmissao-col').value || null,
+      setor: document.getElementById('fSetor-col').value.trim() || null,
       salarioBase: salarioVal !== '' ? parseFloat(salarioVal) : null,
       valeTransporte: vtVal !== '' ? parseFloat(vtVal) : null,
       valeAlimentacao: vaVal !== '' ? parseFloat(vaVal) : null,
@@ -725,7 +741,12 @@ var allCargos = {};
     // Férias (Fase 3b) precisa dela pra calcular período aquisitivo, e
     // rh_ferias.html só tem acesso de leitura a rh_colaboradores_publico,
     // nunca a rh_colaboradores inteiro.
-    updates['rh_colaboradores_publico/' + key] = { nome: data.nome, cargoKey: data.cargoKey, gestorKey: data.gestorKey, uidLogin: data.uidLogin, status: data.status, dataAdmissao: data.dataAdmissao };
+    updates['rh_colaboradores_publico/' + key] = { nome: data.nome, cargoKey: data.cargoKey, gestorKey: data.gestorKey, uidLogin: data.uidLogin, status: data.status, dataAdmissao: data.dataAdmissao, setor: data.setor };
+    // Diretório do Feedback da Semana: o que todo colaborador pode ler (nome, setor, líder) -- nunca CPF, salário nem login.
+    updates['feedback_diretorio/' + key] = FeedbackClima.entradaColaborador(data, allCargos);
+    var uidAntigo = editingKey ? (allColaboradores[editingKey] || {}).uidLogin : null;
+    if (uidAntigo && uidAntigo !== data.uidLogin) updates['feedback_diretorio_por_uid/' + uidAntigo] = null;
+    if (data.uidLogin) updates['feedback_diretorio_por_uid/' + data.uidLogin] = key;
     db.ref().update(updates)
       .then(function() { showAlert('Colaborador salvo com sucesso!', 'success'); closeModal(); })
       .catch(function(err) { showAlert('Erro: ' + err.message, 'danger'); })
@@ -758,6 +779,9 @@ var allCargos = {};
     updates['rh_colaboradores/' + editingKey + '/tipoDesligamento'] = camposDesligamento.tipoDesligamento;
     updates['rh_colaboradores/' + editingKey + '/motivoDesligamento'] = camposDesligamento.motivoDesligamento;
     updates['rh_colaboradores_publico/' + editingKey + '/status'] = camposDesligamento.status;
+    updates['feedback_diretorio/' + editingKey + '/status'] = camposDesligamento.status;
+    var uidDeslig = (allColaboradores[editingKey] || {}).uidLogin;
+    if (uidDeslig) updates['feedback_diretorio_por_uid/' + uidDeslig] = null;
     db.ref().update(updates)
       .then(function() {
         showAlert('Desligamento registrado.', 'success');

@@ -121,6 +121,10 @@ const KURYOS_MODULOS = {
                   paginas: ['rh_cadastros.html', 'rh_avaliacao.html', 'rh_ferias.html'] },
   rh_dashboard: { rotulo: 'RH — Dashboard',        desc: 'Indicadores de RH (dado sensível)',
                   paginas: ['rh_dashboard.html'] },
+  feedback:     { rotulo: 'Feedback da Semana',     desc: 'Avaliar colegas e líder e responder a pesquisa de clima (o colaborador não vê resultado)',
+                  paginas: ['feedback.html'] },
+  rh_feedback:  { rotulo: 'RH — Feedback e Clima',  desc: 'Dashboard, pendências, recados e configuração do Feedback e Clima (só RH Central e administrador)',
+                  paginas: ['rh_feedback.html'] },
   rh_temporarios: { rotulo: 'RH — Temporários',    desc: 'Convocação e pagamento semanal dos temporários (só RH Central e administrador; CPF e Pix)',
                   paginas: ['rh_temporarios.html'] }
 };
@@ -131,13 +135,13 @@ const KURYOS_MODULOS = {
 const MODULOS_POR_PAPEL = {
   admin: '*',
   pcp: ['analytics', 'apontamento', 'manipulacao', 'rotulagem', 'planejamento', 'emitir_op', 'comercial', 'pedidos', 'cadastros',
-        'compras', 'logistica', 'qualidade', 'config', 'usuarios'],
-  production: ['analytics', 'apontamento', 'manipulacao', 'rotulagem', 'planejamento'],
-  rotulagem: ['rotulagem'],
-  logistica: ['logistica'],
-  qualidade: ['qualidade', 'conferencia_pesagem'],
-  rh: ['rh', 'rh_dashboard', 'rh_temporarios'],
-  gestor: ['rh'],
+        'compras', 'logistica', 'qualidade', 'config', 'usuarios', 'feedback'],
+  production: ['analytics', 'apontamento', 'manipulacao', 'rotulagem', 'planejamento', 'feedback'],
+  rotulagem: ['rotulagem', 'feedback'],
+  logistica: ['logistica', 'feedback'],
+  qualidade: ['qualidade', 'conferencia_pesagem', 'feedback'],
+  rh: ['rh', 'rh_dashboard', 'rh_temporarios', 'rh_feedback', 'feedback'],
+  gestor: ['rh', 'feedback'],
   pending: []
 };
 
@@ -802,7 +806,9 @@ function renderUnifiedNavbar(user) {
     temMod('rh') && ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage),
     temMod('rh') && ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage),
     temMod('rh') && ktLink('rh_ferias.html', 'calendar', 'Férias', activePage),
-    temMod('rh_temporarios') && ktLink('rh_temporarios.html', 'clipboard', 'Temporários', activePage)
+    temMod('rh_temporarios') && ktLink('rh_temporarios.html', 'clipboard', 'Temporários', activePage),
+    temMod('feedback') && ktLink('feedback.html', 'pencil', 'Feedback da Semana', activePage),
+    temMod('rh_feedback') && ktLink('rh_feedback.html', 'chart', 'Feedback e Clima', activePage)
   ]);
 
   // "Ajuda" -- os 3 manuais existiam publicados e funcionando desde sempre,
@@ -829,6 +835,7 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && ktLink('manual_qualidade.html', 'book', 'Qualidade', activePage),
     temMod('auditoria5s') && ktLink('manual_auditoria_5s.html', 'book', 'Auditoria 5S', activePage),
     temMod('rh_temporarios') && ktLink('manual_temporarios.html', 'book', 'Temporários', activePage),
+    temMod('feedback') && ktLink('manual_feedback.html', 'book', 'Feedback e Clima', activePage),
     temMod('cadastros') && ktLink('manual_cadastros.html', 'book', 'Cadastros', activePage),
     temMod('usuarios') && ktLink('manual_admin.html', 'book', 'Administração', activePage),
     // Referência completa: única sem gate de módulo, porque é o documento

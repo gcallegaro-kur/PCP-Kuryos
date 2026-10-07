@@ -1283,3 +1283,26 @@ digital, tudo sem aviso ao líder. Fica para depois:
   pede para comparar com ela. Um cadastro de postos com foto-padrão resolveria.
 - **Quem lidera a Qualidade.** A regra "auditor de fora do setor" usa os líderes cadastrados do setor; as duas analistas
   precisam ser cadastradas como Auditor (não líder de Qualidade) ou uma delas líder e a outra auditora do setor Qualidade.
+
+## RH: Temporários e Feedback e Clima (2026-10-06)
+
+Entregue em 06/10: **Temporários** (`rh_temporarios.html` + `shared/temporarios.js`/`temporarios-tela.js`; regra oficial da planilha do RH conferida
+contra a CALCULADORA, 0 diferenças; só RH/admin) e **Feedback e Clima** (`feedback.html` do colaborador, `rh_feedback.html` do RH, `shared/feedback-clima.js`;
+spec `Kuryos_Modulo_Feedback_Clima_Especificacao_v2.docx`, adaptada do Express/Firestore para RTDB com as regras R1–R15 nas regras do banco). Origem: RH.
+Fica para depois (nenhum é bug):
+
+- **Cobrança por e-mail às segundas (spec seção 9) e lembrete de quinta.** A lista de pendências já está pronta (aba Pendências, copiar/CSV) e
+  `feedback_config/ciclo/cobrancaAtiva` existe desligado. Falta o provedor de e-mail (A-05: Resend/Brevo, ou SMTP do Microsoft 365 com senha de aplicativo) e uma
+  função agendada em `functions/index.js` (padrão `checkTurnoNaoEncerrado`; aqui NÃO há o problema do Render hibernando). Decidir antes a consequência de quem não
+  responde (A-06): só informar o RH ou escalar ao líder.
+- **Login individual de quem avalia.** O Feedback pede que cada colaborador tenha login (Usuários) vinculado ao cadastro (RH › Colaboradores › Login vinculado). Hoje
+  há 13 colaboradores cadastrados, nenhum com login, e 18 usuários no sistema. O chão de fábrica provavelmente não terá login individual: avaliar um **quiosque**
+  (tablet do setor + nome + PIN) ou convite por e-mail/telefone. Sem isso a participação fica limitada a quem tem login.
+- **Reciprocidade suspeita (fase 2, spec 8.4).** Pares que se dão nota máxima entre si; só para o RH observar. Exige a autoria gravada (`rhVeAutoria`).
+- **Nota dos colegas no histórico do temporário.** O Feedback já avalia temporários (por setor, só quem trabalhou nos últimos 14 dias), mas o resultado aparece
+  só no painel do Feedback; falta mostrar a média recebida na aba Histórico de Temporários para decidir quem convocar de novo.
+- **Convocação dos temporários alimentando o planejamento.** A presença diária por setor (mão de obra disponível) poderia entrar na capacidade do PCP
+  (`prodHoraRef`/`mediaPorHora` conservadores); hoje a convocação é só do RH.
+- **Fechamento dos temporários: pagamento em lote.** Registrar o pagamento de todos os "em aberto" da semana de uma vez (hoje um por vez, botão Pagar).
+- **Setor do colaborador na admissão/RH Dash.** `rh_colaboradores.setor` é novo e opcional (vale o setor do cargo); preencher os 13 existentes é operação do RH.
+- **Dados na produção:** importar a planilha dos temporários com `bash scripts/importar-temporarios.sh` (o classificador do Claude Code bloqueou a escrita).

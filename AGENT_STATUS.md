@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Feedback e Clima (RH + colaboradores) (06/10/2026)
+
+- **Pedido:** o RH mandou `Kuryos_Modulo_Feedback_Clima_Especificacao_v2.docx` (escrita para outro sistema Node/Firestore); o usuário confirmou: criar no NOSSO sistema. Temporários são **avaliados** pelos registrados do mesmo setor, mas **não participam da pesquisa**.
+- **Código:** `public/shared/feedback-clima.js` (puro: período semanal/quinzenal com virada em 02/11, `alvosDe`, validações, pendências, `montarDiretorio`, `dashboard` com todos os indicadores da seção 8 e N), `public/feedback.html` + `shared/feedback-tela.js` (colaborador: cartões colegas/temporário/líder, clima, aviso honesto conforme a política de autoria), `public/rh_feedback.html` + `shared/rh-feedback-tela.js` (painel, pendências, respostas, recados, configuração: ciclo, 3 formulários até 8 itens, diretório), `public/manual_feedback.html` + card; módulos `feedback` (todos os papéis menos pending) e `rh_feedback` (rh/admin) em `public/auth_check.js`; `public/rh_cadastros.html` ganhou **Setor** e login vinculado de qualquer papel e mantém `feedback_diretorio`; `public/shared/temporarios-tela.js` mantém `feedback_diretorio/{id}/ultimoOk` e a entrada do temporário.
+- **Banco (`database.rules.json`):** `feedback_config` (todos leem, RH grava, formulários ≤ 8 itens), `feedback_diretorio` (nome/setor/líder; sem CPF, salário, login), `feedback_diretorio_por_uid` (só o dono e o RH leem), `feedback_feitos` (só o dono lê; escrita única), `feedback_respostas` e `clima_respostas` (só RH lê; criação única validada: alvo do mesmo setor ou líder direto, nota 1–5 inteira, autoria conforme `rhVeAutoria`/`rhVeAutoriaClima`), `feedback_participacao`, `clima_recados_lidos`.
+- **Testes:** `run_feedback_clima_test.js`, `run_feedback_clima_ui_test.js`, `run_feedback_clima_rules_test.js` (emulador), `run_rh_cadastros_feedback_ui_test.js`.
+- **Para usar:** RH preenche o **Setor** (ou o cargo tem) e **vincula o login** de cada colaborador; abre RH › Feedback e Clima (o diretório se atualiza sozinho). Hoje: 13 colaboradores, 0 com login. Cobrança por e-mail NÃO feita (provedor indefinido, spec A-05); a lista de pendências está pronta.
+
 ### Claude — Temporários (RH): convocação e pagamento semanal (06/10/2026)
 
 - **Pedido:** o RH mandou a planilha CONVOCAÇÃO_TEMPORÁRIO 01.xlsx; o usuário quer o módulo no sistema, só RH acessando, com a regra da planilha como oficial. As colunas `#REF!` do CADASTRO são o histórico de performance de cada temporário (calculado dos lançamentos). Temporários também serão **avaliados** pelos registrados no Feedback, mas **não participam da pesquisa** (módulo Feedback e Clima vem a seguir).

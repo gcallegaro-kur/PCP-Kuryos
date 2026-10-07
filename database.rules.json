@@ -446,6 +446,67 @@
       ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
       "$id": { ".validate": "newData.hasChildren(['tempId', 'data', 'valor', 'categoria']) && newData.child('valor').isNumber() && newData.child('valor').val() > 0 && (newData.child('categoria').val() == 'SALARIO' || newData.child('categoria').val() == 'VT')" }
     },
+    "feedback_config": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "modeloPar": { ".validate": "!newData.child('8').exists()" },
+      "modeloLider": { ".validate": "!newData.child('8').exists()" },
+      "modeloClima": { ".validate": "!newData.child('8').exists()" }
+    },
+    "feedback_diretorio": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+    },
+    "feedback_diretorio_por_uid": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+      }
+    },
+    "feedback_feitos": {
+      "$periodo": {
+        "$uid": {
+          ".read": "auth != null && auth.uid == $uid",
+          "$alvo": {
+            ".write": "auth != null && auth.uid == $uid && !data.exists() && newData.val() == true",
+            ".validate": "newData.isBoolean()"
+          }
+        }
+      }
+    },
+    "feedback_respostas": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$periodo": {
+        "$key": {
+          ".write": "auth != null && !data.exists() && newData.exists() && root.child('feedback_config').child('ciclo').child('ativo').val() != false && root.child('feedback_diretorio_por_uid').child(auth.uid).val() != null && root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('tipo').val() == 'colaborador' && newData.child('avaliadoId').val() != root.child('feedback_diretorio_por_uid').child(auth.uid).val() && root.child('feedback_diretorio').child(newData.child('avaliadoId').val()).child('nome').exists() && ((newData.child('tipo').val() == 'par' && root.child('feedback_diretorio').child(newData.child('avaliadoId').val()).child('setorChave').val() == root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('setorChave').val() && root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('setorChave').val().length > 0 && root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('gestorKey').val() != newData.child('avaliadoId').val() && root.child('feedback_diretorio').child(newData.child('avaliadoId').val()).child('gestorKey').val() != root.child('feedback_diretorio_por_uid').child(auth.uid).val()) || (newData.child('tipo').val() == 'lider' && root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('gestorKey').val() == newData.child('avaliadoId').val())) && (newData.child('avaliadorId').val() == root.child('feedback_diretorio_por_uid').child(auth.uid).val() || (!newData.child('avaliadorId').exists() && root.child('feedback_config').child('ciclo').child('rhVeAutoria').val() == false)) && !root.child('feedback_feitos').child($periodo).child(auth.uid).child(newData.child('avaliadoId').val()).exists()",
+          ".validate": "newData.hasChildren(['tipo', 'avaliadoId', 'notas', 'criadoEm']) && newData.child('notas').hasChildren() && (newData.child('tipo').val() == 'par' || newData.child('tipo').val() == 'lider') && (!newData.child('comentario').exists() || (newData.child('comentario').isString() && newData.child('comentario').val().length <= 1000))",
+          "notas": { "$c": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5 && newData.val() % 1 == 0" } }
+        }
+      }
+    },
+    "feedback_participacao": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$periodo": {
+        "$col": {
+          ".write": "auth != null && root.child('feedback_diretorio_por_uid').child(auth.uid).val() == $col",
+          ".validate": "newData.hasChildren(['atualizadoEm'])"
+        }
+      }
+    },
+    "clima_respostas": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$periodo": {
+        "$key": {
+          ".write": "auth != null && !data.exists() && newData.exists() && root.child('feedback_config').child('ciclo').child('ativo').val() != false && root.child('feedback_diretorio_por_uid').child(auth.uid).val() != null && root.child('feedback_diretorio').child(root.child('feedback_diretorio_por_uid').child(auth.uid).val()).child('tipo').val() == 'colaborador' && (newData.child('colaboradorId').val() == root.child('feedback_diretorio_por_uid').child(auth.uid).val() || (!newData.child('colaboradorId').exists() && root.child('feedback_config').child('ciclo').child('rhVeAutoriaClima').val() == false)) && !root.child('feedback_feitos').child($periodo).child(auth.uid).child('_clima').exists()",
+          ".validate": "newData.hasChildren(['respostas', 'criadoEm']) && newData.child('respostas').hasChildren() && (!newData.child('recadoRh').exists() || (newData.child('recadoRh').isString() && newData.child('recadoRh').val().length <= 2000))",
+          "respostas": { "$q": { ".validate": "(newData.isNumber() && newData.val() >= 1 && newData.val() <= 5 && newData.val() % 1 == 0) || (newData.isString() && newData.val().length <= 1000)" } }
+        }
+      }
+    },
+    "clima_recados_lidos": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+    },
     "rearranjos_linhas": {
       ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'",
       ".write": false
