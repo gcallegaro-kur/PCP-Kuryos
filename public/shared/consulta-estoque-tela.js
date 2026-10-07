@@ -48,7 +48,8 @@
   /* ── Montagem dos dados ── */
   function recalcular() {
     if (!dados.estoque || !dados.materiais || !dados.lotes) return;
-    rows = CE.linhas({estoque: dados.estoque, materiais: dados.materiais, lotes: dados.lotes, incluirCatalogo: true});
+    rows = CE.linhas({estoque: dados.estoque, materiais: dados.materiais, lotes: dados.lotes, incluirCatalogo: true,
+      produtos: dados.produtos || {}, clientes: dados.clientes || {}});
     if (dados.ops && dados.produtos && dados.bom) {
       inter = CE.intermediarios({ops: dados.ops, estoque: dados.estoque, materiais: dados.materiais, bom: dados.bom, produtos: dados.produtos, materialProcesso: dados.mp || {}, bombonas: dados.bombonas || {}});
     }
@@ -415,5 +416,7 @@
   dbOnValue(db.ref('perdas'), function(s) { dados.perdas = s.val() || {}; recalcular(); });
   dbOnValue(db.ref('qualidade_intermediarios'), function(s) { dados.validacoes = s.val() || {}; recalcular(); });
   dbOnValue(db.ref('bombonas_bulk'), function(s) { dados.bombonas = s.val() || {}; recalcular(); });
+  // Cadastro de clientes: unifica o cliente do produto acabado com o dos materiais (06/10).
+  dbOnValue(db.ref('clientes'), function(s) { dados.clientes = s.val() || {}; recalcular(); });
   setInterval(function() { if (rows.length) { var c = el('resumoTxt'); if (c) renderTabela(); } }, 60000);
 })();

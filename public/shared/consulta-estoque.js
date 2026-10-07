@@ -249,7 +249,45 @@
     }
     // O nome do produto vem do lote (itemNome); o cliente também.
     out.forEach(function(r) { if (r.produto && r.lotes[0]) { r.nome = txt(r.lotes[0].nome) || r.nome; } });
+    unificarClientesDosProdutos(out, dados.produtos || {}, dados.clientes || {});
     return out;
+  }
+
+  /* Cliente do produto acabado na MESMA chave dos materiais (06/10). O palete
+     guarda só o nome digitado ("BIOFLORA INDUSTRIA E COMERCIO LTDA - EPP",
+     "MISS RÔSE"); o material guarda a chave do cadastro (porCliente/{chave}).
+     O filtro listava o mesmo cliente duas vezes e cada opção achava só metade.
+     Ordem: chave do cadastro do produto; nome igual (sem acento/caixa) no
+     cadastro de clientes; nome igual ao de algum dono de material. Sem nada
+     disso, fica o nome mesmo. */
+  function unificarClientesDosProdutos(rows, produtos, clientes) {
+    var porNome = {}, nomeDaChave = {};
+    Object.keys(clientes || {}).forEach(function(k) {
+      var c = clientes[k] || {};
+      var nome = txt(c.nome || c.nomeFantasia || c.razaoSocial);
+      if (nome) nomeDaChave[k] = nome;
+      [c.nome, c.nomeFantasia, c.razaoSocial].forEach(function(n) { if (txt(n)) porNome[norm(n)] = k; });
+    });
+    rows.forEach(function(r) {
+      if (r.produto) return;
+      Object.keys(r.porCliente).forEach(function(k) {
+        if (!porNome[norm(r.porCliente[k].nome)]) porNome[norm(r.porCliente[k].nome)] = k;
+        if (!nomeDaChave[k]) nomeDaChave[k] = r.porCliente[k].nome;
+      });
+    });
+    rows.forEach(function(r) {
+      if (!r.produto || !r.cliente) return;
+      var prod = produtos[r.codigo] || null;
+      var chave = txt(prod && prod.clienteKey) || porNome[norm(r.cliente)] || '';
+      if (!chave) return;
+      r.clienteKey = chave;
+      r.clientes = [chave];
+      // Produto acabado é sempre do cliente: a parte dele é o saldo inteiro.
+      r.porCliente = {};
+      r.porCliente[chave] = {nome: nomeDaChave[chave] || r.cliente, saldo: r.atual};
+      r.geral = 0;
+      r.busca += ' ' + norm(nomeDaChave[chave] || '');
+    });
   }
 
   /* ── Busca e filtros ──────────────────────────────────────────────── */
@@ -338,7 +376,8 @@
     var m = {};
     rows.forEach(function(r) {
       Object.keys(r.porCliente).forEach(function(k) { m[k] = r.porCliente[k].nome; });
-      if (r.produto && r.cliente) m[r.cliente] = r.cliente;
+      // Produto sem cliente reconhecido no cadastro: entra pelo nome.
+      if (r.produto && r.cliente && !r.clienteKey) m[r.cliente] = r.cliente;
     });
     return Object.keys(m).map(function(k) { return {chave: k, nome: m[k]}; })
       .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });

@@ -222,4 +222,27 @@ assert.equal(CE.diasAte('2026-10-02', HOJE), 1);
 assert.equal(CE.diasAte('2026-09-30', HOJE), -1);
 assert.equal(CE.diasAte('', HOJE), null);
 
+// ── Cliente do produto acabado na mesma chave dos materiais (06/10) ──
+// Antes: "BIOFLORA ... - EPP" e "MISS RÔSE" apareciam duas vezes no filtro e cada
+// opção achava só os materiais ou só o produto acabado.
+{
+  const estoqueC = {'EP-9': {materialCodigo: 'EP-9', materialNome: 'FRASCO', saldoAtual: 100,
+    porCliente: {BIOF: {saldoAtual: 100, clienteNome: 'BIOFLORA INDUSTRIA E COMERCIO LTDA - EPP'}, MISS: {saldoAtual: 0, clienteNome: 'MISS ROSE'}}}};
+  const lotesC = {
+    'PRF-BIOF-0002': {l1: {itemTipo: 'produto', itemCodigo: 'PRF-BIOF-0002', itemNome: 'PERFUME', cliente: 'BIOFLORA INDUSTRIA E COMERCIO LTDA - EPP', saldoLote: 500, status: 'LIBERADO'}},
+    'HDR-MISS-0004': {l2: {itemTipo: 'produto', itemCodigo: 'HDR-MISS-0004', itemNome: 'HIDRATANTE', cliente: 'MISS RÔSE', saldoLote: 300, status: 'LIBERADO'}},
+    'XPTO-1': {l3: {itemTipo: 'produto', itemCodigo: 'XPTO-1', itemNome: 'SEM CADASTRO', cliente: 'CLIENTE NOVO', saldoLote: 10, status: 'LIBERADO'}}
+  };
+  const rowsC = CE.linhas({estoque: estoqueC, materiais: {}, lotes: lotesC,
+    produtos: {'PRF-BIOF-0002': {sku: 'PRF-BIOF-0002', clienteKey: 'BIOF'}}, clientes: {MISS: {nome: 'MISS RÔSE'}}});
+  const cli = CE.clientesDoEstoque(rowsC);
+  assert.deepEqual(cli.map((c) => c.chave), ['BIOF', 'CLIENTE NOVO', 'MISS'], 'cada cliente uma vez: ' + JSON.stringify(cli));
+  assert.deepEqual(CE.filtrar(rowsC, {cliente: 'BIOF'}).map((r) => r.codigo).sort(), ['EP-9', 'PRF-BIOF-0002'], 'material e produto do mesmo cliente');
+  assert.deepEqual(CE.filtrar(rowsC, {cliente: 'MISS'}).map((r) => r.codigo).sort(), ['EP-9', 'HDR-MISS-0004'], 'MISS RÔSE do palete casa com MISS pelo cadastro');
+  assert.deepEqual(CE.filtrar(rowsC, {cliente: '__KURYOS'}).map((r) => r.codigo), [], 'produto acabado nunca é estoque geral');
+  const pa = rowsC.find((r) => r.codigo === 'PRF-BIOF-0002');
+  assert.equal(pa.porCliente.BIOF.saldo, 500);
+  assert.equal(pa.geral, 0);
+}
+
 console.log('OK Consulta de Estoque: linhas, busca, filtros, casamento bulk x embalagem e retidos.');

@@ -168,6 +168,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Consulta de Estoque: cliente duplicado no filtro (2026-10-06).** Causa: o
+  material guarda o dono pela chave do cadastro (`porCliente/{chave}`) e o palete de PA só o
+  nome digitado; `clientesDoEstoque` juntava os dois ("BIOF" e "BIOFLORA … - EPP", "MISS" e
+  "MISS RÔSE") e cada opção achava só metade. `consulta-estoque.js`
+  (`unificarClientesDosProdutos`): PA ganha a chave pelo `produtos/{sku}.clienteKey`, nome
+  igual no cadastro de clientes ou nome de dono de material; sem nada, segue pelo nome. Tela
+  carrega `clientes`. Base: 8 clientes viraram 6, nenhum PA sem chave. Teste em
+  `run_consulta_estoque_test.js`. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Compras: "Confirmar rota e enviar" para quem não é admin (2026-10-02).** Relato:
   PC nascido da cotação vem com `rota.statusConfirmacao` PENDENTE; só o Editar (admin,
   `podeEditarPC`) confirmava, e o analista não conseguia "Marcar Enviado" — o usuário
