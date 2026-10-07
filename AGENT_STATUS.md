@@ -190,6 +190,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **DADO CORRIGIDO — encerramento na OP errada (2026-10-07, autorizado).** Linha 1 encerrou a 26160/04 (perfume capilar, roda na Linha 2) com 1.872 às 08:47; era o fechamento do hidratante 26278/03 (total 1.872, 1.776 já lançados -> +96). `scripts/corrigir-encerramento-26160-04.js` (idempotente): registro movido para 26278/03 (+96, original guardado em `correcao`); 26160/04 de volta a Programado na Linha 2, sem envase/setup/rotulagem de hoje; 26278/03 envase 1.872, alocação fechada; pedido 0007 1.872->0, 0023__HDR-MISS-0007 +96; 16 baixas do perfume estornadas (13 saldo + 3 lotes WMS) e BOM do hidratante baixado para 96. Backup em `backups/correcao-op26160-04-encerramento-1791376099867.json`. **Achado pendente:** apontamentos da Flor Daura (26278/01-03, 5.451 un) estão somando no pedido 0023__HDR-MISS-0001 (Céu Infinito), não no HDR-MISS-0007. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Consulta de Estoque: cliente duplicado no filtro (2026-10-06).** Causa: o
   material guarda o dono pela chave do cadastro (`porCliente/{chave}`) e o palete de PA só o
   nome digitado; `clientesDoEstoque` juntava os dois ("BIOF" e "BIOFLORA … - EPP", "MISS" e
