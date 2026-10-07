@@ -6,7 +6,8 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const PERFIS = {
-  lider: {role: 'production', papel: {papel: 'LIDER', setores: ['Produção']}},
+  lider: {role: 'production', papel: {papel: 'LIDER', setores: ['Produção'], nome: 'Fulana Teste'},
+    setores: {s01: {nome: 'Produção', ordem: 1, ativo: true, areas: {a01: {nome: 'Linha 1', responsavel: 'Maria Souza'}, a02: {nome: 'Linha 2', responsavel: ''}}}, s02: {nome: 'Recepção', ordem: 2, ativo: true, areas: {}}}},
   auditor: {role: 'qualidade', papel: {papel: 'AUDITOR'}},
   admin: {role: 'admin', papel: null}
 };
@@ -19,6 +20,11 @@ function dados(perfil) {
     auditoria5s_config: {usuarios: p.papel ? {u1: p.papel} : {}, equipe: {p1: {nome: 'Maria Souza', setor: 'Produção'}}},
     auditorias_5s: {}, acoes_5s: {}, ciencia_5s: {}, ocorrencias_5s: {}
   };
+}
+function dadosComSetores(perfil) {
+  const d = dados(perfil);
+  if (PERFIS[perfil].setores) d.auditoria5s_config.setores = PERFIS[perfil].setores;
+  return d;
 }
 
 async function abrir(browser, pagina, perfil) {
@@ -76,7 +82,7 @@ async function abrir(browser, pagina, perfil) {
         return {ref: (p) => ref(p || '')};
       }
     };
-  }, {data: dados(perfil), atraso: atraso});
+  }, {data: dadosComSetores(perfil), atraso: atraso});
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'tr.test') return route.fulfill({body: '', contentType: 'text/javascript'});
@@ -109,7 +115,9 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     let painel = await page.locator('#conteudo').innerText();
     assert.match(painel, /Produção/);
     assert.match(painel, /não fez/, 'checklist de hoje ainda não feito');
-    assert.ok(!/Almoxarifado/.test(painel), 'o líder só vê o setor dele');
+    assert.ok(!/Recepção/.test(painel), 'o líder só vê o setor dele');
+    assert.match(painel, /Fulana Teste/, 'líder indicado do setor aparece no painel');
+    assert.match(painel, /Linha 1 · Linha 2/, 'áreas do setor aparecem no painel');
     assert.equal(await page.locator('[data-aba="config"]').count(), 0, 'configuração é do admin');
     await page.click('[data-ini="Produção"]');
     await page.waitForSelector('#it1');
@@ -129,9 +137,11 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     assert.match(erros, /Item 3 \(NC\): indique o responsável/);
     assert.match(erros, /Pergunta 9/);
     // preenche o NC
-    await page.fill('[data-c="local"][data-n="3"]', 'Posto 2, bancada');
+    assert.equal(await page.locator('#dlAreas option').count(), 2, 'áreas do setor como sugestão do local da falha');
+    await page.fill('[data-c="local"][data-n="3"]', 'Linha 1');
+    await page.press('[data-c="local"][data-n="3"]', 'Tab');
+    assert.equal(await page.locator('[data-c="responsavel"][data-n="3"]').inputValue(), 'Maria Souza', 'a área tem responsável: já vem sugerido');
     await page.fill('[data-c="acao"][data-n="3"]', 'Limpar a bancada agora');
-    await page.fill('[data-c="responsavel"][data-n="3"]', 'Maria Souza');
     await page.setInputFiles('[data-foto="3"] input[type=file]', {name: 'bancada.png', mimeType: 'image/png', buffer: PNG});
     // perguntas da seção B
     await page.click('[data-p="mutirao"] [data-v="SIM"]');
@@ -158,7 +168,7 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     // relatório
     const rel = await page.locator('#relPrint').innerText();
     assert.match(rel, /Checklist do líder — Produção/);
-    assert.match(rel, /VERDE/); assert.match(rel, /Posto 2, bancada/);
+    assert.match(rel, /VERDE/); assert.match(rel, /Linha 1/);
     assert.match(rel, /Consequência sugerida/i); assert.match(rel, /reconhecer o setor/);
     assert.match(rel, /assinado digitalmente/);
     assert.equal(await page.locator('#relPrint .fotos img').count(), 1);
@@ -230,7 +240,8 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     await page.click('#relFechar');
     // o auditor vê o painel de todos os setores e a lista de ocorrências
     await page.click('[data-aba="painel"]');
-    assert.match(await page.locator('#conteudo').innerText(), /Almoxarifado/);
+    assert.match(await page.locator('#conteudo').innerText(), /Recepção/);
+    assert.match(await page.locator('#conteudo').innerText(), /sem líder indicado/, 'setor sem líder aparece destacado');
     await page.click('[data-aba="ocorrencias"]');
     await page.waitForSelector('#oColab');
     await page.fill('#oColab', 'Maria Souza');
@@ -247,11 +258,11 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     await page.click('[data-aba="config"]');
     await page.waitForSelector('[data-salvar-u]');
     await page.selectOption('[data-papel="u2"]', 'LIDER');
-    await page.check('[data-setor-u="u2"][value="Almoxarifado"]');
+    await page.check('[data-setor-u="u2"][value="Recepção"]');
     await page.click('[data-salvar-u="u2"]');
     await page.waitForFunction(() => window.__db.auditoria5s_config.usuarios && window.__db.auditoria5s_config.usuarios.u2);
     d = await db(page);
-    assert.deepEqual([d.auditoria5s_config.usuarios.u2.papel, d.auditoria5s_config.usuarios.u2.setores], ['LIDER', ['Almoxarifado']]);
+    assert.deepEqual([d.auditoria5s_config.usuarios.u2.papel, d.auditoria5s_config.usuarios.u2.setores], ['LIDER', ['Recepção']]);
     await page.fill('#cVerde', '90'); await page.fill('#cAmarelo', '75'); await page.uncheck('#cTreino');
     await page.click('#cSalvarParam');
     await page.waitForFunction(() => window.__db.auditoria5s_config.modoTreinamento === false);
@@ -260,6 +271,23 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     await page.fill('#cEquipe', 'Maria Souza;Produção\nJoão Lima;Expedição');
     await page.click('#cSalvarEquipe');
     await page.waitForFunction(() => window.__db.auditoria5s_config.equipe && Object.keys(window.__db.auditoria5s_config.equipe).length === 2);
+    // Setores e áreas: o admin edita a lista inicial, indica o responsável da área e cria setor
+    assert.equal(await page.locator('[data-sa]').count(), 15, 'começa com a lista inicial');
+    await page.fill('[data-ar="0:0"]', 'Maria Souza');
+    await page.click('[data-aadd="8"]');                       // Expedição: nova área
+    await page.fill('[data-an="8:2"]', 'Portaria');
+    await page.click('#sAdd');
+    await page.fill('[data-sn="15"]', 'Doca Externa');
+    await page.uncheck('[data-sa="14"]');                       // Reciclagem desativada
+    await page.click('#sSalvar');
+    await page.waitForFunction(() => window.__db.auditoria5s_config.setores && Object.keys(window.__db.auditoria5s_config.setores).length === 16);
+    d = await db(page);
+    const st = d.auditoria5s_config.setores;
+    assert.equal(st.s01.nome, 'Produção');
+    assert.deepEqual(st.s01.areas.a01, {nome: 'Linha 1', responsavel: 'Maria Souza'});
+    assert.deepEqual(Object.values(st.s09.areas).map((x) => x.nome), ['Estoque', 'Doca', 'Portaria']);
+    assert.equal(st.s16.nome, 'Doca Externa');
+    assert.equal(st.s15.ativo, false, 'Reciclagem desativada, não apagada');
     assert.deepEqual(errors, [], 'erros (admin): ' + errors.join(' | '));
     await page.close();
   } finally {

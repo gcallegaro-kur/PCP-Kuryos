@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Auditoria 5S: setores e áreas editáveis (06/10/2026)
+
+- **Pedido:** setores/áreas editáveis, com responsável indicado. Lista inicial do usuário (Produção > Linhas 1-3; Manipulação > Manipulação e Estoque; Rotulagem > 1-3 e Estoque; Refeitório; Vestiários; Escritório; Estoque MUC; Recepção; Expedição > Estoque e Doca; Laboratório; Manutenção; Área de Lavagem; DML; Retenção; Reciclagem). Auditoria é por SETOR; área = local do NC + responsável da área.
+- **Código:** `Auditoria5S.setoresConfigurados`/`SETORES_PADRAO` (`public/shared/auditoria-5s.js`), editor em Configuração e líder indicado no Painel (`public/shared/auditoria-5s-tela.js`), nó `auditoria5s_config/setores`. Setor com auditoria não se apaga, só desativa (nome fixo; líderes mapeados por nome).
+
 ### Claude — Auditoria 5S (06/10/2026)
 
 - **Pedido:** a analista de Qualidade quer o checklist 5S no sistema (líder diário + auditoria cruzada sem aviso + inspeção da Diretoria). Decisões do usuário: ocorrências com responsável desde já (virarão advertência formal depois da fase de testes, com ciência dos colaboradores), líderes por setor via usuário/papel, assinatura digital, Qualidade e P&D se revezam e a Diretoria inspeciona sem aviso, sem aviso ao líder.

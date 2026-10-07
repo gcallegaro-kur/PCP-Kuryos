@@ -18,13 +18,22 @@
   function nomeUsuario() { var u = window.currentUser || {}; return u.nome || u.email || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Usuário'; }
   function toast(msg, erro) { var t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.textContent = msg; document.body.appendChild(t); setTimeout(function() { t.remove(); }, 6000); }
   function params() { var p = S.cfg.parametros || {}; return {verde: p.verde != null ? Number(p.verde) : A.PARAMETROS.verde, amarelo: p.amarelo != null ? Number(p.amarelo) : A.PARAMETROS.amarelo, auditoriasPorSemana: p.auditoriasPorSemana != null ? Number(p.auditoriasPorSemana) : A.PARAMETROS.auditoriasPorSemana}; }
+  /* Setores e áreas (editáveis em Configuração; sem configuração vale a lista inicial). */
+  function listaSetores() { return A.setoresConfigurados(S.cfg.setores); }
+  function nomesAtivos() { return listaSetores().filter(function(x) { return x.ativo; }).map(function(x) { return x.nome; }); }
+  function nomesTodos() { return listaSetores().map(function(x) { return x.nome; }); }
+  function areasDoSetor(nome) { var x = listaSetores().filter(function(y) { return y.nome === nome; })[0]; return x ? x.areas : []; }
+  function lideresNomes(setor) {
+    var u = S.cfg.usuarios || {};
+    return Object.keys(u).filter(function(k) { return u[k].papel === 'LIDER' && (u[k].setores || []).indexOf(setor) >= 0; }).map(function(k) { return u[k].nome || k; });
+  }
   function treinamento() { return S.cfg.modoTreinamento !== false; }   // padrão: fase de testes e treinamento
 
   /* ── Papéis ── */
   function ehAdmin() { return !!(window.currentUser && window.currentUser.role === 'admin'); }
   function cfgUsuario() { return ((S.cfg.usuarios || {})[S.uid]) || null; }
   function papel() { return ehAdmin() ? 'ADMIN' : (cfgUsuario() && cfgUsuario().papel) || null; }
-  function setoresDoUsuario() { var p = papel(); if (p === 'ADMIN' || p === 'AUDITOR' || p === 'DIRETORIA' || p === 'GESTAO') return A.SETORES.slice(); return ((cfgUsuario() || {}).setores || []).slice(); }
+  function setoresDoUsuario() { var p = papel(), ativos = nomesAtivos(); if (p === 'ADMIN' || p === 'AUDITOR' || p === 'DIRETORIA' || p === 'GESTAO') return ativos; return ((cfgUsuario() || {}).setores || []).filter(function(x) { return ativos.indexOf(x) >= 0; }); }
   function veTudo() { return ['ADMIN', 'AUDITOR', 'DIRETORIA', 'GESTAO'].indexOf(papel()) >= 0; }
   function podeVerOcorrencias() { return ['ADMIN', 'AUDITOR', 'DIRETORIA', 'GESTAO'].indexOf(papel()) >= 0 || (window.currentUser && window.currentUser.role === 'rh'); }
   function tiposPermitidos() {
@@ -85,19 +94,21 @@
     return out;
   }
   function renderPainel() {
-    var aud = auditoriasVisiveis(), cob = A.cobertura(aud, hoje(), params()), acoes = acoesAbertasPorSetor();
+    var aud = auditoriasVisiveis(), cob = A.cobertura(aud, hoje(), params(), nomesAtivos()), acoes = acoesAbertasPorSetor();
     var meus = setoresDoUsuario();
     var linhas = cob.filter(function(c) { return meus.indexOf(c.setor) >= 0; });
     var semLider = linhas.filter(function(c) { return !c.liderHoje; });
     var h = '';
     if (semLider.length) h += '<div class="aviso warn"><b>Checklist do líder de hoje ainda não feito:</b> ' + semLider.map(function(c) { return e(c.setor); }).join(', ') + '.</div>';
-    h += '<div class="card"><h2>Situação por setor <span class="dica" style="font-weight:400">· ' + dataBR(hoje()) + '</span></h2><div class="tw"><table><thead><tr><th>Setor</th><th>Líder hoje</th><th>Auditorias na semana</th><th>Última externa</th><th>Último resultado</th><th>Ações abertas</th><th></th></tr></thead><tbody>' +
+    h += '<div class="card"><h2>Situação por setor <span class="dica" style="font-weight:400">· ' + dataBR(hoje()) + '</span></h2><div class="tw"><table><thead><tr><th>Setor</th><th>Líder indicado</th><th>Checklist hoje</th><th>Auditorias na semana</th><th>Última externa</th><th>Último resultado</th><th>Ações abertas</th><th></th></tr></thead><tbody>' +
       linhas.map(function(c) {
         var a = acoes[c.setor] || {abertas: 0, atrasadas: 0};
         var ls = c.liderHoje ? '<span class="tg ok">✓ ' + e(c.turnosHoje.join(', ')) + ' turno</span>' : '<span class="tg bad">não fez</span>';
         var ex = c.externasSemana + '/' + c.metaSemana + (c.faltamSemana ? ' <span class="tg warn">faltam ' + c.faltamSemana + '</span>' : ' <span class="tg ok">ok</span>');
         var us = c.ultimoStatus ? '<span class="tg ' + (/VERDE/.test(c.ultimoStatus) ? 'ok' : /AMARELO/.test(c.ultimoStatus) ? 'warn' : 'bad') + '">' + e(c.ultimoStatus) + '</span>' : '<span class="mut">—</span>';
-        return '<tr><td><b>' + e(c.setor) + '</b></td><td>' + ls + '</td><td>' + ex + '</td><td>' + (c.ultimaExterna ? dataBR(c.ultimaExterna) : '<span class="mut">nunca</span>') + '</td><td>' + us + '</td><td>' + (a.abertas ? a.abertas + (a.atrasadas ? ' <span class="tg bad">' + a.atrasadas + ' atrasada(s)</span>' : '') : '<span class="mut">0</span>') + '</td><td>' +
+        var lids = lideresNomes(c.setor);
+        var areasTxt = areasDoSetor(c.setor).map(function(x) { return x.nome; }).join(' · ');
+        return '<tr><td><b>' + e(c.setor) + '</b>' + (areasTxt ? '<div class="dica">' + e(areasTxt) + '</div>' : '') + '</td><td>' + (lids.length ? e(lids.join(', ')) : '<span class="tg bad">sem líder indicado</span>') + '</td><td>' + ls + '</td><td>' + ex + '</td><td>' + (c.ultimaExterna ? dataBR(c.ultimaExterna) : '<span class="mut">nunca</span>') + '</td><td>' + us + '</td><td>' + (a.abertas ? a.abertas + (a.atrasadas ? ' <span class="tg bad">' + a.atrasadas + ' atrasada(s)</span>' : '') : '<span class="mut">0</span>') + '</td><td>' +
           (tiposPermitidos().length ? '<button type="button" class="btn sm pri" data-ini="' + e(c.setor) + '">Iniciar</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div></div>';
     var recentes = Object.keys(aud).map(function(k) { return Object.assign({id: k}, aud[k]); }).sort(function(x, y) { return String(y.fechadaEm).localeCompare(String(x.fechadaEm)); }).slice(0, 6);
@@ -174,7 +185,7 @@
       '<div class="resp" data-n="' + e(x.n) + '"><button type="button" class="C' + (r === 'C' ? ' on' : '') + '" data-r="C">C</button><button type="button" class="NC' + (r === 'NC' ? ' on' : '') + '" data-r="NC">NC</button>' + (crit ? '' : '<button type="button" class="NA' + (r === 'NA' ? ' on' : '') + '" data-r="NA">NA</button>') + '</div>';
     if (r === 'NC') {
       var ext = S.F.tipo !== 'LIDER';
-      h += '<div class="ncbox"><div><label class="t">Local / posto da falha *</label><input type="text" data-c="local" data-n="' + e(x.n) + '" value="' + e(d.local) + '"></div>' +
+      h += '<div class="ncbox"><div><label class="t">Local / posto da falha *</label><input type="text" list="dlAreas" placeholder="Área ou posto" data-c="local" data-n="' + e(x.n) + '" value="' + e(d.local) + '"></div>' +
         '<div><label class="t">Foto * (ao menos uma)</label><div data-foto="' + e(x.n) + '"></div></div>' +
         '<div><label class="t">Ação imediata *</label><input type="text" data-c="acao" data-n="' + e(x.n) + '" value="' + e(d.acao) + '"></div>' +
         '<div class="grid2"><div><label class="t">Responsável pela ação *</label><input type="text" list="dlEquipe" data-c="responsavel" data-n="' + e(x.n) + '" value="' + e(d.responsavel) + '"></div>' +
@@ -203,12 +214,14 @@
   }
   function datalistEquipe() {
     var eq = S.cfg.equipe || {}, nomes = Object.keys(eq).map(function(k) { return eq[k].nome; });
+    var us = S.cfg.usuarios || {}; Object.keys(us).forEach(function(k) { if (us[k].nome && nomes.indexOf(us[k].nome) < 0) nomes.push(us[k].nome); });
     return '<datalist id="dlEquipe">' + nomes.map(function(n) { return '<option value="' + e(n) + '">'; }).join('') + '</datalist>';
   }
   function ligarForm() {
     var F = S.F, c = el('conteudo');
-    c.insertAdjacentHTML('beforeend', datalistEquipe());
-    el('fSetor').onchange = function() { F.setor = this.value; atualizarAoVivo(); };
+    c.insertAdjacentHTML('beforeend', datalistEquipe() + '<datalist id="dlAreas"></datalist>');
+    atualizarAreas();
+    el('fSetor').onchange = function() { F.setor = this.value; atualizarAreas(); atualizarAoVivo(); };
     if (el('fTurno')) el('fTurno').onchange = function() { F.turno = this.value; };
     el('fData').onchange = function() { F.data = this.value; }; el('fHora').onchange = function() { F.horario = this.value; };
     var sup = el('segSurpresa'); if (sup) sup.querySelectorAll('button').forEach(function(b) { b.onclick = function() { F.surpresa = b.getAttribute('data-v') === '1'; sup.querySelectorAll('button').forEach(function(x) { x.classList.toggle('on', x === b); }); }; });
@@ -235,8 +248,23 @@
     // fotos dos itens já NC (ao redesenhar o formulário inteiro)
     Object.keys(F.itens).forEach(function(n) { if (F.itens[n].r === 'NC') montarFoto(n); });
   }
+  function atualizarAreas() {
+    var dl = el('dlAreas'); if (!dl || !S.F) return;
+    dl.innerHTML = areasDoSetor(S.F.setor).map(function(x) { return '<option value="' + e(x.nome) + '">'; }).join('');
+  }
   function ligarCamposItens(raiz) {
-    raiz.querySelectorAll('[data-c]').forEach(function(i) { var h = function() { S.F.itens[i.getAttribute('data-n')][i.getAttribute('data-c')] = i.value; }; i.oninput = h; i.onchange = h; });
+    raiz.querySelectorAll('[data-c]').forEach(function(i) {
+      var h = function() { S.F.itens[i.getAttribute('data-n')][i.getAttribute('data-c')] = i.value; };
+      i.oninput = h;
+      i.onchange = function() {
+        h();
+        // Escolheu uma área que tem responsável indicado: já sugere esse responsável pela ação.
+        if (i.getAttribute('data-c') !== 'local') return;
+        var n = i.getAttribute('data-n'), area = areasDoSetor(S.F.setor).filter(function(x) { return x.nome === i.value.trim(); })[0];
+        var campo = raiz.querySelector('[data-c="responsavel"][data-n="' + n + '"]');
+        if (area && area.responsavel && campo && !campo.value.trim()) { campo.value = area.responsavel; S.F.itens[n].responsavel = area.responsavel; }
+      };
+    });
   }
   function montarFoto(n) {
     var alvo = document.querySelector('[data-foto="' + n + '"]'); if (!alvo) return;
@@ -271,7 +299,7 @@
 
   function finalizar() {
     var F = S.F, a = audDoForm();
-    var erros = A.validar(a, {uid: S.uid, lideresDoSetor: lideresDoSetor(F.setor), fotosPendentes: fotosPendentes()});
+    var erros = A.validar(a, {uid: S.uid, lideresDoSetor: lideresDoSetor(F.setor), fotosPendentes: fotosPendentes(), setores: nomesAtivos()});
     var box = el('errosForm');
     if (erros.length) { box.innerHTML = '<div class="aviso bad"><b>Falta completar:</b><ul style="margin:6px 0 0;padding-left:18px">' + erros.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div>'; box.scrollIntoView({block: 'center'}); return; }
     var r = A.calcular(a, params());
@@ -327,7 +355,7 @@
     var f = S.filtroHist, aud = auditoriasVisiveis();
     var lista = Object.keys(aud).map(function(k) { return Object.assign({id: k}, aud[k]); }).filter(function(a) { return (!f.setor || a.setor === f.setor) && (!f.tipo || a.tipo === f.tipo); })
       .sort(function(x, y) { return String(y.fechadaEm).localeCompare(String(x.fechadaEm)); });
-    el('conteudo').innerHTML = '<div class="card"><div class="grid2" style="margin-bottom:10px"><div><label class="t">Setor</label><select id="hSetor"><option value="">Todos</option>' + setoresDoUsuario().map(function(s) { return '<option' + (f.setor === s ? ' selected' : '') + '>' + e(s) + '</option>'; }).join('') + '</select></div><div><label class="t">Tipo</label><select id="hTipo"><option value="">Todos</option>' + Object.keys(A.TIPOS).map(function(t) { return '<option value="' + t + '"' + (f.tipo === t ? ' selected' : '') + '>' + e(A.TIPOS[t].rotulo) + '</option>'; }).join('') + '</select></div></div>' +
+    el('conteudo').innerHTML = '<div class="card"><div class="grid2" style="margin-bottom:10px"><div><label class="t">Setor</label><select id="hSetor"><option value="">Todos</option>' + (veTudo() ? nomesTodos() : setoresDoUsuario()).map(function(s) { return '<option' + (f.setor === s ? ' selected' : '') + '>' + e(s) + '</option>'; }).join('') + '</select></div><div><label class="t">Tipo</label><select id="hTipo"><option value="">Todos</option>' + Object.keys(A.TIPOS).map(function(t) { return '<option value="' + t + '"' + (f.tipo === t ? ' selected' : '') + '>' + e(A.TIPOS[t].rotulo) + '</option>'; }).join('') + '</select></div></div>' +
       (lista.length ? '<div class="tw"><table><thead><tr><th>Setor</th><th>Quando</th><th>Resultado</th><th></th></tr></thead><tbody>' + lista.map(linhaHistorico).join('') + '</tbody></table></div>' : '<p class="dica">Nenhuma auditoria encontrada.</p>') + '</div>';
     el('hSetor').onchange = function() { S.filtroHist.setor = this.value; renderHistorico(); };
     el('hTipo').onchange = function() { S.filtroHist.tipo = this.value; renderHistorico(); };
@@ -435,6 +463,52 @@
     return achado || ('n_' + n.replace(/[^a-z0-9]/g, '_'));
   }
 
+  /* ── Setores e áreas (admin) ── */
+  function copiaSetores() { return listaSetores().map(function(x) { return {id: x.id, nome: x.nome, ativo: x.ativo, novo: false, areas: x.areas.map(function(a) { return {nome: a.nome, responsavel: a.responsavel}; })}; }); }
+  function editorSetoresHtml() {
+    if (!S.edSetores) S.edSetores = copiaSetores();
+    var h = '<div class="card"><h2>Setores e áreas</h2><p class="dica">Cada setor tem um <b>líder indicado</b> (definido em "Quem é quem") e as <b>áreas</b> dentro dele, cada uma com seu responsável. A área aparece como sugestão no local da falha e o responsável dela já vem preenchido na ação. Setor com auditoria registrada não se apaga: <b>desative</b>.</p>';
+    S.edSetores.forEach(function(x, i) {
+      var lids = lideresNomes(x.nome);
+      h += '<div class="item" style="margin-bottom:10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px">' + (x.novo ? '<input type="text" data-sn="' + i + '" value="' + e(x.nome) + '" placeholder="Nome do setor">' : '<b>' + e(x.nome) + '</b>') + '</div>' +
+        '<label style="display:inline-flex;gap:5px;font-size:13px"><input type="checkbox" data-sa="' + i + '"' + (x.ativo ? ' checked' : '') + '> ativo</label>' +
+        (x.novo ? '<button type="button" class="btn sm perigo" data-srem="' + i + '">Remover</button>' : '') + '</div>' +
+        '<div class="dica" style="margin:6px 0">Líder indicado: ' + (lids.length ? '<b>' + e(lids.join(', ')) + '</b>' : '<span class="tg bad">nenhum — defina em "Quem é quem"</span>') + '</div>';
+      x.areas.forEach(function(a, j) {
+        h += '<div class="grid2" style="margin-bottom:6px;grid-template-columns:1fr 1fr auto;align-items:end"><div><label class="t">Área</label><input type="text" data-an="' + i + ':' + j + '" value="' + e(a.nome) + '"></div><div><label class="t">Responsável da área</label><input type="text" list="dlEquipe" data-ar="' + i + ':' + j + '" value="' + e(a.responsavel) + '" placeholder="Quem responde por esta área"></div><button type="button" class="btn sm perigo" data-arem="' + i + ':' + j + '">Remover</button></div>';
+      });
+      h += '<button type="button" class="btn sm" data-aadd="' + i + '">+ Área</button></div>';
+    });
+    return h + '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn" id="sAdd">+ Novo setor</button><button type="button" class="btn pri" id="sSalvar">Salvar setores e áreas</button></div>' + datalistEquipe() + '</div>';
+  }
+  function lerEditorSetores() {
+    var c = el('conteudo');
+    c.querySelectorAll('[data-sn]').forEach(function(i) { S.edSetores[Number(i.getAttribute('data-sn'))].nome = i.value.trim(); });
+    c.querySelectorAll('[data-sa]').forEach(function(i) { S.edSetores[Number(i.getAttribute('data-sa'))].ativo = i.checked; });
+    c.querySelectorAll('[data-an]').forEach(function(i) { var p = i.getAttribute('data-an').split(':'); S.edSetores[Number(p[0])].areas[Number(p[1])].nome = i.value.trim(); });
+    c.querySelectorAll('[data-ar]').forEach(function(i) { var p = i.getAttribute('data-ar').split(':'); S.edSetores[Number(p[0])].areas[Number(p[1])].responsavel = i.value.trim(); });
+  }
+  function ligarEditorSetores() {
+    var c = el('conteudo');
+    c.querySelectorAll('[data-aadd]').forEach(function(b) { b.onclick = function() { lerEditorSetores(); S.edSetores[Number(b.getAttribute('data-aadd'))].areas.push({nome: '', responsavel: ''}); renderConfig(); }; });
+    c.querySelectorAll('[data-arem]').forEach(function(b) { b.onclick = function() { lerEditorSetores(); var p = b.getAttribute('data-arem').split(':'); S.edSetores[Number(p[0])].areas.splice(Number(p[1]), 1); renderConfig(); }; });
+    c.querySelectorAll('[data-srem]').forEach(function(b) { b.onclick = function() { lerEditorSetores(); S.edSetores.splice(Number(b.getAttribute('data-srem')), 1); renderConfig(); }; });
+    el('sAdd').onclick = function() { lerEditorSetores(); S.edSetores.push({id: null, nome: '', ativo: true, novo: true, areas: []}); renderConfig(); };
+    el('sSalvar').onclick = function() {
+      lerEditorSetores();
+      var nomes = S.edSetores.map(function(x) { return x.nome; });
+      if (nomes.some(function(n) { return !n; })) { toast('Todo setor precisa de nome.', true); return; }
+      if (nomes.some(function(n, i) { return nomes.indexOf(n) !== i; })) { toast('Há dois setores com o mesmo nome.', true); return; }
+      var obj = {};
+      S.edSetores.forEach(function(x, i) {
+        var areas = {}, k = 0;
+        x.areas.forEach(function(a) { if (!a.nome) return; k++; areas['a' + String(k).padStart(2, '0')] = {nome: a.nome, responsavel: a.responsavel || ''}; });
+        obj['s' + String(i + 1).padStart(2, '0')] = {nome: x.nome, ativo: x.ativo, ordem: i + 1, areas: areas};
+      });
+      db.ref('auditoria5s_config/setores').set(obj).then(function() { S.edSetores = null; toast('Setores e áreas salvos.'); }).catch(function(err) { toast(err.message, true); });
+    };
+  }
+
   /* ── Configuração (admin) ── */
   function renderConfig() {
     var us = S.usuarios || {}, cu = S.cfg.usuarios || {}, p = params();
@@ -448,9 +522,9 @@
     h += com.length ? '<div class="tw"><table><thead><tr><th>Usuário</th><th>Papel</th><th>Setores (líder)</th><th></th></tr></thead><tbody>' + com.map(function(k) {
       var c = cu[k] || {};
       return '<tr><td><b>' + e(us[k].nome || us[k].email || k) + '</b><div class="dica">' + e(us[k].email || '') + '</div></td><td><select data-papel="' + k + '"><option value="">—</option>' + [['LIDER', 'Líder de setor'], ['AUDITOR', 'Auditor (Qualidade/P&D)'], ['DIRETORIA', 'Diretoria'], ['GESTAO', 'Gestão']].map(function(o) { return '<option value="' + o[0] + '"' + (c.papel === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></td><td>' +
-        A.SETORES.map(function(s) { return '<label style="display:inline-flex;gap:4px;margin:0 10px 4px 0;font-size:12.5px"><input type="checkbox" data-setor-u="' + k + '" value="' + e(s) + '"' + ((c.setores || []).indexOf(s) >= 0 ? ' checked' : '') + '> ' + e(s) + '</label>'; }).join('') + '</td><td><button type="button" class="btn sm" data-salvar-u="' + k + '">Salvar</button></td></tr>';
+        nomesAtivos().map(function(s) { return '<label style="display:inline-flex;gap:4px;margin:0 10px 4px 0;font-size:12.5px"><input type="checkbox" data-setor-u="' + k + '" value="' + e(s) + '"' + ((c.setores || []).indexOf(s) >= 0 ? ' checked' : '') + '> ' + e(s) + '</label>'; }).join('') + '</td><td><button type="button" class="btn sm" data-salvar-u="' + k + '">Salvar</button></td></tr>';
     }).join('') + '</tbody></table></div>' : '<p class="dica">Nenhum usuário com o módulo marcado ainda.</p>';
-    h += '</div><div class="card"><h2>Equipe (para indicar responsáveis)</h2><p class="dica">Uma pessoa por linha: <b>Nome;Setor</b>. Aparece nas listas de responsável e de ocorrências.</p><textarea id="cEquipe" rows="6" placeholder="Maria Souza;Produção">' +
+    h += '</div>' + editorSetoresHtml() + '<div class="card"><h2>Equipe (para indicar responsáveis)</h2><p class="dica">Uma pessoa por linha: <b>Nome;Setor</b>. Aparece nas listas de responsável e de ocorrências.</p><textarea id="cEquipe" rows="6" placeholder="Maria Souza;Produção">' +
       e(Object.keys(S.cfg.equipe || {}).map(function(k) { return S.cfg.equipe[k].nome + ';' + (S.cfg.equipe[k].setor || ''); }).join('\n')) + '</textarea><div style="margin-top:8px"><button type="button" class="btn pri" id="cSalvarEquipe">Salvar equipe</button></div></div>';
     el('conteudo').innerHTML = h;
     el('cSalvarParam').onclick = function() {
@@ -467,6 +541,7 @@
         db.ref('auditoria5s_config/usuarios/' + k).set(obj).then(function() { toast('Salvo.'); }).catch(function(err) { toast(err.message, true); });
       };
     });
+    ligarEditorSetores();
     el('cSalvarEquipe').onclick = function() {
       var linhas = el('cEquipe').value.split('\n').map(function(l) { return l.trim(); }).filter(Boolean), obj = {};
       linhas.forEach(function(l, i) { var p = l.split(';'); var nome = (p[0] || '').trim(); if (!nome) return; obj['p' + (i + 1)] = {nome: nome, setor: (p[1] || '').trim()}; });

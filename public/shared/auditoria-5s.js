@@ -23,7 +23,27 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  var SETORES = ['Produção', 'Almoxarifado', 'Manutenção', 'Expedição', 'Qualidade', 'Escritório/Diretoria'];
+  /* Setores e áreas (decisão do usuário, 06/10): a lista abaixo é o ponto de partida; o administrador edita em
+     Configuração (auditoria5s_config/setores). A auditoria é por SETOR; as áreas são os locais dentro dele
+     (sugestão para o "local/posto" do NC e responsável da área). */
+  var SETORES_PADRAO = [
+    {nome: 'Produção', areas: ['Linha 1', 'Linha 2', 'Linha 3']},
+    {nome: 'Manipulação', areas: ['Manipulação', 'Estoque']},
+    {nome: 'Rotulagem', areas: ['Rotulagem 1', 'Rotulagem 2', 'Rotulagem 3', 'Estoque']},
+    {nome: 'Refeitório', areas: []},
+    {nome: 'Vestiários', areas: []},
+    {nome: 'Escritório', areas: []},
+    {nome: 'Estoque MUC (Material de Uso e Consumo)', areas: []},
+    {nome: 'Recepção', areas: []},
+    {nome: 'Expedição', areas: ['Estoque', 'Doca']},
+    {nome: 'Laboratório', areas: []},
+    {nome: 'Manutenção', areas: []},
+    {nome: 'Área de Lavagem', areas: []},
+    {nome: 'DML', areas: []},
+    {nome: 'Retenção', areas: []},
+    {nome: 'Reciclagem', areas: []}
+  ];
+  var SETORES = SETORES_PADRAO.map(function(s) { return s.nome; });
   var TURNOS = ['1º', '2º', '3º'];
   var TIPOS = {
     LIDER: {rotulo: 'Checklist do líder', surpresa: false},
@@ -87,6 +107,17 @@
   function norm(s) { return txt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
 
   /* Itens que valem para o modo (a ordem é a da tela). */
+  /* Lista de setores a usar: a da configuração (objeto do banco) ou a padrão. Cada um vem como
+     {nome, ativo, areas:[{nome, responsavel}]}; a ordem é a da configuração (campo `ordem`). */
+  function setoresConfigurados(cfgSetores) {
+    var chaves = cfgSetores && typeof cfgSetores === 'object' ? Object.keys(cfgSetores).filter(function(k) { return cfgSetores[k] && txt(cfgSetores[k].nome); }) : [];
+    if (!chaves.length) return SETORES_PADRAO.map(function(s) { return {id: null, nome: s.nome, ativo: true, areas: s.areas.map(function(a) { return {nome: a, responsavel: ''}; })}; });
+    return chaves.sort(function(a, b) { return (num(cfgSetores[a].ordem) - num(cfgSetores[b].ordem)) || String(cfgSetores[a].nome).localeCompare(String(cfgSetores[b].nome), 'pt-BR'); }).map(function(k) {
+      var s = cfgSetores[k], as = s.areas;
+      var lista = !as ? [] : (Array.isArray(as) ? as : Object.keys(as).sort().map(function(x) { return as[x]; }));
+      return {id: k, nome: txt(s.nome), ativo: s.ativo !== false, areas: lista.filter(function(a) { return a && txt(typeof a === 'string' ? a : a.nome); }).map(function(a) { return typeof a === 'string' ? {nome: txt(a), responsavel: ''} : {nome: txt(a.nome), responsavel: txt(a.responsavel)}; })};
+    });
+  }
   function itensDoTipo(tipo) {
     return tipo === 'LIDER' ? {principais: ITENS_LIDER, criticos: [], perguntas: PERGUNTAS_LIDER, conferencia: []}
       : {principais: ITENS_QUALIDADE, criticos: CRITICOS, perguntas: [], conferencia: CONFERENCIA};
@@ -122,7 +153,7 @@
   function validar(a, ctx) {
     var c = ctx || {}, erros = [], aud = a || {}, tipo = aud.tipo;
     if (!TIPOS[tipo]) return ['Tipo de auditoria inválido.'];
-    if (SETORES.indexOf(aud.setor) < 0) erros.push('Escolha o setor.');
+    if ((c.setores || SETORES).indexOf(aud.setor) < 0) erros.push('Escolha o setor.');
     if (!txt(aud.data)) erros.push('Informe a data.');
     if (tipo === 'LIDER' && TURNOS.indexOf(aud.turno) < 0) erros.push('Escolha o turno.');
     if (!txt(aud.horario)) erros.push('Informe o horário.');
@@ -278,7 +309,7 @@
   }
 
   return {
-    SETORES: SETORES, TURNOS: TURNOS, TIPOS: TIPOS, PARAMETROS: PARAMETROS, SENSOS: SENSOS, ESCADA: ESCADA, PRAZOS: PRAZOS,
+    SETORES: SETORES, SETORES_PADRAO: SETORES_PADRAO, setoresConfigurados: setoresConfigurados, TURNOS: TURNOS, TIPOS: TIPOS, PARAMETROS: PARAMETROS, SENSOS: SENSOS, ESCADA: ESCADA, PRAZOS: PRAZOS,
     ITENS_LIDER: ITENS_LIDER, PERGUNTAS_LIDER: PERGUNTAS_LIDER, ITENS_QUALIDADE: ITENS_QUALIDADE, CRITICOS: CRITICOS, CONFERENCIA: CONFERENCIA,
     itensDoTipo: itensDoTipo, ehCritico: ehCritico, fotosDe: fotosDe, validarItem: validarItem, validar: validar, calcular: calcular,
     acoesObrigatorias: acoesObrigatorias, consequencia: consequencia, linhaControle: linhaControle, escada: escada,

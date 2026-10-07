@@ -84,7 +84,7 @@ assert.ok(A.validar(qualidade({}, {conferencia: {v1: 'NAO', v2: 'SIM'}}), {}).so
 assert.ok(A.validar(qualidade({}, {liderPresente: ''}), {}).some((e) => /líder estava presente/.test(e)));
 // Auditor de fora do setor
 assert.ok(A.validar(qualidade(), {uid: 'u9', lideresDoSetor: ['u1', 'u9']}).some((e) => /de fora do setor/.test(e)), 'quem lidera o setor não o audita');
-assert.deepEqual(A.validar(qualidade({}, {setor: 'Qualidade'}), {uid: 'u2', lideresDoSetor: ['u1']}), [], 'a outra analista audita a Qualidade');
+assert.deepEqual(A.validar(qualidade({}, {setor: 'Laboratório'}), {uid: 'u2', lideresDoSetor: ['u1']}), [], 'a outra analista audita o Laboratório');
 
 // ── Ações obrigatórias: máx. 5, críticos primeiro com prazo "hoje" ──
 const muitos = {};
@@ -132,6 +132,25 @@ const prod = cob.find((c) => c.setor === 'Produção'), exp = cob.find((c) => c.
 assert.deepEqual([prod.liderHoje, prod.turnosHoje, prod.externasSemana, prod.faltamSemana], [1, ['1º'], 2, 0]);
 assert.equal(prod.ultimaExterna, '2026-10-07');
 assert.deepEqual([exp.liderHoje, exp.externasSemana, exp.faltamSemana, exp.ultimaExterna], [0, 0, 2, null], 'auditoria anulada não conta');
-assert.equal(cob.length, 6);
+assert.equal(cob.length, A.SETORES.length);
+assert.equal(A.SETORES.length, 15);
+
+// ── Setores e áreas (lista inicial do usuário, 06/10) e edição pelo administrador ──
+assert.deepEqual(A.SETORES, ['Produção', 'Manipulação', 'Rotulagem', 'Refeitório', 'Vestiários', 'Escritório', 'Estoque MUC (Material de Uso e Consumo)', 'Recepção', 'Expedição', 'Laboratório', 'Manutenção', 'Área de Lavagem', 'DML', 'Retenção', 'Reciclagem']);
+let cfgS = A.setoresConfigurados(null);
+assert.equal(cfgS.length, 15);
+assert.deepEqual(cfgS[0].areas.map((x) => x.nome), ['Linha 1', 'Linha 2', 'Linha 3']);
+assert.deepEqual(cfgS[2].areas.map((x) => x.nome), ['Rotulagem 1', 'Rotulagem 2', 'Rotulagem 3', 'Estoque']);
+assert.deepEqual(cfgS.find((x) => x.nome === 'Expedição').areas.map((x) => x.nome), ['Estoque', 'Doca']);
+assert.ok(cfgS.every((x) => x.ativo));
+// A configuração do banco (objetos com chave) substitui a lista; ordem pelo campo `ordem`; área com responsável
+cfgS = A.setoresConfigurados({s2: {nome: 'Doca Externa', ordem: 2, ativo: false, areas: {a1: {nome: 'Portão', responsavel: 'João'}}}, s1: {nome: 'Produção', ordem: 1, areas: {a2: {nome: 'Linha 2'}, a1: {nome: 'Linha 1', responsavel: 'Maria'}}}});
+assert.deepEqual(cfgS.map((x) => x.nome), ['Produção', 'Doca Externa']);
+assert.deepEqual(cfgS[0].areas, [{nome: 'Linha 1', responsavel: 'Maria'}, {nome: 'Linha 2', responsavel: ''}]);
+assert.equal(cfgS[1].ativo, false);
+assert.deepEqual(A.setoresConfigurados({}).length, 15, 'configuração vazia = lista inicial');
+// O setor escolhido precisa existir na lista em uso
+assert.ok(A.validar(qualidade({}, {setor: 'Doca Externa'}), {}).some((e) => /setor/.test(e)), 'fora da lista padrão');
+assert.deepEqual(A.validar(qualidade({}, {setor: 'Doca Externa'}), {setores: ['Doca Externa']}), [], 'na lista configurada vale');
 
 console.log('OK Auditoria 5S: % e status do líder e da Qualidade, críticos, validação do NC, ações, escada disciplinar (só sugestão) e cobertura.');
