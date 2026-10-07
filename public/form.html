@@ -1274,10 +1274,17 @@ function resumeLine(linha, state) {
   // linha, gravada em estado_linhas/{linha}/opAtual). Sem ela, o campo de OP
   // do apontamento volta a ser texto livre e o próximo lançamento pode ir sem
   // `lote` -- e sem lote NADA propaga pra ops/.
+  // `lote` NAO existe nesta funcao -- resumeLine(linha, state) recebe o lote
+  // dentro de `state`. A versao anterior referenciava `lote` solto e lancava
+  // ReferenceError ao MONTAR o argumento, antes de registrarEventoAuditoria
+  // ser chamada -- ou seja, o try/catch de dentro dela nao protegia nada, e a
+  // retomada inteira abortava: o operador clicava "Sim" e nada acontecia.
   registrarEventoAuditoria({
-    acao: 'RETOMAR_LINHA', lote: lote || null, linhaDe: linha,
-    motivo: 'parada de ' + duration + ' min encerrada',
-    origem: 'form.html/retomarProducao'
+    acao: 'RETOMAR_LINHA', lote: state.lote || null, linhaDe: linha,
+    produto: state.produto || null, pedidoKey: state.pedidoId || null,
+    motivo: 'parada de ' + duration + ' min encerrada' +
+      (state.motivoParada ? ' (' + state.motivoParada + ')' : ''),
+    origem: 'form.html/resumeLine'
   });
   var p2 = db.ref('estado_linhas/' + lineKey).update({
     status: 'ativa',
