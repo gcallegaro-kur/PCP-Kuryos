@@ -15,6 +15,7 @@
   <script src="shared/sequencia-setor.js"></script>
   <script src="shared/sequencia-setor-tela.js"></script>
   <script src="shared/ajuste-grade.js"></script>
+  <script src="shared/eventos-programacao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -717,6 +718,20 @@ var configTurnoFixoNome='';
 var configTurnosExtras={};
 var configCongelamentoDiasFixos=7;
 var pedidos={}; var allProdutos={}; var alocacoesCache={}; var opsCache={}; var lotesMemo={};
+
+/* Auditoria da programação (shared/eventos-programacao.js).
+   Quatro pontos desta tela mexem na linha/horário de uma OP e nenhum deixava
+   rastro: programar, arrastar, limpar bloco e limpar slot. Sem isso não há
+   como responder "quem tirou essa OP da linha?" -- e a resposta pode ser
+   "ninguém, foi o vínculo automático do servidor", que agora também se
+   registra. Best-effort por desenho: nunca derruba a gravação que já deu
+   certo, e a tela não espera por ele. */
+function registrarEventoProg(dados){
+  try{
+    if(typeof EventosProgramacao==='undefined')return;
+    EventosProgramacao.registrarComoUsuario(db,window.currentUser,dados);
+  }catch(e){ try{console.error('auditoria da programação:',e);}catch(_){} }
+}
 // Produto renomeado (troca de SKU em cadastros.html) -- um pedido em
 // aberto pode ter sido criado com o SKU antigo e ainda estar sendo
 // programado quando a troca acontece. Sem isso, allProdutos[sku] falhava
@@ -2129,7 +2144,32 @@ function onOpsGridMouseUp(e){
   if(erro){showToast(erro);renderOpsGrid();return;}
   if(!Object.keys(updates).length){renderOpsGrid();return;}
 
+  var trocouLinha=d.previewLinha!==d.origLinha;
+  var opArrastada=opsCache[d.opKey]||{};
   db.ref().update(updates).then(function(){
+    // Arrastar move UMA OP, mas pode empurrar outras em cadeia (`mudados`).
+    // Registra a arrastada com o detalhe, e as empurradas como consequência --
+    // sem isso, a auditoria mostraria OPs mudando de horário "sozinhas" e o
+    // admin cairia na mesma dúvida de novo.
+    registrarEventoProg({
+      acao:trocouLinha?'TROCAR_LINHA':'MOVER',
+      lote:opArrastada.lote||d.opKey, produto:opArrastada.produto||null,
+      linhaDe:configLinhas[d.origLinha-1]||null,
+      linhaPara:configLinhas[d.previewLinha-1]||null,
+      data:dateAtual,
+      motivo:d.mode==='move'?'arrastada na grade':'duração ajustada na grade',
+      origem:'planejamento.html/aplicarArrasto'
+    });
+    mudados.forEach(function(id){
+      if(id===d.opKey)return;
+      var o=opsCache[id]||{};
+      registrarEventoProg({
+        acao:'MOVER', lote:o.lote||id, produto:o.produto||null,
+        linhaPara:o.linha||null, data:dateAtual,
+        motivo:'empurrada em cadeia pelo arrasto da OP '+(opArrastada.lote||d.opKey),
+        origem:'planejamento.html/aplicarArrasto'
+      });
+    });
     showToast(d.previewLinha!==d.origLinha?'OP movida pra outra linha!':(d.mode==='move'?'OP reposicionada!':'Duração ajustada!'));
     renderOpsGrid();
   }).catch(function(err){
@@ -2229,8 +2269,21 @@ function wireGanttEvents(){
 function clearBlock(date,hours,linha,pedidoKey){
   var updates={};
   hours.forEach(function(h){updates['programacao/'+date+'/'+hKey(h)+'/env'+linha]=null;});
+  // Captura o que vai sumir ANTES de apagar -- depois do update o slot não
+  // existe mais e o log não teria o que registrar além de "algo foi apagado".
+  var slotAntes=(weekData[date]&&weekData[date][hours[0]])?weekData[date][hours[0]]['env'+linha]:null;
   db.ref().update(updates,function(e){
     if(e){showToast('Erro ao remover bloco.');return;}
+    registrarEventoProg({
+      acao:'TIRAR',
+      lote:(slotAntes&&slotAntes.lote)||null,
+      pedidoKey:pedidoKey||(slotAntes&&slotAntes.pedidoKey)||null,
+      produto:(slotAntes&&slotAntes.produto)||null,
+      linhaDe:configLinhas[linha-1]||('Linha '+linha),
+      data:date, hora:hours[0]||null, horas:hours.length,
+      motivo:'bloco de '+hours.length+'h removido da grade',
+      origem:'planejamento.html/clearBlock'
+    });
     showToast('Bloco removido ('+hours.length+'h)!');
     if(pedidoKey&&window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pedidoKey);
   });
@@ -2847,6 +2900,15 @@ function clearSlot(date,hora,linha){
   var totalAntes = pk ? getWeekTotalForPedido(pk) : 0;
   db.ref('programacao/'+date+'/'+hKey(hora)+'/env'+linha).remove(function(e){
     if(!e) {
+      registrarEventoProg({
+        acao:'TIRAR',
+        lote:(slot&&slot.lote)||null, pedidoKey:pk,
+        produto:(slot&&slot.produto)||null,
+        linhaDe:configLinhas[linha-1]||('Linha '+linha),
+        data:date, hora:hora, horas:1,
+        motivo:'slot de 1h limpo na grade',
+        origem:'planejamento.html/clearSlot'
+      });
       showToast('Slot limpo!');
       if (pk && window.updateOpStatusAutomatically) window.updateOpStatusAutomatically(pk);
       if (pk) reajustarMetaAposExclusao(pk, totalAntes, {date:date, hora:hora, linha:linha});
@@ -3030,7 +3092,21 @@ function confirmarProgOp(){
 
   var btn=document.getElementById('progOpConfirmBtn');
   btn.disabled=true;btn.textContent='Programando...';
+  var linhaAntes=op&&op.linha||null;
   db.ref().update(updates).then(function(){
+    // Auditoria: até aqui, pôr uma OP numa linha não deixava rastro nenhum --
+    // e é justamente o evento que o admin precisa para responder "quem
+    // colocou essa OP na Linha 1?". Best-effort: não entra no caminho de erro
+    // da gravação, que já aconteceu.
+    registrarEventoProg({
+      acao:linhaAntes&&linhaAntes!==linhaNome?'TROCAR_LINHA':'PROGRAMAR',
+      lote:(op&&op.lote)||progOpKey, pedidoKey:(op&&op.skuPedidoKey)||null,
+      produto:(op&&op.produto)||null,
+      linhaDe:linhaAntes, linhaPara:linhaNome,
+      data:dataStr, hora:horaIni, horas:duracao,
+      motivo:'programada pelo modal de Programar OP',
+      origem:'planejamento.html/confirmProgOp'
+    });
     btn.disabled=false;btn.textContent='📅 Programar';
     showToast('OP programada! Agora já dá pra ajustar arrastando na grade.');
     closeProgOpModal();

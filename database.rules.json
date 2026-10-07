@@ -348,6 +348,19 @@
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true))"
     },
+    "eventos_programacao": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'",
+      "$dia": {
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['acao','em','porUid'])",
+          "porUid": { ".validate": "newData.isString() && newData.val() == auth.uid" },
+          "acao": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "em": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "$outro": { ".validate": true }
+        }
+      }
+    },
     "alertas_pendentes": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('planejamento').val() == true))"

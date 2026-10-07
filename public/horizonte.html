@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/eventos-programacao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -1073,6 +1074,23 @@ function executarCongelamento(pedidoKey,weekIdx,linhaIdx,qtyAlvo){
         congeladoEm:new Date().toISOString(),
         congeladoPor:congeladoPor
       }).then(function(){
+        // Auditoria: esta página está FORA DO MENU mas continua gravando na
+        // grade (`programacao`) e em `alocacoes_planejamento`. Quem abre pela
+        // URL mexia na programação sem deixar rastro -- e é um dos caminhos
+        // que fazem uma OP "aparecer" numa linha. A alocação já guardava
+        // `congeladoPor`; o que faltava era o evento no log de auditoria.
+        try{
+          if(typeof EventosProgramacao!=='undefined'){
+            EventosProgramacao.registrarComoUsuario(db,window.currentUser,{
+              acao:'CONGELAR',
+              pedidoKey:pedidoKey, produto:p.produto||null,
+              linhaPara:linhaNome, data:toYMD(weekStart), horas:filled,
+              motivo:'congelou '+filled+'h na grade pelo Horizonte ('+fmtNum(qtdReal)+' un)'+
+                (filled<hoursNeeded?' — parcial, faltaram slots livres':''),
+              origem:'horizonte.html/congelar'
+            });
+          }
+        }catch(e){ try{console.error('auditoria da programação:',e);}catch(_){} }
         closeCongelarModal();
         if(filled<hoursNeeded){
           alert('Congelado parcialmente: só '+fmtNum(qtdReal)+' de '+fmtNum(qtyAlvo)+' un. por falta de slots livres na semana.');

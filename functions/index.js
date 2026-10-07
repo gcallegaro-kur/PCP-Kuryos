@@ -186,6 +186,12 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
   const alocacoes = snap.val() || {};
   let bestId = null;
   let vinculoPreciso = false;
+  // Guardado para a AUDITORIA: quando não há necessidadeCodigo, a alocação é
+  // escolhida pela capacidade restante mais PRÓXIMA da quantidade da OP --
+  // ou seja, por aproximação. `diffAceita` é o tamanho dessa aproximação, e
+  // é o que diferencia "casou certo" de "chutou" quando o admin for
+  // investigar por que a OP apareceu naquela linha.
+  let diffAceita = null;
 
   function capacidadeRestante(aloc) {
     return (aloc.qtd || 0) - (aloc.qtdConsumida || 0);
@@ -219,6 +225,7 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
       }
     }
     if (!bestId) return;
+    diffAceita = bestDiff;
   }
 
   const aloc = alocacoes[bestId];
@@ -239,6 +246,37 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
   // qual OP corresponde a cada hora (buildWeekLoteAssignment/exactLoteForSlot).
   // Best-effort: se der errado, a alocação já está vinculada, o pior caso é
   // a Grade continuar caindo no fallback de adivinhação pra essa semana.
+  // AUDITORIA do caminho automático. É este trecho que faz uma OP "aparecer
+  // numa linha sozinha": ninguém clicou -- o servidor casou a OP com uma
+  // alocação e herdou a linha DELA. Sem este registro não havia como provar
+  // isso depois, porque writeLoteIntoWeekSlots só logava em caso de FALHA.
+  // Best-effort: o vínculo já está gravado e não se desfaz por causa do log.
+  try {
+    const diaLocal = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    await db.ref("eventos_programacao/" + diaLocal).push({
+      acao: "VINCULO_AUTOMATICO",
+      lote: lote || null,
+      pedidoKey: skuPedidoKey || null,
+      produto: aloc.produto || null,
+      linhaDe: null,
+      linhaPara: aloc.linha || null,
+      data: aloc.semanaISO || null,
+      hora: null,
+      horas: null,
+      motivo: vinculoPreciso ?
+        "vinculo exato pelo necessidadeCodigo " + necessidadeCodigo + " (alocacao " + bestId + ")" :
+        "escolhida por APROXIMACAO de capacidade: sobra da alocacao " + bestId +
+          " difere " + Math.round(diffAceita) + " un da quantidade da OP (" + qtdPlanejada + " un)",
+      porUid: "sistema",
+      porNome: "Vinculo automatico (criarOP)",
+      papel: "sistema",
+      origem: "functions/index.js/linkAlocacaoToOP",
+      em: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("Falha ao registrar o vinculo automatico do lote " + lote + ":", e);
+  }
+
   try {
     await writeLoteIntoWeekSlots(skuPedidoKey, aloc.semanaISO, aloc.linha, lote, qtdPlanejada);
   } catch (e) {
