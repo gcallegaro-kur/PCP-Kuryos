@@ -5,6 +5,24 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Auditoria do apontamento: assinatura por LOGIN (07/10/2026)
+
+- **Pedido (correção de alvo):** "queria acompanhar muito mais os movimentos dentro da tela apontamentos, que hoje não vejo (quem preenche o que, efetivamente, com qual login, quem aloca op na linha, quem encerra)". A rodada anterior cobriu a programação/grade, que é outra coisa.
+- **O achado:** o apontamento gravava só `operador`, um nome **DIGITADO** (autocomplete de `config.operadores`, 2 nomes). `window.currentUser` aparecia em 6 lugares do `form.html` — consumo de estoque, perda, sobras e permissão — e em **nenhum** para assinar o apontamento. O sistema sabia quem a pessoa DISSE que era, não quem estava logado. `estado_linhas` não guardava autor. E **editar/excluir apontamento no `historico.html` não deixava rastro algum** — número que vira produzido do pedido, consumo de material e fechamento de OP.
+- **Assinatura (aditiva):** as 6 construções de registro em `form.html` + o payload de `turnosEncerrados` recebem `porUid/porNome/porEmail/papel` via `assinaturaApontamento()`. `operador` **não** é substituído: operador é quem rodou a máquina, login é quem registrou; a auditoria vale por comparar os dois.
+- **Eventos:** `APONTAR` (no único ponto por onde todo apontamento passa DEPOIS de gravar — a fila é offline-first e reprocessa), `APONTAR_EDITADO`, `APONTAR_EXCLUIDO` (com resumo do antes), `OP_NA_LINHA`, `PARAR_LINHA`, `RETOMAR_LINHA`, `ENCERRAR_TURNO`.
+- **Renomeado com o nó vazio:** `eventos_programacao` → `eventos_auditoria`; página `auditoria.html`, módulos `eventos-auditoria.js` / `auditoria-tela.js`, globais `EventosAuditoria` / `AuditoriaTela`.
+- **Publicado:** `0a5e577` (Hosting + regras + `criarOP`), 2026-10-07. Conferido no ar: conteúdo idêntico ao commit (comparando com CRLF normalizado — o git guarda LF e o disco tem CRLF, então o hash cru SEMPRE difere), `auditoria.html` chama `AuditoriaTela`, `form.html` tem 8 chamadas de assinatura, `eventos_auditoria.json` sem login = 401.
+- **Testes:** `run_eventos_auditoria_test.js` (76), `run_auditoria_ui_test.js` (30), `run_coerencia_modulos_test.js` (308, novo). Suíte: **146 passam**.
+- **Arquivos ativos:** nenhum.
+
+- **⚠⚠ O ONEDRIVE ATROPELOU ARQUIVOS DURANTE A EDIÇÃO.** Este repo mora dentro do OneDrive e, no meio desta sessão, ele sobrescreveu arquivos editados com versões antigas e salvou minhas alterações como cópias de conflito `public/*-gcallegaropc.html`. Resultado: `planejamento.html` e `horizonte.html` ficaram chamando o global ANTIGO (`EventosProgramacao`) e `auditoria.html` chamava `AuditoriaProgramacaoTela`, que não existe mais. **Com o padrão de guarda do repo (`if (typeof X === 'undefined') return;`) isso vira falha SILENCIOSA: nenhum erro, nenhum dado gravado, tela funcionando.** Corrigido, e agora há teste. Se você vir arquivos `*-gcallegaropc.*`, são lixo de conflito: confira e apague. O `firebase.json` passou a ignorá-los no hosting para que nunca vão ao ar.
+- **⚠ `run_coerencia_modulos_test.js` é a rede contra isso.** 308 verificações sobre o app inteiro: toda tag `<script src="shared/*.js">` existe, todo `typeof Nome` guardado corresponde a um global que algum módulo exporta, todo global usado é carregado. **Rode depois de qualquer renomeação de módulo.**
+- **⚠ Nunca `git add -A`, nem com pasta.** Usei `git add -A public/` e varri 4 cópias de conflito do OneDrive para dentro do commit; tive que desfazer com `git rm --cached` + amend.
+- **⚠ Ainda SEM rastro:** mudança de papel/módulo em `usuarios.html`, as ~55 exclusões nas outras telas, e edição de cadastro de produto/cliente/fornecedor.
+- **⚠ Dois testes já falhavam antes** (conferido com `git stash` no HEAD limpo): `run_operacao_ui_test.js` e `run_portao_bulk_ui_test.js`. Outros dois exigem ambiente: `run_devolucao_cliente_server_test.js` (emulador) e `run_etiquetas_leitura_test.js` (`@zxing/library`).
+- **⚠ Deploy de Functions:** use `firebase-tools@latest` (versão fixa antiga recusa o runtime Node 24) e **do próprio repo**, não de worktree — o CLI precisa de `functions/node_modules`, que está no `.gitignore`.
+
 ### Claude — Auditoria da Programação (07/10/2026)
 
 - **Pedido:** "quero ver esse tipo de movimentação, o que/quem tirou uma op de linha, encerrou, ajustou programação", a partir do caso "a OP x apareceu na linha 1 sozinha — quem colocou, ou foi sozinho?". Só `admin` vê.
