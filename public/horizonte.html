@@ -10,7 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
-  <script src="shared/eventos-programacao.js"></script>
+  <script src="shared/eventos-auditoria.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -1080,8 +1080,8 @@ function executarCongelamento(pedidoKey,weekIdx,linhaIdx,qtyAlvo){
         // que fazem uma OP "aparecer" numa linha. A alocação já guardava
         // `congeladoPor`; o que faltava era o evento no log de auditoria.
         try{
-          if(typeof EventosProgramacao!=='undefined'){
-            EventosProgramacao.registrarComoUsuario(db,window.currentUser,{
+          if(typeof EventosAuditoria!=='undefined'){
+            EventosAuditoria.registrarComoUsuario(db,window.currentUser,{
               acao:'CONGELAR',
               pedidoKey:pedidoKey, produto:p.produto||null,
               linhaPara:linhaNome, data:toYMD(weekStart), horas:filled,

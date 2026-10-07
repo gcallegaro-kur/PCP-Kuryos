@@ -253,7 +253,7 @@ async function linkAlocacaoToOP(skuPedidoKey, lote, qtdPlanejada, necessidadeCod
   // Best-effort: o vínculo já está gravado e não se desfaz por causa do log.
   try {
     const diaLocal = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
-    await db.ref("eventos_programacao/" + diaLocal).push({
+    await db.ref("eventos_auditoria/" + diaLocal).push({
       acao: "VINCULO_AUTOMATICO",
       lote: lote || null,
       pedidoKey: skuPedidoKey || null,

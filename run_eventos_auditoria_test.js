@@ -1,10 +1,10 @@
 'use strict';
-/* Testes do log de eventos de programação (public/shared/eventos-programacao.js).
+/* Testes do log de eventos de programação (public/shared/eventos-auditoria.js).
    Foco no que faz um log de auditoria mentir: evento sem autor, instante que
    cai no dia errado, ação inventada, e o log derrubando a operação que ele
    deveria só refletir. */
 const assert = require('node:assert/strict');
-const E = require('./public/shared/eventos-programacao');
+const E = require('./public/shared/eventos-auditoria');
 
 let n = 0;
 const eq = (a, b, m) => { n++; assert.equal(a, b, m); };
@@ -58,6 +58,48 @@ eq(auto, 'A OP 26273/03 foi posta na linha pelo sistema (Linha 1).', 'vínculo a
 ok(!/Alguém|undefined/.test(auto), 'e não inventa autor');
 eq(E.descrever({ acao: 'PROGRAMAR', lote: '1' }).startsWith('Alguém'), true, 'sem nome, diz "Alguém" em vez de undefined');
 ok(!/undefined|null/.test(E.descrever({ acao: 'MOVER' })), 'evento quase vazio não vaza undefined na frase');
+
+// ── Apontamento: o LOGIN ao lado do nome DIGITADO ──────────────────────────
+// É a razão de ser desta parte. Até 07/10/2026 o apontamento gravava só o
+// nome digitado no campo "operador" (autocomplete com 2 nomes em
+// config.operadores) e nenhum vínculo com a conta que gravou -- então não
+// havia como saber quem registrou a produção, só quem a pessoa disse que era.
+const ap = E.descrever({ acao: 'APONTAR', porNome: 'Robert', porUid: 'u1', lote: '26273/03',
+  quantidade: 800, linhaPara: 'Linha 1', operadorDigitado: 'Luana', turno: 'Padrao' });
+eq(ap, 'Robert apontou 800 un da OP 26273/03 na Linha 1, informando Luana como operador (turno Padrao).',
+  'quando login e operador DIFEREM, a frase mostra os dois');
+const apIgual = E.descrever({ acao: 'APONTAR', porNome: 'Luana', porUid: 'u2', lote: '26273/03',
+  quantidade: 500, linhaPara: 'Linha 2', operadorDigitado: 'Luana' });
+ok(!/informando/.test(apIgual), 'quando são a mesma pessoa, não repete o nome');
+ok(!/de a |de da |o a /.test(ap + apIgual), 'sem contração quebrada ("de a OP")');
+
+eq(E.descrever({ acao: 'APONTAR_EXCLUIDO', porNome: 'Gustavo', lote: '26273/03', antes: '800 un em 07/10 08:00' }),
+  'Gustavo EXCLUIU o apontamento da OP 26273/03 (era: 800 un em 07/10 08:00).',
+  'exclusão diz o que havia antes — é o único registro que sobra do apagado');
+eq(E.descrever({ acao: 'APONTAR_EDITADO', porNome: 'Gustavo', lote: '26273/03', antes: '800 un', depois: '760 un' }),
+  'Gustavo editou o apontamento da OP 26273/03: 800 un → 760 un.',
+  'edição mostra antes e depois');
+eq(E.descrever({ acao: 'OP_NA_LINHA', porNome: 'Robert', lote: '26273/03', linhaPara: 'Linha 1' }),
+  'Robert colocou a OP 26273/03 na Linha 1.', 'quem pôs a OP na linha no chão de fábrica');
+eq(E.descrever({ acao: 'PARAR_LINHA', porNome: 'Robert', lote: '26273/03', linhaDe: 'Linha 1', motivo: 'Falta de Material' }),
+  'Robert parou a Linha 1 (OP 26273/03) — Falta de Material.', 'parada traz o motivo');
+eq(E.descrever({ acao: 'RETOMAR_LINHA', porNome: 'Robert', linhaDe: 'Linha 1' }),
+  'Robert retomou a Linha 1.', 'retomada sem OP não inventa alvo');
+eq(E.descrever({ acao: 'ENCERRAR_TURNO', porNome: 'Robert', turno: 'Padrao', linhaDe: 'Linha 1' }),
+  'Robert encerrou o turno Padrao na Linha 1.', 'encerramento de turno');
+// Pedido é masculino, OP é feminino -- o artigo acompanha
+ok(/o pedido 0019/.test(E.descrever({ acao: 'TIRAR', porNome: 'Ana', pedidoKey: '0019__GLMKAM01' })),
+  'pedido usa artigo masculino');
+ok(/a OP 1/.test(E.descrever({ acao: 'TIRAR', porNome: 'Ana', lote: '1' })), 'OP usa artigo feminino');
+
+// Os campos de apontamento sobrevivem ao montar()
+const regAp = E.montar({ acao: 'APONTAR', porUid: 'u1', quantidade: 800, turno: 'Padrao',
+  operadorDigitado: 'Luana', registroId: '-Nx1', lote: '26273/03' }).registro;
+eq(regAp.quantidade, 800, 'quantidade preservada');
+eq(regAp.operadorDigitado, 'Luana', 'nome digitado preservado ao lado do login');
+eq(regAp.registroId, '-Nx1', 'id do registro preservado — é o que liga o evento ao apontamento');
+eq(regAp.turno, 'Padrao', 'turno preservado');
+eq(E.montar({ acao: 'APONTAR', porUid: 'u1' }).registro.quantidade, null, 'quantidade ausente é null, não 0');
 
 // ── registrar: best-effort, nunca derruba a operação ───────────────────────
 const dbOk = { ref: () => ({ push: () => Promise.resolve({ key: 'k1' }) }) };

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manual — Auditoria da Programação</title>
+  <title>Manual — Auditoria do Sistema</title>
   <link rel="stylesheet" href="shared/manual.css">
 </head>
 <body>
@@ -12,15 +12,16 @@
 
   <div class="header">
     <img src="kuryos-logo.svg" alt="Kuryos">
-    <h1>Auditoria da Programação</h1>
+    <h1>Auditoria do Sistema</h1>
     <p>Administrador — ADM › Auditoria</p>
   </div>
 
   <div class="intro-box">
-    <strong>Para que serve.</strong> Responder a perguntas do tipo <b>"quem tirou essa OP da
-    Linha 1?"</b> e <b>"essa OP apareceu na linha sozinha mesmo?"</b>. A tela mostra, em ordem
-    de tempo, quem mexeu na linha ou no horário de uma OP — e também o que o <b>servidor</b> fez
-    sem ninguém pedir.
+    <strong>Para que serve.</strong> Responder a perguntas do tipo <b>"quem apontou essa
+    produção, com qual login?"</b>, <b>"quem tirou essa OP da Linha 1?"</b>, <b>"quem excluiu
+    esse apontamento?"</b> e <b>"essa OP apareceu na linha sozinha mesmo?"</b>. A tela mostra,
+    em ordem de tempo, quem mexeu no apontamento e na programação — e também o que o
+    <b>servidor</b> fez sem ninguém pedir.
   </div>
 
   <h2>O que a tela registra</h2>
@@ -34,8 +35,28 @@
       <tr><td><b>CONGELAR</b></td><td>O Horizonte congelou horas na grade para um pedido.</td></tr>
       <tr><td><b>VINCULO_AUTOMATICO</b></td><td><b>O servidor</b> pôs a OP numa linha. Ver a seção abaixo.</td></tr>
       <tr><td><b>ENCERRAR</b></td><td>Etapa (envase/rotulagem) confirmada pelo PCP.</td></tr>
+      <tr><td><b>APONTAR</b></td><td>Produção registrada no apontamento. Mostra a quantidade, a linha, o turno, <b>o login que gravou</b> e o nome informado no campo “operador”.</td></tr>
+      <tr><td><b>APONTAR_EDITADO</b></td><td>Apontamento alterado depois, no Histórico. Mostra o que era e o que mudou.</td></tr>
+      <tr><td><b>APONTAR_EXCLUIDO</b></td><td>Apontamento apagado. O resumo do que havia fica aqui — é o único vestígio que sobra.</td></tr>
+      <tr><td><b>OP_NA_LINHA</b></td><td>No chão de fábrica, alguém passou a apontar outra OP naquela linha. Diferente da alocação da grade, que é planejamento.</td></tr>
+      <tr><td><b>PARAR_LINHA</b> / <b>RETOMAR_LINHA</b></td><td>Linha parada (com o motivo) e retomada.</td></tr>
+      <tr><td><b>ENCERRAR_TURNO</b></td><td>Turno ou intervalo fechado, com quantos itens e eventual justificativa de atraso.</td></tr>
     </tbody>
   </table>
+
+  <h2>“Operador” e “login” são duas coisas, e as duas aparecem</h2>
+  <p>
+    No apontamento, o campo <b>operador</b> é um nome <b>digitado</b> — escolhido numa lista. Ele
+    diz quem rodou a máquina. O <b>login</b> é a conta que gravou o registro, e pode ser outra
+    pessoa: o líder apontando pelo time, por exemplo.
+  </p>
+  <div class="aviso">
+    <strong>Até 07/10/2026 o sistema guardava só o nome digitado.</strong> Não havia nenhum
+    vínculo com a conta que registrou — ou seja, sabia-se quem a pessoa <em>disse</em> que era,
+    não quem estava logado. Agora os dois são gravados, e a frase do evento mostra os dois quando
+    eles diferem: <em>“Robert apontou 800 un da OP 26273/03 na Linha 1, informando Luana como
+    operador”</em>. Quando são a mesma pessoa, o nome não se repete.
+  </div>
 
   <h2>“A OP apareceu na linha sozinha” — normalmente é verdade</h2>
   <p>
@@ -79,7 +100,7 @@
 
   <h2>O que esta tela NÃO mostra</h2>
   <ul>
-    <li><b>Apontamento</b> (quantidade, paradas, turnos): isso está em Histórico de Apontamentos e no Dossiê do Lote.</li>
+    <li><b>A lista completa de apontamentos</b> com seus números: continua no Histórico de Apontamentos e no Dossiê do Lote. Aqui o foco é <em>quem fez</em>, não o relatório de produção.</li>
     <li><b>Movimentação de estoque</b>: está no Kardex e no Dossiê do Lote.</li>
     <li><b>Mudança de permissão de usuário</b>: ainda não é registrada em lugar nenhum.</li>
     <li><b>Edição de cadastro</b> de produto, cliente ou fornecedor. Material tem histórico próprio, na tela de Cadastros.</li>

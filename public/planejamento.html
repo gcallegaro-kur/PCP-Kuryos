@@ -15,7 +15,7 @@
   <script src="shared/sequencia-setor.js"></script>
   <script src="shared/sequencia-setor-tela.js"></script>
   <script src="shared/ajuste-grade.js"></script>
-  <script src="shared/eventos-programacao.js"></script>
+  <script src="shared/eventos-auditoria.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -719,7 +719,7 @@ var configTurnosExtras={};
 var configCongelamentoDiasFixos=7;
 var pedidos={}; var allProdutos={}; var alocacoesCache={}; var opsCache={}; var lotesMemo={};
 
-/* Auditoria da programação (shared/eventos-programacao.js).
+/* Auditoria da programação (shared/eventos-auditoria.js).
    Quatro pontos desta tela mexem na linha/horário de uma OP e nenhum deixava
    rastro: programar, arrastar, limpar bloco e limpar slot. Sem isso não há
    como responder "quem tirou essa OP da linha?" -- e a resposta pode ser
@@ -728,8 +728,8 @@ var pedidos={}; var allProdutos={}; var alocacoesCache={}; var opsCache={}; var 
    certo, e a tela não espera por ele. */
 function registrarEventoProg(dados){
   try{
-    if(typeof EventosProgramacao==='undefined')return;
-    EventosProgramacao.registrarComoUsuario(db,window.currentUser,dados);
+    if(typeof EventosAuditoria==='undefined')return;
+    EventosAuditoria.registrarComoUsuario(db,window.currentUser,dados);
   }catch(e){ try{console.error('auditoria da programação:',e);}catch(_){} }
 }
 // Produto renomeado (troca de SKU em cadastros.html) -- um pedido em

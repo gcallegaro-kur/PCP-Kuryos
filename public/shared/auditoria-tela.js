@@ -1,8 +1,8 @@
-/* Tela da Auditoria da Programação (auditoria_programacao.html).
-   A lógica de juntar/filtrar/descrever vive em shared/eventos-programacao.js
+/* Tela da Auditoria do Sistema (auditoria.html).
+   A lógica de juntar/filtrar/descrever vive em shared/eventos-auditoria.js
    (puro, testado). Aqui só há leitura de banco e HTML.
 
-   Por que lê DIA A DIA e não o nó inteiro: `eventos_programacao` é um log e
+   Por que lê DIA A DIA e não o nó inteiro: `eventos_auditoria` é um log e
    cresce para sempre. Ler a árvore toda a cada abertura baixaria o histórico
    completo -- é o mesmo motivo pelo qual o kardex lê
    `movimentos_estoque/{itemKey}` e não a árvore inteira. Aqui o balde é o
@@ -13,7 +13,7 @@
    abertura lenta para quem só quer ver quem mexeu na grade hoje. */
 (function(root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.AuditoriaProgramacaoTela = factory();
+  else root.AuditoriaTela = factory();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
@@ -58,10 +58,10 @@
 
   function montarSelects() {
     var selAcao = el('fAcao');
-    Object.keys(EventosProgramacao.ACOES).forEach(function(a) {
+    Object.keys(EventosAuditoria.ACOES).forEach(function(a) {
       var o = document.createElement('option');
       o.value = a;
-      o.textContent = (EventosProgramacao.ROTULOS[a] || a).replace(/^./, function(c) { return c.toUpperCase(); });
+      o.textContent = (EventosAuditoria.ROTULOS[a] || a).replace(/^./, function(c) { return c.toUpperCase(); });
       selAcao.appendChild(o);
     });
     db.ref('config/linhas').once('value').then(function(s) {
@@ -77,7 +77,7 @@
 
   function lerEventos(dias) {
     return Promise.all(dias.map(function(dia) {
-      return db.ref(EventosProgramacao.NO + '/' + dia).once('value')
+      return db.ref(EventosAuditoria.NO + '/' + dia).once('value')
         .then(function(s) { return { dia: dia, val: s.val() || {} }; })
         .catch(function() { return { dia: dia, val: {} }; });
     })).then(function(partes) {
@@ -112,11 +112,11 @@
     ];
 
     Promise.all(tarefas).then(function(r) {
-      var tempo = EventosProgramacao.linhaDoTempo({ eventos: r[0], rearranjos: r[1], ops: r[2] });
+      var tempo = EventosAuditoria.linhaDoTempo({ eventos: r[0], rearranjos: r[1], ops: r[2] });
       // O recorte de período vale para TODAS as fontes: rearranjos e OPs são
       // lidos inteiros (não têm balde por dia), então sem este filtro a tela
       // mostraria eventos fora da janela que o admin pediu.
-      var filtrado = EventosProgramacao.filtrar(tempo, {
+      var filtrado = EventosAuditoria.filtrar(tempo, {
         de: de, ate: ate,
         acao: el('fAcao').value || null,
         linha: el('fLinha').value || null,
@@ -131,7 +131,7 @@
 
   function render(eventos, ctx) {
     var doSistema = eventos.filter(function(e) { return e.porUid === 'sistema'; }).length;
-    var tirados = eventos.filter(function(e) { return e.acao === EventosProgramacao.ACOES.TIRAR; }).length;
+    var tirados = eventos.filter(function(e) { return e.acao === EventosAuditoria.ACOES.TIRAR; }).length;
     var pessoas = {};
     eventos.forEach(function(e) { if (e.porNome && e.porUid !== 'sistema') pessoas[e.porNome] = 1; });
 
@@ -165,7 +165,7 @@
 
     var corte = eventos.slice(0, MAX_LINHAS);
     lista.innerHTML = corte.map(function(e) {
-      var frase = EventosProgramacao.descrever(e);
+      var frase = EventosAuditoria.descrever(e);
       var meta = [];
       if (e.porNome && e.porUid !== 'sistema') meta.push(esc(e.porNome) + (e.papel ? ' (' + esc(e.papel) + ')' : ''));
       if (e.motivo) meta.push(esc(e.motivo));

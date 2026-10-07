@@ -1,5 +1,5 @@
 'use strict';
-/* Testes da tela de Auditoria da Programação.
+/* Testes da tela de Auditoria do Sistema.
    O módulo da tela toca DOM, então aqui testo o que dá para isolar (a janela
    de dias, que é o que define quantas leituras a tela faz) e exercito
    `iniciar` com um DOM de mentira, procurando o que costuma quebrar:
@@ -9,8 +9,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const Tela = require('./public/shared/auditoria-programacao-tela');
-const E = require('./public/shared/eventos-programacao');
+const Tela = require('./public/shared/auditoria-tela');
+const E = require('./public/shared/eventos-auditoria');
 
 let n = 0;
 const eq = (a, b, m) => { n++; assert.equal(a, b, m); };
@@ -31,9 +31,9 @@ eq(Tela.diasEntre('2026-10-30', '2026-11-02').length, 4, 'atravessa a virada de 
 eq(Tela.diasEntre('2026-12-30', '2027-01-02').length, 4, 'atravessa a virada de ano');
 
 // ── a página declara o módulo e os scripts certos ──────────────────────────
-const html = fs.readFileSync(path.join(__dirname, 'public/auditoria_programacao.html'), 'utf8');
-ok(/shared\/eventos-programacao\.js/.test(html), 'a página carrega o motor do log');
-ok(/shared\/auditoria-programacao-tela\.js/.test(html), 'e o módulo da tela');
+const html = fs.readFileSync(path.join(__dirname, 'public/auditoria.html'), 'utf8');
+ok(/shared\/eventos-auditoria\.js/.test(html), 'a página carrega o motor do log');
+ok(/shared\/auditoria-tela\.js/.test(html), 'e o módulo da tela');
 ok(/auth_check\.js/.test(html), 'e o auth_check, que é quem barra o acesso');
 ok(/kuryosDatabaseURL/.test(html), 'usa o helper de URL do banco, igual às outras telas (emulador local)');
 // Chave inventada é erro clássico de página nova: tem que ser a MESMA do resto
@@ -45,8 +45,8 @@ eq(chaveDaPagina, chaveReal, 'o firebaseConfig é o mesmo das outras páginas, n
 // ── o módulo está registrado nas cinco pontas ──────────────────────────────
 const authCheck = fs.readFileSync(path.join(__dirname, 'public/auth_check.js'), 'utf8');
 ok(/auditoria:\s*\{/.test(authCheck), 'módulo `auditoria` existe em KURYOS_MODULOS');
-ok(/auditoria_programacao\.html/.test(authCheck), 'a página está declarada no módulo');
-ok(/temMod\('auditoria'\)[\s\S]{0,120}auditoria_programacao\.html/.test(authCheck),
+ok(/auditoria.html/.test(authCheck), 'a página está declarada no módulo');
+ok(/temMod\('auditoria'\)[\s\S]{0,120}auditoria.html/.test(authCheck),
   'e tem link na navbar atrás do módulo');
 // A regra mais importante: NÃO entrar no padrão de nenhum papel além de admin
 const porPapel = authCheck.slice(authCheck.indexOf('MODULOS_POR_PAPEL'), authCheck.indexOf('MODULOS_POR_PAPEL') + 1400);
@@ -55,8 +55,8 @@ ok(!/'auditoria'/.test(porPapel),
 
 const regras = fs.readFileSync(path.join(__dirname, 'database.rules.json'), 'utf8');
 const regrasLimpas = regras.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
-const r = JSON.parse(regrasLimpas).rules.eventos_programacao;
-ok(r, 'o nó eventos_programacao tem regra');
+const r = JSON.parse(regrasLimpas).rules.eventos_auditoria;
+ok(r, 'o nó eventos_auditoria tem regra');
 ok(/role'\)\.val\(\) == 'admin'/.test(r['.read']), 'leitura só do admin');
 ok(/!data\.exists\(\)/.test(r.$dia.$id['.write']), 'escrita só CRIA — não dá para editar');
 ok(/newData\.exists\(\)/.test(r.$dia.$id['.write']), 'e não dá para apagar');
@@ -80,7 +80,7 @@ const dbFalso = {
   ref: (p) => ({
     once: () => Promise.resolve({
       val: () => (p === 'config/linhas' ? ['Linha 1', 'Linha 2']
-        : (String(p).indexOf('eventos_programacao') === 0 ? {
+        : (String(p).indexOf('eventos_auditoria') === 0 ? {
           ev1: { acao: 'TIRAR', lote: '26273/03', porNome: 'Gustavo', porUid: 'u1', papel: 'admin',
                  linhaDe: 'Linha 1', em: new Date().toISOString(), motivo: 'slot limpo' }
         } : {}))
@@ -90,10 +90,10 @@ const dbFalso = {
 
 (async () => {
   const g = globalThis;
-  const salvos = { document: g.document, EventosProgramacao: g.EventosProgramacao };
+  const salvos = { document: g.document, EventosAuditoria: g.EventosAuditoria };
   const fake = domFalso();
   g.document = fake.document;
-  g.EventosProgramacao = E;
+  g.EventosAuditoria = E;
 
   // Não-admin tem que ser barrado mesmo recebendo o módulo por engano
   Tela.iniciar(dbFalso, { uid: 'u2', nome: 'Robert', role: 'pcp' });
@@ -114,7 +114,7 @@ const dbFalso = {
     'avisa que encerramentos/cancelamentos estão fora e são retroativos');
 
   g.document = salvos.document;
-  g.EventosProgramacao = salvos.EventosProgramacao;
+  g.EventosAuditoria = salvos.EventosAuditoria;
 
   console.log('OK tela de auditoria: ' + n + ' asserções — janela de dias limitada, cinco pontas registradas, ' +
     'regra do nó só admin e append-only, não-admin barrado, render sem undefined.');

@@ -183,6 +183,11 @@ vm.runInContext(extractFunction('aplicarProducaoPedidoIdempotente'), ctx);
     pad: n => String(n).padStart(2, '0'), guessShift: () => 'Padrao',
     sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),
     db: { ref: () => ({ push: () => ({ key: 'id-' + (queued.length + 1) }) }) },
+    // Assinatura de login no apontamento (07/10): fecharAlocacaoOP passou a
+    // chamar assinaturaApontamento(), que vive fora da funcao extraida.
+    // Stub com os campos nulos -- o que este teste mede e a quantidade e a
+    // idempotencia, nao a autoria.
+    assinaturaApontamento: () => ({ porUid: null, porNome: null, porEmail: null, papel: null }),
     queueOfflineWrite: item => { queued.push(item); item.deltaConfirmado = item.type === 'fechamento_op' ? 797 : 100; return Promise.resolve({ item }); }
   };
   vm.createContext(flowCtx);

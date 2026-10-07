@@ -25,30 +25,42 @@
    planejamento.html para mostrar o que mudou no dia, e mexer nele quebraria
    aquela tela para quem não é admin.
 
-   Funções PURAS, testadas em run_eventos_programacao_test.js. A única função
+   Funções PURAS, testadas em run_eventos_auditoria_test.js. A única função
    que toca o banco é `registrar`, e ela é best-effort DE PROPÓSITO: o log é
    reflexo da operação, nunca pré-requisito dela. Se o push falhar, a
    programação já foi gravada e não se desfaz por causa do log -- mesmo
    critério que `ajustarEstoque` documenta em utils.js. */
 (function(root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.EventosProgramacao = factory();
+  else root.EventosAuditoria = factory();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  var NO = 'eventos_programacao';
+  var NO = 'eventos_auditoria';
 
   /* As ações são fechadas de propósito: uma tela de auditoria que aceita
      string livre vira sopa de rótulos divergentes em três meses, e filtro
      por ação para de funcionar. */
   var ACOES = {
+    // ── Programação (grade semanal / horizonte / servidor) ──
     PROGRAMAR: 'PROGRAMAR',                     // OP ganhou linha e horário
     MOVER: 'MOVER',                             // mudou de horário na mesma linha
     TROCAR_LINHA: 'TROCAR_LINHA',               // mudou de linha
     TIRAR: 'TIRAR',                             // slot/bloco da grade apagado
-    CONGELAR: 'CONGELAR',                       // horizonte congelou alocação na grade
+    CONGELAR: 'CONGELAR',                        // horizonte congelou alocação na grade
     VINCULO_AUTOMATICO: 'VINCULO_AUTOMATICO',   // o SERVIDOR pôs a OP na linha
-    ENCERRAR: 'ENCERRAR'                        // etapa/OP encerrada
+    ENCERRAR: 'ENCERRAR',                       // etapa/OP encerrada (confirmação do PCP)
+    // ── Apontamento (chão de fábrica) ──
+    // Aqui o que importa é o LOGIN. Até 07/10/2026 o apontamento gravava só
+    // o nome DIGITADO no campo "operador" (autocomplete de config.operadores)
+    // -- ninguém sabia qual conta registrou a produção.
+    APONTAR: 'APONTAR',                         // produção registrada
+    APONTAR_EDITADO: 'APONTAR_EDITADO',         // apontamento alterado depois
+    APONTAR_EXCLUIDO: 'APONTAR_EXCLUIDO',       // apontamento apagado
+    OP_NA_LINHA: 'OP_NA_LINHA',                 // operador escolheu a OP da linha
+    PARAR_LINHA: 'PARAR_LINHA',
+    RETOMAR_LINHA: 'RETOMAR_LINHA',
+    ENCERRAR_TURNO: 'ENCERRAR_TURNO'
   };
 
   // Rótulos para a tela. Verbo no passado, porque todo evento já aconteceu.
@@ -59,7 +71,14 @@
     TIRAR: 'tirou da grade',
     CONGELAR: 'congelou na grade',
     VINCULO_AUTOMATICO: 'foi posta na linha pelo sistema',
-    ENCERRAR: 'encerrou'
+    ENCERRAR: 'encerrou',
+    APONTAR: 'apontou',
+    APONTAR_EDITADO: 'editou o apontamento',
+    APONTAR_EXCLUIDO: 'EXCLUIU o apontamento',
+    OP_NA_LINHA: 'colocou',
+    PARAR_LINHA: 'parou',
+    RETOMAR_LINHA: 'retomou',
+    ENCERRAR_TURNO: 'encerrou o turno em'
   };
 
   function texto(v, max) {
@@ -108,6 +127,19 @@
       data: texto(d.data, 10) || null,     // dia da GRADE afetada (≠ dia do evento)
       hora: texto(d.hora, 5) || null,
       horas: numeroOuNulo(d.horas),
+      // ── Apontamento ──
+      quantidade: numeroOuNulo(d.quantidade),
+      turno: texto(d.turno, 40) || null,
+      registroId: texto(d.registroId, 80) || null,
+      /* O nome que a pessoa DIGITOU no campo "operador", guardado ao lado do
+         login de quem gravou. Os dois são fatos diferentes e os dois importam:
+         o operador é quem rodou a máquina, o login é quem registrou -- pode
+         ser o líder apontando pelo time. O valor da auditoria está justamente
+         em poder COMPARAR os dois, não em substituir um pelo outro. */
+      operadorDigitado: texto(d.operadorDigitado, 120) || null,
+      // Para edição/exclusão de apontamento: o que havia e o que passou a ser.
+      antes: texto(d.antes, 400) || null,
+      depois: texto(d.depois, 400) || null,
       motivo: texto(d.motivo, 400) || null,
       porUid: porUid,
       porNome: texto(d.porNome, 120) || null,
@@ -123,14 +155,60 @@
   function descrever(ev) {
     var e = ev || {};
     var quem = e.porUid === 'sistema' ? 'O sistema' : (e.porNome || 'Alguém');
-    var alvo = e.lote ? 'a OP ' + e.lote : (e.pedidoKey ? 'o pedido ' + String(e.pedidoKey).split('__')[0] : 'um item');
+
+    /* Artigo e contração separados do nome do alvo. Concatenar "de" com um
+       alvo que já trazia artigo produzia "de a OP 26273/03" -- e uma tela de
+       auditoria que escreve errado perde autoridade justamente onde ela
+       precisa ser levada a sério. "OP" é feminino; pedido e item, masculino. */
+    var alvo, fem;
+    if (e.lote) { alvo = 'OP ' + e.lote; fem = true; }
+    else if (e.pedidoKey) { alvo = 'pedido ' + String(e.pedidoKey).split('__')[0]; fem = false; }
+    else { alvo = 'item'; fem = false; }
+    var o = fem ? 'a' : 'o';          // "a OP" / "o pedido"
+    var doDa = fem ? 'da' : 'do';     // "da OP" / "do pedido"
     var verbo = ROTULOS[e.acao] || String(e.acao || '').toLowerCase();
 
     if (e.acao === ACOES.VINCULO_AUTOMATICO) {
-      return alvo.charAt(0).toUpperCase() + alvo.slice(1) + ' ' + verbo +
+      return o.toUpperCase() + ' ' + alvo + ' ' + verbo +
         (e.linhaPara ? ' (' + e.linhaPara + ')' : '') + '.';
     }
-    var frase = quem + ' ' + verbo + ' ' + alvo;
+
+    /* Apontamento: a frase mostra os DOIS nomes quando eles diferem.
+       "Robert apontou 800 un da OP 26273/03 na Linha 1, informando Luana como
+       operador" é a informação que o admin quer -- e é impossível de montar
+       se o sistema guardar só um dos dois. */
+    if (e.acao === ACOES.APONTAR) {
+      var f = quem + ' apontou' + (e.quantidade ? ' ' + e.quantidade + ' un' : '') + ' ' + doDa + ' ' + alvo;
+      if (e.linhaPara) f += ' na ' + e.linhaPara;
+      if (e.operadorDigitado && e.operadorDigitado !== e.porNome) {
+        f += ', informando ' + e.operadorDigitado + ' como operador';
+      }
+      if (e.turno) f += ' (turno ' + e.turno + ')';
+      return f + '.';
+    }
+    if (e.acao === ACOES.APONTAR_EDITADO || e.acao === ACOES.APONTAR_EXCLUIDO) {
+      var g = quem + ' ' + verbo + ' ' + doDa + ' ' + alvo;
+      if (e.antes && e.depois) g += ': ' + e.antes + ' → ' + e.depois;
+      else if (e.antes) g += ' (era: ' + e.antes + ')';
+      return g + '.';
+    }
+    if (e.acao === ACOES.PARAR_LINHA || e.acao === ACOES.RETOMAR_LINHA) {
+      var h = quem + ' ' + verbo + ' a ' + (e.linhaDe || e.linhaPara || 'linha');
+      if (e.lote) h += ' (' + alvo + ')';
+      if (e.motivo && e.acao === ACOES.PARAR_LINHA) h += ' — ' + e.motivo;
+      return h + '.';
+    }
+    // "colocou a OP X na Linha 1": o alvo e a OP, o destino e a linha.
+    if (e.acao === ACOES.OP_NA_LINHA) {
+      return quem + ' colocou ' + o + ' ' + alvo +
+        (e.linhaPara ? ' na ' + e.linhaPara : '') + '.';
+    }
+    if (e.acao === ACOES.ENCERRAR_TURNO) {
+      return quem + ' encerrou o turno' + (e.turno ? ' ' + e.turno : '') +
+        (e.linhaDe || e.linhaPara ? ' na ' + (e.linhaDe || e.linhaPara) : '') + '.';
+    }
+
+    var frase = quem + ' ' + verbo + ' ' + o + ' ' + alvo;
     if (e.acao === ACOES.TROCAR_LINHA && e.linhaDe && e.linhaPara) {
       frase += ': ' + e.linhaDe + ' → ' + e.linhaPara;
     } else if (e.linhaPara) {
@@ -150,7 +228,7 @@
     if (m.erro) {
       // Evento malformado é defeito de quem chamou, não do operador: aparece
       // no console e segue, em vez de interromper a tela.
-      try { console.error('EventosProgramacao: ' + m.erro, dados); } catch (e) {}
+      try { console.error('EventosAuditoria: ' + m.erro, dados); } catch (e) {}
       return Promise.resolve({ ok: false, erro: m.erro });
     }
     if (!dbRef || typeof dbRef.ref !== 'function') return Promise.resolve({ ok: false, erro: 'sem dbRef' });
@@ -158,7 +236,7 @@
       return dbRef.ref(NO + '/' + m.dia).push(m.registro)
         .then(function() { return { ok: true }; })
         .catch(function(err) {
-          try { console.error('EventosProgramacao: falha ao gravar o log', err); } catch (e) {}
+          try { console.error('EventosAuditoria: falha ao gravar o log', err); } catch (e) {}
           return { ok: false, erro: err && err.message };
         });
     } catch (err) {
@@ -185,7 +263,7 @@
      a tela nasce com histórico em vez de vazia.
 
      Entradas (todas opcionais):
-       eventos    = eventos_programacao/{dia}/{id}  (este log)
+       eventos    = eventos_auditoria/{dia}/{id}  (este log)
        rearranjos = rearranjos_linhas/{id}          (servidor, já existia)
        ops        = ops/{lote}                      (confirmacaoEtapas, cancelamento) */
   function linhaDoTempo(fontes) {
@@ -197,7 +275,7 @@
       Object.keys(doDia).forEach(function(id) {
         var ev = doDia[id];
         if (!ev || typeof ev !== 'object') return;
-        saida.push(Object.assign({ id: id, fonte: 'eventos_programacao' }, ev));
+        saida.push(Object.assign({ id: id, fonte: 'eventos_auditoria' }, ev));
       });
     });
 

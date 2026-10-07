@@ -21,6 +21,7 @@
   <script src="shared/onde-op.js"></script>
   <script src="shared/perdas-etapa.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
+  <script src="shared/eventos-auditoria.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -1273,6 +1274,11 @@ function resumeLine(linha, state) {
   // linha, gravada em estado_linhas/{linha}/opAtual). Sem ela, o campo de OP
   // do apontamento volta a ser texto livre e o próximo lançamento pode ir sem
   // `lote` -- e sem lote NADA propaga pra ops/.
+  registrarEventoAuditoria({
+    acao: 'RETOMAR_LINHA', lote: lote || null, linhaDe: linha,
+    motivo: 'parada de ' + duration + ' min encerrada',
+    origem: 'form.html/retomarProducao'
+  });
   var p2 = db.ref('estado_linhas/' + lineKey).update({
     status: 'ativa',
     inicioParada: null,
@@ -1459,6 +1465,12 @@ document.getElementById('andonStopForm').addEventListener('submit', function(e) 
     produto: op.produto || '',
     lote: lote || ''
   }).then(function() {
+    registrarEventoAuditoria({
+      acao: 'PARAR_LINHA', lote: lote || null, produto: op.produto || null,
+      pedidoKey: pedidoId || null, linhaDe: linha,
+      motivo: (setorParada === 'rotulagem' ? 'rotulagem — ' : '') + (motivo || 'sem motivo informado'),
+      origem: 'form.html/pararLinha'
+    });
     closeAndonModal();
     showSuccess(setorParada === 'rotulagem' ? 'Rotulagem Parada!' : 'Linha Parada!', linha + ' foi colocada em estado de parada.');
   });
@@ -1898,7 +1910,24 @@ document.getElementById('btnTrocarOP').addEventListener('click', function() {
 function rememberOPForLine(linha, lote) {
   if (!linha || !lote || configLinhas.indexOf(linha) < 0) return;
   var lineKey = sanitizeKey(linha);
-  db.ref('estado_linhas/' + lineKey + '/opAtual').set({ lote: lote });
+  // Auditoria: é AQUI que a OP passa a ser "a OP da linha" no chão de
+  // fábrica -- diferente da alocação da grade semanal, que é planejamento.
+  // `estado_linhas` guarda só o estado atual (sobrescreve), então sem este
+  // evento não restava nenhum histórico de quem trocou a OP da linha.
+  // Só registra quando a OP de fato MUDA, para não gerar um evento por
+  // digitação repetida da mesma OP.
+  var anterior = (latestAndonStates && latestAndonStates[lineKey] &&
+                  latestAndonStates[lineKey].opAtual) ? latestAndonStates[lineKey].opAtual.lote : null;
+  db.ref('estado_linhas/' + lineKey + '/opAtual').set({ lote: lote }).then(function() {
+    if (anterior === lote) return;
+    var opR = findOpByLote(lote) || {};
+    registrarEventoAuditoria({
+      acao: 'OP_NA_LINHA', lote: lote, produto: opR.produto || null,
+      linhaPara: linha,
+      motivo: anterior ? 'substituiu a OP ' + anterior + ' na linha' : 'primeira OP da linha',
+      origem: 'form.html/rememberOPForLine'
+    });
+  });
 }
 // ── Autocomplete search listeners ─────────────────────────────────
 ['fProduto','rProduto','opProduto'].forEach(function(id) {
@@ -3105,6 +3134,35 @@ function clienteKeyDaOp(op) {
   return PropriedadeEstoque.clienteKeyDoSku(op.sku, allProdutosForm, null, op.cliente) || null;
 }
 
+/* ── Assinatura de LOGIN no apontamento ────────────────────────────────────
+   Achado de 07/10/2026: o apontamento gravava apenas `operador`, que é o
+   nome DIGITADO no campo (autocomplete de config.operadores) -- nenhum
+   vínculo com a conta que registrou. Ou seja: o sistema sabia quem a pessoa
+   DISSE que era, não quem estava logado. Qualquer login do perfil da
+   produção podia apontar em nome de qualquer um.
+
+   `operador` NÃO é substituído: operador é quem rodou a máquina, o login é
+   quem registrou -- pode ser o líder apontando pelo time. São dois fatos
+   diferentes, e a auditoria vale justamente por poder COMPARAR os dois.
+   Campos só aditivos, para não mudar nada do que já era lido. */
+function assinaturaApontamento() {
+  var u = window.currentUser || {};
+  return {
+    porUid: u.uid || null,
+    porNome: u.nome || null,
+    porEmail: u.email || null,
+    papel: u.role || null
+  };
+}
+/* Evento no log de auditoria (shared/eventos-auditoria.js). Best-effort: o
+   apontamento já foi gravado e não se desfaz por causa do log. */
+function registrarEventoAuditoria(dados) {
+  try {
+    if (typeof EventosAuditoria === 'undefined') return;
+    EventosAuditoria.registrarComoUsuario(db, window.currentUser, dados);
+  } catch (e) { try { console.error('auditoria do apontamento:', e); } catch (_) {} }
+}
+
 function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
   if (!op || !op.sku || !qtdReal) return Promise.resolve();
   var achado = melhorFormulaDoProduto(op.sku, allFormulasForm);
@@ -3450,6 +3508,27 @@ function syncNextItem() {
   }
 
   promise.then(function() {
+    // Auditoria do apontamento. Fica AQUI, e não onde o registro é montado,
+    // porque este é o único ponto por onde todo apontamento passa DEPOIS de
+    // gravar de verdade (a fila é offline-first e reprocessa). Registrar no
+    // enfileiramento faria o log afirmar uma produção que pode nunca ter
+    // chegado ao banco.
+    var _r = item.registro || {};
+    registrarEventoAuditoria({
+      acao: 'APONTAR',
+      lote: _r.lote || item.lote || null,
+      pedidoKey: _r.pedidoId || item.pedidoId || null,
+      produto: _r.produto || null,
+      linhaPara: _r.linha || null,
+      quantidade: _r.quantidade,
+      turno: _r.turno || null,
+      operadorDigitado: _r.operador || null,
+      registroId: item.id || null,
+      data: _r.data || null, hora: _r.hora || null,
+      motivo: _r.tipo ? 'tipo ' + _r.tipo : 'apontamento horário',
+      origem: 'form.html/syncNextItem'
+    });
+
     var currentPending = JSON.parse(localStorage.getItem('kuryos_pending_sync') || '[]');
     currentPending = currentPending.filter(function(x) { return x.id !== item.id; });
     localStorage.setItem('kuryos_pending_sync', JSON.stringify(currentPending));
@@ -3559,6 +3638,7 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     realTimeStr: now.toLocaleTimeString('pt-BR'),
     apontamentoEmAtraso: isDelayed
   };
+  Object.assign(registro, assinaturaApontamento());
   if (lote)     registro.lote = lote;
   if (colab)    registro.colaboradores = colab;
   if (pedidoId) registro.pedidoId = pedidoId;
@@ -3917,6 +3997,7 @@ document.getElementById('retroForm').addEventListener('submit', function(e) {
       horasTrabalhadas: Math.round(dia.horasUteis * 100) / 100,
       timestamp: new Date().toISOString(), fonte: 'retroativo'
     };
+    Object.assign(reg, assinaturaApontamento());
     if (lote) reg.lote = lote;
     if (colab) reg.colaboradores = colab;
     if (pedidoId) reg.pedidoId = pedidoId;
@@ -4397,6 +4478,7 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
     qtdEsperadaOP: qtdEsperada,
     timestamp: agora
   };
+  Object.assign(registro, assinaturaApontamento());
   if (periodoInicioCalc && periodoInicioCalc < agora) {
     registro.periodoInicio = periodoInicioCalc;
     registro.periodoFim = agora;
@@ -4513,6 +4595,7 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
     qtdTotalOP: qtdTotal,
     qtdEsperadaOP: qtdEsperada
   };
+  Object.assign(registro, assinaturaApontamento());
   if (lote)     registro.lote = lote;
   if (pedidoId) registro.pedidoId = pedidoId;
   if (obs)      registro.obs = obs;
@@ -5192,6 +5275,7 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
     horasTrabalhadas: Math.round(horas * 100) / 100,
     periodoInicio: inicioISO, periodoFim: fimISO, qtdTotalOP: qtdTotal
   };
+  Object.assign(registro, assinaturaApontamento());
   if (ehFechamento) registro.qtdEsperadaOP = parseInt(op.qtdPlanejada || 0) || 0;
   if (lote) registro.lote = lote;
   if (pedidoId) registro.pedidoId = pedidoId;
@@ -5474,6 +5558,7 @@ function fecharAtividadePostoDefinitivo(id, qtd, operador, produto) {
       quantidade: qtd, operador: operador, turno: guessShift(),
       timestamp: new Date().toISOString(), tipo: 'registro'
     };
+    Object.assign(registro, assinaturaApontamento());
     // Posto ficou aberto desde abertoEm (gravado ao abrir, ver
     // btnAbrirPostoTurno) até agora -- período real, mesmo padrão que
     // fecharAlocacaoOP já usa pra Linha/Rotulagem. Sem isso, o Histórico
@@ -5819,8 +5904,18 @@ function confirmarFechamentoTurno(itens, opts) {
       }
       var payload = { encerradoEm: new Date().toISOString(), itens: itens.length };
       if (justificativaAtraso) payload.justificativaAtraso = justificativaAtraso;
+      // O payload do turno nao guardava QUEM encerrou -- so quando. Assina
+      // com o login, pelo mesmo motivo do apontamento.
+      Object.assign(payload, assinaturaApontamento());
       return db.ref('turnosEncerrados/' + today() + '/' + sanitizeKey(turnoNomeAtual)).set(payload);
     }).then(function() {
+      registrarEventoAuditoria({
+        acao: 'ENCERRAR_TURNO', turno: turnoNomeAtual || null,
+        quantidade: itens.length,
+        motivo: (isIntervalo ? 'intervalo registrado' : 'turno encerrado') + ' com ' + itens.length +
+          ' item(ns)' + (justificativaAtraso ? ' — atraso: ' + justificativaAtraso : ''),
+        origem: 'form.html/encerrarTurno'
+      });
       box.style.display = 'none';
       box.innerHTML = '';
       showSuccess(isIntervalo ? 'Intervalo registrado!' : 'Turno encerrado!', itens.length + ' item(ns) ' + (isIntervalo ? 'apontado(s).' : 'fechado(s).'));

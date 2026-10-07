@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/historico-apontamentos.js"></script>
+  <script src="shared/eventos-auditoria.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -2176,6 +2177,30 @@
         tasks.push(filaOp);
 
         Promise.all(tasks).then(function() {
+          // Auditoria: so DEPOIS de gravar. `antes` sai do registro original
+          // em memoria; `depois` sai dos campos que mudaram -- guardar o
+          // registro inteiro nos dois lados encheria o log sem dizer o que
+          // o editor de fato mexeu.
+          var _depois = Object.keys(data).map(function(c) {
+            return c + '=' + (data[c] === null ? '(removido)' : data[c]);
+          }).join(' · ');
+          registrarEventoAuditoria({
+            acao: 'APONTAR_EDITADO',
+            lote: (data.lote != null ? data.lote : (orig && orig.lote)) || null,
+            pedidoKey: (orig && orig.pedidoId) || null,
+            produto: (data.produto != null ? data.produto : (orig && orig.produto)) || null,
+            linhaDe: (orig && orig.linha) || null,
+            linhaPara: data.linha || null,
+            quantidade: data.quantidade != null ? data.quantidade : null,
+            turno: (orig && orig.turno) || null,
+            registroId: editingKey, data: editingDate,
+            operadorDigitado: (orig && orig.operador) || null,
+            antes: resumoRegistroAuditoria(orig && orig._raw ? orig._raw : orig),
+            depois: _depois || null,
+            motivo: 'editado no Histórico' +
+              (editingDate !== newDate ? ' — data mudou de ' + editingDate + ' para ' + newDate : ''),
+            origem: 'historico.html/salvarEdicao'
+          });
           btn.disabled = false; btn.textContent = 'Salvar';
           closeEditModal();
           showAlert('Registro atualizado.', 'success');
@@ -2235,7 +2260,18 @@
     // Só devolve saldo ao pedido se o registro era de ENVASE -- ver comentário
     // no caminho de edição (rotulagem/posto nunca somou, não pode subtrair).
     var _qtyEf = (r && isLinhaEnvase(r.linha)) ? qty : 0;
+    var _antesExcl = resumoRegistroAuditoria(r && r._raw ? r._raw : r);
     db.ref('registros/' + editingDate + '/' + editingKey).remove().then(function() {
+      registrarEventoAuditoria({
+        acao: 'APONTAR_EXCLUIDO',
+        lote: (r && r.lote) || null, pedidoKey: pedId || null, produto: prod || null,
+        linhaDe: (r && r.linha) || null, quantidade: qty || null,
+        turno: (r && r.turno) || null, registroId: editingKey,
+        data: editingDate, operadorDigitado: (r && r.operador) || null,
+        antes: _antesExcl,
+        motivo: 'excluído pelo modal de edição' + (_qtyEf ? ' — devolveu ' + _qtyEf + ' un ao pedido' : ''),
+        origem: 'historico.html/excluirPeloModal'
+      });
       return _qtyEf ? adjustPedidoProduzido(pedId, prod, -_qtyEf) : Promise.resolve();
     }).then(function() {
       closeEditModal();
@@ -2243,6 +2279,31 @@
       loadRegistros();
     });
   });
+
+/* Auditoria do apontamento (shared/eventos-auditoria.js).
+   Até 07/10/2026 editar e EXCLUIR um apontamento não deixava rastro nenhum --
+   e o número do apontamento vira produção do pedido, consumo de material e
+   fechamento de OP. Era a lacuna mais séria do sistema: dava para mudar ou
+   apagar um registro de produção e nada registrava quem fez.
+   Best-effort: nunca derruba a operação, que já aconteceu. */
+function registrarEventoAuditoria(dados) {
+  try {
+    if (typeof EventosAuditoria === 'undefined') return;
+    EventosAuditoria.registrarComoUsuario(db, window.currentUser, dados);
+  } catch (e) { try { console.error('auditoria do apontamento:', e); } catch (_) {} }
+}
+/* Resumo curto de um registro, para os campos antes/depois. É o único
+   vestígio que sobra de um apontamento excluído. */
+function resumoRegistroAuditoria(r) {
+  if (!r) return null;
+  return [
+    r.quantidade != null ? r.quantidade + ' un' : null,
+    r.linha || null,
+    r.data ? r.data + (r.hora ? ' ' + r.hora : '') : null,
+    r.operador ? 'op. ' + r.operador : null,
+    r.tipo ? '[' + r.tipo + ']' : null
+  ].filter(Boolean).join(' · ');
+}
 
   function deleteRegistro(date, key) {
     if (!podeEditarHistorico()) { showAlert('Só o PCP exclui apontamentos.', 'danger'); return; }
@@ -2270,8 +2331,19 @@
     var pedId = r ? (r.pedidoId || '') : '';
     var prod = r ? (r.produto || '') : '';
 
+    var _antesExcl2 = resumoRegistroAuditoria(r && r._raw ? r._raw : r);
     db.ref('registros/' + date + '/' + key).remove()
       .then(function() {
+        registrarEventoAuditoria({
+          acao: 'APONTAR_EXCLUIDO',
+          lote: (r && r.lote) || null, pedidoKey: pedId || null, produto: prod || null,
+          linhaDe: (r && r.linha) || null, quantidade: qty || null,
+          turno: (r && r.turno) || null, registroId: key,
+          data: date, operadorDigitado: (r && r.operador) || null,
+          antes: _antesExcl2,
+          motivo: 'excluído pela lista do Histórico' + (hasPerdas ? ' (tinha perdas lançadas)' : ''),
+          origem: 'historico.html/deleteRegistro'
+        });
         if (hasPerdas && r.lote) {
           var loteSafe = sanitizeKey(r.lote);
           // Só a perda DESTE registro (perdas/{lote} acumula lançamentos de
