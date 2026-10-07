@@ -5,6 +5,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Auditoria da Programação (07/10/2026)
+
+- **Pedido:** "quero ver esse tipo de movimentação, o que/quem tirou uma op de linha, encerrou, ajustou programação", a partir do caso "a OP x apareceu na linha 1 sozinha — quem colocou, ou foi sozinho?". Só `admin` vê.
+- **Levantamento antes de codar:** 7 eventos JÁ eram gravados com autor (`rearranjos_linhas`, `ajustes_planejamento`, `ops/*/confirmacaoEtapas`, `canceladoPor`, `paradas_historico`, `registros`, `turnosEncerrados`). Faltavam exatamente os 6 pontos que mexem na linha/horário da OP.
+- **Instrumentado:** `planejamento.html` (programar pelo modal, arrastar na grade incluindo as OPs empurradas em cadeia, limpar bloco, limpar slot — capturando o que havia ANTES de apagar), `horizonte.html` (congelar; essa página está FORA DO MENU e mexia na grade sem rastro) e `functions/index.js` `linkAlocacaoToOP` (**VINCULO_AUTOMATICO** — é o que responde "foi sozinho?": o servidor casa a OP com uma alocação e herda a LINHA DELA; sem `necessidadeCodigo` a escolha é por aproximação de capacidade, e o motivo agora registra qual alocação e de quanto foi a diferença).
+- **Nó NOVO (`eventos_programacao/{AAAA-MM-DD}/{id}`), e não reaproveitar `ajustes_planejamento`:** aquele tem `.write` para production/rotulagem/pcp/admin e `.read` para qualquer autenticado — log que os auditados reescrevem ou apagam não é log. Este segue o padrão de `rearranjos_linhas`: `.read` só admin, escrita que só **cria** (sem update/delete) e `porUid` validado contra `auth.uid`. `ajustes_planejamento` ficou intocado (é operacional, lido pelo `planejamento.html`).
+- **Código:** `public/shared/eventos-programacao.js` (puro; `montar`, `descrever`, `registrar` best-effort, `linhaDoTempo` juntando as fontes antigas, `filtrar`), `public/auditoria_programacao.html` + `shared/auditoria-programacao-tela.js`, módulo `auditoria` em `auth_check.js` (fora de `MODULOS_POR_PAPEL` de propósito), `manual_auditoria_programacao.html` + card.
+- **Decisões de custo:** lê **dia a dia**, não a árvore (o log cresce para sempre — mesmo motivo do kardex); janela de 62 dias por leitura, 500 linhas por render; `ops` atrás de checkbox (1.300+ registros, só valem pelas confirmações/cancelamentos).
+- **Testes:** `run_eventos_programacao_test.js` (60) e `run_auditoria_programacao_ui_test.js` (30). Suíte: **145 passam**.
+- **Publicado:** `42e95de` (instrumentação + regras + função `criarOP` em Node 24) e `7d0d2cd` (tela), Hosting `prod-kuryos` em 2026-10-07. Conferido no ar: arquivos idênticos ao commit por SHA256, e `eventos_programacao.json` sem login devolve **HTTP 401**.
+- **Arquivos ativos:** nenhum.
+
+- **⚠ Dois testes falham e NÃO são desta mudança** (conferido com `git stash` contra o HEAD limpo): `run_operacao_ui_test.js` ("perfil Produção: os três setores") e `run_portao_bulk_ui_test.js` ("aviso das travadas"). Outros dois exigem ambiente: `run_devolucao_cliente_server_test.js` (emulador) e `run_etiquetas_leitura_test.js` (falta `@zxing/library`).
+- **⚠ Para quem for deployar Functions:** use `firebase-tools@latest`, não uma versão fixa antiga. O `firebase-tools@13` recusa o runtime Node 24 do `functions/package.json` ("Valid versions are 20, 22") e o deploy morre antes de publicar. Além disso, **deploy de Functions não funciona por worktree**: o CLI precisa de `functions/node_modules`, que está no `.gitignore`. Com a árvore limpa, deployar do próprio repo equivale ao commit.
+- **⚠ Ainda SEM rastro no sistema** (ficou fora deste escopo): mudança de papel/módulo em `usuarios.html` (`update`/`remove` crus — alvo nº 1 de auditoria), as ~55 exclusões espalhadas pelas telas, e edição de cadastro de produto/cliente/fornecedor (material tem `historico_materiais`).
+
 ### Claude — Feedback e Clima (RH + colaboradores) (06/10/2026)
 
 - **Pedido:** o RH mandou `Kuryos_Modulo_Feedback_Clima_Especificacao_v2.docx` (escrita para outro sistema Node/Firestore); o usuário confirmou: criar no NOSSO sistema. Temporários são **avaliados** pelos registrados do mesmo setor, mas **não participam da pesquisa**.
