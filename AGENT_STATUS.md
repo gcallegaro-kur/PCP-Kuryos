@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Temporários (RH): convocação e pagamento semanal (06/10/2026)
+
+- **Pedido:** o RH mandou a planilha CONVOCAÇÃO_TEMPORÁRIO 01.xlsx; o usuário quer o módulo no sistema, só RH acessando, com a regra da planilha como oficial. As colunas `#REF!` do CADASTRO são o histórico de performance de cada temporário (calculado dos lançamentos). Temporários também serão **avaliados** pelos registrados no Feedback, mas **não participam da pesquisa** (módulo Feedback e Clima vem a seguir).
+- **Código:** `public/shared/temporarios.js` (regras puras: `fechamentoSemana`, `folhaDaSemana`, `historico`, validações, CSV; reproduz as fórmulas da CALCULADORA), `public/shared/temporarios-tela.js` + `public/rh_temporarios.html` (abas Convocação da semana, Fechamento, Pagamentos, Atrasos, Cadastro, Histórico, Parâmetros), módulo `rh_temporarios` em `public/auth_check.js` (papel `rh`; admin vê tudo; link em RH e no manual), `public/manual_temporarios.html` + card em `manuais.html`, nós `rh_temporarios`, `rh_temporarios_config|presenca|semanas|atrasos|pagamentos` em `database.rules.json` (rh/admin lê e escreve; validação de presença/categoria/valor/horas).
+- **Testes:** `run_temporarios_test.js` (legenda da planilha e bordas), `run_temporarios_ui_test.js`, `run_temporarios_rules_test.js` (emulador). **Ensaio contra a planilha:** `scripts/ensaio-temporarios-planilha.js` — 30 temporários da semana 21/09 × 10 colunas da CALCULADORA, 0 diferenças.
+- **Importação:** `scripts/temporarios-planilha-para-json.py "<xlsx>" <pasta fora do repo>` gera `temporarios-importar.json` (tem CPF/Pix: NUNCA no repositório) para `firebase database:update / <arquivo> --project prod-kuryos`. Só cria nós novos.
+- **Diferenças deliberadas da planilha:** pagamento tem "semana de referência" (padrão = semana da data, como na planilha); as horas da sexta valem também para o desconto proporcional do atraso; tudo ligado ao id do temporário, não ao texto do nome.
+
 ### Claude — Auditoria 5S: setores e áreas editáveis (06/10/2026)
 
 - **Pedido:** setores/áreas editáveis, com responsável indicado. Lista inicial do usuário (Produção > Linhas 1-3; Manipulação > Manipulação e Estoque; Rotulagem > 1-3 e Estoque; Refeitório; Vestiários; Escritório; Estoque MUC; Recepção; Expedição > Estoque e Doca; Laboratório; Manutenção; Área de Lavagem; DML; Retenção; Reciclagem). Auditoria é por SETOR; área = local do NC + responsável da área.

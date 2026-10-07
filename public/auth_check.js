@@ -120,7 +120,9 @@ const KURYOS_MODULOS = {
   rh:           { rotulo: 'RH — Pessoas',          desc: 'Colaboradores, avaliação de desempenho e férias',
                   paginas: ['rh_cadastros.html', 'rh_avaliacao.html', 'rh_ferias.html'] },
   rh_dashboard: { rotulo: 'RH — Dashboard',        desc: 'Indicadores de RH (dado sensível)',
-                  paginas: ['rh_dashboard.html'] }
+                  paginas: ['rh_dashboard.html'] },
+  rh_temporarios: { rotulo: 'RH — Temporários',    desc: 'Convocação e pagamento semanal dos temporários (só RH Central e administrador; CPF e Pix)',
+                  paginas: ['rh_temporarios.html'] }
 };
 
 // Padrão por papel. Reproduz EXATAMENTE o alcance que cada papel tinha antes
@@ -134,7 +136,7 @@ const MODULOS_POR_PAPEL = {
   rotulagem: ['rotulagem'],
   logistica: ['logistica'],
   qualidade: ['qualidade', 'conferencia_pesagem'],
-  rh: ['rh', 'rh_dashboard'],
+  rh: ['rh', 'rh_dashboard', 'rh_temporarios'],
   gestor: ['rh'],
   pending: []
 };
@@ -799,7 +801,8 @@ function renderUnifiedNavbar(user) {
     temMod('rh_dashboard') && ktLink('rh_dashboard.html', 'dashboard', 'Dash', activePage),
     temMod('rh') && ktLink('rh_cadastros.html', 'people', 'Colaboradores', activePage),
     temMod('rh') && ktLink('rh_avaliacao.html', 'pencil', 'Avaliação de Desempenho', activePage),
-    temMod('rh') && ktLink('rh_ferias.html', 'calendar', 'Férias', activePage)
+    temMod('rh') && ktLink('rh_ferias.html', 'calendar', 'Férias', activePage),
+    temMod('rh_temporarios') && ktLink('rh_temporarios.html', 'clipboard', 'Temporários', activePage)
   ]);
 
   // "Ajuda" -- os 3 manuais existiam publicados e funcionando desde sempre,
@@ -825,6 +828,7 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('manual_estoque.html', 'book', 'Estoque e WMS', activePage),
     temMod('qualidade') && ktLink('manual_qualidade.html', 'book', 'Qualidade', activePage),
     temMod('auditoria5s') && ktLink('manual_auditoria_5s.html', 'book', 'Auditoria 5S', activePage),
+    temMod('rh_temporarios') && ktLink('manual_temporarios.html', 'book', 'Temporários', activePage),
     temMod('cadastros') && ktLink('manual_cadastros.html', 'book', 'Cadastros', activePage),
     temMod('usuarios') && ktLink('manual_admin.html', 'book', 'Administração', activePage),
     // Referência completa: única sem gate de módulo, porque é o documento

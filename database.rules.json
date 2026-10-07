@@ -418,6 +418,34 @@
         ".write": "auth != null && (auth.uid == $uid || root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
       }
     },
+    "rh_temporarios": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$id": { ".validate": "newData.hasChild('nome') && newData.child('nome').isString() && newData.child('nome').val().length > 0 && newData.child('nome').val().length < 200" }
+    },
+    "rh_temporarios_config": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+    },
+    "rh_temporarios_presenca": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$data": { "$id": { ".validate": "newData.isString() && (newData.val() == 'OK' || newData.val() == 'NC' || newData.val() == 'F' || newData.val() == 'FA')" } }
+    },
+    "rh_temporarios_semanas": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
+    },
+    "rh_temporarios_atrasos": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$id": { ".validate": "newData.hasChildren(['tempId', 'data', 'horas']) && newData.child('horas').isNumber() && newData.child('horas').val() > 0 && newData.child('horas').val() <= 12" }
+    },
+    "rh_temporarios_pagamentos": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')",
+      "$id": { ".validate": "newData.hasChildren(['tempId', 'data', 'valor', 'categoria']) && newData.child('valor').isNumber() && newData.child('valor').val() > 0 && (newData.child('categoria').val() == 'SALARIO' || newData.child('categoria').val() == 'VT')" }
+    },
     "rearranjos_linhas": {
       ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'",
       ".write": false
