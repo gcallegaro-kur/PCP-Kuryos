@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### ⚠ Claude — INCIDENTE: retomada de linha quebrada em produção (07/10/2026)
+
+- **O que aconteceu:** o evento `RETOMAR_LINHA` que inseri em `0a5e577` referenciava uma variável `lote` que **não existe** em `resumeLine(linha, state)` — o lote vem em `state.lote`. O `ReferenceError` estourava ao **montar o objeto do argumento**, ou seja no CHAMADOR, antes de `registrarEventoAuditoria` ser invocada; **o try/catch de dentro dela não protege esse caso**.
+- **Efeito na fábrica:** o operador clicava "Sim" em "Confirmar retomada?" e **nada acontecia**. `resumeLine` abortava na linha do evento, o `update` de `estado_linhas` para `status: 'ativa'` nunca era criado, o modal nunca fechava e a linha nunca retomava. Como o `push` em `paradas_historico` acontece ANTES, **cada tentativa frustrada gravou um registro de parada** — pode haver paradas duplicadas de 07/10 para limpar.
+- **Corrigido e publicado:** `9a3b1cd`, Hosting, 07/10. Conferido no ar: código corrigido presente, nenhuma ocorrência do antigo, disco = commit = ar.
+- **Lição, e vale para qualquer instrumentação futura:** verificação de sintaxe **não pega** `ReferenceError` — `lote` é identificador válido. Só executar a função revela. E guardar a chamada com try/catch **não basta**: a exceção pode acontecer antes dela, na avaliação dos argumentos.
+- **`run_auditoria_instrumentacao_test.js` (novo)** executa `resumeLine` e `rememberOPForLine` num `vm` com stubs e verifica que não lançam, que a linha volta a `ativa` e que a OP lembrada continua sendo gravada. Conferido que **reprova** com o bug reintroduzido. **Rode-o depois de instrumentar qualquer função do `form.html`.**
+
 ### Claude — Auditoria do apontamento: assinatura por LOGIN (07/10/2026)
 
 - **Pedido (correção de alvo):** "queria acompanhar muito mais os movimentos dentro da tela apontamentos, que hoje não vejo (quem preenche o que, efetivamente, com qual login, quem aloca op na linha, quem encerra)". A rodada anterior cobriu a programação/grade, que é outra coisa.
