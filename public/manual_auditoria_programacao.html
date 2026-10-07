@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual — Auditoria da Programação</title>
+  <link rel="stylesheet" href="shared/manual.css">
+</head>
+<body>
+<div class="container">
+  <a class="manual-voltar" href="manuais.html">← Todos os manuais</a>
+
+  <div class="header">
+    <img src="kuryos-logo.svg" alt="Kuryos">
+    <h1>Auditoria da Programação</h1>
+    <p>Administrador — ADM › Auditoria</p>
+  </div>
+
+  <div class="intro-box">
+    <strong>Para que serve.</strong> Responder a perguntas do tipo <b>"quem tirou essa OP da
+    Linha 1?"</b> e <b>"essa OP apareceu na linha sozinha mesmo?"</b>. A tela mostra, em ordem
+    de tempo, quem mexeu na linha ou no horário de uma OP — e também o que o <b>servidor</b> fez
+    sem ninguém pedir.
+  </div>
+
+  <h2>O que a tela registra</h2>
+  <table>
+    <thead><tr><th>Etiqueta</th><th>O que aconteceu</th></tr></thead>
+    <tbody>
+      <tr><td><b>PROGRAMAR</b></td><td>Uma OP ganhou linha e horário pelo botão “Programar OP”.</td></tr>
+      <tr><td><b>MOVER</b></td><td>A OP mudou de horário, arrastada na grade. Se o arrasto empurrou outras OPs em cadeia, cada uma aparece com o motivo “empurrada em cadeia”.</td></tr>
+      <tr><td><b>TROCAR_LINHA</b></td><td>A OP mudou de linha — pelo arrasto, pelo modal, ou pelo Rearranjo de Linhas.</td></tr>
+      <tr><td><b>TIRAR</b></td><td>Slot ou bloco apagado da grade, ou OP cancelada. Mostra qual OP estava ali antes de apagar.</td></tr>
+      <tr><td><b>CONGELAR</b></td><td>O Horizonte congelou horas na grade para um pedido.</td></tr>
+      <tr><td><b>VINCULO_AUTOMATICO</b></td><td><b>O servidor</b> pôs a OP numa linha. Ver a seção abaixo.</td></tr>
+      <tr><td><b>ENCERRAR</b></td><td>Etapa (envase/rotulagem) confirmada pelo PCP.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>“A OP apareceu na linha sozinha” — normalmente é verdade</h2>
+  <p>
+    Quando o Gerador de OPs cria uma OP, o <b>servidor</b> tenta casá-la com uma alocação de
+    planejamento já congelada e <b>herda a linha dessa alocação</b>. Ninguém clica em nada. Esse
+    evento aparece como <b>VINCULO_AUTOMATICO</b>, com autor “sistema”.
+  </p>
+  <div class="aviso">
+    <strong>Leia o motivo desse evento.</strong> Ele diz como a escolha foi feita:
+    <ul>
+      <li><b>“vinculo exato”</b> — a OP trouxe o código da necessidade e casou com a alocação certa. Confiável.</li>
+      <li><b>“escolhida por APROXIMAÇÃO de capacidade”</b> — a OP <em>não</em> trouxe o código, e o
+      servidor escolheu a alocação cuja sobra era a mais parecida com a quantidade da OP. O motivo
+      informa de quantas unidades foi essa diferença. <b>Quanto maior a diferença, menos confiável
+      é a linha em que a OP caiu.</b></li>
+    </ul>
+  </div>
+
+  <h2>Como investigar um caso</h2>
+  <ol>
+    <li>Abra <b>ADM › Auditoria</b>.</li>
+    <li>Amplie as datas para cobrir o período em que o problema apareceu.</li>
+    <li>Digite o <b>lote da OP</b> na busca. Tanto faz escrever <code>26273/03</code>,
+      <code>26273-03</code> ou <code>2627303</code>.</li>
+    <li>Marque <b>“Incluir encerramentos e cancelamentos de OP”</b> se quiser o ciclo completo.</li>
+    <li>Leia de baixo para cima: o evento mais antigo é o que colocou a OP ali.</li>
+  </ol>
+
+  <h2>Duas coisas que o manual precisa deixar claras</h2>
+  <div class="aviso">
+    <strong>O log começou em 07/10/2026.</strong> Antes dessa data, programar, mover, tirar e
+    congelar <b>não eram registrados</b> — então não procure quem mexeu em setembro: a informação
+    nunca existiu. Já <b>rearranjos de linha</b>, <b>encerramentos</b> e <b>cancelamentos</b> são
+    retroativos, porque sempre foram gravados nos seus próprios lugares.
+  </div>
+  <div class="aviso">
+    <strong>Só o admin vê, e ninguém pode apagar.</strong> O registro aceita apenas inclusão: não
+    dá para editar nem excluir um evento, e o sistema confere que o nome gravado é o de quem
+    estava logado. É o que faz o log valer como prova.
+  </div>
+
+  <h2>O que esta tela NÃO mostra</h2>
+  <ul>
+    <li><b>Apontamento</b> (quantidade, paradas, turnos): isso está em Histórico de Apontamentos e no Dossiê do Lote.</li>
+    <li><b>Movimentação de estoque</b>: está no Kardex e no Dossiê do Lote.</li>
+    <li><b>Mudança de permissão de usuário</b>: ainda não é registrada em lugar nenhum.</li>
+    <li><b>Edição de cadastro</b> de produto, cliente ou fornecedor. Material tem histórico próprio, na tela de Cadastros.</li>
+  </ul>
+</div>
+</body>
+</html>

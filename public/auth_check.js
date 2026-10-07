@@ -117,6 +117,13 @@ const KURYOS_MODULOS = {
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
                   paginas: ['usuarios.html'] },
+  // Auditoria da programação (07/10): quem tirou/pôs uma OP na linha, quem
+  // encerrou, e o que o SERVIDOR fez sozinho (vínculo automático no criarOP).
+  // Não entra em MODULOS_POR_PAPEL de propósito -- só `admin`, que recebe
+  // todos os módulos, e quem o ADM marcar explicitamente. Um log de
+  // auditoria visível para os auditados perde a função.
+  auditoria:    { rotulo: 'Auditoria da Programação', desc: 'Histórico de quem mexeu na linha/horário das OPs (dado sensível)',
+                  paginas: ['auditoria_programacao.html'] },
   rh:           { rotulo: 'RH — Pessoas',          desc: 'Colaboradores, avaliação de desempenho e férias',
                   paginas: ['rh_cadastros.html', 'rh_avaliacao.html', 'rh_ferias.html'] },
   rh_dashboard: { rotulo: 'RH — Dashboard',        desc: 'Indicadores de RH (dado sensível)',
@@ -796,7 +803,8 @@ function renderUnifiedNavbar(user) {
   ]);
 
   const usersGroup = grupo('ADM', [
-    temMod('usuarios') && ktLink('usuarios.html', 'people', 'Usuários', activePage)
+    temMod('usuarios') && ktLink('usuarios.html', 'people', 'Usuários', activePage),
+    temMod('auditoria') && ktLink('auditoria_programacao.html', 'history', 'Auditoria', activePage)
   ]);
 
   // RH (Fase 1-3b): Colaboradores/Cargos, Avaliação, Férias -- Documentos

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditoria da Programação - PCP Kuryos</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/eventos-programacao.js"></script>
+  <script src="shared/auditoria-programacao-tela.js"></script>
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    /* Consome os tokens de shared/theme.css direto (--ink/--panel/--bg/--line/
+       --accent/--good/--critical/--warn). Lição registrada na auditoria de
+       modo escuro: página com sistema de cores paralelo acaba com texto
+       branco em fundo branco, porque auth_check.js injeta o theme.css em
+       toda página e o seletor dele vence. */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+           background: var(--bg); color: var(--ink); font-size: 14px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+
+    .filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .campo { display: flex; flex-direction: column; gap: 4px; }
+    .campo label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+    .campo input, .campo select { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px;
+      background: var(--bg); color: var(--ink); font-size: 13px; font-family: inherit; }
+    .campo input:focus, .campo select:focus { outline: none; border-color: var(--accent); }
+    .campo.cresce { flex: 1; min-width: 190px; }
+    .campo.cresce input { width: 100%; }
+    .btn { padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+      color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn:hover { border-color: var(--accent); }
+    .btn.primario { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .chk { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+
+    .kpis { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 11px 16px; min-width: 124px; }
+    .kpi b { display: block; font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--accent); }
+    .kpi span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .kpi.sistema b { color: var(--warn); }
+    .kpi.tirou b { color: var(--critical); }
+
+    .aviso { background: color-mix(in srgb, var(--warn) 12%, var(--panel)); border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line));
+      border-radius: 10px; padding: 11px 14px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.5; }
+
+    .ev { display: flex; gap: 12px; padding: 11px 2px; border-bottom: 1px solid var(--line); }
+    .ev:last-child { border-bottom: 0; }
+    .ev-hora { flex: 0 0 118px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+    .ev-corpo { flex: 1; min-width: 0; }
+    .ev-frase { font-size: 13.5px; line-height: 1.45; }
+    .ev-meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+      letter-spacing: .03em; margin-right: 5px; vertical-align: 1px; }
+    .tag.PROGRAMAR, .tag.CONGELAR { background: color-mix(in srgb, var(--accent) 18%, var(--panel)); color: var(--accent); }
+    .tag.MOVER { background: color-mix(in srgb, var(--ink) 10%, var(--panel)); color: var(--muted); }
+    .tag.TROCAR_LINHA { background: color-mix(in srgb, var(--warn) 22%, var(--panel)); color: var(--warn); }
+    .tag.TIRAR { background: color-mix(in srgb, var(--critical) 16%, var(--panel)); color: var(--critical); }
+    .tag.VINCULO_AUTOMATICO { background: color-mix(in srgb, var(--warn) 28%, var(--panel)); color: var(--warn); }
+    .tag.ENCERRAR { background: color-mix(in srgb, var(--good) 18%, var(--panel)); color: var(--good); }
+    .fonte { font-size: 10px; color: var(--muted); opacity: .8; }
+    .vazio { padding: 34px 16px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    @media (max-width: 680px) {
+      .ev { flex-direction: column; gap: 3px; }
+      .ev-hora { flex: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Auditoria da Programação</h1>
+    <div class="sub">Quem tirou ou pôs uma OP na linha, quem encerrou etapa, e o que o servidor fez sozinho. Só o admin vê esta página.</div>
+
+    <div class="card">
+      <div class="filtros">
+        <div class="campo"><label for="fDe">De</label><input type="date" id="fDe"></div>
+        <div class="campo"><label for="fAte">Até</label><input type="date" id="fAte"></div>
+        <div class="campo"><label for="fAcao">Ação</label>
+          <select id="fAcao"><option value="">Todas</option></select>
+        </div>
+        <div class="campo"><label for="fLinha">Linha</label>
+          <select id="fLinha"><option value="">Todas</option></select>
+        </div>
+        <div class="campo cresce"><label for="fBusca">Buscar OP, pedido, produto ou pessoa</label>
+          <input type="text" id="fBusca" placeholder="26273/03, 26273-03, 2627303, nome..." autocomplete="off">
+        </div>
+        <button class="btn primario" id="btnBuscar">Buscar</button>
+      </div>
+      <div style="margin-top:11px; display:flex; gap:18px; flex-wrap:wrap; align-items:center">
+        <label class="chk"><input type="checkbox" id="fIncluirOps"> Incluir encerramentos e cancelamentos de OP <span style="opacity:.7">(carrega todas as OPs — mais lento)</span></label>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+    <div id="avisos"></div>
+    <div class="card" id="lista"><div class="vazio">Carregando...</div></div>
+  </div>
+
+  <script>
+  var firebaseConfig = {
+    apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+    authDomain: "prod-kuryos.firebaseapp.com",
+    databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+    projectId: "prod-kuryos",
+    storageBucket: "prod-kuryos.firebasestorage.app",
+    messagingSenderId: "323674581733",
+    appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  kuryosConnectEmulatorsIfLocal();
+  var db = firebase.database();
+
+  // auth_check.js já barra quem não tem o módulo `auditoria`; a tela só
+  // monta depois que ele confirma o usuário.
+  function iniciar() {
+    if (!window.currentUser) { setTimeout(iniciar, 120); return; }
+    AuditoriaProgramacaoTela.iniciar(db, window.currentUser);
+  }
+  iniciar();
+  </script>
+  <script src="auth_check.js"></script>
+</body>
+</html>
