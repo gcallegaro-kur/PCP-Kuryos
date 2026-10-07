@@ -198,6 +198,41 @@
         ".validate": "!newData.exists() || (newData.hasChildren(['status', 'por', 'em']) && (newData.child('status').val() == 'LIBERADO' || newData.child('status').val() == 'REPROVADO' || newData.child('status').val() == 'PENDENTE'))"
       }
     },
+    // Auditoria 5S (06/10): checklist do líder, auditoria da Qualidade e inspeção da Diretoria.
+    // O registro FECHADO não muda mais (é prova formal para as consequências); ações, ciência e
+    // ocorrências têm nós próprios. Configuração (quem é líder/auditor de quê) só o admin altera.
+    "auditoria5s_config": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
+    "auditorias_5s": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true)",
+      "$id": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true) && !data.child('fechadaEm').exists()",
+        ".validate": "!newData.exists() || newData.hasChildren(['tipo', 'setor', 'data', 'itens', 'resultado', 'assinatura', 'fechadaEm'])"
+      }
+    },
+    "acoes_5s": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true)",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true)"
+    },
+    "ciencia_5s": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true)",
+      "$aud": {
+        "$quem": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true) && !data.exists()",
+          ".validate": "newData.hasChildren(['uid', 'nome', 'em'])"
+        }
+      }
+    },
+    // Ocorrências individuais (nome da pessoa): quem lê é só RH/gestão/auditores; quem registra é quem opera o módulo.
+    "ocorrencias_5s": {
+      ".read": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'rh' || root.child('auditoria5s_config').child('usuarios').child(auth.uid).child('papel').val() == 'GESTAO' || root.child('auditoria5s_config').child('usuarios').child(auth.uid).child('papel').val() == 'AUDITOR' || root.child('auditoria5s_config').child('usuarios').child(auth.uid).child('papel').val() == 'DIRETORIA')",
+      "$id": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('auditoria5s').val() == true) && (!data.exists() || root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('auditoria5s_config').child('usuarios').child(auth.uid).child('papel').val() == 'GESTAO')",
+        ".validate": "!newData.exists() || newData.hasChildren(['data', 'setor', 'colaboradorNome', 'descricao', 'registradoPorUid'])"
+      }
+    },
     "perdas": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'production' || (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp') || root.child('usuarios').child(auth.uid).child('role').val() == 'rotulagem')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('manipulacao').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('rotulagem').val() == true))"

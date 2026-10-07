@@ -5,6 +5,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Auditoria 5S (06/10/2026)
+
+- **Pedido:** a analista de Qualidade quer o checklist 5S no sistema (líder diário + auditoria cruzada sem aviso + inspeção da Diretoria). Decisões do usuário: ocorrências com responsável desde já (virarão advertência formal depois da fase de testes, com ciência dos colaboradores), líderes por setor via usuário/papel, assinatura digital, Qualidade e P&D se revezam e a Diretoria inspeciona sem aviso, sem aviso ao líder.
+- **Arquivos:** `public/auditoria_5s.html`, `public/shared/auditoria-5s.js` (regras puras), `public/shared/auditoria-5s-tela.js`, `public/manual_auditoria_5s.html`, `public/manuais.html`, `public/auth_check.js` (módulo `auditoria5s`, link em Qualidade e em Ajuda), `database.rules.json` (`auditoria5s_config`, `auditorias_5s`, `acoes_5s`, `ciencia_5s`, `ocorrencias_5s`), `public/shared/fotos-qualidade.js` (texto "obrigatória"), testes `run_auditoria_5s_test.js`, `run_auditoria_5s_rules_test.js`, `run_auditoria_5s_ui_test.js`.
+- **Para usar:** o admin marca o módulo "Auditoria 5S" em Usuários e define o papel de cada um em Auditoria 5S › Configuração. A fase de treinamento começa ligada (registros não contam para a escada).
+
 ### Claude — Retrabalhos fora do perfil da rotulagem (05/10/2026)
 
 - **Pedido:** o perfil da rotulagem só vê rotuladoras e a rotulagem realizada; o bloco de Retrabalhos sai de lá.

@@ -111,6 +111,8 @@ const KURYOS_MODULOS = {
                   paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'consulta_estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
                   paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html'] },
+  auditoria5s:  { rotulo: 'Auditoria 5S',        desc: 'Checklist do líder, auditoria da Qualidade e inspeção da Diretoria (5S)',
+                  paginas: ['auditoria_5s.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -741,6 +743,8 @@ function renderUnifiedNavbar(user) {
     // Histórico de análises + indicadores (29/09): consulta de todo laudo e KPIs.
     temMod('qualidade') && ktLink('qualidade_historico.html', 'chart', 'Histórico e Indicadores', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
+    // Auditoria 5S (06/10): líderes de setor, auditores (Qualidade/P&D) e Diretoria.
+    temMod('auditoria5s') && ktLink('auditoria_5s.html', 'clipboard', 'Auditoria 5S', activePage),
     temMod('qualidade') && !temMod('comercial') && !temMod('logistica') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage),
     // Dossiê do lote (18/09): auditoria de tudo o que aconteceu com um lote.
     // É ferramenta de gestão -- Qualidade e PCP, nunca o operador (o papel
@@ -820,6 +824,7 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('manual_logistica.html', 'book', 'Recebimento', activePage),
     temMod('logistica') && ktLink('manual_estoque.html', 'book', 'Estoque e WMS', activePage),
     temMod('qualidade') && ktLink('manual_qualidade.html', 'book', 'Qualidade', activePage),
+    temMod('auditoria5s') && ktLink('manual_auditoria_5s.html', 'book', 'Auditoria 5S', activePage),
     temMod('cadastros') && ktLink('manual_cadastros.html', 'book', 'Cadastros', activePage),
     temMod('usuarios') && ktLink('manual_admin.html', 'book', 'Administração', activePage),
     // Referência completa: única sem gate de módulo, porque é o documento

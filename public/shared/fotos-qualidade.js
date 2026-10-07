@@ -146,7 +146,7 @@
       itens.forEach(function(i) { try { if (i.url && URL.revokeObjectURL) URL.revokeObjectURL(i.url); } catch (e) { /* nada */ } });
     }
     function desenhar() {
-      cont.textContent = itens.length + ' de ' + MAX_FOTOS + (itens.length ? '' : ' · opcional');
+      cont.textContent = itens.length + ' de ' + MAX_FOTOS + (itens.length ? '' : (o.obrigatoria ? ' · obrigatória' : ' · opcional'));
       btn.classList.toggle('off', itens.length >= MAX_FOTOS);
       input.disabled = itens.length >= MAX_FOTOS;
       erroEl.textContent = aviso;

@@ -1257,3 +1257,29 @@ em paralelo), `bomDaVersao` (BOM `v1` atende fórmula `V1`). Fica para depois:
   sem densidade/volume no produto, 9 sem fórmula/BOM, 5 com SKU fora do cadastro. Resolve o "O que comprar" e o MRP.
 - **Alocações abertas em OP Concluída (21 em 05/10, antes eram 24).** `scripts/aplicar-plano1.sh` libera; falta
   ajustar `ops.html` para liberar `abertaDesde*` ao concluir a OP (hoje a confirmação do PCP não libera).
+
+## Auditoria 5S — o que ficou para depois (06/10/2026)
+
+Entregue em 06/10 (Fase 1 + ocorrências com responsável): `auditoria_5s.html` + `shared/auditoria-5s.js` (regras) +
+`shared/auditoria-5s-tela.js`; nós `auditorias_5s` (fechada = imutável), `acoes_5s`, `ciencia_5s`, `ocorrencias_5s`,
+`auditoria5s_config`. Origem: analista de Qualidade (planilha `Checklists_Auditoria_5S.xlsx` + roteiro do assistente).
+Líder por setor, auditores (Qualidade e P&D se revezam, uma audita a outra), Diretoria com inspeção surpresa, assinatura
+digital, tudo sem aviso ao líder. Fica para depois:
+
+- **Advertências formais com ciência do colaborador (Fase 2, decisão do usuário).** Depois da fase de testes e do
+  treinamento, a escada vira sistema de advertência formal com assinatura e ciência da pessoa. Hoje a ocorrência
+  guarda o responsável e o sistema só SUGERE o degrau (`Auditoria5S.escada`); nada é aplicado. Falta: documento da
+  advertência (orientação escrita, advertência, suspensão), assinatura/ciência do colaborador (login próprio? coletor
+  de assinatura?), validação do RH/jurídico no fluxo, ligação com o cadastro do RH (`rh_colaboradores`, hoje só RH lê:
+  a lista "Equipe" da configuração é temporária) e LGPD (acesso restrito já aplicado em `ocorrencias_5s`).
+  Desligar "Fase de testes e treinamento" na configuração quando começar a valer.
+- **Lembretes automáticos.** Líder que não fez o checklist até o fim do turno e setor sem a auditoria externa da semana
+  (o Painel já mostra os dois; falta avisar por e-mail/mensagem, no padrão de `checkTurnoNaoEncerrado` em
+  `functions/index.js`).
+- **Pendências cobradas na próxima auditoria.** Itens 11 (líder) e 20 (Qualidade) perguntam pelas pendências anteriores;
+  hoje o plano de ações lista as abertas, mas a pergunta não é pré-preenchida a partir dele.
+- **Tendência e ranking por setor, e meta por setor.** Só o resultado de cada auditoria e o último status por setor.
+- **Auditoria cruzada entre turnos (item 16) e fotos-padrão por posto.** A foto-padrão do posto ainda é papel; o item
+  pede para comparar com ela. Um cadastro de postos com foto-padrão resolveria.
+- **Quem lidera a Qualidade.** A regra "auditor de fora do setor" usa os líderes cadastrados do setor; as duas analistas
+  precisam ser cadastradas como Auditor (não líder de Qualidade) ou uma delas líder e a outra auditora do setor Qualidade.
