@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/itens-cadastro.js"></script>
+  <script src="shared/pendencias-produto.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -49,6 +50,16 @@
     .stat{background:var(--card);border-radius:16px;padding:16px;text-align:center;box-shadow:var(--shadow)}
     .stat-val{font-size:24px;font-weight:700;letter-spacing:-.01em;color:var(--success)}
     .stat-lbl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;margin-top:2px}
+    /* Cartões clicáveis do painel de Produtos (08/10): filtram a lista. */
+    button.stat{border:2px solid transparent;cursor:pointer;font:inherit;color:inherit;width:100%}
+    button.stat:hover{border-color:var(--border)}
+    button.stat:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+    button.stat.ativo{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card))}
+    .stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+    .stats-pend{grid-template-columns:repeat(3,1fr)}
+    .pend-tag{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:6px;background:var(--tint-orange-bg,#fff4e5);color:var(--warning,#b45309);white-space:nowrap}
+    .pend-tag.sem{background:var(--tint-red-bg,#fdecec);color:var(--danger,#b91c1c)}
+    @media(max-width:700px){.stats,.stats-pend{grid-template-columns:repeat(2,1fr)}}
     .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
     .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .table-wrap{overflow:auto;max-height:calc(100vh - 340px)}
@@ -613,11 +624,19 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="stat-val" id="statTotal-prod">—</div><div class="stat-lbl">Total</div></div>
-      <div class="stat"><div class="stat-val" id="statAtivos-prod" style="color:var(--success)">—</div><div class="stat-lbl">Ativos</div></div>
-      <div class="stat"><div class="stat-val" id="statInativos-prod" style="color:var(--muted)">—</div><div class="stat-lbl">Inativos</div></div>
+      <button type="button" class="stat" data-dash-prod="total" title="Mostrar todos"><div class="stat-val" id="statTotal-prod">—</div><div class="stat-lbl">Total</div></button>
+      <button type="button" class="stat" data-dash-prod="Ativo" title="Filtrar ativos"><div class="stat-val" id="statAtivos-prod" style="color:var(--success)">—</div><div class="stat-lbl">Ativos</div></button>
+      <button type="button" class="stat" data-dash-prod="Inativo" title="Filtrar inativos"><div class="stat-val" id="statInativos-prod" style="color:var(--muted)">—</div><div class="stat-lbl">Inativos</div></button>
       <div class="stat"><div class="stat-val" id="statCategorias-prod" style="color:var(--primary)">—</div><div class="stat-lbl">Categorias</div></div>
     </div>
+    <!-- Pendências de cadastro técnico entre os ATIVOS (shared/pendencias-produto.js).
+         Clicar filtra a lista; clicar de novo tira o filtro. -->
+    <div class="stats stats-pend">
+      <button type="button" class="stat" data-dash-prod="formula" aria-pressed="false"><div class="stat-val" id="statPendFormula-prod" style="color:var(--warning)">—</div><div class="stat-lbl">Fórmula pendente</div><div class="stat-sub" id="statPendFormulaSub-prod"></div></button>
+      <button type="button" class="stat" data-dash-prod="bom" aria-pressed="false"><div class="stat-val" id="statPendBom-prod" style="color:var(--warning)">—</div><div class="stat-lbl">BOM pendente</div><div class="stat-sub" id="statPendBomSub-prod"></div></button>
+      <button type="button" class="stat" data-dash-prod="espec" aria-pressed="false"><div class="stat-val" id="statPendEspec-prod" style="color:var(--warning)">—</div><div class="stat-lbl">Especificação pendente</div><div class="stat-sub" id="statPendEspecSub-prod"></div></button>
+    </div>
+    <div id="filtroPend-prod" style="display:none;margin:-6px 0 12px;font-size:13px"></div>
 
     <div class="card">
       <div class="card-title">
@@ -3839,14 +3858,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ── Painel de pendências (08/10, shared/pendencias-produto.js) ── */
+  var pendFormulas = {}, pendBom = {}, pendEspecs = {};
+  var filtroPend = ''; // '' | formula | bom | espec
+  var PEND_IDS = {formula: 'Formula', bom: 'Bom', espec: 'Espec'};
+  function renderPainelPendencias(indice) {
+    var r = PendenciasProduto.resumo(allProdutos, indice);
+    Object.keys(PEND_IDS).forEach(function(c) {
+      document.getElementById('statPend' + PEND_IDS[c] + '-prod').textContent = fmtNum(r[c].pendente);
+      document.getElementById('statPend' + PEND_IDS[c] + 'Sub-prod').textContent =
+        fmtNum(r[c].sem) + ' sem cadastro · ' + fmtNum(r[c].aAprovar) + ' a aprovar';
+    });
+    document.querySelectorAll('[data-dash-prod]').forEach(function(b) {
+      var k = b.getAttribute('data-dash-prod');
+      var on = PEND_IDS[k] ? filtroPend === k : (!filtroPend && document.getElementById('filterAtivo-prod').value === (k === 'total' ? '' : k));
+      b.classList.toggle('ativo', on);
+      if (PEND_IDS[k]) b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var aviso = document.getElementById('filtroPend-prod');
+    if (filtroPend) {
+      aviso.style.display = '';
+      aviso.innerHTML = 'Mostrando os produtos <b>ativos</b> com <b>' + PendenciasProduto.COMPONENTES[filtroPend].titulo.toLowerCase() +
+        '</b> (sem cadastro ou sem versão aprovada). <button type="button" class="btn btn-ghost btn-sm" id="limparPend-prod">✕ Tirar filtro</button>';
+      document.getElementById('limparPend-prod').onclick = function() { filtroPend = ''; renderTable(); };
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
+  function tagPendencia(key, indice) {
+    if (!filtroPend) return '';
+    var st = PendenciasProduto.doProduto(key, indice)[filtroPend];
+    if (!PendenciasProduto.pendente(st)) return '';
+    return '<span class="pend-tag' + (st === 'SEM' ? ' sem' : '') + '">' + PendenciasProduto.COMPONENTES[filtroPend].rotulo + ': ' + (st === 'SEM' ? 'sem cadastro' : 'a aprovar') + '</span>';
+  }
+  function cliqueDashProd(k) {
+    if (PEND_IDS[k]) {
+      filtroPend = filtroPend === k ? '' : k;
+      if (filtroPend) document.getElementById('filterAtivo-prod').value = '';
+    } else {
+      filtroPend = '';
+      document.getElementById('filterAtivo-prod').value = k === 'total' ? '' : k;
+    }
+    renderTable();
+  }
+
   function renderTable() {
     var search = norm(document.getElementById('searchInput-prod').value);
     var filtAtivo = document.getElementById('filterAtivo-prod').value;
     var filtCat = document.getElementById('filterCategoria-prod').value;
     var filtCli = document.getElementById('filterCliente-prod').value;
+    var indicePend = PendenciasProduto.indexar(pendFormulas, pendBom, pendEspecs);
 
     var rows = Object.entries(allProdutos).filter(function(entry) {
       var p = entry[1];
+      if (filtroPend && !PendenciasProduto.filtra(entry[0], p, filtroPend, indicePend)) return false;
       if (filtAtivo && p.ativo !== filtAtivo) return false;
       if (filtCat && p.categoria !== filtCat) return false;
       if (filtCli && p.cliente !== filtCli) return false;
@@ -3871,6 +3936,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('statAtivos-prod').textContent = fmtNum(ativos);
     document.getElementById('statInativos-prod').textContent = fmtNum(inativos);
     document.getElementById('statCategorias-prod').textContent = Object.keys(cats).length;
+    renderPainelPendencias(indicePend);
     document.getElementById('tableCount-prod').textContent = 'Produtos (' + rows.length + ' exibidos)';
 
     var tbody = document.getElementById('tableBody-prod');
@@ -3896,7 +3962,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var pct = calcularPreenchimento(p, CAMPOS_PREENCHIMENTO_PROD).pct;
       return '<tr>' +
         '<td class="sku-cell" title="' + escapeAttr(p.codCliente || '') + '">' + escapeHtml(p.sku || '—') + '</td>' +
-        '<td class="desc-cell" title="' + escapeAttr(p.descricao || '') + '">' + escapeHtml(p.descricao || '—') + '</td>' +
+        '<td class="desc-cell" title="' + escapeAttr(p.descricao || '') + '">' + escapeHtml(p.descricao || '—') + tagPendencia(key, indicePend) + '</td>' +
         '<td style="white-space:nowrap">' + escapeHtml(p.cliente || '—') + '</td>' +
         '<td><span class="badge badge-blue">' + escapeHtml(p.categoria || '—') + '</span></td>' +
         '<td style="font-size:12px;color:var(--muted)">' + escapeHtml(p.subcategoria || '—') + '</td>' +
@@ -4329,6 +4395,13 @@ document.addEventListener('DOMContentLoaded', function() {
     dbOnValue(db.ref('solicitacoes_cadastro_produto'), function(snap) {
       solicitacoesCad = snap.val() || {};
       renderSolicitacoesCadastro();
+    });
+    // Fórmula/BOM/Especificação: alimentam o painel de pendências.
+    dbOnValue(db.ref('formulas'), function(snap) { pendFormulas = snap.val() || {}; renderTable(); });
+    dbOnValue(db.ref('bom'), function(snap) { pendBom = snap.val() || {}; renderTable(); });
+    dbOnValue(db.ref('especificacoes'), function(snap) { pendEspecs = snap.val() || {}; renderTable(); });
+    document.querySelectorAll('[data-dash-prod]').forEach(function(b) {
+      b.addEventListener('click', function() { cliqueDashProd(b.getAttribute('data-dash-prod')); });
     });
     dbOnValue(db.ref('clientes'), function(snap) {
       allClientesCad = snap.val() || {};
