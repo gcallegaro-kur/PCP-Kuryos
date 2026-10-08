@@ -245,7 +245,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — 5S: foto obrigatória em todo item do checklist do líder (2026-10-08).** Arquivos ativos: `public/shared/auditoria-5s.js`, `public/shared/auditoria-5s-tela.js`, `public/manual_auditoria_5s.html`, testes 5S, `AGENT_STATUS.md`.
+- **PUBLICADO — 5S: foto obrigatória em todo item do checklist do líder (2026-10-08).** `Auditoria5S.exigeFoto(tipo, r)`: líder C/NC; Qualidade/Diretoria só NC; NA dispensa. Relatório mostra fotos dos conformes. Testes 5S atualizados. Arquivos ativos: nenhum.
 
 - **PUBLICADO — 5S: auditor também líder, com rodízio (2026-10-08), `8a50f02`.** Papel AUDITOR aceita setores (= líder deles); `Auditoria5S.lideresDoSetor/autoresDoDia/rodizio`; validar: auditor-líder audita o próprio setor exceto no dia em que preencheu o checklist dele, e quem auditou não preenche o checklist do dia. Painel mostra o rodízio. Testes run_auditoria_5s_test.js e _ui_test.js. Arquivos ativos: nenhum.
 
