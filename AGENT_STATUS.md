@@ -15,6 +15,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **`run_pedido_sku_credito_test.js` (novo, 28 verificações)** reproduz a base real reduzida e **reprova com o fallback reintroduzido** (conferido).
 - **Dados:** `scripts/corrigir-credito-sku-errado.js` (ensaio por padrão, `--aplicar` grava). Só move o que o sistema **chutou** — critério mecânico: a OP aponta por SKU pra outro pedido **E** a regra nova não resolveria nada do que o registro guardou. 14 apontamentos / 24.315 un. Os outros 4 (6.614 un., OPs 26260/01 e 26261/02 creditadas em `0011__BODY_SPLASH_LEAO_DO_DESERTO_BOURBON_200ml` com a OP vinculada a `PED-0008__MRARBS07`) **não são movidos**: o registro nomeia outro pedido comercial e o nome bate nele — foi escolha, não chute. Confirmar com o Comercial.
 - **Depois da correção:** Céu Infinito 201% → **76%** (status 'Concluído' volta a 'Produção Parcial', pois foi automático, sem encerramento manual); Flor D'Aura 14% → **98%**; Lunar 158% → 103%; Zahra 76% → **131%** (sobra acima de 100% que vem de antes do razão `apontamentosAplicados` existir, sem rastro por apontamento).
+- **CORREÇÃO DOS DADOS APLICADA** em 2026-10-08 19:45Z, autorizada pelo usuário: 6 pedidos, 14 apontamentos, 24.315 un. movidas. Reensaio depois: **0 apontamentos a corrigir**. Cada pedido tocado guarda `correcaoCreditoSku` (quando, delta, motivo). Céu Infinito está em 7.588 / 10.000 e voltou a 'Produção Parcial'.
 - **Arquivos ativos:** nenhum.
 
 ### ⚠ Claude — INCIDENTE: retomada de linha quebrada em produção (07/10/2026)
