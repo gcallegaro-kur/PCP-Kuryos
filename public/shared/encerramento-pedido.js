@@ -8,7 +8,7 @@
    Antes: botão por linha (7 cliques no pedido 05 da Febella -- 3 linhas
    ficaram abertas), sem motivo, sem quem/quando, e o "Salvar" com status
    "Automático" reabria em silêncio.
-   Aqui: encerra o pedido INTEIRO ou uma linha, motivo obrigatório, grava
+   Aqui: encerra UMA linha por vez (pedido do usuário), motivo obrigatório, grava
    quem/quando/origem e quanto ficou sem produzir; reabrir exige motivo.
    Histórico em pedidos/{key}/encerramentoHistorico.
    Funções puras (testadas em node) + diálogo (navegador).
@@ -135,16 +135,14 @@
     var bg = doc.createElement('div');
     bg.id = 'encPedDlg';
     bg.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px');
-    var escopo = '';
-    if (c.keyLinha && alvoTodas.length > 1) {
-      escopo = '<fieldset style="border:0;padding:0;margin:0 0 10px"><legend style="font-weight:700;font-size:13px;margin-bottom:4px">O que ' + (reabrir ? 'reabrir' : 'encerrar') + '</legend>' +
-        '<label style="display:flex;gap:6px;align-items:center;font-size:13px;margin-bottom:4px"><input type="radio" name="encEscopo" value="linha" checked> Só esta linha: ' + linhaTxt(c.keyLinha) + '</label>' +
-        '<label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="radio" name="encEscopo" value="todas"> Todas as ' + alvoTodas.length + ' linhas ' + (reabrir ? 'encerradas' : 'abertas') + ' do pedido #' + esc(c.pedidoId) + '</label></fieldset>';
-    } else {
-      var lista = c.keyLinha ? [c.keyLinha] : alvoTodas;
-      escopo = '<div style="font-size:13px;margin-bottom:10px"><b>' + (lista.length === 1 ? 'Linha' : lista.length + ' linhas') + ' do pedido #' + esc(c.pedidoId) + ':</b><ul style="margin:4px 0 0 18px;padding:0">' +
-        lista.map(function(k) { return '<li>' + linhaTxt(k) + '</li>'; }).join('') + '</ul></div>';
-    }
+    /* Sempre UMA linha por vez (usuário, 08/10: "prefiro encerrar linha por linha,
+       dá menor margem pra erros"). Vindo da linha (PCP), é ela; vindo do pedido
+       (Comercial), escolhe-se a linha numa lista. */
+    var escopo = c.keyLinha
+      ? '<div style="font-size:13px;margin-bottom:10px"><b>Linha:</b> ' + linhaTxt(c.keyLinha) + '</div>'
+      : '<label style="display:block;font-size:13px;font-weight:700;margin-bottom:4px" for="encLinha">Linha a ' + (reabrir ? 'reabrir' : 'encerrar') + ' *</label>' +
+        '<select id="encLinha" style="width:100%;margin-bottom:10px"><option value="">— escolha a linha —</option>' +
+        alvoTodas.map(function(k) { return '<option value="' + esc(k) + '">' + linhaTxt(k) + '</option>'; }).join('') + '</select>';
     var motivos = Object.keys(MOTIVOS).map(function(k) { return '<option value="' + k + '">' + MOTIVOS[k] + '</option>'; }).join('');
     bg.innerHTML = '<div role="dialog" aria-modal="true" aria-labelledby="encPedTit" style="background:var(--card,var(--surface,#fff));color:var(--text,#111);border-radius:10px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)">' +
       '<h3 id="encPedTit" style="margin:0 0 10px;font-size:17px">' + (reabrir ? '↩ Reabrir pedido #' : '⬛ Encerrar pedido #') + esc(c.pedidoId) + '</h3>' +
@@ -164,8 +162,9 @@
     var btn = $('encConfirmar');
     if (!btn) return;
     btn.onclick = function() {
-      var esc2 = doc.querySelector('input[name="encEscopo"]:checked');
-      var keys = c.keyLinha && !(esc2 && esc2.value === 'todas') ? [c.keyLinha] : alvoTodas;
+      var linhaSel = c.keyLinha || ($('encLinha') && $('encLinha').value);
+      if (!linhaSel) { $('encErro').textContent = 'Escolha a linha.'; $('encErro').style.display = ''; return; }
+      var keys = [linhaSel];
       var opc = {motivoTipo: reabrir ? null : $('encMotivo').value, texto: $('encTexto').value, por: c.por, origem: c.origem};
       var r = reabrir ? montarReabertura(pedidos, keys, opc) : montarEncerramento(pedidos, keys, opc);
       if (!r.ok) { $('encErro').textContent = r.erro; $('encErro').style.display = ''; return; }
@@ -174,7 +173,7 @@
         return c.aposGravar ? c.aposGravar(r.linhas) : null;
       }).then(function() {
         fechar();
-        if (c.aoConcluir) c.aoConcluir((reabrir ? 'Reaberta' : 'Encerrada') + (r.linhas.length === 1 ? ' 1 linha' : 's ' + r.linhas.length + ' linhas') + ' do pedido #' + c.pedidoId + '.');
+        if (c.aoConcluir) c.aoConcluir((reabrir ? 'Reaberta' : 'Encerrada') + ' a linha ' + (r.linhas[0].sku || r.linhas[0].produto || r.linhas[0].key) + ' do pedido #' + c.pedidoId + '.');
       }).catch(function(e) {
         btn.disabled = false;
         $('encErro').textContent = 'Não foi possível gravar: ' + (e && e.message || e) + (/permission/i.test(String(e && e.message)) ? ' (seu usuário não pode encerrar pedido: só PCP e Comercial).' : '');

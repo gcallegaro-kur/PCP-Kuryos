@@ -123,11 +123,22 @@ function estado() {
     await page.waitForSelector('#encPedDlg');
     const dlg = await page.locator('#encPedDlg').innerText();
     assert.match(dlg, /Encerrar pedido #05/);
-    assert.match(dlg, /Todas as 2 linhas abertas do pedido #05/, 'a já encerrada não conta');
-    await page.check('input[name="encEscopo"][value="todas"]');
+    assert.equal(await page.locator('input[name="encEscopo"]').count(), 0, 'só linha a linha (usuário, 08/10)');
+    assert.match(dlg, /Linha: BODY SPLASH SORVETE 120ML/);
     await page.click('#encConfirmar'); // sem motivo
     await page.waitForFunction(() => /Escolha o motivo/.test(document.getElementById('encErro').innerText));
     assert.equal(await page.evaluate(() => window.__db.pedidos['05__FBBS0002'].statusManual), undefined);
+    await page.selectOption('#encMotivo', 'CLIENTE_ACEITOU_MENOS');
+    await page.fill('#encTexto', 'Febella aceitou o entregue');
+    await page.click('#encConfirmar');
+    await page.waitForFunction(() => window.__db.pedidos['05__FBBS0002'].statusManual === 'encerrado', null, {timeout: 8000});
+    assert.equal(await page.evaluate(() => window.__db.pedidos['05__FBHD0002'].statusManual), undefined, 'a outra linha do pedido não é tocada');
+    await page.waitForSelector('#encPedDlg', {state: 'detached'});
+    // Segunda linha pelo botão da edição.
+    await linha('HIDRATANTE SORVETE').locator('[data-action="edit"]').click();
+    await page.waitForSelector('#modalBg.open');
+    await page.click('#btnEncerrar');
+    await page.waitForSelector('#encPedDlg');
     await page.selectOption('#encMotivo', 'CLIENTE_ACEITOU_MENOS');
     await page.fill('#encTexto', 'Febella aceitou o entregue');
     await page.click('#encConfirmar');
@@ -183,17 +194,21 @@ function estado() {
     await c.page.selectOption('#dPedido', '05');
     await c.page.click('#encerrarPed');
     await c.page.waitForSelector('#encPedDlg');
-    assert.match(await c.page.locator('#encPedDlg').innerText(), /2 linhas do pedido #05/);
+    assert.equal(await c.page.locator('#encLinha option').count(), 3, 'escolhe entre as 2 linhas abertas');
     await c.page.selectOption('#encMotivo', 'ATENDIDO_TOLERANCIA');
+    await c.page.click('#encConfirmar'); // sem linha
+    await c.page.waitForFunction(() => /Escolha a linha/.test(document.getElementById('encErro').innerText));
+    await c.page.selectOption('#encLinha', '05__FBBS0002');
     await c.page.click('#encConfirmar');
-    await c.page.waitForFunction(() => window.__db.pedidos['05__FBBS0002'].statusManual === 'encerrado' && window.__db.pedidos['05__FBHD0002'].statusManual === 'encerrado', null, {timeout: 8000});
+    await c.page.waitForFunction(() => window.__db.pedidos['05__FBBS0002'].statusManual === 'encerrado', null, {timeout: 8000});
+    assert.equal(await c.page.evaluate(() => window.__db.pedidos['05__FBHD0002'].statusManual), undefined, 'só a linha escolhida');
     const pc = await c.page.evaluate(() => window.__db);
     assert.equal(pc.pedidos['05__FBBS0002'].encerramento.origem, 'COMERCIAL');
     assert.equal(pc.pedidos['05__FBBS0002'].encerramento.por, 'Diego');
     const ev = Object.values(pc.comercial_eventos['05'] || {});
     assert.ok(ev.some((e) => e.tipo === 'ENCERRAMENTO' && /FBBS0002/.test(e.texto)), 'linha do tempo do Comercial registra');
     assert.deepEqual(c.errors.filter((e) => !/favicon/.test(e)), [], 'erros no Comercial: ' + c.errors.join(' | '));
-    console.log('OK encerramento de pedido: 95% vira aviso; PCP encerra o pedido inteiro com motivo, salvar não reabre, reabrir com motivo; Comercial encerra e registra na linha do tempo.');
+    console.log('OK encerramento de pedido: 95% vira aviso; PCP encerra linha a linha com motivo, salvar não reabre, reabrir com motivo; Comercial encerra a linha escolhida e registra na linha do tempo.');
   } finally {
     await browser.close();
   }
