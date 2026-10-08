@@ -232,6 +232,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — Encerramento só linha a linha (2026-10-08).** Arquivos ativos: `public/shared/encerramento-pedido.js`, `public/comercial.html`, manuais Comercial/Referência, testes de encerramento, `AGENT_STATUS.md`.
+
 - **PUBLICADO — Encerramento de pedido com motivo (2026-10-08), `5e508e5`.** PCP (Pedidos) e Comercial (Documentos › Encerrar/Reabrir pedido) encerram a linha ou o pedido inteiro; motivo obrigatório; `pedidos/{k}/encerramento` {motivoTipo, motivo, texto, por, origem, em, saldoNaoProduzido} + `encerramentoHistorico`; reabrir com motivo. 95% = "Pronto para encerrar" (aviso), não Concluído; Salvar do formulário não reabre. Regra nova em `pedidos/$pedidoKey` (.validate): só admin/pcp/módulo pedidos/módulo comercial mudam statusManual/encerramento. Módulo `shared/encerramento-pedido.js`. Testes: run_encerramento_pedido_test.js, _rules_test.js (emulador), _ui_test.js. Hosting + RTDB por worktree limpo; 4 arquivos conferidos por HTTP. Telas de compra seguem ignorando ≥95% (`pedidoFinalizado`). Arquivos ativos: nenhum.
 
 - **PUBLICADO — Compras ignoram pedido 95% produzido (2026-10-08), `96df7d6`.** Pedidos mostra Concluído a partir de 95%; O que comprar, MRP (`mrpDemandaPorMaterial`) e Compras (`gpGruposFiltrados`) só ignoravam encerrado/100%. Nova `pedidoFinalizado()` em utils.js usada nas três. Base: 13 linhas, 1.167 un de resíduo saem da necessidade. Teste em run_necessidade_pedidos_ui_test.js. Arquivos ativos: nenhum.
