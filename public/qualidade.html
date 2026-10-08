@@ -48,6 +48,7 @@
     .alert-danger{background:var(--tint-red-bg);color:var(--tint-red-fg);border:1px solid color-mix(in srgb, var(--tint-red-fg) 40%, transparent)}
     .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
     .btn-green{background:var(--success);color:white}.btn-green:hover{filter:brightness(.9)}
+    .btn-restricao{background:var(--warning,#d97706);color:white}.btn-restricao:hover{filter:brightness(.9)}
     .btn-primary{background:var(--primary);color:white}.btn-primary:hover{filter:brightness(.9)}
     .btn-danger{background:var(--danger);color:white}.btn-danger:hover{filter:brightness(.9)}
     .btn-purple{background:var(--purple);color:white}.btn-purple:hover{filter:brightness(.9)}
@@ -500,6 +501,19 @@
         <label>Observação</label>
         <textarea id="qGranelObs" rows="2" placeholder="Resultado, ajuste realizado, motivo da reprovação..."></textarea>
       </div>
+      <!-- Liberar com restrição (pedido da Qualidade, 08/10): aparece ao clicar no botão. -->
+      <div id="qGranelRestricaoBox" style="display:none;border:1px solid var(--warning,#d97706);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:rgba(217,119,6,.07)">
+        <div style="font-weight:700;margin-bottom:6px">Liberação com restrição</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label for="qGranelRestricao">Restrição / condição da liberação *</label>
+          <textarea id="qGranelRestricao" rows="2" placeholder="Ex.: pH 3,43 fora da especificação (5 a 6). Liberado para envase; P&amp;D ajusta a fórmula para os próximos lotes."></textarea>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label for="qGranelRestricaoAut">Autorizado por *</label>
+          <input type="text" id="qGranelRestricaoAut" placeholder="Nome de quem autorizou">
+        </div>
+        <div class="field-hint" style="margin-top:6px">O envase fica liberado. A restrição fica gravada no lote e aparece na Manipulação e no Dossiê do lote. Lance os resultados reais, mesmo fora da especificação.</div>
+      </div>
       <div class="form-group">
         <label>Fotos da análise <span class="field-hint" style="font-weight:400">(até 6 · na reprovação, pelo menos uma)</span></label>
         <div id="qFotosGranel"></div>
@@ -508,6 +522,7 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="qGranelCancelar">Cancelar</button>
       <button class="btn btn-danger" id="qGranelReprovar">Reprovar granel</button>
+      <button class="btn btn-restricao" id="qGranelRestringir">Liberar com restrição</button>
       <button class="btn btn-green" id="qGranelLiberar">Liberar para envase</button>
     </div>
   </div>
@@ -1401,6 +1416,10 @@ function abrirLaudoGranel(opKey) {
         ' · <a href="dossie_lote.html?op=' + encodeURIComponent(granelAtual.opKey) + '" target="_blank" rel="noopener">abrir dossiê do lote</a>';
     })();
   document.getElementById('qGranelObs').value = '';
+  document.getElementById('qGranelRestricaoBox').style.display = 'none';
+  document.getElementById('qGranelRestricao').value = '';
+  document.getElementById('qGranelRestricaoAut').value = '';
+  document.getElementById('qGranelRestringir').textContent = 'Liberar com restrição';
   if (fotosGranel) fotosGranel.limpar();
   fotosGranel = FotosQualidade.montar(document.getElementById('qFotosGranel'), {permiteDispensa: true});
   renderPlanoGranel();
@@ -1525,18 +1544,23 @@ function decidirGranel(decisao) {
   if (!exigFotoG.ok) { showAlert(exigFotoG.erro, 'danger'); return; }
   var aval = avaliacaoGranel();
   var ensaios = AnaliseGranel.registro(aval);
+  var comRestricao = decisao === 'LIBERAR_COM_RESTRICAO';
+  var restricaoTxt = document.getElementById('qGranelRestricao').value.trim();
+  var restricaoAut = document.getElementById('qGranelRestricaoAut').value.trim();
+  if (comRestricao && !restricaoTxt) { showAlert('Descreva a restrição: o que está fora e sob qual condição o bulk foi liberado.', 'danger'); document.getElementById('qGranelRestricao').focus(); return; }
+  if (comRestricao && !restricaoAut) { showAlert('Informe quem autorizou a liberação com restrição.', 'danger'); document.getElementById('qGranelRestricaoAut').focus(); return; }
   if (decisao === 'LIBERAR' && aval.bloqueia &&
       !confirm('⚠ Há ensaio CRÍTICO fora da especificação neste granel.\n\nLiberar assim mesmo?')) return;
-  if (decisao === 'LIBERAR' && aval.pendentes &&
+  if ((decisao === 'LIBERAR' || comRestricao) && aval.pendentes &&
       !confirm(aval.pendentes + ' ensaio(s) sem resultado: ' + aval.linhas.filter(function(l) { return l.status === 'PENDENTE'; })
         .map(function(l) { return l.ensaio; }).join(', ') + '.\n\nSe não se aplicam, marque NA. Liberar assim mesmo?')) return;
   // A densidade do bulk converte o peso do envase de produto em ml
   // (Portaria INMETRO 249/2021). Sem ela a Qualidade terá de medir no laudo
   // de cada palete.
-  if (decisao === 'LIBERAR' && ensaios && InspecaoPA.densidadeDoBulk(ensaios) == null &&
+  if ((decisao === 'LIBERAR' || comRestricao) && ensaios && InspecaoPA.densidadeDoBulk(ensaios) == null &&
       !confirm('A densidade do bulk não foi apontada. Ela é usada para calcular o peso mínimo do envase (produto em ml).\n\nLiberar sem densidade? A Qualidade terá de medi-la no laudo de cada palete.')) return;
 
-  var t = Manipulacao.transicao(decisao, {quem: currentUserNome()});
+  var t = Manipulacao.transicao(decisao, {quem: currentUserNome(), restricao: restricaoTxt, autorizadoPor: restricaoAut});
   t['analise/ensaios'] = ensaios;
   t['analise/especificacaoKey'] = granelAtual.espec ? granelAtual.espec.key : null;
   t['analise/observacao'] = obs || null;
@@ -1588,16 +1612,29 @@ function decidirGranel(decisao) {
   }).then(function(rnc) {
     decidindoGranel = false;
     fecharModalGranel();
-    showAlert(decisao === 'LIBERAR'
-      ? 'Granel liberado. O envase deste lote já pode ser alocado.' +
+    showAlert(decisao !== 'REPROVAR'
+      ? (comRestricao ? 'Granel liberado COM RESTRIÇÃO (autorizado por ' + restricaoAut + '). O envase deste lote já pode ser alocado.' : 'Granel liberado. O envase deste lote já pode ser alocado.') +
         (specNova ? ' Faixas gravadas na especificação ' + specNova.chave.replace('__v', ' · versão ') + '.' : '')
       : 'Granel reprovado. O envase segue bloqueado.' + (rnc && rnc.numero ? ' RNC ' + rnc.numero + (rnc.existente ? ' (a mesma da correção).' : ' aberta.') : '') +
         ' Se der para corrigir, abra a correção em "Bulk reprovado".',
-      decisao === 'LIBERAR' ? 'success' : 'danger');
+      decisao !== 'REPROVAR' ? 'success' : 'danger');
   }).catch(function(e) { decidindoGranel = false; showAlert('Erro ao registrar a análise: ' + e.message, 'danger'); });
 }
 document.getElementById('qGranelLiberar').addEventListener('click', function() { decidirGranel('LIBERAR'); });
 document.getElementById('qGranelReprovar').addEventListener('click', function() { decidirGranel('REPROVAR'); });
+// 1º clique abre a caixa da restrição; o 2º confirma.
+document.getElementById('qGranelRestringir').addEventListener('click', function() {
+  var box = document.getElementById('qGranelRestricaoBox');
+  if (box.style.display === 'none') {
+    box.style.display = '';
+    if (!document.getElementById('qGranelRestricaoAut').value) document.getElementById('qGranelRestricaoAut').value = currentUserNome() || '';
+    this.textContent = 'Confirmar liberação com restrição';
+    document.getElementById('qGranelRestricao').focus();
+    box.scrollIntoView({block: 'nearest'});
+    return;
+  }
+  decidirGranel('LIBERAR_COM_RESTRICAO');
+});
 
 /* ─────────── Correção do bulk reprovado (25/09) ───────────
    Decisão do usuário: "Só Qualidade autoriza, RNC obrigatória". O bulk

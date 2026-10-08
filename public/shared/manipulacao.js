@@ -142,6 +142,16 @@
     return f && ESTADOS[f.status] ? f.status : (f ? 'AGUARDANDO_PESAGEM' : null);
   }
   function rotulo(st) { return (ESTADOS[st] || {}).rotulo || '—'; }
+  // Restrição da liberação do bulk ({texto, autorizadoPor}) ou null.
+  function restricao(op) {
+    var f = fase(op), a = f && f.analise;
+    return a && a.decisao === 'LIBERADO_COM_RESTRICAO' ? (a.restricao || {texto: null, autorizadoPor: a.por || null}) : null;
+  }
+  // Rótulo do estado considerando a restrição (telas).
+  function rotuloCompleto(op) {
+    var st = estado(op);
+    return st === 'LIBERADO' && restricao(op) ? 'Bulk liberado com restrição' : rotulo(st);
+  }
 
   /* PORTÃO DO ENVASE (GAP-04 de FLUXOS_DO_SISTEMA.md).
 
@@ -444,6 +454,14 @@
     if (acao === 'LIBERAR') {
       return {status: 'LIBERADO', 'analise/decisao': 'LIBERADO', 'analise/por': quem, 'analise/em': agora};
     }
+    /* Liberação com restrição (Qualidade, 08/10): o bulk segue para o envase
+       (mesmo status LIBERADO, o portão do envase não muda), mas a decisão
+       fica marcada, com a restrição e quem autorizou -- ex.: pH fora da
+       especificação, liberado sob condição de ajuste na fórmula. */
+    if (acao === 'LIBERAR_COM_RESTRICAO') {
+      return {status: 'LIBERADO', 'analise/decisao': 'LIBERADO_COM_RESTRICAO', 'analise/por': quem, 'analise/em': agora,
+        'analise/restricao': {texto: texto(c.restricao) || null, autorizadoPor: texto(c.autorizadoPor) || quem}};
+    }
     if (acao === 'REPROVAR') {
       return {status: 'REPROVADO', 'analise/decisao': 'REPROVADO', 'analise/por': quem, 'analise/em': agora};
     }
@@ -458,7 +476,7 @@
     if (st === 'PESADO') return ['CONFERIR', 'LIBERAR_SEM_CONFERENCIA'];
     if (st === 'CONFERIDO') return ['INICIAR_MANIPULACAO'];
     if (st === 'EM_MANIPULACAO') return ['FECHAR_MANIPULACAO'];
-    if (st === 'AGUARDANDO_CQ') return ['LIBERAR', 'REPROVAR'];
+    if (st === 'AGUARDANDO_CQ') return ['LIBERAR', 'LIBERAR_COM_RESTRICAO', 'REPROVAR'];
     if (st === 'CORRECAO_ABERTA') return ['INICIAR_PESAGEM'];
     if (st === 'REPROVADO') return ['ABRIR_CORRECAO'];
     return [];
@@ -628,6 +646,7 @@
   }
 
   return {
+    restricao: restricao, rotuloCompleto: rotuloCompleto,
     ESTADOS: ESTADOS, TOLERANCIA_PESAGEM_PCT: TOLERANCIA_PESAGEM_PCT, EXIGE_FOTO_PESAGEM: EXIGE_FOTO_PESAGEM,
     fotosDoItem: fotosDoItem, parcelasDoItem: parcelasDoItem, fotosDaLinha: fotosDaLinha,
     validarParcela: validarParcela, itensParaFechamento: itensParaFechamento,

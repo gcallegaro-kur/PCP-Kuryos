@@ -221,7 +221,11 @@
       add(granel.manipulacao.inicio, 'Manipulação', 'Manipulação iniciada', granel.manipulacao.por);
       add(granel.manipulacao.fim, 'Manipulação', 'Manipulação fechada' + (granel.manipulacao.rendimento != null ? ' (rendimento ' + num(granel.manipulacao.rendimento) + ' kg)' : ''), granel.manipulacao.fechadoPor || granel.manipulacao.por);
       if (granel.excedente && granel.excedente.unidades > 0) add(granel.excedente.em || granel.manipulacao.fim, 'Manipulação', 'Excedente: +' + num(granel.excedente.unidades) + ' un planejadas no mesmo lote', granel.excedente.por);
-      if (granel.analise) add(granel.analise.em, 'Qualidade', 'Granel ' + (granel.analise.decisao === 'LIBERADO' ? 'liberado' : granel.analise.decisao === 'REPROVADO' ? 'reprovado' : granel.analise.decisao || 'analisado') + sufixo, granel.analise.por);
+      if (granel.analise) {
+        var restr = granel.analise.decisao === 'LIBERADO_COM_RESTRICAO' ? (granel.analise.restricao || {}) : null;
+        add(granel.analise.em, 'Qualidade', 'Granel ' + (restr ? 'liberado COM RESTRIÇÃO' + (restr.texto ? ': ' + restr.texto : '') + (restr.autorizadoPor ? ' (autorizado por ' + restr.autorizadoPor + ')' : '')
+          : granel.analise.decisao === 'LIBERADO' ? 'liberado' : granel.analise.decisao === 'REPROVADO' ? 'reprovado' : granel.analise.decisao || 'analisado') + sufixo, granel.analise.por);
+      }
     });
     add(op.dataInicioReal, 'Envase', 'Início do envase' + (op.linha ? ' na ' + op.linha : ''), null);
     apontamentos.forEach(function(r) {

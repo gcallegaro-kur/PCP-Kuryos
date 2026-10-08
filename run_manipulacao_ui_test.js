@@ -555,6 +555,48 @@ async function campo(page, seletor, valor) {
     assert.deepEqual(dossie.errors, [], 'erros no dossiê: ' + dossie.errors.join(' | '));
     await dossie.page.close();
 
+    // ── Liberar com restrição (Qualidade, 08/10): pH fora, envase liberado ─
+    {
+      const estadoR = structuredClone(estadoParaCq);
+      const rq = await abrir(browser, 'cq', estadoR, 'qualidade.html');
+      const linhaR = rq.page.locator('#qGranelBody tr', {hasText: '26260/01'});
+      await linhaR.waitFor({timeout: 8000});
+      await linhaR.locator('[data-granel]').click();
+      await rq.page.waitForSelector('#modalGranelBg.open');
+      assert.equal(await rq.page.locator('#qGranelRestricaoBox').isVisible(), false, 'caixa da restrição só aparece no clique');
+      await rq.page.selectOption('[data-granel-cnc="e1"]', 'C');
+      await rq.page.fill('[data-granel-valor="e2"]', '3,43');
+      await rq.page.waitForFunction(() => document.querySelector('[data-granel-linha="e2"]').classList.contains('row-nc'));
+      await rq.page.fill('[data-granel-valor="e3"]', '0,88');
+      await rq.page.fill('[data-granel-min="e3"]', '0,85');
+      await rq.page.fill('[data-granel-max="e3"]', '0,95');
+      rq.page.on('dialog', (d) => d.accept());
+      await rq.page.click('#qGranelRestringir');
+      await rq.page.waitForSelector('#qGranelRestricaoBox', {state: 'visible'});
+      assert.equal(await rq.page.inputValue('#qGranelRestricaoAut'), 'Daiene', 'autorizador sugerido: quem está logado');
+      assert.match(await rq.page.locator('#qGranelRestringir').innerText(), /Confirmar/);
+      await rq.page.click('#qGranelRestringir'); // sem restrição escrita: recusa
+      await rq.page.waitForFunction(() => /Descreva a restrição/.test(document.getElementById('alertBox').innerText));
+      assert.equal(await rq.page.evaluate(() => window.__db.ops['26260-01'].manipulacao.status), 'AGUARDANDO_CQ', 'nada gravado');
+      await rq.page.fill('#qGranelRestricao', 'pH 3,43 fora da especificação. P&D ajusta a fórmula.');
+      await rq.page.fill('#qGranelRestricaoAut', 'Roberta Ramos');
+      await rq.page.click('#qGranelRestringir');
+      await rq.page.waitForFunction(() => window.__db.ops['26260-01'].manipulacao.status === 'LIBERADO', null, {timeout: 8000});
+      const an = await rq.page.evaluate(() => window.__db.ops['26260-01'].manipulacao.analise);
+      assert.equal(an.decisao, 'LIBERADO_COM_RESTRICAO');
+      assert.deepEqual(an.restricao, {texto: 'pH 3,43 fora da especificação. P&D ajusta a fórmula.', autorizadoPor: 'Roberta Ramos'});
+      assert.equal(String(an.ensaios.e2.valor), '3.43', 'resultado real gravado, mesmo fora');
+      assert.equal(an.ensaios.e2.cnc, 'NC');
+      await rq.page.waitForFunction(() => /COM RESTRIÇÃO/.test(document.getElementById('alertBox').innerText));
+      assert.deepEqual(rq.errors, [], 'erros na Qualidade (restrição): ' + rq.errors.join(' | '));
+      const dbR = await rq.page.evaluate(() => window.__db);
+      await rq.page.close();
+      const dr = await abrir(browser, 'cq', dbR, 'dossie_lote.html?op=26260-01');
+      await dr.page.waitForFunction(() => /COM RESTRIÇÃO/.test((document.getElementById('dossie') || {}).innerText || ''), null, {timeout: 8000});
+      assert.match(await dr.page.locator('#dossie').innerText(), /Granel liberado COM RESTRIÇÃO: pH 3,43 fora da especificação\. P&D ajusta a fórmula\. \(autorizado por Roberta Ramos\)/);
+      await dr.page.close();
+    }
+
     // ── Apontamento: o envase só enxerga a OP depois da liberação ───────
     const envase = await abrir(browser, 'pes', estadoParaCq, 'form.html');
     await envase.page.waitForFunction(() => typeof Manipulacao !== 'undefined' && window.opsCache && window.opsCache['26260-01'], null, {timeout: 8000});

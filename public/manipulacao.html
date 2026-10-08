@@ -414,7 +414,7 @@ function render() {
   tb.innerHTML = lista.map(function(o) {
     var st = Manipulacao.estado(o);
     var badge = !st ? '<span class="badge badge-gray">sem fase</span>'
-      : st === 'LIBERADO' ? '<span class="badge badge-green">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
+      : st === 'LIBERADO' ? '<span class="badge ' + (Manipulacao.restricao(o) ? 'badge-orange' : 'badge-green') + '"' + (Manipulacao.restricao(o) ? ' title="' + escapeAttr('Restrição: ' + (Manipulacao.restricao(o).texto || '')) + '"' : '') + '>' + escapeHtml(Manipulacao.rotuloCompleto(o)) + '</span>'
       : st === 'REPROVADO' ? '<span class="badge badge-red">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>'
       : '<span class="badge badge-orange">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>';
     return '<tr><td class="cabeca"><b>' + escapeHtml(o.lote) + '</b> · ' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +

@@ -245,7 +245,7 @@ const pesagemOk = {
 {
   assert.deepEqual(M.acoesDisponiveis({}), ['INICIAR_PESAGEM']);
   assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'PESADO'}}), ['CONFERIR', 'LIBERAR_SEM_CONFERENCIA']);
-  assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'AGUARDANDO_CQ'}}), ['LIBERAR', 'REPROVAR']);
+  assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'AGUARDANDO_CQ'}}), ['LIBERAR', 'LIBERAR_COM_RESTRICAO', 'REPROVAR']);
   assert.deepEqual(M.acoesDisponiveis({manipulacao: {status: 'LIBERADO'}}), []);
 
   const t = M.transicao('FECHAR_PESAGEM', {quem: 'Operador João', agora: '2026-09-17T12:30:00Z'});
@@ -254,6 +254,22 @@ const pesagemOk = {
   assert.equal(M.transicao('LIBERAR', {quem: 'Daiene'})['analise/decisao'], 'LIBERADO');
   assert.equal(M.transicao('NAO_EXISTE', {}), null);
   assert.equal(M.rotulo('EM_MANIPULACAO'), 'Em manipulação');
+}
+
+// Liberação com restrição (Qualidade, 08/10): envase liberado, decisão marcada.
+{
+  const t = M.transicao('LIBERAR_COM_RESTRICAO', {quem: 'Roberta', restricao: 'pH 3,43 fora (5 a 6)', autorizadoPor: 'Daiene', agora: '2026-10-08T12:00:00Z'});
+  assert.equal(t.status, 'LIBERADO', 'mesmo status: o portão do envase não muda');
+  assert.equal(t['analise/decisao'], 'LIBERADO_COM_RESTRICAO');
+  assert.deepEqual(t['analise/restricao'], {texto: 'pH 3,43 fora (5 a 6)', autorizadoPor: 'Daiene'});
+  assert.equal(M.transicao('LIBERAR_COM_RESTRICAO', {quem: 'Roberta', restricao: 'x'})['analise/restricao'].autorizadoPor, 'Roberta', 'sem autorizador explícito, quem registrou');
+  const op = {sku: 'X', manipulacao: {status: 'LIBERADO', analise: {decisao: 'LIBERADO_COM_RESTRICAO', por: 'Roberta', restricao: {texto: 'pH', autorizadoPor: 'Daiene'}}}};
+  assert.equal(M.podeEnvasar(op, {exigeBulk: true}).ok, true, 'envase liberado');
+  assert.deepEqual(M.restricao(op), {texto: 'pH', autorizadoPor: 'Daiene'});
+  assert.equal(M.rotuloCompleto(op), 'Bulk liberado com restrição');
+  const normal = {manipulacao: {status: 'LIBERADO', analise: {decisao: 'LIBERADO'}}};
+  assert.equal(M.restricao(normal), null);
+  assert.equal(M.rotuloCompleto(normal), 'Bulk liberado');
 }
 
 console.log('run_manipulacao_test.js: OK');
