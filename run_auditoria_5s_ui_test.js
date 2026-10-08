@@ -9,7 +9,12 @@ const PERFIS = {
   lider: {role: 'production', papel: {papel: 'LIDER', setores: ['Produção'], nome: 'Fulana Teste'},
     setores: {s01: {nome: 'Produção', ordem: 1, ativo: true, areas: {a01: {nome: 'Linha 1', responsavel: 'Maria Souza'}, a02: {nome: 'Linha 2', responsavel: ''}}}, s02: {nome: 'Recepção', ordem: 2, ativo: true, areas: {}}}},
   auditor: {role: 'qualidade', papel: {papel: 'AUDITOR'}},
-  admin: {role: 'admin', papel: null}
+  admin: {role: 'admin', papel: null},
+  // Auditora que também é líder (08/10): Fulana e Beltrano lideram o Laboratório em rodízio.
+  auditoraLider: {role: 'qualidade', papel: {papel: 'AUDITOR', setores: ['Laboratório'], nome: 'Fulana Teste'},
+    outros: {u2: {papel: 'AUDITOR', setores: ['Laboratório'], nome: 'Beltrano'}},
+    auditorias: () => { const d = new Date(), h = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      return {x1: {tipo: 'LIDER', setor: 'Laboratório', data: h, turno: '1º', responsavelUid: 'u2', responsavelNome: 'Beltrano', resultado: {statusTexto: 'VERDE'}, fechadaEm: h + 'T10:00:00Z'}}; }}
 };
 function dados(perfil) {
   const p = PERFIS[perfil];
@@ -17,8 +22,8 @@ function dados(perfil) {
     usuarios: {u1: {nome: 'Fulana Teste', email: 'f@kuryos.com', role: p.role, modulos: {auditoria5s: true}},
       u2: {nome: 'Beltrano', email: 'b@kuryos.com', role: 'production', modulos: {auditoria5s: true}}},
     config: {linhas: ['Linha 1']},
-    auditoria5s_config: {usuarios: p.papel ? {u1: p.papel} : {}, equipe: {p1: {nome: 'Maria Souza', setor: 'Produção'}}},
-    auditorias_5s: {}, acoes_5s: {}, ciencia_5s: {}, ocorrencias_5s: {}
+    auditoria5s_config: {usuarios: Object.assign(p.papel ? {u1: p.papel} : {}, p.outros || {}), equipe: {p1: {nome: 'Maria Souza', setor: 'Produção'}}},
+    auditorias_5s: p.auditorias ? p.auditorias() : {}, acoes_5s: {}, ciencia_5s: {}, ocorrencias_5s: {}
   };
 }
 function dadosComSetores(perfil) {
@@ -253,6 +258,22 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     await page.close();
 
     // ── Admin: configuração ──
+    // ── Auditora que também é líder: rodízio ──
+    ({page, errors} = await abrir(browser, 'auditoria_5s.html', 'auditoraLider'));
+    await page.waitForSelector('#abas [data-aba]');
+    const linhaLab = page.locator('#conteudo tr', {hasText: 'Laboratório'}).first();
+    await linhaLab.waitFor();
+    assert.match(await linhaLab.innerText(), /Fulana Teste, Beltrano|Beltrano, Fulana Teste/, 'as duas aparecem como líderes');
+    assert.match(await linhaLab.innerText(), /Rodízio: checklist de Beltrano → auditoria de Fulana Teste/);
+    await page.click('[data-aba="nova"]');
+    await page.waitForSelector('[data-tipo="LIDER"]');
+    assert.equal(await page.locator('[data-tipo="QUALIDADE"]').count(), 1, 'auditora-líder escolhe entre auditar e o checklist');
+    await page.click('[data-tipo="LIDER"]');
+    await page.waitForSelector('#fSetor');
+    assert.deepEqual((await page.locator('#fSetor option').allInnerTexts()).filter((x) => x !== 'Escolha…'), ['Laboratório'], 'checklist só nos setores que lidera');
+    assert.deepEqual(errors, [], 'erros (auditora-líder): ' + errors.join(' | '));
+    await page.close();
+
     ({page, errors} = await abrir(browser, 'auditoria_5s.html', 'admin'));
     await page.waitForSelector('[data-aba="config"]');
     await page.click('[data-aba="config"]');
@@ -293,5 +314,5 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
   } finally {
     await browser.close();
   }
-  console.log('OK Auditoria 5S (tela): líder com NC e foto, relatório e ciência, auditoria da Qualidade com crítico e líder que não confere, ocorrências restritas e configuração.');
+  console.log('OK Auditoria 5S (tela): líder com NC e foto, relatório e ciência, auditoria da Qualidade com crítico e líder que não confere, ocorrências restritas, configuração e rodízio da auditora-líder.');
 })().catch((e) => { console.error(e); process.exit(1); });

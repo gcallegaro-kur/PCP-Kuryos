@@ -147,9 +147,50 @@
     return erros;
   }
 
+  /* ── Auditor que também é líder (08/10) ──
+     Pedido do usuário: "a Yasmim e a Roberta são auditoras, mas são também as
+     líderes do laboratório e da retenção. Dá pra intercalar, quando uma
+     preenche, a outra tem que auditar, e vice-versa?"
+     Configuração: papel AUDITOR com setores marcados = também líder deles.
+     Regra (por setor e por dia): quem preencheu o checklist do líder não faz a
+     auditoria externa daquele setor naquele dia, e quem auditou não preenche o
+     checklist. Líder que não é auditor continua sem auditar o próprio setor. */
+  function lideraSetor(cfgUsuario, setor) {
+    var c = cfgUsuario || {};
+    return (c.papel === 'LIDER' || c.papel === 'AUDITOR') && (c.setores || []).indexOf(setor) >= 0;
+  }
+  function lideresDoSetor(cfgUsuarios, setor) {
+    var u = cfgUsuarios || {};
+    return Object.keys(u).filter(function(k) { return lideraSetor(u[k], setor); });
+  }
+  // Registros do setor naquele dia: {checklist:[uid], externa:[uid]}.
+  function autoresDoDia(auditorias, setor, data) {
+    var out = {checklist: [], externa: []};
+    Object.keys(auditorias || {}).forEach(function(k) {
+      var a = auditorias[k];
+      if (!a || a.anulada || a.setor !== setor || a.data !== data) return;
+      var uid = a.responsavelUid || (a.assinatura && a.assinatura.uid);
+      if (!uid) return;
+      (a.tipo === 'LIDER' ? out.checklist : out.externa).push(uid);
+    });
+    return out;
+  }
+  /* Quem audita hoje, num setor com auditores-líderes em rodízio. Devolve
+     {checklistPor:[uid], auditaPor:[uid]} ou null quando o setor não tem
+     auditor-líder. */
+  function rodizio(cfgUsuarios, setor, auditorias, data) {
+    var u = cfgUsuarios || {};
+    var auditoresLideres = lideresDoSetor(u, setor).filter(function(k) { return u[k].papel === 'AUDITOR'; });
+    if (!auditoresLideres.length) return null;
+    var d = autoresDoDia(auditorias, setor, data);
+    return {auditoresLideres: auditoresLideres, checklistPor: d.checklist,
+      auditaPor: d.checklist.length ? auditoresLideres.filter(function(k) { return d.checklist.indexOf(k) < 0; }) : auditoresLideres.slice()};
+  }
+
   /* a = {tipo, setor, turno, data, horario, responsavel, itens:{n:{r,local,fotos,acao,responsavel,prazo}},
           perguntas:{...}, conferencia:{...}, surpresa, liderPresente, divergencias:[n]}
-     ctx = {lideresDoSetor:[uid], uid, fotosPendentes:{n:qtd}} */
+     ctx = {lideresDoSetor:[uid], uid, fotosPendentes:{n:qtd},
+            auditorLider: bool (o usuário é AUDITOR), auditorias: {id: registro} (para o rodízio)} */
   function validar(a, ctx) {
     var c = ctx || {}, erros = [], aud = a || {}, tipo = aud.tipo;
     if (!TIPOS[tipo]) return ['Tipo de auditoria inválido.'];
@@ -163,6 +204,10 @@
       erros = erros.concat(validarItem((aud.itens || {})[x.n], x.n, tipo, (c.fotosPendentes || {})[x.n]));
     });
     if (tipo === 'LIDER') {
+      // Rodízio: quem auditou o setor no dia não preenche o checklist dele.
+      if (c.uid && autoresDoDia(c.auditorias, aud.setor, aud.data).externa.indexOf(c.uid) >= 0) {
+        erros.push('Você auditou ' + aud.setor + ' neste dia: o checklist do líder fica com a outra líder.');
+      }
       var p = aud.perguntas || {};
       if (p.mutirao !== 'SIM' && p.mutirao !== 'NAO') erros.push('Pergunta 9: responda Sim ou Não.');
       if (p.mutirao === 'SIM' && (!txt(p.mutiraoHorario) || !(num(p.mutiraoMinutos) > 0))) erros.push('Pergunta 9: informe o horário e a duração do mutirão.');
@@ -177,8 +222,15 @@
       if (v.v1 !== 'SIM' && v.v1 !== 'NAO') erros.push('V1: responda Sim ou Não.');
       if (v.v1 === 'NAO' && !(aud.divergencias && aud.divergencias.length)) erros.push('V1: informe os itens que o líder marcou C e foram encontrados NC.');
       if (v.v2 !== 'SIM' && v.v2 !== 'NAO') erros.push('V2: responda Sim ou Não.');
-      // Auditor de fora do setor: quem lidera o setor auditado não o audita.
-      if (c.uid && (c.lideresDoSetor || []).indexOf(c.uid) >= 0) erros.push('O auditor tem que ser de fora do setor: você é líder de ' + aud.setor + '.');
+      // Auditor de fora do setor: quem lidera o setor auditado não o audita --
+      // exceto o auditor que também é líder (rodízio): ele audita, desde que
+      // não tenha preenchido o checklist do líder daquele setor no mesmo dia.
+      if (c.uid && (c.lideresDoSetor || []).indexOf(c.uid) >= 0) {
+        if (!c.auditorLider) erros.push('O auditor tem que ser de fora do setor: você é líder de ' + aud.setor + '.');
+        else if (autoresDoDia(c.auditorias, aud.setor, aud.data).checklist.indexOf(c.uid) >= 0) {
+          erros.push('Você preencheu o checklist do líder de ' + aud.setor + ' neste dia: a auditoria fica com a outra líder (rodízio).');
+        }
+      }
     }
     return erros;
   }
@@ -313,6 +365,7 @@
     ITENS_LIDER: ITENS_LIDER, PERGUNTAS_LIDER: PERGUNTAS_LIDER, ITENS_QUALIDADE: ITENS_QUALIDADE, CRITICOS: CRITICOS, CONFERENCIA: CONFERENCIA,
     itensDoTipo: itensDoTipo, ehCritico: ehCritico, fotosDe: fotosDe, validarItem: validarItem, validar: validar, calcular: calcular,
     acoesObrigatorias: acoesObrigatorias, consequencia: consequencia, linhaControle: linhaControle, escada: escada,
-    ocorrenciasNosUltimos90: ocorrenciasNosUltimos90, semana: semana, cobertura: cobertura, statusPor: statusPor
+    ocorrenciasNosUltimos90: ocorrenciasNosUltimos90, semana: semana, cobertura: cobertura, statusPor: statusPor,
+    lideraSetor: lideraSetor, lideresDoSetor: lideresDoSetor, autoresDoDia: autoresDoDia, rodizio: rodizio
   };
 });

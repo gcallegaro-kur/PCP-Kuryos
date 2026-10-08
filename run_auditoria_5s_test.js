@@ -153,4 +153,36 @@ assert.deepEqual(A.setoresConfigurados({}).length, 15, 'configuração vazia = l
 assert.ok(A.validar(qualidade({}, {setor: 'Doca Externa'}), {}).some((e) => /setor/.test(e)), 'fora da lista padrão');
 assert.deepEqual(A.validar(qualidade({}, {setor: 'Doca Externa'}), {setores: ['Doca Externa']}), [], 'na lista configurada vale');
 
-console.log('OK Auditoria 5S: % e status do líder e da Qualidade, críticos, validação do NC, ações, escada disciplinar (só sugestão) e cobertura.');
+// ── Auditor que também é líder: rodízio (08/10; Yasmim e Roberta, Laboratório e Retenção) ──
+{
+  const cfgU = {yas: {papel: 'AUDITOR', setores: ['Laboratório', 'Retenção']}, rob: {papel: 'AUDITOR', setores: ['Laboratório', 'Retenção']},
+    ana: {papel: 'AUDITOR'}, jo: {papel: 'LIDER', setores: ['Produção']}};
+  const S = ['Laboratório', 'Retenção', 'Produção', 'Expedição'];
+  assert.deepEqual(A.lideresDoSetor(cfgU, 'Laboratório'), ['yas', 'rob'], 'auditor com setor marcado é líder dele');
+  assert.deepEqual(A.lideresDoSetor(cfgU, 'Produção'), ['jo']);
+  const chkYas = {tipo: 'LIDER', setor: 'Laboratório', data: '2026-10-08', responsavelUid: 'yas'};
+  const regs = {r1: chkYas};
+  const audLab = (extra) => qualidade({}, Object.assign({setor: 'Laboratório', data: '2026-10-08'}, extra));
+  const ctx = (uid, a) => ({uid, auditorLider: cfgU[uid].papel === 'AUDITOR', lideresDoSetor: A.lideresDoSetor(cfgU, 'Laboratório'), auditorias: a || regs, setores: S});
+  // Yasmim preencheu o checklist: Roberta audita; Yasmim não.
+  assert.deepEqual(A.validar(audLab(), ctx('rob')), [], 'a outra líder audita');
+  assert.ok(A.validar(audLab(), ctx('yas')).some((e) => /preencheu o checklist do líder de Laboratório.*rodízio/.test(e)));
+  // Outro dia ou outro setor: Yasmim audita.
+  assert.deepEqual(A.validar(audLab({data: '2026-10-09'}), ctx('yas')), []);
+  assert.deepEqual(A.validar(qualidade({}, {setor: 'Retenção', data: '2026-10-08'}), Object.assign(ctx('yas'), {lideresDoSetor: A.lideresDoSetor(cfgU, 'Retenção')})), []);
+  // Registro anulado não conta.
+  assert.deepEqual(A.validar(audLab(), ctx('yas', {r1: Object.assign({}, chkYas, {anulada: true})})), []);
+  // Vice-versa: quem auditou não preenche o checklist do dia.
+  const audRob = {r2: {tipo: 'QUALIDADE', setor: 'Laboratório', data: '2026-10-08', assinatura: {uid: 'rob'}}};
+  const chkLab = (uid) => A.validar(Object.assign(lider(), {setor: 'Laboratório', data: '2026-10-08'}), ctx(uid, audRob));
+  assert.ok(chkLab('rob').some((e) => /auditou Laboratório neste dia/.test(e)));
+  assert.deepEqual(chkLab('yas'), []);
+  // Líder que não é auditor continua sem auditar o próprio setor.
+  assert.ok(A.validar(qualidade({}, {setor: 'Produção'}), {uid: 'jo', lideresDoSetor: ['jo'], auditorias: {}, setores: S}).some((e) => /de fora do setor/.test(e)));
+  // Painel: quem audita hoje.
+  assert.deepEqual(A.rodizio(cfgU, 'Laboratório', regs, '2026-10-08'), {auditoresLideres: ['yas', 'rob'], checklistPor: ['yas'], auditaPor: ['rob']});
+  assert.deepEqual(A.rodizio(cfgU, 'Laboratório', {}, '2026-10-08').auditaPor, ['yas', 'rob'], 'sem checklist ainda: qualquer uma');
+  assert.equal(A.rodizio(cfgU, 'Produção', regs, '2026-10-08'), null, 'setor sem auditor-líder');
+}
+
+console.log('OK Auditoria 5S: % e status do líder e da Qualidade, críticos, validação do NC, ações, escada disciplinar (só sugestão), cobertura e rodízio do auditor-líder.');

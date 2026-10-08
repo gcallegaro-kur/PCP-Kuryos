@@ -25,8 +25,13 @@
   function areasDoSetor(nome) { var x = listaSetores().filter(function(y) { return y.nome === nome; })[0]; return x ? x.areas : []; }
   function lideresNomes(setor) {
     var u = S.cfg.usuarios || {};
-    return Object.keys(u).filter(function(k) { return u[k].papel === 'LIDER' && (u[k].setores || []).indexOf(setor) >= 0; }).map(function(k) { return u[k].nome || k; });
+    return A.lideresDoSetor(u, setor).map(function(k) { return u[k].nome || k; });
   }
+  function nomeCfg(uid) { var u = (S.cfg.usuarios || {})[uid]; return (u && u.nome) || uid; }
+  // Setores que o usuário lidera (líder, ou auditor que também é líder).
+  function setoresLiderados() { var c = cfgUsuario() || {}, ativos = nomesAtivos(); return (c.setores || []).filter(function(x) { return ativos.indexOf(x) >= 0; }); }
+  // Setores oferecidos no formulário: checklist do líder só nos que a pessoa lidera.
+  function setoresDoForm(tipo) { return tipo === 'LIDER' && papel() === 'AUDITOR' ? setoresLiderados() : setoresDoUsuario(); }
   function treinamento() { return S.cfg.modoTreinamento !== false; }   // padrão: fase de testes e treinamento
 
   /* ── Papéis ── */
@@ -40,14 +45,11 @@
     var p = papel();
     if (p === 'ADMIN') return ['LIDER', 'QUALIDADE', 'DIRETORIA'];
     if (p === 'LIDER') return ['LIDER'];
-    if (p === 'AUDITOR') return ['QUALIDADE'];
+    if (p === 'AUDITOR') return setoresLiderados().length ? ['QUALIDADE', 'LIDER'] : ['QUALIDADE'];
     if (p === 'DIRETORIA') return ['DIRETORIA'];
     return [];
   }
-  function lideresDoSetor(setor) {
-    var u = S.cfg.usuarios || {};
-    return Object.keys(u).filter(function(k) { return u[k].papel === 'LIDER' && (u[k].setores || []).indexOf(setor) >= 0; });
-  }
+  function lideresDoSetor(setor) { return A.lideresDoSetor(S.cfg.usuarios || {}, setor); }
   function abasVisiveis() {
     return ABAS.filter(function(a) {
       if (a[0] === 'nova') return tiposPermitidos().length > 0;
@@ -107,8 +109,11 @@
         var ex = c.externasSemana + '/' + c.metaSemana + (c.faltamSemana ? ' <span class="tg warn">faltam ' + c.faltamSemana + '</span>' : ' <span class="tg ok">ok</span>');
         var us = c.ultimoStatus ? '<span class="tg ' + (/VERDE/.test(c.ultimoStatus) ? 'ok' : /AMARELO/.test(c.ultimoStatus) ? 'warn' : 'bad') + '">' + e(c.ultimoStatus) + '</span>' : '<span class="mut">—</span>';
         var lids = lideresNomes(c.setor);
+        var rod = A.rodizio(S.cfg.usuarios || {}, c.setor, S.auditorias || {}, hoje());
+        var rodTxt = rod && rod.auditoresLideres.length > 1
+          ? '<div class="dica">Rodízio: ' + (rod.checklistPor.length ? 'checklist de ' + e(rod.checklistPor.map(nomeCfg).join(', ')) + ' → auditoria de ' + e(rod.auditaPor.map(nomeCfg).join(', ') || '—') : 'quem preencher o checklist não audita hoje') + '</div>' : '';
         var areasTxt = areasDoSetor(c.setor).map(function(x) { return x.nome; }).join(' · ');
-        return '<tr><td><b>' + e(c.setor) + '</b>' + (areasTxt ? '<div class="dica">' + e(areasTxt) + '</div>' : '') + '</td><td>' + (lids.length ? e(lids.join(', ')) : '<span class="tg bad">sem líder indicado</span>') + '</td><td>' + ls + '</td><td>' + ex + '</td><td>' + (c.ultimaExterna ? dataBR(c.ultimaExterna) : '<span class="mut">nunca</span>') + '</td><td>' + us + '</td><td>' + (a.abertas ? a.abertas + (a.atrasadas ? ' <span class="tg bad">' + a.atrasadas + ' atrasada(s)</span>' : '') : '<span class="mut">0</span>') + '</td><td>' +
+        return '<tr><td><b>' + e(c.setor) + '</b>' + (areasTxt ? '<div class="dica">' + e(areasTxt) + '</div>' : '') + '</td><td>' + (lids.length ? e(lids.join(', ')) : '<span class="tg bad">sem líder indicado</span>') + rodTxt + '</td><td>' + ls + '</td><td>' + ex + '</td><td>' + (c.ultimaExterna ? dataBR(c.ultimaExterna) : '<span class="mut">nunca</span>') + '</td><td>' + us + '</td><td>' + (a.abertas ? a.abertas + (a.atrasadas ? ' <span class="tg bad">' + a.atrasadas + ' atrasada(s)</span>' : '') : '<span class="mut">0</span>') + '</td><td>' +
           (tiposPermitidos().length ? '<button type="button" class="btn sm pri" data-ini="' + e(c.setor) + '">Iniciar</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div></div>';
     var recentes = Object.keys(aud).map(function(k) { return Object.assign({id: k}, aud[k]); }).sort(function(x, y) { return String(y.fechadaEm).localeCompare(String(x.fechadaEm)); }).slice(0, 6);
@@ -138,7 +143,7 @@
     desenharForm();
   }
   function iniciarForm(tipo) {
-    var setores = setoresDoUsuario();
+    var setores = setoresDoForm(tipo);
     S.F = {tipo: tipo, emEdicao: true, setor: (S.setorPre && setores.indexOf(S.setorPre) >= 0) ? S.setorPre : (setores.length === 1 ? setores[0] : ''), turno: '', data: hoje(), horario: agoraHora(),
       surpresa: tipo !== 'LIDER' ? true : null, liderPresente: '', itens: {}, perguntas: {}, conferencia: {}, divergencias: [], fq: {}};
     S.setorPre = null;
@@ -152,7 +157,7 @@
       itens: itens, perguntas: F.perguntas, conferencia: F.conferencia, divergencias: F.divergencias};
   }
   function desenharForm() {
-    var F = S.F, it = A.itensDoTipo(F.tipo), setores = setoresDoUsuario();
+    var F = S.F, it = A.itensDoTipo(F.tipo), setores = setoresDoForm(F.tipo);
     var h = '<div class="card"><h2>' + e(A.TIPOS[F.tipo].rotulo) + '</h2><div class="grid2">' +
       '<div><label class="t" for="fSetor">Setor</label><select id="fSetor"><option value="">Escolha…</option>' + setores.map(function(s) { return '<option' + (F.setor === s ? ' selected' : '') + '>' + e(s) + '</option>'; }).join('') + '</select></div>' +
       (F.tipo === 'LIDER' ? '<div><label class="t" for="fTurno">Turno</label><select id="fTurno"><option value="">Escolha…</option>' + A.TURNOS.map(function(t) { return '<option' + (F.turno === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' : '') +
@@ -299,7 +304,8 @@
 
   function finalizar() {
     var F = S.F, a = audDoForm();
-    var erros = A.validar(a, {uid: S.uid, lideresDoSetor: lideresDoSetor(F.setor), fotosPendentes: fotosPendentes(), setores: nomesAtivos()});
+    var erros = A.validar(a, {uid: S.uid, lideresDoSetor: lideresDoSetor(F.setor), fotosPendentes: fotosPendentes(), setores: setoresDoForm(F.tipo),
+      auditorLider: papel() === 'AUDITOR', auditorias: S.auditorias || {}});
     var box = el('errosForm');
     if (erros.length) { box.innerHTML = '<div class="aviso bad"><b>Falta completar:</b><ul style="margin:6px 0 0;padding-left:18px">' + erros.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul></div>'; box.scrollIntoView({block: 'center'}); return; }
     var r = A.calcular(a, params());
@@ -517,7 +523,7 @@
       '<div><label class="t">Auditorias externas por setor por semana</label><input type="number" id="cSemana" min="1" value="' + p.auditoriasPorSemana + '"></div></div>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:12px 0;font-size:13px"><input type="checkbox" id="cTreino"' + (treinamento() ? ' checked' : '') + '> <b>Fase de testes e treinamento</b> (registros e ocorrências ficam marcados e não contam para a escada)</label>' +
       '<button type="button" class="btn pri" id="cSalvarParam">Salvar parâmetros</button></div>';
-    h += '<div class="card"><h2>Quem é quem</h2><p class="dica">Só aparecem aqui os usuários que têm o módulo <b>Auditoria 5S</b> marcado em Usuários. Líder: preenche o checklist dos setores marcados. Auditor: Qualidade/P&D (audita qualquer setor, menos onde é líder). Diretoria: inspeções surpresa. Gestão: acompanha tudo e anula ocorrências.</p>';
+    h += '<div class="card"><h2>Quem é quem</h2><p class="dica">Só aparecem aqui os usuários que têm o módulo <b>Auditoria 5S</b> marcado em Usuários. Líder: preenche o checklist dos setores marcados. Auditor: Qualidade/P&D (audita qualquer setor). <b>Auditor que também é líder</b>: marque os setores dele — preenche o checklist desses setores e, no mesmo dia, quem preencheu não audita (rodízio com a outra líder). Diretoria: inspeções surpresa. Gestão: acompanha tudo e anula ocorrências.</p>';
     var com = Object.keys(us).filter(function(k) { return us[k] && (us[k].role === 'admin' || (us[k].modulos && us[k].modulos.auditoria5s === true)); });
     h += com.length ? '<div class="tw"><table><thead><tr><th>Usuário</th><th>Papel</th><th>Setores (líder)</th><th></th></tr></thead><tbody>' + com.map(function(k) {
       var c = cu[k] || {};
@@ -537,7 +543,7 @@
         var k = b.getAttribute('data-salvar-u'), pp = el('conteudo').querySelector('[data-papel="' + k + '"]').value;
         var ss = [].slice.call(el('conteudo').querySelectorAll('[data-setor-u="' + k + '"]')).filter(function(c) { return c.checked; }).map(function(c) { return c.value; });
         if (pp === 'LIDER' && !ss.length) { toast('Marque ao menos um setor para o líder.', true); return; }
-        var obj = pp ? {papel: pp, setores: pp === 'LIDER' ? ss : [], nome: (us[k] && (us[k].nome || us[k].email)) || k} : null;
+        var obj = pp ? {papel: pp, setores: (pp === 'LIDER' || pp === 'AUDITOR') ? ss : [], nome: (us[k] && (us[k].nome || us[k].email)) || k} : null;
         db.ref('auditoria5s_config/usuarios/' + k).set(obj).then(function() { toast('Salvo.'); }).catch(function(err) { toast(err.message, true); });
       };
     });
