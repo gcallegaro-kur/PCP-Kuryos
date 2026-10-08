@@ -232,6 +232,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **PUBLICADO — Painel de pendências em Cadastros › Produtos (2026-10-08), `a8a12aa`.** Cartões Fórmula/BOM/Especificação pendente (ativos; sem cadastro ou sem versão APROVADA), clicáveis para filtrar; Total/Ativos/Inativos também filtram; tag na linha. Módulo `shared/pendencias-produto.js`; testes run_pendencias_produto_test.js e _ui_test.js. Base: 306/315/306 de 335 ativos. Feito em worktree próprio (`../feat-dash-prod`) porque o checkout principal tem alterações não commitadas de outra sessão em form.html/historico.html/utils.js. Arquivos ativos: nenhum.
+
 - **PUBLICADO — Encerramento só linha a linha (2026-10-08).** A pedido do usuário, a janela de `shared/encerramento-pedido.js` encerra/reabre uma linha por vez (sem opção "todas"); no Comercial, botões Encerrar linha / Reabrir linha com lista de linhas. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Encerramento de pedido com motivo (2026-10-08), `5e508e5`.** PCP (Pedidos) e Comercial (Documentos › Encerrar/Reabrir pedido) encerram a linha ou o pedido inteiro; motivo obrigatório; `pedidos/{k}/encerramento` {motivoTipo, motivo, texto, por, origem, em, saldoNaoProduzido} + `encerramentoHistorico`; reabrir com motivo. 95% = "Pronto para encerrar" (aviso), não Concluído; Salvar do formulário não reabre. Regra nova em `pedidos/$pedidoKey` (.validate): só admin/pcp/módulo pedidos/módulo comercial mudam statusManual/encerramento. Módulo `shared/encerramento-pedido.js`. Testes: run_encerramento_pedido_test.js, _rules_test.js (emulador), _ui_test.js. Hosting + RTDB por worktree limpo; 4 arquivos conferidos por HTTP. Telas de compra seguem ignorando ≥95% (`pedidoFinalizado`). Arquivos ativos: nenhum.
