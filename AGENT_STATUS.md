@@ -232,7 +232,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
-- **EM ANDAMENTO — Compras ignoram pedido 95% produzido (2026-10-08).** Arquivos ativos: `public/shared/utils.js`, `public/shared/necessidade-pedidos-tela.js`, `public/insumos.html` (só mrpDemandaPorMaterial), `public/compras.html` (só gpGruposFiltrados), testes, `AGENT_STATUS.md`.
+- **PUBLICADO — Compras ignoram pedido 95% produzido (2026-10-08), `96df7d6`.** Pedidos mostra Concluído a partir de 95%; O que comprar, MRP (`mrpDemandaPorMaterial`) e Compras (`gpGruposFiltrados`) só ignoravam encerrado/100%. Nova `pedidoFinalizado()` em utils.js usada nas três. Base: 13 linhas, 1.167 un de resíduo saem da necessidade. Teste em run_necessidade_pedidos_ui_test.js. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Granel liberado com restrição (2026-10-08), `cc44503`.** Pedido da Qualidade. Botão "Liberar com restrição" na análise do granel (`qualidade.html`): restrição e autorizador obrigatórios; transição `LIBERAR_COM_RESTRICAO` em `shared/manipulacao.js` grava status LIBERADO (portão do envase inalterado), `analise/decisao` LIBERADO_COM_RESTRICAO e `analise/restricao` {texto, autorizadoPor}; helpers `restricao`/`rotuloCompleto`. Selo laranja na Manipulação, linha no Dossiê, manual da Qualidade. Testes: run_manipulacao_test.js, run_manipulacao_ui_test.js (cenário pH 3,43). Hosting por worktree limpo, 5 arquivos conferidos por HTTP. Arquivos ativos: nenhum.
 
