@@ -141,6 +141,12 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     assert.match(erros, /Item 3 \(NC\): descreva a ação imediata/);
     assert.match(erros, /Item 3 \(NC\): indique o responsável/);
     assert.match(erros, /Pergunta 9/);
+    // Checklist do líder: foto também nos itens conformes (08/10).
+    assert.match(erros, /Item 1 \(C\): no checklist do líder, anexe ao menos uma foto mesmo conforme/);
+    for (const n of ['1', '2', '4', '5', '6', '7', '8']) {
+      await page.waitForSelector('[data-foto="' + n + '"] input[type=file]', {state: 'attached'});
+      await page.setInputFiles('[data-foto="' + n + '"] input[type=file]', {name: 'item' + n + '.png', mimeType: 'image/png', buffer: PNG});
+    }
     // preenche o NC
     assert.equal(await page.locator('#dlAreas option').count(), 2, 'áreas do setor como sugestão do local da falha');
     await page.fill('[data-c="local"][data-n="3"]', 'Linha 1');
@@ -165,6 +171,7 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     assert.equal(a.treinamento, true);
     assert.equal(a.assinatura.nome, 'Fulana Teste'); assert.equal(a.assinatura.metodo, 'digital'); assert.ok(a.fechadaEm);
     assert.equal(a.itens['3'].fotos.length, 1, 'a foto subiu e ficou no registro');
+    assert.equal(a.itens['1'].fotos.length, 1, 'item conforme do líder também com foto');
     assert.match(a.itens['3'].fotos[0].url, /fotos\.test\/qualidade\/5s_/);
     assert.match(a.linhaControle, /;Produção;1º;Fulana Teste;Checklist do líder;C,C,NC,C,C,C,C,C;Sim;VERDE 88%/);
     const acoes = Object.values(d.acoes_5s);
@@ -176,7 +183,8 @@ const clicarResp = (page, n, r) => page.locator('.resp[data-n="' + n + '"] butto
     assert.match(rel, /VERDE/); assert.match(rel, /Linha 1/);
     assert.match(rel, /Consequência sugerida/i); assert.match(rel, /reconhecer o setor/);
     assert.match(rel, /assinado digitalmente/);
-    assert.equal(await page.locator('#relPrint .fotos img').count(), 1);
+    assert.equal(await page.locator('#relPrint .fotos img').count(), 8, '1 do NC + 7 dos conformes');
+    assert.match(rel, /Fotos dos itens conformes/i);
     // ciência da gerência
     await page.click('[data-ciencia="gerencia"]');
     await page.waitForFunction(() => window.__db.ciencia_5s && Object.keys(window.__db.ciencia_5s).length === 1);

@@ -188,6 +188,9 @@
     var crit = x.critico || A.ehCritico(S.F.tipo, x.n);
     var h = '<div class="item ' + (r === 'NC' ? 'nc' : r === 'C' ? 'c' : '') + (crit ? ' crit' : '') + '" id="it' + x.n + '"><div><span class="n">' + e(x.n) + '</span><span class="tx">' + e(x.texto) + '</span></div><div class="como">' + e(x.como) + '</div>' +
       '<div class="resp" data-n="' + e(x.n) + '"><button type="button" class="C' + (r === 'C' ? ' on' : '') + '" data-r="C">C</button><button type="button" class="NC' + (r === 'NC' ? ' on' : '') + '" data-r="NC">NC</button>' + (crit ? '' : '<button type="button" class="NA' + (r === 'NA' ? ' on' : '') + '" data-r="NA">NA</button>') + '</div>';
+    if (r === 'C' && A.exigeFoto(S.F.tipo, r)) {
+      h += '<div class="ncbox"><div><label class="t">Foto * (checklist do líder: foto mesmo conforme)</label><div data-foto="' + e(x.n) + '"></div></div></div>';
+    }
     if (r === 'NC') {
       var ext = S.F.tipo !== 'LIDER';
       h += '<div class="ncbox"><div><label class="t">Local / posto da falha *</label><input type="text" list="dlAreas" placeholder="Área ou posto" data-c="local" data-n="' + e(x.n) + '" value="' + e(d.local) + '"></div>' +
@@ -251,7 +254,7 @@
     el('btnCancelarForm').onclick = function() { if (confirm('Descartar esta auditoria?')) { S.F = null; render(); } };
     el('btnFinalizar').onclick = finalizar;
     // fotos dos itens já NC (ao redesenhar o formulário inteiro)
-    Object.keys(F.itens).forEach(function(n) { if (F.itens[n].r === 'NC') montarFoto(n); });
+    Object.keys(F.itens).forEach(function(n) { if (A.exigeFoto(F.tipo, F.itens[n].r)) montarFoto(n); });
   }
   function atualizarAreas() {
     var dl = el('dlAreas'); if (!dl || !S.F) return;
@@ -288,13 +291,13 @@
     novo.querySelectorAll('.resp button').forEach(function(b) {
       b.onclick = function() {
         var r = b.getAttribute('data-r'); S.F.itens[n] = Object.assign(S.F.itens[n] || {}, {r: r});
-        if (r !== 'NC' && S.F.fq[n]) delete S.F.fq[n];
+        if (!A.exigeFoto(S.F.tipo, r) && S.F.fq[n]) delete S.F.fq[n];
         redesenharItem(n); atualizarAoVivo();
         if (S.F.tipo !== 'LIDER' && S.F.conferencia.v1 === 'NAO') desenharForm();
       };
     });
     ligarCamposItens(novo);
-    if ((S.F.itens[n] || {}).r === 'NC') montarFoto(n);
+    if (A.exigeFoto(S.F.tipo, (S.F.itens[n] || {}).r)) montarFoto(n);
   }
   function atualizarAoVivo() {
     var box = el('aoVivo'); if (!box || !S.F) return;
@@ -313,8 +316,9 @@
     var btn = el('btnFinalizar'); btn.disabled = true; btn.textContent = 'Enviando fotos e gravando…';
     var chaveBase = F.data + '_' + F.setor.replace(/[^A-Za-z0-9]/g, '') + '_' + Date.now();
     var ncs = Object.keys(F.itens).filter(function(n) { return F.itens[n].r === 'NC'; });
+    var comFoto = Object.keys(F.itens).filter(function(n) { return A.exigeFoto(F.tipo, F.itens[n].r); });
     var storage = null;
-    Promise.all(ncs.map(function(n) {
+    Promise.all(comFoto.map(function(n) {
       var pend = F.fq[n] ? F.fq[n].pendentes() : [];
       if (pend.length && !storage) storage = firebase.storage();
       return FotosQualidade.enviar(storage, pend, {contexto: '5s', chave: chaveBase + '_' + n, autor: nomeUsuario()}).then(function(regs) { F.itens[n].fotos = regs; });
@@ -324,6 +328,7 @@
       Object.keys(F.itens).forEach(function(n) {
         var d = F.itens[n], o = {r: d.r};
         if (d.r === 'NC') { o.local = d.local.trim(); o.acao = d.acao.trim(); o.responsavel = d.responsavel.trim(); if (d.prazo) o.prazo = d.prazo; o.fotos = d.fotos || []; }
+        else if (A.exigeFoto(F.tipo, d.r)) o.fotos = d.fotos || [];
         itens[n] = o;
       });
       var audFinal = Object.assign(audDoForm(), {itens: itens});
@@ -380,6 +385,10 @@
       var d = a.itens[x.n] || {}, fotos = A.fotosDe(d);
       return '<tr><td><b>' + e(x.n) + '</b> ' + e(x.texto) + '</td><td>' + e(d.local) + '</td><td class="fotos">' + fotos.map(function(f) { return '<a href="' + e(f.url) + '" target="_blank" rel="noopener"><img src="' + e(f.url) + '" alt="foto"></a>'; }).join('') + '</td><td>' + e(d.acao) + '<div class="dica">' + e(d.responsavel) + (d.prazo ? ' · ' + e(d.prazo) : '') + '</div></td></tr>';
     }).join('') + '</tbody></table></div>' : '<p class="dica">Nenhum.</p>');
+    var cFotos = todos.filter(function(x) { var d = a.itens[x.n] || {}; return d.r === 'C' && A.fotosDe(d).length; });
+    if (cFotos.length) h += '<h3>Fotos dos itens conformes</h3><div class="tw"><table><tbody>' + cFotos.map(function(x) {
+      return '<tr><td><b>' + e(x.n) + '</b> ' + e(x.texto) + '</td><td class="fotos">' + A.fotosDe(a.itens[x.n]).map(function(f) { return '<a href="' + e(f.url) + '" target="_blank" rel="noopener"><img src="' + e(f.url) + '" alt="foto"></a>'; }).join('') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
     h += '<h3>Alertas</h3>' + ((r.alertas || []).length ? '<ul style="margin:0;padding-left:18px">' + r.alertas.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') + '</ul>' : '<p class="dica">Sem alertas.</p>');
     h += '<h3>Ações obrigatórias</h3>' + ((a.acoesObrigatorias || []).length ? '<ol style="margin:0;padding-left:18px">' + a.acoesObrigatorias.map(function(x) { return '<li><b>' + e(x.n) + '</b> ' + e(x.texto) + ' — ' + e(x.acao) + ' · ' + e(x.responsavel) + ' · <b>' + e(x.prazo) + '</b></li>'; }).join('') + '</ol>' : '<p class="dica">Nenhuma.</p>');
     h += '<h3>Consequência sugerida</h3><div>' + e(A.consequencia(r.status)) + '</div>';

@@ -16,7 +16,8 @@ assert.equal(A.ITENS_LIDER[4].critico, true);
 const nc = (extra) => Object.assign({r: 'NC', local: 'Posto 3', fotos: [{url: 'u'}], acao: 'Limpar agora', responsavel: 'Operador do posto'}, extra);
 function lider(respostas, perguntas) {
   const itens = {};
-  A.ITENS_LIDER.forEach((i) => { itens[i.n] = respostas && respostas[i.n] ? respostas[i.n] : {r: 'C'}; });
+  // Checklist do líder: foto em todo item (08/10).
+  A.ITENS_LIDER.forEach((i) => { itens[i.n] = respostas && respostas[i.n] ? respostas[i.n] : {r: 'C', fotos: [{url: 'https://f/' + i.n}]}; });
   return {tipo: 'LIDER', setor: 'Produção', turno: '1º', data: '2026-10-06', horario: '17:40', responsavelNome: 'Líder A', itens,
     perguntas: Object.assign({mutirao: 'SIM', mutiraoHorario: '17:30', mutiraoMinutos: 10, todosParticiparam: 'SIM', pendenciasOntem: 'SIM', ocorrencias: 0}, perguntas || {})};
 }
@@ -152,6 +153,17 @@ assert.deepEqual(A.setoresConfigurados({}).length, 15, 'configuração vazia = l
 // O setor escolhido precisa existir na lista em uso
 assert.ok(A.validar(qualidade({}, {setor: 'Doca Externa'}), {}).some((e) => /setor/.test(e)), 'fora da lista padrão');
 assert.deepEqual(A.validar(qualidade({}, {setor: 'Doca Externa'}), {setores: ['Doca Externa']}), [], 'na lista configurada vale');
+
+// ── Foto: líder em todo item (C ou NC); auditoria/inspeção só no NC (08/10) ──
+{
+  const semFoto = lider({1: {r: 'C'}});
+  assert.ok(A.validar(semFoto, {}).some((e) => /Item 1 \(C\).*foto mesmo conforme/.test(e)));
+  assert.deepEqual(A.validarItem({r: 'C'}, '1', 'LIDER', 1), [], 'foto escolhida (ainda não enviada) vale');
+  assert.deepEqual(A.validarItem({r: 'NA'}, '2', 'LIDER', 0), [], 'NA não pede foto');
+  assert.deepEqual(A.validarItem({r: 'C'}, '1', 'QUALIDADE', 0), [], 'auditoria: C sem foto');
+  assert.deepEqual(A.validarItem({r: 'C'}, '1', 'DIRETORIA', 0), [], 'inspeção: C sem foto');
+  assert.equal(A.exigeFoto('LIDER', 'C'), true); assert.equal(A.exigeFoto('QUALIDADE', 'C'), false); assert.equal(A.exigeFoto('DIRETORIA', 'NC'), true);
+}
 
 // ── Auditor que também é líder: rodízio (08/10; Yasmim e Roberta, Laboratório e Retenção) ──
 {

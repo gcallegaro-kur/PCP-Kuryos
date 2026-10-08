@@ -11,6 +11,9 @@
    Regras do roteiro, todas aqui e testadas em run_auditoria_5s_test.js:
    - cada item é C, NC ou NA (itens críticos: só C ou NC);
    - todo NC exige local/posto, foto (ao menos 1) e ação imediata COM responsável;
+   - checklist do LÍDER: foto em TODO item respondido C ou NC (usuário, 08/10:
+     "no checklist de líder é obrigatório tirar foto, mesmo estando conforme;
+     auditor e inspeção tiram foto apenas em NC");
    - % conformidade = C ÷ (C + NC), NA não entra; VERDE ≥ meta, AMARELO ≥ limite, VERMELHO abaixo;
    - NC em item crítico = VERMELHO "ITEM CRÍTICO", qualquer que seja a porcentagem
      (líder: só o item 5; Qualidade/Diretoria: C1 a C4);
@@ -132,12 +135,18 @@
     return (Array.isArray(f) ? f : Object.keys(f).map(function(k) { return f[k]; })).filter(function(x) { return x && (x.url || x.caminho); });
   }
 
+  // O item precisa de foto? Líder: todo C ou NC. Auditoria/inspeção: só NC.
+  function exigeFoto(tipo, r) { r = txt(r).toUpperCase(); return r === 'NC' || (tipo === 'LIDER' && r === 'C'); }
+
   /* Um item respondido. `fotosPendentes` = quantas fotos já escolhidas e ainda não enviadas. */
   function validarItem(item, n, tipo, fotosPendentes) {
     var erros = [], it = item || {}, r = txt(it.r).toUpperCase();
     var critico = ehCritico(tipo, n);
     if (r !== 'C' && r !== 'NC' && r !== 'NA') return ['Item ' + n + ': responda C, NC ou NA (não vale "mais ou menos").'];
     if (critico && r === 'NA') return ['Item ' + n + ': item crítico só aceita C ou NC.'];
+    if (r === 'C' && exigeFoto(tipo, r) && fotosDe(it).length + (Number(fotosPendentes) || 0) < 1) {
+      erros.push('Item ' + n + ' (C): no checklist do líder, anexe ao menos uma foto mesmo conforme.');
+    }
     if (r === 'NC') {
       if (!txt(it.local)) erros.push('Item ' + n + ' (NC): informe o local ou posto da falha.');
       if (fotosDe(it).length + (Number(fotosPendentes) || 0) < 1) erros.push('Item ' + n + ' (NC): anexe ao menos uma foto.');
@@ -363,7 +372,7 @@
   return {
     SETORES: SETORES, SETORES_PADRAO: SETORES_PADRAO, setoresConfigurados: setoresConfigurados, TURNOS: TURNOS, TIPOS: TIPOS, PARAMETROS: PARAMETROS, SENSOS: SENSOS, ESCADA: ESCADA, PRAZOS: PRAZOS,
     ITENS_LIDER: ITENS_LIDER, PERGUNTAS_LIDER: PERGUNTAS_LIDER, ITENS_QUALIDADE: ITENS_QUALIDADE, CRITICOS: CRITICOS, CONFERENCIA: CONFERENCIA,
-    itensDoTipo: itensDoTipo, ehCritico: ehCritico, fotosDe: fotosDe, validarItem: validarItem, validar: validar, calcular: calcular,
+    itensDoTipo: itensDoTipo, ehCritico: ehCritico, fotosDe: fotosDe, exigeFoto: exigeFoto, validarItem: validarItem, validar: validar, calcular: calcular,
     acoesObrigatorias: acoesObrigatorias, consequencia: consequencia, linhaControle: linhaControle, escada: escada,
     ocorrenciasNosUltimos90: ocorrenciasNosUltimos90, semana: semana, cobertura: cobertura, statusPor: statusPor,
     lideraSetor: lideraSetor, lideresDoSetor: lideresDoSetor, autoresDoDia: autoresDoDia, rodizio: rodizio
