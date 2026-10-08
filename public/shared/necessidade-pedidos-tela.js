@@ -47,7 +47,7 @@
   }
   function recalcular() {
     if (!pronto()) return;
-    abertos = NP.pedidosAbertos(D.pedidos, isConcluido);
+    abertos = NP.pedidosAbertos(D.pedidos, pedidoFinalizado); // ≥95% = concluído, como em Pedidos
     // Diagnóstico de todos os pedidos abertos: quais não dá para calcular e por quê.
     diag = {};
     NP.calcular(base(abertos.map(function(p) { return p.key; }), null)).pedidos.forEach(function(p) { diag[p.key] = {ok: p.ok, erro: p.erro, semAprovada: p.semAprovada}; });

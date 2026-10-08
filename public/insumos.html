@@ -2622,7 +2622,8 @@ function mrpDemandaPorMaterial() {
   Object.entries(pedidosCache || {}).forEach(function(e) {
     var key = e[0], p = e[1];
     if (!p || !p.sku) return;
-    if (typeof isConcluido === 'function' && isConcluido(p)) return;
+    // ≥95% produzido conta como concluído, como na tela de Pedidos (pedidoFinalizado).
+    if (typeof pedidoFinalizado === 'function' ? pedidoFinalizado(p) : (typeof isConcluido === 'function' && isConcluido(p))) return;
     var saldo = (parseFloat(p.qtdTotal) || 0) - (parseFloat(p.produzido) || 0);
     if (!(saldo > 0)) return;
 

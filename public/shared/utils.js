@@ -449,6 +449,18 @@ function isConcluido(pedido) {
   return status.indexOf('conclu') === 0 || statusManual === 'encerrado';
 }
 
+// Pedido que já não pede produção nem material (08/10): encerrado, concluído
+// OU com 95% ou mais produzido -- a mesma regra que a tela de Pedidos usa
+// para mostrar "Concluído" (pedidos.html, pedidoStatus). Sem isso, "O que
+// comprar", MRP e Compras calculavam material para o resíduo de linhas que a
+// tela de Pedidos já mostrava concluídas (Febella 05: 451, 100 e 16 un).
+function pedidoFinalizado(pedido) {
+  if (!pedido) return false;
+  if (isConcluido(pedido)) return true;
+  var total = parseFloat(pedido.qtdTotal) || 0;
+  return total > 0 && Math.round((parseFloat(pedido.produzido) || 0) / total * 100) >= 95;
+}
+
 // Uma OP (ops/{lote}) conta como "ainda ativa" pra tudo que decide o que
 // oferecer pro apontamento/planejamento (Alocar OP, grade, Andon, etc) --
 // nem concluída nem cancelada. Centralizado aqui porque "status !== 'Concluído'"

@@ -22,7 +22,11 @@ function dados() {
     pedidos: {
       '0001__SKU-A': {id: '0001', sku: 'SKU-A', produto: 'BODY A', cliente: 'MISS ROSE', qtdTotal: 1000, produzido: 0, dataEntregaPcp: '2026-10-20', priority: 2},
       '0002__SKU-B': {id: '0002', sku: 'SKU-B', produto: 'BODY B', cliente: 'BIOFLORA', qtdTotal: 1000, produzido: 200, dataEntregaPcp: '2026-10-10', priority: 1},
-      '0004__SKU-SEM': {id: '0004', sku: 'SKU-SEM', produto: 'SEM CADASTRO', cliente: 'X', qtdTotal: 100, produzido: 0}
+      '0004__SKU-SEM': {id: '0004', sku: 'SKU-SEM', produto: 'SEM CADASTRO', cliente: 'X', qtdTotal: 100, produzido: 0},
+      // 95,5% produzido, sem encerrar: Pedidos já mostra Concluído; aqui não pode pedir material (Febella 05, 08/10).
+      '0005__SKU-A': {id: '0005', sku: 'SKU-A', produto: 'BODY A', cliente: 'FEBELLA', qtdTotal: 10000, produzido: 9549, status: 'Produção Parcial'},
+      // 94%: ainda pede.
+      '0006__SKU-A': {id: '0006', sku: 'SKU-A', produto: 'BODY A', cliente: 'FEBELLA', qtdTotal: 1000, produzido: 940, status: 'Produção Parcial'}
     },
     estoque: {
       'EP-FRASCO': {materialCodigo: 'EP-FRASCO', saldoAtual: 1500, saldoEmpenhado: 300, empenhos: {'OP-OUTRO': {qtdEmpenhada: 300}}, ajustes: {a: {ajustadoEm: '2026-10-01T10:00:00Z'}}},
@@ -106,7 +110,9 @@ async function abrir(browser, pagina) {
   const browser = await chromium.launch({headless: true, channel: 'chrome'});
   try {
     const {page, errors} = await abrir(browser, 'o_que_comprar.html');
-    await page.waitForFunction(() => document.querySelectorAll('#pgrade .pc').length === 3, null, {timeout: 8000});
+    await page.waitForFunction(() => document.querySelectorAll('#pgrade .pc').length === 4, null, {timeout: 8000});
+    assert.equal(await page.locator('#pgrade .pc', {hasText: '0005'}).count(), 0, 'pedido com 95% produzido não aparece (como em Pedidos: concluído)');
+    assert.equal(await page.locator('#pgrade .pc', {hasText: '0006'}).count(), 1, 'com 94% ainda aparece');
     assert.match(await page.locator('#pgrade .pc', {hasText: '0004'}).innerText(), /não dá para calcular/);
     assert.equal(await page.locator('#acao').isHidden(), true, 'sem pedido escolhido não há ação');
 

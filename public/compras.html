@@ -1464,8 +1464,9 @@ function gpGruposFiltrados() {
   Object.entries(allPedidos).forEach(function(entry) {
     var key = entry[0], p = entry[1];
     if (!p || !p.sku) return;
-    // Mesmo critério de "ativo" das outras telas (isConcluido, shared/utils.js).
-    if (isConcluido(p)) return;
+    // Mesmo critério de "ativo" da tela de Pedidos: encerrado, concluído ou
+    // ≥95% produzido (pedidoFinalizado, shared/utils.js).
+    if (pedidoFinalizado(p)) return;
     var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
     if (saldo <= 0) return;
     var pid = p.parentPedidoId || p.id || '(sem pedido)';
