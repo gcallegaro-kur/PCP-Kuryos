@@ -2152,19 +2152,41 @@ function resolvePedidoFromOp(op) {
   return (key && pedidosCache[key]) ? { key: key, pedido: pedidosCache[key] } : null;
 }
 
-// Resolução final pro submit: prioriza o que a pessoa digitou/selecionou no
-// campo "Número do Pedido" (permite corrigir/informar manualmente); só cai
-// pro vínculo automático da OP se o campo estiver vazio.
-function resolvePedKeyParaSubmit(prefix, produto, matchedOpForSave) {
+// Resolução final pro submit.
+//
+// O campo "Número do Pedido" manda quando aponta pra um pedido comercial
+// DIFERENTE do que a OP já traz -- é pra isso que ele existe, corrigir o
+// vínculo na mão. Mas DENTRO do mesmo pedido comercial quem decide é o SKU
+// da OP, porque o número sozinho não distingue os SKUs daquele pedido (o
+// 0023 tem 7) e o texto do produto diverge entre ops/ e pedidos/.
+//
+// Era exatamente esse o buraco: o campo vinha AUTOPREENCHIDO com o rótulo
+// do pedido certo, o submit extraía só o número dele, jogava fora o SKU que
+// o vínculo da OP já tinha resolvido, e o reempate pelo nome do produto
+// caía no primeiro SKU do pedido. Ver findPedidoKeyPorLote em shared/utils.js.
+function resolvePedKeyParaSubmit(prefix, produto, matchedOpForSave, lote) {
   var manualEl = document.getElementById(prefix + 'PedidoComercial');
   var manualRaw = manualEl ? manualEl.value.trim() : '';
   if (manualRaw) {
     var id = parseOpId(manualRaw);
-    var key = findPedidoKey(id, produto, pedidosCache);
+    var key = findPedidoKeyPorLote(lote, id, produto, opsCache, pedidosCache);
     if (key) return key;
   }
   var linked = resolvePedidoFromOp(matchedOpForSave);
   return linked ? linked.key : null;
+}
+
+// Pedido a creditar por um item da fila de sincronização.
+//
+// `item.pedKey` é o SKU já resolvido na hora do envio, com a tela inteira em
+// mãos -- é a resposta boa. Item antigo (gravado por uma versão anterior do
+// app e ainda preso na fila offline) não tem esse campo: aí resolve pelo
+// lote, e só em último caso pelo par id+produto.
+function pedKeyDoItem(item) {
+  if (!item) return null;
+  if (item.pedKey && pedidosCache[item.pedKey]) return item.pedKey;
+  var lote = item.lote || (item.registro && item.registro.lote) || '';
+  return findPedidoKeyPorLote(lote, item.pedidoId, item.produto, opsCache, pedidosCache);
 }
 
 function updatePedidoComercialHint(prefix) {
@@ -3338,7 +3360,7 @@ function syncNextItem() {
           saves.push(baixarEstoquePerdas(item.perdas, item.registro.lote));
         }
         if (item.pedidoId && item.qtd && item.produto && isSetorEnvase(item.tipo)) {
-          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          var pedKey = pedKeyDoItem(item);
           if (pedKey) {
             saves.push(opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
               if (!ativa) return;
@@ -3414,7 +3436,7 @@ function syncNextItem() {
           : Promise.resolve();
         return confirmarDelta.then(function() {
         if (item.pedidoId && deltaReal && item.produto && isSetorEnvase(item.tipo)) {
-          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          var pedKey = pedKeyDoItem(item);
           if (pedKey) {
             return opAindaAtivaAsync(item.registro && item.registro.lote).then(function(ativa) {
               if (!ativa) return;
@@ -3472,7 +3494,7 @@ function syncNextItem() {
       return opPromise.then(function(opResult) {
         var saves = [];
         if (item.pedidoId && deltaRealFechamento && item.produto && isSetorEnvase(item.tipo)) {
-          var pedKey = findPedidoKey(item.pedidoId, item.produto, pedidosCache);
+          var pedKey = pedKeyDoItem(item);
           if (pedKey) {
             saves.push(opAindaAtivaAsync(item.lote).then(function(ativa) {
               if (!ativa) return;
@@ -3608,7 +3630,7 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
   // Prioriza o campo "Número do Pedido" (digitado/selecionado manualmente),
   // só cai pro vínculo automático da OP se estiver vazio -- ver comentário
   // em resolvePedKeyParaSubmit.
-  var pedKeyResolvido = resolvePedKeyParaSubmit('f', produto, matchedOpForSave);
+  var pedKeyResolvido = resolvePedKeyParaSubmit('f', produto, matchedOpForSave, lote);
   var pedidoId = (pedKeyResolvido && pedidosCache[pedKeyResolvido])
     ? (pedidosCache[pedKeyResolvido].id || '')
     : '';
@@ -3661,6 +3683,10 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     pedidoId: pedidoId,
     produto: produto,
     qtd: qtd,
+    // SKU exato do pedido, resolvido aqui com a tela em maos. O numero do
+    // pedido sozinho NAO distingue os SKUs do mesmo pedido comercial --
+    // ver pedKeyDoItem / findPedidoKeyPorLote.
+    pedKey: pedKeyResolvido || null,
     // Modo Avançado nunca oferece Rotulagem no seletor de linha (só mistura
     // configLinhas + configPostos) -- então o tipo aqui é sempre um dos dois.
     tipo: configPostos.indexOf(linha) !== -1 ? 'posto' : 'linha'
@@ -3959,7 +3985,7 @@ document.getElementById('retroForm').addEventListener('submit', function(e) {
   // em resolvePedKeyParaSubmit. É exatamente o que faltava pra OP antiga sem
   // vínculo conseguir dar baixa: antes disso, sem skuPedidoKey na OP, a
   // baixa nunca tinha como acontecer, mesmo com "Dar baixa" marcado.
-  var pedKeyResolvido = resolvePedKeyParaSubmit('r', produto, matchedOpForSave);
+  var pedKeyResolvido = resolvePedKeyParaSubmit('r', produto, matchedOpForSave, lote);
   var pedidoId = (pedKeyResolvido && pedidosCache[pedKeyResolvido])
     ? (pedidosCache[pedKeyResolvido].id || '')
     : '';
@@ -4022,6 +4048,10 @@ document.getElementById('retroForm').addEventListener('submit', function(e) {
       data: dia.data,
       registro: reg,
       pedidoId: (darBaixa && pedidoId) ? pedidoId : null,
+      // SKU exato do pedido, resolvido aqui com a tela em maos. O numero do
+      // pedido sozinho NAO distingue os SKUs do mesmo pedido comercial --
+      // ver pedKeyDoItem / findPedidoKeyPorLote.
+      pedKey: (darBaixa && pedKeyResolvido) ? pedKeyResolvido : null,
       produto: produto,
       qtd: qtd,
       // Modo Avançado nunca oferece Rotulagem no seletor de linha (só mistura
@@ -4115,7 +4145,10 @@ function buildOpSuggestions() {
 }
 
 function preencheFechamentoForm(linha, lote, produto, pedidoId, apontadoHoje) {
-  var key = findPedidoKey(pedidoId, produto, pedidosCache);
+  // Pelo LOTE: dois SKUs do mesmo pedido comercial so se distinguem pelo
+  // vinculo da OP (ver findPedidoKeyPorLote em shared/utils.js).
+  var key = findPedidoKeyPorLote(lote, pedidoId, produto, opsCache, pedidosCache);
+  document.getElementById('opForm').dataset.opPedKey = key || '';
   var p = key ? pedidosCache[key] : null;
   var qtdEsperada = p ? (p.qtdTotal || 0) : 0;
   document.getElementById('opForm').dataset.opQtdEsperada = qtdEsperada;
@@ -4421,6 +4454,11 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   var qtdTotal  = parseInt(document.getElementById('opQtdTotal').value) || 0;
   var apontado  = parseInt(this.dataset.opApontado||0) || 0;
   var pedidoId  = this.dataset.opPid || '';
+  // Resolve do LOTE que esta no formulario AGORA (o campo e' editavel), nao
+  // do dataset preenchido quando a OP foi escolhida. O dataset so entra como
+  // rede se o lote nao resolver nada.
+  var pedKeyFechamento = findPedidoKeyPorLote(lote, pedidoId, produto, opsCache, pedidosCache)
+    || this.dataset.opPedKey || null;
   var colPerdas = collectPerdasEtapa('opPerdasEtapa', 'perdasList', 'opSemPerda');
   if (!colPerdas.ok) { btn.disabled = false; btn.textContent = '🏁 Finalizar OP'; alert(colPerdas.erros.join('\n')); return; }
   var perdas    = colPerdas.perdas;
@@ -4508,6 +4546,10 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
     pedidoId: pedidoId,
     produto: produto,
     qtdFinal: qtdFinal,
+    // SKU exato do pedido, resolvido aqui com a tela em maos. O numero do
+    // pedido sozinho NAO distingue os SKUs do mesmo pedido comercial --
+    // ver pedKeyDoItem / findPedidoKeyPorLote.
+    pedKey: pedKeyFechamento || null,
     lote: lote,
     perdas: perdas,
     aguardarConfirmacao: true,
@@ -4617,6 +4659,10 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
     pedidoId: pedidoId,
     produto: produto,
     qtdFinal: delta,
+    // SKU exato do pedido, resolvido aqui com a tela em maos. O numero do
+    // pedido sozinho NAO distingue os SKUs do mesmo pedido comercial --
+    // ver pedKeyDoItem / findPedidoKeyPorLote.
+    pedKey: pedKeyResolvido || null,
     lote: lote,
     mediaPorHoraCalculada: ritmo,
     aguardarConfirmacao: true,
@@ -5297,6 +5343,10 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
     pedidoId: pedidoId,
     produto: produto,
     lote: lote,
+    // SKU exato do pedido, resolvido aqui com a tela em maos. O numero do
+    // pedido sozinho NAO distingue os SKUs do mesmo pedido comercial --
+    // ver pedKeyDoItem / findPedidoKeyPorLote.
+    pedKey: pedKeyResolvido || null,
     perdas: opts.perdas || [],
     mediaPorHoraCalculada: ritmo,
     aguardarConfirmacao: true,

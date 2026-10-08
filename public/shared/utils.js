@@ -161,17 +161,58 @@ function findPedidoKey(pedidoId, produto, pedidosDict) {
     }
   }
 
-  // 2. Try exact or prefix match alone
+  // 2. Só o id -- E SOMENTE SE ELE FOR ÚNICO.
+  //
+  // Um pedido comercial vira VÁRIOS registros em pedidos/, um por SKU, todos
+  // com o MESMO `id` (o pedido 0023 tem 7; nesta base são 56 pedidos assim).
+  // Devolver "o primeiro que casar o id" aqui era escolher um SKU no escuro:
+  // a produção de um item ia parar no item vizinho. Bug real, encontrado em
+  // 08/10/2026 -- 12.491 un. de HIDRATANTE FLOR D'AURA creditadas em
+  // HIDRATANTE CÉU INFINITO (o primeiro SKU do pedido 0023), que apareceu na
+  // tela com 20.079 de 10.000 un. (201%). Ao todo 30.929 un. em 4 pedidos.
+  //
+  // O passo 1 não salvava porque o nome do produto DIVERGE entre ops/ e
+  // pedidos/ (geradores diferentes): "200 ML" x "200g", "COPORAL" x
+  // "CORPORAL" -- 24 OPs nesta base.
+  //
+  // Com id ambíguo, a resposta honesta é "não sei": quem chama tem que
+  // desempatar pelo SKU da OP (ver findPedidoKeyPorLote). Não creditar
+  // ninguém é recuperável; creditar o pedido errado contamina produzido,
+  // status, conferência e expedição de dois pedidos de uma vez.
+  var candidatos = [];
   for (var i = 0; i < keys.length; i++) {
     var p = pedidosDict[keys[i]];
     if (!p) continue;
     var idStr = String(p.id || '').trim();
     var idMatches = (idStr === pid || idStr.indexOf(pid + '-') === 0);
-    if (idMatches) {
-      return keys[i];
-    }
+    if (idMatches) candidatos.push(keys[i]);
   }
-  return null;
+  return candidatos.length === 1 ? candidatos[0] : null;
+}
+
+// Pedido comercial que um APONTAMENTO deve creditar.
+//
+// O LOTE é o identificador forte, não o número do pedido: a OP sabe o SKU
+// exato dela (ops/{lote}.skuPedidoKey) e é esse vínculo que distingue dois
+// SKUs do mesmo pedido comercial. O número do pedido sozinho não distingue,
+// e o nome do produto não serve de desempate (ver findPedidoKey acima).
+//
+// `pedidoId` continua mandando quando aponta pra OUTRO pedido comercial --
+// é o caso de alguém corrigir manualmente o campo "Número do Pedido". Só
+// dentro do MESMO pedido comercial o SKU da OP tem a palavra final.
+function findPedidoKeyPorLote(lote, pedidoId, produto, opsDict, pedidosDict) {
+  if (!pedidosDict) return null;
+  var op = (lote && opsDict) ? opsDict[sanitizeKey(lote)] : null;
+  var porSku = (op && op.skuPedidoKey) ? resolvePedidoKeyBySkuKey(op.skuPedidoKey, pedidosDict) : null;
+  if (porSku) {
+    var pedidoDoSku = pedidosDict[porSku];
+    var idPedido = digitsOnly(pedidoId);
+    var idDoSku = digitsOnly(pedidoDoSku && pedidoDoSku.id);
+    // Sem pedido informado, ou informado o mesmo pedido comercial: o SKU da
+    // OP é a resposta certa.
+    if (!idPedido || !idDoSku || parseInt(idPedido, 10) === parseInt(idDoSku, 10)) return porSku;
+  }
+  return findPedidoKey(pedidoId, produto, pedidosDict);
 }
 
 function digitsOnly(s) {

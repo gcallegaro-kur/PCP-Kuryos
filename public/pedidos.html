@@ -1333,6 +1333,17 @@
     if (opBreakdownCache[key]) return Promise.resolve(opBreakdownCache[key]);
     var range = opBreakdownDateRange(p);
     var porLote = {};
+    // Lotes que o proprio pedido registra como creditados (apontamentosAplicados,
+    // gravado pela transacao idempotente do apontamento). E' prova direta de
+    // vinculo e vale MAIS que o nome do produto: o nome diverge entre ops/ e
+    // pedidos/ ('200 ML' x '200g', 'COPORAL' x 'CORPORAL') e, com isso, a OP
+    // ficava de fora do detalhamento mesmo tendo creditado o pedido. Nao custa
+    // leitura nenhuma -- ja veio junto com o pedido.
+    var lotesCreditados = {};
+    Object.keys(p.apontamentosAplicados || {}).forEach(function(id) {
+      var l = (p.apontamentosAplicados[id] || {}).lote;
+      if (l) lotesCreditados[String(l).trim().toUpperCase()] = true;
+    });
     return Promise.all(range.dates.map(function(date) {
       return db.ref('registros/' + date).once('value').then(function(snap) {
         snap.forEach(function(regSnap) {
@@ -1345,7 +1356,16 @@
           // aqui (achado real: registros de "Despertar das Flores" com
           // pedidoId=0011 entrando na conta de "Flor D'Aura").
           var produtoMatch = String(r.produto || '').trim().toUpperCase() === String(p.produto || '').trim().toUpperCase();
-          if (!produtoMatch) return;
+          var loteCreditado = !!lotesCreditados[String(r.lote || '').trim().toUpperCase()];
+          if (!produtoMatch && !loteCreditado) return;
+          // Lote que ESTE pedido creditou entra sem mais pergunta -- o vinculo ja
+          // esta provado e nao precisa passar pelo filtro de pedidoId abaixo, que
+          // olha so o numero do pedido comercial e nao distingue SKU.
+          if (loteCreditado) {
+            var loteOk = r.lote || '(sem lote)';
+            porLote[loteOk] = (porLote[loteOk] || 0) + (parseFloat(r.quantidade) || 0);
+            return;
+          }
           var mesmoPedido = String(r.pedidoId || '') === String(p.id || '');
           // Fallback só quando o registro não tem pedidoId NENHUM -- nunca
           // p/ um registro que tem pedidoId de OUTRO pedido, mesmo que o

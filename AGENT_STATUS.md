@@ -5,6 +5,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### ⚠ Claude — INCIDENTE: produção creditada no SKU vizinho do mesmo pedido (08/10/2026)
+
+- **Como apareceu:** a tela de Pedidos mostrava `HIDRATANTE CÉU INFINITO 200g — 20.079 / 10.000 (201%)` enquanto o detalhamento por OP somava 7.588 un. O detalhamento estava CERTO; o campo `produzido` é que estava errado.
+- **O defeito:** um pedido comercial vira vários registros em `pedidos/`, um por SKU, **todos com o mesmo `id`** (o 0023 tem 7; nesta base são **56 pedidos** assim). O `findPedidoKey` (shared/utils.js) casava `id` + nome do produto e, quando o nome não batia, caía num **"casa só pelo id"** que devolvia o PRIMEIRO SKU daquele pedido. E o nome não batia porque `ops/` e `pedidos/` nascem de geradores diferentes: a OP dizia `HIDRATANTE FLOR DAURA 200 ML`, o pedido dizia `... 200g`. **24 OPs** nesta base estão com essa divergência de texto.
+- **Agravante no `form.html`:** o campo "Número do Pedido" vinha AUTOPREENCHIDO com o pedido certo, mas `resolvePedKeyParaSubmit` extraía só o **número** dele, jogava fora o SKU que o vínculo da OP já tinha resolvido, e re-resolvia pelo nome — caindo no fallback.
+- **Estrago medido:** **30.929 un. em 18 apontamentos**, em 4 pedidos. Maior caso: 12.491 un. de Flor D'Aura dentro de Céu Infinito.
+- **Correção no código (regra nova):** `findPedidoKey` **não desempata id ambíguo** — com vários SKUs no mesmo id, devolve `null`. Quem desempata é o **lote**: `findPedidoKeyPorLote(lote, pedidoId, produto, opsDict, pedidosDict)` usa `ops/{lote}.skuPedidoKey`. O número digitado à mão continua mandando quando aponta pra OUTRO pedido comercial. Os 3 pontos de crédito do `syncNextItem` passam por `pedKeyDoItem`; os 5 itens da fila saem carimbados com `pedKey`; `historico.html` ajusta o produzido pelo mesmo caminho; o tooltip de `pedidos.html` passa a aceitar lote já creditado mesmo com o nome divergindo.
+- **`run_pedido_sku_credito_test.js` (novo, 28 verificações)** reproduz a base real reduzida e **reprova com o fallback reintroduzido** (conferido).
+- **Dados:** `scripts/corrigir-credito-sku-errado.js` (ensaio por padrão, `--aplicar` grava). Só move o que o sistema **chutou** — critério mecânico: a OP aponta por SKU pra outro pedido **E** a regra nova não resolveria nada do que o registro guardou. 14 apontamentos / 24.315 un. Os outros 4 (6.614 un., OPs 26260/01 e 26261/02 creditadas em `0011__BODY_SPLASH_LEAO_DO_DESERTO_BOURBON_200ml` com a OP vinculada a `PED-0008__MRARBS07`) **não são movidos**: o registro nomeia outro pedido comercial e o nome bate nele — foi escolha, não chute. Confirmar com o Comercial.
+- **Depois da correção:** Céu Infinito 201% → **76%** (status 'Concluído' volta a 'Produção Parcial', pois foi automático, sem encerramento manual); Flor D'Aura 14% → **98%**; Lunar 158% → 103%; Zahra 76% → **131%** (sobra acima de 100% que vem de antes do razão `apontamentosAplicados` existir, sem rastro por apontamento).
+- **Arquivos ativos:** nenhum.
+
 ### ⚠ Claude — INCIDENTE: retomada de linha quebrada em produção (07/10/2026)
 
 - **O que aconteceu:** o evento `RETOMAR_LINHA` que inseri em `0a5e577` referenciava uma variável `lote` que **não existe** em `resumeLine(linha, state)` — o lote vem em `state.lote`. O `ReferenceError` estourava ao **montar o objeto do argumento**, ou seja no CHAMADOR, antes de `registrarEventoAuditoria` ser invocada; **o try/catch de dentro dela não protege esse caso**.

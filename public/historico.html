@@ -1996,9 +1996,13 @@
       dataFimReal: fimIso || null
     });
   }
-  function adjustPedidoProduzido(pedidoId, produto, qtyDiff) {
+  // `lote` entrou em 08/10/2026 e NAO e' opcional de verdade: dois SKUs do
+  // mesmo pedido comercial so se distinguem pelo vinculo da OP. Sem ele, o
+  // ajuste de uma edicao/exclusao pode cair no SKU vizinho -- mesmo defeito
+  // que inflou o pedido 0023 em 12.491 un. (ver findPedidoKeyPorLote).
+  function adjustPedidoProduzido(pedidoId, produto, qtyDiff, lote) {
     if (!pedidoId || !produto || qtyDiff === 0) return Promise.resolve({ committed: false });
-    var pedKey = findPedidoKey(pedidoId, produto, pedidosCache);
+    var pedKey = findPedidoKeyPorLote(lote, pedidoId, produto, opsCache, pedidosCache);
     if (!pedKey) return Promise.resolve({ committed: false });
     return db.ref('pedidos/' + pedKey).transaction(function(p) {
       // `return p`, não `return;`: a 1ª passada vem do CACHE LOCAL e pode ser
@@ -2130,14 +2134,14 @@
           syncPromise = Promise.resolve(); // registro não-envase dos dois lados: pedido não muda
         } else if (pedIdOld === pedIdNew && prodOld === prodNew) {
           var diff = _qtyNewEf - _qtyOldEf;
-          syncPromise = diff ? adjustPedidoProduzido(pedIdNew, prodNew, diff) : Promise.resolve();
+          syncPromise = diff ? adjustPedidoProduzido(pedIdNew, prodNew, diff, data.lote || '') : Promise.resolve();
         } else {
           // Troca de pedido/produto: se o segundo passo falhar, desfaz o
           // primeiro (devolve a qtyOld pro pedido antigo) em vez de deixar a
           // quantidade "sumir" dos dois contadores até alguém reconciliar manualmente.
-          syncPromise = adjustPedidoProduzido(pedIdOld, prodOld, -_qtyOldEf).then(function() {
-            return adjustPedidoProduzido(pedIdNew, prodNew, _qtyNewEf).catch(function(err) {
-              return adjustPedidoProduzido(pedIdOld, prodOld, _qtyOldEf).then(function() {
+          syncPromise = adjustPedidoProduzido(pedIdOld, prodOld, -_qtyOldEf, (orig && orig.lote) || '').then(function() {
+            return adjustPedidoProduzido(pedIdNew, prodNew, _qtyNewEf, data.lote || '').catch(function(err) {
+              return adjustPedidoProduzido(pedIdOld, prodOld, _qtyOldEf, (orig && orig.lote) || '').then(function() {
                 throw err; // reverte, mas ainda propaga o erro original pro usuário
               });
             });
@@ -2219,7 +2223,7 @@
         var prodNew = data.produto || '';
         
         db.ref('registros/' + newDate).push(data).then(function() {
-          return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew);
+          return adjustPedidoProduzido(pedIdNew, prodNew, qtyNew, data.lote || '');
         }).then(function() {
           // Registro criado aqui também soma no total da OP -- sem isto, um
           // lançamento feito pelo Histórico apareceria na lista e nunca em
@@ -2272,7 +2276,7 @@
         motivo: 'excluído pelo modal de edição' + (_qtyEf ? ' — devolveu ' + _qtyEf + ' un ao pedido' : ''),
         origem: 'historico.html/excluirPeloModal'
       });
-      return _qtyEf ? adjustPedidoProduzido(pedId, prod, -_qtyEf) : Promise.resolve();
+      return _qtyEf ? adjustPedidoProduzido(pedId, prod, -_qtyEf, (r && r.lote) || '') : Promise.resolve();
     }).then(function() {
       closeEditModal();
       showAlert('Registro excluído.', 'success');
@@ -2358,7 +2362,7 @@ function resumoRegistroAuditoria(r) {
       .then(function() {
         // mesmo gate de envase da outra exclusão
         var _qtyEf2 = (r && isLinhaEnvase(r.linha)) ? qty : 0;
-        return _qtyEf2 ? adjustPedidoProduzido(pedId, prod, -_qtyEf2) : Promise.resolve();
+        return _qtyEf2 ? adjustPedidoProduzido(pedId, prod, -_qtyEf2, (r && r.lote) || '') : Promise.resolve();
       })
       .then(function() {
         // O TOTAL DA OP também tem que cair. Antes só o pedido era ajustado:
