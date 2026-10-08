@@ -244,6 +244,8 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude
 
+- **EM ANDAMENTO — 5S: auditor também líder, com rodízio (2026-10-08).** Arquivos ativos: `public/shared/auditoria-5s.js`, `public/shared/auditoria-5s-tela.js`, `public/manual_auditoria_5s.html`, testes 5S, `AGENT_STATUS.md`.
+
 - **PUBLICADO — Painel de pendências em Cadastros › Produtos (2026-10-08), `a8a12aa`.** Cartões Fórmula/BOM/Especificação pendente (ativos; sem cadastro ou sem versão APROVADA), clicáveis para filtrar; Total/Ativos/Inativos também filtram; tag na linha. Módulo `shared/pendencias-produto.js`; testes run_pendencias_produto_test.js e _ui_test.js. Base: 306/315/306 de 335 ativos. Feito em worktree próprio (`../feat-dash-prod`) porque o checkout principal tem alterações não commitadas de outra sessão em form.html/historico.html/utils.js. Arquivos ativos: nenhum.
 
 - **PUBLICADO — Encerramento só linha a linha (2026-10-08).** A pedido do usuário, a janela de `shared/encerramento-pedido.js` encerra/reabre uma linha por vez (sem opção "todas"); no Comercial, botões Encerrar linha / Reabrir linha com lista de linhas. Arquivos ativos: nenhum.
