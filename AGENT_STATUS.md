@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Perdas do lote no Dossiê (09/10/2026)
+
+- **Pedido:** ver as perdas apontadas; o usuário sugeriu o Dossiê do lote.
+- **Arquivos ativos:** `public/shared/dossie-lote.js`, `public/dossie_lote.html`, `run_dossie_lote_test.js`.
+
 ### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
 
 - **Pergunta do usuário:** "na tela dashboard geral, ele está somando apontamentos da rotulagem e produção? achei muito alto os números". Estava, sim.
