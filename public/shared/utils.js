@@ -518,6 +518,18 @@ function opEstaAtiva(op) {
   return status !== 'Concluído' && status !== 'Cancelado' && status !== 'Aguardando Confirmação';
 }
 
+// A OP continua ALOCADA na linha/rotulagem até ser de fato encerrada (Concluído
+// ou Cancelado). 'Aguardando Confirmação' NÃO tira a OP do card: o status vira
+// sozinho ao bater 95% da meta (computeOpStatus), e a OP sumia do Painel de
+// Turno/Andon no meio da operação -- na retomada do dia o card dizia "Nenhuma OP
+// alocada" com a OP ainda gravada na linha (26258/06, 09/10). Quem libera a linha
+// é o "Encerrar OP" (limpa abertaLinha) ou o PCP ao concluir/cancelar.
+function opSegueAlocada(op) {
+  if (!op) return false;
+  var status = String(op.status || '');
+  return status !== 'Concluído' && status !== 'Cancelado';
+}
+
 // Produção de uma OP (ops/{lote}) é sempre rastreada como 3 somatórias
 // DISTINTAS por setor -- Linha (envase), Rotulagem (rótulo), Posto de
 // Trabalho -- nunca somadas num único número. Somar daria um total sem

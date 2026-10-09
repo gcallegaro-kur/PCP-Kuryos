@@ -14,6 +14,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Fica para depois, se o usuário pedir:** relatório consolidado de perdas entre lotes (período/linha/produto/material) — o dossiê é um lote por vez.
 - **Arquivos ativos:** nenhum.
 
+### Claude — OP nunca sai do card da linha até ser encerrada (09/10/2026)
+
+- **Pergunta:** ao retomar a linha no início do dia, a OP não aparecia como alocada sem ter sido finalizada.
+- **Causa, provada na base:** `computeOpStatus` vira a OP para 'Aguardando Confirmação' sozinho a 95% da meta, e `opAlocadoEm` filtrava por `opEstaAtiva`, que exclui esse status. A 26258/06 (Linha 1) tinha 1.643/1.200 e o fechamento automático foi gravado no "Encerrar turno" de 09/10 19:01; a linha seguia gravada em `abertaLinha`, mas o card dizia "Nenhuma OP alocada".
+- **Regra nova (decisão do usuário):** `opSegueAlocada` (shared/utils.js) — só Concluído/Cancelado tiram a OP da linha. Usada em form.html (Painel de Turno), dashboard.html (Andon) e planejamento.html. `opEstaAtiva` segue valendo para listas de nova alocação.
+- **Teste:** `run_op_segue_alocada_test.js`. **Não feito:** limpar `abertaLinha` de ~20 OPs Concluídas antigas (sem efeito na tela).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
 
 - **Pergunta do usuário:** "na tela dashboard geral, ele está somando apontamentos da rotulagem e produção? achei muito alto os números". Estava, sim.
