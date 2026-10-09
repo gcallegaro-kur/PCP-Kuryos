@@ -5,6 +5,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
+
+- **Pergunta do usuário:** "na tela dashboard geral, ele está somando apontamentos da rotulagem e produção? achei muito alto os números". Estava, sim.
+- **O defeito:** `dashboard_analise.html` montava `RAW.producao` a partir de **todo** registro de `registros/`, com `tipo: 'Envase'` **fixo** e sem olhar o setor. Rotulagem e Posto entravam no total como produção — e não são: são etapas POSTERIORES do mesmo lote que a linha já contou, não criam unidade nova. Mesma regra que `isSetorEnvase` (form.html) já aplica e que o **Dashboard Diário já tinha corrigido** (ver os comentários em `dashboard.html` sobre "somava os 3 setores juntos"); faltava aqui.
+- **Medido na base:** de **3.746.234 un.** em `registros/`, **94.645 rotulagem + 54.351 posto = 148.996 un.** entravam em duplicidade. Para comparação, a soma de `ops.produzido` é 3.446.303.
+- **Correção:** o dashboard passa a carregar `config` junto com os registros (é ela que diz quais recursos são Rotulagem/Posto), grava `setor` em cada linha de `RAW.producao`, e `filterProducao()` conta **só envase** por padrão. Rotulagem e posto **não somem**: quem escolher uma Rotulagem ou um Posto no filtro de Linha vê aquele setor normalmente. O subtítulo declara quantas unidades ficaram fora e como vê-las.
+- **`run_dashboard_geral_setor_test.js` (novo, 19 verificações).** Conferido que reprova sem a regra. Registro antigo **sem** campo `setor` continua contando como envase — na dúvida não some do histórico.
+- **⚠ Fica em aberto (não é deste escopo):** 18 lotes têm soma de `registros` MAIOR que o `produzido` da própria OP, 23.611 un. no total (ex.: 26211/02 com 7.582 em registros contra 1.950 na OP). São apontamentos substituídos que continuam no histórico — o razão `apontamentosAplicados` sabe o número certo, o `registros/` cru não.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Empenho preso: OP encerrada que nunca soltava o material (09/10/2026)
 
 - **Pergunta do usuário:** "pq tem empenho em OP encerrada?"

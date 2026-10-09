@@ -503,8 +503,23 @@ function loadFirebaseAndRun() {
       const skuHistorico = shSnap.val() || {};
       function resolveSkuAtual(sku) { return (sku && skuHistorico[sku]) || sku; }
 
-      db.ref('registros').once('value', function(regSnap) {
+      // `config` entra junto com os registros porque e' ela que diz quais
+      // recursos sao Rotulagem e quais sao Posto. Sem isso este dashboard
+      // somava os tres setores como se fossem producao -- e nao sao: rotular
+      // ou encartuchar e' etapa POSTERIOR do mesmo lote que a linha ja contou,
+      // nao cria unidade nova. Mesma regra que o apontamento ja aplica
+      // (isSetorEnvase, form.html) e que o Dashboard Diario ja corrigiu.
+      Promise.all([db.ref('registros').once('value'), db.ref('config').once('value')]).then(function(_snaps) {
+        const regSnap = _snaps[0];
         const registrosDb = regSnap.val() || {};
+        const _cfg = _snaps[1].val() || {};
+        const CFG_ROTULAGEM = _cfg.rotulagem || [];
+        const CFG_POSTOS = _cfg.postos || [];
+        const setorDoRegistro = function(linha) {
+          if (linha && CFG_ROTULAGEM.indexOf(linha) >= 0) return 'rotulagem';
+          if (linha && CFG_POSTOS.indexOf(linha) >= 0) return 'posto';
+          return 'envase';
+        };
 
         // 1. Rebuild RAW.pedidos
         RAW.pedidos = [];
@@ -622,6 +637,7 @@ function loadFirebaseAndRun() {
             }
             const uph = h > 0 ? u / h : u;
 
+            const _setorReg = setorDoRegistro(r.linha);
             RAW.producao.push({
               dt: dt,
               dt_fim: dtFim,
@@ -637,7 +653,8 @@ function loadFirebaseAndRun() {
               lot: r.lote || '',
               lin: r.linha || '',
               maq: '',
-              tipo: 'Envase',
+              setor: _setorReg,
+              tipo: _setorReg === 'rotulagem' ? 'Rotulagem' : (_setorReg === 'posto' ? 'Posto' : 'Envase'),
               alloc: [{
                 dia: date,
                 u: u,
@@ -965,8 +982,17 @@ function fmtSnapshotDate(iso) {
   return d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
 }
 
+// Producao = unidade ACABADA criada, e so o envase cria. Rotulagem e Posto
+// sao etapas posteriores do MESMO lote que a linha ja contou -- somar os tres
+// conta a mesma peca duas ou tres vezes. Medido em 09/10/2026: de 3.746.234
+// un. em registros/, 94.645 eram rotulagem e 54.351 posto.
+//
+// Elas nao somem do sistema: quem escolher uma Rotulagem ou um Posto no filtro
+// de Linha ve aquele setor normalmente. O que nao acontece mais e' entrarem
+// caladas no total de producao.
 function filterProducao() {
   return RAW.producao.filter(p => {
+    if (p.setor && p.setor !== 'envase' && !(filters.linha.length && filters.linha.includes(p.lin || 'S/LINHA'))) return false;
     if (filters.dateFrom && p._ymd && p._ymd < filters.dateFrom) return false;
     if (filters.dateTo && p._ymd && p._ymd > filters.dateTo) return false;
     if (filters.cliente.length && !filters.cliente.includes(p.cli)) return false;
@@ -1864,8 +1890,15 @@ function initDashboard() {
     });
   });
   const dt = RAW.generated_at ? new Date(RAW.generated_at) : new Date();
+  // A exclusao de rotulagem/posto do total NAO pode ser silenciosa: quem olha
+  // o numero tem que saber que existe producao fora dele e como ve-la.
+  const _fora = RAW.producao.filter(p => p.setor && p.setor !== 'envase');
+  const _unFora = _fora.reduce((s2, p) => s2 + (p.u || 0), 0);
+  const _notaFora = _unFora > 0
+    ? ` · ${_unFora.toLocaleString('pt-BR')} un. de rotulagem/posto fora do total (etapa posterior do mesmo lote — filtre por Linha para vê-las)`
+    : '';
   document.getElementById('subtitle').textContent =
-    `Atualizado em ${dt.toLocaleString('pt-BR')} · ${RAW.producao.length} OPs · ${RAW.pedidos.length} pedidos · ${(RAW.expedicoes||[]).length} expedições · ${(RAW.ops_emitidas||[]).length} OPs emitidas`;
+    `Atualizado em ${dt.toLocaleString('pt-BR')} · ${RAW.producao.length} OPs · ${RAW.pedidos.length} pedidos · ${(RAW.expedicoes||[]).length} expedições · ${(RAW.ops_emitidas||[]).length} OPs emitidas` + _notaFora;
   apply();
 }
 
