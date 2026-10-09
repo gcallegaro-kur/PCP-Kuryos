@@ -8,7 +8,7 @@
      ops/{opKey}                       a OP e a fase de granel (manipulacao)
      registros/{data}/{id}             apontamentos de envase (campo lote)
      paradas_historico/{id}            paradas de linha (campo lote)
-     perdas/{opKey}/{id}               perdas de embalagem no envase
+     perdas/{opKey}/{id}               perdas apontadas na rotulagem e no envase
      movimentos_estoque/{item}/{id}    consumo de material (ref = lote)
      estoque_lotes/{sku}/{palete}      paletes de PA, com conferência e laudo
      conferencias_pa/{opKey}           contagens da Logística
@@ -119,6 +119,80 @@
     };
   }
 
+  /* Perdas do lote, todas as etapas numa lista só (09/10).
+     Pedido do usuário: "preciso enxergar um relatório das perdas que estão
+     sendo apontadas" -> "e se colocássemos no dossiê do lote?".
+     Antes o dossiê só mostrava as perdas de perdas/ ("Perdas no envase",
+     tipo e quantidade, sem material) e as da manipulação ficavam espalhadas
+     dentro de cada MP. Fontes:
+       - pesagem: perda digitada na linha da MP (pesagem/itens/{k}.perda);
+       - manipulação: perda por MP (manipulacao/perdasMp) e as gerais
+         (manipulacao/perdas: resíduo no tacho, amostra, outra), em kg;
+       - rotulagem e envase: perdas/{opKey} (etapa gravada desde 25/09;
+         antes disso fica "não informada").
+     % = perda sobre o que o lote consumiu do material (perda + consumo,
+     quando a perda não baixa estoque à parte, o consumo já a contém -- por
+     isso o % é sobre o consumido, que é o número que o estoque viu). Unidade
+     envasada descartada: sobre o apontado. A perda de processo (entrada −
+     rendimento) vai à parte: ela JÁ contém as perdas da manipulação. */
+  var ROTULO_PERDA_MANIP = {residuo_tacho: 'Resíduo no tacho', amostra: 'Amostra', outra: 'Outra perda da manipulação'};
+  var ETAPAS_PERDA = ['Pesagem', 'Manipulação', 'Rotulagem', 'Envase', 'Não informada'];
+  function etapaDe(x) {
+    var e = normalizar(x);
+    return e === 'rotulagem' ? 'Rotulagem' : e === 'envase' ? 'Envase' : e === 'manipulacao' ? 'Manipulação' : e === 'pesagem' ? 'Pesagem' : 'Não informada';
+  }
+  function perdasDoLote(granel, perdas, consumos, totalApontado) {
+    var consumoDe = {};
+    (consumos || []).forEach(function(c) { consumoDe[compacto(c.itemCodigo)] = c; });
+    var itens = [];
+    function pct(codigo, qtd, ehProduto) {
+      if (ehProduto) return totalApontado > 0 ? Math.round(qtd / totalApontado * 10000) / 100 : null;
+      var c = codigo && consumoDe[compacto(codigo)];
+      return c && c.consumido > 0 ? Math.round(qtd / c.consumido * 10000) / 100 : null;
+    }
+    var ciclos = granel && granel.existe ? (granel.ciclos || [granel]) : [];
+    var processo = [];
+    ciclos.forEach(function(g, i) {
+      var sufixo = ciclos.length > 1 ? ' (ciclo ' + (g.ciclo || i + 1) + ')' : '';
+      var porItem = {};
+      (g.linhas || []).forEach(function(l) {
+        porItem[l.itemKey] = l;
+        if (num(l.perda) > 0) itens.push({etapa: 'Pesagem', codigo: l.mpCodigo, nome: l.mpNome, quantidade: num(l.perda), unidade: l.unidade || 'kg',
+          obs: (l.justificativa || '') + sufixo, data: (g.pesagem || {}).fim || null, pct: pct(l.mpCodigo, num(l.perda))});
+      });
+      var man = g.manipulacao || {};
+      Object.keys(man.perdasMp || {}).forEach(function(k) {
+        var q = num(man.perdasMp[k]); if (!(q > 0)) return;
+        var l = porItem[k] || {};
+        itens.push({etapa: 'Manipulação', codigo: l.mpCodigo || k, nome: l.mpNome || '', quantidade: q, unidade: 'kg',
+          obs: 'pesada e não foi para o tacho' + sufixo, data: man.fim || null, pct: pct(l.mpCodigo || k, q)});
+      });
+      Object.keys(man.perdas || {}).forEach(function(k) {
+        var q = num(man.perdas[k]); if (!(q > 0)) return;
+        itens.push({etapa: 'Manipulação', codigo: null, nome: ROTULO_PERDA_MANIP[k] || k, quantidade: q, unidade: 'kg', obs: sufixo.trim(), data: man.fim || null, pct: null});
+      });
+      var r = g.resumo || {};
+      if (r.perdaProcesso != null) processo.push({ciclo: g.ciclo || i + 1, kg: r.perdaProcesso, pct: r.perdaProcessoPct, massaEntrada: r.massaEntrada, rendimento: r.rendimento});
+    });
+    (perdas || []).forEach(function(p) {
+      var q = num(p.quantidade); if (!(q > 0)) return;
+      var nome = p.materialNome || p.especificacao || p.tipo || '';
+      itens.push({etapa: etapaDe(p.etapa), codigo: p.materialCodigo || null, nome: nome, tipo: p.tipo || null, quantidade: q,
+        unidade: p.unidade || (p.tipo === 'Bulk (kg)' ? 'kg' : 'un'),
+        obs: [p.especificacao && p.especificacao !== nome ? p.especificacao : '', p.linha || ''].filter(Boolean).join(' · '),
+        data: p.timestamp || p.data || null, kgEquivalente: p.kgEquivalente, pct: pct(p.materialCodigo, q, p.produto && p.unidade !== 'kg')});
+    });
+    itens.sort(function(a, b) { return ETAPAS_PERDA.indexOf(a.etapa) - ETAPAS_PERDA.indexOf(b.etapa) || String(a.data || '').localeCompare(String(b.data || '')); });
+    // Totais por etapa e unidade (kg não se soma com un).
+    var porEtapa = {};
+    itens.forEach(function(it) {
+      var e = porEtapa[it.etapa] = porEtapa[it.etapa] || {etapa: it.etapa, n: 0, totais: {}};
+      e.n++;
+      e.totais[it.unidade] = Math.round(((e.totais[it.unidade] || 0) + it.quantidade) * 1000) / 1000;
+    });
+    return {itens: itens, porEtapa: ETAPAS_PERDA.filter(function(e) { return porEtapa[e]; }).map(function(e) { return porEtapa[e]; }), processo: processo};
+  }
+
   function montar(opKey, fontes) {
     var F = fontes || {};
     var op = (F.ops || {})[opKey];
@@ -139,7 +213,10 @@
       lista(F.perdas[k]).forEach(function(p) {
         if (k === opKey || mesmoLote(p.lote)) {
           (Array.isArray(p.perdas) ? p.perdas : lista(p.perdas)).forEach(function(x) {
-            perdas.push({data: p.data || null, timestamp: p.timestamp || null, linha: p.linha || null, tipo: x.tipo, quantidade: num(x.quantidade)});
+            perdas.push({data: p.data || null, timestamp: p.timestamp || null, linha: p.linha || null, tipo: x.tipo, quantidade: num(x.quantidade),
+              etapa: x.etapa || null, materialCodigo: x.materialCodigo || null, materialNome: x.materialNome || null,
+              especificacao: x.especificacao || null, unidade: x.unidade || null, produto: !!x.produto,
+              kgEquivalente: x.kgEquivalente != null ? num(x.kgEquivalente) : null});
           });
         }
       });
@@ -193,6 +270,7 @@
       opKey: opKey, op: op, lote: lote, granel: granel,
       apontamentos: apontamentos, totalApontado: totalApontado,
       paradas: paradas, perdas: perdas, consumos: consumos,
+      perdasLote: perdasDoLote(granel, perdas, consumos, totalApontado),
       paletes: paletes, conferenciaPa: conferenciaPa, contagensPa: contagensPa, rncs: rncs,
       linhaDoTempo: linhaDoTempo(op, granel, apontamentos, paradas, contagensPa, paletes, rncs)
     };
@@ -245,6 +323,6 @@
 
   return {
     normalizar: normalizar, compacto: compacto, buscar: buscar, acharOp: acharOp,
-    montar: montar, montarGranel: montarGranel
+    montar: montar, montarGranel: montarGranel, perdasDoLote: perdasDoLote
   };
 });

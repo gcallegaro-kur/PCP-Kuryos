@@ -141,4 +141,41 @@ const fontes = {
   assert.equal(D.montar('nao-existe', fontes), null);
 }
 
+// Perdas do lote (09/10): todas as etapas numa lista só.
+{
+  const d = D.montar('26250-02', fontes);
+  const P = d.perdasLote;
+  assert.deepEqual(P.itens.map((i) => [i.etapa, i.nome, i.quantidade, i.unidade]),
+    [['Manipulação', 'Resíduo no tacho', 1, 'kg'], ['Não informada', 'Rótulos', 7, 'un']], 'registro antigo sem etapa: não informada');
+  assert.deepEqual(P.processo.map((p) => [p.kg, p.rendimento]), [[2, 63]], '65 pesados, 63 rendidos');
+
+  const granel = {existe: true, ciclos: [{ciclo: 1, pesagem: {fim: '2026-10-01T10:00:00Z'},
+    linhas: [{itemKey: 'MP-A', mpCodigo: 'MP-A', mpNome: 'AGUA', unidade: 'kg', perda: 0.5, justificativa: 'derramou'},
+             {itemKey: 'MP-B', mpCodigo: 'MP-B', mpNome: 'ESSENCIA', unidade: 'kg', perda: 0}],
+    manipulacao: {fim: '2026-10-01T12:00:00Z', perdasMp: {'MP-B': 0.2}, perdas: {amostra: 0.3, outra: 0}},
+    resumo: {perdaProcesso: 4, perdaProcessoPct: 1.2, massaEntrada: 330, rendimento: 326}}]};
+  const perdas = [
+    {timestamp: '2026-10-02T15:00:00Z', linha: 'Linha 1', tipo: 'Rótulos', quantidade: 12, etapa: 'rotulagem', materialCodigo: 'ET-1', materialNome: 'ROTULO X', especificacao: 'ROTULO X', unidade: 'un'},
+    {timestamp: '2026-10-02T16:00:00Z', linha: 'Linha 1', tipo: 'Frascos', quantidade: 5, etapa: 'envase', materialCodigo: 'EP-1', materialNome: 'FRASCO', unidade: 'un'},
+    {timestamp: '2026-10-02T16:10:00Z', linha: 'Linha 1', tipo: 'Produto envasado (un)', quantidade: 20, etapa: 'envase', produto: true, unidade: 'un', kgEquivalente: 3.9, especificacao: 'unidades descartadas'},
+    {timestamp: '2026-10-02T16:20:00Z', tipo: 'Frascos', quantidade: 0, etapa: 'envase'}
+  ];
+  const consumos = [{itemCodigo: 'MP-A', consumido: 300}, {itemCodigo: 'MP-B', consumido: 2}, {itemCodigo: 'ET-1', consumido: 1200}, {itemCodigo: 'EP-1', consumido: 1000}];
+  const Q = D.perdasDoLote(granel, perdas, consumos, 1000);
+  assert.deepEqual(Q.itens.map((i) => [i.etapa, i.codigo, i.quantidade, i.pct]), [
+    ['Pesagem', 'MP-A', 0.5, 0.17],
+    ['Manipulação', 'MP-B', 0.2, 10],
+    ['Manipulação', null, 0.3, null],
+    ['Rotulagem', 'ET-1', 12, 1],
+    ['Envase', 'EP-1', 5, 0.5],
+    ['Envase', null, 20, 2]
+  ], 'ordem por etapa; zero fica de fora; % sobre o consumido, produto sobre o apontado');
+  assert.deepEqual(Q.porEtapa.map((e) => [e.etapa, e.n, e.totais]), [
+    ['Pesagem', 1, {kg: 0.5}], ['Manipulação', 2, {kg: 0.5}], ['Rotulagem', 1, {un: 12}], ['Envase', 2, {un: 25}]
+  ]);
+  assert.equal(Q.itens[0].obs, 'derramou');
+  assert.equal(Q.itens[5].kgEquivalente, 3.9);
+  assert.equal(D.perdasDoLote({existe: false}, [], [], 0).itens.length, 0, 'lote sem nada');
+}
+
 console.log('run_dossie_lote_test.js: OK');

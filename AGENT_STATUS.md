@@ -7,8 +7,12 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ### Claude — Perdas do lote no Dossiê (09/10/2026)
 
-- **Pedido:** ver as perdas apontadas; o usuário sugeriu o Dossiê do lote.
-- **Arquivos ativos:** `public/shared/dossie-lote.js`, `public/dossie_lote.html`, `run_dossie_lote_test.js`.
+- **Pedido:** "preciso enxergar um relatório das perdas que estão sendo apontadas" → "e se colocássemos no dossiê do lote?".
+- **Antes:** o dossiê só mostrava `perdas/` como "Perdas no envase" (tipo + quantidade, sem material, juntando rotulagem); as perdas da manipulação ficavam espalhadas dentro de cada MP.
+- **Agora:** seção própria **Perdas do lote** (`DossieLote.perdasDoLote`): pesagem (`pesagem/itens/{k}.perda`), manipulação (`perdasMp` + `perdas` resíduo/amostra/outra), rotulagem e envase (`perdas/{opKey}`, registro anterior a 25/09 sem `etapa` = "Não informada"). Totais por etapa (kg e un separados), % sobre o consumido do material (produto envasado: sobre o apontado) e a perda de processo à parte (já contém as da manipulação).
+- **Testes:** `run_dossie_lote_test.js` (+bloco de perdas) e `run_dossie_perdas_ui_test.js` (novo). Ensaio na base: 98 perdas em todos os lotes, nenhuma sem nome.
+- **Fica para depois, se o usuário pedir:** relatório consolidado de perdas entre lotes (período/linha/produto/material) — o dossiê é um lote por vez.
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
 

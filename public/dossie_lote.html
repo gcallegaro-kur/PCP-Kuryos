@@ -210,6 +210,29 @@ function secao(titulo, extra, corpo) {
   return '<div class="card"><div class="card-header"><h3>' + titulo + '</h3>' + (extra || '') + '</div><div class="card-body">' + corpo + '</div></div>';
 }
 
+function totaisTxt(t) {
+  return Object.keys(t).map(function(u) { return fmtNum(t[u]) + ' ' + escapeHtml(u); }).join(' + ');
+}
+function secaoPerdas(P) {
+  var proc = P.processo.map(function(p) {
+    return campo('Perda de processo' + (P.processo.length > 1 ? ' (ciclo ' + p.ciclo + ')' : ''),
+      fmtNum(p.kg) + ' kg' + (p.pct != null ? ' (' + String(p.pct).replace('.', ',') + '%)' : '') +
+      '<div class="hint">entrou ' + fmtNum(p.massaEntrada) + ' kg, rendeu ' + fmtNum(p.rendimento) + ' kg — já inclui as perdas da manipulação</div>');
+  }).join('');
+  var resumo = P.porEtapa.map(function(e) { return campo(e.etapa, totaisTxt(e.totais) + '<div class="hint">' + e.n + ' apontamento(s)</div>'); }).join('');
+  var tabela = P.itens.length ? '<div class="rolagem"><table><thead><tr><th>Etapa</th><th>Material</th><th class="num">Quantidade</th><th class="num">% do consumido</th><th>Quando</th><th>Obs.</th></tr></thead><tbody>' +
+    P.itens.map(function(it) {
+      return '<tr><td>' + escapeHtml(it.etapa) + '</td>' +
+        '<td>' + (it.codigo ? '<b>' + escapeHtml(it.codigo) + '</b> ' : '') + '<span' + (it.codigo ? ' class="hint"' : '') + '>' + escapeHtml(it.nome || it.tipo || '—') + '</span></td>' +
+        '<td class="num">' + fmtNum(it.quantidade) + ' ' + escapeHtml(it.unidade) + (it.kgEquivalente ? '<div class="hint">≈ ' + fmtNum(it.kgEquivalente) + ' kg</div>' : '') + '</td>' +
+        '<td class="num">' + (it.pct != null ? String(it.pct).replace('.', ',') + '%' : '—') + '</td>' +
+        '<td>' + (it.data && it.data.length > 10 ? quando(it.data) : escapeHtml(it.data || '—')) + '</td>' +
+        '<td>' + escapeHtml(it.obs || '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhuma perda apontada para este lote.</div>';
+  return secao('Perdas do lote', '<span class="hint">' + P.itens.length + ' apontamento(s)</span>',
+    (resumo || proc ? '<div class="grade" style="margin-bottom:12px">' + resumo + proc + '</div>' : '') + tabela);
+}
+
 function renderDossie() {
   if (!opAberta || !fontes) return;
   var d = DossieLote.montar(opAberta, fontes);
@@ -315,9 +338,10 @@ function renderDossie() {
     }).join('') + '</tbody></table></div>' : '<div class="no-data">Nenhum apontamento de envase.</div>';
   var pa = d.paradas.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Paradas</h4><div class="rolagem"><table><thead><tr><th>Início</th><th>Motivo</th><th class="num">Duração</th></tr></thead><tbody>' +
     d.paradas.map(function(p) { return '<tr><td>' + quando(p.inicio) + '</td><td>' + escapeHtml(p.motivo || '—') + '</td><td class="num">' + fmtNum(p.duracao || 0) + ' min</td></tr>'; }).join('') + '</tbody></table></div>' : '';
-  var pe = d.perdas.length ? '<h4 style="font-size:13px;margin:14px 0 6px">Perdas no envase</h4><div class="rolagem"><table><thead><tr><th>Data</th><th>Tipo</th><th class="num">Quantidade</th></tr></thead><tbody>' +
-    d.perdas.map(function(p) { return '<tr><td>' + escapeHtml(p.data || '—') + '</td><td>' + escapeHtml(p.tipo || '—') + '</td><td class="num">' + fmtNum(p.quantidade) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '';
-  h += secao('Envase', '<span class="hint">' + d.apontamentos.length + ' apontamento(s) · ' + fmtNum(d.totalApontado) + ' un</span>', ap + pa + pe);
+  h += secao('Envase', '<span class="hint">' + d.apontamentos.length + ' apontamento(s) · ' + fmtNum(d.totalApontado) + ' un</span>', ap + pa);
+
+  // 3b. Perdas do lote: todas as etapas numa lista (DossieLote.perdasDoLote).
+  h += secaoPerdas(d.perdasLote);
 
   // 4. Consumo de materiais
   var invertidos = d.consumos.filter(function(c) { return c.sinalInvertido; }).length;
