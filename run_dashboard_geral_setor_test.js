@@ -60,14 +60,14 @@ function extrairFuncao(nome) {
     console, Math, String, Number, Object, Array, Boolean,
     normalizeSearch: (s) => String(s || '').toLowerCase(),
     RAW: {producao: [
-      {u: 1000, lin: 'Linha 1',      setor: 'envase',    cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
-      {u: 900,  lin: 'Linha 2',      setor: 'envase',    cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
-      {u: 800,  lin: 'Rotulagem 01', setor: 'rotulagem', cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
-      {u: 700,  lin: 'Celofane',     setor: 'posto',     cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
+      {u: 1000, lin: 'Linha 1',      setor: 'envase', tipo: 'Envase',    cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
+      {u: 900,  lin: 'Linha 2',      setor: 'envase', tipo: 'Envase',    cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
+      {u: 800,  lin: 'Rotulagem 01', setor: 'rotulagem', tipo: 'Rotulagem', cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
+      {u: 700,  lin: 'Celofane',     setor: 'posto', tipo: 'Posto',     cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2026-10-01'},
       // registro antigo, de antes da classificação existir: sem `setor`
       {u: 600,  lin: 'Linha 01',     cli: 'MISS', cat: 'A', sub: 'B', visc: 'L', sku: 'S1', desc: 'd', _ymd: '2025-05-01'}
     ]},
-    filters: {dateFrom: '', dateTo: '', cliente: [], categoria: [], subcategoria: [], viscosidade: [], linha: [], search: ''}
+    filters: {dateFrom: '', dateTo: '', cliente: [], categoria: [], subcategoria: [], viscosidade: [], setor: [], linha: [], search: ''}
   };
   vm.createContext(ctx);
   vm.runInContext(extrairFuncao('filterProducao'), ctx);
@@ -107,6 +107,43 @@ function extrairFuncao(nome) {
   ctx.filters.dateFrom = '';
   ctx.filters.cliente = ['OUTRO'];
   eq(soma(ctx.filterProducao()), 0, 'e o de cliente também');
+}
+
+// ── Setor como filtro de primeira classe ──────────────────────────────────
+// O usuário pediu "a possibilidade de analisar tudo": rotulagem e posto não
+// podem depender de descobrir que selecionar a Linha certa os revela.
+{
+  ok(/data-field="setor"/.test(source), 'existe um controle de Setor na barra de filtros');
+  ok(/setupMultiSelect\('setor', \['Envase', 'Rotulagem', 'Posto'\]\);/.test(source),
+    'com as três opções que os apontamentos produzem');
+  ok(/field === 'setor' \? 'Envase' : 'Todos'/.test(source),
+    "sem escolha o botão diz 'Envase', não 'Todos' — o padrão da tela tem que estar declarado");
+  ok(/filters\.setor = \[\];/.test(source), 'o Limpar filtros zera o setor junto');
+
+  const ctx2 = {
+    console, Math, String, Number, Object, Array, Boolean,
+    normalizeSearch: (x) => String(x || '').toLowerCase(),
+    RAW: {producao: [
+      {u: 1000, lin: 'Linha 1',      setor: 'envase',    tipo: 'Envase',    cli: 'A', cat: 'A', sub: 'B', visc: 'L', sku: 'S', desc: 'd', _ymd: '2026-10-01'},
+      {u: 800,  lin: 'Rotulagem 01', setor: 'rotulagem', tipo: 'Rotulagem', cli: 'A', cat: 'A', sub: 'B', visc: 'L', sku: 'S', desc: 'd', _ymd: '2026-10-01'},
+      {u: 700,  lin: 'Celofane',     setor: 'posto',     tipo: 'Posto',     cli: 'A', cat: 'A', sub: 'B', visc: 'L', sku: 'S', desc: 'd', _ymd: '2026-10-01'}
+    ]},
+    filters: {dateFrom: '', dateTo: '', cliente: [], categoria: [], subcategoria: [], viscosidade: [], setor: [], linha: [], search: ''}
+  };
+  vm.createContext(ctx2);
+  vm.runInContext(extrairFuncao('filterProducao'), ctx2);
+  const soma2 = (l) => l.reduce((a, x) => a + x.u, 0);
+
+  eq(soma2(ctx2.filterProducao()), 1000, 'sem escolher setor, continua sendo só o envase');
+  ctx2.filters.setor = ['Rotulagem'];
+  eq(soma2(ctx2.filterProducao()), 800, 'escolhendo Rotulagem, a tela inteira passa a falar de rotulagem');
+  ctx2.filters.setor = ['Posto'];
+  eq(soma2(ctx2.filterProducao()), 700, 'idem para Posto');
+  ctx2.filters.setor = ['Envase', 'Rotulagem', 'Posto'];
+  eq(soma2(ctx2.filterProducao()), 2500, 'marcando os três, soma os três — a escolha explícita manda');
+  ctx2.filters.setor = ['Rotulagem'];
+  ctx2.filters.linha = ['Linha 1'];
+  eq(soma2(ctx2.filterProducao()), 0, 'setor e linha se cruzam, não se atropelam');
 }
 
 // ── A exclusão não pode ser silenciosa ─────────────────────────────────────

@@ -14,6 +14,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Fica para depois, se o usuário pedir:** relatório consolidado de perdas entre lotes (período/linha/produto/material) — o dossiê é um lote por vez.
 - **Arquivos ativos:** nenhum.
 
+### ⚠ Aviso ao outro agente — `run_painel_rearranjo_ui_test.js` quebrou em `eeb03df` (09/10/2026)
+
+- `run_painel_rearranjo_ui_test.js` passou a falhar: `admin (login 0 ms depois): botões = 2`. O teste abre **`form.html`**, arquivo tocado por `eeb03df` ("OP so sai do card da linha quando encerrada"). **Não toquei em `form.html` nesta rodada** — meu diff era só `dashboard_analise.html` e o teste dele. Passava antes desse commit.
 ### Claude — OP nunca sai do card da linha até ser encerrada (09/10/2026)
 
 - **Pergunta:** ao retomar a linha no início do dia, a OP não aparecia como alocada sem ter sido finalizada.
@@ -23,6 +26,9 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Arquivos ativos:** nenhum.
 
 ### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
+
+- **Complemento (mesmo dia):** o usuário pediu "a possibilidade de analisar tudo". **Setor virou filtro de primeira classe** na barra (Envase / Rotulagem / Posto), com **Envase como padrão declarado no próprio botão** — não é mais regra escondida atrás do filtro de Linha. Escolha explícita manda: marcar os três soma os três. Setor e Linha se cruzam, não se atropelam. Teste subiu para 28 verificações.
+- **⚠ Manipulação NÃO está no Dashboard Geral** e não entrou agora: só 45 das 1.460 OPs têm nó `manipulacao`, dados de **25/09 a 08/10** (16.647 kg), e a medida é **kg de granel, não peças** — somar com unidades repetiria o erro que acabamos de corrigir. Precisa de painel próprio; esperando a decisão do usuário sobre qual indicador.
 
 - **Pergunta do usuário:** "na tela dashboard geral, ele está somando apontamentos da rotulagem e produção? achei muito alto os números". Estava, sim.
 - **O defeito:** `dashboard_analise.html` montava `RAW.producao` a partir de **todo** registro de `registros/`, com `tipo: 'Envase'` **fixo** e sem olhar o setor. Rotulagem e Posto entravam no total como produção — e não são: são etapas POSTERIORES do mesmo lote que a linha já contou, não criam unidade nova. Mesma regra que `isSetorEnvase` (form.html) já aplica e que o **Dashboard Diário já tinha corrigido** (ver os comentários em `dashboard.html` sobre "somava os 3 setores juntos"); faltava aqui.

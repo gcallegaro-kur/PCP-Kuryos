@@ -150,6 +150,10 @@ table tr:hover { background: #f8fafc; }
         <div class="ms" data-field="viscosidade"><button class="ms-btn">Todas</button></div>
       </div>
       <div class="fgroup">
+        <label>Setor</label>
+        <div class="ms" data-field="setor"><button class="ms-btn">Envase</button></div>
+      </div>
+      <div class="fgroup">
         <label>Linha</label>
         <div class="ms" data-field="linha"><button class="ms-btn">Todas</button></div>
       </div>
@@ -758,7 +762,7 @@ RAW.pedidos.forEach(p => {
 });
 }
 
-const filters = { dateFrom:null, dateTo:null, cliente:[], categoria:[], subcategoria:[], viscosidade:[], linha:[], status:[], servico:[], search:'', preset:null, gran:'auto' };
+const filters = { dateFrom:null, dateTo:null, cliente:[], categoria:[], subcategoria:[], viscosidade:[], setor:[], linha:[], status:[], servico:[], search:'', preset:null, gran:'auto' };
 
 // === Granularidade dos charts temporais ===
 function _bwkStart(d) {
@@ -968,7 +972,9 @@ function updateMsButton(field) {
   if (!wrap) return;
   const btn = wrap.querySelector('.ms-btn');
   const sel = filters[field] || [];
-  if (!sel.length) btn.innerHTML = 'Todos';
+  // Sem seleção, 'setor' não é 'Todos': o padrão da tela é Envase, e o botão
+  // tem que dizer a verdade sobre o que está sendo contado.
+  if (!sel.length) btn.innerHTML = field === 'setor' ? 'Envase' : 'Todos';
   else if (sel.length === 1) btn.innerHTML = escapeHtml(sel[0]);
   else btn.innerHTML = `${sel.length} selecionados`;
 }
@@ -992,7 +998,15 @@ function fmtSnapshotDate(iso) {
 // caladas no total de producao.
 function filterProducao() {
   return RAW.producao.filter(p => {
-    if (p.setor && p.setor !== 'envase' && !(filters.linha.length && filters.linha.includes(p.lin || 'S/LINHA'))) return false;
+    if (filters.setor.length) {
+      // Escolha explícita manda: o total passa a ser daquele(s) setor(es).
+      if (!filters.setor.includes(p.tipo || 'Envase')) return false;
+    } else if (p.setor && p.setor !== 'envase' && !(filters.linha.length && filters.linha.includes(p.lin || 'S/LINHA'))) {
+      // Sem escolha, o padrão é só envase -- rotulagem e posto são etapas
+      // posteriores do mesmo lote e somá-las conta a peça duas vezes.
+      // Escolher uma Rotulagem/Posto no filtro de Linha também vale como pedido.
+      return false;
+    }
     if (filters.dateFrom && p._ymd && p._ymd < filters.dateFrom) return false;
     if (filters.dateTo && p._ymd && p._ymd > filters.dateTo) return false;
     if (filters.cliente.length && !filters.cliente.includes(p.cli)) return false;
@@ -1810,13 +1824,13 @@ function renderAll() {
 function resetFilters() {
   filters.dateFrom = null; filters.dateTo = null;
   filters.cliente = []; filters.categoria = []; filters.subcategoria = [];
-  filters.viscosidade = []; filters.linha = []; filters.status = []; filters.servico = [];
+  filters.viscosidade = []; filters.setor = []; filters.linha = []; filters.status = []; filters.servico = [];
   filters.search = ''; filters.preset = null; filters.gran = 'auto';
   document.getElementById('f-from').value = '';
   document.getElementById('f-to').value = '';
   document.getElementById('f-search').value = '';
   document.querySelectorAll('.ms-pop input[type="checkbox"]').forEach(cb => cb.checked = false);
-  ['cliente','categoria','subcategoria','viscosidade','linha','status','servico'].forEach(f => updateMsButton(f));
+  ['cliente','categoria','subcategoria','viscosidade','setor','linha','status','servico'].forEach(f => updateMsButton(f));
   document.querySelectorAll('.preset.active').forEach(b => b.classList.remove('active'));
   const granDefault = document.querySelector('.preset.gran[data-gran="auto"]');
   if (granDefault) granDefault.classList.add('active');
@@ -1846,6 +1860,10 @@ function initDashboard() {
   setupMultiSelect('subcategoria', distinct(RAW.producao, 'sub'));
   setupMultiSelect('viscosidade', distinct(RAW.producao, 'visc'));
   const linhas = new Set([...RAW.producao.map(p => p.lin || 'S/LINHA'), ...RAW.pedidos.map(p => p.lin || 'S/LINHA'), ...(RAW.opsLive||[]).map(o => o.linha), ...(RAW.paradasLive||[]).map(p => p.linha || 'S/LINHA')]);
+  // Setor é filtro de primeira classe, não regra escondida: Envase é o padrão
+  // (produção = unidade acabada criada), e quem quiser olhar Rotulagem ou
+  // Posto marca aqui e a tela inteira passa a falar daquele setor.
+  setupMultiSelect('setor', ['Envase', 'Rotulagem', 'Posto']);
   setupMultiSelect('linha', [...linhas].filter(v => v));
   setupMultiSelect('status', distinct(RAW.pedidos, 'status'));
   setupMultiSelect('servico', distinct(RAW.pedidos, 'serv'));
