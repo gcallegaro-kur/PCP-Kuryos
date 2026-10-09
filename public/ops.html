@@ -1211,8 +1211,12 @@
       // saldoEmpenhado "fantasma" acumulando pra sempre. Idempotente por
       // design (sem sobra, não faz nada) -- seguro mesmo se o dropdown
       // manual (updateOpField) também disparar pra essa mesma OP.
-      if (op.lote && op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
-        var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+      // Sem `materiaisConsumo` (o caso de quase toda OP anterior a 10/09/2026)
+      // a lista vai vazia DE PROPOSITO: liberarEmpenhoLote descobre sozinho
+      // quem segura o lote pelo indice de empenhos. Antes, a ausencia do
+      // campo impedia ate a chamada -- e a reserva ficava presa para sempre.
+      if (op.lote && typeof liberarEmpenhoLote === 'function') {
+        var codigosEmpenho = Object.values(op.materiaisConsumo || {}).map(function(i) { return i.mpCodigo; });
         liberarEmpenhoLote(database, op.lote, codigosEmpenho).catch(function(err) {
           console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
         });
@@ -2271,8 +2275,12 @@
           // marca 'Concluído' (dropdown manual), que também nunca liberava
           // o empenho. Idempotente: seguro rodar mesmo que já tenha rodado
           // pelo caminho normal.
-          if (op && op.lote && op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
-            var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+          // Sem `materiaisConsumo` (o caso de quase toda OP anterior a 10/09/2026)
+          // a lista vai vazia DE PROPOSITO: liberarEmpenhoLote descobre sozinho
+          // quem segura o lote pelo indice de empenhos. Antes, a ausencia do
+          // campo impedia ate a chamada -- e a reserva ficava presa para sempre.
+          if (op && op.lote && typeof liberarEmpenhoLote === 'function') {
+            var codigosEmpenho = Object.values(op.materiaisConsumo || {}).map(function(i) { return i.mpCodigo; });
             liberarEmpenhoLote(database, op.lote, codigosEmpenho).catch(function(err) {
               console.error('Falha ao liberar empenho da OP ' + op.lote + ':', err);
             });
@@ -2481,8 +2489,12 @@
           // 3. Libera de volta pro disponível qualquer empenho remanescente
           // dessa OP (reservado na emissão, nunca chegou a ser consumido por
           // não ter sido apontado antes do cancelamento).
-          if (op.materiaisConsumo && typeof liberarEmpenhoLote === 'function') {
-            var codigosEmpenho = Object.values(op.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+          // Sem `materiaisConsumo` (o caso de quase toda OP anterior a 10/09/2026)
+          // a lista vai vazia DE PROPOSITO: liberarEmpenhoLote descobre sozinho
+          // quem segura o lote pelo indice de empenhos. Antes, a ausencia do
+          // campo impedia ate a chamada -- e a reserva ficava presa para sempre.
+          if (typeof liberarEmpenhoLote === 'function') {
+            var codigosEmpenho = Object.values(op.materiaisConsumo || {}).map(function(i) { return i.mpCodigo; });
             cascatas.push(liberarEmpenhoLote(database, lote, codigosEmpenho));
           }
         }

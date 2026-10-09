@@ -3099,8 +3099,12 @@ function updateOpRecordOnApontamento(lote, qtd, novaMedia, tsIso, tipo, tsFimIso
       // a sobra empenhada nunca voltava pro disponível: estoque disponível
       // subestimado de forma acumulativa. opEstaAtiva() cobre os três estados
       // finais de uma vez. Continua idempotente (sem sobra, não faz nada).
-      if (!opEstaAtiva(opAtual) && opAtual.materiaisConsumo) {
-        var codigosEmpenho = Object.values(opAtual.materiaisConsumo).map(function(i) { return i.mpCodigo; });
+      // Sem `materiaisConsumo` (o caso de quase toda OP anterior a 10/09/2026)
+      // a lista vai vazia DE PROPOSITO: liberarEmpenhoLote descobre sozinho
+      // quem segura o lote pelo indice de empenhos. Antes, a ausencia do
+      // campo impedia ate a chamada -- e a reserva ficava presa para sempre.
+      if (!opEstaAtiva(opAtual)) {
+        var codigosEmpenho = Object.values(opAtual.materiaisConsumo || {}).map(function(i) { return i.mpCodigo; });
         liberarEmpenhoLote(db, lote, codigosEmpenho).catch(function(err) {
           console.error('Falha ao liberar empenho remanescente da OP ' + lote + ':', err);
         });

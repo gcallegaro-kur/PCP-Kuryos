@@ -1423,20 +1423,49 @@ function baixarEmpenho(dbRef, lote, materialCodigo, qtd) {
 // foi consumido via baixarEmpenho ao longo da produção. `materiaisCodigos`
 // vem de Object.values(op.materiaisConsumo) -- a OP já carrega essa lista,
 // não precisa varrer o estoque inteiro procurando quem reservou esse lote.
+// `materiaisCodigos` é OPCIONAL desde 09/10/2026, e essa é a correção de um
+// defeito real: os quatro pontos que chamam esta função montavam a lista a
+// partir de `ops/{lote}.materiaisConsumo` e, quando o campo não existia,
+// nem chamavam -- a reserva ficava presa para sempre. E o campo quase nunca
+// existe: só 74 das 1.460 OPs da base o têm (passou a ser gravado nas
+// emissões a partir de 10/09/2026). Toda OP anterior a isso era
+// ESTRUTURALMENTE incapaz de soltar o que reservou. Resultado medido: 18
+// reservas presas em 2 OPs concluídas, 37.621 un./kg descontadas do
+// disponível sem ninguém esperando por elas.
+//
+// Sem a lista, a própria base responde quem segura: o índice
+// `estoque/{material}/empenhos/{lote}` É a lista. Custa uma leitura de
+// `estoque` inteiro (201 nós, ~166 KB hoje) e só acontece no caminho de
+// exceção -- OP sem materiaisConsumo, conjunto que só diminui. Melhor pagar
+// essa leitura uma vez por OP encerrada do que deixar material reservado
+// para sempre.
 function liberarEmpenhoLote(dbRef, lote, materiaisCodigos) {
-  if (!lote || !materiaisCodigos || !materiaisCodigos.length) return Promise.resolve();
+  if (!lote) return Promise.resolve();
   var loteKey = sanitizeKey(lote);
-  return Promise.all(materiaisCodigos.map(function(mpCodigo) {
-    if (!mpCodigo) return Promise.resolve();
-    var key = sanitizeKey(mpCodigo);
-    return dbRef.ref('estoque/' + key).transaction(function(atual) {
-      if (!atual || !atual.empenhos || !atual.empenhos[loteKey]) return atual;
-      var restante = atual.empenhos[loteKey].qtdEmpenhada || 0;
-      atual.saldoEmpenhado = Math.max(0, Math.round(((atual.saldoEmpenhado || 0) - restante) * 1000) / 1000);
-      delete atual.empenhos[loteKey];
-      return atual;
-    });
-  }));
+  var informados = (materiaisCodigos || []).filter(function(c) { return !!c; });
+  var listaPromise = informados.length
+    ? Promise.resolve(informados)
+    : dbRef.ref('estoque').once('value').then(function(snap) {
+        var achados = [];
+        snap.forEach(function(filho) {
+          var emp = filho.child('empenhos').child(loteKey);
+          if (emp.exists() && (emp.child('qtdEmpenhada').val() || 0) > 0) achados.push(filho.key);
+        });
+        return achados;
+      }).catch(function() { return []; });  // best-effort: não derruba o encerramento da OP
+  return listaPromise.then(function(lista) {
+    return Promise.all(lista.map(function(mpCodigo) {
+      if (!mpCodigo) return Promise.resolve();
+      var key = sanitizeKey(mpCodigo);
+      return dbRef.ref('estoque/' + key).transaction(function(atual) {
+        if (!atual || !atual.empenhos || !atual.empenhos[loteKey]) return atual;
+        var restante = atual.empenhos[loteKey].qtdEmpenhada || 0;
+        atual.saldoEmpenhado = Math.max(0, Math.round(((atual.saldoEmpenhado || 0) - restante) * 1000) / 1000);
+        delete atual.empenhos[loteKey];
+        return atual;
+      });
+    }));
+  });
 }
 
 // Gera/atualiza os enderecos_estoque de UMA rua a partir da Estrutura de

@@ -5,6 +5,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Empenho preso: OP encerrada que nunca soltava o material (09/10/2026)
+
+- **Pergunta do usuário:** "pq tem empenho em OP encerrada?"
+- **Causa, provada:** os quatro pontos que chamam `liberarEmpenhoLote` (3 em `ops.html`, 1 em `form.html`) montavam a lista de materiais a partir de `ops/{lote}.materiaisConsumo` e, **sem o campo, nem chamavam a função**. E o campo quase nunca existe: **74 de 1.460 OPs** o têm — só passou a ser gravado nas emissões a partir de 10/09/2026. Toda OP anterior era **estruturalmente incapaz** de soltar o que reservou.
+- **Origem das reservas órfãs (26244/02 e 26244/15), confirmada pelos materiais:** o que está reservado é a BOM do **BODY SPLASH FLOR D'AURA** (rótulo, válvula, caixa, essência), e as reservas gravam `sku: MRARBS12` — mas as OPs que ocupam esses números são HIDRATANTE CÉU INFINITO e ÁGUA MICELAR. As reservas nasceram **horas depois** da emissão dessas OPs. É a colisão de numeração entre o Gerador VBA e o sistema, na época em que a emissão ainda fazia `.set(data)` e sobrescrevia o nó (ver `emitir_op.html:1208`). **Esse `.set()` já virou `transaction()`** — a origem está fechada.
+- **Correção:** `liberarEmpenhoLote(dbRef, lote, materiaisCodigos)` — o 3º argumento virou **opcional**. Sem ele, o próprio índice `estoque/{m}/empenhos/{lote}` responde quem segura (uma leitura de `estoque`, 201 nós/166 KB, só no caminho de exceção). Os quatro chamadores perderam a trava do `materiaisConsumo`.
+- **`run_empenho_liberacao_test.js` (novo, 31 verificações)**, com banco de mentira: libera sem lista, respeita reserva de outra OP, é idempotente, não rejeita se a leitura falhar, e **confere que nenhum chamador volta a exigir o campo**. Conferido que reprova com cada metade do bug reintroduzida.
+- **Limpeza:** `scripts/liberar-empenho-op-encerrada.js` (ensaio por padrão, `--aplicar` grava). Critério estreito: só OP `Concluído`/`Cancelado` ou lote que não existe mais. Ensaio: **18 reservas em 2 lotes**; 425 reservas de OP em aberto mantidas.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Consulta de estoque mostra QUEM segura o empenho (09/10/2026)
 
 - **Pedido:** "preciso que a consulta de estoque mostre o que está registrando empenho".
