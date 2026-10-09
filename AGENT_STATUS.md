@@ -5,6 +5,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Consulta de estoque mostra QUEM segura o empenho (09/10/2026)
+
+- **Pedido:** "preciso que a consulta de estoque mostre o que está registrando empenho".
+- **O que mudou:** a seção do empenho no painel do item virou **"Quem está segurando"** — uma linha por OP com o produto, desde quando reserva, a situação da OP e o **total**, que fecha com o campo `Empenhado`. Quando não fecha, a tela diz quanto está sem dono em vez de calar.
+- **`situacaoEmpenho(op, opsCarregadas)`** (novo, em `consulta-estoque.js`) classifica cada reserva: viva, OP concluída, OP cancelada, OP que não existe mais. Com `ops` ainda carregando a situação fica **indefinida** e nada é acusado — acusar falso é pior que não acusar.
+- **Etiqueta/filtro novos `empenhoPreso`** (nível 'atenção') acham, na lista inteira, todo item com reserva presa; a linha da lista mostra "X empenhado · Y preso".
+- **Testes:** `run_consulta_estoque_test.js` (+22 asserções) e `run_consulta_estoque_ui_test.js` (fixture com OP viva + OP concluída, confere o texto do painel). Suíte: 150 passam, mesmas 16 falhas de ambiente/pré-existentes.
+- **⚠ Pegadinha do teste de tela:** os `<h3>` do painel saem em MAIÚSCULAS por CSS, então `innerText` devolve "QUEM ESTÁ SEGURANDO". Regex sem `/i` reprova por nada.
+- **Arquivos ativos:** nenhum.
+- **Achado da base antes de codar:** o índice está íntegro (73 materiais com empenho, **0 divergências** entre `saldoEmpenhado` e a soma de `empenhos/`). O problema é outro: **18 reservas (37.621 un./kg) estão presas em OPs já Concluídas** (26244/02 e 26244/15 em 9 materiais cada) — `liberarEmpenhoLote` não rodou. Na tela, isso aparece como material reservado que na verdade está livre.
+
 ### ⚠ Claude — INCIDENTE: produção creditada no SKU vizinho do mesmo pedido (08/10/2026)
 
 - **Como apareceu:** a tela de Pedidos mostrava `HIDRATANTE CÉU INFINITO 200g — 20.079 / 10.000 (201%)` enquanto o detalhamento por OP somava 7.588 un. O detalhamento estava CERTO; o campo `produzido` é que estava errado.

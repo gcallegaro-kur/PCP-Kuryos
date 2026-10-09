@@ -129,6 +129,25 @@
     return r;
   }
 
+  /* Uma reserva de material aponta para uma OP. Enquanto essa OP está em
+     aberto, o empenho é legítimo: o material está comprometido. Quando a OP
+     termina, é cancelada ou some do cadastro, o empenho vira FANTASMA --
+     continua descontando do disponível sem ninguém esperando por ele. Quem
+     devia soltar é o liberarEmpenhoLote (shared/utils.js), que é best-effort
+     e às vezes não roda. Em 09/10/2026 havia 18 reservas assim na base, 2 OPs
+     concluídas segurando material em 9 materiais cada.
+
+     `ops` vazio significa 'ainda carregando', não 'OP não existe' -- aí a
+     situação fica indefinida e NADA é marcado como preso. Acusar falsamente
+     seria pior que não acusar. */
+  function situacaoEmpenho(op, opsCarregadas) {
+    if (!opsCarregadas) return {codigo: 'indefinida', rotulo: '', preso: false};
+    if (!op) return {codigo: 'semOp', rotulo: 'OP não existe mais', preso: true};
+    var st = txt(op.status);
+    if (st === 'Cancelado') return {codigo: 'cancelada', rotulo: 'OP cancelada', preso: true};
+    if (st === 'Concluído') return {codigo: 'concluida', rotulo: 'OP concluída', preso: true};
+    return {codigo: 'viva', rotulo: st || 'Em aberto', preso: false};
+  }
   /* Etiquetas de situação: o que a pessoa precisa notar sem abrir a linha. */
   function etiquetas(r) {
     var t = [];
@@ -140,13 +159,14 @@
     if (r.vencido > 0) t.push('vencido');
     if (r.vencendo > 0) t.push('vencendo');
     if (r.quarentena > 0) t.push('quarentena');
+    if (r.empenhoPreso > 0) t.push('empenhoPreso');
     if (r.empenhado > 0 && r.disponivel >= 0) t.push('empenhado');
     if (r.atual > 0 && r.disponivel > 0 && !t.length) t.push('ok');
     return t;
   }
   function nivelDe(tags) {
     if (tags.indexOf('negativo') >= 0 || tags.indexOf('falta') >= 0 || tags.indexOf('vencido') >= 0) return 'critico';
-    if (tags.indexOf('vencendo') >= 0 || tags.indexOf('quarentena') >= 0 || tags.indexOf('zerado') >= 0) return 'atencao';
+    if (tags.indexOf('vencendo') >= 0 || tags.indexOf('quarentena') >= 0 || tags.indexOf('zerado') >= 0 || tags.indexOf('empenhoPreso') >= 0) return 'atencao';
     return 'ok';
   }
 
@@ -157,6 +177,8 @@
   function linhas(d) {
     var dados = d || {};
     var estoque = dados.estoque || {}, materiais = dados.materiais || {}, lotes = dados.lotes || {};
+    var ops = dados.ops || {};
+    var opsCarregadas = Object.keys(ops).length > 0;
     var hoje = dados.hoje || new Date();
     var dv = dados.diasVencendo == null ? DIAS_VENCENDO : dados.diasVencendo;
     var out = [], vistos = {};
@@ -168,13 +190,22 @@
       if (ehProduto) { atual = saldoLotes; empenhado = 0; }
       else { atual = num(reg && reg.saldoAtual); empenhado = Math.max(0, num(reg && reg.saldoEmpenhado)); }
       var geral = atual - somaClientes(pc);
-      var emp = [];
+      var emp = [], empPreso = 0;
       if (reg && reg.empenhos) {
         Object.keys(reg.empenhos).forEach(function(k) {
           var e = reg.empenhos[k] || {};
-          if (num(e.qtdEmpenhada) > 0) emp.push({opKey: k, lote: txt(e.lote) || k, sku: txt(e.sku), qtd: num(e.qtdEmpenhada), em: txt(e.atualizadoEm)});
+          if (!(num(e.qtdEmpenhada) > 0)) return;
+          var op = ops[k] || null;
+          var sit = situacaoEmpenho(op, opsCarregadas);
+          var q = num(e.qtdEmpenhada);
+          if (sit.preso) empPreso += q;
+          emp.push({opKey: k, lote: txt(e.lote) || k, sku: txt(e.sku), qtd: q,
+            em: txt(e.atualizadoEm) || txt(e.criadoEm), criadoEm: txt(e.criadoEm),
+            produto: txt(op && op.produto), cliente: txt(op && op.cliente),
+            statusOp: txt(op && op.status), situacao: sit.codigo, rotuloSituacao: sit.rotulo, preso: sit.preso});
         });
-        emp.sort(function(a, b) { return b.qtd - a.qtd; });
+        // Preso primeiro: é o que pede ação. Depois pela quantidade.
+        emp.sort(function(a, b) { return (b.preso - a.preso) || (b.qtd - a.qtd); });
       }
       var ult = (reg && reg.ultimaMovimentacao) || null;
       var tipo = ehProduto ? 'PA' : grupoDoTipo((mat && mat.tipo) || (/^[A-Z]{2,4}/.exec(codigo) || [''])[0]);
@@ -192,6 +223,9 @@
         vencido: arred(rs.vencido), vencendo: arred(rs.vencendo),
         proxValidade: rs.proxValidade, proxDias: rs.proxDias,
         enderecos: rs.enderecos, lotes: lotesItem, empenhos: emp,
+        // Quanto do empenhado está parado em OP que já acabou -- some do
+        // disponível sem ninguém esperando por ele.
+        empenhoPreso: arred(Math.min(empPreso, empenhado)),
         porCliente: pc, geral: arred(geral), clientes: Object.keys(pc),
         ultimaMov: ult ? {em: txt(ult.em), tipo: txt(ult.tipo), qtd: num(ult.qtd), ref: txt(ult.ref)} : null,
         atualizadoEm: txt(reg && reg.ultimaAtualizacao) || (ult && txt(ult.em)) || '',
@@ -322,7 +356,7 @@
   function contagens(rows, f) {
     var c = {grupo: {}, tag: {}, total: 0};
     ORDEM_GRUPOS.forEach(function(g) { c.grupo[g] = 0; });
-    ['comSaldo', 'contado', 'naoContado', 'semControle', 'ok', 'empenhado', 'falta', 'negativo', 'zerado', 'quarentena', 'vencendo', 'vencido'].forEach(function(t) { c.tag[t] = 0; });
+    ['comSaldo', 'contado', 'naoContado', 'semControle', 'ok', 'empenhado', 'empenhoPreso', 'falta', 'negativo', 'zerado', 'quarentena', 'vencendo', 'vencido'].forEach(function(t) { c.tag[t] = 0; });
     rows.forEach(function(r) {
       if (passa(r, f, 'grupo')) c.grupo[r.grupo] = (c.grupo[r.grupo] || 0) + 1;
       if (passa(r, f, 'tag')) {
@@ -668,6 +702,7 @@
   return {
     GRUPOS: GRUPOS, ORDEM_GRUPOS: ORDEM_GRUPOS, STATUS_OK: STATUS_OK, DIAS_VENCENDO: DIAS_VENCENDO,
     grupoDoTipo: grupoDoTipo, diasAte: diasAte, dataLocal: dataLocal, norm: norm, fmt: fmt,
+    situacaoEmpenho: situacaoEmpenho,
     linhas: linhas, filtrar: filtrar, contagens: contagens, ordenar: ordenar, kpis: kpis, clientesDoEstoque: clientesDoEstoque,
     pesoDaPeca: pesoDaPeca, casar: casar, embalagensDaOp: embalagensDaOp, intermediarios: intermediarios, estoqueIntermediario: estoqueIntermediario
   };

@@ -18,7 +18,7 @@ function dados() {
       'MPGR-1': {tipo: 'MPGR', mpNome: 'ALCOOL CEREAL', unidade: 'kg'}
     },
     estoque: {
-      'EP-1': {materialCodigo: 'EP-1', materialNome: 'FRASCO PET 120ML', saldoAtual: 6000, saldoEmpenhado: 1000, unidade: 'un', empenhos: {'OP-A': {lote: 'A/01', qtdEmpenhada: 1000, sku: 'SKU-A'}}, ultimaAtualizacao: agora, ultimaMovimentacao: {em: agora, tipo: 'ajuste_manual', qtd: 6000, ref: 'contagem'}},
+      'EP-1': {materialCodigo: 'EP-1', materialNome: 'FRASCO PET 120ML', saldoAtual: 6000, saldoEmpenhado: 1000, unidade: 'un', empenhos: {'OP-X': {lote: 'X/01', qtdEmpenhada: 600, sku: 'SKU-X', criadoEm: agora}, 'OP-FIM': {lote: '26244/02', qtdEmpenhada: 400, sku: 'SKU-Z', criadoEm: agora}}, ultimaAtualizacao: agora, ultimaMovimentacao: {em: agora, tipo: 'ajuste_manual', qtd: 6000, ref: 'contagem'}},
       'EP-2': {materialCodigo: 'EP-2', materialNome: 'VALVULA SPRAY 24/410', saldoAtual: 3000, saldoEmpenhado: 0, unidade: 'un', porCliente: {MISS: {clienteNome: 'MISS ROSE', saldoAtual: 3000}}, ajustes: {a1: {ajustadoEm: agora}}},
       'ES-1': {materialCodigo: 'ES-1', materialNome: 'ROTULO BODY SPLASH', saldoAtual: 100, saldoEmpenhado: 800, unidade: 'un'},
       'MPGR-1': {materialCodigo: 'MPGR-1', materialNome: 'ALCOOL CEREAL', saldoAtual: 90, saldoEmpenhado: 0, unidade: 'kg'}
@@ -35,7 +35,8 @@ function dados() {
         materiaisConsumo: {a: {origem: 'bom', mpCodigo: 'EP-1', mpNome: 'FRASCO PET 120ML', quantidade: 1000}, b: {origem: 'bom', mpCodigo: 'EP-2', mpNome: 'VALVULA SPRAY 24/410', quantidade: 1000}}},
       'OP-Y': {lote: 'Y/01', sku: 'SKU-X', produto: 'BODY SPLASH IDOLA', cliente: 'MISS ROSE', status: 'Em Produção', qtdPlanejada: 1000, pesoTeoricoUnG: 100, produzidoLinha: 400,
         manipulacao: {status: 'LIBERADO', manipulacao: {rendimento: 100}},
-        materiaisConsumo: {a: {origem: 'bom', mpCodigo: 'ES-1', mpNome: 'ROTULO BODY SPLASH', quantidade: 1000}}}
+        materiaisConsumo: {a: {origem: 'bom', mpCodigo: 'ES-1', mpNome: 'ROTULO BODY SPLASH', quantidade: 1000}}},
+      'OP-FIM': {lote: '26244/02', sku: 'SKU-Z', produto: 'HIDRATANTE CEU INFINITO 200g', status: 'Concluído', qtdPlanejada: 400}
     },
     produtos: {'SKU-X': {sku: 'SKU-X', clienteKey: 'MISS', descricao: 'IDOLA', volume: 120, unidadeVolume: 'ml'}},
     bom: {}, formulas: {},
@@ -177,6 +178,20 @@ async function abrir(browser, pagina) {
     await page.keyboard.press('Escape');
 
     // Atalho "/" foca a busca
+    // Empenho: a tela tem que dizer QUEM segura e o que já pode ser solto
+    await page.locator('#corpo tr[data-c="EP-1"]').click();
+    await page.waitForSelector('#drawer.on');
+    const drEp = await page.locator('#drawer').innerText();
+    assert.match(drEp, /quem está segurando \(2 OPs?\)/i, 'a seção do empenho existe, com a contagem de OPs (o <h3> sai em maiúsculas por CSS)');
+    assert.match(drEp, /X\/01/, 'lista a OP que reservou');
+    assert.match(drEp, /BODY SPLASH IDOLA/, 'e o que ela produz, não só o lote');
+    assert.match(drEp, /26244\/02/, 'inclusive a reserva presa');
+    assert.match(drEp, /OP concluída/i, 'marcando que aquela OP já acabou');
+    assert.match(drEp, /400 un presos em OP que já encerrou/i, 'com o aviso do que dá para soltar, e quanto');
+    assert.match(drEp, /Total reservado\s+1\.000 un/i, 'e o total conferindo com o Empenhado de cima');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.getElementById('drawer').classList.contains('on'));
+
     await page.locator('h1').click();
     await page.keyboard.press('/');
     assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'q');

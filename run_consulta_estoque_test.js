@@ -245,4 +245,62 @@ assert.equal(CE.diasAte('', HOJE), null);
   assert.equal(pa.geral, 0);
 }
 
-console.log('OK Consulta de Estoque: linhas, busca, filtros, casamento bulk x embalagem e retidos.');
+// ── Quem está segurando o empenho (09/10/2026) ─────────────────────────────
+// Pedido: "preciso que a consulta de estoque mostre o que está registrando
+// empenho". O número existia desde sempre; faltava dizer QUAL OP o gerou e se
+// essa OP ainda está de pé. Na base real havia 18 reservas presas em OPs já
+// concluídas (26244/02 e 26244/15), descontando material do disponível sem
+// ninguém esperando por ele.
+{
+  const est = {'EP-7': {materialCodigo: 'EP-7', materialNome: 'TAMPA DISC TOP', saldoAtual: 10000, saldoEmpenhado: 3000, unidade: 'un',
+    empenhos: {
+      'OP-VIVA': {lote: '26290/01', sku: 'SKU-1', qtdEmpenhada: 1000, criadoEm: '2026-10-05T10:00:00Z', atualizadoEm: '2026-10-06T10:00:00Z'},
+      'OP-FIM':  {lote: '26244/02', sku: 'SKU-2', qtdEmpenhada: 1200, criadoEm: '2026-09-01T10:00:00Z'},
+      'OP-CANC': {lote: '26244/15', sku: 'SKU-3', qtdEmpenhada: 500, criadoEm: '2026-09-02T10:00:00Z'},
+      'OP-SUMIU': {lote: '26100/09', sku: 'SKU-4', qtdEmpenhada: 300, criadoEm: '2026-08-01T10:00:00Z'},
+      'OP-ZERO': {lote: '26111/01', qtdEmpenhada: 0}
+    }}};
+  const ops = {
+    'OP-VIVA': {status: 'Em Produção', produto: 'BODY SPLASH ZAHRA 120ml', cliente: 'BRIA'},
+    'OP-FIM': {status: 'Concluído', produto: 'HIDRATANTE CEU INFINITO 200g'},
+    'OP-CANC': {status: 'Cancelado', produto: 'PERFUME IZAAH 30ML'}
+  };
+  const [r] = CE.linhas({estoque: est, materiais: {'EP-7': {tipo: 'EP', unidade: 'un'}}, lotes: {}, ops, hoje: HOJE});
+
+  assert.equal(r.empenhos.length, 4, 'reserva zerada nao entra na lista');
+  const porOp = Object.fromEntries(r.empenhos.map((x) => [x.opKey, x]));
+  assert.equal(porOp['OP-VIVA'].preso, false, 'OP em producao segura o material com razao');
+  assert.equal(porOp['OP-VIVA'].produto, 'BODY SPLASH ZAHRA 120ml', 'a lista diz o que a OP produz, nao so o lote');
+  assert.equal(porOp['OP-VIVA'].rotuloSituacao, 'Em Produção');
+  assert.equal(porOp['OP-FIM'].preso, true, 'OP concluida nao deveria segurar nada');
+  assert.equal(porOp['OP-FIM'].rotuloSituacao, 'OP concluída');
+  assert.equal(porOp['OP-CANC'].preso, true, 'OP cancelada idem');
+  assert.equal(porOp['OP-SUMIU'].rotuloSituacao, 'OP não existe mais', 'reserva orfa tem que aparecer, nao sumir');
+  assert.equal(porOp['OP-SUMIU'].preso, true);
+  assert.equal(r.empenhoPreso, 2000, '1200 + 500 + 300 = 2.000 un. reservadas a toa');
+  assert.ok(r.tags.includes('empenhoPreso'), 'a etiqueta permite achar esses itens na lista inteira');
+  assert.equal(r.nivel, 'atencao', 'empenho preso pede atencao, nao passa como OK');
+  assert.equal(r.empenhos[0].preso, true, 'o que pede acao vem primeiro');
+
+  // Enquanto `ops` nao carregou, acusar seria mentira.
+  const [semOps] = CE.linhas({estoque: est, materiais: {}, lotes: {}, hoje: HOJE});
+  assert.equal(semOps.empenhoPreso, 0, 'sem ops carregadas, nada e marcado como preso');
+  assert.equal(semOps.empenhos.length, 4, 'mas as reservas continuam listadas');
+  assert.ok(!semOps.tags.includes('empenhoPreso'));
+
+  // O detalhamento tem que fechar com o numero de cima.
+  const soma = r.empenhos.reduce((s, x) => s + x.qtd, 0);
+  assert.equal(soma, r.empenhado, 'soma das OPs = empenhado; se divergir, a tela avisa');
+
+  // Filtro novo
+  assert.deepEqual(CE.filtrar([r], {tag: 'empenhoPreso'}).map((x) => x.codigo), ['EP-7']);
+  assert.equal(CE.contagens([r], {}).tag.empenhoPreso, 1, 'o contador do filtro conhece a etiqueta nova');
+
+  // Classificador isolado
+  assert.equal(CE.situacaoEmpenho({status: 'Concluído'}, true).preso, true);
+  assert.equal(CE.situacaoEmpenho({status: 'Programado'}, true).preso, false);
+  assert.equal(CE.situacaoEmpenho(null, true).codigo, 'semOp');
+  assert.equal(CE.situacaoEmpenho(null, false).codigo, 'indefinida', 'sem ops carregadas nao ha veredito');
+}
+
+console.log('OK Consulta de Estoque: linhas, busca, filtros, casamento bulk x embalagem, retidos e rastro do empenho.');

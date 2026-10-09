@@ -49,6 +49,10 @@
   function recalcular() {
     if (!dados.estoque || !dados.materiais || !dados.lotes) return;
     rows = CE.linhas({estoque: dados.estoque, materiais: dados.materiais, lotes: dados.lotes, incluirCatalogo: true,
+      // `ops` é o que permite dizer QUEM segura cada reserva e se essa OP
+      // ainda existe. Chega depois do estoque (carga separada); até chegar,
+      // o módulo deixa a situação indefinida em vez de acusar empenho preso.
+      ops: dados.ops || {},
       produtos: dados.produtos || {}, clientes: dados.clientes || {}});
     if (dados.ops && dados.produtos && dados.bom) {
       inter = CE.intermediarios({ops: dados.ops, estoque: dados.estoque, materiais: dados.materiais, bom: dados.bom, produtos: dados.produtos, materialProcesso: dados.mp || {}, bombonas: dados.bombonas || {}});
@@ -87,10 +91,11 @@
   /* ── Render: filtros ── */
   var TAGS = [
     {t: 'comSaldo', r: 'Com saldo'}, {t: 'contado', r: '📋 Já contado (Dia D)'}, {t: 'naoContado', r: 'Ainda não contado'}, {t: 'semControle', r: 'Sem controle de estoque'}, {t: 'ok', r: '✓ Tudo certo'}, {t: 'empenhado', r: 'Empenhado'}, {t: 'falta', r: 'Empenho maior que o saldo'},
+    {t: 'empenhoPreso', r: '⚠ Empenho preso em OP encerrada'},
     {t: 'negativo', r: 'Saldo negativo'}, {t: 'zerado', r: 'Zerado'}, {t: 'quarentena', r: 'Em quarentena'}, {t: 'vencendo', r: 'Vencendo'}, {t: 'vencido', r: 'Vencido'}
   ];
-  var CLASSE_TAG = {semControle: 'mute', negativo: 'bad', falta: 'bad', vencido: 'bad', zerado: 'mute', vencendo: 'warn', quarentena: 'info', empenhado: 'mute', ok: 'ok'};
-  var ROTULO_TAG = {semControle: 'Sem controle', negativo: 'Negativo', falta: 'Empenho > saldo', vencido: 'Vencido', zerado: 'Zerado', vencendo: 'Vencendo', quarentena: 'Quarentena', empenhado: 'Empenhado', ok: 'OK'};
+  var CLASSE_TAG = {semControle: 'mute', negativo: 'bad', falta: 'bad', vencido: 'bad', zerado: 'mute', vencendo: 'warn', quarentena: 'info', empenhado: 'mute', empenhoPreso: 'warn', ok: 'ok'};
+  var ROTULO_TAG = {semControle: 'Sem controle', negativo: 'Negativo', falta: 'Empenho > saldo', vencido: 'Vencido', zerado: 'Zerado', vencendo: 'Vencendo', quarentena: 'Quarentena', empenhado: 'Empenhado', empenhoPreso: 'Empenho preso', ok: 'OK'};
 
   function filtroAtual() { return {busca: estado.q, grupo: estado.grupo, tag: estado.tag, cliente: estado.cliente}; }
 
@@ -140,7 +145,7 @@
     return '<tr data-i="' + i + '" data-c="' + e(r.codigo) + '" class="' + (selecionado === r.codigo ? 'sel' : '') + '">' +
       '<td><div class="item"><span class="barra-nivel ' + r.nivel + '"></span><div><div class="nome">' + e(r.nome) + '<span class="gp" style="background:' + gp.cor + '">' + e(gp.curto) + '</span></div><div class="cod">' + e(r.codigo) + '</div></div></div></td>' +
       '<td class="num"><div class="saldo ' + (r.atual < 0 ? 'neg' : '') + '">' + fmt(r.atual) + '<small>' + e(r.unidade) + '</small></div>' + barra(r) + '</td>' +
-      '<td class="num hide-m"><div class="saldo ' + (r.disponivel < 0 ? 'neg' : '') + '">' + fmt(r.disponivel) + '</div>' + (r.empenhado > 0 ? '<div class="mut sub2" style="font-size:11px">' + fmt(r.empenhado) + ' empenhado</div>' : '') + '</td>' +
+      '<td class="num hide-m"><div class="saldo ' + (r.disponivel < 0 ? 'neg' : '') + '">' + fmt(r.disponivel) + '</div>' + (r.empenhado > 0 ? '<div class="mut sub2" style="font-size:11px">' + fmt(r.empenhado) + ' empenhado' + (r.empenhoPreso > 0 ? ' · <b>' + fmt(r.empenhoPreso) + ' preso</b>' : '') + '</div>' : '') + '</td>' +
       '<td>' + tags + donos + '</td>' +
       '<td class="hide-m">' + validadeCelula(r) + '</td>' +
       '<td class="hide-m" style="font-size:12px">' + onde + '</td>' +
@@ -225,9 +230,43 @@
     } else if (!r.produto) {
       h += '<div class="secao"><h3>Lotes e endereços</h3><div class="dica">Nenhum lote endereçado. O saldo existe só no agregado (ajuste manual ou entrada antiga).</div></div>';
     }
+    // Quem está segurando o empenho. Esta seção é a resposta para "o número
+    // diz 2.000 reservados -- reservados para QUÊ?": uma linha por OP, com o
+    // que ela produz, desde quando segura e se ainda está de pé. A soma é
+    // conferida contra o total empenhado na hora de desenhar, porque um
+    // detalhamento que não fecha com o número de cima não serve de nada.
     if (r.empenhos.length) {
-      h += '<div class="secao"><h3>Reservado para as OPs (' + r.empenhos.length + ')</h3><table class="mini"><tbody>' +
-        r.empenhos.slice(0, 15).map(function(x) { return '<tr><td><b>' + e(x.lote) + '</b>' + (x.sku ? ' <span class="mut">' + e(x.sku) + '</span>' : '') + '</td><td style="text-align:right">' + fmt(x.qtd) + ' ' + e(u) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+      var somaEmp = r.empenhos.reduce(function(acc, x) { return acc + x.qtd; }, 0);
+      var difEmp = Math.round((r.empenhado - somaEmp) * 1000) / 1000;
+      h += '<div class="secao"><h3>Quem está segurando (' + r.empenhos.length + ' OP' + (r.empenhos.length > 1 ? 's' : '') + ')</h3>';
+      if (r.empenhoPreso > 0) {
+        h += '<div class="alerta warn"><b>' + fmt(r.empenhoPreso) + ' ' + e(u) + ' presos em OP que já encerrou.</b> ' +
+          'Esse material está contando como reservado sem ninguém esperando por ele — some do disponível à toa. ' +
+          'A liberação da reserva não rodou quando a OP fechou; encerre ou cancele a OP de novo no Controle de OPs para soltar.</div>';
+      }
+      h += '<table class="mini"><thead><tr><th>OP</th><th>Situação</th><th style="text-align:right">Reservado</th></tr></thead><tbody>' +
+        r.empenhos.slice(0, 40).map(function(x) {
+          var marca = x.preso ? '<span class="tg warn">' + e(x.rotuloSituacao) + '</span>'
+            : x.rotuloSituacao ? '<span class="tg mute">' + e(x.rotuloSituacao) + '</span>' : '<span class="mut">—</span>';
+          var desde = x.criadoEm || x.em;
+          return '<tr><td><b>' + e(x.lote) + '</b>' +
+            (x.produto ? '<div class="mut" style="font-size:11px">' + e(x.produto) + '</div>'
+              : x.sku ? '<div class="mut" style="font-size:11px">' + e(x.sku) + '</div>' : '') +
+            (desde ? '<div class="mut" style="font-size:11px">reservado ' + e(relativo(desde)) + '</div>' : '') +
+            '</td><td>' + marca + '</td><td style="text-align:right"><b>' + fmt(x.qtd) + '</b> ' + e(u) + '</td></tr>';
+        }).join('') +
+        '<tr><td colspan="2"><b>Total reservado</b></td><td style="text-align:right"><b>' + fmt(somaEmp) + '</b> ' + e(u) + '</td></tr>' +
+        '</tbody></table>' +
+        (r.empenhos.length > 40 ? '<div class="dica">Mostrando 40 de ' + r.empenhos.length + '.</div>' : '') +
+        (Math.abs(difEmp) > 0.001 ? '<div class="alerta bad" style="margin-top:6px"><b>A soma das OPs não fecha com o empenhado.</b> ' +
+          'O campo diz ' + fmt(r.empenhado) + ' e as OPs somam ' + fmt(somaEmp) + ' (' + (difEmp > 0 ? 'faltam' : 'sobram') + ' ' + fmt(Math.abs(difEmp)) + ' ' + e(u) + ' sem dono). ' +
+          'Tem reserva sem índice — avise o PCP.</div>' : '') +
+        '</div>';
+    } else if (r.empenhado > 0) {
+      // Número sem lista: o disponível está sendo descontado e não há a quem
+      // atribuir. Antes isto não aparecia de jeito nenhum.
+      h += '<div class="secao"><h3>Quem está segurando</h3><div class="alerta bad"><b>' + fmt(r.empenhado) + ' ' + e(u) + ' empenhados e nenhuma OP no índice.</b> ' +
+        'O disponível está sendo descontado sem nada para mostrar — reserva antiga, de antes do índice por OP existir. Avise o PCP para zerar.</div></div>';
     }
     if (!r.produto) {
       h += '<div class="secao"><h3>Onde é usado</h3>';
