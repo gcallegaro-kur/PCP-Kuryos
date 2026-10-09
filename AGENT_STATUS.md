@@ -28,6 +28,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 ### Claude — Dashboard Geral somava rotulagem e posto como produção (09/10/2026)
 
 - **Complemento (mesmo dia):** o usuário pediu "a possibilidade de analisar tudo". **Setor virou filtro de primeira classe** na barra (Envase / Rotulagem / Posto), com **Envase como padrão declarado no próprio botão** — não é mais regra escondida atrás do filtro de Linha. Escolha explícita manda: marcar os três soma os três. Setor e Linha se cruzam, não se atropelam. Teste subiu para 28 verificações.
+- **⚠ Conferência pós-deploy: use `-H 'Cache-Control: no-cache'` e `?v=<timestamp>`.** O `curl` simples pegou a versão ANTIGA do CDN logo depois do deploy e a comparação de hash acusou "DIFERE" com o arquivo certo já publicado. O inverso é pior: cache quente pode fazer um deploy falho parecer bem-sucedido.
 - **⚠ Manipulação NÃO está no Dashboard Geral** e não entrou agora: só 45 das 1.460 OPs têm nó `manipulacao`, dados de **25/09 a 08/10** (16.647 kg), e a medida é **kg de granel, não peças** — somar com unidades repetiria o erro que acabamos de corrigir. Precisa de painel próprio; esperando a decisão do usuário sobre qual indicador.
 
 - **Pergunta do usuário:** "na tela dashboard geral, ele está somando apontamentos da rotulagem e produção? achei muito alto os números". Estava, sim.
