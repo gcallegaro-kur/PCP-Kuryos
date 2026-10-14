@@ -192,4 +192,14 @@ Object.values(CP.calcular(base({conferencias_pa: {'26251-15': {finalizadoEm: 'x'
   assert.equal(CP.linhasPorOp(agOp).linhas[1].expedido.total, 50);
 }
 
+// Causas no detalhe do selo.
+{
+  const r1 = CP.calcular(base({ops: {'26244-16': {skuPedidoKey: '19__GLMKAM04', lote: '26244/16', produzido: 250}}})).porPedido['0019__GLMKAM04'];
+  const d1 = CP.descrever(r1).detalhe;
+  assert.ok(/difere da soma das OPs/.test(d1), 'produzido do pedido x OPs');
+  assert.ok(/sem paletes de produto acabado/.test(d1), 'estoque vazio');
+  const r2 = CP.calcular(base()).porPedido['0020__NADA'];
+  assert.ok(/nenhuma OP aponta/.test(CP.descrever(r2).detalhe), 'pedido sem OP');
+}
+
 console.log('run_conciliacao_pedidos_test: OK');

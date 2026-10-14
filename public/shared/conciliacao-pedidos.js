@@ -302,6 +302,18 @@
     if (r.devolvido && r.devolvido.total) linhas.push('Devolvido pelo cliente (já estornado do expedido): ' + fmt(r.devolvido.total));
     if (r.retrabalho && r.retrabalho.total) linhas.push('Em retrabalho (informativo, não soma): ' + fmt(r.retrabalho.total) +
       ' · ' + r.retrabalho.ocorrencias.map(function(o) { return o.lote; }).join(', '));
+    // Por que não fecha: as causas que a base de 14/10/2026 mostrou. Só
+    // aparecem quando a conta não está OK, e só as que valem para este caso.
+    if (r.situacao === 'DIVERGENTE' || r.situacao === 'SEM_REGISTRO') {
+      var nOpsComProducao = Object.keys(r.porOp || {}).filter(function(o) { return r.porOp[o].opKey; }).length;
+      var somaOps = Object.keys(r.porOp || {}).reduce(function(t, o) { return t + n(r.porOp[o].produzido); }, 0);
+      var gap = arred(r.produzido - somaOps);
+      if (nOpsComProducao && Math.abs(gap) >= 1) linhas.push('Causa possível: o produzido do pedido (' + fmt(r.produzido) +
+        ') difere da soma das OPs vinculadas (' + fmt(somaOps) + ') em ' + sinal(gap) +
+        ' — pedido ajustado à mão/conciliado com o cliente, ou produção creditada em outro pedido.');
+      if (!nOpsComProducao && r.produzido > 0) linhas.push('Causa possível: nenhuma OP aponta para este pedido (produção legada ou creditada sem OP).');
+      if (r.diferenca < 0 && !r.estoque.total) linhas.push('Causa possível: sem paletes de produto acabado no WMS (estoque ainda não inventariado) e saída sem registro neste pedido.');
+    }
     if (r.situacao === 'DIVERGENTE') linhas.push(r.diferenca > 0
       ? 'Saídas + estoque passam do produzido em ' + fmt(r.diferenca)
       : 'Faltam ' + fmt(-r.diferenca) + ' un. sem destino registrado');

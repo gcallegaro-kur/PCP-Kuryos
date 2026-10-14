@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Pedidos: Produzido x Expedido x Estoque não fechava (14/10/2026)
+
+- **Diagnóstico (base real, só leitura):** de 390 pedidos com produção, 98 fecham; 170 divergem (125 faltam 381 mil un., 45 sobram 172 mil) e 72 não têm registro de saída. Causas: (1) `estoque_lotes` sem paletes de PA -> "Em estoque" 0; (2) 495 mil un. expedidas + 46 mil devolvidas vêm da planilha legado sem chave de pedido nem OP (189 linhas) e 155 OPs antigas (363 mil un.) sem `skuPedidoKey`; (3) `pedidos.produzido` != soma das OPs em 59 pedidos: 16 foram **fixados de propósito** na conciliação com o cliente de 16/09 (`encerramento.motivo` "Conciliação…", família 0011/0014/0012/0006/0008 MRARBS, FABIANO WKBS) — NÃO mexer; 13 sub-creditados; 20 com pequeno excesso; 10 sem OP (legado).
+- **Corrigido e gravado (autorizado):** `scripts/corrigir-produzido-subcreditado.js` — 0007__DPMTBS01/02/03 e 0020__KUBPBA01_-_2: produzido 0 -> soma das OPs (35.924 un.), status 'Produção Parcial', marca `correcaoProduzidoOps`. Backup em `backups/produzido-subcreditado-*.json`.
+- **Código:** `ConciliacaoPedidos.descrever` passa a listar "Causa possível" no hover do selo.
+- **Deixado de fora de propósito:** Leão do Deserto (6.614 un. creditadas, OPs 55.021) x PED-0008__MRARBS07 (OPs 26260/01, 26261/02) — aguarda o Comercial; 0021__KUBPBA02 (Concluído com 0, OPs 8.396 contra qtd 3.000).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Perdas do lote no Dossiê (09/10/2026)
 
 - **Pedido:** "preciso enxergar um relatório das perdas que estão sendo apontadas" → "e se colocássemos no dossiê do lote?".
