@@ -18,8 +18,8 @@
  * O que trava aqui:
  *   1. id ambíguo (vários SKUs) NUNCA é desempatado no escuro;
  *   2. o lote (== OP) resolve o SKU certo mesmo com o nome divergente;
- *   3. o número do pedido digitado à mão continua mandando quando aponta
- *      pra OUTRO pedido comercial;
+ *   3. a OP manda: o número do pedido digitado à mão NÃO desvia o crédito
+ *      de um lote com OP vinculada (decisão de 15/10/2026);
  *   4. os pontos de crédito do form.html passam pelo lote, não pelo par
  *      id+produto;
  *   5. historico.html ajusta o produzido pelo mesmo caminho.
@@ -101,13 +101,18 @@ const OPS = {
     'sem lote nenhum, o comportamento antigo continua valendo');
 }
 
-// ── 3. o pedido digitado à mão manda quando é OUTRO pedido comercial ───────
+// ── 3. a OP manda: pedido digitado à mão não desvia o crédito ─────────────
 {
-  // A OP 26278/01 é do pedido 0023, mas alguém informou o 0030 no campo
-  // "Número do Pedido" -- corrigir o vínculo na mão é pra isso que ele serve.
+  // A OP 26278/01 é do pedido 0023; alguém informou o 0030 no campo "Número
+  // do Pedido". Caso real: 26230/01 (Honey) digitada como 0012 (Força do
+  // Leão) creditou 4.080 un. no pedido errado. Agora o vínculo da OP vence.
   const k = ctx.findPedidoKeyPorLote('26278/01', '0030', 'BODY SPLASH FLOR D AURA 200ML', OPS, PEDIDOS);
-  eq(k, '0030__MRARBS12',
-    'informar OUTRO pedido comercial tem que prevalecer sobre o vínculo da OP');
+  eq(k, ctx.findPedidoKeyPorLote('26278/01', '', '', OPS, PEDIDOS),
+    'com OP vinculada, o número digitado é ignorado');
+  ok(k !== '0030__MRARBS12', 'não vai para o pedido digitado');
+  // Sem OP no lote, o par id+produto ainda decide.
+  eq(ctx.findPedidoKeyPorLote('', '0030', 'qualquer', OPS, PEDIDOS), '0030__MRARBS12',
+    'sem lote o número digitado continua valendo');
 }
 
 // ── 4. form.html credita pelo lote, não pelo par id+produto ────────────────
@@ -141,7 +146,7 @@ const OPS = {
 // ── 5. historico.html ajusta o produzido pelo mesmo caminho ────────────────
 {
   const hist = fs.readFileSync('public/historico.html', 'utf8');
-  ok(/function adjustPedidoProduzido\(pedidoId, produto, qtyDiff, lote\)/.test(hist),
+  ok(/function adjustPedidoProduzido\(pedidoId, produto, qtyDiff, lote, razao\)/.test(hist),
     'adjustPedidoProduzido recebe o lote');
   ok(/var pedKey = findPedidoKeyPorLote\(lote, pedidoId, produto, opsCache, pedidosCache\);/.test(hist),
     'e resolve por ele — editar/excluir apontamento não pode devolver quantidade pro SKU vizinho');

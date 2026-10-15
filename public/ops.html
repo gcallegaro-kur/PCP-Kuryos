@@ -1199,11 +1199,25 @@
     const op = opsGlobal[opKey];
     if (!op) return;
     const quem = (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido';
-    database.ref('ops/' + opKey).update({
-      status: 'Concluído',
-      confirmadoPor: quem,
-      confirmadoEm: new Date().toISOString()
-    }).then(() => {
+    /* Conferência na confirmação: compara o total da OP com os apontamentos
+       vivos do lote antes de gravar 'Concluído'. A divergência não bloqueia
+       (o PCP pode aceitar), mas fica gravada em `confirmadoComDivergencia`
+       para auditoria -- é o que faltava para explicar depois por que um
+       pedido não fecha com as OPs. */
+    Promise.all([database.ref('registros').once('value'), database.ref('config').once('value')]).then(([regSnap, cfgSnap]) => {
+      const soma = somarRegistrosDoLote(regSnap.val() || {}, op.lote || opKey, cfgSnap.val() || {});
+      const avisos = avaliarConfirmacaoOp(op, soma.linha);
+      if (avisos.length && !confirm('Conferência da OP ' + (op.lote || opKey) + ':' + String.fromCharCode(10,10) + '- ' + avisos.join(String.fromCharCode(10) + '- ') + String.fromCharCode(10,10) + 'Confirmar mesmo assim? (Cancelar para corrigir antes.)')) return null;
+      const upd = {
+        status: 'Concluído',
+        confirmadoPor: quem,
+        confirmadoEm: new Date().toISOString(),
+        confirmadoProduzido: getProduzido(op, 'linha')
+      };
+      if (avisos.length) upd.confirmadoComDivergencia = { avisos: avisos, somaApontamentos: soma.linha };
+      return database.ref('ops/' + opKey).update(upd).then(() => true);
+    }).then((gravou) => {
+      if (!gravou) return;
       showToast('OP ' + (op.lote || opKey) + ' confirmada como concluída.');
       // Achado do Auditor: liberarEmpenhoLote só era chamado no cancelamento
       // (executarCancelamentoOp) -- toda OP concluída pelo fluxo normal

@@ -197,21 +197,18 @@ function findPedidoKey(pedidoId, produto, pedidosDict) {
 // SKUs do mesmo pedido comercial. O número do pedido sozinho não distingue,
 // e o nome do produto não serve de desempate (ver findPedidoKey acima).
 //
-// `pedidoId` continua mandando quando aponta pra OUTRO pedido comercial --
-// é o caso de alguém corrigir manualmente o campo "Número do Pedido". Só
-// dentro do MESMO pedido comercial o SKU da OP tem a palavra final.
+// A OP MANDA (decisão do usuário, 15/10/2026: "deveria ser automático,
+// guiado pela OP"). Se a OP do lote tem vínculo, o apontamento credita esse
+// pedido e mais nenhum -- o número digitado no formulário não desvia o
+// crédito. Antes ele ganhava quando apontava OUTRO pedido comercial, e foi
+// assim que 4.080 un. da OP 26230/01 (Honey) caíram em 0012__MRARBS05 (Força
+// do Leão). Para mudar o pedido de uma OP existe a Transferência de OP, que
+// move OP e produção juntas. Só sem OP vinculada o par id+produto decide.
 function findPedidoKeyPorLote(lote, pedidoId, produto, opsDict, pedidosDict) {
   if (!pedidosDict) return null;
   var op = (lote && opsDict) ? opsDict[sanitizeKey(lote)] : null;
   var porSku = (op && op.skuPedidoKey) ? resolvePedidoKeyBySkuKey(op.skuPedidoKey, pedidosDict) : null;
-  if (porSku) {
-    var pedidoDoSku = pedidosDict[porSku];
-    var idPedido = digitsOnly(pedidoId);
-    var idDoSku = digitsOnly(pedidoDoSku && pedidoDoSku.id);
-    // Sem pedido informado, ou informado o mesmo pedido comercial: o SKU da
-    // OP é a resposta certa.
-    if (!idPedido || !idDoSku || parseInt(idPedido, 10) === parseInt(idDoSku, 10)) return porSku;
-  }
+  if (porSku) return porSku;
   return findPedidoKey(pedidoId, produto, pedidosDict);
 }
 
@@ -630,6 +627,31 @@ function somarRegistrosDoLote(registrosPorData, lote, cfgSetores) {
     out[s] = Math.round(out[s] * 1000) / 1000;
   });
   return out;
+}
+
+/* Confere uma OP no momento em que o PCP a confirma como concluída. A
+   confirmação é o filtro do que está certo (decisão do usuário, 15/10/2026):
+   o PCP só deveria confirmar com o número batendo. Função PURA.
+   `somaEnvase` = somarRegistrosDoLote(...).linha. Devolve a lista de avisos
+   (vazia = tudo certo); cada aviso é uma frase pronta para a tela. */
+function avaliarConfirmacaoOp(op, somaEnvase) {
+  var avisos = [];
+  if (!op) return avisos;
+  var prod = getProduzido(op, 'linha');
+  var plan = parseFloat(op.qtdPlanejada) || 0;
+  var reg = parseFloat(somaEnvase) || 0;
+  var f = function(v) { return (Math.round(v * 1000) / 1000).toLocaleString('pt-BR'); };
+  if (Math.abs(prod - reg) >= 1) {
+    avisos.push('O total da OP (' + f(prod) + ' un.) não bate com a soma dos apontamentos de envase (' + f(reg) + ' un.). ' +
+      'Corrija o apontamento no Histórico antes de confirmar.');
+  }
+  if (plan > 0 && prod > plan * 1.1) {
+    avisos.push('Produzido (' + f(prod) + ') passa de 110% do planejado (' + f(plan) + ').');
+  }
+  if (plan > 0 && prod < plan * 0.5) {
+    avisos.push('Produzido (' + f(prod) + ') é menos da metade do planejado (' + f(plan) + ').');
+  }
+  return avisos;
 }
 
 // Deriva o status geral da OP. Decisão explícita do usuário pra esta

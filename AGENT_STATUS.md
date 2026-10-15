@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Pedidos: o crédito passa a ser só pela OP (15/10/2026)
+
+- **Decisões do usuário:** a confirmação da OP pelo PCP é o filtro do que está certo; o pedido é guiado pela OP; produzido do pedido só muda por OP/apontamento; o razão acompanha edição/exclusão; a planilha de saídas será travada (tudo pelo sistema) e a maior parte do legado já foi expedida.
+- **Feito:** (1) `findPedidoKeyPorLote` — com OP vinculada o número digitado no apontamento é IGNORADO (caso 26230/01); (2) `pedidos.html` — `fProduzido` somente leitura, salvar mantém o valor do banco, selo "⚠ ±N vs OPs" na célula do produzido; (3) `historico.html` — `adjustPedidoProduzido(..., razao)` mantém `apontamentosAplicados` na mesma transaction em editar/trocar pedido/criar/excluir; criar registro manual de Rotulagem/Posto não credita mais o pedido; (4) `ops.html` — `confirmarConclusaoOp` confere total da OP x registros e planejado (`avaliarConfirmacaoOp`, utils.js), grava `confirmadoProduzido` e `confirmadoComDivergencia`.
+- **Dados aplicados (autorizado):** 26 OPs alinhadas aos registros; Leão 55.021 / PED-0008 6.614 (backups em `backups/`).
+- **Testes:** `run_confirmacao_op_test.js`, `run_razao_historico_test.js` (novos), `run_pedido_sku_credito_test.js` e `run_transferencia_op_test.js` atualizados.
+- **Em aberto:** OP 26230/01 (Honey, 4.080 un. creditadas em 0012__MRARBS05, pedido fixado na conciliação de 16/09); 24 pedidos parados em `PEDIDOS_ABERTOS_DECISAO.md` aguardam decisão do PCP; regra para legado "expedido sem registro" (maior parte já saiu).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Pedidos: por que o produzido não bate (investigação, 14-15/10/2026)
 
 - **Causas provadas na base:** (1) até 04/09 o *apontamento por total* gravava no registro a quantidade do período e na OP o total digitado — dois números para o mesmo fato; total digitado errado (OPs 26237/03, 26239/02, 26239/04 = 2 un.) separou OP e registro, enquanto o pedido soma o registro (0019__GLMKAM04 fecha EXATO com os registros, 15.624). Depois de 04/09: 1 un. de divergência em 1.350 lotes — o defeito já parou. (2) Transferência de OP olhava só o vínculo: OPs 26260/01 e 26261/02 foram transferidas ao PED-0008 em 23/09 com `qtd: 0`, as 6.614 un. ficaram no 0011 Leão; as 12 OPs do Leão (55.021 un., expedidas 54.637) nunca foram creditadas ao pedido. (3) Modal de edição do pedido regravava `produzido` com o valor de quando abriu (perda de apontamento chegado no meio) e não deixava rastro. (4) Pedidos 0018 ROSA e 0020 KUBPBA01: produzido digitado à mão, sem OP. (5) OP 26230/01 (Honey, 4.080 un.) apontada com pedidoId 0012 / produto Força do Leão -> creditada em 0012__MRARBS05; NÃO movido (OP planejada 150).

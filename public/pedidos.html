@@ -395,7 +395,7 @@
         </div>
         <div class="form-group">
           <label>Produzido até agora</label>
-          <input type="number" id="fProduzido" min="0" step="1" placeholder="0">
+          <input type="number" id="fProduzido" min="0" step="1" placeholder="0" readonly style="background:var(--bg,#f3f4f6);cursor:not-allowed" title="O produzido do pedido é a soma das OPs vinculadas. Para corrigir, edite o apontamento (Histórico) ou transfira a OP.">
           <div class="form-hint">Ajuste manual se necessário</div>
         </div>
         <div class="form-group">
@@ -880,7 +880,6 @@
   // em run_conciliacao_pedidos_test.js). Aqui só carrega as fontes e desenha.
   // Enquanto qualquer fonte não chegou, as colunas mostram "carregando" em vez
   // de um zero que pareceria divergência.
-  var produzidoAoAbrir = 0; // valor de fProduzido quando o modal abriu (ver salvar)
   var conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, ops: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
   var conciliacao = null;
   var _conciliacaoT = null;
@@ -912,6 +911,22 @@
   function registrarDetalhe(id, r, titulo) {
     if (id && r) detalhesPorOp[id] = {resultado: r, titulo: titulo || ''};
     return id && r && Object.keys(r.porOp || {}).length ? id : null;
+  }
+  /* Selo de coerência: o produzido do pedido tem que ser a soma das OPs
+     vinculadas. Quando difere, a diferença aparece na própria célula --
+     antes ficava escondida até alguém abrir o detalhe por OP, e foi assim que
+     os desvios passaram semanas sem ninguém ver. Só desenha com a conciliação
+     carregada (senão pareceria erro enquanto as fontes chegam). */
+  function seloCoerenciaOps(p) {
+    var c = conciliacaoDoPedido(p._key);
+    if (!c) return '';
+    var r = ConciliacaoPedidos.linhasPorOp(c).restanteProduzido;
+    if (Math.abs(r) < 1) return '';
+    var temOp = Object.keys(c.porOp || {}).some(function(k) { return c.porOp[k].opKey; });
+    var tip = temOp
+      ? 'O produzido do pedido (' + fmtNum(c.produzido) + ') difere da soma das OPs vinculadas em ' + (r > 0 ? '+' : '') + fmtNum(r) + ' un. Corrija o apontamento no Histórico ou transfira a OP.'
+      : 'Há produzido (' + fmtNum(c.produzido) + ') sem nenhuma OP vinculada ao pedido.';
+    return ' <span class="badge badge-orange" style="cursor:help;font-size:10px" title="' + escapeAttr(tip) + '">⚠ ' + (temOp ? (r > 0 ? '+' : '') + fmtNum(r) + ' vs OPs' : 'sem OP') + '</span>';
   }
   function celulaExpedido(r, qtdTotal, id, titulo) {
     if (!conciliacao) return CARREGANDO_CONCILIACAO;
@@ -1124,7 +1139,7 @@
       '<td>' + (p.linha||'—') + '</td>' +
       '<td>' + fmtDiasAbertoOp(p) + '</td>' +
       '<td>' + entregaCellHtml(p) + '</td>' +
-      '<td class="produzido-cell" data-op-key="' + escapeAttr(p._key) + '" style="text-align:right;color:var(--muted);cursor:help">' + ((p.produzido||0).toLocaleString('pt-BR')) + '</td>' +
+      '<td class="produzido-cell" data-op-key="' + escapeAttr(p._key) + '" style="text-align:right;color:var(--muted);cursor:help">' + ((p.produzido||0).toLocaleString('pt-BR')) + seloCoerenciaOps(p) + '</td>' +
       '<td>' +
         '<div class="prog-wrap">' +
           '<div class="prog-label"><span>' + (p.produzido||0).toLocaleString('pt-BR') + ' / ' + (p.qtdTotal||0).toLocaleString('pt-BR') + '</span><span class="pct">' + pc + '%</span></div>' +
@@ -1445,7 +1460,6 @@
     document.getElementById('fQtdTotal').value = p.qtdTotal || '';
     document.getElementById('fDataProd').value = p.dataProd || '';
     document.getElementById('fProduzido').value = p.produzido || 0;
-    produzidoAoAbrir = p.produzido || 0;
     document.getElementById('fStatusManual').value = p.statusManual || '';
     var pc = pct(p);
     document.getElementById('fProgresso').value = pc + '% (' + (p.produzido||0) + ' / ' + (p.qtdTotal||0) + ' un.)';
@@ -1575,22 +1589,12 @@
         data = Object.assign({}, preservedData, data);
         if (!statusManual) data.statusManual = null; // "automático" reabre
       }
-      /* `produzido` só é gravado se a pessoa MUDOU o campo. O modal guarda o
-         valor de quando abriu; salvar por outro motivo (data, prioridade,
-         status) regravava esse número velho por cima dos apontamentos que
-         chegaram enquanto o modal estava aberto -- perda silenciosa de
-         produção. Quando muda de verdade fica o rastro (quem, de quanto para
-         quanto): é a única via de edição manual do produzido e não deixava
-         nenhuma marca, o que impede explicar depois por que o pedido não
-         fecha com as OPs. */
-      if (preservedData) {
-        if (produzido === produzidoAoAbrir) {
-          data.produzido = preservedData.produzido || 0;
-        } else {
-          var quemAjustou = window.currentUser ? (window.currentUser.nome || window.currentUser.email || window.currentUser.role || '') : '';
-          data.ajusteManualProduzido = {em: new Date().toISOString(), por: quemAjustou, de: preservedData.produzido || 0, para: produzido};
-        }
-      }
+      /* `produzido` NÃO é editável aqui (decisão do usuário, 15/10/2026): o
+         total do pedido é a soma das OPs, que se corrige pelo apontamento no
+         Histórico ou pela Transferência de OP. O campo é só leitura e o
+         salvar mantém o valor atual do banco -- regravar o valor de quando o
+         modal abriu apagava apontamentos que chegaram enquanto estava aberto. */
+      if (preservedData) data.produzido = preservedData.produzido || 0;
       // Merge: preserve ultimoApontamento and produzido if not changed by user
       if (preservedData) {
         if (!document.getElementById('fProduzido').value && preservedData.produzido) {

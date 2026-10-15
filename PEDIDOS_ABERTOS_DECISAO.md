@@ -2,15 +2,14 @@
 
 Gerado em 2026-10-15 a partir da base de produção.
 
-## A. Parados com saldo (25)
+## A. Parados com saldo (24)
 Todas as OPs estão concluídas e o pedido não chegou na quantidade.
 
 | Pedido | Cliente | Produto | Pedido | Produzido | % | Saldo | Expedido | Em estoque | Sugestão |
 |---|---|---|--:|--:|--:|--:|--:|--:|---|
-| 0011__BODY_SPLASH_LEAO_DO_DESERTO_BOURBON_200ml | MISS RÔSE | BODY SPLASH LEAO DO DESERTO BOURBON 200ml | 60.000 | 6.614 | 11% | 53.386 | 54.637 | 0 | nova OP para o saldo |
 | PED-0002__MRARBS04 | MISS ROSE | BODY SPLASH NÉCTAR DAS TAMARAS | 39.158 | 16.416 | 42% | 22.742 | 0 | 0 | nova OP para o saldo |
 | 0007__DPMTBS01 | DAPOP | BODY SPLASH MATTE DOCE SEDUÇÃO | 14.400 | 8.012 | 56% | 6.388 | 8.012 | 0 | nova OP para o saldo |
-| PED-0008__MRARBS07 | MISS ROSE | BODY SPLASH LEAO DO DESERTO BOURBON 200ml | 4.800 | 0 | 0% | 4.800 | 0 | 0 | nova OP para o saldo |
+| 0011__BODY_SPLASH_LEAO_DO_DESERTO_BOURBON_200ml | MISS RÔSE | BODY SPLASH LEAO DO DESERTO BOURBON 200ml | 60.000 | 55.021 | 92% | 4.979 | 54.637 | 0 | encerrar ou OP curta |
 | PED-0007__WKBS0006 | WIKE MAKE COSMETICOS | BODY SPLASH IDOLA 120ML | 10.000 | 6.121 | 61% | 3.879 | 0 | 0 | nova OP para o saldo |
 | 0007__DPGLBS03 | DAPOP | BODY SPLASH GLOW NOITE DE GLAMOUR | 14.400 | 12.205 | 85% | 2.195 | 0 | 7.511 | encerrar ou OP curta |
 | 0017__PRF-AFEE-0003 | AFEER OF ARABIAN | PERFUME ASAD AFEER 30ML | 3.000 | 938 | 31% | 2.062 | 936 | 0 | nova OP para o saldo |
