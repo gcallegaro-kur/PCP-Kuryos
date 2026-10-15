@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Exportação dos cadastros para Excel (15/10/2026)
+
+- **Pedido:** exportar cadastros, produtos, fórmulas e BOMs para comparar e ajustar em lote.
+- **Feito:** botão "⬇ Exportar tudo (Excel)" no cabeçalho de `cadastros.html`; `shared/exportar-cadastros.js` (`montar(base)`, puro) gera 9 abas: Leia-me, **Conferência**, Produtos, Materiais, Fórmulas e BOM e Especificações (uma linha por item, com `chave` e `item` do banco nas primeiras colunas e colunas `cad_*` do cadastro de Materiais para comparar), Clientes, Fornecedores. Produto resolve por chave, SKU e `skusAnteriores`, sem diferenciar caixa.
+- **Conferência na base de hoje:** 1.717 ocorrências em 16 tipos (BOM com nome diferente do cadastro 769; fórmula/BOM item sem código 220/163; produto ativo sem fórmula 151 e sem BOM 125; fórmula com soma != 100% 18; etc.).
+- **Teste:** `run_exportar_cadastros_test.js` (regra + clique real no botão, lib xlsx trocada por gravador).
+- **NÃO feito (próximo passo natural):** importar a planilha ajustada de volta (ensaio -> aplicar, com backup). As colunas `chave`/`item` já foram desenhadas para isso.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Conferência: PA não conferido e legado deixam de ser divergência (15/10/2026)
 
 - **Pedido do usuário:** muita coisa não bate porque há PA para a Logística conferir; legado é só consulta e "acaba passando" em Pedem ação.
