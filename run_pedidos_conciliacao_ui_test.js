@@ -13,8 +13,8 @@ function dados() {
     pedidos: {
       '0019__GLMKAM04': {id: '0019', produto: 'GLOW MICELAR', qtdTotal: 1000, produzido: 1000, parentPedidoId: '0019', linha: 'Linha 1', dataEntregaPcp: '2026-09-20'},
       '0017__PRF-AFEE-0014': {id: '0017', produto: 'ZAFIYR 30ML', qtdTotal: 3000, produzido: 2916, parentPedidoId: '0017', linha: 'Linha 2'},
-      '0017__NADA': {id: '0017', produto: 'ITEM SEM SAIDA', qtdTotal: 1000, produzido: 500, parentPedidoId: '0017', linha: 'Linha 2'},
-      '0021__DIV': {id: '0021', produto: 'ITEM DIVERGENTE', qtdTotal: 200, produzido: 100, parentPedidoId: '0021', linha: 'Linha 1'},
+      '0017__NADA': {id: '0017', produto: 'ITEM SEM SAIDA', qtdTotal: 1000, produzido: 500, parentPedidoId: '0017', linha: 'Linha 2', ultimoApontamento: '2026-10-01'},
+      '0021__DIV': {id: '0021', produto: 'ITEM DIVERGENTE', qtdTotal: 200, produzido: 100, parentPedidoId: '0021', linha: 'Linha 1', ultimoApontamento: '2026-10-01'},
       // Produzido por inteiro e todo expedido: finalizado.
       '0022__FIM': {id: '0022', produto: 'ITEM FINALIZADO', qtdTotal: 100, produzido: 100, parentPedidoId: '0022', linha: 'Linha 1'}
     },

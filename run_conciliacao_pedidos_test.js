@@ -10,7 +10,7 @@ function base(extra) {
       '0017__PRF-AFEE-0014': {produzido: 2916},
       '26__BSP-SEUN-0001': {produzido: 24},
       '0019__GLMKAM04': {produzido: 1000},
-      '0020__NADA': {produzido: 500},
+      '0020__NADA': {produzido: 500, ultimoApontamento: '2026-10-01'},
       '0021__ZERO': {produzido: 0}
     },
     ops: {
@@ -200,6 +200,70 @@ Object.values(CP.calcular(base({conferencias_pa: {'26251-15': {finalizadoEm: 'x'
   assert.ok(/sem paletes de produto acabado/.test(d1), 'estoque vazio');
   const r2 = CP.calcular(base()).porPedido['0020__NADA'];
   assert.ok(/nenhuma OP aponta/.test(CP.descrever(r2).detalhe), 'pedido sem OP');
+}
+
+// ── Aguardando conferência de PA e legado (15/10/2026) ───────────────────
+{
+  // Pedido vivo: OP concluída depois de 10/09, Logística ainda não conferiu.
+  let g = CP.calcular({
+    pedidos: {'0001__A': {produzido: 3000, ultimoApontamento: '2026-10-10'}},
+    ops: {'1-1': {skuPedidoKey: '0001__A', lote: '1/1', produzido: 3000, status: 'Concluído', dataEmissao: '2026-10-01T08:00:00'}},
+    expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0001__A'];
+  assert.equal(g.situacao, 'AGUARDA_CONFERENCIA');
+  assert.equal(g.aguardandoPA, 3000);
+  assert.equal(g.legado, false);
+  assert.ok(/Aguardando conferência de PA/.test(CP.descrever(g).rotulo));
+  // Conferiu e declarou só 2.000 no palete: a falta de 1.000 é divergência de verdade.
+  g = CP.calcular({
+    pedidos: {'0001__A': {produzido: 3000, ultimoApontamento: '2026-10-10'}},
+    ops: {'1-1': {skuPedidoKey: '0001__A', lote: '1/1', produzido: 3000, status: 'Concluído', dataEmissao: '2026-10-01'}},
+    expedicoes_comerciais: {}, estoque_lotes: {X: {p: {itemTipo: 'produto', saldoLote: 2000, opKey: '1-1'}}},
+    conferencias_pa: {'1-1': {finalizadoEm: 'x'}}, solicitacoes_descarte: {}
+  }).porPedido['0001__A'];
+  assert.equal(g.situacao, 'DIVERGENTE', 'conferido: a falta não é mais fila da Logística');
+  assert.equal(g.aguardandoPA, 0);
+  // Falta MAIOR que o PA pendente: continua divergente.
+  g = CP.calcular({
+    pedidos: {'0001__A': {produzido: 5000, ultimoApontamento: '2026-10-10'}},
+    ops: {'1-1': {skuPedidoKey: '0001__A', lote: '1/1', produzido: 3000, status: 'Concluído', dataEmissao: '2026-10-01'}},
+    expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0001__A'];
+  assert.equal(g.situacao, 'SEM_REGISTRO', 'só 3.000 dos 5.000 são fila da Logística');
+  // Legado: tudo concluído antes do corte e sem apontamento novo.
+  g = CP.calcular({
+    pedidos: {'0002__B': {produzido: 9000, ultimoApontamento: '2026-08-26'}},
+    ops: {'2-1': {skuPedidoKey: '0002__B', lote: '2/1', produzido: 9000, status: 'Concluído', dataEmissao: '2026-08-01T10:00:00'}},
+    expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0002__B'];
+  assert.equal(g.legado, true);
+  assert.equal(g.situacao, 'LEGADO');
+  // OP sem data de emissão (planilha) também é legado.
+  g = CP.calcular({
+    pedidos: {'0003__C': {produzido: 500}}, ops: {}, expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0003__C'];
+  assert.equal(g.situacao, 'LEGADO');
+  // Apontamento depois do corte tira o pedido do legado.
+  g = CP.calcular({
+    pedidos: {'0002__B': {produzido: 9000, ultimoApontamento: '2026-10-02'}},
+    ops: {'2-1': {skuPedidoKey: '0002__B', lote: '2/1', produzido: 9000, status: 'Concluído', dataEmissao: '2026-08-01'}},
+    expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0002__B'];
+  assert.equal(g.situacao, 'SEM_REGISTRO');
+  // OP ainda aberta mantém o pedido vivo.
+  g = CP.calcular({
+    pedidos: {'0002__B': {produzido: 100, ultimoApontamento: '2026-08-26'}},
+    ops: {'2-1': {skuPedidoKey: '0002__B', lote: '2/1', produzido: 100, status: 'Em Produção', dataEmissao: '2026-08-01'}},
+    expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}
+  }).porPedido['0002__B'];
+  assert.equal(g.legado, false);
+  // Agregado: o pior item manda, e o PA pendente soma.
+  const ag = CP.agregar([
+    CP.calcular({pedidos: {'0001__A': {produzido: 3000, ultimoApontamento: '2026-10-10'}},
+      ops: {'1-1': {skuPedidoKey: '0001__A', lote: '1/1', produzido: 3000, status: 'Concluído', dataEmissao: '2026-10-01'}},
+      expedicoes_comerciais: {}, estoque_lotes: {}, conferencias_pa: {}, solicitacoes_descarte: {}}).porPedido['0001__A']
+  ]);
+  assert.equal(ag.aguardandoPA, 3000);
 }
 
 console.log('run_conciliacao_pedidos_test: OK');

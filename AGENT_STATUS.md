@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Conferência: PA não conferido e legado deixam de ser divergência (15/10/2026)
+
+- **Pedido do usuário:** muita coisa não bate porque há PA para a Logística conferir; legado é só consulta e "acaba passando" em Pedem ação.
+- **Medido:** das 794 mil un. "faltando", só 63 mil (8%) são PA de OP concluída depois de 10/09 sem conferência; o resto é planilha (2,9 mi un.) que nenhuma conferência vai resolver.
+- **`conciliacao-pedidos.js`:** `CORTE = '2026-09-10'`; novas situações **AGUARDA_CONFERENCIA** (falta inteira = PA concluído pós-corte sem `conferencias_pa.finalizadoEm`) e **LEGADO** (produzido>0, nenhuma OP aberta, última OP e último apontamento antes do corte). Divergência além disso segue DIVERGENTE. `classificar()` exportada.
+- **`pedidos.html`:** `pedidoPedeAcao` exclui legado (vai para "Finalizados (consulta)"); filtros e selos novos; `relatorio_pedido.html` com os rótulos.
+- **Efeito na base:** DIVERGENTE 170 -> 29, SEM_REGISTRO 72 -> 10, LEGADO 198, AGUARDA 4; "Pedem ação" 87 -> 72 (45 desses são pedidos sem OP ainda, ação legítima do PCP).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Pedidos: o crédito passa a ser só pela OP (15/10/2026)
 
 - **Decisões do usuário:** a confirmação da OP pelo PCP é o filtro do que está certo; o pedido é guiado pela OP; produzido do pedido só muda por OP/apontamento; o razão acompanha edição/exclusão; a planilha de saídas será travada (tudo pelo sistema) e a maior parte do legado já foi expedida.

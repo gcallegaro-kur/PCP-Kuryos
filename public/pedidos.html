@@ -209,6 +209,8 @@
     <option value="OK">OK</option>
     <option value="OK_APONTADA">OK com divergência apontada</option>
     <option value="SEM_REGISTRO">Sem registro de saída</option>
+    <option value="AGUARDA_CONFERENCIA">Aguardando conferência de PA</option>
+    <option value="LEGADO">Legado (consulta)</option>
   </select>
   <select class="kt-select" id="groupBySel">
     <option value="">Não agrupar</option>
@@ -904,7 +906,7 @@
   // Guarda o que cada célula mostra, para o detalhe por OP reabrir a MESMA
   // conta que está na linha (e não recalcular por outro caminho).
   var detalhesPorOp = {};
-  var CONFERENCIA_ORDEM = {DIVERGENTE: 0, SEM_REGISTRO: 1, OK_APONTADA: 2, OK: 3, SEM_PRODUCAO: 4};
+  var CONFERENCIA_ORDEM = {DIVERGENTE: 0, SEM_REGISTRO: 1, AGUARDA_CONFERENCIA: 2, OK_APONTADA: 3, OK: 4, LEGADO: 5, SEM_PRODUCAO: 6};
   function ordemConferencia(r) { return r ? CONFERENCIA_ORDEM[r.situacao] * 1e9 - Math.abs(r.diferenca) : 5e9; }
   var CARREGANDO_CONCILIACAO = '<span style="color:var(--muted);font-size:11px">carregando…</span>';
 
@@ -950,7 +952,7 @@
     if (!r || r.situacao === 'SEM_PRODUCAO') return '<span style="color:var(--muted)">—</span>';
     var det = registrarDetalhe(id, r, titulo);
     var d = ConciliacaoPedidos.descrever(r);
-    var visual = {OK: ['badge-green', '✓ '], OK_APONTADA: ['badge-green', '✓ '], DIVERGENTE: ['badge-red', '⚠ '], SEM_REGISTRO: ['badge-gray', '']}[r.situacao];
+    var visual = {OK: ['badge-green', '✓ '], OK_APONTADA: ['badge-green', '✓ '], DIVERGENTE: ['badge-red', '⚠ '], SEM_REGISTRO: ['badge-gray', ''], AGUARDA_CONFERENCIA: ['badge-orange', '⏳ '], LEGADO: ['badge-gray', '']}[r.situacao];
     var nOps = Object.keys(r.porOp || {}).length;
     return '<span class="badge ' + visual[0] + '"' + (det ? ' data-op-det="' + escapeAttr(det) + '" style="cursor:pointer"' : ' style="cursor:help"') +
       ' title="' + escapeAttr(d.detalhe + (det ? '\nClique para ver OP por OP.' : '')) + '">' + escapeHtml(visual[1] + d.rotulo) + '</span>' +
@@ -967,7 +969,7 @@
     if (!d) return;
     var r = d.resultado, partes = ConciliacaoPedidos.linhasPorOp(r);
     var MOT = ConciliacaoPedidos.MOTIVOS_EXPEDIDO, ORI = ConciliacaoPedidos.ORIGENS_ESTOQUE;
-    var corSit = {OK: 'badge-green', OK_APONTADA: 'badge-green', DIVERGENTE: 'badge-red', SEM_REGISTRO: 'badge-gray', SEM_PRODUCAO: 'badge-gray'};
+    var corSit = {OK: 'badge-green', OK_APONTADA: 'badge-green', DIVERGENTE: 'badge-red', SEM_REGISTRO: 'badge-gray', AGUARDA_CONFERENCIA: 'badge-orange', LEGADO: 'badge-gray', SEM_PRODUCAO: 'badge-gray'};
     var linhas = partes.linhas.map(function(l) {
       var det = ConciliacaoPedidos.descrever(l);
       var motivos = Object.keys(MOT).filter(function(m) { return l.expedido.motivos[m]; })
@@ -1060,6 +1062,11 @@
   }
   function pedidoPedeAcao(p) {
     var st = pedidoStatus(p);
+    // Pedido histórico (anterior a 10/09, sem OP aberta nem apontamento novo)
+    // é consulta: não entra em "Pedem ação" mesmo com status de planilha em
+    // andamento. Continua em "Finalizados (consulta)" e nos dashboards.
+    var cl = conciliacaoDoPedido(p._key);
+    if (cl && cl.legado) return false;
     return st === 'andamento' || st === 'pronto' || pedidoAguardaExpedicao(p);
   }
 

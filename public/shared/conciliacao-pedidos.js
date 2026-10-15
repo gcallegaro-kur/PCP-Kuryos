@@ -34,6 +34,11 @@
      expedido, e a unidade volta para o estoque como palete de devolução. Sem
      o estorno ela contaria duas vezes -- na carga e no palete. Retrabalho NÃO
      entra na conta (é o mesmo lote voltando para a linha): só é informado. */
+  /* Corte do sistema completo (WMS + Conferência de PA em produção, 10/09/2026).
+     O que foi produzido antes veio da planilha: não tem palete, conferência
+     nem saída por lote, e quase tudo já foi expedido. É consulta, não ação
+     (decisão do usuário, 15/10/2026). */
+  var CORTE = '2026-09-10';
   var MOTIVOS_EXPEDIDO = {EXPEDIDO: 'Expedido', FURTO: 'Furto', DESCARTE: 'Descarte', DEVOLVIDO: 'Devolvido (estorno)'};
   var ORIGENS_ESTOQUE = {WMS: 'Paletes no WMS', RETRABALHO: 'Retrabalho (planilha)', DEVOLUCAO: 'Devolução (planilha)'};
   // tipoLegado da planilha -> [lado da conta, motivo/origem]. O que não está
@@ -61,7 +66,10 @@
       // que está expedido OP por OP, inclusive na conferência, mostrando o
       // que tem em estoque OP por OP"). Toda saída e todo palete de PA
       // sabem de qual OP vieram; o que não souber cai em SEM_OP.
-      porOp: {}
+      porOp: {},
+      // PA concluído depois do corte que a Logística ainda não conferiu, e
+      // pedido histórico (ver CORTE). Preenchidos em calcular().
+      aguardandoPA: 0, legado: false
     };
   }
   var SEM_OP = 'SEM_OP';
@@ -209,6 +217,34 @@
       fechar(porPedido[k]);
       Object.keys(porPedido[k].porOp).forEach(function(o) { fechar(porPedido[k].porOp[o]); });
     });
+
+    // ── Aguardando conferência de PA e legado ─────────────────────────
+    var confs = base.conferencias_pa || {}, info = {};
+    Object.keys(ops).forEach(function(opKey) {
+      var op = ops[opKey] || {};
+      var k = resolver(op.skuPedidoKey || '');
+      if (!porPedido[k] || op.status === 'Cancelado') return;
+      var i = info[k] = info[k] || {emissaoMax: '', aberta: false, pendente: 0};
+      var emissao = String(op.dataEmissao || '').slice(0, 10);
+      if (emissao > i.emissaoMax) i.emissaoMax = emissao;
+      if (op.status !== 'Concluído') i.aberta = true;
+      // Concluída depois do corte, sem conferência finalizada: o que ainda não
+      // virou saída nem estoque é fila da Logística, não divergência.
+      var concluida = op.status === 'Concluído' || op.status === 'Aguardando Confirmação';
+      var conferida = !!(confs[opKey] && confs[opKey].finalizadoEm);
+      if (concluida && !conferida && emissao >= CORTE && n(op.produzido) > 0) {
+        var b = porPedido[k].porOp[opKey];
+        var coberto = b ? b.contabilizado - b.divergenciaApontada.total : 0;
+        i.pendente = arred(i.pendente + Math.max(n(op.produzido) - coberto, 0));
+      }
+    });
+    Object.keys(porPedido).forEach(function(k) {
+      var r = porPedido[k], i = info[k] || {emissaoMax: '', aberta: false, pendente: 0};
+      var ultAp = String((pedidos[k] || {}).ultimoApontamento || '').slice(0, 10);
+      r.aguardandoPA = i.pendente;
+      r.legado = n(r.produzido) > 0 && !i.aberta && i.emissaoMax < CORTE && ultAp < CORTE;
+      classificar(r);
+    });
     return {porPedido: porPedido, semVinculo: semVinculo};
   }
 
@@ -224,9 +260,25 @@
     return r;
   }
 
+  /* Reclassifica o que NÃO é acionável hoje:
+       AGUARDA_CONFERENCIA  a falta é toda de PA concluído que a Logística ainda
+                            não conferiu -- some sozinha quando conferirem;
+       LEGADO               pedido histórico (anterior ao corte, sem OP aberta
+                            nem apontamento novo) -- só consulta.
+     Divergência que sobra além disso continua DIVERGENTE. */
+  function classificar(r) {
+    if ((r.situacao === 'DIVERGENTE' || r.situacao === 'SEM_REGISTRO') && r.diferenca < 0 && r.aguardandoPA > 0 &&
+        (-r.diferenca) - r.aguardandoPA <= 0.5) {
+      r.situacao = 'AGUARDA_CONFERENCIA';
+    } else if ((r.situacao === 'DIVERGENTE' || r.situacao === 'SEM_REGISTRO') && r.legado) {
+      r.situacao = 'LEGADO';
+    }
+    return r;
+  }
+
   // Soma vários pedidos (itens de um pedido comercial). A situação é a PIOR
   // dos itens: somar diferenças de sinais opostos esconderia divergência.
-  var GRAVIDADE = {SEM_PRODUCAO: 0, OK: 1, OK_APONTADA: 2, SEM_REGISTRO: 3, DIVERGENTE: 4};
+  var GRAVIDADE = {SEM_PRODUCAO: 0, OK: 1, LEGADO: 1.5, OK_APONTADA: 2, AGUARDA_CONFERENCIA: 2.5, SEM_REGISTRO: 3, DIVERGENTE: 4};
   function agregar(resultados) {
     var total = novo(0), pior = 'SEM_PRODUCAO', itens = 0;
     (resultados || []).forEach(function(r) {
@@ -235,6 +287,7 @@
       total.produzido = arred(total.produzido + r.produzido);
       Object.keys(r.expedido.motivos).forEach(function(m) { somar(total.expedido, m, r.expedido.motivos[m]); });
       Object.keys(r.estoque.origens).forEach(function(o) { somar(total.estoque, o, r.estoque.origens[o]); });
+      total.aguardandoPA = arred(total.aguardandoPA + n(r.aguardandoPA));
       total.divergenciaApontada.total = arred(total.divergenciaApontada.total + r.divergenciaApontada.total);
       total.divergenciaApontada.ocorrencias = total.divergenciaApontada.ocorrencias.concat(r.divergenciaApontada.ocorrencias);
       ['devolvido', 'retrabalho'].forEach(function(c) {
@@ -282,7 +335,9 @@
   function descrever(r) {
     var rotulo = {
       OK: 'OK', OK_APONTADA: 'OK · divergência apontada', SEM_REGISTRO: 'Sem registro de saída',
-      SEM_PRODUCAO: '—', DIVERGENTE: 'Diferença ' + sinal(r.diferenca)
+      SEM_PRODUCAO: '—', DIVERGENTE: 'Diferença ' + sinal(r.diferenca),
+      AGUARDA_CONFERENCIA: 'Aguardando conferência de PA (' + fmt(r.aguardandoPA) + ' un.)',
+      LEGADO: 'Legado · saída não registrada'
     }[r.situacao];
     var linhas = ['Produzido: ' + fmt(r.produzido)];
     r.divergenciaApontada.ocorrencias.forEach(function(o) {
@@ -314,13 +369,15 @@
       if (!nOpsComProducao && r.produzido > 0) linhas.push('Causa possível: nenhuma OP aponta para este pedido (produção legada ou creditada sem OP).');
       if (r.diferenca < 0 && !r.estoque.total) linhas.push('Causa possível: sem paletes de produto acabado no WMS (estoque ainda não inventariado) e saída sem registro neste pedido.');
     }
+    if (r.situacao === 'AGUARDA_CONFERENCIA') linhas.push('A Logística ainda não conferiu o PA destas OPs (' + fmt(r.aguardandoPA) + ' un.). A diferença some quando os paletes forem declarados.');
+    if (r.situacao === 'LEGADO') linhas.push('Pedido anterior a 10/09/2026 (planilha): sem palete nem saída por lote. Serve para consulta; não pede ação.');
     if (r.situacao === 'DIVERGENTE') linhas.push(r.diferenca > 0
       ? 'Saídas + estoque passam do produzido em ' + fmt(r.diferenca)
       : 'Faltam ' + fmt(-r.diferenca) + ' un. sem destino registrado');
     return {rotulo: rotulo, detalhe: linhas.join('\n')};
   }
 
-  return {calcular: calcular, agregar: agregar, descrever: descrever, fechar: fechar,
+  return {calcular: calcular, classificar: classificar, CORTE: CORTE, agregar: agregar, descrever: descrever, fechar: fechar,
     linhasPorOp: linhasPorOp, SEM_OP: SEM_OP,
     MOTIVOS_EXPEDIDO: MOTIVOS_EXPEDIDO, ORIGENS_ESTOQUE: ORIGENS_ESTOQUE};
 });
