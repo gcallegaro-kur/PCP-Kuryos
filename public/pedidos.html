@@ -880,6 +880,7 @@
   // em run_conciliacao_pedidos_test.js). Aqui só carrega as fontes e desenha.
   // Enquanto qualquer fonte não chegou, as colunas mostram "carregando" em vez
   // de um zero que pareceria divergência.
+  var produzidoAoAbrir = 0; // valor de fProduzido quando o modal abriu (ver salvar)
   var conciliacaoFontes = {expedicoes_comerciais: null, estoque_lotes: null, ops: null, conferencias_pa: null, solicitacoes_descarte: null, devolucoes_cliente: null};
   var conciliacao = null;
   var _conciliacaoT = null;
@@ -1444,6 +1445,7 @@
     document.getElementById('fQtdTotal').value = p.qtdTotal || '';
     document.getElementById('fDataProd').value = p.dataProd || '';
     document.getElementById('fProduzido').value = p.produzido || 0;
+    produzidoAoAbrir = p.produzido || 0;
     document.getElementById('fStatusManual').value = p.statusManual || '';
     var pc = pct(p);
     document.getElementById('fProgresso').value = pc + '% (' + (p.produzido||0) + ' / ' + (p.qtdTotal||0) + ' un.)';
@@ -1572,6 +1574,22 @@
       if (preservedData) {
         data = Object.assign({}, preservedData, data);
         if (!statusManual) data.statusManual = null; // "automático" reabre
+      }
+      /* `produzido` só é gravado se a pessoa MUDOU o campo. O modal guarda o
+         valor de quando abriu; salvar por outro motivo (data, prioridade,
+         status) regravava esse número velho por cima dos apontamentos que
+         chegaram enquanto o modal estava aberto -- perda silenciosa de
+         produção. Quando muda de verdade fica o rastro (quem, de quanto para
+         quanto): é a única via de edição manual do produzido e não deixava
+         nenhuma marca, o que impede explicar depois por que o pedido não
+         fecha com as OPs. */
+      if (preservedData) {
+        if (produzido === produzidoAoAbrir) {
+          data.produzido = preservedData.produzido || 0;
+        } else {
+          var quemAjustou = window.currentUser ? (window.currentUser.nome || window.currentUser.email || window.currentUser.role || '') : '';
+          data.ajusteManualProduzido = {em: new Date().toISOString(), por: quemAjustou, de: preservedData.produzido || 0, para: produzido};
+        }
       }
       // Merge: preserve ultimoApontamento and produzido if not changed by user
       if (preservedData) {

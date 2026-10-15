@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Pedidos: por que o produzido não bate (investigação, 14-15/10/2026)
+
+- **Causas provadas na base:** (1) até 04/09 o *apontamento por total* gravava no registro a quantidade do período e na OP o total digitado — dois números para o mesmo fato; total digitado errado (OPs 26237/03, 26239/02, 26239/04 = 2 un.) separou OP e registro, enquanto o pedido soma o registro (0019__GLMKAM04 fecha EXATO com os registros, 15.624). Depois de 04/09: 1 un. de divergência em 1.350 lotes — o defeito já parou. (2) Transferência de OP olhava só o vínculo: OPs 26260/01 e 26261/02 foram transferidas ao PED-0008 em 23/09 com `qtd: 0`, as 6.614 un. ficaram no 0011 Leão; as 12 OPs do Leão (55.021 un., expedidas 54.637) nunca foram creditadas ao pedido. (3) Modal de edição do pedido regravava `produzido` com o valor de quando abriu (perda de apontamento chegado no meio) e não deixava rastro. (4) Pedidos 0018 ROSA e 0020 KUBPBA01: produzido digitado à mão, sem OP. (5) OP 26230/01 (Honey, 4.080 un.) apontada com pedidoId 0012 / produto Força do Leão -> creditada em 0012__MRARBS05; NÃO movido (OP planejada 150).
+- **Código:** `transferencia-op.js` — origem = pedido que guarda o crédito do lote (teste novo); `pedidos.html` — só grava `produzido` se a pessoa mudou o campo, e guarda `ajusteManualProduzido` (quem/de/para).
+- **Scripts (ensaio por padrão, `--aplicar` grava + backup):** `corrigir-op-produzido-pelos-registros.js` (26 OPs, regra: registros <=110% do planejado), `corrigir-leao-ped0008.js` (Leão 55.021 / PED-0008 6.614), `listar-pedidos-parados.js` -> `PEDIDOS_ABERTOS_DECISAO.md`. **Os dois de correção NÃO foram aplicados: o classificador do app bloqueou a escrita.** Rodar em terminal do usuário.
+- **Correção do que eu disse antes:** `11__BODY_SPLASH_LEAO...` (4.608, Programado) NÃO duplica o Leão; as 12 OPs apontam literalmente para `0011__`. A contagem em dobro foi minha, ao tirar zeros à esquerda.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Pedidos: Produzido x Expedido x Estoque não fechava (14/10/2026)
 
 - **Diagnóstico (base real, só leitura):** de 390 pedidos com produção, 98 fecham; 170 divergem (125 faltam 381 mil un., 45 sobram 172 mil) e 72 não têm registro de saída. Causas: (1) `estoque_lotes` sem paletes de PA -> "Em estoque" 0; (2) 495 mil un. expedidas + 46 mil devolvidas vêm da planilha legado sem chave de pedido nem OP (189 linhas) e 155 OPs antigas (363 mil un.) sem `skuPedidoKey`; (3) `pedidos.produzido` != soma das OPs em 59 pedidos: 16 foram **fixados de propósito** na conciliação com o cliente de 16/09 (`encerramento.motivo` "Conciliação…", família 0011/0014/0012/0006/0008 MRARBS, FABIANO WKBS) — NÃO mexer; 13 sub-creditados; 20 com pequeno excesso; 10 sem OP (legado).

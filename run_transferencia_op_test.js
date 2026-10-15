@@ -176,4 +176,30 @@ assert.strictEqual(T.aplicarEntrada(null, {id: 'T5'}), null);
   assert.strictEqual(p.qtd, 3696);
 }
 
+// Caso real 23/09/2026 (OP 26260/01): o vínculo da OP era PED-0008, mas o
+// apontamento foi creditado em outro pedido do mesmo SKU. A transferência
+// movia 0 un. porque olhava só o vínculo.
+{
+  const b = {
+    ops: {'26260-01': {lote: '26260/01', sku: 'MRARBS07', skuPedidoKey: '', status: 'Concluído', produzidoLinha: 4310, produzido: 4310}},
+    pedidos: {
+      '0011__LEAO': {id: '0011', sku: 'MRARBS07', qtdTotal: 60000, produzido: 4310, status: 'Produção Parcial',
+        apontamentosAplicados: {'-a': {quantidade: 864, lote: '26260/01'}, '-b': {quantidade: 3446, lote: '26260/01'}}},
+      'PED-0008__MRARBS07': {id: 'PED-0008', sku: 'MRARBS07', qtdTotal: 4800, produzido: 0, status: 'Não Iniciado'}
+    },
+    estoque_lotes: {}
+  };
+  const p = T.planejar(b, '26260-01', 'PED-0008__MRARBS07');
+  assert.deepStrictEqual(p.erros, []);
+  assert.strictEqual(p.origemKey, '0011__LEAO', 'a origem é quem guarda o crédito');
+  assert.strictEqual(p.qtd, 4310, 'move o que estava creditado, não 0');
+  assert.ok(p.avisos.some((a) => /estava creditada em 0011__LEAO/.test(a)));
+  // Dois pedidos guardando o mesmo lote: não chuta, não move.
+  b.pedidos['OUTRO__MRARBS07'] = {id: 'OUTRO', sku: 'MRARBS07', qtdTotal: 10, produzido: 5,
+    apontamentosAplicados: {'-z': {quantidade: 5, lote: '26260/01'}}};
+  const amb = T.planejar(b, '26260-01', 'PED-0008__MRARBS07');
+  assert.strictEqual(amb.qtd, 0);
+  assert.ok(amb.avisos.some((a) => /mais de um pedido/.test(a)));
+}
+
 console.log('run_transferencia_op_test.js: OK');

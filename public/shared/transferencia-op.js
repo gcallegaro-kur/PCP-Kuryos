@@ -126,7 +126,26 @@
 
     var origemKey = retomada ? retomada.origem : resolverChave(pedidos, op.skuPedidoKey);
     var destinoKey = retomada ? retomada.destino : resolverChave(pedidos, destinoKeyInformado);
+    /* O crédito da OP pode estar em OUTRO pedido que não o do vínculo. Caso
+       real (23/09/2026, OPs 26260/01 e 26261/02): o vínculo era PED-0008, mas
+       o apontamento tinha sido creditado em 0011__BODY_SPLASH_LEAO... pelo
+       desempate antigo por nome. A transferência olhou só o vínculo, achou
+       0 un. para mover (`qtd: 0`) e as 6.614 un. ficaram no pedido errado.
+       Agora, se o pedido do vínculo não guarda nenhum registro deste lote,
+       a origem passa a ser o único pedido que guarda. */
+    var creditadoFora = '';
+    if (!retomada) {
+      var noVinculo = origemKey ? aplicacoesDoLote(pedidos[origemKey], op.lote).qtd : 0;
+      if (!noVinculo) {
+        var quem = Object.keys(pedidos).filter(function(k) {
+          return k !== origemKey && k !== destinoKey && aplicacoesDoLote(pedidos[k], op.lote).qtd > 0;
+        });
+        if (quem.length === 1) { creditadoFora = quem[0]; origemKey = quem[0]; }
+        else if (quem.length > 1) avisos.push('Este lote tem produção creditada em mais de um pedido (' + quem.join(', ') + '). Nada foi movido: corrija à mão.');
+      }
+    }
     var origem = origemKey ? pedidos[origemKey] : null, destino = destinoKey ? pedidos[destinoKey] : null;
+    if (creditadoFora) avisos.push('A produção deste lote estava creditada em ' + creditadoFora + ', não no pedido do vínculo (' + (op.skuPedidoKey || 'sem pedido') + '). É de lá que ela sai.');
 
     if (!destino) erros.push('Escolha um pedido de destino que exista.');
     else if (!retomada) {
@@ -134,8 +153,8 @@
       if (String(destino.sku || '') !== String(op.sku || '')) erros.push('O pedido de destino é de outro produto (' + (destino.sku || 'sem SKU') + ').');
       if (pedidoFechado(destino)) erros.push('O pedido de destino está encerrado ou cancelado.');
     }
-    if (!retomada && op.skuPedidoKey && !origem) avisos.push('O pedido atual da OP (' + op.skuPedidoKey + ') não existe mais. Só o vínculo muda; nenhuma produção é somada ao destino.');
-    if (!op.skuPedidoKey) avisos.push('A OP não tinha pedido. Só o vínculo é criado; a produção já apontada não é somada ao destino.');
+    if (!retomada && op.skuPedidoKey && !origem && !creditadoFora) avisos.push('O pedido atual da OP (' + op.skuPedidoKey + ') não existe mais. Só o vínculo muda; nenhuma produção é somada ao destino.');
+    if (!op.skuPedidoKey && !creditadoFora) avisos.push('A OP não tinha pedido. Só o vínculo é criado; a produção já apontada não é somada ao destino.');
     if (op.abertaDesde || op.abertaLinha || op.abertaDesdeRot || op.abertaRotulagem) {
       avisos.push('A OP está com apontamento aberto. Apontamento enviado durante a transferência pode cair no pedido antigo -- o ideal é transferir com a linha parada.');
     }
