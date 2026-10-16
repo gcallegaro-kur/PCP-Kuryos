@@ -313,9 +313,19 @@
     add(op.dataFimReal, 'Envase', 'Fim do envase (' + num(op.produzido) + ' un)', null);
     add(op.confirmadoEm, 'OP', 'OP confirmada/encerrada', op.confirmadoPor);
     contagensPa.forEach(function(c) { add(c.contadoEm, 'Logística', 'Contagem de PA: ' + num(c.total) + ' un', c.contadoPor); });
+    var laudosLote = {};
     paletes.forEach(function(l) {
       var q = l.qualidade;
-      if (q) add(q.inspecionadoEm, 'Qualidade', 'Palete ' + (l.identificadorPalete || l.id) + ': ' + (q.decisao || '—'), q.inspecionadoPor);
+      if (!q) return;
+      // Laudo único por lote (16/10/2026): o espelho em cada palete é UM evento.
+      if (q.espelhoDeLote && q.laudoLote) {
+        if (laudosLote[q.laudoLote]) return;
+        laudosLote[q.laudoLote] = true;
+        var n = paletes.filter(function(x) { return x.qualidade && x.qualidade.laudoLote === q.laudoLote; }).length;
+        add(q.inspecionadoEm, 'Qualidade', 'Lote ' + (q.decisao || '—') + ' — laudo único para ' + n + ' palete(s)', q.inspecionadoPor);
+        return;
+      }
+      add(q.inspecionadoEm, 'Qualidade', 'Palete ' + (l.identificadorPalete || l.id) + ': ' + (q.decisao || '—'), q.inspecionadoPor);
     });
     rncs.forEach(function(r) { add(r.abertaEm, 'Qualidade', 'RNC ' + (r.numero || r.id) + ' aberta' + (r.classificacao ? ' (' + r.classificacao + ')' : ''), r.abertaPor); });
     return ev.sort(porData('em'));

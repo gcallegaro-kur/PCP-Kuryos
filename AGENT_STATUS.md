@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Laudo único de PA por LOTE (OP), não por palete (16/10/2026)
+
+- **Decisão do usuário:** uma OP = um lote de PA; um laudo, uma decisão, vale para todos os paletes; a amostragem √N+1 segue por palete (x caixas do palete A, y do B) dentro do mesmo laudo; os 55 paletes já liberados valem como liberação; reprovar/reter atinge o lote inteiro.
+- **Modelo:** `ops/{op}/qualidadePA` = laudo (fonte da verdade, com `amostragemPaletes` e lista de `paletes`); cada palete recebe `status` + `qualidade` ESPELHO (`espelhoDeLote`, `laudoLote`, `amostragemPalete`) na MESMA operação — por isso Expedição (`expedicao.js`/`expedicao_regras.js`), Dossiê e grade não mudaram. `shared/laudo-pa-lote.js` (novo): `filaLotes`, `amostragemPorPalete`, `planejarGravacao`, `registrarLaudoPaLote` (reserva por transaction, confere QUARENTENA, um update multi-path, UMA RNC por lote), `heranca`. `utils.js`: `qualidadeDoLaudo()` extraída de `registrarLaudoQualidade` (mesmo registro para todos); `lotesAguardandoQualidade` agora devolve `opKey`/`origemTipo`.
+- **Tela (`qualidade.html`):** fila PA mostra "Laudar lote" (1 linha por OP: paletes, caixas, endereços); laudo abre como "Liberação de lote" com amostra por palete e total; histórico e Dossiê mostram um evento por lote; emissão aceita a amostragem por lote. Palete de **devolução do cliente** continua com laudo próprio (decide reintegrar/reenviar). `database.rules.json`: `ops/$op/qualidadePA` gravável por qualidade — **regras precisam de `firebase deploy --only database`**.
+- **Pergunta 5 (palete que chega depois):** na prática não acontece — a Cloud Function de finalização da Conferência cria TODOS os paletes da OP de uma vez e bloqueia criar mais. Deixei `LaudoPaLote.heranca()` pronto (palete novo herda a decisão do lote, `herdado:true`, sem amostragem) e `paletesSemAmostragem()` para sinalizar; ainda NÃO ligado a nenhum fluxo.
+- **Testes:** `run_laudo_pa_lote_test.js` (regra + banco de mentira), `run_laudo_pa_lote_ui_test.js` (tela real: fila, laudo, reter grava lote inteiro); `run_qualidade_pa_tipo_test.js` ajustado.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Exportação dos cadastros para Excel (15/10/2026)
 
 - **Pedido:** exportar cadastros, produtos, fórmulas e BOMs para comparar e ajustar em lote.

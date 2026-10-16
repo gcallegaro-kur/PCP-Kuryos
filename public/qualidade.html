@@ -14,6 +14,7 @@
   <script src="shared/anexos.js"></script>
   <script src="shared/fotos-qualidade.js"></script>
   <script src="shared/inspecao-pa.js"></script>
+  <script src="shared/laudo-pa-lote.js"></script>
   <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script><script src="shared/analise-granel.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
@@ -1166,9 +1167,25 @@ function lerTipoFilaLembrado() {
 function lembrarTipoFila(k) {
   try { localStorage.setItem(chaveTipoFila(), k); } catch (e) { /* aba anônima: segue sem lembrar */ }
 }
+/* Fila de laudos. PA sai por LOTE (OP): um item por OP, qualquer que seja o
+   número de paletes (decisão de 16/10/2026). Palete de devolução do cliente
+   segue avulso — a Qualidade decide reintegrar/reenviar palete a palete. */
+function filaCompleta() {
+  var avulsos = lotesAguardandoQualidade(allEstoqueLotes).filter(function(f) {
+    return !(f.itemTipo === 'produto' && f.origemTipo === 'conferencia_pa' && f.opKey);
+  });
+  var lotesPa = LaudoPaLote.filaLotes(allEstoqueLotes).map(function(g) {
+    return {ehLotePa: true, g: g, itemTipo: 'produto', itemCodigo: g.itemCodigo, itemKey: g.itemKey,
+      loteKey: g.paletes[0].loteKey, saldoLote: g.saldoTotal, criadoEm: g.criadoEm};
+  });
+  return avulsos.concat(lotesPa).sort(function(a, b) {
+    var da = a.dataRecebimento || (a.criadoEm || '').slice(0, 10), db2 = b.dataRecebimento || (b.criadoEm || '').slice(0, 10);
+    return da < db2 ? -1 : da > db2 ? 1 : 0;
+  });
+}
 function contagemPorTipo() {
   var c = {mp: 0, embalagem: 0, bulk: 0, pa: 0};
-  lotesAguardandoQualidade(allEstoqueLotes).forEach(function(f) { c[tipoFilaDoLote(f.itemTipo, f.itemCodigo)]++; });
+  filaCompleta().forEach(function(f) { c[tipoFilaDoLote(f.itemTipo, f.itemCodigo)]++; });
   c.bulk = opsGranelPendentes().length + opsBulkReprovado().length;
   return c;
 }
@@ -1213,12 +1230,33 @@ function renderTiposFila() {
   } else vazio.style.display = 'none';
 }
 
+function linhaFilaLotePa(g) {
+  var dias = diasDesde((g.criadoEm || '').slice(0, 10));
+  var badgeDias = dias === null ? ''
+    : ' <span class="badge ' + (dias > 7 ? 'badge-red' : dias > 3 ? 'badge-orange' : 'badge-gray') + '">' + (dias === 0 ? 'hoje' : 'há ' + dias + 'd') + '</span>';
+  var aviso = g.aguardandoConferencia
+    ? '<br><span class="badge badge-orange" title="Paletes ainda não conferidos pela Logística entram no lote e herdam a decisão.">' + g.aguardandoConferencia + ' palete(s) ainda sem conferência</span>' : '';
+  return '<tr>' +
+    '<td><span class="badge badge-purple">PA</span> <b>' + escapeHtml(g.itemCodigo) + '</b> <span class="badge badge-purple" title="Checklist de produto acabado (CK-7)">CK-7</span>' +
+      (g.itemNome ? '<br><span class="field-hint">' + escapeHtml(g.itemNome) + '</span>' : '') + '</td>' +
+    '<td>' + escapeHtml(g.loteOrigem || '—') + '<br><span class="field-hint"><b>Lote inteiro</b> · ' + g.paletes.length + ' palete(s) · ' + fmtNum(g.caixasTotal) + ' caixa(s)</span>' +
+      (g.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(g.dataValidade) + '</span>' : '') + aviso + '</td>' +
+    '<td><span class="field-hint">Produção interna</span></td>' +
+    '<td><span class="field-hint">Não se aplica</span></td>' +
+    '<td>' + escapeHtml(g.enderecos.join(', ') || '—') + '</td>' +
+    '<td style="text-align:right">' + fmtNum(g.saldoTotal) + ' ' + escapeHtml(g.unidade || '') + '</td>' +
+    '<td>' + fmtData((g.criadoEm || '').slice(0, 10)) + badgeDias + '</td>' +
+    '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(g.itemCodigo) + '" data-laudo-primeiro="' + escapeAttr(g.paletes[0].loteKey) +
+      '" data-laudo-op="' + escapeAttr(g.opKey) + '">🔬 Laudar lote</button></td>' +
+  '</tr>';
+}
+
 function renderFila() {
   var tbody = document.getElementById('qFilaBody');
   if (!tbody) return;
   var tipoAtual = tipoFilaAtual();
   renderTiposFila();
-  var fila = lotesAguardandoQualidade(allEstoqueLotes).filter(function(f) {
+  var fila = filaCompleta().filter(function(f) {
     return tipoAtual === 'tudo' || tipoFilaDoLote(f.itemTipo, f.itemCodigo) === tipoAtual;
   });
 
@@ -1229,11 +1267,16 @@ function renderFila() {
   });
 
   var corte = new Date(Date.now() - 30 * 86400000).toISOString();
-  var lib = 0, rep = 0, recentes = [];
+  var lib = 0, rep = 0, recentes = [], laudosLoteVistos = {};
   Object.keys(allEstoqueLotes || {}).forEach(function(itemKey) {
     Object.keys(allEstoqueLotes[itemKey] || {}).forEach(function(lk) {
       var l = (allEstoqueLotes[itemKey] || {})[lk];
       if (!l || !l.qualidade || !l.qualidade.inspecionadoEm) return;
+      // Laudo único por lote de PA: o espelho em cada palete não vira linha extra.
+      if (l.qualidade.espelhoDeLote && l.qualidade.laudoLote) {
+        if (laudosLoteVistos[l.qualidade.laudoLote]) return;
+        laudosLoteVistos[l.qualidade.laudoLote] = true;
+      }
       recentes.push({ lote: l, loteKey: lk });
       if (l.qualidade.inspecionadoEm < corte) return;
       if (l.qualidade.decisao === 'LIBERADO' || l.qualidade.decisao === 'LIBERADO_EXPEDICAO') lib++;
@@ -1257,6 +1300,7 @@ function renderFila() {
     tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
   } else {
     tbody.innerHTML = fila.map(function(f) {
+      if (f.ehLotePa) return linhaFilaLotePa(f.g);
       var dias = diasDesde(f.dataRecebimento || f.criadoEm);
       // Espera longa é o sinal que importa: material parado ocupando posição
       // sem poder ser usado, possivelmente com OP esperando por ele.
@@ -1297,6 +1341,11 @@ function renderFila() {
         abrirLaudo(btn.getAttribute('data-laudo-item'), btn.getAttribute('data-laudo-lote'));
       });
     });
+    tbody.querySelectorAll('[data-laudo-op]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        abrirLaudo(btn.getAttribute('data-laudo-item'), btn.getAttribute('data-laudo-primeiro'), btn.getAttribute('data-laudo-op'));
+      });
+    });
   }
 
   // Laudos recentes -- mais novos primeiro, 25 últimos, do tipo da aba.
@@ -1323,7 +1372,8 @@ function renderFila() {
       return '<tr>' +
         '<td>' + (l.itemTipo === 'produto' ? '<span class="badge badge-purple">PA</span> ' : '') + escapeHtml(l.itemCodigo || '—') +
           (l.itemNome ? '<br><span class="field-hint">' + escapeHtml(l.itemNome) + '</span>' : '') + '</td>' +
-        '<td>' + escapeHtml(l.loteOrigem || '—') + '</td>' +
+        '<td>' + escapeHtml(l.loteOrigem || '—') +
+          (q.espelhoDeLote ? '<br><span class="field-hint">lote inteiro · laudo único</span>' : '') + '</td>' +
         '<td><span class="badge ' + badgeStatusLote(q.decisao) + '">' + escapeHtml(rotuloStatusLote(q.decisao)) + '</span>' +
           (q.autorizadoPor ? '<br><span class="field-hint">aut. ' + escapeHtml(q.autorizadoPor) + '</span>' : '') +
           (q.resumoPlano ? '<br><span class="field-hint">' + escapeHtml(q.resumoPlano) + '</span>' : '') +
@@ -1826,10 +1876,21 @@ function roteiroDoLote(itemTipo, itemCodigo) {
   return /^(EP|ES|ET)$/.test(String(m.tipo || '')) ? 'EMBALAGEM' : 'MP';
 }
 
-function abrirLaudo(itemCodigo, loteKey) {
+function abrirLaudo(itemCodigo, loteKey, opKey) {
   var itemKey = sanitizeKey(itemCodigo);
   var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
   if (!lote) { showAlert('Este lote não está mais disponível.', 'danger'); return; }
+  // PA: o laudo é do LOTE (OP) inteiro. `lote` vira a soma dos paletes e a
+  // amostragem de caixas é sugerida palete a palete.
+  var grupoPa = null;
+  if (opKey) {
+    grupoPa = LaudoPaLote.filaLotes(allEstoqueLotes).filter(function(g) { return g.opKey === opKey; })[0] || null;
+    if (!grupoPa) { showAlert('Este lote não está mais aguardando laudo.', 'danger'); return; }
+    lote = Object.assign({}, grupoPa.paletes[0].lote, {
+      saldoLote: grupoPa.saldoTotal, enderecoCodigo: grupoPa.enderecos.join(', ') || null,
+      caixasFechadas: grupoPa.caixasTotal, unidadesCaixaParcial: 0
+    });
+  }
   var itemTipo = lote.itemTipo || 'material';
   var espec = especificacaoVigente(allEspecificacoes, itemCodigo);
   var forn = fornecedorDoLote(lote, allPedidosCompra);
@@ -1845,19 +1906,21 @@ function abrirLaudo(itemCodigo, loteKey) {
     parametros: ehPa ? Object.assign({}, allParametrosPa[itemKey] || {}) : null,
     // Densidade do bulk do mesmo lote e a do cadastro: fontes da pesagem de
     // produto em ml quando a inspetora não mede uma nova no laudo.
-    fontesPa: ehPa ? fontesPesagemPa(lote, itemCodigo) : null
+    fontesPa: ehPa ? fontesPesagemPa(lote, itemCodigo) : null,
+    lotePA: grupoPa ? {grupo: grupoPa, amostragem: LaudoPaLote.amostragemPorPalete(grupoPa.paletes, InspecaoPA.amostragem)} : null
   };
 
   document.getElementById('modalLaudoTitle').textContent =
-    (laudoAtual.roteiro === 'PA' ? 'Liberação de palete — '
+    (laudoAtual.roteiro === 'PA' ? (grupoPa ? 'Liberação de lote — ' : 'Liberação de palete — ')
       : laudoAtual.roteiro === 'EMBALAGEM' ? 'Análise de embalagem — '
       : 'Análise de matéria-prima — ') + itemCodigo;
   document.getElementById('qBtnLiberar').textContent =
-    itemTipo === 'produto' ? 'Liberar para expedição' : 'Liberar para uso';
+    itemTipo === 'produto' ? (grupoPa ? 'Liberar lote para expedição' : 'Liberar para expedição') : 'Liberar para uso';
   document.getElementById('qLoteInfo').innerHTML =
     '<b>' + escapeHtml(lote.itemNome || itemCodigo) + '</b><br>' +
     'Lote: ' + escapeHtml(lote.loteOrigem || '—') +
     ' · Posição: ' + escapeHtml(lote.enderecoCodigo || '—') +
+    (grupoPa ? ' · <b>' + grupoPa.paletes.length + ' palete(s) — um só laudo para o lote inteiro</b>' : '') +
     ' · Saldo: ' + fmtNum(lote.saldoLote || 0) + ' ' + escapeHtml(lote.unidade || '') +
     (lote.dataValidade ? ' · Validade: ' + fmtData(lote.dataValidade) : '') +
     (forn ? '<br>Fornecedor: <b>' + escapeHtml(forn.fornecedorNome || '—') + '</b>' +
@@ -2279,7 +2342,15 @@ function renderCk7() {
     (aval.criticosNC ? ' <span class="badge badge-red">⚠ crítico</span>' : '');
 
   var amostra = aval.amostragem;
-  document.getElementById('qCk7Amostra').innerHTML = amostra.caixas
+  if (laudoAtual.lotePA) {
+    // Amostra sugerida palete a palete (√N+1 sobre as caixas de cada um).
+    document.getElementById('qCk7Amostra').innerHTML = '<b>Amostra por palete</b> (inspecione as unidades dessas caixas):<br>' +
+      laudoAtual.lotePA.amostragem.porPalete.map(function(x) {
+        return '• Palete ' + escapeHtml(String(x.palete)) + (x.endereco ? ' (' + escapeHtml(x.endereco) + ')' : '') + ': ' +
+          (x.caixas ? '<b>' + x.amostra + ' de ' + x.caixas + ' caixa(s)</b> — ' + escapeHtml(x.posicoes.join(', ').toLowerCase()) : 'sem caixas informadas na conferência');
+      }).join('<br>') +
+      '<br><b>Total: ' + laudoAtual.lotePA.amostragem.caixasAmostradas + ' de ' + laudoAtual.lotePA.amostragem.caixasLote + ' caixa(s).</b>';
+  } else document.getElementById('qCk7Amostra').innerHTML = amostra.caixas
     ? '<b>Amostra:</b> ' + escapeHtml(amostra.texto) + '. Inspecione as unidades dessas caixas.'
     : 'Palete sem número de caixas registrado na conferência — informe a amostra na observação.';
 
@@ -2400,6 +2471,24 @@ function botoesLaudo() {
 }
 
 var fotosLaudo = null, fotosGranel = null, fotosRncAbertura = null, fotosRncEncerramento = null, decidindoGranel = false;
+/* Grava o laudo. PA com lote (OP): UM laudo para todos os paletes, com a
+   amostragem de caixas palete a palete dentro dele. Os demais: um laudo por
+   lote/palete, como sempre. */
+function chamarRegistroLaudo(dados, ctx) {
+  if (!laudoAtual.lotePA) {
+    return registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, dados, currentUserNome(), ctx);
+  }
+  var g = laudoAtual.lotePA.grupo, am = laudoAtual.lotePA.amostragem;
+  if (dados.ck7) {
+    dados.ck7.amostragem = {regra: '√N+1 por palete', caixasLote: am.caixasLote, caixasAmostradas: am.caixasAmostradas,
+      porPalete: am.porPalete, texto: LaudoPaLote.textoAmostragem(am)};
+  }
+  return LaudoPaLote.registrarLaudoPaLote(db, g.opKey, g.paletes, dados, currentUserNome(), {
+    itemCodigo: laudoAtual.itemCodigo, itemNome: ctx.itemNome, unidade: ctx.unidade,
+    loteOrigem: ctx.loteOrigem, opLote: g.opLote, amostragem: am
+  }, {qualidadeDoLaudo: qualidadeDoLaudo, abrirRnc: abrirRnc, rotuloStatusLote: rotuloStatusLote});
+}
+
 function salvarLaudo(decisao) {
   if (!laudoAtual) return;
   var obs = document.getElementById('qObservacao').value.trim();
@@ -2446,7 +2535,7 @@ function salvarLaudo(decisao) {
   if (laudoAtual.ehPa) {
     avalPa = avaliarCk7();
     if (avalPa.bloqueia && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO' || decisao === 'APROVADO_CONCESSAO')) {
-      showAlert('Não é possível liberar: ' + avalPa.impedimentos.join('; ') + '. Retenha o palete ou envie para retrabalho.', 'danger');
+      showAlert('Não é possível liberar: ' + avalPa.impedimentos.join('; ') + (laudoAtual.lotePA ? '. Retenha o lote ou envie para retrabalho.' : '. Retenha o palete ou envie para retrabalho.'), 'danger');
       return;
     }
     if (!avalPa.completo && (decisao === 'LIBERADO' || decisao === 'LIBERADO_EXPEDICAO')) {
@@ -2509,7 +2598,7 @@ function salvarLaudo(decisao) {
   FotosQualidade.enviar(storage, fotosLaudo ? fotosLaudo.pendentes() : [], {
     contexto: 'laudo', chave: sanitizeKey(laudoAtual.itemCodigo) + '_' + laudoAtual.loteKey, autor: currentUserNome()
   }).then(function(fotosEnviadas) {
-  return registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, {
+  var dadosLaudo = {
     decisao: decisao,
     fotos: fotosEnviadas,
     fotosDispensadas: dispensadaLaudo,
@@ -2539,7 +2628,8 @@ function salvarLaudo(decisao) {
       condicaoEmbalagem: document.getElementById('qCondicaoEmb').value || null,
       avaria: document.getElementById('qAvaria').value || null
     }
-  }, currentUserNome(), {
+  };
+  var ctxLaudo = {
     itemTipo: laudoAtual.itemTipo,
     itemNome: laudoAtual.lote.itemNome || null,
     unidade: laudoAtual.lote.unidade || null,
@@ -2547,7 +2637,8 @@ function salvarLaudo(decisao) {
     fornecedorKey: f.fornecedorKey || null, fornecedorNome: f.fornecedorNome || null,
     pedidoKey: f.pedidoKey || null, pedidoNumero: f.pedidoNumero || null,
     origem: laudoAtual.itemTipo === 'produto' ? 'PRODUCAO' : 'RECEBIMENTO'
-  });
+  };
+  return chamarRegistroLaudo(dadosLaudo, ctxLaudo);
   }).then(function(r) {
     btns.forEach(function(b) { b.disabled = false; });
     if (!r.ok) { showAlert(r.erro, 'danger'); return; }
@@ -2562,8 +2653,10 @@ function salvarLaudo(decisao) {
     fecharModalLaudo();
     var msg, tipo;
     if (r.decisao === 'LIBERADO') { msg = 'Lote liberado — já disponível para a Separação de Materiais.'; tipo = 'success'; }
-    else if (r.decisao === 'LIBERADO_EXPEDICAO') { msg = 'Palete liberado — já disponível para a Expedição.'; tipo = 'success'; }
-    else if (r.decisao === 'APROVADO_CONCESSAO') { msg = 'Lote liberado com concessão, autorizado por ' + autorizadoPor + '.'; tipo = 'success'; }
+    else if (r.decisao === 'LIBERADO_EXPEDICAO') {
+      msg = r.paletes ? 'Lote liberado — ' + r.paletes + ' palete(s) já disponíveis para a Expedição.' : 'Palete liberado — já disponível para a Expedição.'; tipo = 'success';
+    }
+    else if (r.decisao === 'APROVADO_CONCESSAO') { msg = 'Lote liberado com concessão' + (r.paletes ? ' (' + r.paletes + ' palete(s))' : '') + ', autorizado por ' + autorizadoPor + '.'; tipo = 'success'; }
     else { msg = 'Lote ' + rotuloStatusLote(r.decisao).toLowerCase() + '. O material continua no estoque até ser devolvido ou descartado.'; tipo = 'danger'; }
     if (r.rnc) msg += ' Não conformidade ' + r.rnc + ' aberta automaticamente.';
     // O laudo vale mesmo se a RNC falhar -- mas quem laudou precisa saber
@@ -2822,9 +2915,11 @@ function dadosLaudoPa(itemCodigo, loteKey, lote, q, opcoes) {
     // Laudo antigo: bulk/especificação, como antes (resultado em branco).
     fq: q.resultadosPa ? q.resultadosPa.fq : linhasFqDoLaudo(op, itemCodigo),
     embalagem: linhasEmbalagemDoLaudo(ck7.itens),
-    amostragemTexto: ck7.amostragem && ck7.amostragem.caixasPalete
-      ? ck7.amostragem.caixasAmostradas + ' de ' + ck7.amostragem.caixasPalete + ' caixas'
-      : '',
+    amostragemTexto: ck7.amostragem && ck7.amostragem.caixasLote
+      ? ck7.amostragem.caixasAmostradas + ' de ' + ck7.amostragem.caixasLote + ' caixas (por palete)'
+      : ck7.amostragem && ck7.amostragem.caixasPalete
+        ? ck7.amostragem.caixasAmostradas + ' de ' + ck7.amostragem.caixasPalete + ' caixas'
+        : '',
     pa: {
       defeitoMenor: contarDefeitos(ck7.itens, 'MENOR'),
       defeitoMaior: contarDefeitos(ck7.itens, 'MAIOR'),

@@ -43,6 +43,7 @@ const ctx = {
   rotuloStatusLote:s => s,
 };
 vm.createContext(ctx);
+vm.runInContext(extractFunction('qualidadeDoLaudo'), ctx);
 vm.runInContext(extractFunction('registrarLaudoQualidade'), ctx);
 
 ctx.registrarLaudoQualidade(db, 'PA-001', 'pa_op_p1', { decisao:'LIBERADO_EXPEDICAO' }, 'Qualidade Teste')

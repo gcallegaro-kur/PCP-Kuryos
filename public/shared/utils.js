@@ -2271,36 +2271,12 @@ function badgeStatusLote(status) {
 // REPROVADO não zera o saldo: o material continua fisicamente lá, ocupando
 // a posição, até alguém devolver ao fornecedor ou descartar -- e essas são
 // saídas próprias, com movimento próprio, não efeito colateral de um laudo.
-function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
-  if (!itemCodigo || !loteKey || !laudo || !laudo.decisao) {
-    return Promise.resolve({ ok: false, erro: 'Faltam dados do laudo.' });
-  }
-  // Decisões válidas (spec do CQ, 7.3). LIBERADO_EXPEDICAO é o equivalente
-  // de LIBERADO para produto acabado -- o formulário "Liberação de Palete". Quem
-  // chama escolhe conforme o itemTipo do lote; a função aceita as duas
-  // porque a mecânica (transação, laudo, movimento) é idêntica.
-  var DECISOES = { LIBERADO: 1, LIBERADO_EXPEDICAO: 1, REPROVADO: 1, APROVADO_CONCESSAO: 1, RETIDO: 1 };
-  if (!DECISOES[laudo.decisao]) {
-    return Promise.resolve({ ok: false, erro: 'Decisão inválida: ' + laudo.decisao });
-  }
-  // Concessão é autorização formal pra usar material fora de especificação --
-  // a spec exige autorização nominal (7.3). Sem quem autorizou, não grava.
-  if (laudo.decisao === 'APROVADO_CONCESSAO' && !laudo.autorizadoPor) {
-    return Promise.resolve({ ok: false, erro: 'Aprovação com concessão exige o nome de quem autorizou.' });
-  }
-  var itemKey = sanitizeKey(itemCodigo);
-  var agora = new Date().toISOString();
-  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
-  var saldoNoMomento = 0;
-  return loteRef.transaction(function(atual) {
-    if (!atual) return atual;
-    // Só decide o que ainda está em quarentena -- reprocessar um lote já
-    // liberado/reprovado por dois cliques ou duas sessões não pode
-    // sobrescrever o laudo anterior em silêncio.
-    if (atual.status !== 'QUARENTENA') return; // aborta a transaction
-    saldoNoMomento = atual.saldoLote || 0;
-    atual.status = laudo.decisao;
-    atual.qualidade = {
+// Registro `qualidade` gravado no lote/palete a partir do laudo. Função PURA:
+// é a mesma para o laudo de material, de embalagem e de PA -- inclusive o
+// laudo único por lote de PA (shared/laudo-pa-lote.js), que grava este objeto
+// na OP e o espelha em cada palete.
+function qualidadeDoLaudo(laudo, autor, agora) {
+  return {
       decisao: laudo.decisao,
       inspecionadoEm: agora,
       inspecionadoPor: autor || null,
@@ -2337,7 +2313,39 @@ function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
       // o registro. fotosDispensadas = reprovação sem o que fotografar.
       fotos: (laudo.fotos && laudo.fotos.length) ? laudo.fotos : null,
       fotosDispensadas: laudo.fotosDispensadas ? true : null
-    };
+  };
+}
+
+function registrarLaudoQualidade(dbRef, itemCodigo, loteKey, laudo, autor) {
+  if (!itemCodigo || !loteKey || !laudo || !laudo.decisao) {
+    return Promise.resolve({ ok: false, erro: 'Faltam dados do laudo.' });
+  }
+  // Decisões válidas (spec do CQ, 7.3). LIBERADO_EXPEDICAO é o equivalente
+  // de LIBERADO para produto acabado -- o formulário "Liberação de Palete". Quem
+  // chama escolhe conforme o itemTipo do lote; a função aceita as duas
+  // porque a mecânica (transação, laudo, movimento) é idêntica.
+  var DECISOES = { LIBERADO: 1, LIBERADO_EXPEDICAO: 1, REPROVADO: 1, APROVADO_CONCESSAO: 1, RETIDO: 1 };
+  if (!DECISOES[laudo.decisao]) {
+    return Promise.resolve({ ok: false, erro: 'Decisão inválida: ' + laudo.decisao });
+  }
+  // Concessão é autorização formal pra usar material fora de especificação --
+  // a spec exige autorização nominal (7.3). Sem quem autorizou, não grava.
+  if (laudo.decisao === 'APROVADO_CONCESSAO' && !laudo.autorizadoPor) {
+    return Promise.resolve({ ok: false, erro: 'Aprovação com concessão exige o nome de quem autorizou.' });
+  }
+  var itemKey = sanitizeKey(itemCodigo);
+  var agora = new Date().toISOString();
+  var loteRef = dbRef.ref('estoque_lotes/' + itemKey + '/' + loteKey);
+  var saldoNoMomento = 0;
+  return loteRef.transaction(function(atual) {
+    if (!atual) return atual;
+    // Só decide o que ainda está em quarentena -- reprocessar um lote já
+    // liberado/reprovado por dois cliques ou duas sessões não pode
+    // sobrescrever o laudo anterior em silêncio.
+    if (atual.status !== 'QUARENTENA') return; // aborta a transaction
+    saldoNoMomento = atual.saldoLote || 0;
+    atual.status = laudo.decisao;
+    atual.qualidade = qualidadeDoLaudo(laudo, autor, agora);
     // ── Pendência de endereçamento definitivo ──
     // Levantado pelo usuário (2026-09-08): "o correto não seria ir para
     // quarentena e, após aprovado, ser endereçado pela logística?".
@@ -2477,6 +2485,7 @@ function lotesAguardandoQualidade(estoqueLotes) {
       out.push({
         itemKey: itemKey, loteKey: loteKey,
         itemTipo: l.itemTipo || 'material',
+        opKey: l.opKey || null, origemTipo: l.origemTipo || null,
         itemCodigo: l.itemCodigo, itemNome: l.itemNome || null, unidade: l.unidade || null,
         saldoLote: l.saldoLote || 0,
         loteOrigem: l.loteOrigem || null, dataValidade: l.dataValidade || null,
