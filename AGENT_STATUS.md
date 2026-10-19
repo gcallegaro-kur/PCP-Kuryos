@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Lista suspensa única em todas as telas (19/10/2026)
+
+- **Pedido:** "sempre que aparecer lista suspensa, podemos deixar no mesmo padrão? Algo com visual mais bonito" (print do `<datalist>` nativo, cinza escuro, na Entrada avulsa de PA).
+- **`public/shared/lista-suspensa.js` (novo, `KtListaSuspensa`):** carregado pelo `auth_check.js` (escrita síncrona no `<head>`). Converte sozinho todo `<input list>` — inclusive os desenhados depois, via MutationObserver — lendo as opções do `<datalist>` a cada abertura; quem preenche o datalist não muda. Busca sem acento e por palavras, código "COD — descrição" em destaque, trecho achado marcado, teclado, "Nada encontrado", limite 200 com aviso. Escolher dispara `input` **e** `change`.
+- **`attachAutocomplete` (utils.js) delega** para o componente quando ele existe (o código antigo fica de reserva).
+- **`<select>` comum:** a lista que abre ganha o mesmo visual via `appearance: base-select` (Chrome 135+; outros navegadores seguem nativos). Campo fechado mantém o CSS de cada tela — conferido por print em Estoque, Compras, OPs, Pedidos, Qualidade, Cadastros e Devoluções.
+- **Testes:** `run_lista_suspensa_ui_test.js` (novo). Bateria de 63 testes de tela: falham só `encerramento_pedido`, `inspecao_pa`, `operacao`, `painel_rearranjo`, `portao_bulk` — **os mesmos falham no main sem esta mudança**. `run_rearranjo_linhas_ui_test.js` e `run_retrabalhos_ui_test.js` fazem `require('playwright')` direto: rodar com `NODE_PATH`.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Recebimento: amostragem em kg/L e aviso de erro por cima do modal (19/10/2026)
 
 - **Caso:** PC-0051, 1 kg de corante (MPGR-00051) não entrava: "A amostragem ... não pode exceder a quantidade recebida". A tela calculava √1 + 1 = 2 e o servidor recusava 2 > 1. Valia para todo lote em kg/L abaixo de ~2,6 (e acima disso pedia "√massa + 1", ex. 33 kg de amostra para 1.000 kg).

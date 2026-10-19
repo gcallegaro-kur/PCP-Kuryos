@@ -877,6 +877,10 @@ function clearLoteFromFutureSlots(lote, dbRef) {
 // de datalist onde value/textContent podem ser diferentes).
 function attachAutocomplete(input, getItems, opts) {
   if (!input) return;
+  // Lista única do sistema (shared/lista-suspensa.js, carregada pelo
+  // auth_check.js): mesmo contrato, visual padronizado. O código abaixo fica
+  // como reserva para tela que não carregue o auth_check.
+  if (typeof window !== 'undefined' && window.KtListaSuspensa) return window.KtListaSuspensa.anexar(input, getItems, opts);
   opts = opts || {};
 
   var list = document.createElement('div');
