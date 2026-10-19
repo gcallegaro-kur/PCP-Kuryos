@@ -4694,7 +4694,7 @@ function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) 
       custoUnitarioNaDecisao: calc.custoUnitario != null ? Math.round(calc.custoUnitario * 10000) / 10000 : null,
       custoTotalNaDecisao: calc.custoTotal != null ? Math.round(calc.custoTotal * 100) / 100 : null,
       obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey,
-      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey)
+      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey, it.materialCodigo)
     };
     totalPedido += calc.custoTotal || 0;
     var prazo = parseFloat(resp.prazoEntregaDias);
@@ -4859,7 +4859,7 @@ function gerarPedidoDeCotacao(procKey, convidadoKey) {
       materialSimilarCotado: (convidado.materialSimilarPorItem || {})[origItemKey] || null,
       especificacaoTecnicaCotada: resp.especificacaoTecnica || null,
       obs: '', qtdRecebida: 0, origemSolicitacaoKey: it.origemSolicitacaoKey,
-      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey)
+      vinculo: vinculoSugeridoDaSolicitacao(it.origemSolicitacaoKey, it.materialCodigo)
       };
     });
     var prazoVencedor = parsePrazoPagamento(convidado.condicaoPagamento || '');
@@ -4936,10 +4936,22 @@ function clientesOrdenadosCompras() {
 }
 
 // Item de PC nascido de Solicitação gerada a partir de pedido(s).
-function vinculoSugeridoDaSolicitacao(scKey) {
+function vinculoSugeridoDaSolicitacao(scKey, materialCodigo) {
   var sc = scKey && allSolicitacoes[scKey];
   if (!sc || typeof PropriedadeEstoque === 'undefined') return null;
   var chaves = (sc.pedidoKeys && sc.pedidoKeys.length) ? sc.pedidoKeys : (sc.pedidoOrigemKey ? [sc.pedidoOrigemKey] : []);
+  /* Só sugere os pedidos de origem cujo produto USA o material (23/10/2026,
+     PC-0049: óleo mineral vinha pré-marcado com pedidos que não o têm na
+     fórmula). Se o material não consta em fórmula/BOM não há como saber e a
+     sugestão fica como era; se NENHUM pedido de origem o usa, não sugere nada
+     -- quem compra escolhe -- em vez de marcar pedidos que sabidamente não demandam. */
+  if (materialCodigo && typeof OndeUsado !== 'undefined' && typeof PedidosDoMaterial !== 'undefined') {
+    var d = PedidosDoMaterial.skusQueUsam(OndeUsado.indice({formulas: allFormulasCompras, bom: allBomCompras, produtos: allProdutosCompras}), [materialCodigo]);
+    if (d.achou) {
+      chaves = chaves.filter(function(k) { var p = allPedidos[k]; return p && d.skus[String(p.sku || '').toUpperCase()]; });
+      if (!chaves.length) return null;
+    }
+  }
   return PropriedadeEstoque.vinculoSugeridoDasChavesPedido(chaves, allPedidos, allProdutosCompras, allClientesCompras);
 }
 
@@ -5022,7 +5034,6 @@ function renderPedidosDoEditor(ed) {
   }
   var lista = PropriedadeEstoque.pedidosDoCliente(clienteKey, allPedidos, allProdutosCompras, allClientesCompras,
     { incluirConcluidos: ed.querySelector('.vinc-concluidos').checked });
-  // Pedido já marcado que não aparece (concluído, com filtro desligado) continua marcado e visível.
   // Só os pedidos cujo produto usa o material -- a menos que não haja como saber
   // (material fora de toda fórmula/BOM) ou a pessoa peça todos.
   var demanda = demandaDoEditorPorId(ed.getAttribute('data-vinc'));
@@ -5036,22 +5047,51 @@ function renderPedidosDoEditor(ed) {
     : (demanda && demanda.semUso.length > 1 ? 'Há material sem uso conhecido em Fórmula/BOM vigente: mostrando todos os pedidos do cliente.'
       : 'Este material não consta em nenhuma Fórmula/BOM vigente: mostrando todos os pedidos do cliente.'));
   var ids = lista.map(function(g) { return PropriedadeEstoque.normPedidoId(g.id); });
+  var SKU = function(l) { return String(l.sku || '').toUpperCase(); };
+  var sabeFiltrar = !!(demanda && demanda.achou);
+  var usaMaterial = function(g) { return !sabeFiltrar || g.linhas.some(function(l) { return demanda.skus[SKU(l)]; }); };
+
+  /* Pedido JÁ MARCADO (vínculo salvo, ou sugerido pela solicitação) que a lista
+     filtrada não traz. Fica visível e marcado -- tirar dado salvo em silêncio é
+     pior -- mas com o motivo à vista: ou o produto dele NÃO usa o material
+     (caso do PC-0049, óleo mineral: pedidos 29 e 0020 não têm óleo na fórmula),
+     ou o pedido está concluído. Antes ele aparecia sem explicação e ainda
+     rotulado "(concluído)", e parecia sugestão do sistema. */
+  var completo = PropriedadeEstoque.pedidosDoCliente(clienteKey, allPedidos, allProdutosCompras, allClientesCompras, { incluirConcluidos: true });
+  var porId = {};
+  completo.forEach(function(g) { porId[PropriedadeEstoque.normPedidoId(g.id)] = g; });
+  var fora = [];
   selecionados.forEach(function(id) {
-    if (ids.indexOf(PropriedadeEstoque.normPedidoId(id)) < 0) lista.push({ id: id, linhas: [], aberto: false });
+    var n = PropriedadeEstoque.normPedidoId(id);
+    if (ids.indexOf(n) >= 0) return;
+    var g = porId[n] || { id: id, linhas: [], aberto: true };
+    fora.push(Object.assign({}, g, { naoUsa: sabeFiltrar && !usaMaterial(g) && g.linhas.length > 0, desconhecido: !porId[n] }));
+    ids.push(n);
   });
-  if (!lista.length) {
+  var nNaoUsam = fora.filter(function(g) { return g.naoUsa; }).length;
+  if (nNaoUsam && !mostrarTodos) aviso.textContent += ' ⚠ ' + nNaoUsam + (nNaoUsam === 1 ? ' pedido já marcado não usa' : ' pedidos já marcados não usam') + ' este material.';
+
+  if (!lista.length && !fora.length) {
     box.innerHTML = '<span class="vinc-sub">' + (filtro.filtrado && totalDoCliente
       ? 'Nenhum pedido aberto deste cliente usa este material. Marque "mostrar todos os pedidos do cliente" se for o caso.'
       : 'Nenhum pedido aberto deste cliente. Marque "mostrar pedidos concluídos" se for o caso.') + '</span>';
     return;
   }
-  box.innerHTML = lista.map(function(g) {
+  function linha(g, extra) {
     var marcado = selecionados.some(function(id) { return PropriedadeEstoque.normPedidoId(id) === PropriedadeEstoque.normPedidoId(g.id); });
     var skus = g.linhas.map(function(l) { return l.sku; }).join(', ');
-    return '<label><input type="checkbox" class="vinc-pedido" value="' + escapeAttr(g.id) + '"' + (marcado ? ' checked' : '') + '>' +
+    var naoUsa = g.naoUsa || (extra === 'lista' && sabeFiltrar && !usaMaterial(g));
+    return '<label' + (naoUsa ? ' style="opacity:.85"' : '') + '><input type="checkbox" class="vinc-pedido" value="' + escapeAttr(g.id) + '"' + (marcado ? ' checked' : '') + (naoUsa ? ' data-nao-usa="1"' : '') + '>' +
       '<span><b>#' + escapeHtml(g.id) + '</b>' + (g.aberto ? '' : ' <span class="vinc-sub">(concluído)</span>') +
+      (naoUsa ? ' <span class="badge badge-orange" title="Nenhum produto deste pedido tem este material na Fórmula/BOM vigente">⚠ não usa este material</span>' : '') +
       (skus ? '<br><span class="vinc-sub">' + escapeHtml(skus) + '</span>' : '') + '</span></label>';
-  }).join('');
+  }
+  box.innerHTML =
+    (fora.length ? '<div class="vinc-sub" style="margin:2px 0 6px"><b>Já marcados' + (nNaoUsam ? ' (' + nNaoUsam + ' sem uso deste material)' : '') + ':</b> ' +
+      (nNaoUsam ? 'desmarque se foi engano. <button type="button" class="btn btn-ghost btn-sm vinc-limpar-fora" style="margin-left:6px">Desmarcar os que não usam</button>' : 'continuam marcados.') + '</div>' +
+      fora.map(function(g) { return linha(g, 'fora'); }).join('') +
+      (lista.length ? '<div class="vinc-sub" style="margin:8px 0 6px"><b>Pedidos que usam este material:</b></div>' : '') : '') +
+    lista.map(function(g) { return linha(g, 'lista'); }).join('');
 }
 
 function ligarVinculoEditores(root) {
@@ -5063,6 +5103,13 @@ function ligarVinculoEditores(root) {
     });
     ed.querySelector('.vinc-concluidos').addEventListener('change', function() { renderPedidosDoEditor(ed); });
     ed.querySelector('.vinc-todos-ped').addEventListener('change', function() { renderPedidosDoEditor(ed); });
+    ed.querySelector('.vinc-pedidos').addEventListener('click', function(ev) {
+      if (!ev.target.classList || !ev.target.classList.contains('vinc-limpar-fora')) return;
+      var manter = Array.prototype.filter.call(ed.querySelectorAll('.vinc-pedido:checked'), function(el) { return !el.hasAttribute('data-nao-usa'); })
+        .map(function(el) { return el.value; });
+      ed.setAttribute('data-selecionados', JSON.stringify(manter));
+      renderPedidosDoEditor(ed);
+    });
     ed.querySelector('.vinc-pedidos').addEventListener('change', function() {
       var marcados = Array.prototype.map.call(ed.querySelectorAll('.vinc-pedido:checked'), function(el) { return el.value; });
       ed.setAttribute('data-selecionados', JSON.stringify(marcados));
