@@ -8,7 +8,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 ### Claude — Manutenção › Cadastro de Ativos (19/10/2026)
 
 - **Pedido:** módulo de gestão de ativos (máquinas e equipamentos) consumido pelos outros módulos; 1º passo para CK-3/CK-4/CK-5 e CK-8 da spec do CQ.
-- **Arquivos ativos:** `public/ativos.html` (novo), `public/shared/ativos.js` (novo), `public/shared/ativos-tela.js` (novo), `public/auth_check.js`, `database.rules.json`, `public/manuais.html`, `public/manual_ativos.html` (novo), testes `run_ativos*`.
+- **Feito:** `ativos/{id}` + `ativos_historico/{id}/{k}` (só acrescenta). Tipos com padrões (assepsia/calibração/unidade/sigla do código), código único sem caixa, situação OPERACIONAL/EM_MANUTENCAO/INATIVO com motivo obrigatório para parar. Módulo `manutencao` (fora de MODULOS_POR_PAPEL; ADM marca), grupo de menu **Manutenção**, manual. Leitura para todo logado (outros módulos consomem: `Ativos.daLinha`, `Ativos.porTipo`).
+- **Testes:** `run_ativos_test.js`, `run_ativos_ui_test.js`, `run_ativos_rules_test.js` (emulador). `run_relatorio_expedicao_test.js` já falhava no main ("1 !== 5").
+- **Próximo:** CK-4 (assepsia de linha) + CK-5 (first article), depois CK-3 (reator).
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Compras › Cliente/pedido sugere só pedidos que demandam o material (23/10/2026)
 

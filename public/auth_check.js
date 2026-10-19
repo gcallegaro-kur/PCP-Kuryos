@@ -123,6 +123,11 @@ const KURYOS_MODULOS = {
                   paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html'] },
   auditoria5s:  { rotulo: 'Auditoria 5S',        desc: 'Checklist do líder, auditoria da Qualidade e inspeção da Diretoria (5S)',
                   paginas: ['auditoria_5s.html'] },
+  // Manutenção › Ativos (19/10): cadastro de máquinas e equipamentos que
+  // Qualidade (assepsia, calibração), Operação e Planejamento consomem.
+  // Fora de MODULOS_POR_PAPEL de propósito: o ADM marca quem cadastra.
+  manutencao:   { rotulo: 'Manutenção — Ativos',   desc: 'Cadastro de máquinas e equipamentos (reatores, linhas, instrumentos) usado pelos outros módulos',
+                  paginas: ['ativos.html'] },
   config:       { rotulo: 'Ajustes / Configuração',desc: 'Metas, parâmetros e listas do sistema',
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
@@ -775,6 +780,12 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && !temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage)
   ]);
 
+  // "Manutenção" (19/10): começa pelo cadastro de ativos; ordens de serviço e
+  // preventiva entram aqui quando existirem.
+  const manutencaoGroup = grupo('Manutenção', [
+    temMod('manutencao') && ktLink('ativos.html', 'gear', 'Ativos', activePage)
+  ]);
+
   // "Operação" (23/09): Produção, Manipulação e Rotulagem, cada setor com a
   // sua tela de trabalho, o seu histórico e o estoque da sua área. O
   // Apontamento e o Histórico são as mesmas páginas para os dois setores:
@@ -852,6 +863,7 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('manual_estoque.html', 'book', 'Estoque e WMS', activePage),
     temMod('qualidade') && ktLink('manual_qualidade.html', 'book', 'Qualidade', activePage),
     temMod('auditoria5s') && ktLink('manual_auditoria_5s.html', 'book', 'Auditoria 5S', activePage),
+    temMod('manutencao') && ktLink('manual_ativos.html', 'book', 'Ativos', activePage),
     temMod('rh_temporarios') && ktLink('manual_temporarios.html', 'book', 'Temporários', activePage),
     temMod('feedback') && ktLink('manual_feedback.html', 'book', 'Feedback e Clima', activePage),
     temMod('cadastros') && ktLink('manual_cadastros.html', 'book', 'Cadastros', activePage),
@@ -870,7 +882,7 @@ function renderUnifiedNavbar(user) {
   var brandHome = homeDoUsuario(user);
   sidebar.innerHTML =
     '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
-    analisesGroup + geralGroup + comercialGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
+    analisesGroup + geralGroup + comercialGroup + comprasGroup + pcpGroup + logisticaGroup + qualidadeGroup + manutencaoGroup + producaoGroup + usersGroup + rhGroup + manuaisGroup +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +
       '<div class="who"><div class="name">' + user.nome + '</div><div class="role">' + roleLabel + '</div></div>' +

@@ -201,6 +201,24 @@
         ".validate": "!newData.exists() || (newData.hasChildren(['status', 'por', 'em']) && (newData.child('status').val() == 'LIBERADO' || newData.child('status').val() == 'REPROVADO' || newData.child('status').val() == 'PENDENTE'))"
       }
     },
+    // Manutenção › Ativos (19/10): todo usuário logado LÊ (Qualidade, Operação e Planejamento
+    // consomem o cadastro); grava quem tem o módulo manutencao. Histórico de situação só acrescenta.
+    "ativos": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('manutencao').val() == true)",
+      "$ativoId": {
+        ".validate": "!newData.exists() || (newData.hasChildren(['codigo', 'nome', 'tipo', 'area', 'situacao']) && newData.child('codigo').isString() && newData.child('codigo').val().length > 0 && (newData.child('situacao').val() == 'OPERACIONAL' || newData.child('situacao').val() == 'EM_MANUTENCAO' || newData.child('situacao').val() == 'INATIVO'))"
+      }
+    },
+    "ativos_historico": {
+      ".read": "auth != null",
+      "$ativoId": {
+        "$evento": {
+          ".write": "auth != null && !data.exists() && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('modulos').child('manutencao').val() == true)",
+          ".validate": "newData.hasChildren(['de', 'para', 'em'])"
+        }
+      }
+    },
     // Auditoria 5S (06/10): checklist do líder, auditoria da Qualidade e inspeção da Diretoria.
     // O registro FECHADO não muda mais (é prova formal para as consequências); ações, ciência e
     // ocorrências têm nós próprios. Configuração (quem é líder/auditor de quê) só o admin altera.

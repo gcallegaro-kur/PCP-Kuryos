@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ativos — Manutenção</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script>
+<script src="auth_check.js"></script>
+<script src="shared/ativos.js"></script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+:root{--ok:#0a7d3c;--ok-bg:#e3f6ea;--warn:#a15c00;--warn-bg:#fff1d6;--bad:#c42b2b;--bad-bg:#fde8e8;--info:#1f4fb8;--info-bg:#e6edfc;--mute-bg:#f0f0f3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ok:#6fe3a0;--ok-bg:rgba(60,200,120,.16);--warn:#ffcb6b;--warn-bg:rgba(250,178,25,.16);--bad:#ff8f8f;--bad-bg:rgba(240,80,80,.18);--info:#9db7ff;--info-bg:rgba(94,131,234,.2);--mute-bg:rgba(255,255,255,.08)}}
+:root[data-theme="dark"]{--ok:#6fe3a0;--ok-bg:rgba(60,200,120,.16);--warn:#ffcb6b;--warn-bg:rgba(250,178,25,.16);--bad:#ff8f8f;--bad-bg:rgba(240,80,80,.18);--info:#9db7ff;--info-bg:rgba(94,131,234,.2);--mute-bg:rgba(255,255,255,.08)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
+.pg{max-width:1240px;margin:0 auto;padding:24px 18px 80px}
+h1{margin:0;font-size:27px;letter-spacing:-.02em}
+.sub{font-size:13px;color:var(--ink-soft);margin-top:4px;line-height:1.45;max-width:780px}
+.head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.painel{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 14px}
+.stat{all:unset;cursor:pointer;box-sizing:border-box;background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:12px 14px;border:2px solid transparent}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}.stat span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-mute);font-weight:700}
+.stat.on{border-color:var(--accent)}.stat:focus-visible{outline:2px solid var(--accent)}
+.barra{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.card{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:14px 16px}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.sm{padding:5px 10px;font-size:12px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.tg{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.tg.ok{background:var(--ok-bg);color:var(--ok)}.tg.warn{background:var(--warn-bg);color:var(--warn)}.tg.bad{background:var(--bad-bg);color:var(--bad)}.tg.info{background:var(--info-bg);color:var(--info)}.tg.mute{background:var(--mute-bg);color:var(--ink-soft)}
+.aviso{border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;margin:10px 0;line-height:1.45}.aviso.bad{background:var(--bad-bg);color:var(--bad)}
+.mut{color:var(--ink-mute)}.dica{font-size:12px;color:var(--ink-soft);line-height:1.4}
+.vazio{text-align:center;padding:34px 16px;color:var(--ink-soft);line-height:1.5}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-mute);text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent);vertical-align:top}
+td.acoes{white-space:nowrap;text-align:right}
+.cod{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.tw{overflow-x:auto}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+label.t{display:block;font-size:12px;font-weight:700;margin:0 0 4px;color:var(--ink-soft)}
+input[type=text],input[type=date],input[type=number],select,textarea{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:inherit;font-size:14px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.checks{display:grid;gap:8px;margin:14px 0}.checks label{font-size:13.5px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:flex;gap:8px;flex-wrap:wrap}
+.seg button{border:1.5px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:8px 16px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
+.seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.mf{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10040;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
+.md{background:var(--panel);border-radius:16px;max-width:760px;width:100%;padding:20px 22px;margin:auto}
+.md h2{margin:0 0 10px;font-size:19px}
+.rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.toast{position:fixed;top:18px;right:18px;z-index:10050;background:var(--ok);color:#fff;padding:12px 16px;border-radius:10px;font-size:13.5px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.erro{background:var(--bad)}
+@media (max-width:860px){.barra{grid-template-columns:1fr 1fr}.barra .busca{grid-column:1/-1}}
+@media (max-width:760px){.pg{padding:14px 10px 80px}h1{font-size:22px}}
+</style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<main class="pg">
+  <div class="head">
+    <div>
+      <h1>Ativos</h1>
+      <div class="sub">Máquinas e equipamentos da fábrica e do laboratório: onde estão, se pedem assepsia ou calibração e em que situação estão. A Qualidade, a Operação e o Planejamento usam este mesmo cadastro.</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center"><span id="conn" class="tg mute">Conectando…</span><button class="btn pri" type="button" id="btnNovo">+ Novo equipamento</button></div>
+  </div>
+  <div class="painel" id="painel"></div>
+  <div class="barra">
+    <input type="text" id="fBusca" class="busca" placeholder="Buscar por código, nome, fabricante, série..." aria-label="Buscar equipamento">
+    <select id="fTipo" aria-label="Tipo"></select>
+    <select id="fArea" aria-label="Área"></select>
+    <select id="fLinha" aria-label="Linha ou posto"></select>
+  </div>
+  <div class="card" id="lista"><b>Carregando…</b></div>
+</main>
+<div id="modais"></div>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script>
+<script src="shared/ativos-tela.js"></script>
+</body>
+</html>
