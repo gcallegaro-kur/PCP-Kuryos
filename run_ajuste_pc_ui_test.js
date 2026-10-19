@@ -6,8 +6,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
-const dados = (papel) => ({
-  usuarios: {u1: {nome: 'Gustavo', email: 'g@kuryos.com', role: papel}},
+const dados = (papel, modulos) => ({
+  usuarios: {u1: Object.assign({nome: 'Gustavo', email: 'g@kuryos.com', role: papel}, modulos ? {modulos} : {})},
   pedidos_compra: {
     pc38: {numero: 38, numeroFormatado: 'PC-0038', status: 'RECEBIDO_PARCIAL', fornecedorNome: 'D. A. BRASIL', dataCriacao: '2026-10-07T16:40:40Z',
       valorTotalEstimado: 30000, recebimentos: {REC1: {data: '2026-10-09'}},
@@ -19,7 +19,7 @@ const dados = (papel) => ({
   }
 });
 
-async function abrir(browser, papel) {
+async function abrir(browser, papel, modulos) {
   const page = await browser.newPage({viewport: {width: 1600, height: 1100}});
   const erros = [];
   page.on('pageerror', (e) => erros.push(e.message));
@@ -66,7 +66,7 @@ async function abrir(browser, papel) {
         }};
       }
     };
-  }, dados(papel));
+  }, dados(papel, modulos));
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.hostname !== 'c.test') return route.fulfill({body: '', contentType: 'text/javascript'});
@@ -122,16 +122,21 @@ async function abrir(browser, papel) {
       assert.deepEqual(erros, [], 'sem erro de página: ' + erros.join(' | '));
       await page.close();
     }
-    // Quem não é admin não vê os botões.
+    // O Compras (papel qualquer com o módulo `compras`) também ajusta; antes só o admin.
     {
-      const {page} = await abrir(browser, 'pcp');
+      const {page, erros} = await abrir(browser, 'gestor', {compras: true});
       await page.waitForSelector('.tab[data-tab="pedidos"]', {timeout: 10000});
       await page.click('.tab[data-tab="pedidos"]');
-      await page.waitForFunction(() => [...document.querySelectorAll('tr')].some((t) => /PC-0038/.test(t.innerText)), null, {timeout: 10000});
-      await page.waitForTimeout(800);
-      assert.equal(await page.locator('.pc-ajustar').count(), 0, 'só administrador ajusta');
+      await page.waitForSelector('.pc-ajustar', {state: 'visible', timeout: 10000});
+      assert.equal(await page.locator('.pc-ajustar').count(), 2, 'Compras vê Encerrar saldo e Ajustar quantidade');
+      await page.locator('tr', {hasText: 'PC-0038'}).locator('.pc-ajustar').click();
+      await page.fill('#pcAjMotivo', 'Fornecedor só tinha 5.000; combinado com o comercial.');
+      await page.click('#pcAjConfirmar');
+      await page.waitForFunction(() => window.__db.pedidos_compra.pc38.status === 'RECEBIDO_TOTAL', null, {timeout: 8000});
+      assert.equal(await page.evaluate(() => window.__db.pedidos_compra.pc38.ajustes.AJ001.por), 'Gustavo');
+      assert.deepEqual(erros, [], 'sem erro de página: ' + erros.join(' | '));
       await page.close();
     }
   } finally { await browser.close(); }
-  console.log('OK Compras: encerrar saldo do PC recebido em parte (PC-0038) e ajustar quantidade antes de receber, só administrador.');
+  console.log('OK Compras: encerrar saldo do PC recebido em parte (PC-0038) e ajustar quantidade antes de receber, para o Compras e o administrador.');
 })().catch((e) => { console.error(e); process.exit(1); });

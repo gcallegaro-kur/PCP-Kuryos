@@ -24,13 +24,16 @@ const enviado = () => ({
   }
 });
 const agora = '2026-10-19T12:00:00.000Z';
-const base = {papel: 'admin', autor: 'Gustavo', agora, motivo: 'Fornecedor só tinha 5.000; combinado por telefone.'};
+const base = {autorizado: true, autor: 'Gustavo', agora, motivo: 'Fornecedor só tinha 5.000; combinado por telefone.'};
 
 // ── Quem pode e quando ────────────────────────────────────────────────────
 assert.deepEqual(A.avaliar(pc38(), 'admin'), {pode: true, modo: 'ENCERRAR_SALDO', motivo: null});
 assert.deepEqual(A.avaliar(enviado(), 'admin'), {pode: true, modo: 'ANTES_DE_RECEBER', motivo: null});
-assert.equal(A.avaliar(pc38(), 'pcp').pode, false, 'só admin');
-assert.match(A.avaliar(pc38(), 'compras').motivo, /administradores/);
+assert.equal(A.avaliar(pc38(), true).pode, true, 'a tela autoriza quem tem o módulo Compras');
+assert.equal(A.avaliar(pc38(), false).pode, false, 'sem módulo Compras não ajusta');
+assert.equal(A.avaliar(pc38(), undefined).pode, false);
+assert.equal(A.avaliar(pc38(), 'pcp').pode, false, 'um papel qualquer não autoriza: quem decide é o módulo');
+assert.match(A.avaliar(pc38(), false).motivo, /Compras/);
 assert.match(A.avaliar(Object.assign(pc38(), {status: 'ABERTO'}), 'admin').motivo, /Editar/);
 assert.equal(A.avaliar(Object.assign(pc38(), {status: 'RECEBIDO_TOTAL'}), 'admin').pode, false);
 assert.equal(A.avaliar(Object.assign(pc38(), {status: 'CANCELADO'}), 'admin').pode, false);
@@ -67,7 +70,7 @@ assert.match(A.avaliar(semSaldo, 'admin').motivo, /saldo/);
 
   // Sem motivo / motivo curto: recusa. Não-admin: recusa.
   assert.match(A.aplicar(pc38(), Object.assign({}, base, {motivo: 'curto'})).erro, /motivo/);
-  assert.match(A.aplicar(pc38(), Object.assign({}, base, {papel: 'pcp'})).erro, /administradores/);
+  assert.match(A.aplicar(pc38(), Object.assign({}, base, {autorizado: false})).erro, /Compras/);
   // Segunda vez: já está recebido total.
   assert.match(A.aplicar(r.pc, base).erro, /por inteiro/);
 }
@@ -122,5 +125,6 @@ assert.match(A.avaliar(semSaldo, 'admin').motivo, /saldo/);
   assert.ok(/function confirmarAjustePC/.test(h) && /AjustePC\.aplicar\(atual, dados\)/.test(h), 'grava por transaction com a regra pura');
   assert.ok(/if \(!atual\) return atual;\s*\n\s*var r = AjustePC\.aplicar/.test(h), 'transaction não aborta no null do cache');
   assert.ok(/pc-ajustar/.test(h) && /faixaRevisaoDocumentoPC/.test(h), 'botão na lista e faixa de revisão no documento');
+  assert.ok(/function podeAjustarPC/.test(h) && /modulosDoUsuario\(u\)\.indexOf\('compras'\)/.test(h), 'permissão = módulo Compras ou admin');
 }
 console.log('run_ajuste_pc_test: OK');

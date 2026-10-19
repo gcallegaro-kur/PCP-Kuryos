@@ -2081,11 +2081,11 @@ function renderPedidos() {
         '📝 Revisão ' + (p.revisao || 1) + (ultAj.tipo === 'ENCERRAR_SALDO' ? ' · saldo encerrado' : ' · quantidade ajustada') +
         ' em ' + fmtData(ultAj.em) + '<br><span style="color:var(--text)">' + escapeHtml(ultAj.motivo || '') + '</span></div>';
     }
-    var avAjuste = AjustePC.avaliar(p, window.currentUser && window.currentUser.role);
+    var avAjuste = AjustePC.avaliar(p, podeAjustarPC());
     var botaoAjustar = avAjuste.pode
       ? ' <button class="btn btn-ghost btn-sm pc-ajustar" data-key="' + escapeAttr(key) + '" title="' + (avAjuste.modo === 'ENCERRAR_SALDO'
-          ? 'Fechar o pedido com o que já foi recebido (o saldo não virá mais). Só administrador.'
-          : 'Corrigir a quantidade antes de receber, com revisão registrada. Só administrador.') + '">' +
+          ? 'Fechar o pedido com o que já foi recebido (o saldo não virá mais). Compras e administrador.'
+          : 'Corrigir a quantidade antes de receber, com revisão registrada. Compras e administrador.') + '">' +
         (avAjuste.modo === 'ENCERRAR_SALDO' ? '✂️ Encerrar saldo' : '✏️ Ajustar quantidade') + '</button>'
       : '';
     if (p.status === 'CANCELADO') {
@@ -2167,9 +2167,17 @@ function renderPedidos() {
    (corrige a quantidade, com revisão) e RECEBIDO_PARCIAL (encerra o saldo que
    não virá). Aqui só a ligação: modal e transaction no PC. */
 var pcAjKey = null, pcAjModo = null;
+// Quem trabalha com Compras (módulo `compras`; o papel pcp já o traz) ou é
+// admin. Mesma condição da regra de escrita em pedidos_compra no banco.
+function podeAjustarPC() {
+  var u = window.currentUser;
+  if (!u) return false;
+  if (u.role === 'admin') return true;
+  return typeof window.modulosDoUsuario === 'function' && window.modulosDoUsuario(u).indexOf('compras') >= 0;
+}
 function abrirModalAjustarPC(key) {
   var pc = allPedidosCompra[key];
-  var av = AjustePC.avaliar(pc, window.currentUser && window.currentUser.role);
+  var av = AjustePC.avaliar(pc, podeAjustarPC());
   if (!av.pode) { showAlert(av.motivo, 'danger'); return; }
   pcAjKey = key; pcAjModo = av.modo;
   var antes = av.modo === 'ANTES_DE_RECEBER';
@@ -2217,7 +2225,7 @@ function confirmarAjustePC() {
     : 'Gravar a revisão de ' + (pcLocal.numeroFormatado || 'este pedido') + '? Avise o fornecedor.')) return;
   var btn = document.getElementById('pcAjConfirmar');
   btn.disabled = true;
-  var dados = { papel: window.currentUser && window.currentUser.role, motivo: motivo, autor: currentUserNome(),
+  var dados = { autorizado: podeAjustarPC(), motivo: motivo, autor: currentUserNome(),
     qtdNova: qtdNova, agora: new Date().toISOString() };
   var recusa = null;
   // `if (!atual) return atual;` -- a 1ª passada vem do cache local e pode ser

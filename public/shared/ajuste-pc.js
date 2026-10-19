@@ -17,9 +17,13 @@
      total e some da fila da Logística e do MRP. Não é cancelamento: o que
      entrou continua válido, e o pedido não vira "Cancelado".
 
-   Só ADMIN, como editar e cancelar PC (mexer em quantidade de um pedido
-   decidido é alterar acordo comercial). Motivo obrigatório. O PC nunca é
-   apagado: tudo fica em `ajustes/` com antes, depois, quem e quando.
+   Quem pode: ADMIN e quem trabalha com Compras (módulo `compras`, que o papel
+   pcp já traz). Começou só admin (19/10) e foi aberto ao Compras no mesmo dia
+   para o ajuste não ficar preso a uma pessoa; cancelar PC segue só admin. A
+   tela decide a permissão com modulosDoUsuario() (auth_check.js) e passa
+   `autorizado`; a regra do banco já permite escrita a admin/pcp e ao módulo
+   compras. Motivo obrigatório. O PC nunca é apagado: tudo fica em `ajustes/`
+   com antes, depois, quem e quando.
 
    O servidor (functions/recebimento.js) valida o recebimento contra `qtd` e
    recalcula o status a partir de qtd x qtdRecebida; por isso reduzir `qtd` é
@@ -47,10 +51,13 @@
     });
   }
 
+  // `autorizado`: true (a tela já checou o módulo Compras) ou o papel 'admin'.
+  function permitido(autorizado) { return autorizado === true || autorizado === 'admin'; }
+
   // {pode, modo, motivo}: `motivo` é a frase para a tela quando não pode.
-  function avaliar(pc, papel) {
+  function avaliar(pc, autorizado) {
     if (!pc) return {pode: false, modo: null, motivo: 'Pedido não encontrado.'};
-    if (papel !== 'admin') return {pode: false, modo: null, motivo: 'Apenas administradores podem ajustar um pedido de compra.'};
+    if (!permitido(autorizado)) return {pode: false, modo: null, motivo: 'Apenas o Compras (ou um administrador) pode ajustar um pedido de compra.'};
     if (pc.status === 'CANCELADO') return {pode: false, modo: null, motivo: 'Pedido cancelado não se ajusta.'};
     if (pc.status === 'RECEBIDO_TOTAL') return {pode: false, modo: null, motivo: 'Este pedido já foi recebido por inteiro — não há o que ajustar.'};
     if (pc.status === 'ABERTO') return {pode: false, modo: null, motivo: 'O pedido ainda não foi enviado: corrija pelo botão Editar.'};
@@ -103,11 +110,11 @@
 
   /* Aplica o ajuste sobre o PC ATUAL (dentro da transaction). Devolve {pc}
      ou {erro} para abortar com a frase da tela.
-     dados: {papel, motivo, autor, agora, qtdNova: {itemKey: quantidade}} --
+     dados: {autorizado, motivo, autor, agora, qtdNova: {itemKey: quantidade}} --
      qtdNova só vale em ANTES_DE_RECEBER. */
   function aplicar(pcAtual, dados) {
     dados = dados || {};
-    var av = avaliar(pcAtual, dados.papel);
+    var av = avaliar(pcAtual, dados.autorizado != null ? dados.autorizado : dados.papel);
     if (!av.pode) return {erro: av.motivo};
     var motivo = texto(dados.motivo);
     if (motivo.length < MOTIVO_MINIMO) return {erro: 'Descreva o motivo do ajuste (mínimo ' + MOTIVO_MINIMO + ' caracteres).'};
