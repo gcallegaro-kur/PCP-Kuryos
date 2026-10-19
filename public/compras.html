@@ -14,6 +14,8 @@
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/cancelamento-pc.js"></script>
   <script src="shared/ajuste-pc.js"></script>
+  <script src="shared/onde-usado.js"></script>
+  <script src="shared/pedidos-do-material.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -4958,18 +4960,54 @@ function vinculoEditorHtml(id, vinculo, travado) {
     return '<div class="vinc-editor" data-vinc="' + escapeAttr(id) + '" data-travado="1"><div class="vinc-travado">🔒 ' + resumoVinculoHtml(v) +
       ' — já recebido; os lotes que entraram guardam este vínculo.</div></div>';
   }
+  // Clientes com pedido aberto que USA o material vêm primeiro, com a contagem.
+  var demandaCli = demandaDoEditorPorId(id);
+  var contagem = demandaCli && demandaCli.achou
+    ? PedidosDoMaterial.contagemPorCliente(Object.keys(allClientesCompras || {}), function(k) {
+        return PropriedadeEstoque.pedidosDoCliente(k, allPedidos, allProdutosCompras, allClientesCompras, {});
+      }, demandaCli)
+    : {};
+  function opcaoCliente(c) {
+    var n = contagem[c.key] || 0;
+    return '<option value="' + escapeAttr(c.key) + '"' + (c.key === v.clienteKey ? ' selected' : '') + '>' +
+      escapeHtml(c.nome) + (c.ativo ? '' : ' (inativo)') + (n ? ' — ' + n + (n === 1 ? ' pedido usa' : ' pedidos usam') + ' este material' : '') + '</option>';
+  }
+  var todosClientes = clientesOrdenadosCompras();
+  var comDemanda = todosClientes.filter(function(c) { return contagem[c.key] > 0 || c.key === v.clienteKey; });
+  var semDemanda = todosClientes.filter(function(c) { return comDemanda.indexOf(c) < 0; });
   var opcoes = '<option value="">Selecione o cliente…</option>' +
     '<option value="' + VINCULO_GERAL + '"' + (PropriedadeEstoque.vinculoGeral(v) ? ' selected' : '') + '>Sem cliente — uso e consumo / estoque geral (só compra da Kuryos)</option>' +
-    clientesOrdenadosCompras().map(function(c) {
-    return '<option value="' + escapeAttr(c.key) + '"' + (c.key === v.clienteKey ? ' selected' : '') + '>' +
-      escapeHtml(c.nome) + (c.ativo ? '' : ' (inativo)') + '</option>';
-  }).join('');
+    (comDemanda.length && semDemanda.length
+      ? '<optgroup label="Clientes com pedido que usa este material">' + comDemanda.map(opcaoCliente).join('') + '</optgroup>' +
+        '<optgroup label="Demais clientes">' + semDemanda.map(opcaoCliente).join('') + '</optgroup>'
+      : todosClientes.map(opcaoCliente).join(''));
   return '<div class="vinc-editor" data-vinc="' + escapeAttr(id) + '" data-selecionados="' + escapeAttr(JSON.stringify(v.pedidos || [])) + '">' +
     '<div class="vinc-grid">' +
       '<div><select class="vinc-cliente">' + opcoes + '</select>' +
-        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="vinc-concluidos"> mostrar pedidos concluídos</label></div>' +
-      '<div class="vinc-pedidos"></div>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer"><input type="checkbox" class="vinc-concluidos"> mostrar pedidos concluídos</label>' +
+        '<label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer" title="Por padrão só aparecem os pedidos cujo produto usa este material (BOM/Fórmula)"><input type="checkbox" class="vinc-todos-ped"> mostrar todos os pedidos do cliente</label></div>' +
+      '<div><div class="vinc-aviso-material vinc-sub" style="margin-bottom:6px"></div><div class="vinc-pedidos"></div></div>' +
     '</div></div>';
+}
+
+/* Quais SKUs usam o(s) material(is) do editor (shared/pedidos-do-material.js).
+   Editor de item = o material dele; editor "todos" = os materiais dos itens
+   ainda editáveis. O índice (fórmulas + BOM vigentes) é montado ao abrir o modal. */
+var vpcIndiceUso = null;
+function demandaDoEditorPorId(id) {
+  var pc = allPedidosCompra[vpcKey];
+  if (!pc || !vpcIndiceUso) return null;
+  var codigos = [];
+  if (String(id).indexOf('item-') === 0) {
+    var it = (pc.itens || {})[String(id).slice(5)];
+    if (it) codigos.push(it.materialCodigo);
+  } else {
+    Object.keys(pc.itens || {}).forEach(function(ik) {
+      var x = pc.itens[ik] || {};
+      if (!(vinculoPreenchido(x.vinculo) && (parseFloat(x.qtdRecebida) || 0) > 0)) codigos.push(x.materialCodigo);
+    });
+  }
+  return PedidosDoMaterial.skusQueUsam(vpcIndiceUso, codigos);
 }
 
 function renderPedidosDoEditor(ed) {
@@ -4985,11 +5023,28 @@ function renderPedidosDoEditor(ed) {
   var lista = PropriedadeEstoque.pedidosDoCliente(clienteKey, allPedidos, allProdutosCompras, allClientesCompras,
     { incluirConcluidos: ed.querySelector('.vinc-concluidos').checked });
   // Pedido já marcado que não aparece (concluído, com filtro desligado) continua marcado e visível.
+  // Só os pedidos cujo produto usa o material -- a menos que não haja como saber
+  // (material fora de toda fórmula/BOM) ou a pessoa peça todos.
+  var demanda = demandaDoEditorPorId(ed.getAttribute('data-vinc'));
+  var mostrarTodos = ed.querySelector('.vinc-todos-ped').checked;
+  var filtro = mostrarTodos ? {grupos: lista, filtrado: false} : PedidosDoMaterial.filtrarGrupos(lista, demanda);
+  var totalDoCliente = lista.length;
+  lista = filtro.grupos;
+  var aviso = ed.querySelector('.vinc-aviso-material');
+  aviso.textContent = mostrarTodos ? '' : (demanda && demanda.achou
+    ? 'Só pedidos cujo produto usa este material (BOM/Fórmula). Falta algum? Marque "mostrar todos os pedidos do cliente".'
+    : (demanda && demanda.semUso.length > 1 ? 'Há material sem uso conhecido em Fórmula/BOM vigente: mostrando todos os pedidos do cliente.'
+      : 'Este material não consta em nenhuma Fórmula/BOM vigente: mostrando todos os pedidos do cliente.'));
   var ids = lista.map(function(g) { return PropriedadeEstoque.normPedidoId(g.id); });
   selecionados.forEach(function(id) {
     if (ids.indexOf(PropriedadeEstoque.normPedidoId(id)) < 0) lista.push({ id: id, linhas: [], aberto: false });
   });
-  if (!lista.length) { box.innerHTML = '<span class="vinc-sub">Nenhum pedido aberto deste cliente. Marque "mostrar pedidos concluídos" se for o caso.</span>'; return; }
+  if (!lista.length) {
+    box.innerHTML = '<span class="vinc-sub">' + (filtro.filtrado && totalDoCliente
+      ? 'Nenhum pedido aberto deste cliente usa este material. Marque "mostrar todos os pedidos do cliente" se for o caso.'
+      : 'Nenhum pedido aberto deste cliente. Marque "mostrar pedidos concluídos" se for o caso.') + '</span>';
+    return;
+  }
   box.innerHTML = lista.map(function(g) {
     var marcado = selecionados.some(function(id) { return PropriedadeEstoque.normPedidoId(id) === PropriedadeEstoque.normPedidoId(g.id); });
     var skus = g.linhas.map(function(l) { return l.sku; }).join(', ');
@@ -5007,6 +5062,7 @@ function ligarVinculoEditores(root) {
       renderPedidosDoEditor(ed);
     });
     ed.querySelector('.vinc-concluidos').addEventListener('change', function() { renderPedidosDoEditor(ed); });
+    ed.querySelector('.vinc-todos-ped').addEventListener('change', function() { renderPedidosDoEditor(ed); });
     ed.querySelector('.vinc-pedidos').addEventListener('change', function() {
       var marcados = Array.prototype.map.call(ed.querySelectorAll('.vinc-pedido:checked'), function(el) { return el.value; });
       ed.setAttribute('data-selecionados', JSON.stringify(marcados));
@@ -5048,6 +5104,8 @@ function abrirModalVinculoPC(key) {
     return;
   }
   vpcKey = key;
+  // Fórmulas e BOM vigentes -> onde cada material é usado (para sugerir só os pedidos que o demandam).
+  vpcIndiceUso = OndeUsado.indice({formulas: allFormulasCompras, bom: allBomCompras, produtos: allProdutosCompras});
   var itens = pc.itens || {};
   var recebeuAlgo = Object.values(itens).some(function(it) { return (parseFloat(it && it.qtdRecebida) || 0) > 0; });
   var fixo = PropriedadeEstoque.proprietarioDaNatureza(pc.naturezaMovimentacao);

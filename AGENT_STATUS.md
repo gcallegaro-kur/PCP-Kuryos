@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Compras › Cliente/pedido sugere só pedidos que demandam o material (23/10/2026)
+
+- **Pedido:** ao vincular cliente e pedidos num PC, sugerir só os pedidos que precisam do material comprado.
+- **Feito:** `shared/pedidos-do-material.js` (puro) sobre `OndeUsado.indice` (fórmula + BOM vigentes). `compras.html`: a lista de pedidos de cada item filtra as linhas cujo SKU usa o material; clientes com pedido que usa vêm primeiro (optgroup) com contagem; checkbox "mostrar todos os pedidos do cliente"; aviso na tela. Sem uso conhecido (material fora de toda fórmula/BOM) ou, no editor "todos os itens", se QUALQUER item for desconhecido: não filtra e avisa. Pedido já marcado continua visível.
+- **Base real:** 12 itens de PCs abertos, todos com uso conhecido; essências caem de 19 pedidos abertos para 1-3, álcool para 12.
+- **Teste:** `run_pedidos_do_material_test.js`; `run_propriedade_estoque_ui_test.js` atualizado (concluídos/SEUNOURA agora exigem "mostrar todos"). Manual de Compras atualizado.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Cliente em grafias diferentes virava opções separadas (19/10/2026)
 
 - **Caso:** "O que comprar" listava MISS RÔSE, MISS ROSE e Miss Rose como três clientes; escolher um escondia os pedidos dos outros. Na base: `pedidos` e `pedidos_comerciais` têm 30 grafias para 26 clientes (Miss Rôse ×3, Glow Make Up ×2, Briá Beauty ×2). `ops` e `produtos` estão limpos.

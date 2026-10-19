@@ -149,11 +149,20 @@ async function abrir(browser, pagina, host) {
     assert.equal(await p.inputValue('#vpcPropriedade'), 'KURYOS');
     assert.equal(await p.locator('#vpcPropriedade').isDisabled(), true, 'compra é sempre da Kuryos');
     const ed1 = p.locator('#vpcItens .vinc-box[data-item="i1"] .vinc-editor');
+    // Clientes com pedido que usa o material vêm primeiro, com a contagem.
+    const opcoesCli = await ed1.locator('.vinc-cliente').innerText();
+    assert.match(opcoesCli, /MISS ROSE — 1 pedido usa este material/);
+    assert.equal(await ed1.locator('.vinc-cliente optgroup').count(), 2, 'com demanda / demais clientes');
+    assert.match(await ed1.locator('.vinc-cliente optgroup').first().getAttribute('label'), /Clientes com pedido que usa este material/);
     await ed1.locator('.vinc-cliente').selectOption('MRAR');
     const pedidosTxt = await ed1.locator('.vinc-pedidos').innerText();
     assert.match(pedidosTxt, /#0006/);
     assert.doesNotMatch(pedidosTxt, /#0011/, 'concluído só com o filtro');
     await ed1.locator('.vinc-concluidos').check();
+    // 23/10: só pedidos cujo produto USA o material (VAL-1 está no BOM do MRARBS05, não do MRARBS08).
+    assert.doesNotMatch(await ed1.locator('.vinc-pedidos').innerText(), /#0011/, 'o MRARBS08 não usa a válvula');
+    assert.match(await ed1.locator('.vinc-aviso-material').innerText(), /Só pedidos cujo produto usa este material/);
+    await ed1.locator('.vinc-todos-ped').check();
     assert.match(await ed1.locator('.vinc-pedidos').innerText(), /#0011 \(concluído\)/);
     // Salvar com item 2 vazio: recusa.
     await ed1.locator('.vinc-pedido[value="0006"]').check();
@@ -210,6 +219,7 @@ async function abrir(browser, pagina, host) {
     const ed3 = p.locator('#vpcItens .vinc-box[data-item="i1"]');
     assert.match(await ed3.innerText(), /Parte já entrou antes desta regra/);
     await ed3.locator('.vinc-cliente').selectOption('SEUNO');
+    await ed3.locator('.vinc-todos-ped').check();   // o SKU dele não usa a válvula: só aparece com "todos"
     assert.match(await ed3.locator('.vinc-pedidos').innerText(), /#26/);
     await ed3.locator('.vinc-pedido[value="26"]').check();
     await p.evaluate(() => { window.__writes = []; });
