@@ -13,6 +13,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/cancelamento-pc.js"></script>
+  <script src="shared/ajuste-pc.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -733,6 +734,26 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" id="pcCancVoltar">Voltar</button>
       <button class="btn btn-danger-ghost" id="pcCancConfirmar" style="background:var(--danger);color:#fff;border-color:var(--danger)">Cancelar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ajustar Pedido de Compra já enviado (só ADM) — ver shared/ajuste-pc.js -->
+<div class="modal-bg" id="modalAjustarPC">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div><h2 id="pcAjTitulo">Ajustar pedido</h2><div style="font-size:11.5px;opacity:.85" id="pcAjSub"></div></div>
+      <button class="modal-close" id="modalAjustarPCClose" title="Fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-note" id="pcAjAviso" style="margin-bottom:14px"></div>
+      <div id="pcAjItens" style="margin-bottom:14px"></div>
+      <label class="form-label" for="pcAjMotivo" style="display:block;font-size:12.5px;font-weight:600;margin-bottom:4px">Motivo do ajuste *</label>
+      <textarea id="pcAjMotivo" rows="3" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font:inherit" placeholder="Ex.: fornecedor só tinha 5.000 no estoque; combinado por telefone com o comercial em 07/10."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pcAjVoltar">Voltar</button>
+      <button class="btn btn-primary" id="pcAjConfirmar">Confirmar ajuste</button>
     </div>
   </div>
 </div>
@@ -2052,6 +2073,21 @@ function renderPedidos() {
     var botaoCancelar = cancelavel
       ? ' <button class="btn btn-danger-ghost btn-sm pc-cancelar" data-key="' + escapeAttr(key) + '" title="Cancelar o pedido (só administrador). O registro fica em Cancelados.">✖ Cancelar</button>'
       : '';
+    if (p.ajustes && p.status !== 'CANCELADO') {
+      // Revisão do pedido (shared/ajuste-pc.js): quem olha a lista vê que o
+      // documento que o fornecedor tem não é mais o original.
+      var ultAj = Object.values(p.ajustes).sort(function(a, b) { return (b.revisao || 0) - (a.revisao || 0); })[0] || {};
+      statusBadge += '<div style="font-size:11px;color:var(--muted);margin-top:4px;max-width:260px;line-height:1.4" title="' + escapeAttr(ultAj.motivo || '') + '">' +
+        '📝 Revisão ' + (p.revisao || 1) + (ultAj.tipo === 'ENCERRAR_SALDO' ? ' · saldo encerrado' : ' · quantidade ajustada') +
+        ' em ' + fmtData(ultAj.em) + '<br><span style="color:var(--text)">' + escapeHtml(ultAj.motivo || '') + '</span></div>';
+    }
+    var avAjuste = AjustePC.avaliar(p, window.currentUser && window.currentUser.role);
+    var botaoAjustar = avAjuste.pode
+      ? ' <button class="btn btn-ghost btn-sm pc-ajustar" data-key="' + escapeAttr(key) + '" title="' + (avAjuste.modo === 'ENCERRAR_SALDO'
+          ? 'Fechar o pedido com o que já foi recebido (o saldo não virá mais). Só administrador.'
+          : 'Corrigir a quantidade antes de receber, com revisão registrada. Só administrador.') + '">' +
+        (avAjuste.modo === 'ENCERRAR_SALDO' ? '✂️ Encerrar saldo' : '✏️ Ajustar quantidade') + '</button>'
+      : '';
     if (p.status === 'CANCELADO') {
       // Cancelado: sem Enviar/Etiquetas. Fica só a consulta do documento, que
       // sai com a faixa de cancelamento (serve de aviso ao fornecedor).
@@ -2075,7 +2111,7 @@ function renderPedidos() {
       (['ABERTO', 'ENVIADO', 'RECEBIDO_PARCIAL'].indexOf(p.status) >= 0
         ? ' <button class="btn btn-ghost btn-sm pc-vinculo" data-key="' + escapeAttr(key) + '" title="De quem é o material e para qual cliente e pedido">🔗 Cliente/pedido</button>'
         : '') +
-      botaoCancelar;
+      botaoCancelar + botaoAjustar;
     // De quem é e para quem: o que a Logística vai ver no recebimento.
     var vinc = PropriedadeEstoque.validarVinculoPC(p);
     var tipoDono = PropriedadeEstoque.propriedadeDoPC(p);
@@ -2120,6 +2156,86 @@ function renderPedidos() {
   });
   document.querySelectorAll('.pc-cancelar').forEach(function(btn) {
     btn.addEventListener('click', function() { abrirModalCancelarPC(btn.getAttribute('data-key')); });
+  });
+  document.querySelectorAll('.pc-ajustar').forEach(function(btn) {
+    btn.addEventListener('click', function() { abrirModalAjustarPC(btn.getAttribute('data-key')); });
+  });
+}
+
+/* ── Ajuste de Pedido de Compra ──
+   Regras em shared/ajuste-pc.js. Duas situações: ENVIADO sem recebimento
+   (corrige a quantidade, com revisão) e RECEBIDO_PARCIAL (encerra o saldo que
+   não virá). Aqui só a ligação: modal e transaction no PC. */
+var pcAjKey = null, pcAjModo = null;
+function abrirModalAjustarPC(key) {
+  var pc = allPedidosCompra[key];
+  var av = AjustePC.avaliar(pc, window.currentUser && window.currentUser.role);
+  if (!av.pode) { showAlert(av.motivo, 'danger'); return; }
+  pcAjKey = key; pcAjModo = av.modo;
+  var antes = av.modo === 'ANTES_DE_RECEBER';
+  document.getElementById('pcAjTitulo').textContent = (antes ? 'Ajustar quantidade — ' : 'Encerrar saldo — ') + (pc.numeroFormatado || '');
+  document.getElementById('pcAjSub').textContent = (pc.fornecedorNome || '') + (pc.revisao ? ' · revisão atual ' + pc.revisao : '');
+  document.getElementById('pcAjAviso').innerHTML = antes
+    ? 'Nada foi recebido deste pedido ainda. Altere a quantidade dos itens que mudaram; o ajuste vira uma <b>revisão</b> do pedido, com motivo e autor, e o documento impresso passa a sair com a faixa de revisão. <b>Avise o fornecedor</b> e reenvie o documento.'
+    : 'Este pedido foi <b>recebido em parte</b>. Encerrar o saldo fecha o pedido com o que já chegou: a quantidade pedida de cada item passa a ser a recebida, o pedido vira <b>Recebido total</b> e sai da fila da Logística e do MRP. O que já entrou no estoque continua válido. Para receber o saldo depois, será preciso um novo pedido.';
+  var itens = (pc.itens || {});
+  var linhas = AjustePC.resumoParaTela(pc).map(function(r) {
+    var cel = antes
+      ? '<input type="number" min="0" step="any" class="pc-aj-qtd" data-item="' + escapeAttr(r.itemKey) + '" value="' + escapeAttr(r.qtdPedida) + '" style="width:110px;text-align:right;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px">'
+      : (r.saldo > 0 ? '<b style="color:var(--danger)">−' + fmtNum(r.saldo) + '</b>' : '<span style="color:var(--muted)">—</span>');
+    return '<tr><td>' + escapeHtml(r.materialCodigo || '—') + (r.materialNome ? ' — ' + escapeHtml(r.materialNome) : '') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(r.qtdPedida) + ' ' + escapeHtml(r.unidade || '') + '</td>' +
+      '<td style="text-align:right">' + fmtNum(r.qtdRecebida) + '</td>' +
+      '<td style="text-align:right">' + cel + '</td></tr>';
+  }).join('');
+  document.getElementById('pcAjItens').innerHTML = '<table class="table" style="width:100%;font-size:12.5px"><thead><tr><th>Item</th><th style="text-align:right">Pedido</th><th style="text-align:right">Recebido</th>' +
+    '<th style="text-align:right">' + (antes ? 'Nova quantidade' : 'Saldo encerrado') + '</th></tr></thead><tbody>' + linhas + '</tbody></table>';
+  document.getElementById('pcAjMotivo').value = '';
+  document.getElementById('pcAjConfirmar').disabled = false;
+  document.getElementById('pcAjConfirmar').textContent = antes ? 'Confirmar ajuste' : 'Encerrar saldo';
+  document.getElementById('modalAjustarPC').classList.add('open');
+  document.getElementById('pcAjMotivo').focus();
+}
+function fecharModalAjustarPC() {
+  document.getElementById('modalAjustarPC').classList.remove('open');
+  pcAjKey = null; pcAjModo = null;
+}
+function confirmarAjustePC() {
+  var key = pcAjKey;
+  if (!key) return;
+  var pcLocal = allPedidosCompra[key] || {};
+  var motivo = document.getElementById('pcAjMotivo').value;
+  if (String(motivo).trim().length < AjustePC.MOTIVO_MINIMO) {
+    showAlert('Descreva o motivo do ajuste (mínimo ' + AjustePC.MOTIVO_MINIMO + ' caracteres).', 'danger');
+    return;
+  }
+  var qtdNova = {};
+  document.querySelectorAll('#pcAjItens .pc-aj-qtd').forEach(function(inp) { qtdNova[inp.getAttribute('data-item')] = inp.value; });
+  var encerrar = pcAjModo === 'ENCERRAR_SALDO';
+  if (!confirm(encerrar
+    ? 'Encerrar o saldo de ' + (pcLocal.numeroFormatado || 'este pedido') + '? O pedido vira Recebido total e o saldo não será mais esperado.'
+    : 'Gravar a revisão de ' + (pcLocal.numeroFormatado || 'este pedido') + '? Avise o fornecedor.')) return;
+  var btn = document.getElementById('pcAjConfirmar');
+  btn.disabled = true;
+  var dados = { papel: window.currentUser && window.currentUser.role, motivo: motivo, autor: currentUserNome(),
+    qtdNova: qtdNova, agora: new Date().toISOString() };
+  var recusa = null;
+  // `if (!atual) return atual;` -- a 1ª passada vem do cache local e pode ser
+  // null; abortar ali recusaria um PC válido (ver run_transacoes_null_test.js).
+  db.ref('pedidos_compra/' + key).transaction(function(atual) {
+    recusa = null;
+    if (!atual) return atual;
+    var r = AjustePC.aplicar(atual, dados);
+    if (r.erro) { recusa = r.erro; return; }
+    return r.pc;
+  }).then(function(res) {
+    if (!res.committed) throw new Error(recusa || 'O pedido mudou enquanto você ajustava (talvez um recebimento acabou de entrar). Atualize e tente de novo.');
+    if (!res.snapshot.exists()) throw new Error('Pedido não encontrado.');
+    fecharModalAjustarPC();
+    showAlert((pcLocal.numeroFormatado || 'Pedido') + (encerrar ? ': saldo encerrado — pedido Recebido total.' : ': quantidade ajustada (revisão ' + (res.snapshot.val().revisao || 1) + '). Reimprima e avise o fornecedor.'), 'success');
+  }).catch(function(err) {
+    btn.disabled = false;
+    showAlert('Não foi possível ajustar: ' + err.message, 'danger');
   });
 }
 
@@ -2271,9 +2387,22 @@ function faixaCancelamentoDocumentoPC(pc) {
     '<div style="font-size:11px;margin-top:4px;color:#1d1d1f">Cancelado em ' + escapeHtml(c.canceladoEm ? new Date(c.canceladoEm).toLocaleString('pt-BR') : '—') +
     ' por ' + escapeHtml(c.canceladoPor || '—') + '. Motivo: ' + escapeHtml(c.motivo || '—') + '</div></div>';
 }
+function faixaRevisaoDocumentoPC(pc) {
+  if (!pc || !pc.ajustes || pc.status === 'CANCELADO') return '';
+  var aj = Object.values(pc.ajustes).sort(function(a, b) { return (b.revisao || 0) - (a.revisao || 0); })[0];
+  if (!aj) return '';
+  var mudancas = Object.keys(aj.itens || {}).map(function(k) {
+    var i = aj.itens[k];
+    return escapeHtml(i.materialCodigo || '') + (i.materialNome ? ' — ' + escapeHtml(i.materialNome) : '') + ': <b>' + fmtNum(i.qtdAntes) + ' → ' + fmtNum(i.qtdDepois) + ' ' + escapeHtml(i.unidade || '') + '</b>';
+  }).join('<br>');
+  return '<div style="border:3px solid #b45309;color:#7c2d12;padding:10px 14px;margin:0 0 12px;font-family:Arial,sans-serif">' +
+    '<div style="font-size:18px;font-weight:800;letter-spacing:.04em">PEDIDO REVISADO — REVISÃO ' + (pc.revisao || aj.revisao || 1) + (aj.tipo === 'ENCERRAR_SALDO' ? ' (SALDO ENCERRADO)' : '') + '</div>' +
+    '<div style="font-size:11px;margin-top:4px;color:#1d1d1f">Ajustado em ' + escapeHtml(aj.em ? new Date(aj.em).toLocaleString('pt-BR') : '—') + ' por ' + escapeHtml(aj.por || '—') +
+    '. Motivo: ' + escapeHtml(aj.motivo || '—') + '<br>' + mudancas + '</div></div>';
+}
 function montarDocumentoPedidoCompraComRota(pc, fornecedor) {
   var html = montarDocumentoPedidoCompra(pc, fornecedor), bloco = blocoRotaDocumentoPC(pc);
-  var faixa = faixaCancelamentoDocumentoPC(pc);
+  var faixa = faixaCancelamentoDocumentoPC(pc) || faixaRevisaoDocumentoPC(pc);
   // A faixa entra logo depois do <style> inicial, no topo da 1ª página.
   if (faixa) html = html.replace('</style>', '</style>' + faixa);
   if (!bloco) return html;
@@ -3749,6 +3878,9 @@ document.getElementById('modalRotaEnvioClose').addEventListener('click', fecharM
 document.getElementById('pcEnvCancelar').addEventListener('click', fecharModalRotaEnvio);
 document.getElementById('pcEnvSalvar').addEventListener('click', salvarRotaEnvio);
 document.getElementById('modalCancelarPCClose').addEventListener('click', fecharModalCancelarPC);
+document.getElementById('modalAjustarPCClose').addEventListener('click', fecharModalAjustarPC);
+document.getElementById('pcAjVoltar').addEventListener('click', fecharModalAjustarPC);
+document.getElementById('pcAjConfirmar').addEventListener('click', confirmarAjustePC);
 document.getElementById('pcCancVoltar').addEventListener('click', fecharModalCancelarPC);
 document.getElementById('pcCancConfirmar').addEventListener('click', confirmarCancelamentoPC);
 document.getElementById('modalEditarPC').addEventListener('click', function(ev) { if (ev.target === this) fecharModalEditarPC(); });

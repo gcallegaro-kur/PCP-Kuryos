@@ -5,6 +5,16 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Ajuste de Pedido de Compra (19/10/2026)
+
+- **Motivação:** PC-0038 (álcool): pedido 6.000, fornecedor entregou 5.000, ajuste combinado por telefone sem como registrar; ficou "Recebido parcial" esperando um saldo que não virá.
+- **Feito:** `shared/ajuste-pc.js` (regras puras) + `compras.html`. Só ADMIN, motivo obrigatório (mín. 10 car.), tudo em `pedidos_compra/{pc}/ajustes/AJnnn` (antes/depois/quem/quando) + `revisao`. **ANTES_DE_RECEBER** (ENVIADO sem recebimento): ajusta `qtd` (e escala `qtdCotada`, `qtdEmUnidadeEstoque`, `custoTotalNaDecisao`, `valorTotalEstimado` na mesma proporção); documento impresso sai com faixa "PEDIDO REVISADO". **ENCERRAR_SALDO** (RECEBIDO_PARCIAL): `qtd` de cada item cai para a recebida (guarda `qtdOriginal`/`saldoEncerrado`), status -> RECEBIDO_TOTAL, grava `encerramentoSaldo`. Não é cancelamento.
+- **Por que reduzir `qtd` basta:** `functions/recebimento.js` valida o recebimento contra `item.qtd` e recalcula o status por qtd x qtdRecebida (`statusPedidoApos`); um estorno posterior reabre o saldo sozinho. Teste confere isso contra o código real do servidor.
+- **Achado, NÃO corrigido:** o editor de PC ABERTO (`salvarEdicaoPC`) grava `qtdCotada`/`qtdEmUnidadeEstoque` mas não `item.qtd`, que é o que o recebimento usa — se alguém muda a quantidade no editor, o limite de recebimento fica na quantidade antiga. Conferir com o usuário antes de mexer.
+- **Testes:** `run_ajuste_pc_test.js`, `run_ajuste_pc_ui_test.js` (tela real, PC-0038 replicado). Manual de Compras atualizado.
+- **PC-0038 real NÃO foi alterado:** o usuário aplica pelo botão "Encerrar saldo" (fica com o motivo e o nome dele).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Laudo único de PA por LOTE (OP), não por palete (16/10/2026)
 
 - **Decisão do usuário:** uma OP = um lote de PA; um laudo, uma decisão, vale para todos os paletes; a amostragem √N+1 segue por palete (x caixas do palete A, y do B) dentro do mesmo laudo; os 55 paletes já liberados valem como liberação; reprovar/reter atinge o lote inteiro.
