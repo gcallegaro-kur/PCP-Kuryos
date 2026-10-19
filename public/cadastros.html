@@ -3849,7 +3849,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // não têm cadastro (ex: MOUTIER, 40 produtos) e apareceriam 50 opções,
     // várias sem produto nenhum. Datalist = o que você DEVE digitar (cadastro);
     // filtro = o que EXISTE no catálogo. São perguntas diferentes.
-    fillSelect('filterCliente-prod', clientesUsados, 'Todos clientes');
+    // Filtro de cliente: uma opção por cliente, qualquer grafia (chaveNome).
+    (function() {
+      var sel = document.getElementById('filterCliente-prod'), atual = sel.value;
+      sel.innerHTML = '<option value="">Todos clientes</option>' + opcoesPorNome(Object.values(allProdutos).map(function(p) { return p && p.cliente; }))
+        .map(function(c) { return '<option value="' + escapeAttr(c.chave) + '">' + escapeHtml(c.nome) + '</option>'; }).join('');
+      sel.value = atual;
+    })();
   }
 
   function refreshAutoSkuSelects() {
@@ -3948,7 +3954,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (filtroPend && !PendenciasProduto.filtra(entry[0], p, filtroPend, indicePend)) return false;
       if (filtAtivo && p.ativo !== filtAtivo) return false;
       if (filtCat && p.categoria !== filtCat) return false;
-      if (filtCli && p.cliente !== filtCli) return false;
+      if (filtCli && chaveNome(p.cliente) !== filtCli) return false;
       if (search) {
         var haystack = norm(p.sku) + ' ' + norm(p.descricao) + ' ' + norm(p.cliente) + ' ' + norm(p.codCliente);
         if (haystack.indexOf(search) === -1) return false;

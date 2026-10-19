@@ -1242,8 +1242,13 @@ function renderAll() {
     options: { maintainAspectRatio: false, responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt1(c.parsed.y) + 'h · ' + linAgg[c.label].ops + ' OPs' } } }, scales: { x: { grid: { display: false } } } }
   });
 
+  // Cliente agrupado sem acento/caixa (chaveNome): "MISS RÔSE", "MISS ROSE" e
+  // "Miss Rose" eram três barras. O rótulo é a grafia mais usada.
+  const nomesCli = opcoesPorNome(prod.map(p => p.cli).concat(ped.map(p => p.cli)));
+  const rotuloCli = {}; nomesCli.forEach(c => { rotuloCli[c.chave] = c.nome; });
+  const nomeCli = (c) => rotuloCli[chaveNome(c)] || c;
   const cliAgg = {};
-  prod.forEach(p => { if (!cliAgg[p.cli]) cliAgg[p.cli] = { u:0, h:0, ops:0 }; cliAgg[p.cli].u += p.u; cliAgg[p.cli].h += p.h; cliAgg[p.cli].ops++; });
+  prod.forEach(p => { const k = nomeCli(p.cli); if (!cliAgg[k]) cliAgg[k] = { u:0, h:0, ops:0 }; cliAgg[k].u += p.u; cliAgg[k].h += p.h; cliAgg[k].ops++; });
   const topCli = Object.entries(cliAgg).sort((a,b) => b[1].u - a[1].u).slice(0, 12);
   makeChart('c_top_clientes', { type: 'bar',
     data: { labels: topCli.map(c => c[0]), datasets: [{ data: topCli.map(c => c[1].u), backgroundColor: topCli.map((_,i) => COLORS[i % COLORS.length]), borderRadius: 3 }] },
@@ -1314,7 +1319,7 @@ function renderAll() {
     });
   }
   const cliPedAgg = {};
-  ped.forEach(p => cliPedAgg[p.cli] = (cliPedAgg[p.cli]||0) + p.qtd);
+  ped.forEach(p => { const k = nomeCli(p.cli); cliPedAgg[k] = (cliPedAgg[k]||0) + p.qtd; });
   const topCliPed = Object.entries(cliPedAgg).sort((a,b) => b[1]-a[1]).slice(0, 15);
   makeChart('c_ped_cli', { type: 'bar',
     data: { labels: topCliPed.map(c=>c[0]), datasets: [{ data: topCliPed.map(c=>c[1]), backgroundColor: topCliPed.map((_,i) => COLORS[i % COLORS.length]), borderRadius: 3 }] },

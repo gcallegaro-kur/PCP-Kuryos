@@ -5,6 +5,15 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Cliente em grafias diferentes virava opções separadas (19/10/2026)
+
+- **Caso:** "O que comprar" listava MISS RÔSE, MISS ROSE e Miss Rose como três clientes; escolher um escondia os pedidos dos outros. Na base: `pedidos` e `pedidos_comerciais` têm 30 grafias para 26 clientes (Miss Rôse ×3, Glow Make Up ×2, Briá Beauty ×2). `ops` e `produtos` estão limpos.
+- **Regra (`utils.js`):** `chaveNome(s)` = sem acento, maiúsculas, espaços colapsados — só para comparar/agrupar, o texto gravado não muda. `opcoesPorNome(nomes)` = uma opção por chave, exibindo a grafia mais usada.
+- **Aplicado em:** filtro de cliente do O que comprar (`necessidade-pedidos-tela.js`), Cadastros › Produtos, Planejamento (agenda), Expedição — montar carga (`expedicao-grade-tela.js`, cópia local `chaveClienteExp` porque o teste de tela troca o utils por vazio), contagem de clientes do Relatório de Expedição e os gráficos por cliente do Dashboard Geral. Pedidos (agrupar por cliente) e Gestão Comercial já normalizavam; buscas de texto já usavam `norm`.
+- **Não muda:** nome diferente de verdade (ex. SEUNOURA × SEUNOURA BEAUTY LTDA) continua separado — isso só se resolve pelo `clienteKey`/cadastro.
+- **Testes:** `run_chave_nome_test.js` (novo); telas O que comprar, Cadastros, Expedição e Dashboard Geral passam.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Lista suspensa única em todas as telas (19/10/2026)
 
 - **Pedido:** "sempre que aparecer lista suspensa, podemos deixar no mesmo padrão? Algo com visual mais bonito" (print do `<datalist>` nativo, cinza escuro, na Entrada avulsa de PA).

@@ -61,12 +61,12 @@
 
   /* ── Passo 1: escolha de pedidos ── */
   function renderEscolha() {
-    var clis = {}; abertos.forEach(function(p) { if (p.cliente) clis[p.cliente] = 1; });
-    var htmlC = '<option value="">Todos os clientes</option>' + Object.keys(clis).sort().map(function(c) { return '<option value="' + e(c) + '"' + (S.cli === c ? ' selected' : '') + '>' + e(c) + '</option>'; }).join('');
+    // Uma opção por cliente, qualquer que seja a grafia (chaveNome, utils.js).
+    var htmlC = '<option value="">Todos os clientes</option>' + opcoesPorNome(abertos.map(function(p) { return p.cliente; })).map(function(c) { return '<option value="' + e(c.chave) + '"' + (S.cli === c.chave ? ' selected' : '') + '>' + e(c.nome) + '</option>'; }).join('');
     if (el('fCli').getAttribute('data-h') !== htmlC) { el('fCli').innerHTML = htmlC; el('fCli').setAttribute('data-h', htmlC); }
     var toks = norm(S.q).split(' ').filter(Boolean);
     var lista = abertos.filter(function(p) {
-      if (S.cli && p.cliente !== S.cli) return false;
+      if (S.cli && chaveNome(p.cliente) !== S.cli) return false;
       var alvo = norm([p.id, p.sku, p.produto, p.cliente].join(' '));
       return toks.every(function(t) { return alvo.indexOf(t) >= 0; });
     });

@@ -2759,16 +2759,13 @@ function populateAgdClientFilter() {
   var sel = document.getElementById('agdFilterClient');
   if (!sel) return;
   var currentVal = sel.value;
-  var clientsSet = new Set();
-  Object.values(pedidos).forEach(function(p) {
-    if (p.cliente) clientsSet.add(p.cliente);
-  });
-  var sortedClients = Array.from(clientsSet).sort();
+  // Uma opção por cliente, qualquer grafia (chaveNome, utils.js).
+  var sortedClients = opcoesPorNome(Object.values(pedidos).map(function(p) { return p.cliente; }));
   sel.innerHTML = '<option value="">Todos os clientes</option>';
   sortedClients.forEach(function(c) {
     var opt = document.createElement('option');
-    opt.value = c;
-    opt.textContent = c;
+    opt.value = c.chave;
+    opt.textContent = c.nome;
     sel.appendChild(opt);
   });
   sel.value = currentVal;
@@ -2781,7 +2778,7 @@ function renderAgendaTab(){
   var cli = document.getElementById('agdFilterClient') ? document.getElementById('agdFilterClient').value : '';
   if (search || cli) {
     list = list.filter(function(p) {
-      if (cli && p.cliente !== cli) return false;
+      if (cli && chaveNome(p.cliente) !== cli) return false;
       if (search) {
         var haystack = normalizeSearch(p.produto || '') + ' ' + normalizeSearch(p.sku || '') + ' ' + normalizeSearch(p.id || '');
         if (haystack.indexOf(search) === -1) return false;

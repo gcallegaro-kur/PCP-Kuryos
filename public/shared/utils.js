@@ -122,6 +122,31 @@ function norm(s) {
   return stripAccents(s == null ? '' : String(s)).toLowerCase().trim();
 }
 
+/* Nome para COMPARAR e AGRUPAR (19/10/2026). Pedido do usuário: "na tela 'O
+   que comprar' aparecem MISS ROSE, MISS RÔSE e Miss Rose" -- o mesmo cliente
+   em três grafias virava três opções no filtro, e escolher uma escondia os
+   pedidos das outras duas. Sem acento, maiúsculas, espaços colapsados.
+   Só compara: o texto gravado não muda. */
+function chaveNome(s) {
+  return stripAccents(s == null ? '' : String(s)).toUpperCase().replace(/\s+/g, ' ').trim();
+}
+/* Opções de filtro a partir de nomes livres: uma por chaveNome, exibindo a
+   grafia mais usada (empate: a primeira que apareceu). -> [{chave, nome}] */
+function opcoesPorNome(nomes) {
+  var g = {}, ordem = [];
+  (nomes || []).forEach(function(n) {
+    var k = chaveNome(n);
+    if (!k) return;
+    if (!g[k]) { g[k] = {}; ordem.push(k); }
+    var t = String(n).trim();
+    g[k][t] = (g[k][t] || 0) + 1;
+  });
+  return ordem.map(function(k) {
+    var vs = g[k], melhor = Object.keys(vs).reduce(function(a, b) { return vs[b] > vs[a] ? b : a; });
+    return {chave: k, nome: melhor};
+  }).sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+}
+
 function sanitizeKey(str) {
   if (!str) return '';
   var s = String(str).trim()

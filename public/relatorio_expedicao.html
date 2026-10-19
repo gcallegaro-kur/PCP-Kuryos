@@ -279,7 +279,7 @@ function agrupar(chaveDe, rotulo) {
     var g = mapa[k];
     g.unidades += l.unidades; g.caixas += l.caixas; g.peso += l.peso; g.linhas++;
     g.cargas[l.cargaKey] = 1;
-    if (l.cliente) g.clientes[l.cliente] = 1;
+    if (l.cliente) g.clientes[chaveNome(l.cliente)] = 1;
     if (l.sku) g.skus[l.sku] = 1;
   });
   return {rotulo: rotulo, itens: Object.keys(mapa).map(function(k) { return mapa[k]; })};
@@ -323,7 +323,7 @@ function renderTotais() {
   filtradas.forEach(function(l) {
     uni += l.unidades; cx += l.caixas; kg += l.peso;
     cargasSet[l.cargaKey] = 1;
-    if (l.cliente) clientesSet[l.cliente] = 1;
+    if (l.cliente) clientesSet[chaveNome(l.cliente)] = 1;
     if (l.sku) skusSet[l.sku] = 1;
     if (l.vinculoPendente) pendentes++;
   });

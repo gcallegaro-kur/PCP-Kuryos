@@ -96,13 +96,14 @@ function renderPaletes(){
   });
   if(alterados)aviso('Um palete mudou no estoque e foi retirado da seleção. Confira a composição da carga antes de continuar.',true);
   var pendentesOp=opsAguardandoConferencia();
-  var filtroCliente=el('filtroCliente').value, clientes=Array.from(new Set(linhas.map(function(l){return l.cliente;}).concat(pendentesOp.map(function(p){return p.cliente;})).filter(Boolean))).sort();
-  el('filtroCliente').innerHTML='<option value="">Todos os clientes</option>'+clientes.map(function(c){return '<option value="'+e(c)+'">'+e(c)+'</option>';}).join('');el('filtroCliente').value=filtroCliente;
+  var filtroCliente=el('filtroCliente').value, clientes=opcoesClientesExp(linhas.map(function(l){return l.cliente;}).concat(pendentesOp.map(function(p){return p.cliente;})));
+  // Uma opção por cliente, qualquer grafia (chaveClienteExp, abaixo).
+  el('filtroCliente').innerHTML='<option value="">Todos os clientes</option>'+clientes.map(function(c){return '<option value="'+e(c.chave)+'">'+e(c.nome)+'</option>';}).join('');el('filtroCliente').value=filtroCliente;
   var busca=el('busca').value.toLocaleLowerCase('pt-BR'), filtro=el('filtroStatus').value;
   var disponiveis=linhas.filter(function(l){return l.disponivel;}).length;
   el('contagem').textContent=num(linhas.length)+' paletes em estoque · '+num(disponiveis)+' liberados';
-  linhas=linhas.filter(function(l){var ag=agendaDoPalete(idLinha(l));return (!filtroCliente||l.cliente===filtroCliente)&&(!filtro||filtro==='liberados'&&l.disponivel||filtro==='pendentes'&&!l.disponivel||filtro==='agendados'&&ag)&&[l.lote.identificadorPalete,l.lote.itemCodigo,l.lote.itemNome,l.lote.opLote,l.pedidoNumero,l.cliente,l.endereco.codigo].join(' ').toLocaleLowerCase('pt-BR').includes(busca);});
-  renderPesoResumo(linhas,pendentesOp.filter(function(p){return (!filtroCliente||p.cliente===filtroCliente)&&[p.sku,p.produto,p.opLote,p.pedidoNumero,p.cliente].join(' ').toLocaleLowerCase('pt-BR').includes(busca);}));
+  linhas=linhas.filter(function(l){var ag=agendaDoPalete(idLinha(l));return (!filtroCliente||chaveClienteExp(l.cliente)===filtroCliente)&&(!filtro||filtro==='liberados'&&l.disponivel||filtro==='pendentes'&&!l.disponivel||filtro==='agendados'&&ag)&&[l.lote.identificadorPalete,l.lote.itemCodigo,l.lote.itemNome,l.lote.opLote,l.pedidoNumero,l.cliente,l.endereco.codigo].join(' ').toLocaleLowerCase('pt-BR').includes(busca);});
+  renderPesoResumo(linhas,pendentesOp.filter(function(p){return (!filtroCliente||chaveClienteExp(p.cliente)===filtroCliente)&&[p.sku,p.produto,p.opLote,p.pedidoNumero,p.cliente].join(' ').toLocaleLowerCase('pt-BR').includes(busca);}));
   var ordem=el('ordem').value;
   linhas.sort(function(a,b){var av=ordem==='cliente'?a.cliente:ordem==='pedido'?a.pedidoNumero:ordem==='entrada'?a.lote.criadoEm:a.lote.identificadorPalete,bv=ordem==='cliente'?b.cliente:ordem==='pedido'?b.pedidoNumero:ordem==='entrada'?b.lote.criadoEm:b.lote.identificadorPalete;return String(av||'').localeCompare(String(bv||''),'pt-BR',{numeric:true});});
   el('paletes').innerHTML=linhas.map(function(l){
@@ -192,3 +193,10 @@ function abrirVinculoEstoque(k){
     EntradaAvulsaPA.desvincular(db,partes[0],partes[1],autor).then(function(r){if(!r.ok){bg.querySelector('#vincErro').textContent=r.erro;return;}fechar();aviso('Vínculo desfeito.');});
   };
 }
+
+/* Cliente sem acento, caixa e espaço repetido (19/10/2026): "MISS RÔSE",
+   "MISS ROSE" e "Miss Rose" são uma opção só no filtro. Mesma regra de
+   chaveNome/opcoesPorNome (shared/utils.js), local para a tela não depender
+   da ordem de carga do utils. */
+function chaveClienteExp(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
+function opcoesClientesExp(nomes){var g={},ordem=[];(nomes||[]).forEach(function(n){var k=chaveClienteExp(n);if(!k)return;if(!g[k]){g[k]={};ordem.push(k);}var t=String(n).trim();g[k][t]=(g[k][t]||0)+1;});return ordem.map(function(k){var v=g[k];return {chave:k,nome:Object.keys(v).reduce(function(a,b){return v[b]>v[a]?b:a;})};}).sort(function(a,b){return a.nome.localeCompare(b.nome,'pt-BR');});}
