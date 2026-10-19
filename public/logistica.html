@@ -865,28 +865,44 @@ function opcoesAvaliacaoRecebimento() {
    O valor gravado é recalculado na leitura da tela (lerItensRecebimentoDaTela),
    não lido do input -- o campo é só o espelho, e assim um DOM desatualizado
    nunca vira número errado na fila da Qualidade. */
-function amostragemDoLote(qtd) {
+/* Unidade contínua (19/10, PC-0051): 1 kg de corante pedia amostra de
+   "2" -- √1 + 1 -- e o servidor recusava ("não pode exceder a quantidade
+   recebida"). √n + 1 é plano de RECIPIENTES: para kg, g, L e ml o n é o
+   número de volumes, não a massa (√1000 kg + 1 daria 33 kg de amostra).
+   Unidade discreta (un, rolo, cx) segue sobre a quantidade. Nunca passa do
+   total: lote pequeno é amostrado inteiro. Cópia em functions/recebimento.js. */
+var UNIDADES_CONTINUAS_AMOSTRA = {kg: 1, g: 1, mg: 1, l: 1, lt: 1, litro: 1, litros: 1, ml: 1};
+function amostraPorVolume(unidade) { return !!UNIDADES_CONTINUAS_AMOSTRA[String(unidade || '').trim().toLowerCase()]; }
+function amostragemDoLote(qtd, volumes, unidade) {
   var n = Number(qtd);
   if (!isFinite(n) || n <= 0) return 0;
-  return Math.ceil(Math.sqrt(n) + 1);
+  if (amostraPorVolume(unidade)) {
+    var v = Math.max(1, Math.floor(Number(volumes) || 1));
+    return Math.min(v, Math.ceil(Math.sqrt(v) + 1));
+  }
+  return Math.min(Math.ceil(n), Math.ceil(Math.sqrt(n) + 1));
 }
 function atualizarAmostragemLote(row) {
   if (!row) return;
   var campoQtd = row.querySelector('.rc-qtd'), campoVol = row.querySelector('.rc-volumes');
   var qtd = Number((campoQtd && campoQtd.value) || 0);
   var volumes = Math.max(1, Math.floor(Number((campoVol && campoVol.value) || 1)) || 1);
-  var total = amostragemDoLote(qtd);
+  var unidade = row.getAttribute('data-unidade') || '';
+  var porVolume = amostraPorVolume(unidade);
+  var total = amostragemDoLote(qtd, volumes, unidade);
   var campo = row.querySelector('.rc-amostragem');
   if (campo) campo.value = String(total);
   var hint = row.querySelector('.rc-amostragem-hint');
   if (!hint) return;
-  hint.textContent = total > 0
-    ? '√' + fmtNum(qtd) + ' + 1 → ' + fmtNum(total) + ' (arredondado para cima). Colete de todos os ' +
-      fmtNum(volumes) + ' volume(s), cerca de ' + fmtNum(Math.ceil(total / volumes)) + ' de cada.'
-    : 'Informe a quantidade recebida para calcular.';
+  if (!(total > 0)) { hint.textContent = 'Informe a quantidade recebida para calcular.'; return; }
+  hint.textContent = porVolume
+    ? 'Em ' + unidade + ' a amostra é por volume: √' + fmtNum(volumes) + ' volume(s) + 1 → retire amostra de ' + fmtNum(total) + ' volume(s)' +
+      (total >= volumes ? ' (todos).' : ' de ' + fmtNum(volumes) + '.')
+    : '√' + fmtNum(qtd) + ' + 1 → ' + fmtNum(total) + ' ' + (unidade || 'un') + (total >= qtd ? ' (lote pequeno: o lote todo).' : ' (arredondado para cima). Colete de todos os ' +
+      fmtNum(volumes) + ' volume(s), cerca de ' + fmtNum(Math.ceil(total / volumes)) + ' de cada.');
 }
 function htmlLoteRecebimento(qtd, unidade, removivel) {
-  return '<div class="rc-lote-row">' +
+  return '<div class="rc-lote-row" data-unidade="' + escapeAttr(unidade || '') + '">' +
     (removivel ? '<button type="button" class="rc-lote-remove" title="Remover este lote">Remover</button>' : '') +
     '<div class="rc-lote-title">Lote físico do fornecedor</div><div class="rc-form-grid">' +
       '<div class="form-group"><label>Lote do fornecedor *</label><input class="rc-lote" type="text" placeholder="Use NÃO INFORMADO quando não existir"></div>' +
@@ -1016,7 +1032,7 @@ function lerItensRecebimentoDaTela() {
       linhas.push(Object.assign({}, comum, {
         loteOrigem: row.querySelector('.rc-lote').value.trim(), qtdRecebida: qtd,
         qtdVolumes: Number(row.querySelector('.rc-volumes').value),
-        qtdAmostragem: amostragemDoLote(qtd),
+        qtdAmostragem: amostragemDoLote(qtd, row.querySelector('.rc-volumes').value, row.getAttribute('data-unidade')),
         certificadoFornecedor: row.querySelector('.rc-certificado').value,
         condicoesEmbalagem: Number(row.querySelector('.rc-cond-embalagem').value),
         dataValidade: row.querySelector('.rc-validade').value || null,

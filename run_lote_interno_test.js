@@ -20,9 +20,13 @@ if (!excedeu) throw new Error('Saldo excedente do PC foi aceito');
 let duplicou = false;
 try { validarEPrepararLinhas({...base,linhas:[base.linhas[0],{...base.linhas[0],qtdRecebida:10}]},pedido,enderecos); } catch (e) { duplicou = /repetido/.test(e.message); }
 if (!duplicou) throw new Error('Mesmo lote externo duplicado no item foi aceito');
-let amostraExcedeu = false;
-try { validarEPrepararLinhas({...base,linhas:[{...base.linhas[0],qtdAmostragem:401}]},pedido,enderecos); } catch (e) { amostraExcedeu = /amostragem/.test(e.message); }
-if (!amostraExcedeu) throw new Error('Amostragem maior que o lote foi aceita');
+// Amostragem é calculada no servidor (19/10, PC-0051): o número do navegador
+// é ignorado, então uma tela em cache com a regra velha não trava a entrada.
+const amostraServidor = validarEPrepararLinhas({...base,linhas:[{...base.linhas[0],qtdAmostragem:401}]},pedido,enderecos);
+if (amostraServidor.linhas[0].qtdAmostragem !== 21 || amostraServidor.linhas[0].amostragemUnidade !== 'un') throw new Error('Amostragem de 400 un deveria ser √400+1 = 21 un');
+const pedidoKg = {itens:{k1:{materialCodigo:'MPGR-00051',unidade:'kg',qtd:1,qtdRecebida:0}}};
+const corante = validarEPrepararLinhas({...base,linhas:[{...base.linhas[0],itemKey:'k1',tipoMaterial:'MATERIA_PRIMA',qtdRecebida:1,qtdVolumes:1,qtdAmostragem:2}]},pedidoKg,enderecos);
+if (corante.linhas[0].qtdAmostragem !== 1 || corante.linhas[0].amostragemUnidade !== 'volume') throw new Error('1 kg em 1 volume: amostra de 1 volume');
 
 const final = statusPedidoApos(pedido.itens,{i1:900,i2:50});
 if (final.status !== 'RECEBIDO_TOTAL' || final.novosTotais.i1 !== 1000) throw new Error('Status total incorreto');

@@ -5,6 +5,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Recebimento: amostragem em kg/L e aviso de erro por cima do modal (19/10/2026)
+
+- **Caso:** PC-0051, 1 kg de corante (MPGR-00051) não entrava: "A amostragem ... não pode exceder a quantidade recebida". A tela calculava √1 + 1 = 2 e o servidor recusava 2 > 1. Valia para todo lote em kg/L abaixo de ~2,6 (e acima disso pedia "√massa + 1", ex. 33 kg de amostra para 1.000 kg).
+- **Regra nova (`amostragemDoLote` em `logistica.html`, cópia em `functions/recebimento.js`, paridade testada):** unidade contínua (kg, g, mg, L, ml) → √VOLUMES + 1, em volumes; discreta (un, rolo, cx) → √quantidade + 1; nunca passa do total (lote pequeno é amostrado inteiro). O **servidor calcula** e ignora o número do navegador — tela em cache com a regra velha não trava mais. Grava `amostragemUnidade` ('volume' ou a unidade); a Qualidade mostra "Amostra: 1 volume(s)".
+- **Aviso por cima de tudo (`auth_check.js`, vale para as 18 telas com `#alertBox`):** faixa fixa no topo, acima de qualquer modal; erro (`alert-danger`) fica até fechar no × ou 30 s; sucesso segue sumindo no tempo da página.
+- **Testes:** `run_recebimento_amostragem_test.js` (regra nova + paridade tela × servidor), `run_lote_interno_test.js` (servidor calcula), `run_recebimento_amostra_ui_test.js` (novo). Outras 12 telas com `#alertBox` passam. `run_inspecao_pa_ui_test.js` já falhava no main antes (botão `data-laudo-lote`), não é deste escopo.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Entrada avulsa de PA, sem OP (22/10/2026)
 
 - **Pedido:** chegou devolução de item antigo sem OP nem carga; não havia como aparecer como estoque de PA. Decisões do usuário: passa pelo **laudo**; é estoque **próprio** da Kuryos, vendido a **outro cliente**; sabe cliente/NF/lote/validade; acontece de vez em quando (vira tela).

@@ -1016,6 +1016,11 @@ function showAlert(msg, type) {
   box.className = 'alert alert-' + (type || 'success') + ' show';
   setTimeout(function() { box.classList.remove('show'); }, 6000);
 }
+// Amostra de material em kg/L é contada em volumes (19/10); entrada antiga não tem a unidade.
+function unidadeAmostra(entrada) {
+  var u = entrada && entrada.amostragemUnidade;
+  return !u ? '' : u === 'volume' ? ' volume(s)' : ' ' + escapeHtml(u);
+}
 function currentUserNome() {
   return (window.currentUser && window.currentUser.nome) || (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Desconhecido';
 }
@@ -1314,7 +1319,7 @@ function renderFila() {
         : (f.itemTipo === 'produto' ? '<span class="field-hint">Produção interna</span>' : '<span class="field-hint">—</span>');
       var entrada = lote.recebimento;
       var resumoEntrada = entrada
-        ? '<b>NF ' + escapeHtml(entrada.notaFiscal || '—') + '</b><br><span class="field-hint">Amostra: ' + fmtNum(entrada.qtdAmostragem || 0) +
+        ? '<b>NF ' + escapeHtml(entrada.notaFiscal || '—') + '</b><br><span class="field-hint">Amostra: ' + fmtNum(entrada.qtdAmostragem || 0) + unidadeAmostra(entrada) +
           ' · Cert.: ' + (entrada.certificadoFornecedor ? 'sim' : 'não') + '<br>Veículo: ' + escapeHtml(entrada.condicoesVeiculo || '—') +
           '/5 · Embalagem: ' + escapeHtml(entrada.condicoesEmbalagem || '—') + '/5</span>'
         : '<span class="field-hint">' + (f.itemTipo === 'produto' ? 'Não se aplica' : 'Entrada anterior ao novo formulário') + '</span>';
@@ -1932,7 +1937,7 @@ function abrirLaudo(itemCodigo, loteKey, opKey) {
     entradaBox.innerHTML = '<b>Entrada registrada pela Logística</b><br>' +
       'NF: ' + escapeHtml(entrada.notaFiscal || '—') + ' · Lote interno: ' + escapeHtml(entrada.loteInterno || lote.loteInterno || '—') +
       ' · SKU fornecedor: ' + escapeHtml(entrada.skuFornecedor || '—') + '<br>' +
-      'Amostra separada: ' + fmtNum(entrada.qtdAmostragem || 0) + ' · Certificado: ' + (entrada.certificadoFornecedor ? 'sim' : 'não') +
+      'Amostra separada: ' + fmtNum(entrada.qtdAmostragem || 0) + unidadeAmostra(entrada) + ' · Certificado: ' + (entrada.certificadoFornecedor ? 'sim' : 'não') +
       ' · Veículo: ' + escapeHtml(entrada.condicoesVeiculo || '—') + '/5 · Embalagem: ' + escapeHtml(entrada.condicoesEmbalagem || '—') + '/5' +
       (entrada.recebidoPor ? '<br><span class="field-hint">Recebido por ' + escapeHtml(entrada.recebidoPor) + '</span>' : '');
   } else {

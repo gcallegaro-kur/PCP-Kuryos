@@ -1794,7 +1794,7 @@ exports.registrarRecebimento = onCall(async (request) => {
         tipoMaterial: linha.tipoMaterial, identificacaoMaterial: linha.identificacaoMaterial,
         skuInterno: materialCodigo, skuFornecedor: linha.skuFornecedor,
         loteInterno, loteOrigem: linha.loteOrigem, notaFiscal: entrada.notaFiscal,
-        qtdRecebida: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, qtdAmostragem: linha.qtdAmostragem,
+        qtdRecebida: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, qtdAmostragem: linha.qtdAmostragem, amostragemUnidade: linha.amostragemUnidade || null,
         certificadoFornecedor: linha.certificadoFornecedor,
         condicoesVeiculo: entrada.condicoesVeiculo, condicoesEmbalagem: linha.condicoesEmbalagem,
         fornecedorKey: pedido.fornecedorKey || null,

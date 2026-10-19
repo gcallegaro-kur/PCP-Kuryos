@@ -2,6 +2,25 @@
 
 const TIPOS_MATERIAL = new Set(["EMBALAGEM", "MATERIA_PRIMA"]);
 
+/* Amostragem √n + 1 (cópia de amostragemDoLote em public/logistica.html).
+   O SERVIDOR calcula -- o número que vem do navegador não é usado: tela em
+   cache com a regra antiga mandava 2 para 1 kg e travava a entrada (PC-0051,
+   19/10). Unidade contínua: n = volumes; discreta: n = quantidade. Nunca
+   passa do total. */
+const UNIDADES_CONTINUAS_AMOSTRA = new Set(["kg", "g", "mg", "l", "lt", "litro", "litros", "ml"]);
+function amostraPorVolume(unidade) {
+  return UNIDADES_CONTINUAS_AMOSTRA.has(String(unidade || "").trim().toLowerCase());
+}
+function amostragemDoLote(qtd, volumes, unidade) {
+  const n = Number(qtd);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (amostraPorVolume(unidade)) {
+    const v = Math.max(1, Math.floor(Number(volumes) || 1));
+    return Math.min(v, Math.ceil(Math.sqrt(v) + 1));
+  }
+  return Math.min(Math.ceil(n), Math.ceil(Math.sqrt(n) + 1));
+}
+
 function numero(valor) {
   const n = Number(valor);
   return Number.isFinite(n) ? n : NaN;
@@ -40,7 +59,6 @@ function validarEPrepararLinhas(payload, pedido, enderecos) {
     if (!texto(item.materialCodigo, 120)) throw Object.assign(new Error(`O item ${itemKey} está sem SKU interno no Pedido de Compra.`), {code: "failed-precondition"});
     const qtd = numero(linha.qtdRecebida);
     const qtdVolumes = numero(linha.qtdVolumes);
-    const amostra = numero(linha.qtdAmostragem);
     const tipo = texto(linha.tipoMaterial, 30).toUpperCase();
     const enderecoKey = texto(linha.enderecoKey, 100);
     const endereco = enderecos && enderecos[enderecoKey];
@@ -59,8 +77,8 @@ function validarEPrepararLinhas(payload, pedido, enderecos) {
     const chaveLote = `${itemKey}|${loteOrigem.toUpperCase()}`;
     if (lotesInformados.has(chaveLote)) throw Object.assign(new Error(`O lote ${loteOrigem} foi repetido para ${item.materialCodigo || itemKey}. Mantenha uma única linha e some a quantidade.`), {code: "invalid-argument"});
     lotesInformados.add(chaveLote);
-    if (!Number.isFinite(amostra) || amostra < 0) throw Object.assign(new Error(`Informe uma amostragem válida para ${item.materialCodigo || itemKey}.`), {code: "invalid-argument"});
-    if (amostra > qtd + 0.0001) throw Object.assign(new Error(`A amostragem de ${item.materialCodigo || itemKey} não pode exceder a quantidade recebida deste lote.`), {code: "invalid-argument"});
+    const amostra = amostragemDoLote(qtd, qtdVolumes, item.unidade);
+    const amostraUnidade = amostraPorVolume(item.unidade) ? "volume" : (texto(item.unidade, 20) || "un");
     if (!certificadoInformado) throw Object.assign(new Error(`Informe se ${item.materialCodigo || itemKey} veio com certificado.`), {code: "invalid-argument"});
     if (![1, 2, 3, 4, 5].includes(condEmb)) throw Object.assign(new Error(`Avalie a embalagem de ${item.materialCodigo || itemKey} de 1 a 5.`), {code: "invalid-argument"});
     if (!endereco || endereco.ativo === false) throw Object.assign(new Error(`Selecione um endereço ativo para ${item.materialCodigo || itemKey}.`), {code: "failed-precondition"});
@@ -68,7 +86,7 @@ function validarEPrepararLinhas(payload, pedido, enderecos) {
     const validade = texto(linha.dataValidade, 10);
     if (validade && !/^\d{4}-\d{2}-\d{2}$/.test(validade)) throw Object.assign(new Error(`A validade de ${item.materialCodigo || itemKey} é inválida.`), {code: "invalid-argument"});
     return {
-      itemKey, item, qtdRecebida: qtd, qtdVolumes, qtdAmostragem: amostra, tipoMaterial: tipo,
+      itemKey, item, qtdRecebida: qtd, qtdVolumes, qtdAmostragem: amostra, amostragemUnidade: amostraUnidade, tipoMaterial: tipo,
       identificacaoMaterial: identificacao, skuFornecedor, loteOrigem,
       certificadoFornecedor: certificado, condicoesEmbalagem: condEmb,
       dataValidade: validade || null, enderecoKey,
@@ -105,4 +123,4 @@ function statusPedidoApos(itens, deltas, statusAtual) {
   return {status: completo ? "RECEBIDO_TOTAL" : (algum ? "RECEBIDO_PARCIAL" : "ENVIADO"), novosTotais};
 }
 
-module.exports = {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos};
+module.exports = {formatarLoteInterno, validarEPrepararLinhas, statusPedidoApos, amostragemDoLote};

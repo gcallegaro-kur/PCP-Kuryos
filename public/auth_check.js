@@ -1581,3 +1581,61 @@ function _autoAjustarPlanejamentoInterno(db, pedidoKey) {
     });
   });
 };
+
+/* Aviso da tela por cima de tudo (19/10/2026).
+   Pedido do usuário: "quando aparece o erro, ele fica atrás da janela onde
+   está sendo preenchida a entrada de material [...] para qualquer erro,
+   mostrar um banner que sobrepõe qualquer tela que esteja aberta".
+   Cada página tem o seu #alertBox no topo do conteúdo e o seu showAlert();
+   com um modal aberto (z-index 500+) a mensagem nascia escondida atrás dele.
+   Aqui, num ponto só para as 18 telas que usam #alertBox:
+   - o aviso visível vira faixa fixa no topo, acima de qualquer modal;
+   - ERRO (alert-danger) não some sozinho em 4-7 s: fica até a pessoa fechar
+     no ×, ou por 30 s; aviso de sucesso continua sumindo no tempo da página. */
+(function() {
+  var ESTILO = '#alertBox.show{position:fixed!important;top:14px;left:50%;transform:translateX(-50%);' +
+    'z-index:2147483000;width:min(760px,calc(100vw - 24px));margin:0!important;box-shadow:0 12px 32px rgba(0,0,0,.28);' +
+    'font-size:14px;line-height:1.45;padding:14px 46px 14px 18px!important;border-radius:10px}' +
+    '#alertBox .alert-fechar{position:absolute;top:8px;right:10px;border:0;background:transparent;color:inherit;' +
+    'font-size:22px;line-height:1;cursor:pointer;padding:4px 6px;opacity:.75}#alertBox .alert-fechar:hover{opacity:1}';
+  var PERMANENCIA_ERRO_MS = 30000;
+  function instalar() {
+    var box = document.getElementById('alertBox');
+    if (!box || box.__avisoFixo) return;
+    box.__avisoFixo = true;
+    var st = document.createElement('style');
+    st.textContent = ESTILO;
+    document.head.appendChild(st);
+    var fechado = false, ate = 0, timer = null, obs;
+    function fechar() {
+      fechado = true; ate = 0;
+      box.classList.remove('show');
+      if (obs) obs.takeRecords();
+    }
+    function aplicar() {
+      var erro = box.classList.contains('alert-danger');
+      if (box.classList.contains('show')) {
+        if (erro && !box.querySelector('.alert-fechar')) {
+          // Mensagem nova (a página trocou o texto): botão de fechar e prazo novo.
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'alert-fechar'; b.title = 'Fechar'; b.setAttribute('aria-label', 'Fechar aviso');
+          b.textContent = '×';
+          b.addEventListener('click', fechar);
+          box.appendChild(b);
+          fechado = false; ate = Date.now() + PERMANENCIA_ERRO_MS;
+          clearTimeout(timer);
+          timer = setTimeout(function() { if (box.classList.contains('alert-danger')) fechar(); }, PERMANENCIA_ERRO_MS);
+        }
+      } else if (erro && !fechado && Date.now() < ate) {
+        // O setTimeout da própria página tentou esconder o erro: segura.
+        box.classList.add('show');
+      }
+      obs.takeRecords();
+    }
+    obs = new MutationObserver(aplicar);
+    obs.observe(box, {attributes: true, attributeFilter: ['class'], childList: true});
+    if (box.classList.contains('show')) aplicar();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', instalar);
+  else instalar();
+})();
