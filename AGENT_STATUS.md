@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Manutenção › Cadastro de Ativos (19/10/2026)
+
+- **Pedido:** módulo de gestão de ativos (máquinas e equipamentos) consumido pelos outros módulos; 1º passo para CK-3/CK-4/CK-5 e CK-8 da spec do CQ.
+- **Arquivos ativos:** `public/ativos.html` (novo), `public/shared/ativos.js` (novo), `public/shared/ativos-tela.js` (novo), `public/auth_check.js`, `database.rules.json`, `public/manuais.html`, `public/manual_ativos.html` (novo), testes `run_ativos*`.
+
 ### Claude — Compras › Cliente/pedido sugere só pedidos que demandam o material (23/10/2026)
 
 - **Pedido:** ao vincular cliente e pedidos num PC, sugerir só os pedidos que precisam do material comprado.
