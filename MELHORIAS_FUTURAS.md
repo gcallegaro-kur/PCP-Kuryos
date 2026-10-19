@@ -934,6 +934,8 @@ diz por quê.
 
 ## Qualidade
 
+**Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.
+
 ### CK-3, CK-4 e CK-5 — decisões de 19/10/2026 (em construção)
 
 O usuário pediu as três rotinas (assepsia do reator, assepsia da linha e
