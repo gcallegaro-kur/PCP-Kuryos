@@ -5,6 +5,17 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Entrada avulsa de PA, sem OP (22/10/2026)
+
+- **Pedido:** chegou devolução de item antigo sem OP nem carga; não havia como aparecer como estoque de PA. Decisões do usuário: passa pelo **laudo**; é estoque **próprio** da Kuryos, vendido a **outro cliente**; sabe cliente/NF/lote/validade; acontece de vez em quando (vira tela).
+- **Fluxo:** `devolucoes.html` aba "Entrada avulsa de PA (sem OP)" (módulo logistica) -> palete `origemTipo: 'entrada_avulsa_pa'` em QUARENTENA (sem `opKey`, sem pedido, `propriedade: KURYOS`, `entradaAvulsa{motivo,clienteOrigem,nf,...}`; chave idempotente `avu_{uuid}`) -> Qualidade laudo por palete (fila avulsa, não há OP para agrupar) -> Expedição: botão "Vincular a pedido" (`expedicao-grade-tela.js`) grava `skuPedidoKey` + `vinculoPedido` -> saída.
+- **Módulo:** `shared/entrada-avulsa-pa.js` (`validar`, `montarPalete`, `registrar`, `candidatosPedido`, `validarVinculo`, `vincular`/`desvincular`).
+- **Expedição (regra tela = servidor, byte a byte):** `expedicao.js` + `functions/expedicao_regras.js`: avulso dispensa portões de OP/Conferência/vínculo da OP, exige pedido de destino ("Estoque próprio sem pedido: vincule…"), mantém laudo/validade/endereço/cancelamento. `functions/expedicao.js`: `opKey`/`conferencia`/`qualidade` `|| null` (undefined derruba a transaction), item da carga ganha `origemTipo`, e a saída **credita o pedido** (`produzido`, `atendidoPorEstoque`, `ultimoApontamento`, status Concluído ao atingir a quantidade). **Exige `firebase deploy --only functions:confirmarExpedicaoPA,functions:salvarAgendamentoExpedicaoPA`.**
+- **Conciliação:** palete avulso parado não conta como estoque de pedido; `atendidoPorEstoque` vira o balde `ESTOQUE_PROPRIO` ("Estoque próprio (sem OP)"), então produzido = expedido e o selo "vs OPs" não acusa. Kardex ganhou o rótulo.
+- **Limitação:** palete avulso retido/reprovado não tem OP para retrabalho automático (decidir com PCP/Qualidade).
+- **Testes:** `run_entrada_avulsa_pa_test.js` (regras, expedição real do servidor, conciliação), `run_entrada_avulsa_pa_ui_test.js` (lançar -> laudar -> vincular nas telas reais). Manual da Logística atualizado.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Ajuste de Pedido de Compra (19/10/2026)
 
 - **Motivação:** PC-0038 (álcool): pedido 6.000, fornecedor entregou 5.000, ajuste combinado por telefone sem como registrar; ficou "Recebido parcial" esperando um saldo que não virá.

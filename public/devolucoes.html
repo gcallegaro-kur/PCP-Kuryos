@@ -11,6 +11,7 @@
   <script src="shared/utils.js"></script>
   <script src="auth_check.js"></script>
   <script src="shared/devolucao-cliente.js"></script>
+  <script src="shared/entrada-avulsa-pa.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg"><link rel="stylesheet" href="shared/theme.css">
   <style>
     :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface:#f9fafb;--green:#d1fae5;--red:#fee2e2;--orange:#fff7ed;--blue:#e0e7ff}
@@ -79,6 +80,7 @@
     <button type="button" data-tab="lista" class="active">Devoluções</button>
     <button type="button" data-tab="autorizar" id="tabAutorizar" hidden>Autorizar devolução</button>
     <button type="button" data-tab="receber" id="tabReceber" hidden>Receber mercadoria</button>
+    <button type="button" data-tab="avulsa" id="tabAvulsa" hidden>Entrada avulsa de PA (sem OP)</button>
   </div>
   <main class="main">
     <div id="alert" class="alert"></div>
@@ -141,6 +143,32 @@
         <div class="footer"><button type="button" class="btn" id="rSalvar" disabled>Confirmar recebimento em quarentena</button></div>
       </div></div>
     </section>
+
+    <!-- ══ ENTRADA AVULSA (Logística) ══ -->
+    <section id="view-avulsa" hidden>
+      <div class="card"><h2>Entrada avulsa de produto acabado</h2><div class="body">
+        <p class="note">Para produto acabado que <b>não tem OP nem saída registrada no sistema</b> — por exemplo, devolução de um item antigo. O palete entra em <b>quarentena</b>, sem tocar em pedido, OP ou produção, e segue para o <b>laudo da Qualidade</b>. Liberado, vira <b>estoque próprio da Kuryos</b>; para vender, vincule-o ao pedido do cliente na Expedição.</p>
+        <div class="grid">
+          <div class="field"><label for="vProduto">Produto *</label><input id="vProduto" list="vProdutos" autocomplete="off" placeholder="SKU ou descrição"><datalist id="vProdutos"></datalist></div>
+          <div class="field"><label for="vLote">Lote que está na caixa *</label><input id="vLote" maxlength="60"></div>
+          <div class="field"><label for="vQtd">Quantidade (unidades) *</label><input id="vQtd" type="number" min="1" step="1"></div>
+          <div class="field"><label for="vUnCx">Unidades por caixa</label><input id="vUnCx" type="number" min="1" step="1" placeholder="Pega do cadastro do produto"></div>
+          <div class="field"><label for="vValidade">Validade *</label><input id="vValidade" type="date"></div>
+          <div class="field"><label for="vEndereco">Endereço *</label><select id="vEndereco"></select></div>
+          <div class="field"><label for="vMotivoTipo">Tipo de motivo *</label><select id="vMotivoTipo"></select></div>
+          <div class="field"><label for="vCliente">Cliente que devolveu (se devolução)</label><input id="vCliente" maxlength="120"></div>
+          <div class="field"><label for="vNf">NF de devolução</label><input id="vNf" maxlength="60"></div>
+          <div class="field full"><label for="vMotivo">Motivo *</label><textarea id="vMotivo" rows="2" maxlength="2000" placeholder="O que é, de onde veio, por que não tem OP"></textarea></div>
+        </div>
+        <div id="vCaixas" class="sub"></div>
+        <div id="vErros" class="erros"></div>
+        <div class="footer"><button type="button" class="btn" id="vSalvar">Lançar em quarentena</button></div>
+      </div></div>
+      <div class="card"><h2>Entradas avulsas lançadas</h2><div class="wrap"><table>
+        <thead><tr><th>Palete</th><th>Produto / lote</th><th class="num">Saldo</th><th>Situação</th><th>Lançada por</th><th>Pedido vinculado</th></tr></thead>
+        <tbody id="vLista"></tbody>
+      </table></div></div>
+    </section>
   </main>
 
   <div id="modal" class="modal-bg"><div class="modal">
@@ -164,7 +192,7 @@ firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
 var D = window.DevolucaoCliente;
-var dados = {devolucoes_cliente: {}, expedicoes_comerciais: {}, pedidos_comerciais: {}, estoque_lotes: {}, enderecos_estoque: {}};
+var dados = {devolucoes_cliente: {}, expedicoes_comerciais: {}, pedidos_comerciais: {}, estoque_lotes: {}, enderecos_estoque: {}, produtos: {}};
 var carregados = {};
 var detalheAberto = null;
 
@@ -180,7 +208,7 @@ function dataBr(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse(
 document.querySelectorAll('.tabs button').forEach(function(b) {
   b.onclick = function() {
     document.querySelectorAll('.tabs button').forEach(function(x) { x.classList.toggle('active', x === b); });
-    ['lista', 'autorizar', 'receber'].forEach(function(k) { document.getElementById('view-' + k).hidden = k !== b.dataset.tab; });
+    ['lista', 'autorizar', 'receber', 'avulsa'].forEach(function(k) { document.getElementById('view-' + k).hidden = k !== b.dataset.tab; });
   };
 });
 
@@ -393,12 +421,92 @@ document.getElementById('rSalvar').onclick = function() {
     .finally(function() { btn.disabled = false; btn.textContent = 'Confirmar recebimento em quarentena'; });
 };
 
+// ── Entrada avulsa de PA (Logística) ─────────────────────────────
+// Regras em shared/entrada-avulsa-pa.js. Aqui só a ligação: formulário,
+// lista dos lançamentos e a chave de idempotência (duplo clique não duplica).
+var EA = window.EntradaAvulsaPA, avulsaChave = null;
+function hojeIso() { return new Date().toLocaleDateString('en-CA', {timeZone: 'America/Sao_Paulo'}); }
+function produtoPorEntrada(txt) {
+  var t = String(txt || '').trim().toUpperCase();
+  if (!t) return null;
+  var ach = EA.acharProduto(dados.produtos, t.split(' — ')[0].trim());
+  return ach;
+}
+function renderAvulsa() {
+  var dl = document.getElementById('vProdutos');
+  if (dl && !dl.dataset.pronto && Object.keys(dados.produtos).length) {
+    dl.dataset.pronto = '1';
+    dl.innerHTML = Object.keys(dados.produtos).sort().map(function(k) {
+      var p = dados.produtos[k] || {};
+      return '<option value="' + esc((p.sku || k) + ' — ' + (p.descricao || '')) + '"></option>';
+    }).join('');
+  }
+  var sel = document.getElementById('vEndereco');
+  if (sel && !sel.dataset.pronto && Object.keys(dados.enderecos_estoque).length) { sel.dataset.pronto = '1'; sel.innerHTML = opcoesEnderecos(); }
+  var tipo = document.getElementById('vMotivoTipo');
+  if (tipo && !tipo.options.length) tipo.innerHTML = Object.keys(EA.MOTIVOS).map(function(k) { return '<option value="' + k + '">' + esc(EA.MOTIVOS[k]) + '</option>'; }).join('');
+  var linhas = [];
+  Object.keys(dados.estoque_lotes).forEach(function(ik) {
+    Object.keys(dados.estoque_lotes[ik] || {}).forEach(function(lk) {
+      var l = dados.estoque_lotes[ik][lk];
+      if (EA.ehAvulso(l)) linhas.push(l);
+    });
+  });
+  linhas.sort(function(a, b) { return String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')); });
+  var SIT = {QUARENTENA: ['Na Qualidade (laudo)', ''], LIBERADO_EXPEDICAO: ['Liberado — estoque disponível', 'green'], APROVADO_CONCESSAO: ['Liberado com concessão', 'green'], REPROVADO: ['Reprovado', 'red'], RETIDO: ['Retido', 'red'], EXPEDIDO: ['Expedido', 'gray']};
+  document.getElementById('vLista').innerHTML = linhas.map(function(l) {
+    var s = SIT[l.status] || [l.status || '—', 'gray'], ea = l.entradaAvulsa || {};
+    return '<tr><td><b>' + esc(l.identificadorPalete) + '</b><div class="sub">' + dataBr(l.criadoEm) + '</div></td>' +
+      '<td>' + esc(l.itemCodigo) + '<div class="sub">' + esc(l.itemNome || '') + ' · lote ' + esc(l.loteOrigem || '—') + '</div></td>' +
+      '<td class="num">' + fmt(l.saldoLote) + '</td><td><span class="badge ' + s[1] + '">' + esc(s[0]) + '</span></td>' +
+      '<td>' + esc(ea.lancadaPor || l.criadoPor || '—') + '<div class="sub">' + esc(ea.clienteOrigem ? 'Cliente: ' + ea.clienteOrigem : '') + '</div></td>' +
+      '<td>' + (l.skuPedidoKey ? esc(l.skuPedidoKey) : '<span class="sub">— (vincule na Expedição)</span>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="empty">Nenhuma entrada avulsa lançada.</td></tr>';
+  atualizarCaixasAvulsa();
+}
+function lerAvulsa() {
+  var ach = produtoPorEntrada(document.getElementById('vProduto').value);
+  var un = document.getElementById('vUnCx').value;
+  return {sku: ach ? ach.key : document.getElementById('vProduto').value, qtd: document.getElementById('vQtd').value,
+    unidadesPorCaixa: un !== '' ? un : (ach && ach.produto.unCx ? ach.produto.unCx : ''), loteOrigem: document.getElementById('vLote').value,
+    validade: document.getElementById('vValidade').value, enderecoKey: document.getElementById('vEndereco').value,
+    motivoTipo: document.getElementById('vMotivoTipo').value, motivo: document.getElementById('vMotivo').value,
+    clienteOrigem: document.getElementById('vCliente').value, nfDevolucao: document.getElementById('vNf').value};
+}
+function atualizarCaixasAvulsa() {
+  var d = lerAvulsa(), v = EA.validar(d, {produtos: dados.produtos, enderecos: dados.enderecos_estoque, hoje: hojeIso()});
+  document.getElementById('vCaixas').textContent = (Number(d.qtd) > 0 && v.mult > 0)
+    ? v.caixas.fechadas + ' caixa(s) fechada(s)' + (v.caixas.parcial ? ' + 1 caixa parcial com ' + v.caixas.parcial + ' un.' : '') + ' (' + v.mult + ' un./caixa)'
+    : (Number(d.qtd) > 0 ? 'Sem unidades por caixa: o palete entra sem composição de caixas (a Qualidade amostra pelo que informar).' : '');
+}
+['vProduto', 'vQtd', 'vUnCx'].forEach(function(id) { document.getElementById(id).addEventListener('input', atualizarCaixasAvulsa); });
+document.getElementById('vSalvar').onclick = function() {
+  var btn = this, d = lerAvulsa();
+  var ctx = {produtos: dados.produtos, enderecos: dados.enderecos_estoque, hoje: hojeIso()};
+  var v = EA.validar(d, ctx);
+  document.getElementById('vErros').textContent = '';
+  if (v.erros.length) { document.getElementById('vErros').innerHTML = v.erros.map(esc).join('<br>'); return; }
+  if (!confirm('Lançar ' + fmt(d.qtd) + ' un. de ' + (v.produto.produto.descricao || v.produto.key) + ' em quarentena?')) return;
+  avulsaChave = avulsaChave || (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : String(Date.now()) + Math.random().toString(36).slice(2));
+  d.idempotencyKey = avulsaChave;
+  btn.disabled = true; btn.textContent = 'Lançando…';
+  EA.registrar(db, d, ctx, nome()).then(function(r) {
+    if (!r.ok) { document.getElementById('vErros').innerHTML = (r.erros || ['Falhou.']).map(esc).join('<br>'); return; }
+    alerta((r.repetida ? 'Este lançamento já estava registrado: ' : 'Lançado: ') + r.identificador + ' — na Fila de Inspeção da Qualidade.');
+    avulsaChave = null;
+    ['vProduto', 'vLote', 'vQtd', 'vUnCx', 'vValidade', 'vMotivo', 'vCliente', 'vNf'].forEach(function(id) { document.getElementById(id).value = ''; });
+    atualizarCaixasAvulsa();
+  }).catch(function(e) { document.getElementById('vErros').textContent = 'Não lançou: ' + e.message; })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Lançar em quarentena'; });
+};
+
 // ── Carga ─────────────────────────────────────────────────────────
 firebase.auth().onAuthStateChanged(function(user) {
   if (!user) return;
   var aplicarPapeis = function() {
     document.getElementById('tabAutorizar').hidden = !pode('comercial');
     document.getElementById('tabReceber').hidden = !pode('logistica');
+    document.getElementById('tabAvulsa').hidden = !pode('logistica');
   };
   // As abas dependem do perfil, que o auth_check.js lê depois do login:
   // aplica agora (se já estiver pronto) e de novo quando ele avisar.
@@ -412,7 +520,8 @@ firebase.auth().onAuthStateChanged(function(user) {
       aplicarPapeis();
       render();
       if (no === 'pedidos_comerciais' || no === 'expedicoes_comerciais' || no === 'devolucoes_cliente') renderPedidosAutorizar();
-      if (no === 'enderecos_estoque') renderItensReceber();
+      if (no === 'enderecos_estoque') { renderItensReceber(); renderAvulsa(); }
+      if (no === 'produtos' || no === 'estoque_lotes') renderAvulsa();
     });
   });
 });

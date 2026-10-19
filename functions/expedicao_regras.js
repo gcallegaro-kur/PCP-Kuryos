@@ -52,7 +52,12 @@
     // dele é o próprio recebimento (devolucao.recebidaEm), e o laudo da
     // Qualidade continua obrigatório -- é ele que decide reintegrar/reenviar.
     var devolvido = lote.origemTipo === 'devolucao_cliente' && !!(lote.devolucao && lote.devolucao.recebidaEm);
-    var origemValida = lote.origemTipo === 'conferencia_pa' || legado || devolvido;
+    // Entrada AVULSA de PA (shared/entrada-avulsa-pa.js): estoque próprio sem OP
+    // nem carga de origem, que passou pelo laudo da Qualidade. Dispensa os
+    // portões da OP e da Conferência de PA (não existem para ele), mas exige o
+    // PEDIDO de destino, escolhido na hora de vender (skuPedidoKey do palete).
+    var avulso = lote.origemTipo === 'entrada_avulsa_pa';
+    var origemValida = lote.origemTipo === 'conferencia_pa' || legado || devolvido || avulso;
     var vinculoGravado = legado ? lote.skuPedidoKeyOrigem : lote.skuPedidoKey;
     var motivo = '';
     if (lote.itemTipo !== 'produto' || !origemValida || !lote.identificadorPalete) motivo = 'Sem palete de PA conferido';
@@ -61,8 +66,10 @@
     else if (!legado && (!lote.qualidade || lote.qualidade.decisao !== lote.status)) motivo = 'Laudo da Qualidade ausente ou divergente';
     else if (lote.validade && String(lote.validade).slice(0, 10) < hoje) motivo = 'Palete vencido';
     else if (!endereco || endereco.ativo === false || lote.aguardandoEnderecoDefinitivo) motivo = 'Aguardando endereço definitivo ativo';
-    else if (op.status !== 'Concluído' || op.sku !== lote.itemCodigo || key(op.sku) !== itemKey) motivo = 'OP ou produto inconsistente';
-    else if (!legado && !devolvido && (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId)) motivo = 'Conferência de PA não finalizada';
+    else if (!avulso && (op.status !== 'Concluído' || op.sku !== lote.itemCodigo || key(op.sku) !== itemKey)) motivo = 'OP ou produto inconsistente';
+    else if (avulso && key(lote.itemCodigo) !== itemKey) motivo = 'Produto inconsistente';
+    else if (!legado && !devolvido && !avulso && (!conf.finalizadoEm || !lote.conferencia || conf.finalizacaoId !== lote.conferencia.finalizacaoId)) motivo = 'Conferência de PA não finalizada';
+    else if (avulso && (!skuPedidoKey || !demanda.sku)) motivo = 'Estoque próprio sem pedido: vincule o palete ao pedido que vai receber';
     else if (!skuPedidoKey || !pedidoId || demanda.sku !== lote.itemCodigo || !demanda.cliente) motivo = 'Pedido de origem ausente; regularize o vínculo da OP no PCP';
     // No palete legado, skuPedidoKey guarda a chave RECONSTRUÍDA (a que existe
     // em /pedidos); a da OP é a antiga, sem zero à esquerda. Comparar as duas
@@ -70,14 +77,14 @@
     // então é skuPedidoKeyOrigem, a chave da OP no momento da importação --
     // a proteção continua valendo, contra o campo certo. A comparação ignora
     // só o zero à esquerda: número ou SKU diferente continua sendo mudança.
-    else if (vinculoGravado && normalizarChavePedido(op.skuPedidoKey) !== normalizarChavePedido(vinculoGravado)) motivo = 'Vínculo do pedido mudou após a conferência';
+    else if (!avulso && vinculoGravado && normalizarChavePedido(op.skuPedidoKey) !== normalizarChavePedido(vinculoGravado)) motivo = 'Vínculo do pedido mudou após a conferência';
     else if ([demanda.status, demanda.pedidoComercialStatus, comercial && comercial.status].some(function(s) { return /cancelad/i.test(s || ''); })) motivo = 'Pedido cancelado';
     else if (comercial && !Object.values(comercial.itens || {}).some(function(i) { return i.sku === lote.itemCodigo; })) motivo = 'Produto não consta no pedido comercial';
     var pedido = comercial || demanda;
     return {itemKey: itemKey, loteKey: loteKey, lote: lote, op: op, demanda: demanda, comercial: comercial || null,
       skuPedidoKey: skuPedidoKey, pedidoId: pedidoId, pedidoNumero: pedido.numeroFormatado || demanda.id || pedidoId,
       cliente: pedido.cliente || op.cliente || '', clienteKey: pedido.clienteKey || '',
-      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo, legado: legado, devolvido: devolvido};
+      frete: pedido.frete || {}, endereco: endereco || {}, motivo: motivo, disponivel: !motivo, legado: legado, devolvido: devolvido, avulso: avulso};
   }
   function listar(base, hoje) {
     var linhas = [];

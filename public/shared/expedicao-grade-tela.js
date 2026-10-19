@@ -110,13 +110,14 @@ function renderPaletes(){
     var dias=ExpedicaoGrade.diasEstoque(l.lote.criadoEm,hoje());
     var etapaAg=ag?CargasPA.etapa(ag[1]):null;
     return '<tr class="'+(selecionado?'selected':!l.disponivel?'blocked':'')+'"><td><input type="checkbox" aria-label="Selecionar '+e(l.lote.identificadorPalete||l.loteKey)+'" data-palete="'+e(k)+'" '+(selecionado?'checked ':'')+(bloqueado?'disabled':'')+'></td>'+
-      '<td><span class="state '+(!l.disponivel?'pending':ag?'scheduled':'')+'">'+(!l.disponivel?'Pendente':ag?'Agendado':'Disponível')+'</span>'+(!l.disponivel?'<div class="sub product">'+e(l.motivo)+'</div>':'')+(ag?'<div class="sub">'+e(etapaAg.curto)+'</div><div><a class="btn ghost" data-agenda="'+e(ag[0])+'" href="cargas.html?carga='+encodeURIComponent(ag[0])+'">Acompanhar</a></div>':'')+'</td>'+
+      '<td><span class="state '+(!l.disponivel?'pending':ag?'scheduled':'')+'">'+(!l.disponivel?'Pendente':ag?'Agendado':'Disponível')+'</span>'+(!l.disponivel?'<div class="sub product">'+e(l.motivo)+'</div>':'')+(l.avulso&&!ag&&/LIBERADO_EXPEDICAO|APROVADO_CONCESSAO/.test(l.lote.status||'')?'<div><button type="button" class="btn ghost" data-vincular="'+e(k)+'">'+(l.skuPedidoKey?'Trocar pedido':'Vincular a pedido')+'</button></div>':'')+(ag?'<div class="sub">'+e(etapaAg.curto)+'</div><div><a class="btn ghost" data-agenda="'+e(ag[0])+'" href="cargas.html?carga='+encodeURIComponent(ag[0])+'">Acompanhar</a></div>':'')+'</td>'+
       '<td>'+e(l.cliente)+'</td><td>'+e(l.pedidoNumero||'Sem vínculo')+'</td><td class="product"><b>'+e(l.lote.itemCodigo)+'</b><div class="sub">'+e(l.lote.itemNome)+'</div></td>'+
       '<td>'+e(l.lote.opLote||l.lote.opKey)+'<div class="sub">'+e(l.lote.identificadorPalete||l.loteKey)+'</div></td><td>'+composicaoHTML(l.lote)+'</td><td class="numeric"><b>'+num(l.lote.saldoLote)+'</b></td>'+celulasPeso(l)+
       '<td>'+e(l.endereco.codigo||l.lote.enderecoCodigo||'—')+'</td><td class="numeric">'+(dias==null?'—':dias)+'</td>'+
       '<td class="extra-col">'+dataBR(l.op.dataFimReal)+'</td><td class="extra-col">'+dataBR(l.lote.criadoEm)+'</td><td class="extra-col">'+dataBR(l.lote.validade)+'</td></tr>';
   }).join('')||'<tr><td colspan="15">Nenhum palete neste filtro. O PA aparece após a conferência no estoque.</td></tr>';
   selecionaveisVisiveis=enviando?[]:linhas.filter(function(l){return l.disponivel&&!agendaDoPalete(idLinha(l));});
+  el('paletes').querySelectorAll('[data-vincular]').forEach(function(b){b.onclick=function(){abrirVinculoEstoque(b.dataset.vincular);};});
   el('paletes').querySelectorAll('[data-palete]').forEach(function(x){x.onchange=function(){var l=linhas.find(function(a){return idLinha(a)===x.dataset.palete;});if(x.checked){if(!Object.keys(selecionados).length&&l.frete.tipo)el('tipo').value=l.frete.tipo==='FOB'?'COLETA':'ENTREGA';selecionados[idLinha(l)]=l;}else delete selecionados[idLinha(l)];renderPaletes();};});
   resumo();
 }
@@ -154,3 +155,40 @@ el('dataAgendada').value=hoje();
 Object.keys(base).forEach(function(no){dbOnValue(db.ref(no),function(s){base[no]=s.val()||{};carregados.add(no);renderPaletes();});});
 dbOnValue(db.ref('clientes'),function(s){clientesContatos=s.val()||{};renderPaletes();});
 dbOnValue(db.ref('agendamentos_expedicao'),function(s){agendas=s.val()||{};agendaPronta=true;CargasFluxo.render(el('fluxoCargas'),'expedicao.html',agendas);renderPaletes();});
+
+/* Estoque PRÓPRIO (entrada avulsa de PA, sem OP): antes de sair, o palete é
+   vinculado ao pedido que vai receber. A saída credita o pedido como atendido
+   por estoque. Regras em shared/entrada-avulsa-pa.js. */
+function abrirVinculoEstoque(k){
+  var partes=k.split('/'), lote=((base.estoque_lotes[partes[0]]||{})[partes[1]])||null;
+  if(!lote)return aviso('Palete não encontrado.',true);
+  var cand=EntradaAvulsaPA.candidatosPedido(base,lote);
+  var bg=document.createElement('div');
+  bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
+  bg.innerHTML='<div style="background:var(--card,#fff);color:var(--text,#1d1d1f);border-radius:14px;max-width:620px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.35)">'+
+    '<h2 style="margin:0 0 6px;font-size:18px">Vincular estoque próprio a um pedido</h2>'+
+    '<div class="sub" style="margin-bottom:12px">'+e(lote.itemCodigo)+' — '+e(lote.itemNome)+' · palete '+e(lote.identificadorPalete)+' · <b>'+num(lote.saldoLote)+' un.</b> · lote '+e(lote.loteOrigem||'—')+'</div>'+
+    (cand.length?'<label for="vincPedido" style="font-size:12px;font-weight:700">Pedido que recebe este palete</label>'+
+      '<select id="vincPedido" style="width:100%;padding:9px;margin:6px 0 4px">'+cand.map(function(c){return '<option value="'+e(c.key)+'"'+(c.key===lote.skuPedidoKey?' selected':'')+'>'+e('Pedido '+c.id+' · '+c.cliente+' · saldo a produzir '+num(c.saldo)+' de '+num(c.qtdTotal))+'</option>';}).join('')+'</select>'+
+      '<div class="sub">Ao confirmar a saída, o pedido é creditado como <b>atendido por estoque</b> (conta como produzido, sem OP).</div>'
+      :'<p>Não há pedido aberto deste produto com saldo para receber o palete. Peça ao Comercial para lançar o pedido e volte aqui.</p>')+
+    '<div id="vincErro" class="sub" style="color:#d03b3b;margin-top:8px"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">'+
+      (lote.skuPedidoKey?'<button type="button" class="btn ghost" id="vincDesfazer">Desfazer vínculo</button>':'')+
+      '<button type="button" class="btn ghost" id="vincFechar">Fechar</button>'+
+      (cand.length?'<button type="button" class="btn" id="vincOk">Vincular</button>':'')+'</div></div>';
+  document.body.appendChild(bg);
+  var fechar=function(){bg.remove();};
+  bg.querySelector('#vincFechar').onclick=fechar;
+  var autor=(window.currentUser&&window.currentUser.nome)||'Logística';
+  if(bg.querySelector('#vincOk'))bg.querySelector('#vincOk').onclick=function(){
+    this.disabled=true;
+    EntradaAvulsaPA.vincular(db,base,partes[0],partes[1],bg.querySelector('#vincPedido').value,autor).then(function(r){
+      if(!r.ok){bg.querySelector('#vincErro').textContent=r.erro;bg.querySelector('#vincOk').disabled=false;return;}
+      fechar();aviso('Palete vinculado ao pedido. Já pode entrar numa carga.');
+    }).catch(function(err){bg.querySelector('#vincErro').textContent=err.message;bg.querySelector('#vincOk').disabled=false;});
+  };
+  if(bg.querySelector('#vincDesfazer'))bg.querySelector('#vincDesfazer').onclick=function(){
+    EntradaAvulsaPA.desvincular(db,partes[0],partes[1],autor).then(function(r){if(!r.ok){bg.querySelector('#vincErro').textContent=r.erro;return;}fechar();aviso('Vínculo desfeito.');});
+  };
+}

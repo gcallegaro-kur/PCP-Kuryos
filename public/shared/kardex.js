@@ -39,6 +39,7 @@
     recebimento_pc:            {rotulo: 'Recebimento (PC)',          natureza: 'ENTRADA',  razao: 'ambas'},
     producao_op:               {rotulo: 'Entrada de produção',        natureza: 'ENTRADA',  razao: 'lote'},
     conferencia_pa:            {rotulo: 'Entrada de PA (conferência)', natureza: 'ENTRADA', razao: 'lote'},
+    entrada_avulsa_pa:         {rotulo: 'Entrada avulsa de PA (sem OP)', natureza: 'ENTRADA', razao: 'lote'},
     devolucao_cliente:         {rotulo: 'Devolução de cliente',       natureza: 'ENTRADA',  razao: 'lote'},
     consumo_producao:          {rotulo: 'Consumo na produção (OP)',   natureza: 'CONSUMO',  razao: 'item'},
     consumo_manipulacao:       {rotulo: 'Consumo na manipulação',     natureza: 'CONSUMO',  razao: 'item'},

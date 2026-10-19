@@ -98,17 +98,31 @@ function prepararSaida(base, data, autor, uid, agora) {
       tipo: 'expedicao_pa', motivo: restante === 0 ? 'SAÍDA DE PA POR PALETE' : 'SAÍDA PARCIAL DE PA (CAIXAS)', qtd: -qtd, saldoApos: restante,
       ref: cargaKey, loteKey: l.loteKey, itemTipo: 'produto', itemCodigo: p.itemCodigo, itemNome: p.itemNome || '',
       enderecoKey: p.enderecoKey, enderecoCodigo: l.endereco.codigo || p.enderecoCodigo || p.enderecoKey,
-      opKey: p.opKey, pedidoId: l.pedidoId, skuPedidoKey: l.skuPedidoKey, autor, em: agora, unidade: p.unidade || 'un'};
+      opKey: p.opKey || null, pedidoId: l.pedidoId, skuPedidoKey: l.skuPedidoKey, autor, em: agora, unidade: p.unidade || 'un'};
     return {itemKey: l.itemKey, loteKey: l.loteKey, identificadorPalete: p.identificadorPalete,
       sku: p.itemCodigo, descricao: p.itemNome || l.op.produto || '', qtd, unidade: p.unidade || 'un',
       parcial: restante > 0, caixasCarregadas: l.carga.caixas, caixaParcialCarregada: l.carga.parcial, saldoRestante: restante,
       pedidoId: l.pedidoId, pedidoNumero: l.pedidoNumero, skuPedidoKey: l.skuPedidoKey,
-      opKey: p.opKey, opLote: p.opLote || l.op.lote || '', loteOrigem: p.loteOrigem || '',
+      opKey: p.opKey || null, opLote: p.opLote || l.op.lote || '', loteOrigem: p.loteOrigem || '', origemTipo: p.origemTipo || null,
       enderecoKey: p.enderecoKey, enderecoCodigo: l.endereco.codigo || p.enderecoCodigo || p.enderecoKey,
-      validade: p.validade || null, conferencia: p.conferencia, qualidade: p.qualidade,
+      validade: p.validade || null, conferencia: p.conferencia || null, qualidade: p.qualidade || null,
       paleteOrigem: JSON.parse(JSON.stringify(p)), producao: JSON.parse(JSON.stringify(l.op))};
   });
   for (const [k, qtd] of Object.entries(porDemanda)) updates['pedidos/' + k + '/expedido'] = Number(base.pedidos[k].expedido || 0) + qtd;
+  // Estoque próprio (entrada avulsa de PA): a unidade não passou pela linha,
+  // então o pedido que ela atende é creditado aqui como produzido e marcado
+  // `atendidoPorEstoque` -- senão ficaria aberto para sempre e a conta
+  // produzido = expedido + estoque da conciliação não fecharia.
+  const porEstoque = {};
+  linhas.forEach(l => { if (l.avulso) porEstoque[l.skuPedidoKey] = (porEstoque[l.skuPedidoKey] || 0) + l.carga.unidades; });
+  for (const [k, qtd] of Object.entries(porEstoque)) {
+    const ped = base.pedidos[k] || {};
+    const produzido = Number(ped.produzido || 0) + qtd;
+    updates['pedidos/' + k + '/produzido'] = produzido;
+    updates['pedidos/' + k + '/atendidoPorEstoque'] = Number(ped.atendidoPorEstoque || 0) + qtd;
+    updates['pedidos/' + k + '/ultimoApontamento'] = agora;
+    if (Number(ped.qtdTotal) > 0 && produzido >= Number(ped.qtdTotal) && String(ped.statusManual || '').toLowerCase() !== 'cancelado') updates['pedidos/' + k + '/status'] = 'Concluído';
+  }
   Object.assign(updates, porComercial);
   for (const id of Object.keys(pedidos)) updates['comercial_eventos/' + id + '/' + cargaKey] = {tipo: 'SAIDA_PA_CONFIRMADA', cargaKey, em: agora, por: autor};
   const ids = Object.keys(pedidos);

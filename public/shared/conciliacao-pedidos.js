@@ -73,6 +73,7 @@
     };
   }
   var SEM_OP = 'SEM_OP';
+  var ESTOQUE_PROPRIO = 'ESTOQUE_PROPRIO';
   function baldeOp(r, opKey, opLote) {
     var k = opKey || SEM_OP;
     if (!r.porOp[k]) {
@@ -126,6 +127,15 @@
       baldeOp(porPedido[k], opKey, op.lote).produzido = arred(n(op.produzido));
     });
 
+    // Estoque PRÓPRIO que atendeu o pedido (entrada avulsa de PA, 22/10/2026):
+    // a unidade não passou pela linha, mas o servidor creditou `produzido` e
+    // `atendidoPorEstoque` na saída. Vira uma "OP" à parte para a conta por OP
+    // fechar (produzido do pedido = soma das OPs + estoque próprio).
+    Object.keys(pedidos).forEach(function(k) {
+      var a = n((pedidos[k] || {}).atendidoPorEstoque);
+      if (a > 0 && porPedido[k]) baldeOp(porPedido[k], ESTOQUE_PROPRIO, 'Estoque próprio (sem OP)').produzido = arred(a);
+    });
+
     // ── Cargas: legado da planilha e fluxo novo ────────────────────────
     Object.keys(base.expedicoes_comerciais || {}).forEach(function(ck) {
       var c = base.expedicoes_comerciais[ck] || {};
@@ -138,7 +148,8 @@
         var k = chaveDe(i);
         if (!k) { semVinculo[destino[0]] = arred(semVinculo[destino[0]] + qtd); return; }
         somar(porPedido[k][destino[0]], destino[1], qtd);
-        somar(baldeOp(porPedido[k], i.opKey, loteDe(i))[destino[0]], destino[1], qtd);
+        var deEstoque = i.origemTipo === 'entrada_avulsa_pa';
+        somar(baldeOp(porPedido[k], deEstoque ? ESTOQUE_PROPRIO : i.opKey, deEstoque ? 'Estoque próprio (sem OP)' : loteDe(i))[destino[0]], destino[1], qtd);
       });
     });
 
@@ -175,6 +186,8 @@
       Object.keys(lotes[itemKey] || {}).forEach(function(loteKey) {
         var l = lotes[itemKey][loteKey] || {};
         if (l.itemTipo !== 'produto' || !(n(l.saldoLote) > 0)) return;
+        // Estoque próprio ainda não vendido não é produção de pedido nenhum.
+        if (l.origemTipo === 'entrada_avulsa_pa') return;
         var k = chaveDe(l);
         if (!k) { semVinculo.estoque = arred(semVinculo.estoque + n(l.saldoLote)); return; }
         somar(porPedido[k].estoque, 'WMS', l.saldoLote);
