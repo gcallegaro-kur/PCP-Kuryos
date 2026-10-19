@@ -884,7 +884,65 @@ Pedido" e MRP só usam material do cliente para a demanda dele. Regras em
   clientes órfãos, em escala menor. A correção é a mesma já aplicada em
   Cliente (`8c2166f`): resolver uma chave e avisar quando não casar.
 
+## Adiados entre 07 e 19/10/2026 (registrados em 19/10)
+
+Itens que surgiram nas conversas desse período e ficaram para depois. Cada um
+diz por quê.
+
+- **Relatório de Perdas consolidado (Analytics).** Perdas entre lotes, com filtro
+  por período, linha, cliente, produto, etapa e material, ranking e % de perda.
+  Hoje só existe a seção "Perdas do lote" no Dossiê (`DossieLote.perdasDoLote`),
+  um lote por vez. O usuário preferiu manter assim por ora ("deixa como está").
+  Decisão de navegação tomada junto: relatório que cruza lotes/setores nasce no
+  Analytics; consulta de um item/lote fica no setor (o Dossiê fica em PCP e Qualidade).
+- **Padronizar o nome do cliente gravado nos pedidos.** `pedidos` e
+  `pedidos_comerciais` têm 30 grafias para 26 clientes (Miss Rôse ×3, Glow
+  Make Up ×2, Briá Beauty ×2). Os filtros já comparam por `chaveNome`
+  (utils.js); falta reescrever o texto gravado para o nome do cadastro e, de
+  vez, resolver cliente por `clienteKey` em vez de texto. Nome realmente
+  diferente (SEUNOURA × SEUNOURA BEAUTY LTDA) só se resolve pelo cadastro.
+  Oferecido ao usuário, sem resposta.
+- **Granel liberado com restrição → RNC automática.** A liberação com
+  restrição (`LIBERAR_COM_RESTRICAO`, manipulacao.js) registra texto e quem
+  autorizou, mas não abre RNC. Oferecido, não pedido.
+- **Regra dos 95% no Planejamento e no Dashboard.** "O que comprar" e
+  Compras ignoram pedido ≥95% produzido (`pedidoFinalizado`); Planejamento e
+  Dashboard ainda tratam ≥95% como concluído sem o aviso "pronto para encerrar".
+- **`registros/` cru maior que o produzido da OP.** 18 lotes somam 23.611 un.
+  a mais em `registros/` do que em `ops.produzido` (ex.: 26211/02, 7.582 ×
+  1.950) — apontamentos substituídos que ficam no histórico. O razão
+  `apontamentosAplicados` tem o número certo; quem soma `registros/` direto
+  (relatórios antigos) superestima. Dívida técnica.
+- **Densidade dos cremes Miss Rôse.** HDR-MISS-0002 (Leão do Deserto) está com
+  densidade 1,0; os demais cremes da marca, 0,95 (+1,5% overfill, +2% perda).
+  Com 1,0 a pesagem pede ~207 g de granel por unidade contra 196,7 g dos
+  outros. Pendência de CADASTRO: confirmar o valor com a Qualidade.
+- **Testes de tela quebrados no main** (conferido em 19/10, falham sem nenhuma
+  mudança nova): `run_encerramento_pedido_ui_test.js`,
+  `run_inspecao_pa_ui_test.js` (botão `data-laudo-lote`),
+  `run_operacao_ui_test.js`, `run_painel_rearranjo_ui_test.js`,
+  `run_portao_bulk_ui_test.js`. E `run_rearranjo_linhas_ui_test.js` /
+  `run_retrabalhos_ui_test.js` fazem `require('playwright')` direto (rodar
+  com `NODE_PATH`). Teste quebrado por semanas deixa de proteger.
+- **Módulo de Manutenção / Gestão de Ativos** (proposta do usuário em 19/10).
+  Cadastro único de máquinas e equipamentos (reatores/tachos, envasadoras,
+  fechadoras, rotuladoras, balanças e instrumentos), consumido pelos outros
+  módulos: Qualidade (assepsia CK-3/CK-4, calibração CK-8), Operação (paradas
+  por máquina), Planejamento (capacidade por linha). Primeiro passo é só o
+  cadastro + situação (necessário para a assepsia); ordens de serviço,
+  preventiva e MTBF/MTTR vêm depois.
+
 ## Qualidade
+
+### CK-3, CK-4 e CK-5 — decisões de 19/10/2026 (em construção)
+
+O usuário pediu as três rotinas (assepsia do reator, assepsia da linha e
+first article). Decidido: agentes sanitizantes iniciais = os do F 0065/F 0066
+(água, Divosan Divosep 350 1%, álcool 70%), editáveis; equipamentos vêm do
+cadastro de ativos (ver "Módulo de Manutenção" acima); trava em chave de
+Ajustes, ligada quando a Qualidade estiver usando. First article com **32
+unidades** (correção da Qualidade em 17/09; a spec dizia 5–10). Contraprova do
+setup registrada como "unidade retida" até a entidade RET existir.
 
 ### Laudos do CQ — o que ficou de fora (2026-09-21)
 
