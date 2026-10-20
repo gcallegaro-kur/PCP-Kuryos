@@ -281,6 +281,14 @@ window.currentUser = null;
     document.head.appendChild(themeLink);
   }
 
+  // Cabeçalho de toda tabela fica congelado enquanto o corpo rola.
+  if (!window.__ktTabelaFixa && !document.querySelector('script[src="shared/tabela-fixa.js"]')) {
+    var fixaScript = document.createElement('script');
+    fixaScript.src = 'shared/tabela-fixa.js';
+    fixaScript.defer = true;
+    document.head.appendChild(fixaScript);
+  }
+
   // Estilos da sidebar de navegação (ver dashboard.html para o resto dos tokens).
   // O recuo de layout (padding-left:232px) NÃO fica aqui — mora em
   // shared/theme.css na classe estática ".has-sidebar" do <body>, presente
