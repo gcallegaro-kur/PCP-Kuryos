@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Qualidade A2: motor de checklists editáveis (19/10/2026)
+
+- **Plano:** `PLANO_QUALIDADE.md`, item A2 (decisão D6).
+- **Arquivos ativos:** `public/shared/checklists.js` (novo), `public/shared/checklists-modelos-padrao.js` (novo), `public/checklists_cq.html` (novo), `public/shared/checklists-tela.js` (novo), `public/auth_check.js`, `database.rules.json`, testes `run_checklists*`.
+
 ### Claude — Manutenção › Cadastro de Ativos (19/10/2026)
 
 - **Pedido:** módulo de gestão de ativos (máquinas e equipamentos) consumido pelos outros módulos; 1º passo para CK-3/CK-4/CK-5 e CK-8 da spec do CQ.
