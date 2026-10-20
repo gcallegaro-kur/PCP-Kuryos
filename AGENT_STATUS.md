@@ -32,6 +32,15 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Cabeçalho de tabela congelado em todas as telas — PUBLICADO (20/10/2026)
+
+- **Pedido (14/10, outro PC):** toda tabela que rola mantém o cabeçalho fixo. O trabalho ficou só na pasta, sem commit (o `.git` daquele PC estava corrompido); publicado hoje em `8f2ced1`.
+- **Como:** `public/shared/tabela-fixa.js`, carregado pelo `auth_check.js` em toda tela autenticada (manuais ficam de fora): `thead` sticky; contêiner com `overflow-x:auto` ganha altura até o pé da janela e rola por dentro (o topo da página fica visível); `overflow:hidden` vira `clip`; `th` transparente ganha fundo; tabela criada depois entra por MutationObserver; impressão desliga.
+- **Testes:** `run_tabela_fixa_test.js` 15/15; bateria de 69 testes de tela com só as 5 falhas que já existiam no main. Print do Estoque com 60 linhas rolando.
+- **⚠ Lição (incidente de 2 min):** comando encadeado com `;` deixou o deploy rodar depois de uma falha, de um worktree que já estava atrás do origin — a mudança de `a6e5eee` (peso por volume) saiu do ar por ~2 min até o rebase + novo deploy. Sempre `git fetch` e conferir `HEAD..origin/main` vazio IMEDIATAMENTE antes do deploy, no mesmo `&&`.
+- **Limpeza:** a pasta principal (`producao_firebase_FINAL`) tinha um commit local antigo (`f5fb420`, sem a liberação de linha de 19–20/10) e os arquivos desta mudança soltos; conferido que tudo já estava no origin e alinhada com `reset --hard origin/main`. Os 4 `*-gcallegaropc.html` (não versionados) ficaram intactos.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Peso REAL de cada volume no recebimento (20/10/2026)
 
 - **Pedido:** a divisão igual não serve quando os volumes diferem (caso real: 330 kg = 6 de 50 kg + 1 de 30 kg).
