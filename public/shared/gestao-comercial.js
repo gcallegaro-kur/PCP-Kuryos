@@ -24,9 +24,9 @@
    de maior início <= data. O preço do PEDIDO vence a tabela (é o negociado);
    a tabela só preenche item sem preço e serve de régua para o desvio. */
 (function(root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./conciliacao-pedidos.js'));
-  else root.GestaoComercial = factory(root.ConciliacaoPedidos);
-})(typeof globalThis !== 'undefined' ? globalThis : this, function(ConciliacaoPedidos) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./conciliacao-pedidos.js'), require('./responsavel-comercial.js'));
+  else root.GestaoComercial = factory(root.ConciliacaoPedidos, root.ResponsavelComercial);
+})(typeof globalThis !== 'undefined' ? globalThis : this, function(ConciliacaoPedidos, ResponsavelComercial) {
   'use strict';
 
   var TOLERANCIA_ATENDIDO = 0.95;
@@ -134,13 +134,15 @@
   }
 
   /* raw: {pedidos_comerciais, pedidos, ops, expedicoes_comerciais, estoque_lotes,
-     conferencias_pa, solicitacoes_descarte, clientes, produtos, precos_venda}
+     conferencias_pa, solicitacoes_descarte, clientes, produtos, precos_venda,
+     comercial_config}
      hoje: 'AAAA-MM-DD'. */
   function calcular(raw, hoje) {
     raw = raw || {};
     hoje = dataValida(hoje) || new Date().toISOString().slice(0, 10);
     var pcs = raw.pedidos_comerciais || {}, linhas = raw.pedidos || {}, ops = raw.ops || {};
     var clientes = raw.clientes || {}, produtos = raw.produtos || {}, precos = raw.precos_venda || {};
+    var comercialCfg = raw.comercial_config || {};
     var resolverCliente = indiceClientes(clientes, produtos);
 
     var conc = ConciliacaoPedidos.calcular({
@@ -348,7 +350,12 @@
       if (!mapaCli[k]) {
         var cad = clientes[k] || {};
         mapaCli[k] = {clienteKey: k, cliente: cad.nome || nome || k.replace(/^nome:/, '').toUpperCase(), codigo: texto(cad.codigo), cadastrado: !!clientes[k],
-          condicaoPagamento: texto(cad.condicaoPagamento), cidade: texto(cad.cidade), uf: texto(cad.uf), pedidos: []};
+          condicaoPagamento: texto(cad.condicaoPagamento), cidade: texto(cad.cidade), uf: texto(cad.uf),
+          // Responsavel comercial (20/10): resolvido aqui para a tela filtrar e
+          // agrupar sem reler o cadastro. Cliente que aparece em pedido mas nao
+          // esta cadastrado (`cadastrado: false`) nao tem onde guardar dono --
+          // vem sem responsavel, e a tela nao oferece atribuicao para ele.
+          responsavel: ResponsavelComercial.doCliente(cad, comercialCfg), pedidos: []};
       }
       return mapaCli[k];
     }
@@ -381,6 +388,12 @@
       return {
         clienteKey: k, cliente: c.cliente, codigo: c.codigo, cadastrado: c.cadastrado, cidade: c.cidade, uf: c.uf,
         condicaoPagamento: c.condicaoPagamento,
+        // Este literal monta um objeto NOVO: campo posto em `mapaCli` e nao
+        // repassado aqui some sem erro nenhum. Foi o que aconteceu com
+        // `responsavel` em 20/10 -- o motor resolvia certo e a coluna da tela
+        // mostrava "--" para todo mundo. Quem adicionar campo a `cli()` tem de
+        // repassar aqui tambem.
+        responsavel: c.responsavel,
         pedidosTotal: ps.length, pedidos12m: em12.length, volume12m: vol(em12), expedido12m: expedido12,
         valor12m: comValor12.length ? arred(comValor12.reduce(function(s, p) { return s + p.valor; }, 0)) : null,
         pedidosComValor12m: comValor12.length,

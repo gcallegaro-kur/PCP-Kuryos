@@ -66,7 +66,23 @@
     },
     "clientes": {
       ".read": "auth != null",
-      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true))"
+      ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true))",
+      "$cliente": {
+        // Responsavel comercial (20/10): quem atribui e quem usa a TELA
+        // (gestao_comercial.html, modulo `comercial`), nao so o cadastro.
+        // Regra de filho concede a MAIS, sem abrir o resto do cadastro do
+        // cliente -- mesmo recurso de `config/contadores` acima. Hoje quem tem
+        // `comercial` e pcp/admin, que ja escreviam; isso deixa a atribuicao
+        // funcionando no dia em que existir um papel comercial proprio.
+        "responsavelComercialId": { ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true)" },
+        "responsavelComercialNome": { ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true)" },
+        "responsavelComercialEm": { ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true)" },
+        "responsavelComercialPor": { ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true)" }
+      }
+    },
+    "comercial_config": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('comercial').val() == true || root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true)"
     },
     "materiais": {
       ".read": "auth != null",

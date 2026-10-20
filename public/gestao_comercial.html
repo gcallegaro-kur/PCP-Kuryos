@@ -12,6 +12,7 @@
   <script src="shared/utils.js"></script>
   <script src="shared/expedicao.js"></script>
   <script src="shared/conciliacao-pedidos.js"></script>
+  <script src="shared/responsavel-comercial.js"></script>
   <script src="shared/gestao-comercial.js"></script>
   <script src="shared/pedido-edicao.js"></script>
   <script src="shared/impacto-pedido-ops.js"></script>
@@ -180,6 +181,8 @@
         <option value="ATRASADA">Recompra atrasada</option>
         <option value="ATENCAO">Recompra em atenção</option>
       </select>
+      <select id="cliResp" title="Filtrar pelo responsável comercial"><option value="">Todos os responsáveis</option></select>
+      <button class="btn btn-ghost btn-sm" id="btnCarteira">Carteira e responsáveis</button>
     </div>
     <p class="nota" style="margin-bottom:10px">Classe ABC por volume pedido em 12 meses (A = clientes que somam os primeiros 80%). Recompra compara os dias desde o último pedido com o intervalo mediano entre pedidos do cliente (precisa de 3 pedidos ou mais). Tendência: volume dos últimos 180 dias contra os 180 anteriores. Clique no cliente para detalhar.</p>
     <div class="card" style="padding:0">
@@ -285,6 +288,47 @@
   </div>
 </div>
 
+<div class="modal-bg" id="modalCarteira">
+  <div class="modal largo" role="dialog" aria-modal="true" aria-labelledby="caTitulo">
+    <h2 id="caTitulo">Carteira e responsáveis</h2>
+    <p class="nota" style="margin-bottom:10px">O responsável é quem, na Kuryos, responde pela conta. A lista é do próprio comercial: aceita quem ainda não tem login no sistema, e quem tem ganha o filtro "minha carteira". Esta janela mostra <b>todos os clientes cadastrados</b>, inclusive os que nunca tiveram pedido — a tabela atrás só lista quem tem movimento.</p>
+    <div class="tabs" id="caAbas" style="margin-bottom:12px">
+      <button class="tab active" data-ca="carteira">Atribuir carteira</button>
+      <button class="tab" data-ca="pessoas">Responsáveis</button>
+    </div>
+
+    <div id="caPainelCarteira">
+      <div class="grid-kpi" id="caKpis" style="margin-bottom:10px"></div>
+      <div class="toolbar">
+        <input type="text" class="search" id="caBusca" placeholder="Buscar cliente...">
+        <select id="caFiltro">
+          <option value="">Todos os clientes</option>
+          <option value="SEM">Sem responsável</option>
+          <option value="ORFAO">Responsável removido</option>
+        </select>
+        <select id="caDestino" title="Responsável a aplicar nos selecionados"></select>
+        <button class="btn btn-primary btn-sm" id="caAplicar" disabled>Atribuir aos selecionados</button>
+      </div>
+      <div class="erro" id="caErro"></div>
+      <div class="card" style="padding:0;margin-top:8px">
+        <div class="table-wrap" style="max-height:46vh"><table id="caTabela"></table></div>
+      </div>
+    </div>
+
+    <div id="caPainelPessoas" style="display:none">
+      <p class="nota" style="margin-bottom:10px">Nome é obrigatório. O <b>login</b> é opcional: só serve para o filtro "minha carteira" — representante sem acesso ao sistema fica sem login e funciona igual. Desligar alguém <b>não</b> tira o responsável dos clientes dele; a janela avisa quantos ficariam para redistribuir.</p>
+        <div id="caPessoas"></div>
+      <div class="erro" id="caPessoasErro"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-ghost btn-sm" id="caAddPessoa">+ Adicionar responsável</button>
+        <button class="btn btn-primary btn-sm" id="caSalvarPessoas">Salvar responsáveis</button>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="btn btn-ghost" id="caFechar">Fechar</button></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalVersoes">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="vsTitulo" style="max-width:640px">
     <h2 id="vsTitulo">Versões do pedido</h2>
@@ -329,7 +373,7 @@ function setStatus(on, txt) { document.getElementById('sDot').classList.toggle('
 
 // ── Dados ────────────────────────────────────────────────────────────
 var NOS = ['pedidos_comerciais', 'pedidos', 'ops', 'expedicoes_comerciais', 'estoque_lotes', 'conferencias_pa',
-  'solicitacoes_descarte', 'devolucoes_cliente', 'clientes', 'produtos', 'precos_venda', 'config/emailDiretoria', 'config/emailFinanceiro'];
+  'solicitacoes_descarte', 'devolucoes_cliente', 'clientes', 'produtos', 'precos_venda', 'comercial_config', 'config/emailDiretoria', 'config/emailFinanceiro'];
 var raw = {};
 NOS.forEach(function(no) { raw[no] = null; });
 var analise = null, tabelaPrecos = [];
@@ -349,6 +393,8 @@ function recalcular() {
     }
     setStatus(true, 'Atualizado ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'}));
     preencherFiltrosCliente();
+    preencherFiltroResp();
+    if (document.getElementById('modalCarteira').classList.contains('open')) caTrocarAba(caAba);
     renderTudo();
   }, 250);
 }
@@ -628,15 +674,17 @@ function renderClientes() {
     if (busca && normalizeSearch(c.cliente + ' ' + c.codigo).indexOf(busca) === -1) return false;
     if (filtro === 'ATIVOS' && !c.volume12m) return false;
     if ((filtro === 'ATRASADA' || filtro === 'ATENCAO') && c.recompra !== filtro) return false;
+    if (!filtroResponsavel(c)) return false;
     return true;
   });
-  var html = '<thead><tr><th>ABC</th><th>Cliente</th><th class="num">Pedidos 12m</th><th class="num">Volume 12m</th><th class="num">Part.</th><th>Tendência</th>' +
+  var html = '<thead><tr><th>ABC</th><th>Cliente</th><th>Responsável</th><th class="num">Pedidos 12m</th><th class="num">Volume 12m</th><th class="num">Part.</th><th>Tendência</th>' +
     '<th class="num">Intervalo</th><th>Último pedido</th><th>Recompra</th><th class="num">Carteira</th><th class="num">1ª entrega</th><th class="num">No prazo</th>' +
     '<th class="num">R$ 12m</th><th class="num">Ticket</th><th>Condição</th><th class="num">Furto/devol. 12m</th></tr></thead><tbody>';
-  if (!lista.length) html += '<tr><td colspan="16" class="vazio">Nenhum cliente neste filtro.</td></tr>';
+  if (!lista.length) html += '<tr><td colspan="17" class="vazio">Nenhum cliente neste filtro.</td></tr>';
   lista.forEach(function(c) {
     html += '<tr class="clicavel" data-k="' + esc(c.clienteKey) + '"><td><span class="badge ' + (c.classe === 'A' ? 'b-blue' : 'b-gray') + '">' + esc(c.classe) + '</span></td>' +
       '<td><b>' + esc(c.cliente) + '</b>' + (c.cadastrado ? '' : ' <span class="badge b-orange" title="Nome do pedido não bate com nenhum cliente cadastrado">sem cadastro</span>') + '</td>' +
+      '<td>' + respTxt(c) + '</td>' +
       '<td class="num">' + c.pedidos12m + '</td><td class="num">' + unCurto(c.volume12m) + '</td><td class="num">' + pct(c.participacao, 1) + '</td>' +
       '<td>' + tendenciaTxt(c) + '</td><td class="num">' + diasTxt(c.intervaloMedio) + '</td>' +
       '<td>' + data(c.ultimoPedido) + (c.diasDesdeUltimo != null ? ' <span class="muted">(' + c.diasDesdeUltimo + 'd)</span>' : '') + '</td>' +
@@ -686,6 +734,248 @@ function renderDetalheCliente() {
     {rotulo: 'Expedido', dados: c.serieMensal.map(function(s) { return s.expedidoUn; }), cor: cssVar('--serie-b')}
   ], function(v, curto) { return curto ? unCurto(v) : un(v) + ' un'; });
 }
+
+// ── RESPONSÁVEL COMERCIAL ────────────────────────────────────────────
+/* Quem responde pela conta. Lista própria do comercial em
+   `comercial_config/responsaveis` -- `/usuarios` só é legível por admin/rh
+   (database.rules.json), então um select vindo de lá nasceria vazio para o
+   `pcp`, que é quem usa esta tela. Detalhes em shared/responsavel-comercial.js.
+
+   A tabela da aba Clientes só lista cliente COM movimento (o motor monta a
+   lista a partir dos pedidos): medido em 20/10, 28 dos 60 cadastrados. Por
+   isso a atribuição vive no modal "Carteira e responsáveis", que lê
+   `raw.clientes` direto e alcança os 60. A coluna aqui é só leitura. */
+function cfgResp() { return raw.comercial_config || {}; }
+function uidAtual() { return (firebase.auth().currentUser || {}).uid || null; }
+function meuResponsavel() { return ResponsavelComercial.porUid(cfgResp(), uidAtual()); }
+
+function respTxt(c) {
+  var r = c.responsavel || {};
+  if (!r.atribuido) {
+    // Cliente que aparece em pedido sem casar com cadastro não tem onde
+    // guardar dono -- dizer "sem responsável" sugeriria que basta atribuir.
+    return c.cadastrado ? '<span class="muted">—</span>' : '<span class="muted" title="Sem cadastro: não há onde guardar o responsável">—</span>';
+  }
+  // O motivo vai no TEXTO, nao so no title: a conta a reatribuir existe para
+  // ser notada de relance, e tooltip nao aparece numa varredura da tabela.
+  if (r.orfao) return '<span class="badge b-red" title="O responsável foi removido da lista. Reatribua este cliente.">' + esc(r.nome || 'sem nome') + ' · removido</span>';
+  if (r.inativo) return '<span class="badge b-orange" title="Responsável desligado. Reatribua este cliente.">' + esc(r.nome) + ' · desligado</span>';
+  return esc(r.nome);
+}
+
+function filtroResponsavel(c) {
+  var v = document.getElementById('cliResp').value;
+  if (!v) return true;
+  var r = c.responsavel || {};
+  if (v === 'SEM') return !r.atribuido;
+  if (v === 'PENDENTE') return r.atribuido && (r.orfao || r.inativo);
+  if (v === 'MINHA') { var meu = meuResponsavel(); return !!meu && r.id === meu.id; }
+  return r.id === v;
+}
+
+function preencherFiltroResp() {
+  var el = document.getElementById('cliResp'), atual = el.value, meu = meuResponsavel();
+  el.innerHTML = '<option value="">Todos os responsáveis</option>' +
+    (meu ? '<option value="MINHA">Minha carteira (' + esc(meu.nome) + ')</option>' : '') +
+    '<option value="SEM">Sem responsável</option><option value="PENDENTE">Responsável desligado ou removido</option>' +
+    ResponsavelComercial.lista(cfgResp()).map(function(r) {
+      return '<option value="' + esc(r.id) + '">' + esc(r.nome) + (r.ativo ? '' : ' (desligado)') + '</option>';
+    }).join('');
+  el.value = atual;
+  // Responsável que saiu da lista não deixa o filtro travado num valor morto.
+  if (el.value !== atual) el.value = '';
+}
+
+// ── Modal: carteira e responsáveis ───────────────────────────────────
+var caAba = 'carteira', caSel = {}, caPessoas = null;
+function caAbrir() {
+  caSel = {}; caPessoas = null;
+  document.getElementById('caBusca').value = '';
+  document.getElementById('caFiltro').value = '';
+  caTrocarAba('carteira');
+  document.getElementById('modalCarteira').classList.add('open');
+}
+function caFechar() { document.getElementById('modalCarteira').classList.remove('open'); }
+function caTrocarAba(qual) {
+  caAba = qual;
+  document.querySelectorAll('#caAbas .tab').forEach(function(b) { b.classList.toggle('active', b.dataset.ca === qual); });
+  document.getElementById('caPainelCarteira').style.display = qual === 'carteira' ? '' : 'none';
+  document.getElementById('caPainelPessoas').style.display = qual === 'pessoas' ? '' : 'none';
+  if (qual === 'carteira') caRender(); else caRenderPessoas();
+}
+function caErro(msg) {
+  var el = document.getElementById(caAba === 'carteira' ? 'caErro' : 'caPessoasErro');
+  el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none';
+}
+/* Todos os clientes ATIVOS do cadastro -- a fonte é raw.clientes, não a
+   análise, justamente para alcançar quem nunca teve pedido. */
+function caClientes() {
+  var cs = raw.clientes || {};
+  return Object.keys(cs).filter(function(k) { return cs[k] && typeof cs[k] === 'object' && cs[k].ativo !== false; })
+    .map(function(k) { return {key: k, nome: String(cs[k].nome || k), codigo: String(cs[k].codigo || ''), resp: ResponsavelComercial.doCliente(cs[k], cfgResp())}; })
+    .sort(function(a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+}
+function caRender() {
+  caErro('');
+  var cob = ResponsavelComercial.cobertura(raw.clientes || {}, cfgResp());
+  var maior = cob.carteiras.length && cob.carteiras[0].total ? cob.carteiras[0].nome + ' (' + cob.carteiras[0].total + ')' : '—';
+  document.getElementById('caKpis').innerHTML =
+    kpi('Com responsável', cob.atribuidos + ' de ' + cob.totalClientes, pct(cob.pctCobertura) + ' do cadastro ativo') +
+    kpi('Sem responsável', String(cob.semResponsavel.length), 'Clientes a atribuir') +
+    kpi('A reatribuir', String(cob.orfaos.length), 'Responsável removido da lista') +
+    kpi('Responsáveis ativos', String(ResponsavelComercial.ativos(cfgResp()).length), 'Maior carteira: ' + maior);
+
+  var busca = normalizeSearch(document.getElementById('caBusca').value), filtro = document.getElementById('caFiltro').value;
+  var lista = caClientes().filter(function(c) {
+    if (busca && normalizeSearch(c.nome + ' ' + c.codigo).indexOf(busca) === -1) return false;
+    if (filtro === 'SEM' && c.resp.atribuido) return false;
+    if (filtro === 'ORFAO' && !c.resp.orfao) return false;
+    return true;
+  });
+  var ativosResp = ResponsavelComercial.ativos(cfgResp());
+  var destino = document.getElementById('caDestino'), destinoAtual = destino.value;
+  destino.innerHTML = (ativosResp.length ? '' : '<option value="">Cadastre um responsável primeiro</option>') +
+    ativosResp.map(function(r) { return '<option value="' + esc(r.id) + '">' + esc(r.nome) + '</option>'; }).join('') +
+    (ativosResp.length ? '<option value="__LIMPAR">— Remover o responsável —</option>' : '');
+  destino.value = destinoAtual || (ativosResp.length ? ativosResp[0].id : '');
+
+  var h = '<thead><tr><th style="width:34px"><input type="checkbox" id="caTodos" title="Selecionar os desta lista"></th><th>Cliente</th><th>Código</th><th>Responsável</th><th>Atribuído em</th></tr></thead><tbody>';
+  if (!lista.length) h += '<tr><td colspan="5" class="vazio">Nenhum cliente neste filtro.</td></tr>';
+  lista.forEach(function(c) {
+    var r = c.resp;
+    var txt = !r.atribuido ? '<span class="muted">sem responsável</span>'
+      : r.orfao ? '<span class="badge b-red">' + esc(r.nome || 'removido') + ' — reatribuir</span>'
+      : r.inativo ? '<span class="badge b-orange">' + esc(r.nome) + ' — desligado</span>' : esc(r.nome);
+    h += '<tr><td><input type="checkbox" data-ca-k="' + esc(c.key) + '"' + (caSel[c.key] ? ' checked' : '') + '></td>' +
+      '<td><b>' + esc(c.nome) + '</b></td><td>' + esc(c.codigo || '—') + '</td><td>' + txt + '</td>' +
+      '<td>' + (r.em ? data(String(r.em).slice(0, 10)) + (r.por ? ' <span class="muted">por ' + esc(r.por) + '</span>' : '') : '<span class="muted">—</span>') + '</td></tr>';
+  });
+  var tab = document.getElementById('caTabela');
+  tab.innerHTML = h + '</tbody>';
+  tab.querySelectorAll('[data-ca-k]').forEach(function(cb) {
+    cb.onchange = function() { if (cb.checked) caSel[cb.dataset.caK] = true; else delete caSel[cb.dataset.caK]; caAtualizarBotao(); };
+  });
+  document.getElementById('caTodos').onchange = function() {
+    var on = this.checked;
+    lista.forEach(function(c) { if (on) caSel[c.key] = true; else delete caSel[c.key]; });
+    caRender();
+  };
+  caAtualizarBotao();
+}
+function caAtualizarBotao() {
+  var n = Object.keys(caSel).length, b = document.getElementById('caAplicar');
+  b.disabled = !n;
+  b.textContent = n ? 'Atribuir aos ' + n + ' selecionados' : 'Atribuir aos selecionados';
+}
+function caAplicar() {
+  var keys = Object.keys(caSel), destino = document.getElementById('caDestino').value;
+  if (!keys.length) return;
+  if (!destino) return caErro('Cadastre um responsável na aba "Responsáveis" antes de atribuir.');
+  var limpar = destino === '__LIMPAR';
+  var r = limpar ? null : ResponsavelComercial.porId(cfgResp(), destino);
+  if (!limpar && !r) return caErro('Responsável não encontrado. Reabra a janela.');
+  if (limpar && !confirm('Remover o responsável de ' + keys.length + ' cliente(s)?')) return;
+  var u;
+  try { u = ResponsavelComercial.atribuirVarios(keys, r, {por: autorAtual()}); }
+  catch (e) { return caErro(e.message); }
+  var btn = document.getElementById('caAplicar');
+  btn.disabled = true;
+  // Promise.resolve: throw síncrono do SDK não é pego por .catch (CLAUDE.md).
+  Promise.resolve().then(function() { return db.ref().update(u); }).then(function() {
+    caSel = {}; caErro('');
+    setStatus(true, (limpar ? 'Responsável removido de ' : 'Responsável atribuído a ') + keys.length + ' cliente(s)');
+  }).catch(function(e) { caErro('Não foi possível gravar: ' + e.message); }).then(function() { caAtualizarBotao(); });
+}
+
+// ── Modal: lista de responsáveis ─────────────────────────────────────
+function caRenderPessoas() {
+  caErro('');
+  if (!caPessoas) caPessoas = ResponsavelComercial.lista(cfgResp());
+  var cs = raw.clientes || {};
+  var h = caPessoas.length ? '' : '<p class="nota">Nenhum responsável cadastrado ainda.</p>';
+  caPessoas.forEach(function(r, i) {
+    var n = ResponsavelComercial.clientesDe(cs, r.id).length;
+    h += '<div class="card" style="padding:12px;margin-bottom:8px"><div class="ed-grid">' +
+      '<div class="form-row"><label>Nome</label><input data-rp="nome" data-i="' + i + '" value="' + esc(r.nome) + '" placeholder="Ex.: Ana Souza"></div>' +
+      '<div class="form-row"><label>E-mail (opcional)</label><input data-rp="email" data-i="' + i + '" value="' + esc(r.email) + '" placeholder="ana@kuryos.com.br"></div>' +
+      '<div class="form-row"><label>Login do sistema (opcional)</label><select data-rp="uidLogin" data-i="' + i + '"></select></div>' +
+      '</div><div style="display:flex;gap:14px;align-items:center;margin-top:6px;flex-wrap:wrap">' +
+      '<label style="font-size:12px;display:inline-flex;gap:5px;align-items:center"><input type="checkbox" data-rp="ativo" data-i="' + i + '"' + (r.ativo ? ' checked' : '') + '> Ativo</label>' +
+      '<span class="nota">' + (n ? n + (n === 1 ? ' cliente na carteira' : ' clientes na carteira') : 'Sem clientes na carteira') + '</span>' +
+      '<button class="btn btn-ghost btn-sm" data-rp-rem="' + i + '">Remover</button></div></div>';
+  });
+  var alvo = document.getElementById('caPessoas');
+  alvo.innerHTML = h;
+  // O select de login só tem opções quando /usuarios está legível (admin/rh).
+  // Para `pcp` ele vem vazio -- então o campo preserva o que já está gravado e
+  // diz isso, em vez de apagar o vínculo em silêncio.
+  var us = usuariosLegiveis();
+  alvo.querySelectorAll('[data-rp=uidLogin]').forEach(function(sel) {
+    var r = caPessoas[Number(sel.dataset.i)];
+    var opts = '<option value="">Sem login (representante externo)</option>' +
+      us.map(function(u) { return '<option value="' + esc(u.uid) + '">' + esc(u.nome || u.email || u.uid) + '</option>'; }).join('');
+    if (r.uidLogin && !us.some(function(u) { return u.uid === r.uidLogin; })) {
+      opts += '<option value="' + esc(r.uidLogin) + '">Login já vinculado</option>';
+    }
+    sel.innerHTML = opts;
+    sel.value = r.uidLogin || '';
+  });
+  alvo.querySelectorAll('[data-rp]').forEach(function(el) {
+    var campo = el.dataset.rp, r = caPessoas[Number(el.dataset.i)];
+    var ler = function() { r[campo] = el.type === 'checkbox' ? el.checked : el.value; };
+    if (el.tagName === 'SELECT' || el.type === 'checkbox') el.onchange = function() { ler(); if (campo === 'ativo') caRenderPessoas(); };
+    else el.oninput = ler;
+  });
+  alvo.querySelectorAll('[data-rp-rem]').forEach(function(b) {
+    b.onclick = function() {
+      var i = Number(b.dataset.rpRem), r = caPessoas[i], n = ResponsavelComercial.clientesDe(cs, r.id).length;
+      if (n && !confirm(r.nome + ' tem ' + n + ' cliente(s) na carteira.\n\nRemover da lista deixa esses clientes marcados para reatribuir (o nome continua visível). Prefere desmarcar "Ativo"?\n\nOK remove mesmo assim.')) return;
+      caPessoas.splice(i, 1); caRenderPessoas();
+    };
+  });
+}
+/* /usuarios inteiro só é legível por admin/rh. Quem é `pcp` recebe
+   PERMISSION_DENIED e a lista fica vazia -- previsto, não é falha. */
+var usuariosCache = null;
+function usuariosLegiveis() {
+  if (usuariosCache === null) {
+    usuariosCache = [];
+    Promise.resolve().then(function() { return db.ref('usuarios').once('value'); })
+      .then(function(snap) {
+        var v = snap.val() || {};
+        usuariosCache = Object.keys(v).filter(function(k) { return v[k] && typeof v[k] === 'object'; })
+          .map(function(k) { return {uid: k, nome: v[k].nome || '', email: v[k].email || ''}; })
+          .sort(function(a, b) { return String(a.nome).localeCompare(String(b.nome), 'pt-BR'); });
+        if (usuariosCache.length && caAba === 'pessoas' && document.getElementById('modalCarteira').classList.contains('open')) caRenderPessoas();
+      }).catch(function() { usuariosCache = []; });
+  }
+  return usuariosCache;
+}
+function caSalvarPessoas() {
+  var obj;
+  try { obj = ResponsavelComercial.salvar(caPessoas || []); }
+  catch (e) { return caErro(e.message); }
+  var btn = document.getElementById('caSalvarPessoas');
+  btn.disabled = true;
+  Promise.resolve().then(function() { return db.ref('comercial_config/responsaveis').set(obj); }).then(function() {
+    caPessoas = null; caErro(''); setStatus(true, 'Responsáveis salvos');
+  }).catch(function(e) { caErro('Não foi possível gravar: ' + e.message); }).then(function() { btn.disabled = false; });
+}
+
+document.getElementById('btnCarteira').addEventListener('click', caAbrir);
+document.getElementById('caFechar').addEventListener('click', caFechar);
+document.getElementById('modalCarteira').addEventListener('click', function(ev) { if (ev.target === this) caFechar(); });
+document.querySelectorAll('#caAbas .tab').forEach(function(b) { b.addEventListener('click', function() { caTrocarAba(b.dataset.ca); }); });
+document.getElementById('caBusca').addEventListener('input', caRender);
+document.getElementById('caFiltro').addEventListener('change', caRender);
+document.getElementById('caAplicar').addEventListener('click', caAplicar);
+document.getElementById('caAddPessoa').addEventListener('click', function() {
+  if (!caPessoas) caPessoas = ResponsavelComercial.lista(cfgResp());
+  caPessoas.push({id: ResponsavelComercial.novoId(), nome: '', email: '', uidLogin: null, ativo: true, criadoEm: new Date().toISOString()});
+  caRenderPessoas();
+});
+document.getElementById('caSalvarPessoas').addEventListener('click', caSalvarPessoas);
+document.getElementById('cliResp').addEventListener('change', renderClientes);
 
 // ── PRAZOS ───────────────────────────────────────────────────────────
 ['przBusca', 'przCliente'].forEach(function(id) {

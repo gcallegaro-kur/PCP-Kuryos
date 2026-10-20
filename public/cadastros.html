@@ -203,7 +203,8 @@
     .adv-facet-count{color:var(--muted);font-size:12px;margin-left:auto}
     .adv-result-row:hover{background:var(--surface-2);cursor:pointer}
   </style>
-<script src="shared/contatos-cliente.js"></script><script src="shared/espelho-cadastro.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/cliente-comercial.js"></script><script src="shared/etiqueta-caixa.js"></script>
+<script src="shared/contatos-cliente.js"></script><script src="shared/espelho-cadastro.js"></script><script src="shared/contatos-cliente-ui.js"></script><link rel="stylesheet" href="shared/contatos-cliente.css"><script src="shared/responsavel-comercial.js"></script>
+  <script src="shared/cliente-comercial.js"></script><script src="shared/etiqueta-caixa.js"></script>
 </head>
 <body class="kuryos-theme has-sidebar">
 
@@ -1111,6 +1112,11 @@
             <div class="form-group">
               <label>Site</label>
               <input type="text" id="fSite-cli" placeholder="www.cliente.com.br">
+            </div>
+            <div class="form-group">
+              <label>Responsável comercial</label>
+              <select id="fResponsavel-cli"><option value="">Sem responsável</option></select>
+              <div class="field-hint">Quem, na Kuryos, responde por esta conta. A lista sai da Gestão Comercial &rsaquo; Clientes &rsaquo; "Carteira e responsáveis", que também atribui vários clientes de uma vez.</div>
             </div>
           </div>
           <div class="section-label">Regulatório</div>
@@ -2611,6 +2617,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fCidade-cli').value = c.cidade || '';
     document.getElementById('fUf-cli').value = c.uf || '';
     document.getElementById('fCondicaoPagamento-cli').value = c.condicaoPagamento || '';
+    document.getElementById('fResponsavel-cli').value = c.responsavelComercialId || '';
+    preencherResponsavelCli();
     document.getElementById('fSite-cli').value = c.site || '';
     document.getElementById('fDetentorAnvisa-cli').value = c.detentorAnvisa === 'kuryos' ? 'kuryos' : 'cliente';
     document.getElementById('fAtivo-cli').value = c.ativo === false ? 'inativo' : 'ativo';
@@ -2674,6 +2682,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('fCidade-cli').value = d.cidade;
     document.getElementById('fUf-cli').value = d.uf;
     document.getElementById('fCondicaoPagamento-cli').value = d.condicaoPagamento;
+    document.getElementById('fResponsavel-cli').value = '';
+    preencherResponsavelCli();
     document.getElementById('fSite-cli').value = d.site;
     document.getElementById('fAtivo-cli').value = d.ativo === false ? 'inativo' : 'ativo';
     document.getElementById('cliFornecedorVinculado-cli').value = origem.nome;
@@ -2711,6 +2721,26 @@ document.addEventListener('DOMContentLoaded', function() {
     window.abrirFornecedorEspelhado(origem, r);
   }
 
+  var comercialCfgCli = {};
+  /* Repovoa o select preservando o que esta selecionado. Responsavel desligado
+     ou removido continua aparecendo quando o cliente ja o tem gravado -- sumir
+     com a opcao faria o save apagar o vinculo sem ninguem pedir. */
+  function preencherResponsavelCli() {
+    var sel = document.getElementById('fResponsavel-cli');
+    if (!sel) return;
+    var atual = sel.value;
+    var ativos = ResponsavelComercial.ativos(comercialCfgCli);
+    var html = '<option value="">Sem responsável</option>' +
+      ativos.map(function(r) { return '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.nome) + '</option>'; }).join('');
+    if (atual && !ativos.some(function(r) { return r.id === atual; })) {
+      var fora = ResponsavelComercial.porId(comercialCfgCli, atual);
+      html += '<option value="' + escapeHtml(atual) + '">' +
+        escapeHtml(fora ? fora.nome + ' (desligado)' : 'Responsável removido — reatribuir') + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = atual;
+  }
+
   function saveModal() {
     var nome = document.getElementById('fNome-cli').value.trim();
     var codigo = document.getElementById('fCodigo-cli').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
@@ -2737,6 +2767,27 @@ document.addEventListener('DOMContentLoaded', function() {
       matrizKey: document.getElementById('cliMatrizKey-cli').value || null,
       fornecedorVinculadoKey: document.getElementById('cliFornecedorVinculadoKey-cli').value || null
     };
+    /* Responsavel comercial: vai dentro de `data` de proposito. Renomear a
+       chave do cliente faz `updates['clientes/'+key] = data`, que e um SET --
+       campo que ficasse fora seria apagado no rename. O nome e espelho (para
+       exportacao e leitor antigo); o id manda. */
+    var respIdCli = document.getElementById('fResponsavel-cli').value || '';
+    var respCli = respIdCli ? ResponsavelComercial.porId(comercialCfgCli, respIdCli) : null;
+    // `editingKey || key`: no rename, `key` e a chave NOVA e ainda nao existe em
+    // allClientes -- ler por ela perderia o espelho de um responsavel orfao.
+    var respAntes = allClientes[editingKey || key] || {};
+    data.responsavelComercialId = respIdCli || null;
+    data.responsavelComercialNome = respCli ? respCli.nome
+      : (respIdCli ? (respAntes.responsavelComercialNome || null) : null);
+    if (respIdCli !== (respAntes.responsavelComercialId || '')) {
+      data.responsavelComercialEm = respIdCli ? new Date().toISOString() : null;
+      data.responsavelComercialPor = respIdCli ? ((window.currentUser && window.currentUser.nome) || null) : null;
+    } else {
+      // Nao mudou: carrega o que ja estava. No rename `data` e um SET, entao
+      // campo ausente aqui some do cadastro.
+      data.responsavelComercialEm = respAntes.responsavelComercialEm || null;
+      data.responsavelComercialPor = respAntes.responsavelComercialPor || null;
+    }
     try { Object.assign(data, editorContatosCliente.dados()); } catch(err) { showAlert(err.message, 'danger'); return; }
     data.logoEtiquetaUrl = logoCli.url || null;
     document.getElementById('modalSaveBtn-cli').disabled = true;
@@ -2814,6 +2865,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('cliFornecedorVinculado-cli').addEventListener('input', function() { document.getElementById('cliFornecedorVinculadoKey-cli').value = ''; });
 
+    // Responsavel comercial (20/10): a lista vive em comercial_config, nao em
+    // /usuarios (que so admin/rh leem). Ver shared/responsavel-comercial.js.
+    dbOnValue(db.ref('comercial_config'), function(snap) {
+      comercialCfgCli = snap.val() || {};
+      preencherResponsavelCli();
+    }, {onError: function() { comercialCfgCli = {}; }, attempts: 0});
     dbOnValue(db.ref('clientes'), function(snap) {
       allClientes = snap.val() || {};
       refreshCliVinculoItems();

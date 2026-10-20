@@ -932,6 +932,53 @@ diz por quê.
   cadastro + situação (necessário para a assepsia); ordens de serviço,
   preventiva e MTBF/MTTR vêm depois.
 
+## Responsável comercial por cliente — o que ficou de fora (2026-10-20)
+
+Entregue: `comercial_config/responsaveis` (lista própria do comercial, com
+`uidLogin` opcional), `clientes/{key}.responsavelComercialId` + espelho do
+nome, coluna e filtro na aba Clientes da Gestão Comercial, modal
+"Carteira e responsáveis" com atribuição em lote, e o campo no cadastro de
+clientes. Motor em `public/shared/responsavel-comercial.js`.
+
+- **Preencher os 60 clientes é operação, não código.** No dia da entrega a
+  cobertura era **0 de 60** e não havia nenhum responsável cadastrado — o
+  ensaio (`scripts/ensaio-responsavel-comercial.js`) mede isso. Campo vazio
+  faz a coluna, o filtro e o KPI de cobertura não dizerem nada.
+- **Nada avisa o responsável.** A ideia natural é o responsável receber a
+  recompra atrasada e o pedido parado da carteira dele, mas isso é
+  `checkNotificacoes`, que está **fora do ar pelo incidente de billing**.
+  Enquanto não voltar, o responsável só aparece se alguém abrir a tela.
+  Quando voltar: `functions/index.js`, usar `responsavelComercialId` →
+  `comercial_config/responsaveis/{id}.email`.
+- **O filtro não é permissão.** "Minha carteira" é conveniência: qualquer um
+  com o módulo `comercial` continua vendo e atribuindo a carteira inteira.
+  Restringir de verdade exige regra de banco por responsável, e só faz
+  sentido depois que existir papel `comercial` (ver abaixo).
+- **Não existe papel `comercial`.** Medido em 20/10: dos 20 logins, zero são
+  de vendedor; quem tem o módulo é `pcp` (4) e `admin` (3). A regra de banco
+  já aceita `modulos.comercial` nos 4 campos do responsável, então a
+  atribuição funciona no dia em que o papel existir — mas criar o papel
+  precisa das cinco pontas do `CLAUDE.md` (`pageAccessRules`, navbar,
+  `login.html`, `usuarios.html`, `database.rules.json`).
+- **Um responsável por cliente, só o comercial.** Decisão do usuário em
+  20/10, contra as alternativas "comercial + técnico" e "um por área". O
+  cadastro do cliente já tem contatos por área (`contatos-cliente.js`); se o
+  desenvolvimento de produto passar a ter dono próprio, o caminho é um mapa
+  `responsaveisPorArea`, e o campo atual vira a área `COMERCIAL`.
+- **A carteira não aparece nas outras abas.** Visão geral, Carteira, Prazos e
+  Faturamento não cortam por responsável — só a aba Clientes. Um KPI
+  "carteira por responsável" no topo seria o próximo passo de valor, e o
+  motor já devolve `cobertura().carteiras` pronto.
+- **O vínculo com login é escolhido à mão.** O select de login na janela só
+  tem opções para quem é `admin`/`rh`, porque `/usuarios` inteiro não é
+  legível pelos outros papéis. Para `pcp` o campo preserva o que já está
+  gravado e não oferece lista. O jeito certo é um espelho público de
+  usuários, como o RH fez com `rh_colaboradores_publico`.
+- **Cliente sem cadastro não tem dono.** Nome que aparece em pedido mas não
+  casa com nenhum registro de `clientes` (`cadastrado: false`) não tem onde
+  guardar o responsável — a tela mostra "—" e não oferece atribuição. Resolver
+  isso é o mesmo trabalho de cadastrar o cliente de verdade.
+
 ## Qualidade
 
 **Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.
