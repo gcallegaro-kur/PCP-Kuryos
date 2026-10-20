@@ -344,6 +344,25 @@
     <div class="section-note" id="conferenciaPesagemStatus" style="margin-top:6px"></div>
   </div>
 
+  <!-- LIBERAÇÃO DE LINHA (19/10, PLANO_QUALIDADE.md A3) -->
+  <div class="card">
+    <div class="card-title">Liberação de linha (assepsia + first article)</div>
+    <div class="section-note">
+      Ligada, a linha de envase só encerra o setup e só recebe apontamento quando a Qualidade liberou a
+      assepsia (CK-4) e o first article (CK-5), com a assinatura do líder. Desligada, o sistema só avisa no fim do
+      setup — use enquanto a equipe se acostuma. O limite de lotes é a regra do POP 035: mesma fórmula, no mesmo dia,
+      até N lotes sem nova assepsia completa.
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin-top:6px">
+      <input type="checkbox" id="iTravaLiberacao">
+      <span id="lblTravaLiberacao">Trava desligada</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:8px">Lotes da mesma fórmula sem nova assepsia:
+      <input type="number" id="iLimiteLotes" min="1" max="50" style="width:80px">
+    </label>
+    <div class="section-note" id="travaLiberacaoStatus" style="margin-top:6px"></div>
+  </div>
+
   <!-- ZONA FIXA (CONGELAMENTO AUTOMÁTICO ROLANTE) -->
   <div class="card">
     <div class="card-title">Zona Fixa do Planejamento</div>
@@ -750,6 +769,30 @@ document.getElementById('iConferenciaPesagem').addEventListener('change', functi
       renderConferenciaPesagem();
       showAlert('Não foi possível salvar — a chave continua como estava. ' + err.message, 'danger');
     });
+});
+
+/* Liberação de linha (19/10): nó próprio config/liberacaoLinha {trava, limiteLotes}. */
+var libLinhaCfg = {};
+function renderTravaLiberacao() {
+  var on = libLinhaCfg.trava === true;
+  document.getElementById('iTravaLiberacao').checked = on;
+  document.getElementById('lblTravaLiberacao').textContent = on ? 'Trava LIGADA: sem liberação a linha não produz' : 'Trava desligada: o sistema só avisa';
+  if (document.activeElement !== document.getElementById('iLimiteLotes')) document.getElementById('iLimiteLotes').value = libLinhaCfg.limiteLotes || 15;
+  document.getElementById('travaLiberacaoStatus').textContent = (libLinhaCfg.alteradoPor ? 'Alterado por ' + libLinhaCfg.alteradoPor : '') + (libLinhaCfg.alteradoEm ? ' em ' + new Date(libLinhaCfg.alteradoEm).toLocaleString('pt-BR') : '');
+}
+function salvarLiberacaoLinha(campo, valor, ok) {
+  var quem = (window.currentUser && window.currentUser.nome) || 'ADM', u = {};
+  u['config/liberacaoLinha/' + campo] = valor; u['config/liberacaoLinha/alteradoPor'] = quem; u['config/liberacaoLinha/alteradoEm'] = new Date().toISOString();
+  db.ref().update(u).then(function() { showAlert(ok, 'success'); })
+    .catch(function(err) { renderTravaLiberacao(); showAlert('Não foi possível salvar — ficou como estava. ' + err.message, 'danger'); });
+}
+document.getElementById('iTravaLiberacao').addEventListener('change', function() {
+  salvarLiberacaoLinha('trava', this.checked, this.checked ? 'Trava ligada: a linha só produz com a liberação da Qualidade.' : 'Trava desligada: o sistema só avisa.');
+});
+document.getElementById('iLimiteLotes').addEventListener('change', function() {
+  var n = Math.round(Number(this.value));
+  if (!(n >= 1 && n <= 50)) { renderTravaLiberacao(); showAlert('Informe de 1 a 50 lotes.', 'danger'); return; }
+  salvarLiberacaoLinha('limiteLotes', n, 'Limite salvo: ' + n + ' lote(s) da mesma fórmula sem nova assepsia.');
 });
 
 document.getElementById('iAutoAjusteAtivo').addEventListener('change', function() {
@@ -1285,6 +1328,8 @@ try {
     var val = snap.val() || {};
     confPesagemCfg = val.conferenciaPesagem || {};
     renderConferenciaPesagem();
+    libLinhaCfg = val.liberacaoLinha || {};
+    renderTravaLiberacao();
     configData.meta = val.meta || {};
     configData.metasPorLinha = val.metasPorLinha || {};
     configData.metasMatriz = val.metasMatriz || {};

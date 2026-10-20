@@ -94,7 +94,7 @@ const KURYOS_MODULOS = {
   // `apontamento` continua sendo a da Produção de propósito: as regras do
   // banco e os `modulos` já gravados usam esse nome.
   apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html', 'liberacao_linha.html'] },
   manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
                   paginas: ['manipulacao.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
@@ -120,7 +120,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'consulta_estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html', 'checklists_cq.html'] },
+                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html', 'checklists_cq.html', 'liberacao_linha.html'] },
   auditoria5s:  { rotulo: 'Auditoria 5S',        desc: 'Checklist do líder, auditoria da Qualidade e inspeção da Diretoria (5S)',
                   paginas: ['auditoria_5s.html'] },
   // Manutenção › Ativos (19/10): cadastro de máquinas e equipamentos que
@@ -772,6 +772,8 @@ function renderUnifiedNavbar(user) {
     temMod('qualidade') && ktLink('qualidade_historico.html', 'chart', 'Histórico e Indicadores', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
     // Modelos de checklist (19/10): a Qualidade edita e versiona as perguntas (PLANO_QUALIDADE.md, A2).
+    // Liberação de linha (19/10): assepsia da linha (CK-4) + setup/first article (CK-5) por OP.
+    temMod('qualidade') && ktLink('liberacao_linha.html', 'flask', 'Liberação de linha', activePage),
     temMod('qualidade') && ktLink('checklists_cq.html', 'clipboard', 'Modelos de checklist', activePage),
     // Auditoria 5S (06/10): líderes de setor, auditores (Qualidade/P&D) e Diretoria.
     temMod('auditoria5s') && ktLink('auditoria_5s.html', 'clipboard', 'Auditoria 5S', activePage),
@@ -804,6 +806,7 @@ function renderUnifiedNavbar(user) {
     sub('Produção', [
       setores.producao && ktLink('proximas_ordens.html?setor=envase', 'list', 'Próximas Ordens', activePage),
       setores.producao && ktLink('form.html', 'pencil', 'Apontamento', activePage),
+      setores.producao && !temMod('qualidade') && ktLink('liberacao_linha.html', 'flask', 'Liberação de linha', activePage),
       setores.producao && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
       setores.producao && ktLink('estoque_setor.html?setor=producao', 'warehouse', 'Estoque da Fábrica', activePage)
     ]),

@@ -35,8 +35,8 @@ da Kuryos diz qual.
 | # | Entrega | Dono | Depende de |
 |---|---|---|---|
 | A1 | Cadastro de Ativos (Manutenção › Ativos) | Sistema | ✅ feito em 19/10 |
-| A2 | **Motor de checklists editáveis** (modelos versionados, itens S/N/NA, crítico, foto, medida numérica com faixa) + editor da Qualidade | Sistema | — |
-| A3 | **CK-4 Assepsia de linha** (operador registra, CQ libera) + **CK-5 Setup/First article** (32 un., média e −3%, line clearance, lote/validade impressos, unidade retida) — trava em chave | Sistema | A2; K1; K3 |
+| A2 | **Motor de checklists editáveis** (modelos versionados, itens S/N/NA, crítico, foto, medida numérica com faixa) + editor da Qualidade | Sistema | ✅ feito em 19/10 (`9c02f76`) |
+| A3 | **CK-4 Assepsia de linha** (operador registra, CQ libera) + **CK-5 Setup/First article** (32 un., média e −3%, line clearance, lote/validade impressos, unidade retida) — trava em chave | Sistema | ✅ feito em 19/10 (tela Liberação de linha; trava em Ajustes, desligada) |
 | A4 | **CK-3 Assepsia de reator/tacho**, ligada à pesagem (situação do equipamento: sujo → sanitizado → liberado; regra dos 15 lotes) | Sistema | A2; K1 |
 
 ### Fase B — Pegar o problema na hora

@@ -8,7 +8,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 ### Claude — Qualidade A3: assepsia de linha (CK-4) + first article (CK-5) (19/10/2026)
 
 - **Plano:** `PLANO_QUALIDADE.md`, item A3.
-- **Arquivos ativos:** `public/shared/liberacao-linha.js` (novo), `public/shared/liberacao-linha-tela.js` (novo), `public/liberacao_linha.html` (novo), `public/form.html` (só o portão de envase), `public/admin.html` (chave da trava), `public/auth_check.js`, `database.rules.json`, testes `run_liberacao_linha*`.
+- **Feito:** `liberacao_linha.html` (Qualidade › Liberação de linha; Operação › Produção para quem não tem Qualidade). Por OP: CK-4 (EXECUCAO → AGUARDANDO_QUALIDADE → APROVADO/REPROVADO, ou DISPENSADA pela regra do POP 035: mesmo SKU, mesmo dia BRT, < limite de lotes, nenhum ativo da linha voltou de manutenção) e CK-5 (Qualidade → AGUARDANDO_LIDER → líder com OUTRO login → APROVADO). Nós `inspecoes_cq` (aprovada imutável, nada se apaga), `liberacao_linha/{opKey}` (índice com status), `assepsia_linhas/{LINHA}` (última assepsia + lotesDesde). Nominal do first article = volume × densidade (ou g). Chave `config/liberacaoLinha` {trava, limiteLotes} em Ajustes, **desligada**. `form.html`: `bloquearSeLinhaNaoLiberada` no fim de setup (avisa sem trava) e no apontamento de envase (só barra com trava); alocar/abrir não passam (o first article é com a OP na linha).
+- **Testes:** `run_liberacao_linha_test.js`, `run_liberacao_linha_ui_test.js` (ponta a ponta, troca de usuário, Storage falso), `run_liberacao_linha_rules_test.js` (emulador). Lição: redesenhar o formulário dentro do `change` de um campo derruba o nó ("node to be removed is no longer a child") — agendar com setTimeout e guardar número no rascunho já no `input`.
+- **Próximo:** A4 (CK-3 assepsia de reator ligada à pesagem).
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Qualidade A2: motor de checklists editáveis (19/10/2026)
 

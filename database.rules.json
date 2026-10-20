@@ -201,6 +201,27 @@
         ".validate": "!newData.exists() || (newData.hasChildren(['status', 'por', 'em']) && (newData.child('status').val() == 'LIBERADO' || newData.child('status').val() == 'REPROVADO' || newData.child('status').val() == 'PENDENTE'))"
       }
     },
+    // Liberação de linha (19/10, PLANO_QUALIDADE.md A3): CK-4 assepsia + CK-5 first article por OP.
+    // Operador registra a limpeza; a Qualidade verifica; o líder assina. Inspeção APROVADA não muda mais.
+    "inspecoes_cq": {
+      ".read": "auth != null",
+      "$id": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true) && (!data.exists() || data.child('status').val() != 'APROVADO') && newData.exists()",
+        ".validate": "newData.hasChildren(['modeloId', 'versao', 'opKey', 'status'])"
+      }
+    },
+    "liberacao_linha": {
+      ".read": "auth != null",
+      "$opKey": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true)"
+      }
+    },
+    "assepsia_linhas": {
+      ".read": "auth != null",
+      "$linha": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('role').val() == 'production' || root.child('usuarios').child(auth.uid).child('modulos').child('apontamento').val() == true)"
+      }
+    },
     // Modelos de checklist da Qualidade (19/10, PLANO_QUALIDADE.md A2): todo logado LÊ (operador
     // preenche a assepsia com o modelo); edita quem é da Qualidade. Versão publicada é imutável --
     // a inspeção guarda o número da versão e precisa reencontrar as perguntas como eram.

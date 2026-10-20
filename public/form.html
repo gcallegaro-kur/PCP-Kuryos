@@ -18,6 +18,8 @@
   <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/checklists.js"></script>
+  <script src="shared/liberacao-linha.js"></script>
   <script src="shared/onde-op.js"></script>
   <script src="shared/perdas-etapa.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
@@ -1808,6 +1810,7 @@ dbOnValue(db.ref('config'), function(snap) {
   configPostos  = cfg.postosTrabalho || cfg.postos || [];
   configTurnos  = cfg.turnos         || [];
   configModoOperacaoTurno = cfg.modoOperacaoTurno || 'auto';
+  configLiberacaoLinha = cfg.liberacaoLinha || {};
   configTurnoFixoNome = cfg.turnoFixoNome || '';
   configTurnoHorarios = cfg.turnoHorarios || {};
   configTurnoPausas = cfg.turnoPausas || {};
@@ -2067,6 +2070,24 @@ function bloquearSeBulkNaoLiberado(op, acao) {
   alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'envasar') + ': ' + r.motivo +
     (sit && !sit.disponivel ? '\n\nOnde está agora: ' + sit.texto + '.' : ''));
   return true;
+}
+
+/* Liberação de linha pela Qualidade (19/10, PLANO_QUALIDADE.md A3): assepsia da
+   linha (CK-4) + setup/first article (CK-5). Vale para FIM DE SETUP e apontamento
+   de envase -- não para alocar/abrir, porque o first article acontece com a OP já
+   na linha. Com a trava (Ajustes) desligada, só avisa no fim do setup. */
+var configLiberacaoLinha = {}, liberacoesLinha = {};
+dbOnValue(db.ref('liberacao_linha'), function(snap) { liberacoesLinha = snap.val() || {}; });
+function bloquearSeLinhaNaoLiberada(op, acao, avisar) {
+  if (!op || typeof LiberacaoLinha === 'undefined') return false;
+  var key = sanitizeKey(op.lote || '');
+  var r = LiberacaoLinha.podeProduzir(op, liberacoesLinha[key], {}, !!configLiberacaoLinha.trava);
+  if (!r.ok) {
+    alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'produzir') + ': ' + r.motivo + '\n\nA liberação é feita em Liberação de linha (Qualidade).');
+    return true;
+  }
+  if (r.aviso && avisar && typeof showAlert === 'function') showAlert('Atenção — lote ' + (op.lote || '') + ': ' + r.aviso + ' (a trava está desligada; registre a liberação em Liberação de linha).', 'danger');
+  return false;
 }
 
 function bloquearSeOpCancelada(op, acao) {
@@ -3618,7 +3639,7 @@ document.getElementById('prodForm').addEventListener('submit', function(e) {
     btn.disabled = false; btn.textContent = 'Salvar Registro';
     return;
   }
-  if (!(configRotulagem || []).includes(linha) && bloquearSeBulkNaoLiberado(matchedOpForSave, 'receber apontamento de envase')) {
+  if (!(configRotulagem || []).includes(linha) && (bloquearSeBulkNaoLiberado(matchedOpForSave, 'receber apontamento de envase') || bloquearSeLinhaNaoLiberada(matchedOpForSave, 'receber apontamento de envase', false))) {
     btn.disabled = false; btn.textContent = 'Salvar Registro';
     return;
   }
@@ -5283,7 +5304,7 @@ function encerrarSetup(lote, tipo) {
   var op = findOpByLote(lote);
   if (!op || !op[campoAberturaInicio(tipo)]) return;
   if (bloquearSeOpCancelada(op, 'ter o setup encerrado')) return;
-  if (tipo !== 'rotulagem' && bloquearSeBulkNaoLiberado(op, 'começar o envase')) return;
+  if (tipo !== 'rotulagem' && (bloquearSeBulkNaoLiberado(op, 'começar o envase') || bloquearSeLinhaNaoLiberada(op, 'começar o envase', true))) return;
   var agora = new Date().toISOString();
   var upd = {};
   upd[campoSetupFim(tipo)] = agora;
