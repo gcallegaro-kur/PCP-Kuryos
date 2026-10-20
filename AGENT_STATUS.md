@@ -32,6 +32,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Etiqueta de recebimento com o peso de cada volume (20/10/2026)
+
+- **Pedido (Logística):** 330 kg em 7 volumes saía "330 kg · volume 1 de 7" em todas as etiquetas (o total repetido); queriam o peso de cada volume e a quebra fechando.
+- **Feito:** `shared/etiquetas-wms.js` — `quantidadeDoVolume(total, volumes, volume, unidade)`: divisão EXATA em passos inteiros (0,01 para kg/g/mg/L/mL ou fração; 1 para unidade discreta), o resto de 1 passo vai para os primeiros volumes. 330 kg / 7 = 47,15 (x2) + 47,14 (x5) = 330,00. Texto: "47,15 kg · volume 1 de 7 (total 330 kg)"; 1 volume segue "330 kg · volume 1 de 1". Reimprimir recebimento antigo também sai certo (mesmo código). Cabe na térmica 100x70 (conferido renderizando).
+- **Não feito (se precisar):** pesos REAIS por volume digitados no recebimento (bombonas que não pesam igual); hoje a divisão é igual entre volumes.
+- **Teste:** `run_etiquetas_volume_test.js` (soma fecha em 10 casos, etiqueta do caso real).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Assepsia da linha antes de ALOCAR a OP (20/10/2026)
 
 - **Pedido:** a inspeção de limpeza tem que vir antes de alocar uma nova OP; o first article continua depois do setup.

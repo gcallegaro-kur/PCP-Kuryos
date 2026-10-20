@@ -49,11 +49,44 @@
   // Área útil da etiqueta: largura menos 3 mm de margem interna de cada lado
   // e 1 mm de folga -- o código nunca pode ser cortado (perderia a margem branca).
   function util(fmt) { return fmt.largura - 7; }
+  /* Quantidade de CADA volume do recebimento (pedido da Logística, 20/10/2026:
+     330 kg em 7 volumes saía "330 kg · volume 1 de 7" em todas as etiquetas, o
+     total repetido, e não o peso do volume).
+
+     A divisão é exata: trabalha em passos inteiros (0,01 para unidade contínua,
+     1 para as demais) e reparte o resto de 1 passo nos primeiros volumes. Assim
+     a soma das etiquetas é SEMPRE o total da entrada (330,00 kg / 7 = dois
+     volumes de 47,15 e cinco de 47,14). Devolve {valor, passo, casas}. */
+  var UNIDADES_CONTINUAS = {kg: 1, g: 1, mg: 1, l: 1, lt: 1, litro: 1, litros: 1, ml: 1};
+  function quantidadeDoVolume(total, volumes, volume, unidade) {
+    var t = Number(total), n = Math.max(1, Math.floor(Number(volumes) || 1)), v = Math.min(Math.max(1, Math.floor(Number(volume) || 1)), n);
+    var continua = !!UNIDADES_CONTINUAS[String(unidade || '').trim().toLowerCase()];
+    if (!isFinite(t)) return {valor: total, passo: 1, casas: 0, dividido: false};
+    var passo = continua || Math.round(t) !== t ? 0.01 : 1, casas = passo === 1 ? 0 : 2;
+    var passos = Math.round(t / passo), base = Math.floor(passos / n), resto = passos - base * n;
+    var meus = base + (v <= resto ? 1 : 0);
+    return {valor: Math.round(meus * passo * 100) / 100, passo: passo, casas: casas, dividido: n > 1};
+  }
+  // Algum volume fica com parte fracionária? (divisão não exata no passo inteiro)
+  function fracao(total, volumes, unidade) {
+    var n = Math.max(1, Math.floor(Number(volumes) || 1));
+    for (var v = 1; v <= Math.min(n, 2); v++) { if (Math.round(quantidadeDoVolume(total, n, v, unidade).valor) !== quantidadeDoVolume(total, n, v, unidade).valor) return true; }
+    return false;
+  }
+  function fmtQtd(v, casas) { return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: casas, maximumFractionDigits: casas}); }
   function cartaoRecebimento(l, volume, total, fmt) {
+    var q = quantidadeDoVolume(l.quantidade, total, volume, l.unidade);
+    // Mais de um volume: peso do volume e, entre parênteses, o total da entrada.
+    // Fração (ex.: 47,15) mostra as duas casas em todos os volumes, para não
+    // misturar "47,15" com "47,1".
+    var casas = q.dividido ? (fracao(l.quantidade, total, l.unidade) ? 2 : 0) : q.casas;
+    var qtdTxt = q.dividido
+      ? fmtQtd(q.valor, casas) + ' ' + esc(l.unidade) + ' · volume ' + volume + ' de ' + total + ' (total ' + esc(l.quantidade) + ' ' + esc(l.unidade) + ')'
+      : esc(l.quantidade) + ' ' + esc(l.unidade) + ' · volume ' + volume + ' de ' + total;
     return '<section class="etq"><div class="topo"><div class="tx"><span class="tag q">QUARENTENA</span><div class="big">' + esc(l.loteInterno) + '</div>' +
       '<div class="nome">' + esc(l.materialCodigo) + ' — ' + esc(l.materialNome) + '</div></div>' + qrCodeSvg(l.loteInterno, 20) + '</div>' +
       '<div class="grid"><b>Lote fornecedor</b><span>' + esc(l.loteOrigem || '—') + '</span><b>Fornecedor</b><span>' + esc(l.fornecedorNome || '—') + '</span>' +
-      '<b>Quantidade</b><span>' + esc(l.quantidade) + ' ' + esc(l.unidade) + ' · volume ' + volume + ' de ' + total + '</span>' +
+      '<b>Quantidade</b><span>' + qtdTxt + '</span>' +
       '<b>Receb. / NF</b><span>' + esc(data(l.dataRecebimento)) + ' · ' + esc(l.notaFiscal || '—') + '</span>' +
       '<b>Validade</b><span>' + esc(l.dataValidade ? data(l.dataValidade) : 'Não se aplica') + '</span><b>Endereço</b><span>' + esc(l.enderecoCodigo || '—') + '</span></div>' +
       '<div class="bar">' + barras(l.loteInterno, util(fmt), 10, 0.4) + '</div></section>';
@@ -139,5 +172,5 @@
     return true;
   }
 
-  root.EtiquetasWMS = {pagina: pagina, imprimir: imprimir, FORMATOS: FORMATOS};
+  root.EtiquetasWMS = {pagina: pagina, imprimir: imprimir, FORMATOS: FORMATOS, quantidadeDoVolume: quantidadeDoVolume};
 })(typeof window !== 'undefined' ? window : this);
