@@ -170,6 +170,24 @@
     return {updates: u};
   }
 
+  /* Portão da ALOCAÇÃO (20/10, pedido do usuário: "o correto seria ela ser
+     necessária antes de alocar uma nova OP"). A linha só recebe a OP nova
+     limpa: assepsia aprovada para esta OP, ou dispensada pela regra do POP 035
+     (mesma fórmula, mesmo dia, dentro do limite). O first article fica para
+     depois -- ele precisa do setup da OP nova (codificação, insumos dela).
+     Devolve {ok, motivo?, aviso?, dispensa?}: `dispensa` = o motivo a gravar
+     quando a regra dispensa e ainda não há registro (auditoria). */
+  function podeAlocar(op, lib, reg, agoraIso, o, trava) {
+    if (op && (op.tipoOrdem === 'RETRABALHO' || op.tipo === 'RETRABALHO')) return {ok: true};
+    var ck4 = (lib && lib.ck4) || {};
+    if (ck4.status === 'APROVADO' || ck4.status === 'DISPENSADA') return {ok: true};
+    var pa = precisaAssepsia(op, reg, agoraIso, o);
+    if (!pa.precisa) return {ok: true, dispensa: pa.motivo};
+    var falta = 'a linha precisa de assepsia antes de receber esta OP (' + pa.motivo.replace(/\.$/, '') + ')' +
+      (ck4.status ? ' — assepsia ' + (ROTULO[ck4.status] || ck4.status).toLowerCase() : '') + '.';
+    return trava ? {ok: false, motivo: falta} : {ok: true, aviso: falta};
+  }
+
   /* Portão do envase (form.html). trava = chave em Ajustes. Sem trava, só
      avisa. OP de retrabalho não tem setup de envase próprio: passa. */
   function podeProduzir(op, lib, insp, trava) {
@@ -198,6 +216,6 @@
     LIMITE_LOTES_PADRAO: LIMITE_LOTES_PADRAO, ROTULO: ROTULO, chaveLinha: chaveLinha, diaBR: diaBR,
     precisaAssepsia: precisaAssepsia, situacaoOp: situacaoOp, novaInspecao: novaInspecao,
     concluirExecucao: concluirExecucao, decidirQualidade: decidirQualidade, assinarLider: assinarLider,
-    dispensarAssepsia: dispensarAssepsia, podeProduzir: podeProduzir, nominalGramas: nominalGramas
+    dispensarAssepsia: dispensarAssepsia, podeAlocar: podeAlocar, podeProduzir: podeProduzir, nominalGramas: nominalGramas
   };
 });

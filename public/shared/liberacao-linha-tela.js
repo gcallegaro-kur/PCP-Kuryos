@@ -42,7 +42,8 @@
   function opsDaLinha() {
     return Object.keys(S.ops).map(function(k) { return Object.assign({key: k}, S.ops[k]); })
       .filter(function(o) { return o && o.lote && o.status !== 'Concluído' && o.status !== 'Cancelado' && o.tipoOrdem !== 'RETRABALHO'; })
-      .filter(function(o) { return !S.linha || o.linha === S.linha || o.abertaLinha === S.linha; })
+      // Da linha: programada nela, aberta nela, ou preparada aqui (assepsia iniciada para ela).
+      .filter(function(o) { var l = S.lib[o.key]; return !S.linha || o.linha === S.linha || o.abertaLinha === S.linha || (l && l.linha === S.linha && !o.abertaLinha); })
       .sort(function(a, b) {
         var aa = a.abertaLinha === S.linha ? 0 : 1, bb = b.abertaLinha === S.linha ? 0 : 1;
         return aa - bb || String(a.dataEmissao || '').localeCompare(String(b.dataEmissao || ''));
@@ -69,8 +70,9 @@
       (reg && reg.ultima ? 'última assepsia ' + hora(reg.ultima.em) + ' (' + e(reg.ultima.sku || '') + ') · ' + (reg.lotesDesde || 0) + ' lote(s) desde então' : 'nenhuma assepsia registrada') + '</div>' +
       '<div class="dica">' + (ativos.length ? 'Equipamentos: ' + ativos.map(function(a) { return e(a.codigo) + (a.situacao === 'EM_MANUTENCAO' ? ' <span class="tg warn">em manutenção</span>' : ''); }).join(', ') : 'Nenhum equipamento cadastrado nesta linha em Manutenção › Ativos.') + '</div></div>';
     var ops = opsDaLinha();
-    if (!ops.length) { el('lista').innerHTML = cab + '<div class="card vazio">Nenhuma OP aberta ou programada nesta linha.</div>'; return; }
-    el('lista').innerHTML = cab + ops.map(cardOp).join('');
+    if (!ops.length) { el('lista').innerHTML = cab + proxima() + '<div class="card vazio">Nenhuma OP aberta, programada ou preparada nesta linha.</div>'; if (el('bPreparar')) el('bPreparar').onclick = preparar; return; }
+    el('lista').innerHTML = cab + proxima() + ops.map(cardOp).join('');
+    if (el('bPreparar')) el('bPreparar').onclick = preparar;
     el('lista').querySelectorAll('[data-acao]').forEach(function(b) { b.onclick = function() { acao(b.getAttribute('data-acao'), b.getAttribute('data-op'), b.getAttribute('data-id')); }; });
   }
 
@@ -99,8 +101,30 @@
     }
     return '<div class="card op' + (sit.liberada ? ' lib' : '') + '"><div class="op-cab"><div><b>' + e(op.lote) + '</b> · ' + e(op.produto || '') + ' <span class="dica">' + e(op.sku || '') + '</span>' +
       (aberta ? ' <span class="tg info">aberta na linha</span>' : '') + '</div><div>' + (sit.liberada ? '<span class="tg ok">LINHA LIBERADA</span>' : '<span class="tg warn">' + e(sit.falta) + '</span>') + '</div></div>' +
-      '<div class="etapas"><div class="etapa"><div class="et-t">1. Assepsia da linha (CK-4) ' + chip(sit.ck4) + '</div>' + b4 + '</div>' +
-      '<div class="etapa"><div class="et-t">2. Setup / first article (CK-5) ' + chip(sit.ck5) + '</div>' + b5 + '</div></div></div>';
+      '<div class="etapas"><div class="etapa"><div class="et-t">1. Assepsia da linha (CK-4) ' + chip(sit.ck4) + '</div><div class="dica">Antes de alocar a OP na linha.</div>' + b4 + '</div>' +
+      '<div class="etapa"><div class="et-t">2. Setup / first article (CK-5) ' + chip(sit.ck5) + '</div><div class="dica">Depois de alocar, com o setup feito; antes de produzir.</div>' + b5 + '</div></div></div>';
+  }
+
+  /* Próxima OP: a assepsia vem ANTES de alocar (20/10). Quem vai trocar o
+     produto escolhe aqui a OP que vem a seguir, mesmo que o PCP ainda não
+     tenha posto a linha nela; a OP passa a aparecer nesta linha. */
+  function proxima() {
+    var livres = Object.keys(S.ops).map(function(k) { return Object.assign({key: k}, S.ops[k]); })
+      .filter(function(o) { return o && o.lote && o.status !== 'Concluído' && o.status !== 'Cancelado' && !o.abertaLinha && o.tipoOrdem !== 'RETRABALHO'; })
+      .sort(function(a, b) { return String(a.lote).localeCompare(String(b.lote), 'pt-BR', {numeric: true}); });
+    return '<div class="card proxima"><div class="et-t">Preparar a próxima OP desta linha</div>' +
+      '<div class="dica">A assepsia é feita antes de alocar a OP na linha. Escolha a OP que vem a seguir; o sistema diz se a limpeza é necessária (POP 035).</div>' +
+      '<div class="lin"><input type="text" id="fProxima" list="dlProximas" placeholder="Lote ou produto" style="max-width:none"><datalist id="dlProximas">' +
+      livres.map(function(o) { return '<option value="' + e(o.lote) + ' — ' + e(o.produto || '') + '"></option>'; }).join('') +
+      '</datalist><button class="btn" type="button" id="bPreparar">Preparar</button></div></div>';
+  }
+  function preparar() {
+    var v = String(el('fProxima').value || '').split(' — ')[0].trim();
+    var key = Object.keys(S.ops).find(function(k) { return (S.ops[k] || {}).lote === v; });
+    if (!key) { toast('Escolha uma OP da lista.', true); return; }
+    if ((S.lib[key] || {}).linha && S.lib[key].linha !== S.linha) { toast('Esta OP já está sendo preparada na ' + S.lib[key].linha + '.', true); return; }
+    db.ref('liberacao_linha/' + key + '/linha').set(S.linha).then(function() { toast('Lote ' + v + ' preparado na ' + S.linha + '.'); })
+      .catch(function(err) { toast('Não foi possível gravar: ' + err.message, true); });
   }
 
   /* ── Ações da lista ── */

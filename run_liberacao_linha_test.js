@@ -107,4 +107,33 @@ ok('portão no apontamento: fim de setup e apontamento de envase, nunca ao aloca
   assert.match(html, /src="shared\/liberacao-linha\.js"/);
 });
 
+ok('portão da alocação: assepsia antes de alocar (20/10)', () => {
+  const reg = {ultima: {em: '2026-10-20T11:00:00Z', sku: 'HDR-MISS-0003'}, lotesDesde: 3};
+  // Mesma fórmula, mesmo dia: aloca e devolve o motivo da dispensa para gravar.
+  const r1 = L.podeAlocar(op, null, reg, agora, {}, true);
+  assert.equal(r1.ok, true); assert.match(r1.dispensa, /3 de 15 lotes/);
+  // Troca de produto: com trava barra, sem trava avisa.
+  const outro = Object.assign({}, op, {sku: 'HDR-MISS-0009'});
+  assert.deepEqual(L.podeAlocar(outro, null, reg, agora, {}, true).ok, false);
+  assert.match(L.podeAlocar(outro, null, reg, agora, {}, true).motivo, /precisa de assepsia antes de receber esta OP \(Troca de produto/);
+  assert.match(L.podeAlocar(outro, null, reg, agora, {}, false).aviso, /precisa de assepsia/);
+  assert.equal(L.podeAlocar(outro, null, reg, agora, {}, false).ok, true);
+  // Assepsia em andamento aparece no motivo; aprovada ou dispensada libera.
+  assert.match(L.podeAlocar(outro, {ck4: {status: 'AGUARDANDO_QUALIDADE'}}, reg, agora, {}, true).motivo, /assepsia aguardando a qualidade/);
+  assert.deepEqual(L.podeAlocar(outro, {ck4: {status: 'APROVADO'}}, reg, agora, {}, true), {ok: true});
+  assert.deepEqual(L.podeAlocar(op, {ck4: {status: 'DISPENSADA'}}, reg, agora, {}, true), {ok: true});
+  assert.deepEqual(L.podeAlocar(Object.assign({}, outro, {tipoOrdem: 'RETRABALHO'}), null, reg, agora, {}, true), {ok: true});
+});
+
+ok('apontamento: assepsia cobrada ao ALOCAR e ao ABRIR a OP na linha de envase', () => {
+  const html = require('fs').readFileSync('public/form.html', 'utf8');
+  assert.match(html, /function bloquearSeAssepsiaPendente\(op, linha, acao\)/);
+  assert.match(html, /bloquearSeAssepsiaPendente\(op, linha, 'ser aberta'\)/);
+  assert.match(html, /alocarOpAlvoAtual\.tipo === 'linha' && bloquearSeAssepsiaPendente\(findOpByLote\(lote\), alocarOpAlvoAtual\.nome, 'ser alocada'\)/);
+  assert.equal((html.match(/bloquearSeAssepsiaPendente\(/g) || []).length, 3);
+  assert.match(html, /configRotulagem \|\| \[\]\)\.includes\(linha\) \|\| \(configPostos/, 'rotulagem e postos não pedem assepsia de linha de envase');
+  assert.match(html, /src="shared\/ativos\.js"/);
+  assert.doesNotMatch(html, /typeof showAlert === 'function'\) showAlert\('Atenção/, 'form.html não tem showAlert: aviso vai por avisoLiberacao');
+});
+
 console.log(`\nrun_liberacao_linha_test: ${n} OK`);

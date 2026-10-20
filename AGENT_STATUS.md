@@ -35,7 +35,11 @@ functions (os secrets precisam estar acessíveis de novo).
 ### Claude — Assepsia da linha antes de ALOCAR a OP (20/10/2026)
 
 - **Pedido:** a inspeção de limpeza tem que vir antes de alocar uma nova OP; o first article continua depois do setup.
-- **Arquivos ativos:** `public/shared/liberacao-linha.js`, `public/shared/liberacao-linha-tela.js`, `public/form.html` (portões de alocar/abrir), manuais de Qualidade e Apontamento, `run_liberacao_linha*`.
+- **Feito:** `LiberacaoLinha.podeAlocar` + `bloquearSeAssepsiaPendente(op, linha, acao)` no `form.html`, nos dois pontos que põem OP em linha de envase (Abrir OP e Confirmar alocação; rotulagem/postos fora). Ordem: OP anterior encerrada → assepsia (ou dispensa pela regra, gravada na hora da alocação em `liberacao_linha/{op}/ck4`) → alocar → setup → first article (fim de setup/apontamento, como antes). Tela: "Preparar a próxima OP desta linha" grava `liberacao_linha/{op}/linha` para a OP aparecer antes de ter linha.
+- **Corrigido junto:** o aviso sem trava do A3 chamava `showAlert`, que o `form.html` não tem — nunca aparecia. Agora `avisoLiberacao(msg)` (faixa fixa própria).
+- **Testes:** `run_liberacao_linha_test.js` (8), `run_assepsia_alocacao_ui_test.js` (novo: form.html com trava ligada/desligada + tela).
+- **⚠ Incidente de billing (bloco acima):** com o Storage fora, item de checklist com foto SEMPRE (CK-5: arte e codificação) não fecha. Paliativo da Qualidade: mudar a foto desses itens para "só se NC" no editor.
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Qualidade A3: assepsia de linha (CK-4) + first article (CK-5) (19/10/2026)
 

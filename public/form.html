@@ -20,6 +20,7 @@
   <script src="shared/manipulacao.js"></script>
   <script src="shared/checklists.js"></script>
   <script src="shared/liberacao-linha.js"></script>
+  <script src="shared/ativos.js"></script>
   <script src="shared/onde-op.js"></script>
   <script src="shared/perdas-etapa.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
@@ -2076,8 +2077,57 @@ function bloquearSeBulkNaoLiberado(op, acao) {
    linha (CK-4) + setup/first article (CK-5). Vale para FIM DE SETUP e apontamento
    de envase -- não para alocar/abrir, porque o first article acontece com a OP já
    na linha. Com a trava (Ajustes) desligada, só avisa no fim do setup. */
-var configLiberacaoLinha = {}, liberacoesLinha = {};
+var configLiberacaoLinha = {}, liberacoesLinha = {}, assepsiaLinhas = {}, ativosCad = {};
+/* Aviso que não bloqueia (trava desligada). Esta tela não tem faixa de aviso
+   própria (showAlert não existe aqui): faixa fixa no topo, por cima de tudo,
+   fecha no × ou sozinha em 20 s. */
+function avisoLiberacao(msg) {
+  var box = document.getElementById('avisoLiberacao');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'avisoLiberacao';
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483000;width:min(760px,calc(100vw - 24px));' +
+      'background:#fde8e8;color:#9b1c1c;border:1px solid #f3b4b4;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:14px 44px 14px 18px;font-size:14px;line-height:1.45';
+    document.body.appendChild(box);
+  }
+  box.textContent = msg;
+  var x = document.createElement('button');
+  x.type = 'button'; x.textContent = '×'; x.setAttribute('aria-label', 'Fechar aviso');
+  x.style.cssText = 'position:absolute;top:6px;right:10px;border:0;background:transparent;color:inherit;font-size:22px;cursor:pointer';
+  x.onclick = function() { box.remove(); };
+  box.appendChild(x);
+  clearTimeout(avisoLiberacao._t);
+  avisoLiberacao._t = setTimeout(function() { if (box.parentNode) box.remove(); }, 20000);
+}
 dbOnValue(db.ref('liberacao_linha'), function(snap) { liberacoesLinha = snap.val() || {}; });
+dbOnValue(db.ref('assepsia_linhas'), function(snap) { assepsiaLinhas = snap.val() || {}; });
+dbOnValue(db.ref('ativos'), function(snap) { ativosCad = snap.val() || {}; });
+
+/* Assepsia ANTES DE ALOCAR (20/10, pedido do usuário: "o correto seria ela ser
+   necessária antes de alocar uma nova OP"). Vale só para linha de envase. A
+   regra do POP 035 decide se precisa (troca de produto, início do dia, limite de
+   lotes, máquina que voltou de manutenção); quando dispensa, a dispensa fica
+   gravada na OP para a auditoria. Sem trava: só avisa. */
+function bloquearSeAssepsiaPendente(op, linha, acao) {
+  if (!op || !linha || typeof LiberacaoLinha === 'undefined') return false;
+  if ((configRotulagem || []).includes(linha) || (configPostos || []).includes(linha)) return false;
+  var key = sanitizeKey(op.lote || '');
+  var ativosLinha = typeof Ativos !== 'undefined' ? Ativos.daLinha(ativosCad, linha) : [];
+  var r = LiberacaoLinha.podeAlocar(op, liberacoesLinha[key], assepsiaLinhas[LiberacaoLinha.chaveLinha(linha)], new Date().toISOString(),
+    {limite: configLiberacaoLinha.limiteLotes, ativosLinha: ativosLinha}, !!configLiberacaoLinha.trava);
+  if (!r.ok) {
+    alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'ser alocada') + ' na ' + linha + ': ' + r.motivo + '\n\nRegistre a assepsia em Liberação de linha (escolha a linha e esta OP).');
+    return true;
+  }
+  if (r.aviso) avisoLiberacao('Atenção — ' + linha + ', lote ' + (op.lote || '') + ': ' + r.aviso + ' Trava desligada: registre a assepsia em Liberação de linha.');
+  if (r.dispensa && !(liberacoesLinha[key] && liberacoesLinha[key].ck4)) {
+    var who = (window.currentUser && window.currentUser.nome) || 'Operador';
+    Promise.resolve().then(function() { return db.ref().update(LiberacaoLinha.dispensarAssepsia(key, linha, r.dispensa, {agora: new Date().toISOString(), por: who}).updates); })
+      .catch(function(err) { console.warn('Dispensa da assepsia não gravada:', err && err.message); });
+  }
+  return false;
+}
 function bloquearSeLinhaNaoLiberada(op, acao, avisar) {
   if (!op || typeof LiberacaoLinha === 'undefined') return false;
   var key = sanitizeKey(op.lote || '');
@@ -2086,7 +2136,7 @@ function bloquearSeLinhaNaoLiberada(op, acao, avisar) {
     alert('A OP ' + (op.lote || '') + ' não pode ' + (acao || 'produzir') + ': ' + r.motivo + '\n\nA liberação é feita em Liberação de linha (Qualidade).');
     return true;
   }
-  if (r.aviso && avisar && typeof showAlert === 'function') showAlert('Atenção — lote ' + (op.lote || '') + ': ' + r.aviso + ' (a trava está desligada; registre a liberação em Liberação de linha).', 'danger');
+  if (r.aviso && avisar) avisoLiberacao('Atenção — lote ' + (op.lote || '') + ': ' + r.aviso + ' Trava desligada: registre a liberação em Liberação de linha.');
   return false;
 }
 
@@ -2475,6 +2525,7 @@ document.getElementById('btnAbrirOP').addEventListener('click', function() {
   if (bloquearSeOpCancelada(op, 'ser aberta')) return;
   if (bloquearSeBulkNaoLiberado(op, 'ser aberta na linha')) return;
   if (!linha) { alert('Selecione a linha/posto.'); return; }
+  if (bloquearSeAssepsiaPendente(op, linha, 'ser aberta')) return;
   if (op.abertaDesde) { alert('Essa OP já está aberta desde ' + fmtDataHora(op.abertaDesde) + '.'); return; }
 
   btn.disabled = true; btn.textContent = 'Abrindo...';
@@ -5266,6 +5317,7 @@ document.getElementById('btnConfirmarAlocarOp').addEventListener('click', functi
   if (!lote || !alocarOpAlvoAtual) { alert('Selecione uma OP na lista antes de confirmar.'); return; }
   if (bloquearSeOpCancelada(findOpByLote(lote), 'ser alocada')) return;
   if (alocarOpAlvoAtual.tipo !== 'rotulagem' && bloquearSeBulkNaoLiberado(findOpByLote(lote), 'ser alocada na linha')) return;
+  if (alocarOpAlvoAtual.tipo === 'linha' && bloquearSeAssepsiaPendente(findOpByLote(lote), alocarOpAlvoAtual.nome, 'ser alocada')) return;
   var btn = this;
   btn.disabled = true;
   var agora = new Date().toISOString();
