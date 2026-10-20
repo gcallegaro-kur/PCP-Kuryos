@@ -201,6 +201,26 @@
         ".validate": "!newData.exists() || (newData.hasChildren(['status', 'por', 'em']) && (newData.child('status').val() == 'LIBERADO' || newData.child('status').val() == 'REPROVADO' || newData.child('status').val() == 'PENDENTE'))"
       }
     },
+    // Modelos de checklist da Qualidade (19/10, PLANO_QUALIDADE.md A2): todo logado LÊ (operador
+    // preenche a assepsia com o modelo); edita quem é da Qualidade. Versão publicada é imutável --
+    // a inspeção guarda o número da versão e precisa reencontrar as perguntas como eram.
+    "checklist_modelos": {
+      ".read": "auth != null",
+      "$modeloId": {
+        // Sem .write aqui de propósito: permissão concedida em cima não pode ser
+        // revogada embaixo, e a versão publicada precisa ser imutável.
+        ".validate": "newData.hasChildren(['codigo', 'nome'])",
+        "versoes": {
+          "$n": {
+            ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true) && !data.exists()",
+            ".validate": "newData.hasChildren(['itens', 'criadaEm'])"
+          }
+        },
+        "$campo": {
+          ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true)"
+        }
+      }
+    },
     // Manutenção › Ativos (19/10): todo usuário logado LÊ (Qualidade, Operação e Planejamento
     // consomem o cadastro); grava quem tem o módulo manutencao. Histórico de situação só acrescenta.
     "ativos": {

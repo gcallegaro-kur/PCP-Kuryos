@@ -8,7 +8,10 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 ### Claude — Qualidade A2: motor de checklists editáveis (19/10/2026)
 
 - **Plano:** `PLANO_QUALIDADE.md`, item A2 (decisão D6).
-- **Arquivos ativos:** `public/shared/checklists.js` (novo), `public/shared/checklists-modelos-padrao.js` (novo), `public/checklists_cq.html` (novo), `public/shared/checklists-tela.js` (novo), `public/auth_check.js`, `database.rules.json`, testes `run_checklists*`.
+- **Feito:** `checklist_modelos/{id}` com `versoes/{n}` imutáveis (regra: sem `.write` no nó do modelo, só por campo — permissão concedida em cima não se revoga embaixo). Tipos SNA/MEDIDA/AMOSTRAS/ESCOLHA/TEXTO, papel EXECUTOR/QUALIDADE, crítico, foto NUNCA/NC/SEMPRE. `Checklists.avaliar` (por papel), `avaliarAmostras` (first article 32 un., nominal do produto, −3%). Modelos iniciais CK-3/CK-4/CK-5 (`checklists-modelos-padrao.js`, spec + POP 035). Editor `checklists_cq.html` (Qualidade › Modelos de checklist): rascunho, publicar com nota, histórico com diferenças. Manual da Qualidade seção 5.
+- **Testes:** `run_checklists_test.js`, `run_checklists_ui_test.js`, `run_checklists_rules_test.js` (emulador).
+- **Próximo:** A3 (execução do CK-4 + CK-5 por OP/linha) usando este motor.
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Manutenção › Cadastro de Ativos (19/10/2026)
 

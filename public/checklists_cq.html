@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelos de checklist — Qualidade</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="shared/utils.js"></script>
+<script src="auth_check.js"></script>
+<script src="shared/checklists.js"></script>
+<script src="shared/checklists-modelos-padrao.js"></script>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="shared/theme.css">
+<style>
+:root{--ok:#0a7d3c;--ok-bg:#e3f6ea;--warn:#a15c00;--warn-bg:#fff1d6;--bad:#c42b2b;--bad-bg:#fde8e8;--info-bg:#e6edfc;--mute-bg:#f0f0f3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ok:#6fe3a0;--ok-bg:rgba(60,200,120,.16);--warn:#ffcb6b;--warn-bg:rgba(250,178,25,.16);--bad:#ff8f8f;--bad-bg:rgba(240,80,80,.18);--info-bg:rgba(94,131,234,.2);--mute-bg:rgba(255,255,255,.08)}}
+:root[data-theme="dark"]{--ok:#6fe3a0;--ok-bg:rgba(60,200,120,.16);--warn:#ffcb6b;--warn-bg:rgba(250,178,25,.16);--bad:#ff8f8f;--bad-bg:rgba(240,80,80,.18);--info-bg:rgba(94,131,234,.2);--mute-bg:rgba(255,255,255,.08)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui)}
+.pg{max-width:1280px;margin:0 auto;padding:24px 18px 80px}
+h1{margin:0;font-size:27px;letter-spacing:-.02em}
+h2{margin:0;font-size:19px}
+.sub{font-size:13px;color:var(--ink-soft);margin-top:4px;line-height:1.45;max-width:820px}
+.head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px}
+.lay{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+.mod{all:unset;cursor:pointer;box-sizing:border-box;display:block;width:100%;background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:11px 13px;margin-bottom:8px;border:2px solid transparent;font-size:14px}
+.mod.on{border-color:var(--accent)}.mod .dica{display:block;margin-top:3px}.mod:focus-visible{outline:2px solid var(--accent)}
+.card{background:var(--panel);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:12px}
+.cab{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.abas{display:flex;gap:4px;margin:6px 0 12px;border-bottom:1px solid var(--line)}
+.aba{all:unset;cursor:pointer;padding:9px 14px;font-size:14px;font-weight:700;color:var(--ink-soft);border-bottom:3px solid transparent;margin-bottom:-1px}
+.aba.on{color:var(--accent);border-bottom-color:var(--accent)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--radius-sm);padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;gap:6px;align-items:center;justify-content:center}
+.btn:hover{border-color:var(--accent)}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.sm{padding:4px 9px;font-size:12px}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.perigo{color:var(--bad)}
+.tg{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.tg.ok{background:var(--ok-bg);color:var(--ok)}.tg.warn{background:var(--warn-bg);color:var(--warn)}.tg.mute{background:var(--mute-bg);color:var(--ink-soft)}
+.aviso{border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;margin:10px 0;line-height:1.45}.aviso.bad{background:var(--bad-bg);color:var(--bad)}
+.dica{font-size:12px;color:var(--ink-soft);line-height:1.4}
+.vazio{text-align:center;color:var(--ink-soft);padding:30px}
+.it{background:var(--panel);border:1.5px solid var(--line);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px}
+.it.crit{border-color:color-mix(in srgb,var(--bad) 55%,var(--line))}
+.it-top{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.it .n{display:inline-flex;min-width:26px;height:26px;border-radius:13px;background:var(--accent);color:#fff;font-weight:800;font-size:12px;align-items:center;justify-content:center;padding:0 7px}
+.it.crit .n{background:var(--bad)}
+.it .tx{flex:1;font-weight:650}
+.it .mv{display:flex;gap:4px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+.it label{display:block;font-size:11.5px;font-weight:700;color:var(--ink-soft);margin-top:6px}
+.it label input,.it label select,.it label textarea{margin-top:3px}
+.flags{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px}.flags label{display:flex;gap:6px;align-items:center;font-size:12.5px;font-weight:600;color:var(--ink)}
+label.t{display:block;font-size:12px;font-weight:700;margin:10px 0 4px;color:var(--ink-soft)}
+input[type=text],input:not([type]),select,textarea{width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:inherit;font-size:13.5px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.publicar{margin-top:14px}
+.rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.ver{padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}.ver:last-child{border-bottom:0}
+.toast{position:fixed;top:18px;right:18px;z-index:10050;background:var(--ok);color:#fff;padding:12px 16px;border-radius:10px;font-size:13.5px;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.erro{background:var(--bad)}
+@media (max-width:900px){.lay{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.pg{padding:14px 10px 80px}h1{font-size:22px}}
+</style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<main class="pg">
+  <div class="head">
+    <div>
+      <h1>Modelos de checklist</h1>
+      <div class="sub">As perguntas da assepsia, do first article e das demais inspeções. A Qualidade edita e publica uma versão nova sempre que precisar; cada inspeção guarda a versão que usou, então mudar o modelo nunca altera um registro já feito.</div>
+    </div>
+    <span id="conn" class="tg mute">Conectando…</span>
+  </div>
+  <div class="lay">
+    <aside id="mods"><div class="dica">Carregando…</div></aside>
+    <section id="editor"></section>
+  </div>
+</main>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script>
+<script src="shared/checklists-tela.js"></script>
+</body>
+</html>

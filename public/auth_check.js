@@ -120,7 +120,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'consulta_estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html'] },
+                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html', 'checklists_cq.html'] },
   auditoria5s:  { rotulo: 'Auditoria 5S',        desc: 'Checklist do líder, auditoria da Qualidade e inspeção da Diretoria (5S)',
                   paginas: ['auditoria_5s.html'] },
   // Manutenção › Ativos (19/10): cadastro de máquinas e equipamentos que
@@ -771,6 +771,8 @@ function renderUnifiedNavbar(user) {
     // Histórico de análises + indicadores (29/09): consulta de todo laudo e KPIs.
     temMod('qualidade') && ktLink('qualidade_historico.html', 'chart', 'Histórico e Indicadores', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
+    // Modelos de checklist (19/10): a Qualidade edita e versiona as perguntas (PLANO_QUALIDADE.md, A2).
+    temMod('qualidade') && ktLink('checklists_cq.html', 'clipboard', 'Modelos de checklist', activePage),
     // Auditoria 5S (06/10): líderes de setor, auditores (Qualidade/P&D) e Diretoria.
     temMod('auditoria5s') && ktLink('auditoria_5s.html', 'clipboard', 'Auditoria 5S', activePage),
     temMod('qualidade') && !temMod('comercial') && !temMod('logistica') && ktLink('devolucoes.html', 'history', 'Devoluções de Cliente', activePage),
