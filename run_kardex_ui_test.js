@@ -31,6 +31,9 @@ function dados() {
     bombonas_bulk: {'BB-0007': {codigo: 'BB-0007', tipo: 'BOMBONA', conteudo: {lote: '26280/01', produto: 'BODY SPLASH IDOLA', kg: 120}, historico: {
       h1: {tipo: 'ENCHER', kgAntes: 0, kgDepois: 200, lote: '26280/01', opKey: '26280-01', origem: 'MANIPULACAO', por: 'Léo', em: H('2026-09-30T15:00')},
       h2: {tipo: 'AJUSTE', kgAntes: 200, kgDepois: 120, lote: '26280/01', motivo: 'retirada para envase', por: 'Léo', em: H('2026-10-01T08:00')}}}},
+    // O recebimento grava a CHAVE do PC em `ref`; a aba de movimentos carrega
+    // este nó sob demanda só para traduzir em número + fornecedor.
+    pedidos_compra: {'PC-0012': {numeroFormatado: 'PC-0012', fornecedorNome: 'LOMAR PACK', status: 'RECEBIDO_TOTAL'}},
     material_processo: {},
     contagens_inventario: {c1: {enderecoKey: 'e1', enderecoCodigo: 'MP-A-01', contadoEm: H('2026-09-30T17:00'), contadoPor: 'Lia', ajusteAplicado: false,
       linhas: [{itemCodigo: 'EP-00095', saldoEsperado: 4100, qtdContada: 4100, diferenca: 0, tipo: 'ok'}]}},
@@ -213,8 +216,84 @@ const linhasMov = (page) => page.locator('#itemConteudo table').first().locator(
       await page.screenshot({path: process.env.KARDEX_SHOT + '/kardex_conc.png', fullPage: true});
     }
 
+    /* ── Entradas e movimentos (todos os itens) ──
+       O relatório sem filtro por item. O que precisa estar certo não é a
+       listagem: é o total, que tem duas formas de mentir (misturar unidade e
+       contar o consumo duas vezes), e a coluna Origem, que sem o mapa de PCs
+       mostraria a chave interna do pedido. */
+    await page.click('.aba[data-aba="mov"]');
+    await page.waitForSelector('#pMov.on');
+    // O padrão é "só entradas" nos últimos 30 dias; o fixture é mais antigo,
+    // então abrir o histórico inteiro também exercita o filtro de período.
+    assert.equal(await page.inputValue('#mNatureza'), 'ENTRADA', 'a aba abre nas entradas');
+    await page.selectOption('#mPeriodo', '');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 3);
+    assert.match(await page.locator('#mTitulo').innerText(), /^entrada \(3\)$/i, 'o <h3> sai em maiúsculas por CSS');
+
+    // Total SEPARADO POR UNIDADE: 6.661 un e 200 kg não se somam.
+    const txtTiles = (await page.locator('#mTiles .tile').allInnerTexts()).join(' | ');
+    assert.match(txtTiles, /Movimentos no filtro/);
+    assert.match(txtTiles, /6\.661 un[\s\S]*?Total em un · 2 mov/, 'veio: ' + txtTiles);
+    assert.match(txtTiles, /200 kg[\s\S]*?Total em kg · 1 mov/, 'veio: ' + txtTiles);
+    assert.ok(!/6\.861/.test(txtTiles), 'nunca um total único somando kg com un');
+
+    // Origem resolvida: o PC vira número + fornecedor, não a chave.
+    const linhaRec = page.locator('#mBody tr', {hasText: 'EP-00095'});
+    const txtRec = await linhaRec.innerText();
+    assert.match(txtRec, /PC-0012/);
+    assert.match(txtRec, /LOMAR PACK/, 'fornecedor do PC: ' + txtRec);
+    assert.match(txtRec, /\+5\.000/);
+    assert.match(txtRec, /Recebimento \(PC\)/);
+    // Sem coluna de saldo na visão geral.
+    assert.equal((await page.locator('#pMov thead th').allInnerTexts()).join('|').toUpperCase(),
+      'DATA|ITEM|MOVIMENTO|ORIGEM|LOTE / ENDEREÇO|DONO|AUTOR|QUANTIDADE', 'sem coluna de saldo (CSS deixa o th em maiúsculas)');
+
+    // Consumo: as duas linhas aparecem, o total conta uma, e a tela explica.
+    await page.selectOption('#mNatureza', 'CONSUMO');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 2);
+    const tilesC = (await page.locator('#mTiles .tile').allInnerTexts()).join(' | ');
+    assert.match(tilesC, /-1\.000 un/, 'veio: ' + tilesC);
+    assert.ok(!/-2\.000/.test(tilesC), 'não conta a saída duas vezes');
+    assert.match(await page.locator('#mAviso').innerText(), /não entram no total/);
+    assert.equal(await page.locator('#mBody tr.info').count(), 1, 'o espelho de lote fica em cinza');
+
+    // Filtros: tipo de item e busca livre por fornecedor.
+    await page.selectOption('#mNatureza', 'ENTRADA');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 3);
+    await page.selectOption('#mItemTipo', 'produto');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 1);
+    assert.match(await page.locator('#mBody tr').first().innerText(), /GLMKAM01/);
+    await page.selectOption('#mItemTipo', '');
+    await page.fill('#mBusca', 'lomar');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 1);
+    assert.match(await page.locator('#mBody tr').first().innerText(), /EP-00095/, 'acha pelo fornecedor, que não está no movimento');
+    await page.fill('#mBusca', '');
+    await page.waitForFunction(() => document.querySelectorAll('#mBody tr').length === 3);
+
+    // "Qualquer movimento" segue a natureza escolhida.
+    const opcoesMov = await page.locator('#mTipoMov option').allInnerTexts();
+    assert.ok(opcoesMov.includes('Recebimento (PC)'), 'veio: ' + opcoesMov.join(', '));
+    assert.ok(!opcoesMov.includes('Perda de produção'), 'perda não é entrada: ' + opcoesMov.join(', '));
+
+    // CSV da aba leva o conjunto filtrado, com o PC resolvido.
+    await page.evaluate(() => {
+      window.__mcsv = [];
+      const orig = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (b) => { b.text().then((t) => window.__mcsv.push(t)); return orig(b); };
+    });
+    await page.click('#mCsv');
+    await page.waitForFunction(() => window.__mcsv.length === 1, null, {timeout: 5000});
+    const csvMov = (await page.evaluate(() => window.__mcsv[0])).replace(/^﻿/, '').split('\n');
+    assert.equal(csvMov.length, 4, 'cabeçalho + 3 entradas');
+    assert.match(csvMov[0], /^Data\/hora;Código;Item;Tipo de item;Movimento;Natureza;Motivo;Origem;Fornecedor \/ detalhe;/);
+    assert.ok(csvMov.some((l) => l.indexOf('PC-0012;LOMAR PACK;') > 0), 'veio: ' + csvMov.join(' // '));
+
+    // Link direto para a aba.
+    await page.goto(page.url().split('?')[0] + '?aba=entradas');
+    await page.waitForSelector('#pMov.on');
+
     assert.deepEqual(errors, [], 'erros de JS: ' + errors.join(' | '));
-    console.log('OK Kardex: material, produto com lote da planilha, intermediário sem cadastro, saldo sem origem, período, CSV, conciliação e celular.');
+    console.log('OK Kardex: material, produto com lote da planilha, intermediário sem cadastro, saldo sem origem, período, CSV, conciliação, celular e a aba de entradas de todos os itens.');
   } finally {
     await browser.close();
   }

@@ -3,6 +3,63 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Kardex: relatório de entradas de todos os itens (20/10/2026)
+
+- **Pedido:** "relatório de entradas, talvez o próprio kardex, mas sem filtro
+  por item".
+- **Dá, e sai barato:** `kardex.html` já carrega `movimentos_estoque` INTEIRO
+  (0,71 MB, 2.196 movimentos, 311 itens) e filtra o item no cliente. Uma
+  visão de todos os itens não custa egress novo.
+- **Mas não é o kardex com o filtro solto:** o kardex do item calcula saldo
+  inicial/final, conciliação e saldo corrido. Saldo corrido somando itens
+  diferentes não significa nada — a coluna não pode ir para a visão geral.
+- **Medido (03/09 → 20/10):** 125 entradas = `recebimento_pc` 60 +
+  `conferencia_pa` 65. Nada de `producao_op`, `entrada_avulsa_pa` ou
+  `devolucao_cliente` ainda. Zero qtd negativa, zero entrada repetida.
+- **Armadilha 1 — unidade:** as 125 entradas têm 4 unidades (un 94, kg 24,
+  rolo 5, L 2). Um "total de entradas" único somaria kg com unidade. Total
+  só por unidade.
+- **Armadilha 2 — dupla contagem:** o log grava consumo DUAS vezes
+  (`consumo_producao` no saldo do item + `consumo` na baixa do lote). Vale
+  para CONSUMO, não para ENTRADA (medido: recebimento_pc é um registro só,
+  razão 'ambas'). Se a tela deixar trocar a natureza, o total tem que
+  respeitar a razão.
+- **`ref` do recebimento é a chave do PC**, não o número: os 36 refs
+  distintos resolvem 36/36 em `pedidos_compra` (55 PCs, 0,26 MB), que já tem
+  `numeroFormatado` e `fornecedorNome` desnormalizado — não precisa de
+  `fornecedores`. Hoje o kardex do item mostra essa chave crua.
+  Carregar sob demanda, só ao abrir a aba.
+- **Feito:** terceira aba **"Entradas e movimentos"** no `kardex.html`, que
+  abre em "só entradas / últimos 30 dias"; filtros de período, natureza,
+  movimento (as opções seguem a natureza), tipo de item e busca livre
+  (item, lote, PC, fornecedor, OP, endereço, autor); CSV do conjunto
+  filtrado inteiro, com teto de 400 linhas só no desenho da tabela.
+  Motor em `Kardex.movimentosGerais(base, filtro)` + `Kardex.csvGerais(r)`,
+  puros e testados. `pedidos_compra` carrega no primeiro abrir da aba.
+- **Sem coluna de saldo, de propósito.** Saldo corrido atravessando itens
+  diferentes não é número ruim, é número sem significado. Quem precisa de
+  saldo usa o Kardex do item. Travado por asserção nos dois testes.
+- **Total sempre por unidade**, nunca um número só, e o teste rejeita o
+  total somado.
+- **Quem protege da dupla contagem é o `conta()`** (o mesmo sistema de razão
+  do kardex do item): num item de razão 'item' o `consumo` (baixa FEFO) tem
+  razão 'lote' e cai fora sozinho. Escrevi uma lista `ESPELHO_DE_LOTE` para
+  isso, o teste negativo mostrou que ela era **código morto**, e removi.
+  As linhas que não contam aparecem em cinza e a tela diz por quê.
+- **Link para o PC não existe:** `compras.html` não lê parâmetro de URL
+  nenhum. A coluna Origem mostra número + fornecedor como texto — link
+  morto é pior.
+- **Ensaio contra a base:** 149 entradas (não 125 — a minha primeira
+  contagem varreu só o log cru e perdeu 24 `mp_sobra`, que são sintéticos
+  do material em processo e já são natureza ENTRADA); 60/60 recebimentos
+  resolvem PC + fornecedor; em CONSUMO, 128 das 1.494 linhas ficam fora do
+  total, exatamente os 128 `consumo` medidos.
+- **Testes:** `run_kardex_test.js` (unidade, razão, resolução de PC,
+  fallback sem o mapa, filtros, busca, CSV) e `run_kardex_ui_test.js` (a
+  aba na tela real). Conferido que os dois falham se a proteção de dupla
+  contagem quebrar.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Consulta de Estoque: exportar empenho por OP (20/10/2026)
 
 - **Pedido:** botão para exportar os dados em Consulta de estoque, no caminho

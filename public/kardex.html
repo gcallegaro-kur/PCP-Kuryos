@@ -99,6 +99,7 @@
 <div class="main">
   <div class="abas">
     <button class="aba on" data-aba="item">Kardex do item</button>
+    <button class="aba" data-aba="mov">Entradas e movimentos</button>
     <button class="aba" data-aba="conc">Conciliação (auditoria)</button>
   </div>
 
@@ -131,6 +132,54 @@
     <div id="itemConteudo">
       <div class="vazio">Busque um item para ver o kardex.<br><span class="nota">Também dá para abrir pela aba <b>Conciliação</b>, que lista todos os itens com saldo ou movimento.</span></div>
     </div>
+  </div>
+
+  <!-- ── Entradas e movimentos de todos os itens ──
+       Pedido do usuário (20/10): "relatório de entradas, talvez o próprio
+       kardex, mas sem filtro por item". Não é o kardex com o filtro solto:
+       lá existe saldo inicial, saldo corrido e conciliação, e saldo corrido
+       somando itens diferentes não significa nada. Aqui não há coluna de
+       saldo, e o total sai SEMPRE por unidade -- as entradas misturam un,
+       kg, rolo e L. -->
+  <div class="painel" id="pMov">
+    <div class="filtros">
+      <input type="search" id="mBusca" placeholder="Filtrar por item, lote, PC, fornecedor, OP, endereço ou autor…" aria-label="Filtrar" style="flex:1;min-width:min(280px,100%)">
+      <select id="mPeriodo" aria-label="Período">
+        <option value="30">Últimos 30 dias</option>
+        <option value="7">Últimos 7 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="">Todo o histórico</option>
+        <option value="custom">Escolher datas…</option>
+      </select>
+      <input type="date" id="mDesde" aria-label="De" style="display:none">
+      <input type="date" id="mAte" aria-label="Até" style="display:none">
+      <select id="mNatureza" aria-label="Natureza do movimento">
+        <option value="ENTRADA">Só entradas</option>
+        <option value="">Todos os movimentos</option>
+        <option value="SAIDA">Saídas</option>
+        <option value="CONSUMO">Consumos</option>
+        <option value="PERDA">Perdas</option>
+        <option value="AJUSTE">Ajustes</option>
+        <option value="QUALIDADE">Qualidade</option>
+        <option value="TRANSFERENCIA">Transferências</option>
+      </select>
+      <select id="mTipoMov" aria-label="Movimento"><option value="">Qualquer movimento</option></select>
+      <select id="mItemTipo" aria-label="Tipo de item">
+        <option value="">Material e produto</option>
+        <option value="material">Só materiais</option>
+        <option value="produto">Só produtos acabados</option>
+      </select>
+    </div>
+    <div class="tiles" id="mTiles"></div>
+    <div id="mAviso"></div>
+    <div class="card">
+      <div class="card-header"><h3 id="mTitulo">Movimentos</h3><button class="btn" id="mCsv">Exportar CSV</button></div>
+      <div class="rolagem"><table>
+        <thead><tr><th>Data</th><th>Item</th><th>Movimento</th><th>Origem</th><th>Lote / endereço</th><th>Dono</th><th>Autor</th><th class="num">Quantidade</th></tr></thead>
+        <tbody id="mBody"><tr><td colspan="8" class="no-data">Carregando…</td></tr></tbody>
+      </table></div>
+    </div>
+    <p class="nota"><b>Como ler:</b> uma linha por movimento, de todos os itens — não há coluna de saldo porque saldo corrido atravessando itens diferentes não significa nada; para isso use o <b>Kardex do item</b>. O total aparece <b>separado por unidade</b>: somar quilo com unidade daria um número que parece saldo e não é nada. O recebimento grava a chave do pedido de compra, não o número, então a coluna <b>Origem</b> resolve para <b>PC + fornecedor</b>; quando o pedido não é encontrado, mostra a chave crua em vez de inventar número.</p>
   </div>
 
   <!-- ── Conciliação ── -->
@@ -183,6 +232,10 @@ var dados = {movimentos: null, estoque: null, estoqueLotes: null, materiais: nul
 // dados + material em processo (bombonas e sobras) convertido em movimentos.
 var base = null;
 var catalogoAtual = {}, itemSel = null, abaAtual = 'item', concAtual = [], buscaUrlFeita = false;
+// Pedidos de compra: carregados sob demanda, só para traduzir a chave que o
+// recebimento grava em `ref` no número do PC e no fornecedor. Fora do `dados`
+// de propósito -- `prontos()` não pode esperar por eles.
+var pedidosPc = null;
 
 function setStatus(on, txt) {
   document.getElementById('sDot').classList.toggle('on', !!on);
@@ -218,9 +271,11 @@ function nomeEndereco(l) {
 function recalcular() {
   if (!prontos()) return;
   base = Kardex.prepararBase(dados);
+  base.pedidos = pedidosPc; // null até a aba de movimentos pedir
   catalogoAtual = Kardex.catalogo(base);
   concAtual = Kardex.conciliacao(base);
   if (abaAtual === 'conc') renderConc();
+  if (abaAtual === 'mov') renderMov();
   if (itemSel) renderItem();
   var alvo = new URLSearchParams(location.search).get('item');
   if (alvo && !itemSel) {
@@ -448,12 +503,113 @@ document.getElementById('cCsv').onclick = function() {
   baixar('conciliacao-estoque.csv', linhas.join('\n'));
 };
 
+/* ── Entradas e movimentos (todos os itens) ── */
+var movAtual = null, pedidosCarregando = false;
+
+/* `pedidos_compra` (0,26 MB) só entra quando esta aba abre: sem ele a coluna
+   Origem do recebimento sai como a chave crua do PC, e carregá-lo junto com
+   os outros nove nós faria todo mundo que abre o kardex pagar por uma aba
+   que talvez não use. `fornecedorNome` já vem desnormalizado no PC, então
+   não precisa de `fornecedores` (420 registros). */
+function carregarPedidos() {
+  if (pedidosCarregando) return;
+  pedidosCarregando = true;
+  db.ref('pedidos_compra').once('value').then(function(snap) {
+    pedidosPc = snap.val() || {};
+    if (base) base.pedidos = pedidosPc;
+    if (abaAtual === 'mov') renderMov();
+  }).catch(function() {
+    pedidosCarregando = false; // deixa tentar de novo na próxima abertura
+  });
+}
+
+function filtroMov() {
+  var per = document.getElementById('mPeriodo').value;
+  var desde = '', ate = '';
+  if (per === 'custom') { desde = document.getElementById('mDesde').value; ate = document.getElementById('mAte').value; }
+  else if (per) { desde = new Date(Date.now() - Number(per) * 86400000).toISOString().slice(0, 10); }
+  return {desde: desde, ate: ate, natureza: document.getElementById('mNatureza').value,
+    tipo: document.getElementById('mTipoMov').value, itemTipo: document.getElementById('mItemTipo').value,
+    busca: document.getElementById('mBusca').value};
+}
+
+// As opções de "movimento" seguem a natureza escolhida: oferecer tipo que não
+// existe naquela natureza só gera lista vazia.
+function preencherTiposMov() {
+  var sel = document.getElementById('mTipoMov');
+  var nat = document.getElementById('mNatureza').value;
+  var atual = sel.value;
+  var tipos = Object.keys(Kardex.TIPOS).filter(function(t) { return !nat || Kardex.TIPOS[t].natureza === nat; })
+    .sort(function(a, b) { return Kardex.TIPOS[a].rotulo.localeCompare(Kardex.TIPOS[b].rotulo); });
+  sel.innerHTML = '<option value="">Qualquer movimento</option>' +
+    tipos.map(function(t) { return '<option value="' + esc(t) + '">' + esc(Kardex.TIPOS[t].rotulo) + '</option>'; }).join('');
+  sel.value = tipos.indexOf(atual) >= 0 ? atual : '';
+}
+
+function renderMov() {
+  if (!base) return;
+  carregarPedidos();
+  var f = filtroMov();
+  var r = Kardex.movimentosGerais(base, f);
+  movAtual = r;
+
+  // Total por unidade -- nunca um número só. Ver a nota no pé da aba.
+  document.getElementById('mTiles').innerHTML =
+    tile(fmt(r.movimentos), 'Movimentos no filtro') +
+    (r.totais.length ? r.totais.map(function(t) {
+      return tile('<span class="' + (t.qtd < 0 ? 'sai' : 'ent') + '">' + fmtSinal(t.qtd) + '</span> ' + esc(t.unidade), 'Total em ' + esc(t.unidade) + ' · ' + t.movimentos + ' mov');
+    }).join('') : tile('—', 'Nada no total'));
+
+  var avisos = [];
+  if (r.foraDoTotal) {
+    avisos.push('<li>' + fmt(r.foraDoTotal) + ' linha(s) aparecem na lista mas <b>não entram no total</b>: o log grava o consumo duas vezes — uma no saldo do item e outra na baixa do lote (FEFO). Somar as duas contaria a saída em dobro. São as linhas em cinza, igual ao kardex do item.</li>');
+  }
+  if (!pedidosPc && r.linhas.some(function(l) { return l.tipo === 'recebimento_pc'; })) {
+    avisos.push('<li>Carregando os pedidos de compra… até terminar, a coluna <b>Origem</b> do recebimento mostra a chave interna do PC.</li>');
+  }
+  document.getElementById('mAviso').innerHTML = avisos.length ? '<ul class="alertas">' + avisos.join('') + '</ul>' : '';
+
+  var nat = f.natureza ? (Kardex.NATUREZAS[f.natureza] || f.natureza) : 'Movimentos';
+  document.getElementById('mTitulo').textContent = nat + ' (' + fmt(r.movimentos) + ')';
+
+  var corpo = document.getElementById('mBody');
+  if (!r.linhas.length) {
+    corpo.innerHTML = '<tr><td colspan="8" class="no-data">Nenhum movimento com esses filtros.</td></tr>';
+    return;
+  }
+  // Teto de desenho: a tabela não precisa pintar 2.200 linhas para ser lida,
+  // e o CSV leva o conjunto inteiro de qualquer jeito.
+  var TETO = 400;
+  var mostrar = r.linhas.slice(0, TETO);
+  corpo.innerHTML = mostrar.map(function(l) {
+    return '<tr class="' + (l.conta ? '' : 'info') + '">' +
+      '<td class="sub" style="white-space:nowrap">' + dataHora(l.em) + '</td>' +
+      '<td><b>' + esc(l.codigo) + '</b>' + (l.nome ? '<div class="sub">' + esc(l.nome) + '</div>' : '') +
+        '<div class="sub">' + (l.itemTipo === 'produto' ? 'Produto acabado' : l.itemTipo === 'material' ? 'Material' : '—') + '</div></td>' +
+      '<td><span class="badge n-' + esc(l.natureza) + '">' + esc(Kardex.NATUREZAS[l.natureza] || l.natureza) + '</span> ' + esc(l.rotulo) +
+        (l.motivo && l.motivo.toUpperCase() !== String(l.rotulo).toUpperCase() ? '<div class="sub">' + esc(l.motivo) + '</div>' : '') +
+        (l.conta ? '' : '<div class="sub">não entra no total</div>') + '</td>' +
+      // Sem link para o PC: compras.html não abre por URL, e link morto é pior
+      // que texto. O número e o fornecedor bastam para achar lá.
+      '<td>' + (l.origem ? '<b>' + esc(l.origem) + '</b>' : '—') +
+        (l.origemDetalhe ? '<div class="sub">' + esc(l.origemDetalhe) + '</div>' : '') +
+        (l.rnc ? '<div class="sub">RNC ' + esc(l.rnc) + '</div>' : '') + '</td>' +
+      '<td>' + esc(l.loteKey || '—') + (l.endereco ? '<div class="sub">' + esc(l.endereco) + '</div>' : '') + '</td>' +
+      '<td class="sub">' + esc(l.cliente || '—') + '</td>' +
+      '<td class="sub">' + esc(l.autor || '—') + '</td>' +
+      '<td class="num ' + (l.qtd < 0 ? 'sai' : 'ent') + '"><b>' + fmtSinal(l.qtd) + '</b> <span class="sub">' + esc(l.unidade) + '</span></td></tr>';
+  }).join('') +
+    (r.linhas.length > TETO ? '<tr><td colspan="8" class="no-data">Mostrando as ' + TETO + ' mais recentes de ' + fmt(r.linhas.length) + '. Estreite o período ou use o Exportar CSV, que leva todas.</td></tr>' : '');
+}
+
 function irParaAba(aba) {
   abaAtual = aba;
   document.querySelectorAll('.aba').forEach(function(b) { b.classList.toggle('on', b.getAttribute('data-aba') === aba); });
   document.getElementById('pItem').classList.toggle('on', aba === 'item');
+  document.getElementById('pMov').classList.toggle('on', aba === 'mov');
   document.getElementById('pConc').classList.toggle('on', aba === 'conc');
   if (aba === 'conc') renderConc();
+  if (aba === 'mov') renderMov();
 }
 document.querySelectorAll('.aba').forEach(function(b) { b.onclick = function() { irParaAba(b.getAttribute('data-aba')); }; });
 ['fPeriodo', 'fDesde', 'fAte', 'fNatureza', 'fInfo'].forEach(function(id) { document.getElementById(id).addEventListener('change', renderItem); });
@@ -461,11 +617,31 @@ document.querySelectorAll('.aba').forEach(function(b) { b.onclick = function() {
 var _cb = null;
 document.getElementById('cBusca').addEventListener('input', function() { clearTimeout(_cb); _cb = setTimeout(renderConc, 200); });
 
+preencherTiposMov();
+document.getElementById('mNatureza').addEventListener('change', function() { preencherTiposMov(); renderMov(); });
+document.getElementById('mPeriodo').addEventListener('change', function() {
+  var custom = document.getElementById('mPeriodo').value === 'custom';
+  document.getElementById('mDesde').style.display = custom ? '' : 'none';
+  document.getElementById('mAte').style.display = custom ? '' : 'none';
+  renderMov();
+});
+['mDesde', 'mAte', 'mTipoMov', 'mItemTipo'].forEach(function(id) { document.getElementById(id).addEventListener('change', renderMov); });
+var _mb = null;
+document.getElementById('mBusca').addEventListener('input', function() { clearTimeout(_mb); _mb = setTimeout(renderMov, 200); });
+document.getElementById('mCsv').onclick = function() {
+  if (!movAtual) return;
+  var f = filtroMov();
+  var nome = 'movimentos-' + (f.natureza ? f.natureza.toLowerCase() + '-' : '') + new Date().toISOString().slice(0, 10) + '.csv';
+  baixar(nome, Kardex.csvGerais(movAtual));
+};
+
 db.ref('.info/connected').on('value', function(s) { setStatus(s.val(), s.val() ? 'Conectado' : 'Reconectando...'); });
 [['movimentos_estoque', 'movimentos'], ['estoque', 'estoque'], ['estoque_lotes', 'estoqueLotes'], ['materiais', 'materiais'], ['produtos', 'produtos'], ['enderecos_estoque', 'enderecos'], ['bombonas_bulk', 'bombonas'], ['material_processo', 'materialProcesso'], ['contagens_inventario', 'contagens']].forEach(function(p) {
   dbOnValue(db.ref(p[0]), function(snap) { dados[p[1]] = snap.val() || {}; recalcular(); });
 });
-if (new URLSearchParams(location.search).get('aba') === 'conciliacao') irParaAba('conc');
+var _abaUrl = new URLSearchParams(location.search).get('aba');
+if (_abaUrl === 'conciliacao') irParaAba('conc');
+else if (_abaUrl === 'entradas' || _abaUrl === 'movimentos') irParaAba('mov');
 </script>
 </body>
 </html>

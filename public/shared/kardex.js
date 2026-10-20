@@ -403,8 +403,163 @@
     return linhas.join('\n');
   }
 
+  /* ──────────────────────────────────────────────────────────────────────
+     Movimentos de TODOS os itens (usuário, 20/10: "relatório de entradas,
+     talvez o próprio kardex, mas sem filtro por item").
+
+     NÃO é o kardex do item com o filtro solto, e a diferença é de conteúdo,
+     não de tela: o kardex do item entrega saldo inicial, saldo corrido e
+     conciliação. Saldo corrido atravessando itens diferentes não é número
+     ruim, é número sem significado -- aqui não existe coluna de saldo.
+
+     DUAS CONTAS QUE NÃO SE SOMAM, e por isso o total nunca é um só número:
+
+     1. UNIDADE. Medido em 20/10, as 125 entradas do log têm 4 unidades
+        (un 94, kg 24, rolo 5, L 2). Um "total de entradas" único somaria
+        quilo com unidade. O total sai por unidade, sempre.
+     2. RAZÃO. O log grava consumo DUAS vezes -- 'consumo_producao' no saldo
+        do item e 'consumo' na baixa FEFO do lote (ver cabeçalho deste
+        arquivo). Somar os dois conta a saída duas vezes. Entrada não tem
+        esse par (recebimento_pc é um registro só, de razão 'ambas'), mas
+        como a tela deixa trocar a natureza o total conta só a razão do item
+        quando o conjunto filtrado mistura as duas, e avisa.
+
+     `origem` é o que o movimento referencia em linguagem de gente: o
+     recebimento grava em `ref` a CHAVE do pedido de compra, não o número,
+     então sem o mapa de PCs a coluna mais importante do relatório sai como
+     '-P1WLOLiLDYpRMmhKa06'. `pedidos` é opcional: sem ele a linha cai para
+     a ref crua em vez de mentir. */
+
+  function norm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  // O que o movimento aponta, em linguagem de gente. Devolve {rotulo, detalhe}.
+  function origemDoMovimento(m, pedidos) {
+    var ref = m.ref == null ? '' : String(m.ref);
+    if (m.tipo === 'recebimento_pc') {
+      var pc = (pedidos || {})[ref];
+      if (!pc) return {rotulo: ref, detalhe: '', pedidoKey: ref}; // sem o mapa, ref crua: não inventa número
+      return {rotulo: pc.numeroFormatado || ref, detalhe: pc.fornecedorNome || '', pedidoKey: ref};
+    }
+    if (m.tipo === 'conferencia_pa' || m.tipo === 'producao_op') return {rotulo: ref ? 'OP ' + ref : '', detalhe: '', pedidoKey: null};
+    return {rotulo: ref, detalhe: '', pedidoKey: null};
+  }
+
+  /* Uma linha por movimento, de todos os itens. `filtro`:
+       {desde, ate, natureza, itemTipo, tipo, busca}
+     Devolve {linhas, totais: [{unidade, movimentos, qtd}], movimentos,
+              duplaContagem, naturezas: {NATUREZA: n}}. */
+  function movimentosGerais(base, filtro) {
+    var d = base || {}, f = filtro || {};
+    var cat = catalogo(d);
+    var pedidos = d.pedidos || {};
+    var busca = norm(f.busca);
+    var linhas = [];
+    var naturezas = {};
+
+    Object.keys(d.movimentos || {}).forEach(function(itemKey) {
+      var it = cat[itemKey] || {key: itemKey, codigo: itemKey, nome: '', itemTipo: null, unidade: ''};
+      // Mesma razão que o kardex do item usa (material em processo é sempre
+      // de lote), senão o total aqui e o saldo lá discordariam.
+      var razao = (d.processo && d.processo[itemKey]) ? 'lote' : razaoDoItem((d.estoque || {})[itemKey]);
+      Object.keys(d.movimentos[itemKey] || {}).forEach(function(id) {
+        var m = d.movimentos[itemKey][id] || {};
+        var info = tipoInfo(m.tipo);
+        naturezas[info.natureza] = (naturezas[info.natureza] || 0) + 1;
+
+        var em = m.em || '';
+        if (f.desde && em && em.slice(0, 10) < f.desde) return;
+        if (f.ate && em && em.slice(0, 10) > f.ate) return;
+        if (f.natureza && info.natureza !== f.natureza) return;
+        if (f.tipo && m.tipo !== f.tipo) return;
+
+        var itemTipo = m.itemTipo || it.itemTipo || null;
+        if (f.itemTipo && itemTipo !== f.itemTipo) return;
+
+        var origem = origemDoMovimento(m, pedidos);
+        var cliente = (m.propriedade && m.propriedade.clienteNome) || m.cliente || '';
+        var linha = {
+          id: itemKey + '/' + id,
+          itemKey: itemKey,
+          codigo: m.itemCodigo || it.codigo || itemKey,
+          nome: m.itemNome || it.nome || '',
+          itemTipo: itemTipo,
+          unidade: m.unidade || it.unidade || '',
+          em: em,
+          tipo: m.tipo || '',
+          rotulo: info.rotulo,
+          natureza: info.natureza,
+          motivo: m.motivo || '',
+          origem: origem.rotulo,
+          origemDetalhe: origem.detalhe,
+          pedidoKey: origem.pedidoKey,
+          ref: m.ref == null ? '' : String(m.ref),
+          loteKey: m.loteKey || '',
+          endereco: m.enderecoCodigo || m.enderecoKey || '',
+          autor: m.autor || '',
+          cliente: cliente,
+          rnc: m.rncNumero || '',
+          qtd: num(m.qtd),
+          /* Conta na soma? É `conta()` -- o mesmo sistema de razão do kardex
+             do item -- que protege da dupla contagem, e não uma lista de
+             exceções: num item de razão 'item', o 'consumo' (baixa FEFO do
+             lote) tem razão 'lote' e já cai fora sozinho. Uma guarda extra
+             por tipo aqui seria código morto. */
+          conta: conta(m.tipo, razao)
+        };
+
+        if (busca) {
+          var alvo = norm([linha.codigo, linha.nome, linha.origem, linha.origemDetalhe, linha.ref,
+            linha.loteKey, linha.endereco, linha.autor, linha.cliente, linha.rotulo, linha.motivo].join(' '));
+          if (busca.split(' ').some(function(p) { return alvo.indexOf(p) < 0; })) return;
+        }
+        linhas.push(linha);
+      });
+    });
+
+    linhas.sort(function(a, b) { return String(b.em).localeCompare(String(a.em)) || String(a.codigo).localeCompare(String(b.codigo)); });
+
+    // Total por unidade. Nunca um número só: as entradas misturam un, kg,
+    // rolo e L, e somar isso daria um número que parece saldo e não é nada.
+    var porUn = {};
+    linhas.forEach(function(l) {
+      if (!l.conta) return;
+      var u = l.unidade || '—';
+      porUn[u] = porUn[u] || {unidade: u, movimentos: 0, qtd: 0};
+      porUn[u].movimentos++;
+      porUn[u].qtd = arred(porUn[u].qtd + l.qtd);
+    });
+    var totais = Object.keys(porUn).sort(function(a, b) { return porUn[b].movimentos - porUn[a].movimentos; }).map(function(u) { return porUn[u]; });
+
+    return {
+      linhas: linhas,
+      totais: totais,
+      movimentos: linhas.length,
+      // Quantas linhas ficaram fora do total por serem espelho de lote: é o
+      // que explica a diferença entre "N movimentos" e a soma.
+      foraDoTotal: linhas.filter(function(l) { return !l.conta; }).length,
+      naturezas: naturezas
+    };
+  }
+
+  function csvGerais(r) {
+    var cab = ['Data/hora', 'Código', 'Item', 'Tipo de item', 'Movimento', 'Natureza', 'Motivo', 'Origem',
+      'Fornecedor / detalhe', 'Lote', 'Endereço', 'Dono (cliente)', 'Autor', 'Quantidade', 'Unidade', 'Conta no total'];
+    function q(v) { var s = v == null ? '' : String(v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+    function n(v) { return v == null ? '' : String(v).replace('.', ','); }
+    var out = [cab.join(';')];
+    ((r && r.linhas) || []).forEach(function(l) {
+      out.push([l.em, l.codigo, l.nome, l.itemTipo === 'produto' ? 'Produto' : l.itemTipo === 'material' ? 'Material' : (l.itemTipo || ''),
+        l.rotulo, NATUREZAS[l.natureza] || l.natureza, l.motivo, l.origem, l.origemDetalhe, l.loteKey, l.endereco,
+        l.cliente, l.autor, n(l.qtd), l.unidade, l.conta ? 'SIM' : 'NAO'].map(q).join(';'));
+    });
+    return out.join('\n');
+  }
+
   return {TIPOS: TIPOS, NATUREZAS: NATUREZAS, tipoInfo: tipoInfo, conta: conta, razaoDoItem: razaoDoItem,
     saldoDosLotes: saldoDosLotes, montar: montar, opcoesDoItem: opcoesDoItem,
     movimentosMaterialProcesso: movimentosMaterialProcesso, comMaterialProcesso: comMaterialProcesso,
-    movimentosContagens: movimentosContagens, prepararBase: prepararBase, catalogo: catalogo, conciliacao: conciliacao, csv: csv};
+    movimentosContagens: movimentosContagens, prepararBase: prepararBase, catalogo: catalogo, conciliacao: conciliacao, csv: csv,
+    movimentosGerais: movimentosGerais, csvGerais: csvGerais};
 });

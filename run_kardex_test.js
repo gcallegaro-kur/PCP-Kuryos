@@ -186,4 +186,94 @@ if (base) {
   });
 }
 
+/* ── Movimentos de todos os itens (relatório de entradas) ──
+   O que precisa estar certo aqui não é a listagem, é o TOTAL: ele tem duas
+   formas de mentir (misturar unidade e contar consumo duas vezes) e as duas
+   são invisíveis olhando a tela. */
+{
+  const baseGeral = {
+    estoque: {
+      'MPGR-1': {materialCodigo: 'MPGR-1', materialNome: 'ALCOOL CEREAL', unidade: 'kg', saldoAtual: 100},
+      'EP-1': {materialCodigo: 'EP-1', materialNome: 'FRASCO PET', unidade: 'un', saldoAtual: 500}
+    },
+    // PA só existe em lote: a razão dele é 'lote'.
+    estoqueLotes: {'SKU-PA': {p1: {itemTipo: 'produto', itemCodigo: 'SKU-PA', saldoLote: 800}}},
+    materiais: {m1: {mpCodigo: 'MPGR-1', mpNome: 'ALCOOL CEREAL', unidade: 'kg', tipo: 'MPGR'},
+      m2: {mpCodigo: 'EP-1', mpNome: 'FRASCO PET', unidade: 'un', tipo: 'EP'}},
+    produtos: {'SKU-PA': {sku: 'SKU-PA', descricao: 'BODY SPLASH 120ml'}},
+    pedidos: {'-PCKEY1': {numeroFormatado: 'PC-0004', fornecedorNome: 'LOMAR PACK', status: 'RECEBIDO_TOTAL'}},
+    movimentos: {
+      'MPGR-1': {
+        a: {tipo: 'recebimento_pc', qtd: 40, unidade: 'kg', em: '2026-09-10T10:00:00Z', ref: '-PCKEY1', loteKey: 'AK-1', autor: 'Rodolfo', itemTipo: 'material', itemCodigo: 'MPGR-1', itemNome: 'ALCOOL CEREAL'},
+        b: {tipo: 'consumo_producao', qtd: -10, unidade: 'kg', em: '2026-09-12T10:00:00Z', ref: '26250/01', itemTipo: 'material'},
+        c: {tipo: 'consumo', qtd: -10, unidade: 'kg', em: '2026-09-12T10:00:01Z', loteKey: 'AK-1', itemTipo: 'material'}
+      },
+      'EP-1': {
+        d: {tipo: 'recebimento_pc', qtd: 7300, unidade: 'un', em: '2026-09-14T10:00:00Z', ref: '-PCKEY1', loteKey: 'AK-2', autor: 'Diego', itemTipo: 'material',
+          propriedade: {clienteNome: 'AFEER OF ARABIAN', tipo: 'CLIENTE'}},
+        e: {tipo: 'recebimento_pc', qtd: 100, unidade: 'un', em: '2026-10-01T10:00:00Z', ref: '-SEM-PC', loteKey: 'AK-3', itemTipo: 'material'}
+      },
+      'SKU-PA': {
+        f: {tipo: 'conferencia_pa', qtd: 812, unidade: 'un', em: '2026-09-23T10:00:00Z', ref: '26245-03', loteKey: 'pa_1', itemTipo: 'produto', enderecoCodigo: 'FAB-2.1.4'}
+      }
+    }
+  };
+
+  // Entradas: 3 recebimentos + 1 conferência de PA, nenhum consumo.
+  const ent = K.movimentosGerais(baseGeral, {natureza: 'ENTRADA'});
+  assert.equal(ent.movimentos, 4);
+  assert.deepEqual(ent.linhas.map((l) => l.codigo), ['EP-1', 'SKU-PA', 'EP-1', 'MPGR-1'], 'mais recente em cima');
+  assert.equal(ent.linhas[0].em, '2026-10-01T10:00:00Z');
+  // Total por unidade, nunca um número só: 40 kg e 8.212 un não se somam.
+  assert.deepEqual(ent.totais, [
+    {unidade: 'un', movimentos: 3, qtd: 8212},
+    {unidade: 'kg', movimentos: 1, qtd: 40}
+  ]);
+  assert.equal(ent.foraDoTotal, 0, 'entrada não tem espelho de lote');
+
+  // A ref do recebimento é a CHAVE do PC: resolvida vira número + fornecedor.
+  const recEp = ent.linhas.find((l) => l.codigo === 'EP-1' && l.ref === '-PCKEY1');
+  assert.equal(recEp.origem, 'PC-0004');
+  assert.equal(recEp.origemDetalhe, 'LOMAR PACK');
+  assert.equal(recEp.cliente, 'AFEER OF ARABIAN', 'dono do material vem de propriedade');
+  // PC que não está no mapa: cai para a ref crua em vez de inventar número.
+  assert.equal(ent.linhas.find((l) => l.ref === '-SEM-PC').origem, '-SEM-PC');
+  // Sem o mapa de pedidos nenhuma ref resolve -- e nenhuma linha mente.
+  const semPc = K.movimentosGerais(Object.assign({}, baseGeral, {pedidos: null}), {natureza: 'ENTRADA'});
+  assert.equal(semPc.linhas.find((l) => l.ref === '-PCKEY1').origem, '-PCKEY1');
+  assert.equal(semPc.linhas.find((l) => l.ref === '-PCKEY1').origemDetalhe, '');
+  // OP fica legível sem depender de mapa nenhum.
+  assert.equal(ent.linhas.find((l) => l.codigo === 'SKU-PA').origem, 'OP 26245-03');
+
+  // CONSUMO: o log grava duas vezes (saldo do item + baixa do lote). O total
+  // conta UMA, e `foraDoTotal` explica a linha que sobra.
+  const cons = K.movimentosGerais(baseGeral, {natureza: 'CONSUMO'});
+  assert.equal(cons.movimentos, 2, 'as duas linhas aparecem, como no kardex do item');
+  assert.equal(cons.foraDoTotal, 1, 'só uma conta');
+  assert.deepEqual(cons.totais, [{unidade: 'kg', movimentos: 1, qtd: -10}], 'não -20');
+
+  // Filtros
+  assert.equal(K.movimentosGerais(baseGeral, {natureza: 'ENTRADA', itemTipo: 'produto'}).movimentos, 1);
+  assert.equal(K.movimentosGerais(baseGeral, {natureza: 'ENTRADA', itemTipo: 'material'}).movimentos, 3);
+  assert.equal(K.movimentosGerais(baseGeral, {natureza: 'ENTRADA', tipo: 'conferencia_pa'}).movimentos, 1);
+  assert.equal(K.movimentosGerais(baseGeral, {desde: '2026-09-20', ate: '2026-09-30'}).movimentos, 1, 'janela fecha nos dois lados');
+  assert.equal(K.movimentosGerais(baseGeral, {}).movimentos, 6, 'sem filtro, tudo (4 entradas + 2 consumos)');
+  // Busca livre: por fornecedor, por número de PC, sem acento e em qualquer ordem.
+  assert.equal(K.movimentosGerais(baseGeral, {busca: 'lomar'}).movimentos, 2);
+  assert.equal(K.movimentosGerais(baseGeral, {busca: 'pc-0004 diego'}).movimentos, 1);
+  assert.equal(K.movimentosGerais(baseGeral, {busca: 'alcool'}).movimentos, 3, 'acha o item sem acento');
+  assert.equal(K.movimentosGerais(baseGeral, {busca: 'afeer of arabian'}).movimentos, 1);
+  assert.equal(K.movimentosGerais(baseGeral, {busca: 'nao-existe'}).movimentos, 0);
+
+  // Sem coluna de saldo: saldo corrido atravessando itens não significa nada.
+  assert.ok(ent.linhas.every((l) => !('saldo' in l)), 'a visão geral não tem saldo corrido');
+
+  // CSV
+  const linhasCsv = K.csvGerais(ent).split('\n');
+  assert.equal(linhasCsv.length, 5, 'cabeçalho + 4 entradas');
+  assert.match(linhasCsv[0], /^Data\/hora;Código;Item;Tipo de item;Movimento;Natureza;Motivo;Origem;Fornecedor \/ detalhe;/);
+  assert.ok(linhasCsv.some((l) => l.indexOf('PC-0004;LOMAR PACK;') > 0), 'o CSV leva o PC resolvido');
+  assert.ok(K.csvGerais(cons).split('\n').some((l) => /;NAO$/.test(l)), 'o CSV marca a linha que não conta no total');
+}
+
 console.log('kardex: ok');
