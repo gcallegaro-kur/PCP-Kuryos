@@ -13,6 +13,7 @@
   <script src="shared/qrcode-lib.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/etiquetas-wms.js"></script>
+  <script src="shared/pesos-volumes.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/calendario-logistica.js"></script>
@@ -704,7 +705,7 @@ function lotesEtiquetaDoRecebimento(pedidoKey, recebimentoKey) {
   return Object.values(rec.itensRecebidos || {}).map(function(l) {
     var q = l.entradaQualidade || {};
     return {loteInterno:q.loteInterno, loteOrigem:q.loteOrigem, materialCodigo:l.materialCodigo, materialNome:l.materialNome,
-      quantidade:l.qtdRecebidaAgora, qtdVolumes:q.qtdVolumes || 1, unidade:l.unidade, enderecoCodigo:q.enderecoCodigo || '', dataRecebimento:rec.data,
+      quantidade:l.qtdRecebidaAgora, qtdVolumes:q.qtdVolumes || 1, volumesPesos:q.volumes || null, unidade:l.unidade, enderecoCodigo:q.enderecoCodigo || '', dataRecebimento:rec.data,
       dataValidade:q.dataValidade, fornecedorNome:p.fornecedorNome || p.origemNome, notaFiscal:rec.notaFiscal};
   }).filter(function(l) { return l.loteInterno; });
 }
@@ -882,6 +883,21 @@ function amostragemDoLote(qtd, volumes, unidade) {
   }
   return Math.min(Math.ceil(n), Math.ceil(Math.sqrt(n) + 1));
 }
+/* Peso de cada volume: mostra "6 × 50 + 1 × 30 = 330 kg" e, se não fecha com a
+   quantidade ou com o nº de volumes, diz quanto falta. */
+function atualizarPesosLote(row) {
+  if (!row) return;
+  var campo = row.querySelector('.rc-pesos'), hint = row.querySelector('.rc-pesos-hint');
+  if (!campo || !hint) return;
+  var r = PesosVolumes.interpretar(campo.value), unidade = row.getAttribute('data-unidade') || '';
+  campo.style.borderColor = '';
+  if (!campo.value.trim()) { hint.textContent = 'Vazio = divide igual entre os volumes. Digite como chegou: 6x50 + 30.'; hint.style.color = ''; return; }
+  if (!r.ok) { hint.textContent = r.erro; hint.style.color = 'var(--danger)'; campo.style.borderColor = 'var(--danger)'; return; }
+  var c = PesosVolumes.conferir(r.pesos, Number(row.querySelector('.rc-qtd').value || 0), Number(row.querySelector('.rc-volumes').value || 0));
+  hint.textContent = PesosVolumes.resumo(r.pesos, unidade) + (c.ok ? ' ✓ fecha com a quantidade' : ' — ' + c.erro);
+  hint.style.color = c.ok ? 'var(--success)' : 'var(--danger)';
+  if (!c.ok) campo.style.borderColor = 'var(--danger)';
+}
 function atualizarAmostragemLote(row) {
   if (!row) return;
   var campoQtd = row.querySelector('.rc-qtd'), campoVol = row.querySelector('.rc-volumes');
@@ -909,6 +925,7 @@ function htmlLoteRecebimento(qtd, unidade, removivel) {
       '<div class="form-group"><label>Lote interno</label><div class="rc-auto-lote">Gerado automaticamente ao confirmar</div></div>' +
       '<div class="form-group"><label>Quantidade deste lote *</label><input type="number" class="rc-qtd" min="0" step="any" value="' + escapeAttr(String(qtd || 0)) + '"><div class="field-hint">' + escapeHtml(unidade || '') + '</div></div>' +
       '<div class="form-group"><label>Volumes / embalagens *</label><input type="number" class="rc-volumes" min="1" step="1" value="1"><div class="field-hint">Gera uma etiqueta por volume.</div></div>' +
+      '<div class="form-group"><label>Peso de cada volume (opcional)</label><input type="text" class="rc-pesos" placeholder="ex.: 6x50 + 30" autocomplete="off"><div class="field-hint rc-pesos-hint">Vazio = divide igual entre os volumes. Digite como chegou: 6x50 + 30.</div></div>' +
       '<div class="form-group"><label>Quantidade de amostragem *</label><input class="rc-readonly rc-amostragem" type="number" readonly value="0"><div class="field-hint rc-amostragem-hint">Informe a quantidade recebida para calcular.</div></div>' +
       '<div class="form-group"><label>Certificado do fornecedor *</label><select class="rc-certificado"><option value="">Selecione…</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>' +
       '<div class="form-group"><label>Condições da embalagem *</label><select class="rc-cond-embalagem">' + opcoesAvaliacaoRecebimento() + '</select></div>' +
@@ -1005,6 +1022,19 @@ function openModalReceber(key) {
     if (e.target.classList.contains('rc-qtd') || e.target.classList.contains('rc-volumes')) {
       atualizarAmostragemLote(e.target.closest('.rc-lote-row'));
     }
+    if (e.target.classList.contains('rc-pesos')) {
+      // Digitou os pesos: o nº de volumes e (se vazia) a quantidade acompanham.
+      var rowP = e.target.closest('.rc-lote-row'), rp = PesosVolumes.interpretar(e.target.value);
+      if (rp.ok && rp.pesos) {
+        rowP.querySelector('.rc-volumes').value = rp.pesos.length;
+        var qtdP = rowP.querySelector('.rc-qtd');
+        if (!(Number(qtdP.value) > 0)) qtdP.value = PesosVolumes.conferir(rp.pesos, 0, null).soma;
+      }
+      atualizarAmostragemLote(rowP);
+    }
+    if (e.target.classList.contains('rc-qtd') || e.target.classList.contains('rc-volumes') || e.target.classList.contains('rc-pesos')) {
+      atualizarPesosLote(e.target.closest('.rc-lote-row'));
+    }
   };
   lista.querySelectorAll('.rc-lote-row').forEach(atualizarAmostragemLote);
   document.getElementById('modalReceber').classList.add('open');
@@ -1032,6 +1062,8 @@ function lerItensRecebimentoDaTela() {
       linhas.push(Object.assign({}, comum, {
         loteOrigem: row.querySelector('.rc-lote').value.trim(), qtdRecebida: qtd,
         qtdVolumes: Number(row.querySelector('.rc-volumes').value),
+        volumesPesos: (function() { var r = PesosVolumes.interpretar(row.querySelector('.rc-pesos') ? row.querySelector('.rc-pesos').value : ''); return r.ok ? r.pesos : null; })(),
+        pesosTexto: row.querySelector('.rc-pesos') ? row.querySelector('.rc-pesos').value : '',
         qtdAmostragem: amostragemDoLote(qtd, row.querySelector('.rc-volumes').value, row.getAttribute('data-unidade')),
         certificadoFornecedor: row.querySelector('.rc-certificado').value,
         condicoesEmbalagem: Number(row.querySelector('.rc-cond-embalagem').value),
@@ -1046,6 +1078,13 @@ function validarEntradaRecebimento(dados) {
   if (!dados.data) return 'Informe a data do recebimento.';
   if (!String(dados.notaFiscal || '').trim()) return 'Informe o número da nota fiscal. Quando não existir, registre “SEM NF”.';
   if (![1, 2, 3, 4, 5].includes(Number(dados.condicoesVeiculo))) return 'Avalie as condições do veículo de 1 a 5.';
+  var pesosInvalido = (dados.itens || []).map(function(it) {
+    var r = PesosVolumes.interpretar(it.pesosTexto || '');
+    if (!r.ok) return (it.skuInterno || it.itemKey || 'Um item') + ': ' + r.erro;
+    var c = PesosVolumes.conferir(r.pesos, it.qtdRecebida, it.qtdVolumes);
+    return c.ok ? null : (it.skuInterno || it.itemKey || 'Um item') + ': ' + c.erro;
+  }).filter(Boolean)[0];
+  if (pesosInvalido) return 'Peso dos volumes: ' + pesosInvalido;
   var qtdInvalida = (dados.itens || []).find(function(it) { return !isFinite(it.qtdRecebida) || Number(it.qtdRecebida) < 0; });
   if (qtdInvalida) return 'A quantidade recebida de ' + (qtdInvalida.skuInterno || 'um item') + ' é inválida.';
   var ativos = (dados.itens || []).filter(function(it) { return Number(it.qtdRecebida) > 0; });
@@ -1303,6 +1342,12 @@ function saveReceber() {
     var resultado = res.data || {};
     closeModalReceber();
     showAlert((resultado.lotes || []).length + ' lote(s) interno(s) gerado(s): ' + (resultado.lotes || []).map(function(l) { return l.loteInterno; }).join(', '), 'success');
+    // Os pesos digitados valem na etiqueta mesmo se o servidor ainda for a versão
+    // anterior (a ordem dos lotes devolvidos é a das linhas enviadas).
+    (resultado.lotes || []).forEach(function(l, i) {
+      var enviada = payload.linhas[i];
+      if (enviada && enviada.volumesPesos && !l.volumesPesos) l.volumesPesos = enviada.volumesPesos;
+    });
     imprimirEtiquetasRecebimento(resultado.lotes || []);
   }).catch(function(err) {
     var msg = err && err.message ? err.message.replace(/^.*?:\s*/, '') : 'Não foi possível registrar o recebimento.';

@@ -1794,7 +1794,7 @@ exports.registrarRecebimento = onCall(async (request) => {
         tipoMaterial: linha.tipoMaterial, identificacaoMaterial: linha.identificacaoMaterial,
         skuInterno: materialCodigo, skuFornecedor: linha.skuFornecedor,
         loteInterno, loteOrigem: linha.loteOrigem, notaFiscal: entrada.notaFiscal,
-        qtdRecebida: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, qtdAmostragem: linha.qtdAmostragem, amostragemUnidade: linha.amostragemUnidade || null,
+        qtdRecebida: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, volumes: linha.volumesPesos || null, qtdAmostragem: linha.qtdAmostragem, amostragemUnidade: linha.amostragemUnidade || null,
         certificadoFornecedor: linha.certificadoFornecedor,
         condicoesVeiculo: entrada.condicoesVeiculo, condicoesEmbalagem: linha.condicoesEmbalagem,
         fornecedorKey: pedido.fornecedorKey || null,
@@ -1834,7 +1834,7 @@ exports.registrarRecebimento = onCall(async (request) => {
         parte.qtd += linha.qtdRecebida;
       }
       lotesResultado.push({loteInterno, loteOrigem: linha.loteOrigem, loteKey, materialKey, materialCodigo, materialNome,
-        quantidade: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, unidade, enderecoCodigo: linha.enderecoCodigo, dataRecebimento: entrada.data,
+        quantidade: linha.qtdRecebida, qtdVolumes: linha.qtdVolumes, volumesPesos: linha.volumesPesos || null, unidade, enderecoCodigo: linha.enderecoCodigo, dataRecebimento: entrada.data,
         dataValidade: linha.dataValidade, fornecedorNome: pedido.fornecedorNome || pedido.origemNome || null,
         notaFiscal: entrada.notaFiscal});
     });

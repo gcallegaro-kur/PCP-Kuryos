@@ -1,5 +1,7 @@
 "use strict";
 
+const PesosVolumes = require("./pesos_volumes");
+
 const TIPOS_MATERIAL = new Set(["EMBALAGEM", "MATERIA_PRIMA"]);
 
 /* Amostragem √n + 1 (cópia de amostragemDoLote em public/logistica.html).
@@ -83,10 +85,17 @@ function validarEPrepararLinhas(payload, pedido, enderecos) {
     if (![1, 2, 3, 4, 5].includes(condEmb)) throw Object.assign(new Error(`Avalie a embalagem de ${item.materialCodigo || itemKey} de 1 a 5.`), {code: "invalid-argument"});
     if (!endereco || endereco.ativo === false) throw Object.assign(new Error(`Selecione um endereço ativo para ${item.materialCodigo || itemKey}.`), {code: "failed-precondition"});
     totais[itemKey] = (totais[itemKey] || 0) + qtd;
+    // Peso de cada volume (opcional): lista que descreve os volumes e soma a quantidade.
+    let volumesPesos = null;
+    if (linha.volumesPesos != null) {
+      const pv = PesosVolumes.validarLista(linha.volumesPesos, qtd, qtdVolumes);
+      if (pv.erro) throw Object.assign(new Error(`${item.materialCodigo || itemKey}: ${pv.erro}`), {code: "invalid-argument"});
+      volumesPesos = pv.pesos;
+    }
     const validade = texto(linha.dataValidade, 10);
     if (validade && !/^\d{4}-\d{2}-\d{2}$/.test(validade)) throw Object.assign(new Error(`A validade de ${item.materialCodigo || itemKey} é inválida.`), {code: "invalid-argument"});
     return {
-      itemKey, item, qtdRecebida: qtd, qtdVolumes, qtdAmostragem: amostra, amostragemUnidade: amostraUnidade, tipoMaterial: tipo,
+      itemKey, item, qtdRecebida: qtd, qtdVolumes, volumesPesos, qtdAmostragem: amostra, amostragemUnidade: amostraUnidade, tipoMaterial: tipo,
       identificacaoMaterial: identificacao, skuFornecedor, loteOrigem,
       certificadoFornecedor: certificado, condicoesEmbalagem: condEmb,
       dataValidade: validade || null, enderecoKey,

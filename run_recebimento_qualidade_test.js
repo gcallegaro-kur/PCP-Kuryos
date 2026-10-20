@@ -44,6 +44,7 @@ function extractFunction(source, name) {
 const lotesCriados = [];
 const ctx = {
   Object, String, Number, Array, Promise, Date, Math, isFinite,
+  PesosVolumes: require('./public/shared/pesos-volumes.js'),
   allMateriais: {}, allEnderecosEstoque: { A1:{ codigo:'GAL-1.1.1', ativo:true } },
   currentUserNome: () => 'Operador Logística', db: {},
   sanitizeKey: s => String(s).replace(/[.#$[\]\/]/g, '-'),

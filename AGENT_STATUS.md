@@ -32,6 +32,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Peso REAL de cada volume no recebimento (20/10/2026)
+
+- **Pedido:** a divisão igual não serve quando os volumes diferem (caso real: 330 kg = 6 de 50 kg + 1 de 30 kg).
+- **Feito:** `shared/pesos-volumes.js` (puro; `functions/pesos_volumes.js` é cópia byte a byte): `interpretar("6x50 + 30")`, `conferir`, `resumo`, `validarLista`. `logistica.html`: campo "Peso de cada volume (opcional)" no lote do recebimento — ajusta o nº de volumes, mostra "6 × 50 + 1 × 30 = 330 kg ✓" ou quanto falta, e `validarEntradaRecebimento` TRAVA o que não fecha. `etiquetas-wms.js`: `volumesPesos` (do tamanho dos volumes) vale; senão divide igual. A tela mescla os pesos digitados nos lotes devolvidos antes de imprimir (funciona mesmo com o servidor antigo). Reimprimir lê `entradaQualidade.volumes`.
+- **Servidor:** `functions/recebimento.js` valida a mesma regra e `functions/index.js` grava `volumes` em `recebimento`/`entradaQualidade` e devolve `volumesPesos`. **PENDENTE DE DEPLOY: functions fora do ar pelo incidente de billing (bloco no topo).** Enquanto isso o peso real sai na impressão logo após o recebimento, mas Reimprimir depois cai na divisão igual. Redeployar `registrarRecebimento` quando o billing voltar.
+- **Testes:** `run_pesos_volumes_test.js` (texto, conferência, validação do servidor, etiqueta), `run_recebimento_pesos_ui_test.js` (modal real: 6x50 + 30, mismatch trava, etiqueta); `run_recebimento_qualidade_test.js` ajustado.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Etiqueta de recebimento com o peso de cada volume (20/10/2026)
 
 - **Pedido (Logística):** 330 kg em 7 volumes saía "330 kg · volume 1 de 7" em todas as etiquetas (o total repetido); queriam o peso de cada volume e a quebra fechando.

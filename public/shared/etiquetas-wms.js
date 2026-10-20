@@ -75,11 +75,13 @@
   }
   function fmtQtd(v, casas) { return Number(v).toLocaleString('pt-BR', {minimumFractionDigits: casas, maximumFractionDigits: casas}); }
   function cartaoRecebimento(l, volume, total, fmt) {
-    var q = quantidadeDoVolume(l.quantidade, total, volume, l.unidade);
+    // Pesos digitados no recebimento (6x50 + 30) valem; sem eles, divisão igual.
+    var reais = Array.isArray(l.volumesPesos) && l.volumesPesos.length === total ? l.volumesPesos : null;
+    var q = reais ? {valor: Number(reais[volume - 1]), passo: 0.01, casas: 2, dividido: total > 1} : quantidadeDoVolume(l.quantidade, total, volume, l.unidade);
     // Mais de um volume: peso do volume e, entre parênteses, o total da entrada.
     // Fração (ex.: 47,15) mostra as duas casas em todos os volumes, para não
     // misturar "47,15" com "47,1".
-    var casas = q.dividido ? (fracao(l.quantidade, total, l.unidade) ? 2 : 0) : q.casas;
+    var casas = !q.dividido ? q.casas : reais ? (reais.some(function(p) { return Math.round(p) !== p; }) ? 2 : 0) : (fracao(l.quantidade, total, l.unidade) ? 2 : 0);
     var qtdTxt = q.dividido
       ? fmtQtd(q.valor, casas) + ' ' + esc(l.unidade) + ' · volume ' + volume + ' de ' + total + ' (total ' + esc(l.quantidade) + ' ' + esc(l.unidade) + ')'
       : esc(l.quantidade) + ' ' + esc(l.unidade) + ' · volume ' + volume + ' de ' + total;
