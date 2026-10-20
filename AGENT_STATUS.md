@@ -20,13 +20,26 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   do PC nasce com `qtd: it.qtd` (qtd pedida, não a cotada), logo o consumo é
   por item inteiro, sem saldo parcial de quantidade; `materialCodigo` é único
   dentro de cada uma das 31 SCs, então serve de chave de consumo.
-- **Desenho:** status novo `PARCIAL` (APROVADA → PARCIAL → CONSOLIDADA);
-  `solicitacoes_compra/{sc}/itensConsumidos/{materialCodigo}` = {pcKey,
-  procKey, em}; `solicitadoPorMaterial` aceita PARCIAL e pula item consumido;
-  cancelar PC desconsome só os itens daquele PC.
-- **Arquivos ativos:** `public/compras.html`,
-  `public/shared/necessidade-pedidos.js`, `public/shared/cancelamento-pc.js`,
-  `run_cotacao_parcial_test.js`.
+- **Feito:** status `PARCIAL` (APROVADA → PARCIAL → CONSOLIDADA);
+  `solicitacoes_compra/{sc}/itensConsumidos/{materialCodigo}` = {procKey,
+  pcKey, em}; `solicitadoPorMaterial` aceita PARCIAL e pula item consumido;
+  `statusSolicitacaoPorConsumo` calcula o status a partir dos itens (os dois
+  em `necessidade-pedidos.js`, que `compras.html` passou a carregar);
+  botão **"✓ Fechar com este fornecedor (n)"** na visão por fornecedor;
+  `gerarPcsDaCotacao` serve aos dois caminhos; item fechado guarda
+  `pedidoCompraKey` e o caminho "todos os itens" passa a pulá-lo; cancelar PC
+  desconsome só os itens daquele PC (`CancelamentoPC.consumoDoPedido`).
+  PARCIAL não entra em cotação nova nem pode ser excluída por admin.
+- **Avisa antes:** fechar com um fornecedor alerta quando há convidado do
+  mesmo material ainda sem resposta — ali se compra sem comparar.
+- **Testes:** `run_cotacao_parcial_test.js` (48, inclui o parse dos blocos
+  inline de `compras.html`). Rodados sem quebra: necessidade_pedidos,
+  cancelamento_pc, cotacao_texto, ajuste_pc, rotas_pc.
+- **Estado:** `718f61a`, no ar e conferido com cache-busting.
+- **Compatibilidade:** SC consumida antes disto não tem `itensConsumidos`; o
+  recálculo a devolve a APROVADA no cancelamento, igual ao comportamento
+  antigo. Nada de migração de dados.
+- **Arquivos ativos:** nenhum.
 
 ## 🚨 INCIDENTE ABERTO — projeto caiu para Spark, billing fechado (19/10/2026)
 
