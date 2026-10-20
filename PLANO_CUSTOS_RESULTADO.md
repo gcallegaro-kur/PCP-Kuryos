@@ -1,6 +1,6 @@
 # Plano — Custos + Resultado (LP, LPD, metas e bonificação)
 
-Rascunho para decisão, 20/10/2026. **Nada será executado antes das decisões da seção 7.**
+Plano de 20/10/2026, **decisões da seção 7 respondidas no mesmo dia**. Execução começa pela Fase 0.
 Números medidos na base `prod-kuryos` em 20/10 (últimos 90 dias), não estimados.
 Leia junto: `PLANO_CUSTOS.md` (arquitetura de custos de 14/09) e `PROMPT_CUSTOS_ERP.md`
 (especificação entregue ao Kuryos ERP).
@@ -179,18 +179,44 @@ placar, porque o placar usa o orçado.
 
 ---
 
-## 7. Decisões que travam o plano
+## 7. Decisões (respondidas pelo usuário em 20/10/2026)
 
-1. **Onde construir.** Em setembro a decisão foi o módulo de custos nascer no **Kuryos ERP**
-   (`PROMPT_CUSTOS_ERP.md`) e a aba daqui foi retirada (`bb245a0`). Opções: (a) construir aqui
-   o motor + placar e o ERP reaproveita o motor; (b) só a especificação, para o ERP construir;
-   (c) custo no ERP, placar da TV aqui (o apontamento está aqui).
-2. **LP = margem de contribuição sobre o preço líquido de impostos**, sem custo fixo (o fixo
-   entra na meta). Confirma?
-3. **Pontos pelo LP orçado** (estável, fecha na hora) e não pelo realizado?
-4. **Meta fixa ou ajustada ao programa do dia?**
-5. **Fonte e forma do bônus:** fatia do excedente (com teto) ou valor fixo; PLR ou outra forma.
-6. **Portões de qualidade/segurança** no bônus: quais e quanto pesam.
-7. **Quem participa:** toda a fábrica igual, ou por setor (envase, manipulação, rotulagem,
-   logística) com a mesma meta da fábrica?
-8. **Quem vê o quê:** R$ só diretoria; gestores com LP por SKU?; fábrica só pontos.
+| # | Decisão | Resposta |
+|---|---|---|
+| 1 | Onde construir | **Tudo aqui** (custos, LP/LPD, pontos, metas e placar). Revoga a decisão de 14/09 de o módulo nascer no Kuryos ERP; `PROMPT_CUSTOS_ERP.md` vira referência, não entrega. O motor segue em funções puras, reaproveitável pelo ERP |
+| 2 | LP | **Margem de contribuição sobre o preço líquido de impostos**; custo fixo entra na meta. O custo fixo vai ser estruturado depois — o usuário quer **trazer a gestão financeira para cá** em algum momento (revê o "não construir financeiro transacional" de 14/09: fica como fase futura própria, não neste plano) |
+| 3 | Pontos | **Pontos por item = LP orçado × fator; contados sobre o REALIZADO** (unidades boas apontadas, menos descontos). O valor do ponto é fixo e conhecido; a quantidade é a real |
+| 4 | Meta | **Ajustada ao programa do dia** |
+| 5 | Bônus | **Valor fixo ao bater a meta**, **podendo superar conforme a superação da meta** (faixas). Forma legal (PLR ou outra) ainda a validar com RH/contador |
+| 6 | Descontos e portões | **Descontar pontos em retrabalhos e perdas.** Demais itens propostos na seção 7.1 |
+| 7 | Quem participa | **A fábrica inteira**, uma meta só |
+| 8 | Quem vê | **R$ e LP: só diretoria.** Todos os demais: **só pontos** |
+
+### 7.1 Descontos e portões propostos (a confirmar)
+
+Dois tipos: **desconto** tira pontos do dia (proporcional ao estrago); **portão** suspende ou
+reduz o bônus do período (evento grave, raro).
+
+| Item | Tipo | Proposta | Por quê |
+|---|---|---|---|
+| Perdas apontadas (unidades e material) | desconto | pontos do item × unidades perdidas (material perdido convertido em unidades equivalentes) | decidido |
+| Retrabalho | desconto | pontos do item × unidades retrabalhadas | decidido |
+| **Lote reprovado pela Qualidade** (granel ou PA) | desconto | pontos do lote reprovado saem do dia em que foram contados | produzir rápido e errado não pode pontuar |
+| **Divergência na Conferência de PA** (apontado > contado pela Logística) | desconto | a diferença sai dos pontos | **protege o placar de apontamento inflado** — é o principal risco de um bônus por quantidade |
+| **Reclamação / devolução de cliente com causa na fábrica** | portão | reduz o bônus do mês (ex.: −50% por RNC de cliente procedente) | é o custo de qualidade mais caro e aparece semanas depois |
+| **Acidente com afastamento** | portão | zera o bônus da semana | segurança acima de produção, sem exceção |
+| First article ou assepsia reprovados | **não descontar** | só registrar | descontar ensina a esconder; a reprovação é o sistema funcionando |
+| Paradas | **não descontar** | já reduzem a produção sozinhas | evitar punir duas vezes |
+
+**Cuidado que vale para tudo isto: não punir quem aponta.** Se perda apontada tira ponto, a
+tentação é não apontar. A defesa é a **conciliação de consumo** (estoque consumido × BOM ×
+produzido, que já existe para a rotulagem): perda que não foi apontada aparece como diferença
+de material na conciliação e **desconta em dobro**. Assim, apontar é sempre melhor que esconder.
+
+### 7.2 O que fica pendente
+
+- Forma legal do bônus (PLR ou outra) — RH/contador.
+- Faixas da superação (ex.: 100% da meta = valor base; 110% = base × 1,2; teto em 130%).
+- Valor do fator dos pontos e do % alvo da meta — sai da simulação da Fase 4.
+- Custo fixo mensal — estruturar depois (decisão 2); até lá a meta usa o programa do dia
+  e o ponto de equilíbrio entra como checagem da diretoria, não como regra do placar.
