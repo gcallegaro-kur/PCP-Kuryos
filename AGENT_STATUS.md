@@ -3,6 +3,33 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+## 🚨 INCIDENTE ABERTO — projeto caiu para Spark, billing fechado (19/10/2026)
+
+**NÃO tente `firebase deploy --only functions`: vai falhar.** A conta de
+faturamento do `prod-kuryos` está **fechada** (não só desvinculada). Medido,
+não suposto — a API responde `HTTP 402 "The billing account for the owning
+project is disabled in state closed"`.
+
+- **Última execução de function:** `checkNotificacoes` 19/10 20:49 (local).
+  Primeiro erro de billing medido: 19/10 22:36. A queda foi nessa janela.
+- **Morto:** as 20 Cloud Functions, Storage (**todas as fotos**), Secret
+  Manager, Cloud Scheduler (e-mails do `checkNotificacoes`), e a integração
+  do gerador VBA (`criarOP` / `criarPedido`).
+- **Vivo:** RTDB (10,7 MB — folga enorme no limite de 1 GB do Spark),
+  Hosting (HTTP 200) e Auth (login de pé). O apontamento de produção grava
+  direto no RTDB, então a fábrica continua apontando.
+- **Nada foi perdido:** os arquivos seguem no bucket; é o acesso que está
+  cortado, não o dado.
+- **Atenção no Spark:** o teto passa a ser 100 conexões simultâneas no RTDB.
+  Para um app de fábrica isso é apertado — se começarem reclamações de tela
+  que não carrega, suspeite disto antes de procurar bug.
+
+**Resolve com uma coisa só:** reabrir/vincular a conta de faturamento no
+Cloud Console e voltar o projeto para Blaze. Depois disso, redeployar as
+functions (os secrets precisam estar acessíveis de novo).
+
+**Arquivos ativos:** nenhum.
+
 ## Em andamento
 
 ### Claude — Qualidade A3: assepsia de linha (CK-4) + first article (CK-5) (19/10/2026)
