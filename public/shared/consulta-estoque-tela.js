@@ -394,17 +394,65 @@
     if (selecionado) renderDrawer();
   }
 
+  /* Export. Duas formas porque são duas perguntas: "o que eu tenho" (uma
+     linha por item) e "para quem o que eu tenho está reservado" (uma linha
+     por OP). A segunda não dá para tirar da primeira: o empenho de um item
+     é a soma de várias OPs, e somar não volta atrás. */
+
+  // Número sai sem aspas e com vírgula: é o que o Excel pt-BR lê como número.
+  // Texto sai com aspas, e por isso código e lote mantêm o ponto deles.
+  function campoCsv(v) {
+    if (typeof v === 'number') return isFinite(v) ? String(v).replace('.', ',') : '';
+    return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  }
+  // ISO cru o Excel trata como texto; dd/mm/aaaa hh:mm ele reconhece.
+  function dataCsv(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    var p = function(n) { return String(n).length < 2 ? '0' + n : String(n); };
+    return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function baixarCsv(prefixo, cab, lin) {
+    var csv = [cab].concat(lin).map(function(l) { return l.map(campoCsv).join(';'); }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = prefixo + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  // `visiveis` é a lista filtrada INTEIRA, não a página de 150 desenhada:
+  // export que entrega menos do que o filtro diz não serve para conferir nada.
+  function filtradas() { return visiveis.length ? visiveis : rows; }
+
   function exportarCsv() {
-    var lista = visiveis.length ? visiveis : rows;
     var cab = ['Código', 'Item', 'Tipo', 'Unidade', 'Saldo', 'Empenhado', 'Disponível', 'Em quarentena', 'Próxima validade', 'Endereços', 'Clientes (dono)', 'Situação'];
-    var lin = lista.map(function(r) {
+    var lin = filtradas().map(function(r) {
       return [r.codigo, r.nome, CE.GRUPOS[r.grupo].rotulo, r.unidade, r.atual, r.empenhado, r.disponivel, r.quarentena, r.proxValidade, r.enderecos.join(' | '),
         r.clientes.map(function(k) { return r.porCliente[k] ? r.porCliente[k].nome : k; }).join(' | '), r.tags.map(function(t) { return ROTULO_TAG[t]; }).join(' | ')];
     });
-    var csv = [cab].concat(lin).map(function(l) { return l.map(function(v) { var s = String(v == null ? '' : v).replace(/\./g, function() { return '.'; }); return '"' + s.replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
-    var blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = 'estoque-' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(a); a.click(); setTimeout(function() { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    baixarCsv('estoque-', cab, lin);
+  }
+
+  /* Uma linha por OP que segura material. Leva o total do item em cada linha
+     de propósito: é com ele que se confere na planilha se as OPs fecham com o
+     empenhado -- a mesma conferência que o drawer faz na tela. Sem corte em
+     40 OPs, que ali é limite de leitura e aqui seria dado faltando. */
+  function exportarEmpenhos() {
+    var lista = filtradas().filter(function(r) { return r.empenhos && r.empenhos.length; });
+    if (!lista.length) {
+      alert('Nenhum item nos filtros atuais tem material reservado para OP.\n\nPara ver só o que está reservado, clique em Situação: Empenhado.');
+      return;
+    }
+    var cab = ['Código', 'Item', 'Tipo', 'Unidade', 'Saldo do item', 'Empenhado no item', 'Disponível no item',
+      'OP (lote)', 'Produto', 'Cliente', 'SKU', 'Status da OP', 'Situação da reserva', 'Empenho preso', 'Qtd reservada', 'Reservado em'];
+    var lin = [];
+    lista.forEach(function(r) {
+      r.empenhos.forEach(function(x) {
+        lin.push([r.codigo, r.nome, CE.GRUPOS[r.grupo].rotulo, r.unidade, r.atual, r.empenhado, r.disponivel,
+          x.lote, x.produto, x.cliente, x.sku, x.statusOp, x.rotuloSituacao, x.preso ? 'SIM' : '', x.qtd, dataCsv(x.criadoEm || x.em)]);
+      });
+    });
+    baixarCsv('empenhos-', cab, lin);
   }
 
   var timer = null;
@@ -417,6 +465,7 @@
   el('abaInter').onclick = function() { irParaAba('inter'); };
   el('fundo').onclick = fecharDrawer;
   el('btnCsv').onclick = exportarCsv;
+  el('btnCsvEmp').onclick = exportarEmpenhos;
   el('btnDens').onclick = function() { estado.denso = !estado.denso; el('btnDens').textContent = estado.denso ? '↕ Confortável' : '↕ Compacto'; try { localStorage.setItem('ce-denso', estado.denso ? '1' : '0'); } catch (x) { /* sem storage */ } render(); };
   document.querySelectorAll('thead th[data-o]').forEach(function(th) {
     th.onclick = function() { var o = th.getAttribute('data-o'); if (estado.ordem === o) estado.desc = !estado.desc; else { estado.ordem = o; estado.desc = o === 'atual' || o === 'atualizado'; } render(); };

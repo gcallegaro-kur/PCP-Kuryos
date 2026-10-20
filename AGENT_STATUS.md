@@ -3,6 +3,36 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Consulta de Estoque: exportar empenho por OP (20/10/2026)
+
+- **Pedido:** botão para exportar os dados em Consulta de estoque, no caminho
+  Tipo: Matéria-prima -> Situação: Empenhado.
+- **Achado:** o botão **já existe e está no ar** (`btnCsv`, desde `b629304`),
+  exporta a lista filtrada inteira (não só a página de 150). O que falta é o
+  conteúdo: uma linha por item com o empenho como total único, sem dizer
+  PARA QUAL OP o saldo está reservado -- que é a única informação que torna o
+  filtro "Empenhado" útil. O detalhe existe em `row.empenhos` e só aparece no
+  drawer, um item por vez e cortado em 40 OPs.
+- **Feito:** segundo botão **"⬇ Exportar empenhos"** (`btnCsvEmp`), uma linha
+  por OP x material, sem o corte de 40; leva o total do item em cada linha,
+  que é como se confere na planilha se as OPs fecham com o empenhado (a mesma
+  conferência que o drawer já faz na tela); marca `Empenho preso` = SIM para
+  reserva presa em OP encerrada. Sem item com empenho no filtro, avisa e não
+  baixa arquivo vazio. O antigo virou **"⬇ Exportar itens"** (era só
+  "Exportar CSV", e com dois botões o nome não dizia mais qual era qual).
+- **Bug corrigido de passagem:** o CSV saía com ponto decimal, que o Excel
+  pt-BR lê como texto -- "exportar para planilha" entregava número que não
+  somava. Agora número sai sem aspas e com vírgula, e texto sai com aspas
+  (por isso o ponto de código e lote sobrevive); data de reserva em
+  dd/mm/aaaa hh:mm, que o ISO cru também não era reconhecido. Havia um
+  `.replace(/\./g, function() { return '.'; })` no lugar -- no-op, pelo jeito
+  resto de uma conversão que nunca foi concluída.
+- **Testes:** `run_consulta_estoque_ui_test.js` cobre os dois exports
+  (cabeçalhos, filtro respeitado, vírgula decimal, empenho preso, data).
+  Conferido que o teste falha se a vírgula voltar a ser ponto. Rodados sem
+  quebra: consulta_estoque, propriedade_estoque (+ui), coerencia_modulos.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Cotação: fechar só os itens de um fornecedor (20/10/2026)
 
 - **Pedido:** na COT-0042 (47 itens, 26 convidados) o usuário preencheu UM

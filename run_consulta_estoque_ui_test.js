@@ -26,7 +26,7 @@ function dados() {
     estoque_lotes: {
       'MPGR-1': {l1: {itemTipo: 'material', saldoLote: 40, status: 'LIBERADO', dataValidade: ymd(10), loteInterno: 'AK-2026-000001', enderecoCodigo: 'GAL-1.1.1'},
         l2: {itemTipo: 'material', saldoLote: 30, status: 'LIBERADO', dataValidade: ymd(-2), loteInterno: 'AK-2026-000002', enderecoCodigo: 'GAL-1.1.2'},
-        l3: {itemTipo: 'material', saldoLote: 20, status: 'QUARENTENA', dataValidade: ymd(400), loteInterno: 'AK-2026-000003', enderecoCodigo: 'DOC-1.1.1'}},
+        l3: {itemTipo: 'material', saldoLote: 20.5, status: 'QUARENTENA', dataValidade: ymd(400), loteInterno: 'AK-2026-000003', enderecoCodigo: 'DOC-1.1.1'}},
       'SKU-PA': {p1: {itemTipo: 'produto', itemCodigo: 'SKU-PA', itemNome: 'BODY SPLASH ZAHRA 120ml', cliente: 'BRIA BEAUTY', saldoLote: 4849, status: 'LIBERADO_EXPEDICAO', enderecoCodigo: 'DOC-1.1.1', identificadorPalete: 'PA-1'}}
     },
     ops: {
@@ -165,7 +165,7 @@ async function abrir(browser, pagina) {
     const dr = await page.locator('#drawer').innerText();
     assert.match(dr, /ALCOOL CEREAL/);
     assert.match(dr, /30 kg vencidos/);
-    assert.match(dr, /20 kg em quarentena/);
+    assert.match(dr, /20,5 kg em quarentena/);
     assert.ok(dr.indexOf('AK-2026-000002') < dr.indexOf('AK-2026-000001'), 'o lote que vence primeiro vem primeiro');
     assert.match(await page.locator('#drawer a[href^="kardex.html?item=MPGR-1"]').innerText(), /Kardex/);
     await page.keyboard.press('Escape');
@@ -214,8 +214,58 @@ async function abrir(browser, pagina) {
     await page.click('#abaItens');
     if (process.env.CE_SCREENSHOT) { await page.locator('#corpo tr[data-c="MPGR-1"]').click(); await page.waitForSelector('#drawer.on'); await page.waitForTimeout(400); await page.screenshot({path: process.env.CE_SCREENSHOT + '-itens.png'}); }
 
+    /* Export. Captura o Blob em vez de baixar arquivo: o que precisa estar
+       certo é o conteúdo. Duas perguntas, dois CSVs -- "o que eu tenho" e
+       "para quem está reservado" -- e o segundo não sai do primeiro. */
+    await page.evaluate(() => {
+      window.__csv = [];
+      const orig = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => { blob.text().then((t) => window.__csv.push(t)); return orig(blob); };
+    });
+    const pegarCsv = async (n) => {
+      await page.waitForFunction((k) => window.__csv.length === k, n, {timeout: 5000});
+      const txt = await page.evaluate((k) => window.__csv[k - 1], n);
+      return txt.replace(/^﻿/, '').split('\r\n');
+    };
+
+    await page.click('#btnCsv');
+    const csvItens = await pegarCsv(1);
+    assert.equal(csvItens.length, 6, 'cabeçalho + os 5 itens');
+    assert.equal(csvItens[0].indexOf('"Código";"Item";"Tipo";"Unidade";"Saldo";"Empenhado";"Disponível"'), 0, 'veio: ' + csvItens[0]);
+    // Número sem aspas e com vírgula (Excel pt-BR lê como número); texto com
+    // aspas, e por isso o ponto do código sobrevive.
+    const linhaMp = csvItens.find((l) => l.indexOf('"MPGR-1"') === 0);
+    assert.equal(linhaMp.indexOf('"MPGR-1";"ALCOOL CEREAL";"Matéria-prima";"kg";90;0;90;20,5;'), 0, 'veio: ' + linhaMp);
+
+    // Filtro respeitado: Matéria-prima não tem empenho, então avisa e não baixa.
+    await page.click('#fGrupo [data-g="MPGR"]');
+    await page.waitForFunction(() => document.querySelectorAll('#corpo tr[data-c]').length === 1);
+    await page.click('#btnCsvEmp');
+    await page.waitForTimeout(250);
+    assert.equal(await page.evaluate(() => window.__csv.length), 1, 'sem empenho no filtro, não gera arquivo');
+    await page.click('#btnCsv');
+    assert.equal((await pegarCsv(2)).length, 2, 'o export segue o filtro da tela');
+
+    // Empenho: uma linha por OP, com o total do item em cada linha para conferir.
+    await page.click('#fGrupo [data-g=""]');
+    await page.waitForFunction(() => document.querySelectorAll('#corpo tr[data-c]').length === 5);
+    await page.click('#btnCsvEmp');
+    const emp = await pegarCsv(3);
+    assert.equal(emp.length, 3, 'cabeçalho + as 2 OPs que seguram o EP-1');
+    assert.match(emp[0], /"OP \(lote\)";"Produto";"Cliente";"SKU";"Status da OP";"Situação da reserva";"Empenho preso";"Qtd reservada";"Reservado em"$/);
+    const lx = emp.find((l) => l.indexOf('"X/01"') > 0);
+    const lfim = emp.find((l) => l.indexOf('"26244/02"') > 0);
+    assert.ok(lx && lfim, 'as duas OPs saem, não só as 40 primeiras que o drawer mostra');
+    assert.equal(lx.indexOf('"EP-1";"FRASCO PET 120ML";"Embalagem primária";"un";6000;1000;5000;'), 0, 'o total do item viaja na linha: ' + lx);
+    assert.match(lx, /"BODY SPLASH IDOLA";"MISS ROSE";"SKU-X";"Programado"/);
+    assert.match(lx, /;600;/, 'qtd reservada da OP-X: ' + lx);
+    // A OP-FIM está Concluída: o empenho dela é preso, e é isso que o CSV marca.
+    assert.match(lfim, /"SIM";400;/, 'empenho preso marcado: ' + lfim);
+    assert.ok(!/"SIM";600;/.test(lx), 'OP-X está viva, não é empenho preso');
+    assert.match(lfim, /;"\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}"$/, 'data em dd/mm/aaaa hh:mm: ' + lfim);
+
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
-    console.log('OK Consulta de Estoque (tela): busca, filtros vivos, drawer, atalhos e intermediários x embalagens.');
+    console.log('OK Consulta de Estoque (tela): busca, filtros vivos, drawer, atalhos, intermediários x embalagens e os dois exports.');
   } finally {
     await browser.close();
   }
