@@ -100,6 +100,69 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Responsável comercial por cliente — PUBLICADO (20/10/2026)
+
+- **Pedido:** "criar um responsável por cliente, dentro da gestão comercial".
+- **Medido antes de desenhar:** 60 clientes (todos ativos), **nenhum** com
+  qualquer campo de responsável; só 28 dos 60 já tiveram pedido; 20 logins e
+  **o papel `comercial` não existe** — quem tem o módulo é `pcp` (4) +
+  `admin` (3). `/usuarios` (lista inteira) só é legível por `admin`/`rh`
+  (`database.rules.json:45`), então um select alimentado de lá nasceria VAZIO
+  para quem é `pcp`, que é justamente quem usa o comercial. Por isso a lista
+  é própria do módulo — mesmo recurso do RH (`rh_colaboradores_publico`) e do
+  CQ (`config/responsaveisCq`).
+- **Decisões do usuário (20/10):** lista própria com `uidLogin` OPCIONAL
+  (aceita representante sem login e já habilita "minha carteira" para quem
+  tem) e **um** responsável por cliente, o comercial — contra as opções
+  "comercial + técnico" e "um por área".
+- **Feito:** `shared/responsavel-comercial.js` (motor puro: `lista`, `porUid`,
+  `salvar`, `doCliente`, `atribuir`/`atribuirVarios` em caminho PLANO,
+  `clientesDe`, `cobertura`). `comercial_config/responsaveis/{id} = {nome,
+  email, uidLogin, ativo, criadoEm}`; vínculo em
+  `clientes/{key}.responsavelComercialId` (fonte da verdade) +
+  `responsavelComercialNome`/`Em`/`Por` (espelho, padrão de `contatoComNome`).
+  `gestao_comercial.html`: coluna **Responsável** e filtro na aba Clientes
+  (inclui "minha carteira", "sem responsável" e "desligado ou removido") +
+  modal **"Carteira e responsáveis"** com KPI de cobertura, atribuição em
+  lote e CRUD da lista. `cadastros.html`: o campo no modal do cliente.
+- **Por que a atribuição vive num modal:** a tabela da aba Clientes é montada
+  pelo motor a partir dos PEDIDOS — cliente sem movimento não aparece (28 dos
+  60). O modal lê `raw.clientes` direto e alcança os 60. A coluna é só leitura.
+- **Responsável desligado/removido NÃO tira o dono do cliente:** o vínculo fica
+  marcado `· desligado` / `· removido` no próprio texto da célula (não só no
+  `title` — tooltip não aparece numa varredura da tabela), com filtro próprio
+  para redistribuir. Perder o dono em silêncio seria pior que mostrá-lo vencido.
+- **Regra de banco:** `comercial_config` novo (leitura: autenticado; escrita:
+  admin/pcp/módulo comercial/módulo cadastros) e os **4 campos do responsável**
+  em `clientes/$cliente` ganharam `.write` próprio — regra de filho concede a
+  MAIS sem abrir o resto do cadastro, igual `config/contadores`. Assim a
+  atribuição já funciona no dia em que existir papel `comercial`.
+- **⚠ Defeito que o teste de UNIDADE não pegou:** `listaClientes` em
+  `gestao-comercial.js` monta um objeto NOVO, e `responsavel` sumia ali — o
+  motor resolvia certo e a coluna mostrava "—" para todos. Foi o teste de
+  TELA que pegou. É a armadilha do `clienteKey` duplicado do `CLAUDE.md`.
+  Deixei comentário no literal e asserção de ligação no teste do motor
+  (conferi que ela falha se a linha for removida). **Quem adicionar campo em
+  `cli()` tem de repassá-lo nesse literal.**
+- **Testes:** `run_responsavel_comercial_test.js` (motor + a ligação) e
+  `run_responsavel_comercial_ui_test.js` (tela real: modal alcança cliente sem
+  pedido, lote em caminho plano com campo irmão intacto, travas de nome
+  igual-com-acento e de e-mail, desligar preserva carteira, limpar tira o
+  espelho junto). Sem regressão em `run_gestao_comercial_ui_test`,
+  `run_resumo_comercial_ui_test`, `run_contatos_cliente_ui_test`,
+  `run_espelho_cadastro_ui_test`, `run_transacoes_null_test`,
+  `run_conciliacao_pedidos_test`.
+- **Ensaio na base real** (`scripts/ensaio-responsavel-comercial.js`, só
+  leitura): 60 clientes atravessados sem erro, nenhuma chave recusada pelo
+  update plano, **cobertura 0 de 60 e zero responsáveis cadastrados**.
+- **Pendência operacional, não de código:** cadastrar os responsáveis e
+  atribuir os 60 clientes. Enquanto isso a coluna, o filtro e o KPI não dizem
+  nada. O que ficou de fora está em `MELHORIAS_FUTURAS.md` (nada avisa o
+  responsável — depende das functions, fora do ar pelo billing; o filtro não é
+  permissão; papel `comercial`; carteira nas outras abas).
+- **Publicado:** `864f950` (hosting + regras de banco).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Cabeçalho de tabela congelado em todas as telas — PUBLICADO (20/10/2026)
 
 - **Pedido (14/10, outro PC):** toda tabela que rola mantém o cabeçalho fixo. O trabalho ficou só na pasta, sem commit (o `.git` daquele PC estava corrompido); publicado hoje em `8f2ced1`.
