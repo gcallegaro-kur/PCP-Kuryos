@@ -32,6 +32,11 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Assepsia da linha antes de ALOCAR a OP (20/10/2026)
+
+- **Pedido:** a inspeção de limpeza tem que vir antes de alocar uma nova OP; o first article continua depois do setup.
+- **Arquivos ativos:** `public/shared/liberacao-linha.js`, `public/shared/liberacao-linha-tela.js`, `public/form.html` (portões de alocar/abrir), manuais de Qualidade e Apontamento, `run_liberacao_linha*`.
+
 ### Claude — Qualidade A3: assepsia de linha (CK-4) + first article (CK-5) (19/10/2026)
 
 - **Plano:** `PLANO_QUALIDADE.md`, item A3.
