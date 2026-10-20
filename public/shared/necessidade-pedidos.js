@@ -101,18 +101,40 @@
     return out;
   }
 
+  // SC em aberto conta como "em andamento"; o item que JÁ virou PC não, senão
+  // ele seria contado duas vezes -- aqui e no PC -- e a falta sumiria da tela.
+  // `PARCIAL` é a SC que teve parte dos itens fechados num PC e segue em
+  // cotação para o resto: conta, mas só pelos itens ainda não consumidos
+  // (`itensConsumidos`, gravado por quem gera o PC a partir da cotação).
   function solicitadoPorMaterial(solicitacoes) {
     var out = {};
     Object.keys(solicitacoes || {}).forEach(function(k) {
       var sc = solicitacoes[k];
       // CONSOLIDADA já virou cotação/PC (entra pelo PC); rejeitada não conta.
-      if (!sc || (sc.status !== 'PENDENTE' && sc.status !== 'APROVADA')) return;
+      if (!sc || (sc.status !== 'PENDENTE' && sc.status !== 'APROVADA' && sc.status !== 'PARCIAL')) return;
+      var consumidos = sc.itensConsumidos || {};
       Object.keys(sc.itens || {}).forEach(function(ik) {
         var it = sc.itens[ik]; if (!it || !txt(it.materialCodigo)) return;
+        if (consumidos[chaveMat(it.materialCodigo)]) return; // já virou PC: entra pelo PC
         (out[it.materialCodigo] = out[it.materialCodigo] || []).push({sc: sc.numeroFormatado || k, qtd: num(it.qtd), status: sc.status});
       });
     });
     return out;
+  }
+
+  /* Quanto de uma SC já virou PC, e o status que ela deve ter por causa disso.
+     Chamado por quem gera o PC da cotação e por quem cancela um PC -- os dois
+     precisam da MESMA conta, senão a SC fica num estado que não corresponde
+     aos itens. `consumidosExtra` permite simular antes de gravar. */
+  function statusSolicitacaoPorConsumo(sc, consumidosExtra) {
+    var itens = (sc && sc.itens) || {};
+    var cons = Object.assign({}, (sc && sc.itensConsumidos) || {}, consumidosExtra || {});
+    var codigos = Object.keys(itens).map(function(ik) {
+      return itens[ik] && txt(itens[ik].materialCodigo) ? chaveMat(itens[ik].materialCodigo) : null;
+    }).filter(Boolean);
+    var consumidos = codigos.filter(function(c) { return !!cons[c]; }).length;
+    if (!codigos.length || !consumidos) return 'APROVADA';
+    return consumidos >= codigos.length ? 'CONSOLIDADA' : 'PARCIAL';
   }
 
   /* d = {pedidos, selecionados:[keys], produtos, formulas, bom, materiais, estoque, ops,
@@ -278,5 +300,5 @@
     });
   }
 
-  return {ESTADOS: ESTADOS, pedidosAbertos: pedidosAbertos, ordemAtendimento: ordemAtendimento, calcular: calcular, itensParaSolicitar: itensParaSolicitar, recebimentosPorMaterial: recebimentosPorMaterial, solicitadoPorMaterial: solicitadoPorMaterial, norm: norm};
+  return {ESTADOS: ESTADOS, pedidosAbertos: pedidosAbertos, ordemAtendimento: ordemAtendimento, calcular: calcular, itensParaSolicitar: itensParaSolicitar, recebimentosPorMaterial: recebimentosPorMaterial, solicitadoPorMaterial: solicitadoPorMaterial, statusSolicitacaoPorConsumo: statusSolicitacaoPorConsumo, chaveItemConsumo: chaveMat, norm: norm};
 });

@@ -3,6 +3,31 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Cotação: fechar só os itens de um fornecedor (20/10/2026)
+
+- **Pedido:** na COT-0042 (47 itens, 26 convidados) o usuário preencheu UM
+  fornecedor e quis gerar o PC só dele, seguindo a cotação dos outros.
+- **Por que não dava:** `gerarPedidosDeCotacaoPorItem` varre TODOS os itens e
+  exige vencedor com preço/qtd em cada um; um item sem resposta aborta tudo.
+  E o consumo da origem é um flip único `APROVADA → CONSOLIDADA` por
+  solicitação, então gerar parcial deixaria o resto da SC órfão.
+- **A armadilha que isso esconde:** `necessidade-pedidos.js`
+  (`solicitadoPorMaterial`) conta TODOS os itens de SC `PENDENTE`/`APROVADA`.
+  Se a SC ficasse `APROVADA` depois de gerar parte, os itens comprados
+  contariam DUAS vezes (pela SC e pelo PC) e "O que comprar" passaria a
+  mentir. Qualquer mudança aqui tem que mexer nesse ponto junto.
+- **Fatos medidos:** o item do processo carrega `origemSolicitacaoKey`; o item
+  do PC nasce com `qtd: it.qtd` (qtd pedida, não a cotada), logo o consumo é
+  por item inteiro, sem saldo parcial de quantidade; `materialCodigo` é único
+  dentro de cada uma das 31 SCs, então serve de chave de consumo.
+- **Desenho:** status novo `PARCIAL` (APROVADA → PARCIAL → CONSOLIDADA);
+  `solicitacoes_compra/{sc}/itensConsumidos/{materialCodigo}` = {pcKey,
+  procKey, em}; `solicitadoPorMaterial` aceita PARCIAL e pula item consumido;
+  cancelar PC desconsome só os itens daquele PC.
+- **Arquivos ativos:** `public/compras.html`,
+  `public/shared/necessidade-pedidos.js`, `public/shared/cancelamento-pc.js`,
+  `run_cotacao_parcial_test.js`.
+
 ## 🚨 INCIDENTE ABERTO — projeto caiu para Spark, billing fechado (19/10/2026)
 
 **NÃO tente `firebase deploy --only functions`: vai falhar.** A conta de

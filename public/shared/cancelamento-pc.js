@@ -85,13 +85,33 @@
   }
 
   // SCs que a tela oferece reabrir: só as de origem, só se nada foi recebido,
-  // e só as que ainda estão CONSOLIDADA (outra ação pode ter mexido).
+  // e só as que ainda estão CONSOLIDADA ou PARCIAL (outra ação pode ter
+  // mexido). PARCIAL entra porque o PC pode ter fechado só parte da SC --
+  // cancelá-lo devolve à cotação exatamente os itens dele, não a SC inteira.
   function solicitacoesParaReabrir(pc, solicitacoes) {
     if (!pc || recebeuAlgo(pc)) return [];
     return Object.keys(pc.solicitacoesOrigem || {}).filter(function(k) {
       var s = (solicitacoes || {})[k];
-      return !!s && s.status === 'CONSOLIDADA';
+      return !!s && (s.status === 'CONSOLIDADA' || s.status === 'PARCIAL');
     });
+  }
+
+  /* Quais itens de cada SC este PC consumiu -- {scKey: [chaveConsumo, ...]}.
+     Cancelar um PC tem que desconsumir SÓ o que ele levou: se a SC estava
+     PARCIAL porque outro PC fechou outros itens, aqueles continuam fechados.
+     `chaveDe` é o mesmo saneamento de código usado na gravação
+     (NecessidadePedidos.chaveItemConsumo), injetado para não duplicar regra. */
+  function consumoDoPedido(pc, chaveDe) {
+    var f = chaveDe || function(c) { return String(c == null ? '' : c).trim(); };
+    var out = {};
+    Object.keys((pc && pc.itens) || {}).forEach(function(ik) {
+      var it = pc.itens[ik];
+      if (!it || !it.origemSolicitacaoKey || !it.materialCodigo) return;
+      var lista = out[it.origemSolicitacaoKey] = out[it.origemSolicitacaoKey] || [];
+      var ch = f(it.materialCodigo);
+      if (lista.indexOf(ch) < 0) lista.push(ch);
+    });
+    return out;
   }
 
   // Filtro da aba: 'ativos' (padrão, esconde cancelados), 'cancelados', 'todos'.
@@ -110,6 +130,7 @@
     CANCELAVEIS: CANCELAVEIS, MOTIVO_MINIMO: MOTIVO_MINIMO,
     avaliarCancelamento: avaliarCancelamento, saldoPendentePorItem: saldoPendentePorItem,
     aplicarCancelamento: aplicarCancelamento, solicitacoesParaReabrir: solicitacoesParaReabrir,
+    consumoDoPedido: consumoDoPedido,
     passaFiltroStatus: passaFiltroStatus, contaComoCompra: contaComoCompra, recebeuAlgo: recebeuAlgo
   };
   root.CancelamentoPC = api;

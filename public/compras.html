@@ -17,6 +17,10 @@
   <script src="shared/onde-usado.js"></script>
   <script src="shared/pedidos-do-material.js"></script>
   <script src="shared/propriedade-estoque.js"></script>
+  <!-- Consumo da solicitação item a item: chaveItemConsumo e
+       statusSolicitacaoPorConsumo moram junto da conta de "O que comprar",
+       que é quem tem de pular item já consumido. Mesma regra nos dois lados. -->
+  <script src="shared/necessidade-pedidos.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -243,6 +247,7 @@
         <option value="PENDENTE">Pendente</option>
         <option value="APROVADA">Aprovada</option>
         <option value="REJEITADA">Rejeitada</option>
+        <option value="PARCIAL">Parcial em PC</option>
         <option value="CONSOLIDADA">Consolidada em PC</option>
       </select>
       <button class="btn btn-purple btn-sm" id="btnIniciarCotacao" disabled>🤝 Iniciar Cotação (0)</button>
@@ -1118,8 +1123,12 @@ function renderSolicitacoes() {
         PENDENTE: '<span class="badge badge-orange">Pendente</span>',
         APROVADA: '<span class="badge badge-green">Aprovada</span>',
         REJEITADA: '<span class="badge badge-red">Rejeitada</span>',
+        PARCIAL: '<span class="badge badge-blue" title="Parte dos materiais já virou Pedido de Compra; o resto segue em cotação.">Parcial em PC</span>',
         CONSOLIDADA: '<span class="badge badge-blue">Consolidada em PC</span>'
       }[s.status] || '<span class="badge badge-gray">' + escapeHtml(s.status || '—') + '</span>';
+      // Só APROVADA entra em cotação nova: PARCIAL já pertence a um processo
+      // em andamento, e deixá-la ser escolhida de novo criaria dois processos
+      // disputando os mesmos itens.
       var podeSelecionar = s.status === 'APROVADA';
       var checkbox = podeSelecionar
         ? '<input type="checkbox" class="sc-check" data-key="' + escapeAttr(key) + '"' + (cotacaoSelecionadas[key] ? ' checked' : '') + '>'
@@ -1138,7 +1147,8 @@ function renderSolicitacoes() {
       // historico.html: bloqueia com mensagem em vez de agir sem entender a
       // consequência). Espelha a regra em database.rules.json (só admin
       // pode remover $key de solicitacoes_compra, pcp só cria/atualiza).
-      if (window.currentUser && window.currentUser.role === 'admin' && s.status !== 'CONSOLIDADA') {
+      // PARCIAL entra na mesma trava: parte dela já é PC de verdade.
+      if (window.currentUser && window.currentUser.role === 'admin' && s.status !== 'CONSOLIDADA' && s.status !== 'PARCIAL') {
         acoes += (acoes ? ' ' : '') + '<button class="btn btn-danger-ghost btn-sm sc-excluir" data-key="' + escapeAttr(key) + '" title="Excluir solicitação (admin)">🗑️ Excluir</button>';
       }
       return '<tr>' +
@@ -1227,7 +1237,7 @@ function rejeitarSolicitacao(key) {
 function excluirSolicitacao(key) {
   var s = allSolicitacoes[key];
   if (!s) return;
-  if (s.status === 'CONSOLIDADA') {
+  if (s.status === 'CONSOLIDADA' || s.status === 'PARCIAL') {
     showAlert('Essa solicitação já virou uma cotação/pedido de compra -- não pode ser excluída daqui.', 'danger');
     return;
   }
@@ -2322,13 +2332,24 @@ function confirmarCancelamentoPC() {
     if (!res.committed) throw new Error(recusa || 'O pedido mudou enquanto você cancelava. Atualize e tente de novo.');
     if (!res.snapshot.exists()) throw new Error('Pedido não encontrado.');
     var reabertas = (res.snapshot.val().cancelamento || {}).solicitacoesReabertas ? scsReabrir : [];
+    // Devolve à cotação só os itens que ESTE pedido levou: se a solicitação
+    // estava PARCIAL porque outro PC fechou outros materiais, aqueles
+    // continuam fechados. Solicitação consumida antes de 20/10/2026 não tem
+    // `itensConsumidos` -- o recálculo então devolve APROVADA, como antes.
+    var consumo = CancelamentoPC.consumoDoPedido(pcLocal, NecessidadePedidos.chaveItemConsumo);
     return Promise.all(reabertas.map(function(scKey) {
-      return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) {
+      return db.ref('solicitacoes_compra/' + scKey).transaction(function(atual) {
         if (atual === null) return atual;
-        if (atual !== 'CONSOLIDADA') return; // outra ação já mexeu -- não reabre
-        return 'APROVADA';
+        if (atual.status !== 'CONSOLIDADA' && atual.status !== 'PARCIAL') return; // outra ação já mexeu
+        var cons = atual.itensConsumidos || {};
+        (consumo[scKey] || []).forEach(function(ch) {
+          if (cons[ch] && (cons[ch].pcKey == null || cons[ch].pcKey === key)) delete cons[ch];
+        });
+        atual.itensConsumidos = Object.keys(cons).length ? cons : null;
+        atual.status = NecessidadePedidos.statusSolicitacaoPorConsumo(atual);
+        return atual;
       }).then(function(r) {
-        if (!r.committed || r.snapshot.val() !== 'APROVADA') return null;
+        if (!r.committed || !r.snapshot.exists()) return null;
         return db.ref('solicitacoes_compra/' + scKey + '/reaberturaPorCancelamentoPC').set({
           pedidoCompraKey: key, pedidoCompraNumero: pcLocal.numeroFormatado || null,
           por: dados.autor, em: dados.agora
@@ -4486,6 +4507,12 @@ function cotacaoCardHtml(entry) {
     : '<div class="cot-fornecedor-tabs">' + tabs + '</div><div class="cot-proposta"><div class="cot-proposta-head"><div><h3>' + escapeHtml(nomeConvidadoCotacao(atual, fornecedorAtivo)) + '</h3><span class="badge ' + classeStatusConvidado(atual) + '">' + escapeHtml(statusConvidadoCotacao(atual)) + '</span>' + seloQualidadeHtml(atual.fornecedorKey) + '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
         (fornecedorAtivo ? '<button type="button" class="btn btn-ghost btn-sm cot-copiar-texto" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(fornecedorAtivo) + '" title="Texto pronto só com os materiais que ESTE fornecedor foi convidado a cotar">📋 Copiar texto</button>' : '') +
+        (function() {
+          if (!fornecedorAtivo || atual.status === 'DECLINOU') return '';
+          var n = itensFechaveisDoConvidado(p, fornecedorAtivo).length;
+          if (!n) return '';
+          return '<button type="button" class="btn btn-green btn-sm cot-gerar-pc-fornec" data-key="' + escapeAttr(key) + '" data-ckey="' + escapeAttr(fornecedorAtivo) + '" title="Gera o Pedido de Compra só com os materiais que este fornecedor cotou. Os demais continuam em cotação com os outros convidados.">✓ Fechar com este fornecedor (' + n + ')</button>';
+        })() +
         (atual.rascunhoCotacaoWebLink ? '<a class="btn btn-ghost btn-sm" href="' + escapeAttr(atual.rascunhoCotacaoWebLink) + '" target="_blank">Abrir rascunho ↗</a>' : '') + '</div></div>' +
       condicoesCotacaoGuiada(key, fornecedorAtivo, atual) +
       (atual.status === 'DECLINOU' ? '<div class="empty-hint">Este fornecedor declinou a cotação.</div>' : '<div class="cot-itens-proposta">' + itensArr.map(function(e) { return itemRespostaCotacaoGuiada(key, fornecedorAtivo, atual, e[0], e[1], cmp, chavesItens); }).join('') + '</div>') + '</div>';
@@ -4539,6 +4566,9 @@ function wireCotacoesAndamento() {
   });
   document.querySelectorAll('.cot-copiar-texto').forEach(function(btn) {
     btn.addEventListener('click', function() { copiarTextoCotacaoFornecedor(btn.getAttribute('data-key'), btn.getAttribute('data-ckey')); });
+  });
+  document.querySelectorAll('.cot-gerar-pc-fornec').forEach(function(btn) {
+    btn.addEventListener('click', function() { gerarPedidoDoFornecedor(btn.getAttribute('data-key'), btn.getAttribute('data-ckey')); });
   });
   document.querySelectorAll('.cot-vencedor-item').forEach(function(sel) {
     sel.addEventListener('change', function() {
@@ -4726,6 +4756,135 @@ function criarPedidoCotacaoPorFornecedor(procKey, proc, convidadoKey, itemKeys) 
   });
 }
 
+/* ── Consumo da solicitação item a item ───────────────────────────────
+   Até 20/10/2026 gerar o PC virava a solicitação inteira de APROVADA para
+   CONSOLIDADA de uma vez. Isso obrigava a fechar TODOS os itens juntos: o
+   usuário tinha 26 fornecedores convidados na COT-0042, preencheu um e não
+   pôde comprar dele sem esperar os outros.
+
+   Agora o consumo é por item (`itensConsumidos`, chaveado pelo código do
+   material -- verificado único dentro de cada solicitação). A solicitação
+   fica `PARCIAL` enquanto sobrar item a cotar e só vira `CONSOLIDADA` quando
+   o último item fecha. `NecessidadePedidos.solicitadoPorMaterial` pula item
+   consumido, senão ele contaria duas vezes em "O que comprar" -- pela
+   solicitação e pelo PC -- e a falta desapareceria da tela.
+
+   A reserva é uma transação por solicitação: quem chegar primeiro leva o
+   item, e tentar consumir item já consumido aborta em vez de sobrescrever. */
+function itensPorSolicitacao(itemKeys, itens) {
+  var porSc = {};
+  itemKeys.forEach(function(ik) {
+    var it = itens[ik];
+    if (!it || !it.origemSolicitacaoKey || !it.materialCodigo) return;
+    var lista = porSc[it.origemSolicitacaoKey] = porSc[it.origemSolicitacaoKey] || [];
+    var ch = NecessidadePedidos.chaveItemConsumo(it.materialCodigo);
+    if (lista.indexOf(ch) < 0) lista.push(ch);
+  });
+  return porSc;
+}
+
+function reservarItensDaSolicitacao(procKey, itemKeys, itens) {
+  var porSc = itensPorSolicitacao(itemKeys, itens);
+  var scKeys = Object.keys(porSc);
+  if (!scKeys.length) return Promise.reject(new Error('Os itens escolhidos não têm solicitação de origem.'));
+  var agora = new Date().toISOString();
+  var reservados = [];
+  var cadeia = scKeys.reduce(function(p, scKey) {
+    return p.then(function() {
+      return db.ref('solicitacoes_compra/' + scKey).transaction(function(sc) {
+        if (!sc) return sc; // cache frio devolve null: não inventa solicitação
+        if (sc.status !== 'APROVADA' && sc.status !== 'PARCIAL') return undefined;
+        var cons = sc.itensConsumidos || {};
+        // Item já consumido: outro PC levou. Aborta em vez de sobrescrever.
+        if (porSc[scKey].some(function(ch) { return !!cons[ch]; })) return undefined;
+        porSc[scKey].forEach(function(ch) { cons[ch] = {procKey: procKey, pcKey: null, em: agora}; });
+        sc.itensConsumidos = cons;
+        sc.status = NecessidadePedidos.statusSolicitacaoPorConsumo(sc);
+        return sc;
+      }).then(function(res) {
+        if (!res.committed || !res.snapshot.exists()) throw new Error('A solicitação de origem mudou de estado (outro pedido pode ter levado esses itens). Recarregue a tela.');
+        reservados.push(scKey);
+      });
+    });
+  }, Promise.resolve());
+  return cadeia.then(function() { return {porSc: porSc, scKeys: scKeys}; }).catch(function(err) {
+    // Desfaz só o que ESTA chamada reservou -- consumo de outro PC fica.
+    return desfazerConsumo(reservados, porSc).then(function() { throw err; });
+  });
+}
+
+function desfazerConsumo(scKeys, porSc) {
+  return (scKeys || []).reduce(function(p, scKey) {
+    return p.then(function() {
+      return db.ref('solicitacoes_compra/' + scKey).transaction(function(sc) {
+        if (!sc) return sc;
+        var cons = sc.itensConsumidos || {};
+        (porSc[scKey] || []).forEach(function(ch) { delete cons[ch]; });
+        sc.itensConsumidos = Object.keys(cons).length ? cons : null;
+        sc.status = NecessidadePedidos.statusSolicitacaoPorConsumo(sc);
+        return sc;
+      });
+    }).catch(function() { /* best-effort: não deixa o erro original sumir */ });
+  }, Promise.resolve());
+}
+
+/* Fecha com UM fornecedor os itens que ele cotou, deixando o resto do
+   processo em cotação. É o pedido do usuário: ele preencheu um fornecedor
+   entre 26 convidados e não queria esperar os outros para comprar.
+
+   Critério: item que este convidado cotou (preço e quantidade preenchidos) e
+   que ainda não virou PC. Não exige escolha de vencedor na etapa de
+   comparação -- fechar com quem respondeu é uma decisão deliberada do
+   comprador, e é por isso que ela avisa quando há convidado do mesmo item
+   ainda sem resposta: nesse caso você está comprando sem comparar. */
+function itensFechaveisDoConvidado(proc, cKey) {
+  var itens = proc.itens || {}, c = (proc.fornecedoresConvidados || {})[cKey] || {};
+  var chaves = Object.keys(itens);
+  return chaves.filter(function(ik) {
+    if (itens[ik].pedidoCompraKey) return false;
+    if (!convidadoCotaItem(c, ik, chaves)) return false;
+    var resp = (c.respostaItens || {})[ik] || {};
+    if (resp.precoUnit == null || resp.qtdCotada == null) return false;
+    if ((c.materialSimilarPorItem || {})[ik] && !String(resp.especificacaoTecnica || '').trim()) return false;
+    return true;
+  });
+}
+
+function gerarPedidoDoFornecedor(procKey, cKey) {
+  var proc = allProcessosCotacao[procKey];
+  if (!proc) return;
+  var itens = proc.itens || {}, convidados = proc.fornecedoresConvidados || {};
+  var c = convidados[cKey];
+  if (!c) return;
+  var nome = nomeConvidadoCotacao(c, cKey);
+  if (!c.fornecedorKey) { showAlert(nome + ': cadastre o fornecedor avulso em Fornecedores antes de gerar o Pedido de Compra.', 'danger'); return; }
+  var alvo = itensFechaveisDoConvidado(proc, cKey);
+  if (!alvo.length) { showAlert(nome + ' não tem nenhum material com preço e quantidade preenchidos que ainda esteja em aberto.', 'info'); return; }
+
+  // Quem mais foi convidado para estes mesmos itens e ainda não respondeu.
+  var chaves = Object.keys(itens);
+  var semResposta = {};
+  alvo.forEach(function(ik) {
+    Object.keys(convidados).forEach(function(outra) {
+      if (outra === cKey) return;
+      var o = convidados[outra];
+      if (!o || o.status === 'DECLINOU') return;
+      if (!convidadoCotaItem(o, ik, chaves)) return;
+      var r = (o.respostaItens || {})[ik] || {};
+      if (r.precoUnit == null) semResposta[outra] = true;
+    });
+  });
+  var pendentes = Object.keys(semResposta).length;
+  var restantes = chaves.filter(function(ik) { return !itens[ik].pedidoCompraKey && alvo.indexOf(ik) < 0; }).length;
+  var aviso = 'Fechar ' + alvo.length + ' material(is) com ' + nome + '?' +
+    (pendentes ? '\n\nATENÇÃO: ' + pendentes + ' fornecedor(es) convidado(s) para esses mesmos materiais ainda não responderam. Fechando agora você compra sem comparar com eles.' : '') +
+    (restantes ? '\n\n' + restantes + ' material(is) continuam em cotação neste processo.' : '\n\nEste é o último fornecedor pendente: o processo será encerrado.');
+  if (!confirm(aviso)) return;
+
+  var grupos = {}; grupos[cKey] = alvo;
+  gerarPcsDaCotacao(procKey, proc, itens, grupos, alvo, null);
+}
+
 function gerarPedidosDeCotacaoPorItem(procKey, escolhasTela) {
   var proc = allProcessosCotacao[procKey];
   if (!proc) return;
@@ -4738,8 +4897,11 @@ function gerarPedidosDeCotacaoPorItem(procKey, escolhasTela) {
   Object.keys(itens).forEach(function(itemKey) {
     if (!escolhas[itemKey] && comparacao.vencedorPorItem[itemKey]) escolhas[itemKey] = comparacao.vencedorPorItem[itemKey].cKey;
   });
-  var grupos = {}, erros = [];
+  var grupos = {}, erros = [], jaFechados = 0;
   Object.keys(itens).forEach(function(itemKey) {
+    // Item que já virou PC (fechamento por fornecedor) sai da conta: não
+    // precisa de vencedor nem pode ser comprado de novo.
+    if (itens[itemKey].pedidoCompraKey) { jaFechados++; return; }
     var cKey = escolhas[itemKey], c = convidados[cKey];
     if (!cKey || !c) { erros.push((itens[itemKey].materialCodigo || itemKey) + ': escolha o fornecedor'); return; }
     if (!convidadoCotaItem(c, itemKey, Object.keys(itens))) { erros.push((itens[itemKey].materialCodigo || itemKey) + ': fornecedor não foi convidado'); return; }
@@ -4752,29 +4914,59 @@ function gerarPedidosDeCotacaoPorItem(procKey, escolhasTela) {
     (grupos[cKey] = grupos[cKey] || []).push(itemKey);
   });
   if (erros.length) { showAlert('Não foi possível gerar: ' + erros.join('; '), 'danger'); return; }
-  var scKeys = Object.keys(proc.solicitacoesOrigem || {});
-  if (!scKeys.length) { showAlert('Esse processo não tem solicitações de origem.', 'danger'); return; }
-  // `atual === null` devolve o próprio null (cache frio, ver aprovarSolicitacao);
-  // reserva só vale se o valor FINAL for CONSOLIDADA -- commit de null sobre
-  // null é solicitação inexistente, não reserva.
-  var reservas = scKeys.map(function(scKey) { return db.ref('solicitacoes_compra/' + scKey + '/status').transaction(function(atual) { if (atual === null) return atual; return atual === 'APROVADA' ? 'CONSOLIDADA' : undefined; }); });
-  Promise.all(reservas).then(function(results) {
-    var reservou = function(r) { return r.committed && r.snapshot.val() === 'CONSOLIDADA'; };
-    var falharam = results.filter(function(r) { return !reservou(r); });
-    if (falharam.length) {
-      var reverts = {};
-      results.forEach(function(r, i) { if (reservou(r)) reverts['solicitacoes_compra/' + scKeys[i] + '/status'] = 'APROVADA'; });
-      return db.ref().update(reverts).then(function() { throw new Error('Uma ou mais solicitações já foram consolidadas ou alteradas por outro processo.'); });
-    }
+  var itemKeysTodos = Object.keys(grupos).reduce(function(acc, cKey) { return acc.concat(grupos[cKey]); }, []);
+  if (!itemKeysTodos.length) {
+    showAlert(jaFechados ? 'Todos os materiais deste processo já viraram Pedido de Compra.' : 'Nada a gerar.', 'info');
+    return;
+  }
+  gerarPcsDaCotacao(procKey, proc, itens, grupos, itemKeysTodos, escolhas);
+}
+
+/* Cria os PCs de `grupos` ({cKey: [itemKey]}), reservando antes os itens nas
+   solicitações de origem e carimbando depois o PC que levou cada um. Serve
+   tanto ao fechamento de todos os itens quanto ao de um fornecedor só -- a
+   diferença entre eles é só quais grupos chegam aqui. */
+function gerarPcsDaCotacao(procKey, proc, itens, grupos, itemKeysTodos, escolhas) {
+  reservarItensDaSolicitacao(procKey, itemKeysTodos, itens).then(function(reserva) {
     var cadeia = Promise.resolve(), criados = [];
-    Object.keys(grupos).forEach(function(cKey) { cadeia = cadeia.then(function() { return criarPedidoCotacaoPorFornecedor(procKey, proc, cKey, grupos[cKey]).then(function(pc) { criados.push(pc); }); }); });
+    Object.keys(grupos).forEach(function(cKey) {
+      cadeia = cadeia.then(function() {
+        return criarPedidoCotacaoPorFornecedor(procKey, proc, cKey, grupos[cKey]).then(function(pc) { criados.push(pc); });
+      });
+    });
     return cadeia.then(function() {
-      var pcsPorFornecedor = {}; criados.forEach(function(pc) { pcsPorFornecedor[pc.cKey] = pc.pcKey; });
-      return db.ref('processos_cotacao/' + procKey).update({
-        status: 'DECIDIDO', vencedoresPorItem: escolhas, pedidosCompraGeradosPorFornecedor: pcsPorFornecedor,
-        fornecedorVencedorConvidadoKey: criados.length === 1 ? criados[0].cKey : null,
-        pedidoCompraGeradoKey: criados.length === 1 ? criados[0].pcKey : null
-      }).then(function() { showAlert(criados.length + ' Pedido(s) de Compra criado(s): ' + criados.map(function(pc) { return pc.numero; }).join(', ') + '.', 'success'); });
+      var updates = {};
+      var pcsPorFornecedor = Object.assign({}, proc.pedidosCompraGeradosPorFornecedor || {});
+      criados.forEach(function(pc) {
+        pcsPorFornecedor[pc.cKey] = pc.pcKey;
+        grupos[pc.cKey].forEach(function(ik) {
+          updates['processos_cotacao/' + procKey + '/itens/' + ik + '/pedidoCompraKey'] = pc.pcKey;
+          var it = itens[ik];
+          if (it && it.origemSolicitacaoKey && it.materialCodigo) {
+            updates['solicitacoes_compra/' + it.origemSolicitacaoKey + '/itensConsumidos/' +
+              NecessidadePedidos.chaveItemConsumo(it.materialCodigo) + '/pcKey'] = pc.pcKey;
+          }
+        });
+      });
+      // O processo só fecha quando não sobra material a cotar.
+      var restantes = Object.keys(itens).filter(function(ik) {
+        return !itens[ik].pedidoCompraKey && itemKeysTodos.indexOf(ik) < 0;
+      }).length;
+      var fechou = !restantes;
+      if (escolhas) updates['processos_cotacao/' + procKey + '/vencedoresPorItem'] = escolhas;
+      updates['processos_cotacao/' + procKey + '/pedidosCompraGeradosPorFornecedor'] = pcsPorFornecedor;
+      updates['processos_cotacao/' + procKey + '/status'] = fechou ? 'DECIDIDO' : 'ABERTO';
+      var um = fechou && Object.keys(pcsPorFornecedor).length === 1 ? criados[0] : null;
+      updates['processos_cotacao/' + procKey + '/fornecedorVencedorConvidadoKey'] = um ? um.cKey : null;
+      updates['processos_cotacao/' + procKey + '/pedidoCompraGeradoKey'] = um ? um.pcKey : null;
+      return db.ref().update(updates).then(function() {
+        showAlert(criados.length + ' Pedido(s) de Compra criado(s): ' +
+          criados.map(function(pc) { return pc.numero; }).join(', ') + '.' +
+          (restantes ? ' ' + restantes + ' material(is) seguem em cotação.' : ''), 'success');
+      });
+    }).catch(function(err) {
+      // PC falhou depois da reserva: devolve os itens à cotação.
+      return desfazerConsumo(reserva.scKeys, reserva.porSc).then(function() { throw err; });
     });
   }).catch(function(err) { showAlert('Erro ao gerar pedidos: ' + err.message, 'danger'); });
 }
