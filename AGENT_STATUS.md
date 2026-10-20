@@ -5,6 +5,11 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 ## Em andamento
 
+### Claude — Qualidade A3: assepsia de linha (CK-4) + first article (CK-5) (19/10/2026)
+
+- **Plano:** `PLANO_QUALIDADE.md`, item A3.
+- **Arquivos ativos:** `public/shared/liberacao-linha.js` (novo), `public/shared/liberacao-linha-tela.js` (novo), `public/liberacao_linha.html` (novo), `public/form.html` (só o portão de envase), `public/admin.html` (chave da trava), `public/auth_check.js`, `database.rules.json`, testes `run_liberacao_linha*`.
+
 ### Claude — Qualidade A2: motor de checklists editáveis (19/10/2026)
 
 - **Plano:** `PLANO_QUALIDADE.md`, item A2 (decisão D6).
