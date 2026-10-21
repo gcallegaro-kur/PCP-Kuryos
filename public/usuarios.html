@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/gestao-usuarios.js"></script>
   <link rel="stylesheet" href="shared/theme.css">
   <style>
     /* Achado da auditoria de modo escuro: esta página tinha seu próprio
@@ -151,6 +152,32 @@
       color: #0d9488;
     }
 
+    /* Desativado (21/10): cinza, nao vermelho -- nao e erro, e uma decisao
+       do ADM, e a linha precisa continuar legivel. */
+    .badge.inativo {
+      background: color-mix(in srgb, var(--ink-mute) 18%, var(--panel));
+      color: var(--ink-mute);
+    }
+
+    .acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn-acao {
+      padding: 5px 9px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+      cursor: pointer; white-space: nowrap;
+    }
+    .btn-acao:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .btn-acao:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-acao.perigo:hover:not(:disabled) { border-color: var(--bad, #dc2626); color: var(--bad, #dc2626); }
+    .linha-inativa td { opacity: .55; }
+    .aviso-painel {
+      border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+      margin-bottom: 14px; background: var(--panel); font-size: 13px;
+    }
+    .aviso-painel h3 { font-size: 13px; margin-bottom: 6px; }
+    .aviso-painel ul { margin: 0; padding-left: 18px; }
+    .aviso-painel li { margin: 2px 0; }
+    .sub-nota { font-size: 11px; color: var(--ink-mute); }
+
     select {
       padding: 6px 10px;
       border: 1px solid var(--line);
@@ -257,7 +284,15 @@
     </div>
   </div>
   
+  <div id="painelAvisos"></div>
+
   <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <label style="font-size:12px;display:inline-flex;gap:6px;align-items:center">
+        <input type="checkbox" id="verInativos"> Mostrar desativados
+      </label>
+      <span class="sub-nota" id="contagemUsuarios"></span>
+    </div>
     <div class="table-container">
       <table>
         <thead>
@@ -268,11 +303,12 @@
             <th>Status/Perfil</th>
             <th>Alterar Função</th>
             <th>Módulos liberados</th>
+            <th>Acesso</th>
           </tr>
         </thead>
         <tbody id="users-tbody">
           <tr>
-            <td colspan="6" style="text-align:center; color:var(--ink-mute); padding:30px;">Carregando lista de usuários...</td>
+            <td colspan="7" style="text-align:center; color:var(--ink-mute); padding:30px;">Carregando lista de usuários...</td>
           </tr>
         </tbody>
       </table>
@@ -342,6 +378,12 @@
         if (p && p.role === 'admin' && !jaEscutandoUsuarios) {
           jaEscutandoUsuarios = true;
           listenToUsers();
+          // Lapides de quem foi excluido. A regra deixa so ADM ler; se der
+          // erro, segue vazio -- o painel apenas nao mostra a pendencia.
+          dbOnValue(database.ref('usuarios_removidos'), s2 => {
+            removidosCache = s2.val() || {};
+            if (Object.keys(usuariosCache).length) renderPainel();
+          }, {onError: function() { removidosCache = {}; }, attempts: 0});
         } else if (p && p.role !== 'admin') {
           // Achado do agente de auditoria (4a rodada): o menu mostra este
           // link pra quem tem o módulo "Gestão de Usuários" (ver
@@ -351,7 +393,7 @@
           // Marcar módulos é exclusivo de ADM (pedido do usuário), e a regra
           // de banco em usuarios/$uid já garante isso do lado do servidor.
           document.getElementById('users-tbody').innerHTML =
-            '<tr><td colspan="6" style="text-align:center; color:var(--ink-mute); padding:30px;">' +
+            '<tr><td colspan="7" style="text-align:center; color:var(--ink-mute); padding:30px;">' +
             'Apenas administradores podem gerenciar usuários e módulos de acesso.</td></tr>';
         }
       });
@@ -360,26 +402,42 @@
   
   function listenToUsers() {
     dbOnValue(database.ref('usuarios'), snapshot => {
-      const users = snapshot.val() || {};
+      usuariosCache = snapshot.val() || {};
+      renderUsuarios();
+    });
+  }
+
+  /* Separado do listener para o filtro "Mostrar desativados" poder
+     redesenhar sem abrir um segundo listener no mesmo no. */
+  function renderUsuarios() {
+      const users = usuariosCache || {};
       const tbody = document.getElementById('users-tbody');
       tbody.innerHTML = '';
       
       const uids = Object.keys(users);
       if (uids.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--ink-mute);">Nenhum usuário cadastrado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--ink-mute);">Nenhum usuário cadastrado.</td></tr>';
         return;
       }
-      usuariosCache = users;
-      
-      // Sort users: pendings first, then by date desc
+      // Pendentes na frente (precisam de decisao), desativados no fim
+      // (ja foram decididos). Desativado so aparece com o filtro marcado:
+      // sem isso a lista acumularia ex-funcionario para sempre.
+      const verInativos = document.getElementById('verInativos').checked;
       const sortedUsers = uids.map(uid => ({
         uid: uid,
         ...users[uid]
-      })).sort((a, b) => {
+      })).filter(u => verInativos || GestaoUsuarios.ativo(u)).sort((a, b) => {
+        const ia = GestaoUsuarios.ativo(a) ? 0 : 1, ib = GestaoUsuarios.ativo(b) ? 0 : 1;
+        if (ia !== ib) return ia - ib;
         if (a.role === 'pending' && b.role !== 'pending') return -1;
         if (a.role !== 'pending' && b.role === 'pending') return 1;
         return new Date(b.created_at || 0) - new Date(a.created_at || 0);
       });
+      const resumoU = GestaoUsuarios.resumo(users, removidosCache, new Date().toISOString());
+      document.getElementById('contagemUsuarios').textContent =
+        resumoU.ativos + ' com acesso · ' + resumoU.pendentes.length + ' pendente(s) · ' +
+        resumoU.inativos + ' desativado(s)';
+      renderPainel();
       
       sortedUsers.forEach(u => {
         const tr = document.createElement('tr');
@@ -389,8 +447,15 @@
         const badgeClasses = { 'pending': 'pending', 'production': 'production', 'admin': 'admin', 'pcp': 'pcp', 'rotulagem': 'rotulagem', 'logistica': 'pcp', 'rh': 'rh', 'gestor': 'gestor', 'qualidade': 'qualidade' };
         const badgeLabels = { 'pending': 'Pendente', 'production': 'Produção', 'admin': 'Administrador', 'pcp': 'PCP', 'rotulagem': 'Rotulagem', 'logistica': 'Logística', 'rh': 'RH Central', 'gestor': 'Gestor de Linha', 'qualidade': 'Qualidade' };
         
-        const badgeClass = badgeClasses[u.role] || 'pending';
-        const badgeLabel = badgeLabels[u.role] || u.role;
+        let badgeClass = badgeClasses[u.role] || 'pending';
+        let badgeLabel = badgeLabels[u.role] || u.role;
+        if (!GestaoUsuarios.ativo(u)) {
+          // O selo diz DESATIVADO, nao o papel: o papel dele e irrelevante
+          // enquanto nao tem acesso, e mostrar "PCP" sugeriria que entra.
+          badgeClass = 'inativo';
+          badgeLabel = 'Desativado';
+          tr.className = 'linha-inativa';
+        }
         
         // Disable dropdown for the logged-in administrator itself to prevent accidental lockouts!
         const selfLogged = firebase.auth().currentUser.uid === u.uid;
@@ -416,13 +481,19 @@
             </select>
           </td>
           <td>${celulaModulos(u, selfLogged)}</td>
+          <td>${celulaAcesso(u, selfLogged)}</td>
         `;
 
         const btnMod = tr.querySelector('.btn-mod');
         if (btnMod) btnMod.addEventListener('click', () => abrirModulos(u.uid));
+        const btnDes = tr.querySelector('.btn-desativar');
+        if (btnDes) btnDes.addEventListener('click', () => desativarUsuario(u.uid));
+        const btnRea = tr.querySelector('.btn-reativar');
+        if (btnRea) btnRea.addEventListener('click', () => reativarUsuario(u.uid));
+        const btnExc = tr.querySelector('.btn-excluir');
+        if (btnExc) btnExc.addEventListener('click', () => excluirUsuario(u.uid));
         tbody.appendChild(tr);
       });
-    });
   }
   
   /* ══════════════════════════════════════════════════════════════════
@@ -578,6 +649,152 @@
     });
   }
   
+  /* ══════════════════════════════════════════════════════════════════
+     DESATIVAR / REATIVAR / EXCLUIR  (21/10/2026)
+
+     Duas operacoes diferentes, e isso define a tela:
+      - Desativar/excluir tiram o acesso ao APP. Funciona hoje: auth_check.js
+        barra `ativo === false` e trata perfil ausente como "sem perfil".
+      - Apagar a CREDENCIAL (conta do Firebase Auth) exige Admin SDK, que vive
+        nas Cloud Functions -- mortas pelo incidente de billing. A tela NAO
+        consegue, entao `excluir` deixa lapide em usuarios_removidos com
+        `authPendente`, e o painel cobra o passo no Console. Sem isso a conta
+        viraria fantasma: autentica, leva "acesso pendente" e nao aparece em
+        lista nenhuma -- medido em 21/10, JA existiam 2 assim.
+
+     Regra de negocio pura em shared/gestao-usuarios.js (travas inclusive).
+     ══════════════════════════════════════════════════════════════════ */
+  var removidosCache = {};
+  function autorAtual() {
+    return (window.currentUser && window.currentUser.nome) ||
+      ((firebase.auth().currentUser || {}).email) || 'desconhecido';
+  }
+  function uidAtual() { return (firebase.auth().currentUser || {}).uid || null; }
+
+  function celulaAcesso(u, selfLogged) {
+    if (selfLogged) return '<span class="sub-nota">Seu próprio acesso</span>';
+    const trava = GestaoUsuarios.podeRemover(usuariosCache, u.uid, uidAtual());
+    if (!GestaoUsuarios.ativo(u)) {
+      const quando = u.desativadoEm ? new Date(u.desativadoEm).toLocaleDateString('pt-BR') : '';
+      return '<div class="acoes">' +
+        '<button class="btn-acao btn-reativar">Reativar</button>' +
+        '<button class="btn-acao perigo btn-excluir">Excluir</button></div>' +
+        '<div class="sub-nota">Desativado' + (quando ? ' em ' + quando : '') +
+        (u.desativadoPor ? ' por ' + escapeHtml(u.desativadoPor) : '') + '</div>';
+    }
+    if (!trava.ok) {
+      // A trava explica POR QUE, senao o botao cinza parece bug.
+      return '<span class="sub-nota">' + escapeHtml(trava.motivo) + '</span>';
+    }
+    const recomenda = GestaoUsuarios.recomendaExcluir(u);
+    return '<div class="acoes">' +
+      '<button class="btn-acao btn-desativar">Desativar</button>' +
+      '<button class="btn-acao perigo btn-excluir">Excluir</button></div>' +
+      '<div class="sub-nota">' + (recomenda
+        ? 'Nunca foi aprovado — pode excluir'
+        : 'Prefira desativar: preserva o histórico de quem assinou') + '</div>';
+  }
+
+  function desativarUsuario(uid) {
+    const u = usuariosCache[uid] || {};
+    const trava = GestaoUsuarios.podeRemover(usuariosCache, uid, uidAtual());
+    if (!trava.ok) return showToast(trava.motivo);
+    if (!confirm('Desativar o acesso de ' + (u.nome || uid) + '?\n\n' +
+      'Ele perde o acesso a todas as telas na hora, mas continua na lista e o histórico é preservado. Dá para reativar depois.')) return;
+    let upd;
+    try { upd = GestaoUsuarios.desativar(uid, {por: autorAtual()}); }
+    catch (e) { return showToast(e.message); }
+    // Promise.resolve: throw sincrono do SDK nao e pego por .catch (CLAUDE.md).
+    Promise.resolve().then(() => database.ref().update(upd))
+      .then(() => showToast('Acesso de ' + (u.nome || uid) + ' desativado.'))
+      .catch(err => { console.error(err); showToast('Erro ao desativar: ' + err.message); });
+  }
+
+  function reativarUsuario(uid) {
+    const u = usuariosCache[uid] || {};
+    if (!confirm('Reativar o acesso de ' + (u.nome || uid) + '?\n\n' +
+      'Ele volta com o perfil "' + (u.role || 'pendente') + '" que já tinha.')) return;
+    let upd;
+    try { upd = GestaoUsuarios.reativar(uid, {por: autorAtual()}); }
+    catch (e) { return showToast(e.message); }
+    Promise.resolve().then(() => database.ref().update(upd))
+      .then(() => showToast('Acesso de ' + (u.nome || uid) + ' reativado.'))
+      .catch(err => { console.error(err); showToast('Erro ao reativar: ' + err.message); });
+  }
+
+  function excluirUsuario(uid) {
+    const u = usuariosCache[uid] || {};
+    const trava = GestaoUsuarios.podeRemover(usuariosCache, uid, uidAtual());
+    if (!trava.ok) return showToast(trava.motivo);
+    if (!confirm('EXCLUIR ' + (u.nome || uid) + ' da lista?\n\n' +
+      'O acesso cai na hora e o registro sai do cadastro — isto NÃO dá para desfazer pelo app.\n\n' +
+      'A conta de login (' + (u.email || 'sem e-mail') + ') continua existindo no Firebase e vai aparecer como pendência para apagar no Console.\n\n' +
+      'Se a pessoa já trabalhou no sistema, prefira Desativar.')) return;
+    let upd;
+    try { upd = GestaoUsuarios.excluir(uid, u, {por: autorAtual()}); }
+    catch (e) { return showToast(e.message); }
+    Promise.resolve().then(() => database.ref().update(upd))
+      .then(() => showToast((u.nome || uid) + ' foi excluído. Falta apagar a conta de login no Console.'))
+      .catch(err => { console.error(err); showToast('Erro ao excluir: ' + err.message); });
+  }
+
+  function confirmarAuthApagado(uid) {
+    const r = removidosCache[uid] || {};
+    if (!confirm('Confirmar que a conta de login ' + (r.email || uid) + ' já foi apagada no Console do Firebase?\n\n' +
+      'Isto só tira a pendência desta lista — não apaga nada.')) return;
+    let upd;
+    try { upd = GestaoUsuarios.marcarAuthApagado(uid, {por: autorAtual()}); }
+    catch (e) { return showToast(e.message); }
+    Promise.resolve().then(() => database.ref().update(upd))
+      .then(() => showToast('Pendência encerrada.'))
+      .catch(err => { console.error(err); showToast('Erro: ' + err.message); });
+  }
+
+  /* Painel do ADM: so aparece o que precisa de decisao. Pendente ordenado
+     pelo que espera ha mais tempo -- medido em 21/10, uma pessoa estava
+     pendente desde julho e a lista nao dizia isso em lugar nenhum. */
+  function renderPainel() {
+    const alvo = document.getElementById('painelAvisos');
+    if (!alvo) return;
+    const r = GestaoUsuarios.resumo(usuariosCache, removidosCache, new Date().toISOString());
+    let h = '';
+    const esperando = r.pendentes.filter(p => (p.diasEsperando || 0) >= 7);
+    if (esperando.length) {
+      h += '<div class="aviso-painel"><h3>⏳ Cadastro esperando aprovação há mais de 7 dias</h3><ul>' +
+        esperando.map(p => '<li><b>' + escapeHtml(p.nome || p.uid) + '</b> (' + escapeHtml(p.email || 'sem e-mail') +
+          ') — ' + p.diasEsperando + ' dias</li>').join('') +
+        '</ul><div class="sub-nota">Defina o perfil na linha dele, ou exclua se não for usar.</div></div>';
+    }
+    const dupE = r.duplicados.porEmail, dupN = r.duplicados.porNome;
+    if (dupE.length || dupN.length) {
+      h += '<div class="aviso-painel"><h3>👥 Mesma pessoa com mais de um login</h3><ul>' +
+        dupE.map(g => '<li>' + escapeHtml(g.chave) + ' — <b>' + g.usuarios.length + ' logins</b>: ' +
+          g.usuarios.map(x => escapeHtml(x.nome || x.uid) + ' (' + x.role + ')').join(', ') + '</li>').join('') +
+        dupN.filter(g => !dupE.some(e => e.usuarios.some(u2 => g.usuarios.some(u3 => u3.uid === u2.uid))))
+          .map(g => '<li>' + escapeHtml(g.chave) + ' — <b>' + g.usuarios.length + ' logins</b>, e-mails diferentes: ' +
+            g.usuarios.map(x => escapeHtml(x.email || x.uid)).join(', ') + '</li>').join('') +
+        '</ul><div class="sub-nota">Mantenha o login que a pessoa usa e exclua os outros.</div></div>';
+    }
+    if (r.authPendente.length) {
+      h += '<div class="aviso-painel"><h3>🔑 Conta de login a apagar no Console do Firebase</h3>' +
+        '<div class="sub-nota" style="margin-bottom:6px">Estes foram excluídos da lista, mas a credencial ainda existe — ' +
+        'o app não consegue apagá-la (precisa das Cloud Functions, fora do ar). ' +
+        'Apague em Firebase &rsaquo; Authentication e confirme aqui.</div><ul>' +
+        r.authPendente.map(x => '<li><b>' + escapeHtml(x.nome || x.uid) + '</b> (' + escapeHtml(x.email || 'sem e-mail') +
+          ') — excluído em ' + (x.removidoEm ? new Date(x.removidoEm).toLocaleDateString('pt-BR') : '?') +
+          ' <button class="btn-acao" data-auth-ok="' + escapeHtml(x.uid) + '">Já apaguei</button></li>').join('') +
+        '</ul></div>';
+    }
+    alvo.innerHTML = h;
+    alvo.querySelectorAll('[data-auth-ok]').forEach(b => {
+      b.addEventListener('click', () => confirmarAuthApagado(b.getAttribute('data-auth-ok')));
+    });
+  }
+
+  document.getElementById('verInativos').addEventListener('change', function() {
+    if (Object.keys(usuariosCache).length) renderUsuarios();
+  });
+
   function showToast(text) {
     const toast = document.getElementById('toast');
     toast.textContent = text;

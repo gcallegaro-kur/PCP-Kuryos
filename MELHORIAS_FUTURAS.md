@@ -979,6 +979,58 @@ clientes. Motor em `public/shared/responsavel-comercial.js`.
   guardar o responsável — a tela mostra "—" e não oferece atribuição. Resolver
   isso é o mesmo trabalho de cadastrar o cliente de verdade.
 
+## Desativar e excluir usuário — o que ficou de fora (2026-10-21)
+
+Entregue: `shared/gestao-usuarios.js`, botões **Desativar / Reativar /
+Excluir** em `usuarios.html`, `usuarios/{uid}/ativo` barrado em
+`auth_check.js`, lápide em `usuarios_removidos/{uid}`, painel de pendências
+(pendente há +7 dias, duplicata, conta de login a apagar) e a **trava de
+duplo clique no cadastro** de `login.html` — que era a causa raiz.
+
+- **A tela não apaga a credencial, e isso é limitação de infra, não
+  escolha.** Apagar conta do Firebase Auth exige Admin SDK, que vive nas
+  Cloud Functions, **mortas pelo incidente de billing de 19/10**. Por isso
+  `excluir` grava `authPendente: true` e o painel cobra o passo no Console.
+  Quando o billing voltar: uma function `excluirUsuario` chamada pela tela
+  fecharia o ciclo num clique, e o `authPendente` deixaria de existir.
+  Enquanto isso, `scripts/limpar-logins-duplicados.js` faz os dois lados.
+- **Conta no Auth SEM registro no RTDB continua invisível na tela.** Medido
+  em 21/10: `S48tfSML` (tom@kuryos.com.br) e `TReOaKIo`
+  (gustavosilvabraulio20@gmail.com) autenticam, levam "acesso pendente" e
+  **não aparecem em lugar nenhum do app** — `usuarios.html` lista o RTDB, e
+  listar o Auth exige Admin SDK. O painel só vê o que tem lápide. Para
+  torná-las visíveis sem apagar nada, basta gravar lápide com
+  `authPendente: true` nesses dois uids; ficou pendente de decisão do
+  usuário, que limitou a limpeza de 21/10 às duplicatas da Luana.
+- **O projeto aceita várias contas com o MESMO e-mail.** É o que permitiu 3
+  contas `lauarlata@gmail.com`. A trava de duplo clique corta o caminho mais
+  comum, mas a configuração continua permissiva — é um toggle do Console
+  (Authentication > Settings > "uma conta por e-mail"). Ligar isso fecharia a
+  porta de vez; não foi mexido porque é config de projeto, não código.
+- **Duplicatas de setembro não foram limpas** (decisão do usuário em 21/10,
+  "só as de hoje"): `tom@kuryos.com.br` x2, `gustavosilvabraulio20@gmail.com`
+  x2, Roberta Ramos com `.com` e `.com.br`, e `AadKYuWD`
+  (adlaiadlai.alberto@..., **registro no RTDB sem conta no Auth** — linha
+  morta, ninguém consegue logar nela). O painel novo aponta todas.
+- **Autocadastro segue aberto** (decisão do usuário): qualquer um com o link
+  cria conta como `pending`. O painel agora cobra pendente com mais de 7 dias
+  — medido, uma pessoa estava assim desde julho. Fechar o autocadastro
+  exigiria o ADM criar conta pelo app, que também depende de Admin SDK.
+- **Excluir não tem desfazer pelo app.** A lápide guarda nome, e-mail, papel
+  e quando a conta nasceu, mas recriar o acesso passa pelo Console (ou pela
+  pessoa se cadastrar de novo). Um botão "restaurar da lápide" é possível e
+  fácil (o registro todo está ali), mas não foi pedido.
+- **Histórico sobrevive à exclusão porque o nome é gravado como TEXTO** no
+  próprio apontamento, auditoria 5S e laudo. O que se perde é o vínculo pelo
+  uid (ex.: `responsavelUid` da 5S, `uidLogin` de
+  `comercial_config/responsaveis`). Nenhuma tela resolve nome a partir de
+  `usuarios/{uid}` em tempo de render, então nada fica em branco — confirmado
+  na implementação, não suposto.
+- **Desativado some da lista por padrão** (filtro "Mostrar desativados"). Com
+  o tempo isso acumula; uma limpeza periódica de quem está inativo há mais de
+  um ano seria o próximo passo, mas só faz sentido depois de o RH ter o
+  desligamento registrado em `rh_colaboradores`.
+
 ## Qualidade
 
 **Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.

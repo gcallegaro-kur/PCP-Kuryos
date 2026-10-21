@@ -48,6 +48,15 @@
         ".write": "auth != null && ((auth.uid == $uid && !data.exists()) || root.child('usuarios').child(auth.uid).child('role').val() == 'admin')"
       }
     },
+    "usuarios_removidos": {
+      // Lapide de usuario excluido (21/10). A conta no Firebase Auth sobrevive
+      // a exclusao -- a tela nao consegue apagar credencial (precisa de Admin
+      // SDK, nas Cloud Functions, fora do ar pelo billing). Sem este registro
+      // a conta viraria fantasma: autentica, leva "acesso pendente" e nao
+      // aparece em lista nenhuma. So ADM le e escreve, como /usuarios.
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'",
+      ".write": "auth != null && root.child('usuarios').child(auth.uid).child('role').val() == 'admin'"
+    },
     "produtos": {
       ".read": "auth != null",
       ".write": "(auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp')) || (auth != null && (root.child('usuarios').child(auth.uid).child('modulos').child('cadastros').val() == true))"

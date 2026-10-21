@@ -213,7 +213,7 @@
       <label for="login-password">Senha</label>
       <input type="password" id="login-password" required placeholder="Sua senha">
     </div>
-    <button type="submit" class="btn">Entrar no Sistema</button>
+    <button type="submit" class="btn" id="btn-login">Entrar no Sistema</button>
   </form>
   
   <!-- Form Cadastro -->
@@ -230,7 +230,7 @@
       <label for="reg-password">Senha</label>
       <input type="password" id="reg-password" required minlength="6" placeholder="Mínimo 6 caracteres">
     </div>
-    <button type="submit" class="btn">Criar Conta</button>
+    <button type="submit" class="btn" id="btn-register">Criar Conta</button>
   </form>
 </div>
 
@@ -267,6 +267,9 @@
   // Check URL query parameters for pending status
   window.onload = function() {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'inativo') {
+      showFeedback('error', 'Acesso desativado: Seu acesso ao sistema foi desativado por um administrador. Procure o PCP se isso for um engano.');
+    }
     if (params.get('status') === 'pending') {
       showFeedback('warning', 'Acesso pendente: Sua conta foi criada, mas ainda não foi ativada por um administrador. Entre em contato para liberação.');
     }
@@ -277,7 +280,10 @@
         db.ref('usuarios/' + user.uid).once('value')
           .then(snap => {
             const profile = snap.val();
-            if (profile && profile.role !== 'pending') {
+            // `ativo !== false`: sem isto, quem foi desativado seria mandado de
+            // volta pro app aqui, o auth_check o devolveria para ca, e as duas
+            // paginas ficariam em laco.
+            if (profile && profile.role !== 'pending' && profile.ativo !== false) {
               // Already approved, redirect
               redirectUser(profile.role);
             }
@@ -289,6 +295,25 @@
     });
   };
   
+  /* CAUSA RAIZ das contas duplicadas (medida em 21/10): o botao de cadastro
+     nao era desabilitado durante o envio. Os 3 logins da Luana nasceram no
+     MESMO segundo (14:04:19) -- duplo/triplo clique disparou
+     createUserWithEmailAndPassword varias vezes, e o projeto aceita varias
+     contas com o mesmo e-mail. Mesma assinatura em tom@kuryos.com.br (x2) e
+     gustavosilvabraulio20@gmail.com (x2). Resultado: 25 contas no Auth para
+     ~19 pessoas. Travar o botao e o conserto, nao enfeite. */
+  var enviando = false;
+  function travarEnvio(idBotao, texto) {
+    enviando = true;
+    var b = document.getElementById(idBotao);
+    if (b) { b.disabled = true; b.dataset.rotulo = b.textContent; b.textContent = texto; }
+  }
+  function liberarEnvio(idBotao) {
+    enviando = false;
+    var b = document.getElementById(idBotao);
+    if (b) { b.disabled = false; if (b.dataset.rotulo) b.textContent = b.dataset.rotulo; }
+  }
+
   function switchTab(mode) {
     const tabLogin = document.getElementById('tab-login');
     const tabRegister = document.getElementById('tab-register');
@@ -325,18 +350,27 @@
   
   function handleLogin(e) {
     e.preventDefault();
+    if (enviando) return;
     const email = document.getElementById('login-email').value.trim();
     const pass = document.getElementById('login-password').value;
     const feedback = document.getElementById('feedback');
     
     feedback.style.display = 'none';
     
+    travarEnvio('btn-login', 'Entrando...');
     auth.signInWithEmailAndPassword(email, pass)
       .then(cred => {
         return db.ref('usuarios/' + cred.user.uid).once('value')
           .then(snap => {
             const profile = snap.val();
-            if (!profile || profile.role === 'pending') {
+            // Conta desativada pelo ADM: dizer "pendente de aprovacao" faria a
+            // pessoa esperar por uma liberacao que ninguem vai dar.
+            if (profile && profile.ativo === false) {
+              liberarEnvio('btn-login');
+              showFeedback('error', 'Acesso desativado: Seu acesso ao sistema foi desativado por um administrador. Procure o PCP se isso for um engano.');
+              auth.signOut();
+            } else if (!profile || profile.role === 'pending') {
+              liberarEnvio('btn-login');
               showFeedback('error', 'Acesso pendente: Sua conta ainda não foi aprovada pelo Administrador.');
               auth.signOut();
             } else {
@@ -344,10 +378,12 @@
             }
           })
           .catch(err => {
+            liberarEnvio('btn-login');
             showFeedback('error', 'Login realizado, mas houve um erro ao carregar seu perfil de acesso. Tente novamente em instantes. (' + err.message + ')');
           });
       })
       .catch(err => {
+        liberarEnvio('btn-login');
         let msg = 'Erro ao realizar login. Verifique seu e-mail e senha.';
         if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
           msg = 'E-mail ou senha incorretos.';
@@ -362,6 +398,7 @@
   
   function handleRegister(e) {
     e.preventDefault();
+    if (enviando) return;  // segundo clique nao cria uma segunda conta
     const name = document.getElementById('reg-name').value.trim();
     const email = document.getElementById('reg-email').value.trim();
     const pass = document.getElementById('reg-password').value;
@@ -369,6 +406,7 @@
     
     feedback.style.display = 'none';
     
+    travarEnvio('btn-register', 'Criando conta...');
     auth.createUserWithEmailAndPassword(email, pass)
       .then(cred => {
         // Create user node in DB. Achado do agente de auditoria (4a rodada):
@@ -385,17 +423,20 @@
           created_at: new Date().toISOString()
         })
         .then(() => {
+          liberarEnvio('btn-register');
           auth.signOut(); // logout newly created user
           showFeedback('success', 'Cadastro realizado com sucesso! Sua conta (' + email + ') agora aguarda ativação pelo administrador do PCP.');
           document.getElementById('form-register').reset();
           switchTab('login');
         })
         .catch(err => {
+          liberarEnvio('btn-register');
           auth.signOut();
           showFeedback('error', 'Sua conta foi criada, mas houve uma falha ao salvar seu perfil de acesso. Contate o administrador do PCP informando o e-mail ' + email + '. (' + err.message + ')');
         });
       })
       .catch(err => {
+        liberarEnvio('btn-register');
         let msg = 'Erro ao criar conta. Tente novamente.';
         if (err.code === 'auth/email-already-in-use') {
           msg = 'Este e-mail já está em uso por outro usuário.';

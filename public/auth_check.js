@@ -454,7 +454,23 @@ window.currentUser = null;
         readUsuarioProfileWithRetry(db, user.uid, snapshot => {
           const profile = snapshot.val();
 
-          if (!profile || profile.role === 'pending') {
+          if (profile && profile.ativo === false) {
+            // Acesso DESATIVADO pelo ADM (21/10). Sai do ar em toda página --
+            // sem esta ponta o botão "Desativar" de usuarios.html ficaria
+            // decorativo, que é a armadilha de "regra de nó novo" do CLAUDE.md.
+            // `=== false` de propósito: registro antigo não tem o campo, e
+            // tratar ausência como inativo trancaria todo mundo no deploy.
+            //
+            // signOut antes de redirecionar NÃO é zelo: `login.html` manda de
+            // volta pro app quem tem perfil com papel != 'pending', então sem
+            // encerrar a sessão isto viraria laço entre as duas páginas.
+            clearAuthWatchdog();
+            firebase.auth().signOut().then(function() {
+              window.location.href = 'login.html?status=inativo';
+            }).catch(function() {
+              window.location.href = 'login.html?status=inativo';
+            });
+          } else if (!profile || profile.role === 'pending') {
             // Sem perfil ou pendente de aprovação
             clearAuthWatchdog();
             if (activePage !== 'login.html') {
