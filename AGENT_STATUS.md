@@ -157,6 +157,15 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Pesagens: o que foi pesado no dia + pendências para cobrar (21/10/2026)
+
+- **Pedido:** "consigo verificar o que pesou no dia, isso ajuda a gente ir lá cobrar caso não tenha pesado". Regra do usuário: pesar BEM antes do envase (ideal 3–5 dias); ferramenta para todos, principalmente o PCP.
+- **Feito:** `shared/pesagens-dia.js` (puro): `pesagensDoDia(ops, dia)` lê `ops/*/manipulacao/pesagem/parcelas` (dia/hora em São Paulo; por operador, por OP, cada pesagem com foto; cancelada não soma) e `pendencias(ops, programacao, hoje, {ideal, janela})` (OP aberta que `exigeBulk`, sem pesagem concluída e que ainda não envasou → ATRASADA / FORA_META / NA_JANELA / FUTURA / SEM_DATA). Tela nova `pesagens.html` (abas "Pesado no dia" e "Pendências para cobrar", meta configurável 3/5 dias, botão "Copiar lista para cobrar"). Menu: PCP › Pesagens e Manipulação › Pesagens do dia; acesso por `planejamento`, `emitir_op`, `manipulacao`, `conferencia_pesagem`.
+- **Limite conhecido:** a grade `programacao` guarda pedido+SKU, não a OP; com várias OPs no mesmo pedido a data de envase é a primeira da grade (a tela marca "aprox."). OPs com fórmula emitidas antes de 24/09 não entram (bulk feito fora do sistema).
+- **Medido na base (21/10):** 32 pesagens em 20/10 e 18 em 19/10; 7 OPs em pendência (2 com envase hoje sem pesagem iniciada: 26293/03 e 26293/04; 5 sem data na grade).
+- **Testes:** `run_pesagens_dia_test.js`, `run_pesagens_dia_ui_test.js`.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Consulta de Estoque: botão "Gerar PDF" (21/10/2026)
 
 - **Pedido:** relatório de inventário da Consulta de Estoque em PDF, com logotipo e visual profissional.

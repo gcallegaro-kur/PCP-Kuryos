@@ -96,18 +96,18 @@ const KURYOS_MODULOS = {
   apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
                   paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html', 'liberacao_linha.html'] },
   manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
-                  paginas: ['manipulacao.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
+                  paginas: ['manipulacao.html', 'pesagens.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
                   paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   // Quem pode conferir a pesagem enquanto a chave "Conferência de Pesagem"
   // (Ajustes) estiver ligada -- Qualidade e P&D. Dá acesso só à tela da
   // Manipulação; conferir é a única ação que a tela oferece a quem só tem isto.
   conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
-                  paginas: ['manipulacao.html'] },
+                  paginas: ['manipulacao.html', 'pesagens.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html', 'consulta_estoque.html', 'o_que_comprar.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'pesagens.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html', 'consulta_estoque.html', 'o_que_comprar.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
-                  paginas: ['emitir_op.html', 'dossie_lote.html'] },
+                  paginas: ['emitir_op.html', 'dossie_lote.html', 'pesagens.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
                   paginas: ['comercial.html', 'gestao_comercial.html', 'devolucoes.html', 'relatorio_pedido.html'] },
   pedidos:      { rotulo: 'Pedidos e MRP',         desc: 'Backlog de produção e Matriz de Insumos',
@@ -734,6 +734,7 @@ function renderUnifiedNavbar(user) {
     temMod('planejamento') && ktLink('ops.html', 'gear', 'Controle de OPs', activePage),
     temMod('emitir_op') && ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage),
     temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage),
+    (temMod('planejamento') || temMod('emitir_op')) && ktLink('pesagens.html', 'flask', 'Pesagens', activePage),
     temMod('pedidos') && ktLink('pedidos.html', 'list', 'Pedidos', activePage),
     temMod('pedidos') && ktLink('relatorio_pedido.html', 'chart', 'Relatório de Pedido', activePage),
     // "Matriz de Insumos > MRP" -- por ora só o rótulo muda (confirmado
@@ -837,6 +838,7 @@ function renderUnifiedNavbar(user) {
     sub('Manipulação', [
       setores.manipulacao && ktLink('proximas_ordens.html?setor=manipulacao', 'list', 'Próximas Ordens', activePage),
       (setores.manipulacao || temMod('conferencia_pesagem')) && ktLink('manipulacao.html', 'flask', setores.manipulacao ? 'Pesagem e Manipulação' : 'Conferência de Pesagem', activePage),
+      (setores.manipulacao || temMod('conferencia_pesagem')) && ktLink('pesagens.html', 'list', 'Pesagens do dia', activePage),
       setores.manipulacao && ktLink('estoque_setor.html?setor=manipulacao', 'warehouse', 'Estoque da Manipulação', activePage)
     ]),
     sub('Rotulagem', [

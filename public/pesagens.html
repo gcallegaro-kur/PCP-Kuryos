@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pesagens</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/pesagens-dia.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:10px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .card-body{padding:14px 16px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none}
+    .btn-primary{background:var(--primary);color:#fff}.btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .busca{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;color:var(--text);background:var(--card)}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:7px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    tr.clicavel{cursor:pointer}tr.clicavel:hover{background:var(--tint-blue-bg)}
+    .num{text-align:right;white-space:nowrap}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13.5px}
+    .hint{font-size:11.5px;color:var(--muted)}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}.badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}.badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 16px}
+    .campo .rot{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+    .campo .val{font-size:14px;font-weight:600;margin-top:2px;word-break:break-word}
+    .mp{border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;break-inside:avoid}
+    .mp-topo{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .fotos{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+    .foto{width:150px;font-size:11.5px}
+    .foto img{width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid var(--border);display:block;background:var(--tint-gray-bg)}
+    .foto.cancelada{opacity:.55}.foto.cancelada .leg b{text-decoration:line-through}
+    .foto .leg{margin-top:4px;line-height:1.35}
+    .sem-foto{width:150px;height:150px;border-radius:10px;border:2px dashed var(--danger);display:flex;align-items:center;justify-content:center;color:var(--danger);font-weight:700}
+    .tempo{border-left:2px solid var(--border);margin-left:6px;padding-left:14px}
+    .ev{position:relative;padding:5px 0;font-size:13px}
+    .ev::before{content:'';position:absolute;left:-20px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+    .ev .quando{font-size:11.5px;color:var(--muted);display:inline-block;min-width:118px}
+    .ev .etapa{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-right:6px}
+    .aviso{background:var(--tint-orange-bg);color:var(--tint-orange-fg);padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
+    .rolagem{overflow-x:auto}
+    #dossie{display:none}
+    @media(max-width:700px){
+      .header,.main{max-width:100%;padding-left:12px;padding-right:12px}
+      .header h1{font-size:22px}
+      .foto,.foto img,.sem-foto{width:130px}.foto img,.sem-foto{height:130px}
+      .card-body,.card-header{padding:12px}
+    }
+    /* Impressão / PDF: só o dossiê, sem menu nem busca. */
+    @media print{
+      body{background:#fff;color:#000}
+      .nao-imprime,#kuryos-sidebar,.kt-sidebar,nav,aside{display:none!important}
+      body.has-sidebar{padding-left:0!important;margin-left:0!important}
+      .card{box-shadow:none;border:1px solid #ccc;break-inside:avoid-page}
+      .main,.header{max-width:100%}
+      a{color:#000;text-decoration:none}
+    }
+    .abas{display:flex;gap:6px;margin:6px 0 14px;flex-wrap:wrap}
+    .aba{padding:9px 16px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:13.5px;cursor:pointer}
+    .aba.ativa{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+    .kpi b{display:block;font-size:24px}.kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.3px}
+    .ctrl{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+    .ctrl input,.ctrl select{padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:14px}
+    td.num,th.num{text-align:right;white-space:nowrap}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Pesagens</h1>
+    <div class="header-sub">O que foi pesado em cada dia e o que ainda precisa ser pesado antes do envase — a meta é pesar de 3 a 5 dias antes</div>
+  </div>
+</div>
+<div class="main">
+  <div class="abas">
+    <button type="button" class="aba ativa" data-aba="dia">Pesado no dia</button>
+    <button type="button" class="aba" data-aba="pend">Pendências para cobrar <span class="badge badge-red" id="pBadge" style="display:none"></span></button>
+  </div>
+
+  <section id="abaDia">
+    <div class="card"><div class="card-body ctrl">
+      <button type="button" class="btn btn-ghost" id="dAnt" title="Dia anterior">◀</button>
+      <div><label class="hint" for="dData" style="display:block">Dia</label><input type="date" id="dData"></div>
+      <button type="button" class="btn btn-ghost" id="dProx" title="Próximo dia">▶</button>
+      <button type="button" class="btn btn-ghost" id="dHoje">Hoje</button>
+      <div><label class="hint" for="dOper" style="display:block">Operador</label><select id="dOper"><option value="">Todos</option></select></div>
+      <span class="hint" id="dResumo">Carregando...</span>
+    </div></div>
+    <div class="kpis" id="dKpis"></div>
+    <div class="card"><div class="card-header"><h3>Por operador</h3></div><div class="card-body rolagem"><table>
+      <thead><tr><th>Operador</th><th class="num">Pesagens</th><th class="num">Total (kg)</th><th class="num">OPs</th><th>Primeira / última</th><th class="num">Sem foto</th></tr></thead>
+      <tbody id="dPorOper"></tbody></table></div></div>
+    <div class="card"><div class="card-header"><h3>Por OP</h3></div><div class="card-body rolagem"><table>
+      <thead><tr><th>Lote</th><th>Produto</th><th class="num">Pesagens</th><th class="num">Total (kg)</th><th>MPs pesadas da OP</th><th>Estado do bulk</th></tr></thead>
+      <tbody id="dPorOp"></tbody></table></div></div>
+    <div class="card"><div class="card-header"><h3>Cada pesagem</h3></div><div class="card-body rolagem"><table>
+      <thead><tr><th>Hora</th><th>Operador</th><th>Lote da OP</th><th>Matéria-prima</th><th>Lote da MP</th><th class="num">Quantidade</th><th>Foto</th></tr></thead>
+      <tbody id="dLinhas"></tbody></table></div></div>
+  </section>
+
+  <section id="abaPend" style="display:none">
+    <div class="card"><div class="card-body ctrl">
+      <div><label class="hint" for="pIdeal" style="display:block">Meta: pesar até (dias antes do envase)</label><input type="number" id="pIdeal" min="1" max="30" value="3" style="width:90px"></div>
+      <div><label class="hint" for="pJanela" style="display:block">Pode começar a pesar (dias antes)</label><input type="number" id="pJanela" min="1" max="30" value="5" style="width:90px"></div>
+      <button type="button" class="btn btn-primary" id="pCopiar">Copiar lista para cobrar</button>
+      <span class="hint" id="pResumo">Carregando...</span>
+    </div>
+    <div class="card-body hint" style="padding-top:0">Só entram OPs abertas que exigem bulk liberado (com fórmula, emitidas a partir de 24/09) e cuja pesagem ainda não foi concluída. A data do envase vem da grade de programação por pedido/SKU: com mais de uma OP do mesmo pedido, a data é aproximada.</div></div>
+    <div class="kpis" id="pKpis"></div>
+    <div class="card"><div class="card-body rolagem"><table>
+      <thead><tr><th>Situação</th><th>Lote</th><th>Produto</th><th>Cliente</th><th>Envase previsto</th><th>Pesar até</th><th>MPs pesadas</th><th>Estado do bulk</th></tr></thead>
+      <tbody id="pLinhas"></tbody></table></div></div>
+  </section>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allOps = {}, grade = {}, opsOk = false, gradeOk = false;
+function $(id) { return document.getElementById(id); }
+function hojeSP() { return PesagensDia.diaLocal(new Date().toISOString()); }
+function brData(d) { return d ? d.slice(8) + '/' + d.slice(5, 7) + '/' + d.slice(2, 4) : '—'; }
+function fmt(n) { return Number(n).toLocaleString('pt-BR', {maximumFractionDigits: 3}); }
+function kpi(rot, val) { return '<div class="kpi"><b>' + val + '</b><span>' + rot + '</span></div>'; }
+
+dbOnValue(db.ref('ops'), function(s) { allOps = s.val() || {}; opsOk = true; render(); });
+dbOnValue(db.ref('programacao'), function(s) { grade = s.val() || {}; gradeOk = true; render(); });
+
+document.querySelectorAll('.aba').forEach(function(b) {
+  b.addEventListener('click', function() {
+    document.querySelectorAll('.aba').forEach(function(x) { x.classList.toggle('ativa', x === b); });
+    var pend = b.getAttribute('data-aba') === 'pend';
+    $('abaDia').style.display = pend ? 'none' : ''; $('abaPend').style.display = pend ? '' : 'none';
+  });
+});
+$('dData').value = hojeSP();
+['dData', 'dOper', 'pIdeal', 'pJanela'].forEach(function(id) { $(id).addEventListener('input', render); $(id).addEventListener('change', render); });
+$('dAnt').addEventListener('click', function() { $('dData').value = PesagensDia.somaDias($('dData').value || hojeSP(), -1); render(); });
+$('dProx').addEventListener('click', function() { $('dData').value = PesagensDia.somaDias($('dData').value || hojeSP(), 1); render(); });
+$('dHoje').addEventListener('click', function() { $('dData').value = hojeSP(); render(); });
+
+var ultimaPend = null;
+function render() {
+  if (!opsOk) return;
+  renderDia();
+  renderPend();
+}
+
+function renderDia() {
+  var dia = $('dData').value || hojeSP();
+  var r = PesagensDia.pesagensDoDia(allOps, dia);
+  var sel = $('dOper'), atual = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + r.porOperador.map(function(o) { return '<option value="' + escapeAttr(o.por) + '">' + escapeHtml(o.por) + '</option>'; }).join('');
+  sel.value = r.porOperador.some(function(o) { return o.por === atual; }) ? atual : '';
+  var oper = sel.value;
+  var parcelas = r.parcelas.filter(function(p) { return !oper || p.por === oper; });
+  var validas = parcelas.filter(function(p) { return !p.cancelada; });
+  var kg = validas.reduce(function(s, p) { return s + p.peso; }, 0);
+  $('dResumo').textContent = validas.length ? validas.length + ' pesagem(ns) em ' + brData(dia) : 'Nenhuma pesagem registrada em ' + brData(dia);
+  $('dKpis').innerHTML = kpi('Pesagens', validas.length) + kpi('Total pesado (kg)', fmt(kg)) +
+    kpi('OPs', Object.keys(validas.reduce(function(m, p) { m[p.opKey] = 1; return m; }, {})).length) +
+    kpi('Operadores', oper ? 1 : r.totais.operadores) + kpi('Sem foto', validas.filter(function(p) { return !p.temFoto; }).length) +
+    (r.totais.canceladas ? kpi('Canceladas', r.totais.canceladas) : '');
+  $('dPorOper').innerHTML = r.porOperador.filter(function(o) { return !oper || o.por === oper; }).map(function(o) {
+    return '<tr><td><b>' + escapeHtml(o.por) + '</b></td><td class="num">' + o.pesagens + '</td><td class="num">' + fmt(o.kg) + '</td><td class="num">' + o.ops +
+      '</td><td>' + o.primeira + ' – ' + o.ultima + '</td><td class="num">' + (o.semFoto ? '<span class="badge badge-orange">' + o.semFoto + '</span>' : '0') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="no-data">Ninguém pesou neste dia.</td></tr>';
+  var opsDoOper = {};
+  validas.forEach(function(p) { opsDoOper[p.opKey] = 1; });
+  $('dPorOp').innerHTML = r.porOp.filter(function(o) { return opsDoOper[o.opKey]; }).map(function(o) {
+    return '<tr><td><a href="dossie_lote.html?op=' + encodeURIComponent(o.opKey) + '"><b>' + escapeHtml(o.lote) + '</b></a></td><td>' + escapeHtml(o.produto) + '<div class="hint">' + escapeHtml(o.cliente) + '</div></td>' +
+      '<td class="num">' + o.pesagens + '</td><td class="num">' + fmt(o.kg) + '</td><td>' + o.mpsPesadas + ' de ' + o.mpsPrevistas +
+      (o.completa ? ' <span class="badge badge-green">completa</span>' : ' <span class="badge badge-orange">incompleta</span>') + '</td><td>' + escapeHtml(o.estado ? Manipulacao.rotulo(o.estado) : '—') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="no-data">—</td></tr>';
+  $('dLinhas').innerHTML = parcelas.map(function(p) {
+    return '<tr' + (p.cancelada ? ' style="opacity:.5;text-decoration:line-through"' : '') + '><td>' + p.hora + '</td><td>' + escapeHtml(p.por) + '</td><td>' + escapeHtml(p.lote) +
+      '</td><td>' + escapeHtml(p.mpCodigo) + '<div class="hint">' + escapeHtml(p.mpNome) + '</div></td><td>' + escapeHtml(p.loteMaterial || '—') + '</td><td class="num">' + fmt(p.peso) + ' ' + escapeHtml(p.unidade) +
+      '</td><td>' + (p.fotoUrl ? '<a href="' + escapeAttr(p.fotoUrl) + '" target="_blank" rel="noopener">ver foto</a>' : (p.temFoto ? 'sim' : '<span class="badge badge-orange">sem foto</span>')) + '</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="no-data">Nada pesado neste dia.</td></tr>';
+}
+
+var SIT = {
+  ATRASADA: ['badge-red', 'Envase hoje / atrasado'], FORA_META: ['badge-orange', 'Fora da meta — cobrar'],
+  NA_JANELA: ['badge-blue', 'Já pode pesar'], FUTURA: ['badge-gray', 'Ainda cedo'], SEM_DATA: ['badge-gray', 'Sem data de envase']
+};
+function renderPend() {
+  var ideal = Math.max(1, Number($('pIdeal').value) || 3), janela = Math.max(ideal, Number($('pJanela').value) || 5);
+  var r = ultimaPend = PesagensDia.pendencias(allOps, grade, hojeSP(), {ideal: ideal, janela: janela});
+  var b = $('pBadge'); b.textContent = r.cobrar; b.style.display = r.cobrar ? '' : 'none';
+  $('pResumo').textContent = !gradeOk ? 'Carregando a grade...' : r.cobrar ? r.cobrar + ' OP(s) para cobrar' : 'Nenhuma OP para cobrar agora';
+  $('pKpis').innerHTML = kpi('Envase hoje / atrasado', r.contagem.ATRASADA) + kpi('Fora da meta', r.contagem.FORA_META) + kpi('Já pode pesar', r.contagem.NA_JANELA) + kpi('Ainda cedo', r.contagem.FUTURA) + kpi('Sem data', r.contagem.SEM_DATA);
+  $('pLinhas').innerHTML = r.itens.map(function(i) {
+    var s = SIT[i.situacao];
+    return '<tr><td><span class="badge ' + s[0] + '">' + s[1] + '</span></td><td><a href="dossie_lote.html?op=' + encodeURIComponent(i.opKey) + '"><b>' + escapeHtml(i.lote) + '</b></a></td>' +
+      '<td>' + escapeHtml(i.produto) + '</td><td>' + escapeHtml(i.cliente) + '</td>' +
+      '<td>' + (i.envase ? brData(i.envase) + ' <span class="hint">(' + (i.diasAteEnvase <= 0 ? 'hoje' : 'em ' + i.diasAteEnvase + 'd') + (i.dividemData > 1 ? ', aprox.: ' + i.dividemData + ' OPs no pedido' : '') + ')</span>' : '—') + '</td>' +
+      '<td>' + (i.pesarAte ? brData(i.pesarAte) : '—') + '</td>' +
+      '<td>' + (i.semRegistro ? 'não iniciada' : i.mpsPesadas + ' de ' + i.mpsPrevistas) + '</td>' +
+      '<td>' + escapeHtml(i.estado ? Manipulacao.rotulo(i.estado) : 'sem registro') + '</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="no-data">Nenhuma OP aberta pendente de pesagem.</td></tr>';
+}
+$('pCopiar').addEventListener('click', function() {
+  var t = PesagensDia.textoCobranca(ultimaPend || {itens: []});
+  var ok = function() { $('pResumo').textContent = 'Lista copiada.'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, function() { window.prompt('Copie a lista:', t); });
+  else window.prompt('Copie a lista:', t);
+});
+</script>
+</body>
+</html>
