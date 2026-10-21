@@ -1466,6 +1466,11 @@
     document.getElementById('fPriority').value = p.priority || '';
     document.getElementById('fLinha').value = p.linha || '';
     document.getElementById('fQtdTotal').value = p.qtdTotal || '';
+    // Linha de pedido comercial: quantidade e valor só mudam no Comercial (Gestão
+    // Comercial, com versão, motivo e trava). Editar aqui deixava as telas discordando.
+    var qtdTravada = !!p.parentPedidoId;
+    document.getElementById('fQtdTotal').disabled = qtdTravada;
+    document.getElementById('fQtdTotal').title = qtdTravada ? 'Quantidade só se altera na Gestão Comercial (Editar pedido), que registra versão e mantém todas as telas iguais.' : '';
     document.getElementById('fDataProd').value = p.dataProd || '';
     document.getElementById('fProduzido').value = p.produzido || 0;
     document.getElementById('fStatusManual').value = p.statusManual || '';
@@ -1547,6 +1552,7 @@
     if (!editingKey) { showModalAlert('Pedidos novos são lançados no Comercial.'); return; }
     var existing = editingKey ? allPedidos[editingKey] : null;
     var isComercial = !!(existing && existing.parentPedidoId);
+    if (isComercial) qtdTotal = Number(existing.qtdTotal) || qtdTotal; // quantidade é do Comercial
 
     var newKey = isComercial ? editingKey : pedidoFirebaseKey(id, produto);
 
