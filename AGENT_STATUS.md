@@ -157,6 +157,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Dossiê do lote: busca por data (21/10/2026)
+
+- **Pedido:** campo de busca pela data no dossiê do lote.
+- **Medido:** só 332 das 1.473 OPs têm `dataEmissao`; 1.371 têm `dataInicioReal`/1.361 `dataFimReal` -> a data de PRODUÇÃO é a padrão.
+- **Feito:** `dossie-lote.js` `buscar(ops, termo, limite, filtroData)`: (1) palavra que seja data no campo de busca ("15/10/2026", "15/10", "2026-10-15") acha a OP produzida/emitida/confirmada no dia (produção que atravessa o dia conta); (2) `filtroData {campo: producao|emissao|confirmacao, de, ate}` (só "De" = aquele dia). Instante com fuso (Z) vira o dia em São Paulo; sem fuso vale como está. Com data, ordena pela produção mais recente. `dossie_lote.html`: seletor + De/Até + "Limpar datas" e coluna **Produção** (dd/mm/aa ou "dd/mm → dd/mm/aa").
+- **Testes:** `run_dossie_busca_data_test.js` (regra, fuso, atravessar o dia, intervalos, combinação com texto), `run_dossie_busca_data_ui_test.js` (tela real).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Responsável comercial por cliente — PUBLICADO (20/10/2026)
 
 - **Pedido:** "criar um responsável por cliente, dentro da gestão comercial".

@@ -39,14 +39,78 @@
     return function(a, b) { return String(a[campo] || '').localeCompare(String(b[campo] || '')); };
   }
 
+  /* ── Datas (pedido do usuário, 21/10/2026: "campo de busca pela data") ──
+     A base mistura instantes com fuso ("...Z") e sem fuso ("2026-07-29T15:49:54",
+     hora local). Com fuso converte para o dia em São Paulo; sem fuso vale como está.
+     Só 332 de 1.473 OPs têm dataEmissao; 1.371 têm início real de produção --
+     por isso a data de PRODUÇÃO é a padrão. */
+  function diaLocal(v) {
+    var s = texto(v);
+    if (!s) return '';
+    if (/(Z|[+-]\d\d:?\d\d)$/.test(s) && /T/.test(s)) {
+      var d = new Date(s);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('en-CA', {timeZone: 'America/Sao_Paulo'});
+    }
+    return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+  }
+  function datasDaOp(o) {
+    o = o || {};
+    var inicio = diaLocal(o.dataInicioReal), fim = diaLocal(o.dataFimReal);
+    return {emissao: diaLocal(o.dataEmissao), inicio: inicio, fim: fim, confirmacao: diaLocal(o.confirmadoEm),
+      producaoDe: inicio || fim, producaoAte: fim || inicio};
+  }
+  /* "15/10/2026", "15/10/26", "15-10-2026" e "2026-10-15" são um DIA; "15/10" é
+     dia+mês de qualquer ano. Qualquer outra palavra não é data. */
+  function dataDaPalavra(p) {
+    var t = texto(p), m;
+    if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t))) return {dia: t};
+    if ((m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/.exec(t))) {
+      var a = m[3].length === 2 ? '20' + m[3] : m[3];
+      return {dia: a + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2)};
+    }
+    if ((m = /^(\d{1,2})\/(\d{1,2})$/.exec(t))) return {diames: ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2)};
+    return null;
+  }
+
   /* Busca por lote, cliente, produto, SKU ou pedido. Todas as palavras
-     digitadas precisam aparecer (em qualquer campo). Mais recente primeiro. */
-  function buscar(ops, termo, limite) {
-    var palavras = normalizar(termo).split(' ').filter(Boolean);
+     digitadas precisam aparecer (em qualquer campo). Mais recente primeiro.
+
+     DATA: (1) uma palavra que seja data ("15/10/2026", "15/10") acha as OPs
+     que tiveram aquele dia como emissão, início/fim de produção ou
+     confirmação; (2) `filtroData` = {campo: 'producao'|'emissao'|'confirmacao',
+     de, ate} (AAAA-MM-DD) filtra por intervalo. Só `de` = aquele dia. Em
+     'producao' vale a OP cuja produção (início até fim) toca o intervalo. */
+  function buscar(ops, termo, limite, filtroData) {
+    var tokens = normalizar(termo).split(' ').filter(Boolean);
+    var datasDoTermo = [], palavras = [];
+    tokens.forEach(function(t) { var d = dataDaPalavra(t); if (d) datasDoTermo.push(d); else palavras.push(t); });
     var max = limite || 50;
+    var f = filtroData && (filtroData.de || filtroData.ate) ? {
+      campo: filtroData.campo || 'producao',
+      de: filtroData.de || '', ate: filtroData.ate || (filtroData.de || '')
+    } : null;
+    if (f && !f.de) f.de = '0000-01-01';
+    if (f && !f.ate) f.ate = '9999-12-31';
+    function passaFiltro(dt) {
+      if (!f) return true;
+      if (f.campo === 'emissao') return !!dt.emissao && dt.emissao >= f.de && dt.emissao <= f.ate;
+      if (f.campo === 'confirmacao') return !!dt.confirmacao && dt.confirmacao >= f.de && dt.confirmacao <= f.ate;
+      return !!dt.producaoDe && dt.producaoDe <= f.ate && dt.producaoAte >= f.de;
+    }
+    function passaDatasDoTermo(dt) {
+      return datasDoTermo.every(function(d) {
+        var dias = [dt.emissao, dt.inicio, dt.fim, dt.confirmacao].filter(Boolean);
+        // Produção que ATRAVESSA o dia (início antes, fim depois) também conta.
+        if (d.dia && dt.producaoDe && dt.producaoDe <= d.dia && dt.producaoAte >= d.dia) return true;
+        return dias.some(function(x) { return d.dia ? x === d.dia : x.slice(5) === d.diames; });
+      });
+    }
+    var comData = !!f || datasDoTermo.length > 0;
     var achados = Object.keys(ops || {}).map(function(k) { return Object.assign({key: k}, ops[k]); })
       .filter(function(o) { return o && (o.lote || o.produto); })
       .filter(function(o) {
+        if (comData) { var dt = datasDaOp(o); if (!passaFiltro(dt) || !passaDatasDoTermo(dt)) return false; }
         if (!palavras.length) return true;
         var campos = [o.lote, o.key, o.cliente, o.produto, o.sku, o.skuPedidoKey, o.linha].map(texto).join(' ');
         var solto = normalizar(campos), junto = compacto(campos);
@@ -55,11 +119,16 @@
           return solto.indexOf(p) >= 0 || (pc && junto.indexOf(pc) >= 0);
         });
       });
-    // Quem digitou o lote exato quer aquele lote em cima.
-    var alvo = compacto(termo);
+    // Quem digitou o lote exato quer aquele lote em cima. Buscando por data,
+    // vem o dia mais recente de produção primeiro.
+    var alvo = compacto(palavras.join(' '));
     achados.sort(function(a, b) {
-      var ea = compacto(a.lote) === alvo ? 1 : 0, eb = compacto(b.lote) === alvo ? 1 : 0;
+      var ea = alvo && compacto(a.lote) === alvo ? 1 : 0, eb = alvo && compacto(b.lote) === alvo ? 1 : 0;
       if (ea !== eb) return eb - ea;
+      if (comData) {
+        var pa = datasDaOp(a).producaoAte || datasDaOp(a).emissao, pb = datasDaOp(b).producaoAte || datasDaOp(b).emissao;
+        if (pa !== pb) return String(pb || '').localeCompare(String(pa || ''));
+      }
       return String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')) ||
         String(b.lote || '').localeCompare(String(a.lote || ''));
     });
@@ -333,6 +402,7 @@
 
   return {
     normalizar: normalizar, compacto: compacto, buscar: buscar, acharOp: acharOp,
+    diaLocal: diaLocal, datasDaOp: datasDaOp, dataDaPalavra: dataDaPalavra,
     montar: montar, montarGranel: montarGranel, perdasDoLote: perdasDoLote
   };
 });

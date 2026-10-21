@@ -94,10 +94,18 @@
   <div class="card nao-imprime" id="dBuscaCard">
     <div class="card-header"><h3>Buscar lote</h3><span class="hint" id="dResumoBusca">Carregando OPs...</span></div>
     <div class="card-body">
-      <input type="search" class="busca" id="dBusca" placeholder="Lote (26250/02), cliente, produto ou SKU" autocomplete="off">
-      <div class="hint" style="margin-top:6px">Não precisa de acento nem da barra: "26250 02", "miss rose leao" e "rôse bourbon" funcionam.</div>
+      <input type="search" class="busca" id="dBusca" placeholder="Lote (26250/02), cliente, produto, SKU ou data (15/10/2026)" autocomplete="off">
+      <div class="hint" style="margin-top:6px">Não precisa de acento nem da barra: "26250 02", "miss rose leao" e "rôse bourbon" funcionam. Uma data digitada ("15/10/2026" ou "15/10") acha o lote produzido, emitido ou confirmado nesse dia.</div>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-top:10px">
+        <div><label class="hint" for="dCampoData" style="display:block">Filtrar por data de</label>
+          <select id="dCampoData" style="padding:9px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)">
+            <option value="producao">Produção (início/fim real)</option><option value="emissao">Emissão da OP</option><option value="confirmacao">Confirmação da conclusão</option></select></div>
+        <div><label class="hint" for="dDe" style="display:block">De</label><input type="date" id="dDe" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)"></div>
+        <div><label class="hint" for="dAte" style="display:block">Até (vazio = só o dia "De")</label><input type="date" id="dAte" style="padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)"></div>
+        <button type="button" class="btn" id="dLimparData">Limpar datas</button>
+      </div>
       <div class="rolagem" style="margin-top:10px"><table>
-        <thead><tr><th>Lote</th><th>Produto</th><th>Cliente</th><th>Emissão</th><th>OP</th><th>Granel</th></tr></thead>
+        <thead><tr><th>Lote</th><th>Produto</th><th>Cliente</th><th>Emissão</th><th>Produção</th><th>OP</th><th>Granel</th></tr></thead>
         <tbody id="dResultados"></tbody>
       </table></div>
     </div>
@@ -158,18 +166,30 @@ function badgeGranel(o) {
   return '<span class="badge ' + cls + '">' + escapeHtml(Manipulacao.rotulo(st)) + '</span>';
 }
 
+// Produção em dd/mm/aa; início e fim em dias diferentes mostra "dd/mm → dd/mm/aa".
+function diaBr(d, curto) { return d ? d.slice(8) + '/' + d.slice(5, 7) + (curto ? '' : '/' + d.slice(2, 4)) : ''; }
+function producaoDa(o) {
+  var dt = DossieLote.datasDaOp(o);
+  if (!dt.producaoDe) return '<span class="hint">—</span>';
+  return dt.producaoDe === dt.producaoAte ? diaBr(dt.producaoAte) : diaBr(dt.producaoDe, true) + ' → ' + diaBr(dt.producaoAte);
+}
+
 function renderBusca() {
   var termo = document.getElementById('dBusca').value;
-  var r = DossieLote.buscar(allOps, termo, 40);
+  var de = document.getElementById('dDe').value, ate = document.getElementById('dAte').value;
+  var filtroData = (de || ate) ? {campo: document.getElementById('dCampoData').value, de: de, ate: ate} : null;
+  var r = DossieLote.buscar(allOps, termo, 40, filtroData);
+  var filtrando = termo.trim() || filtroData;
   document.getElementById('dResumoBusca').textContent = !opsCarregadas ? 'Carregando OPs...'
-    : (termo.trim() ? r.total + ' lote(s) encontrado(s)' + (r.total > 40 ? ' — mostrando 40, refine a busca' : '') : 'Os 40 lotes mais recentes');
+    : (filtrando ? r.total + ' lote(s) encontrado(s)' + (r.total > 40 ? ' — mostrando 40, refine a busca' : '') : 'Os 40 lotes mais recentes');
   var tb = document.getElementById('dResultados');
   tb.innerHTML = r.itens.length ? r.itens.map(function(o) {
     return '<tr class="clicavel" data-op="' + escapeAttr(o.key) + '"><td><b>' + escapeHtml(o.lote || o.key) + '</b></td>' +
       '<td>' + escapeHtml(o.produto || '—') + '<div class="hint">' + escapeHtml(o.sku || '') + '</div></td>' +
       '<td>' + escapeHtml(o.cliente || '—') + '</td><td>' + quando(o.dataEmissao) + '</td>' +
+      '<td>' + producaoDa(o) + '</td>' +
       '<td>' + escapeHtml(o.status || '—') + '</td><td>' + badgeGranel(o) + '</td></tr>';
-  }).join('') : '<tr><td colspan="6" class="no-data">' + (opsCarregadas ? 'Nenhum lote encontrado.' : 'Carregando...') + '</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="no-data">' + (opsCarregadas ? 'Nenhum lote encontrado.' : 'Carregando...') + '</td></tr>';
   tb.querySelectorAll('[data-op]').forEach(function(tr) {
     tr.addEventListener('click', function() { abrir(tr.getAttribute('data-op')); });
   });
@@ -177,6 +197,10 @@ function renderBusca() {
 var tBusca = null;
 document.getElementById('dBusca').addEventListener('input', function() {
   clearTimeout(tBusca); tBusca = setTimeout(renderBusca, 150);
+});
+['dDe', 'dAte', 'dCampoData'].forEach(function(id) { document.getElementById(id).addEventListener('change', renderBusca); });
+document.getElementById('dLimparData').addEventListener('click', function() {
+  document.getElementById('dDe').value = ''; document.getElementById('dAte').value = ''; renderBusca();
 });
 document.getElementById('dImprimir').addEventListener('click', function() { window.print(); });
 
