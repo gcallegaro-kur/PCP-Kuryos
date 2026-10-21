@@ -599,7 +599,7 @@ function detalhePedido(p) {
     linhas + '</tbody></table>' +
     '<div class="nota" style="margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span>Criado por ' + esc(p.criadoPor || '—') + (p.percentualNF != null ? ' · NF ' + p.percentualNF + '%' : '') +
     (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</span>' +
-    (p.temComercial && podeEditarComercial() && !p.cancelado ? '<button class="btn btn-primary btn-sm" data-editar="' + esc(p.id) + '">Editar pedido</button>' : '') +
+    (p.temComercial && podeEditarComercial() && !p.cancelado ? '<button class="btn btn-primary btn-sm" data-editar="' + esc(p.id) + '">Editar pedido</button>' : (!p.temComercial ? '<span class="muted">Pedido antigo, sem cabeçalho comercial: a quantidade se ajusta em Pedidos (PCP).</span>' : '')) +
     (p.versao > 1 ? '<button class="btn btn-ghost btn-sm" data-versoes="' + esc(p.id) + '">Versões (' + p.versao + ')</button>' : '') +
     (!p.temComercial ? '<span class="muted">Pedido antigo sem cadastro comercial: edite pela tela de Pedidos.</span>' : '') +
     statusEmailPedido(p.id) + '</div></td></tr>';

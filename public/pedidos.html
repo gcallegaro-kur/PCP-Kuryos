@@ -1159,8 +1159,9 @@
       '<td>' + statusBadge + '</td>' +
       '<td>' + insBadge + '</td>' +
       '<td><div class="actions-cell">' +
-        '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '">✏️</button>' +
-        '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '" title="' + (p.parentPedidoId ? 'Prioridade, linha, data de produção e encerrar. Quantidade e preço: Gestão Comercial.' : 'Editar') + '">✏️</button>' +
+        // Pedido comercial não se exclui aqui: some só pelo Comercial (cancelar saldo).
+        (p.parentPedidoId ? '' : '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>') +
       '</div></td>' +
     '</tr>';
   }
@@ -1760,6 +1761,7 @@
   function openDelete(key) {
     var p = allPedidos[key];
     if (!p) return;
+    if (p.parentPedidoId) { showAlert('Pedido do Comercial não se exclui aqui. Para tirar o saldo, o Comercial cancela; para parar de produzir, use Encerrar.', 'danger'); return; }
     if (conciliacaoFontes.ops === null) { showAlert('Aguarde carregar as OPs antes de excluir.', 'danger'); return; }
     var alvo = TransferenciaOP.normalizarChave(key);
     var opsDoItem = Object.keys(conciliacaoFontes.ops).map(function(k) { return conciliacaoFontes.ops[k]; }).filter(function(o) {
