@@ -191,6 +191,7 @@
   </div>
   <select class="kt-select" id="filterStatus">
     <option value="acao" selected>Pedem ação</option>
+    <option value="saldo">Concluídos com saldo (decidir)</option>
     <option value="finalizados">Finalizados (consulta)</option>
     <option value="andamento">Em andamento</option>
     <option value="">Todos os status</option>
@@ -1068,7 +1069,8 @@
     // andamento. Continua em "Finalizados (consulta)" e nos dashboards.
     var cl = conciliacaoDoPedido(p._key);
     if (cl && cl.legado) return false;
-    return st === 'andamento' || st === 'pronto' || pedidoAguardaExpedicao(p);
+    // Concluída com produzido < pedido pede decisão (encerrar de verdade ou reabrir o saldo).
+    return st === 'andamento' || st === 'pronto' || pedidoAguardaExpedicao(p) || EncerramentoPedido.saldoReabrivel(p);
   }
 
   // ── Entrega (PCP) ───────────────────────────────────────────────
@@ -1159,6 +1161,7 @@
       '<td>' + statusBadge + '</td>' +
       '<td>' + insBadge + '</td>' +
       '<td><div class="actions-cell">' +
+        (EncerramentoPedido.saldoReabrivel(p) ? '<button class="btn btn-ghost btn-sm" data-action="encerrar" data-key="' + p._key + '" title="O saldo não será mais produzido: encerra a linha com o motivo.">⬛ Encerrar</button><button class="btn btn-ghost btn-sm" data-action="reabrir-saldo" data-key="' + p._key + '" title="Concluída, mas produzida ' + fmtNum(p.produzido || 0) + ' de ' + fmtNum(p.qtdTotal) + '. Reabre para produzir o saldo (pede o motivo)." style="color:var(--warn,#b45309)">↩ Reabrir saldo</button>' : '') +
         '<button class="btn btn-ghost btn-sm" data-action="edit" data-key="' + p._key + '" title="' + (p.parentPedidoId ? 'Prioridade, linha, data de produção e encerrar. Quantidade e preço: Gestão Comercial.' : 'Editar') + '">✏️</button>' +
         // Pedido comercial não se exclui aqui: some só pelo Comercial (cancelar saldo).
         (p.parentPedidoId ? '' : '<button class="btn btn-ghost btn-sm" data-action="delete" data-key="' + p._key + '" style="color:var(--danger)">🗑️</button>') +
@@ -1176,6 +1179,7 @@
     var list = Object.values(allPedidos).filter(function(p) {
       var st = pedidoStatus(p);
       if (filterStatus === 'acao') { if (!pedidoPedeAcao(p)) return false; }
+      else if (filterStatus === 'saldo') { if (!EncerramentoPedido.saldoReabrivel(p)) return false; }
       else if (filterStatus === 'finalizados') { if (pedidoPedeAcao(p)) return false; }
       else if (filterStatus && st !== filterStatus) return false;
       if (filterLinha && p.linha !== filterLinha) return false;
@@ -1304,6 +1308,7 @@
     if (btn.dataset.action === 'edit') openEdit(key);
     if (btn.dataset.action === 'delete') openDelete(key);
     if (btn.dataset.action === 'encerrar') abrirEncerramento(key, 'encerrar');
+    if (btn.dataset.action === 'reabrir-saldo') abrirEncerramento(key, 'reabrir_saldo');
   });
 
   // ── Hover em "Produzido" (aba SKUs para Produção): detalha por OP/lote ──

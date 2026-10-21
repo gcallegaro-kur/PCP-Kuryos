@@ -16,6 +16,7 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Feito:** pedido-edicao.js (totalValorItens, statusAposQuantidade; Gestão reabre a linha ao aumentar);
   pedidos.html (mesmo reabrir, totalValor ao editar/excluir linha); comercial.html (KPI Valor calculado dos
   itens, sem cancelados). Teste novo em run_pedido_edicao_test.js.
+- **Depois (21/10):** aba Acompanhar pedido no Comercial; lixeira some em pedido comercial no PCP; Reabrir saldo + Encerrar em linha Concluída com produzido < pedido (encerramento-pedido.js: saldoReabrivel, montarReaberturaSaldo; filtro "Concluídos com saldo (decidir)"; entram em "Pedem ação").
 - **Não feito de propósito (decisão do PCP/Comercial):** reabrir ou encerrar as 106 linhas históricas, e
   corrigir os totais de 0011/26/05/0020 — não sei qual lado está certo. Orçamento→pedido sem vínculo segue.
 - **Arquivos ativos:** nenhum.

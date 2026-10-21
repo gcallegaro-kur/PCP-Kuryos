@@ -75,4 +75,28 @@ ok('descrição para o hover', () => {
   assert.equal(E.descricao({canceladoPorComercial: true}), 'Saldo cancelado pelo Comercial');
 });
 
+ok('reabrir saldo: Concluído com produzido < pedido volta a produzir, com motivo', () => {
+  const ps = {
+    A: {sku: 'A', status: 'Concluído', qtdTotal: 1000, produzido: 800},
+    B: {sku: 'B', status: 'Concluído', qtdTotal: 1000, produzido: 1000},
+    C: {sku: 'C', status: 'Concluído', statusManual: 'encerrado', qtdTotal: 1000, produzido: 800},
+    D: {sku: 'D', status: 'Concluído', qtdTotal: 1000, produzido: 0},
+    F: {sku: 'F', status: 'Concluído', canceladoPorComercial: true, qtdTotal: 1000, produzido: 10}
+  };
+  assert.deepEqual(['A', 'B', 'C', 'D', 'F'].filter((k) => E.saldoReabrivel(ps[k])), ['A', 'D']);
+  assert.equal(E.montarReaberturaSaldo(ps, ['A'], {texto: '', por: 'x'}).ok, false, 'motivo obrigatório');
+  const r = E.montarReaberturaSaldo(ps, ['A', 'B', 'C', 'D'], {texto: 'cliente quer o saldo', por: 'Diego', agora: '2026-10-21T12:00:00Z'});
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.linhas.map((l) => [l.key, l.saldo]), [['A', 200], ['D', 1000]]);
+  assert.equal(r.updates['pedidos/A/status'], 'Produção Parcial');
+  assert.equal(r.updates['pedidos/D/status'], 'Não Iniciado');
+  assert.equal(r.updates['pedidos/B/status'], undefined);
+  const h = Object.values(r.updates).find((v) => v && v.acao === 'SALDO_REABERTO');
+  assert.equal(h.por, 'Diego'); assert.equal(h.saldo, 200);
+  assert.equal(E.situacao(Object.assign({}, ps.A, {status: 'Produção Parcial'})), 'andamento');
+  const enc = E.montarEncerramento(ps, ['A', 'B'], {motivoTipo: 'CLIENTE_ACEITOU_MENOS', por: 'Diego'});
+  assert.deepEqual(enc.linhas.map((l) => [l.key, l.saldo]), [['A', 200]]);
+  assert.equal(enc.updates['pedidos/A/statusManual'], 'encerrado');
+});
+
 console.log(`\nrun_encerramento_pedido_test: ${n} OK`);
