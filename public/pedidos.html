@@ -16,6 +16,7 @@
   <script src="shared/situacao-op.js"></script>
   <script src="shared/entrega-pcp.js"></script>
   <script src="shared/encerramento-pedido.js"></script>
+  <script src="shared/pedido-edicao.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -1615,6 +1616,12 @@
         }
       }
 
+      // Aumentou a quantidade de uma linha "Concluído": volta a pedir produção.
+      if (preservedData) {
+        var statusReaberto = PedidoEdicao.statusAposQuantidade(Object.assign({}, preservedData, data), qtdTotal);
+        if (statusReaberto) data.status = statusReaberto;
+      }
+
       var shiftsUpdates = {};
       if (priorityVal > 0) {
         var pMap = {};
@@ -1670,6 +1677,10 @@
             Object.keys(itensPc).forEach(function(i) { totalPc += i === idxItem[0] ? qtdTotal : (Number(itensPc[i] && itensPc[i].qtd) || 0); });
             shiftsUpdates['pedidos_comerciais/' + existing.parentPedidoId + '/itens/' + idxItem[0] + '/qtd'] = qtdTotal;
             shiftsUpdates['pedidos_comerciais/' + existing.parentPedidoId + '/total_qtd'] = totalPc;
+            // O total em R$ acompanha a quantidade (antes ficava velho e o Comercial
+            // e a Gestão Comercial passavam a mostrar valores diferentes).
+            var itensNovos = Object.keys(itensPc).map(function(i) { return i === idxItem[0] ? Object.assign({}, itensPc[i], {qtd: qtdTotal}) : itensPc[i]; });
+            shiftsUpdates['pedidos_comerciais/' + existing.parentPedidoId + '/totalValor'] = PedidoEdicao.totalValorItens(itensNovos);
           }
         }
       }
@@ -1924,7 +1935,7 @@
         return db.ref('pedidos_comerciais/' + parentId).remove();
       }
       var newTotal = newItens.reduce(function(s, it) { return s + (it.qtd || 0); }, 0);
-      return db.ref('pedidos_comerciais/' + parentId).update({ itens: newItens, total_qtd: newTotal });
+      return db.ref('pedidos_comerciais/' + parentId).update({ itens: newItens, total_qtd: newTotal, totalValor: PedidoEdicao.totalValorItens(newItens) });
     });
   }
 

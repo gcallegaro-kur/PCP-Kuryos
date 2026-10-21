@@ -3,6 +3,23 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Pedidos que não conversam: PCP × Gestão Comercial × Comercial (21/10/2026)
+
+- **Pedido:** pente fino nas telas de pedido; pedidos encerrados no PCP abertos na Gestão e valores que não batem.
+- **Medido na produção (leitura):** encerramento manual funciona (92 linhas, 0 abertas na Gestão). O furo é outro:
+  106 linhas com status 'Concluído' e produzido < pedido (faltam 92.579 un), das quais 64 aparecem
+  abertas na Gestão; 14 produzidas 100% esperando expedir. Valor: Comercial R$ 5,27 mi × Gestão R$ 6,64 mi
+  (17 pedidos; 13 sem preço no pedido, a Gestão preenche pela tabela; 0011, 26, 05 e 0020 com total/quantidade
+  do cabeçalho velhos). Zero orçamentos na base. Listas em relatorios/pedidos-*-2026-10-21.csv.
+- **Causa:** a tela de Pedidos do PCP gravava a quantidade no cabeçalho comercial sem refazer totalValor, e
+  aumento de quantidade não reabria linha 'Concluído'.
+- **Feito:** pedido-edicao.js (totalValorItens, statusAposQuantidade; Gestão reabre a linha ao aumentar);
+  pedidos.html (mesmo reabrir, totalValor ao editar/excluir linha); comercial.html (KPI Valor calculado dos
+  itens, sem cancelados). Teste novo em run_pedido_edicao_test.js.
+- **Não feito de propósito (decisão do PCP/Comercial):** reabrir ou encerrar as 106 linhas históricas, e
+  corrigir os totais de 0011/26/05/0020 — não sei qual lado está certo. Orçamento→pedido sem vínculo segue.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Kardex: relatório de entradas de todos os itens (20/10/2026)
 
 - **Pedido:** "relatório de entradas, talvez o próprio kardex, mas sem filtro

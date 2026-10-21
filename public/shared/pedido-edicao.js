@@ -156,6 +156,24 @@
       versaoAtual: versaoAtual, versaoNova: versaoAtual + 1};
   }
 
+  /* Total em R$ do pedido comercial a partir dos itens: qtd x preço - desconto.
+     Única conta; toda tela que mexe em quantidade deve regravar totalValor com ela
+     (a tela de Pedidos do PCP gravava só a quantidade e deixava o total velho). */
+  function totalValorItens(itens) {
+    return arred(listaItens(itens).reduce(function(s, i) { return s + n(i.qtd) * n(i.valorUnitario) - n(i.desconto); }, 0), 2);
+  }
+
+  /* Linha "Concluído" cuja quantidade passou do produzido volta a pedir produção.
+     Só a transferência de OP reabria; aumentar o pedido deixava o saldo escondido
+     do PCP. Devolve o novo status, ou null se não muda. */
+  function statusAposQuantidade(linha, novaQtd) {
+    var l = linha || {};
+    if (!/^conclu/i.test(texto(l.status))) return null;
+    if (/encerr|cancel/i.test(texto(l.statusManual)) || l.canceladoPorComercial === true) return null;
+    if (!(n(novaQtd) > n(l.produzido))) return null;
+    return n(l.produzido) > 0 ? 'Produção Parcial' : 'Não Iniciado';
+  }
+
   function descrever(m) {
     var f = function(v) { return v == null || v === '' ? '—' : (typeof v === 'number' ? v.toLocaleString('pt-BR') : String(v)); };
     switch (m.tipo) {
@@ -187,7 +205,7 @@
     });
     u[raiz + 'itens'] = itens;
     u[raiz + 'total_qtd'] = itens.reduce(function(s, i) { return s + n(i.qtd); }, 0);
-    u[raiz + 'totalValor'] = arred(itens.reduce(function(s, i) { return s + n(i.qtd) * n(i.valorUnitario) - n(i.desconto); }, 0), 2);
+    u[raiz + 'totalValor'] = totalValorItens(itens);
     u[raiz + 'versao'] = plano.versaoNova;
     u[raiz + 'atualizadoEm'] = agora;
     u[raiz + 'atualizadoPor'] = meta.autor || '';
@@ -208,6 +226,8 @@
       var lk = c && c.linhaKey;
       if (lk) {
         u['pedidos/' + lk + '/qtdTotal'] = i.qtd;
+        var novoStatus = statusAposQuantidade((base.pedidos || {})[lk], i.qtd);
+        if (novoStatus) u['pedidos/' + lk + '/status'] = novoStatus;
         u['pedidos/' + lk + '/valorUnitario'] = i.valorUnitario == null ? null : i.valorUnitario;
         if (plano.camposMudados.dataPedido !== undefined) u['pedidos/' + lk + '/dataPedido'] = dataPedido || null;
         if (Object.keys(plano.camposMudados).some(function(k) { return k.indexOf('frete/') === 0; })) u['pedidos/' + lk + '/frete'] = frete;
@@ -226,5 +246,5 @@
     return u;
   }
 
-  return {CAMPOS: CAMPOS, planejar: planejar, atualizacoes: atualizacoes, descrever: descrever, contextoItens: contextoItens, sanitizeKey: sanitizeKey};
+  return {CAMPOS: CAMPOS, planejar: planejar, atualizacoes: atualizacoes, descrever: descrever, contextoItens: contextoItens, totalValorItens: totalValorItens, statusAposQuantidade: statusAposQuantidade, sanitizeKey: sanitizeKey};
 });

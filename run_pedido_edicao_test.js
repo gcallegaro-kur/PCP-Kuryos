@@ -157,4 +157,24 @@ const meta = {motivo: 'Conciliação com o cliente', autor: 'Gustavo', agora: '2
   assert.ok(u['pedidos_comerciais/PED-0002/versoes/v4']);
 }
 
+
+// Aumentar pedido de linha 'Concluído' reabre a linha; total em R$ acompanha (21/10: 106 linhas Concluído com saldo).
+{
+  const b = base();
+  b.pedidos['PED-0002__MRARBS03'] = {id: 'PED-0002', parentPedidoId: 'PED-0002', sku: 'MRARBS03', qtdTotal: 7411, produzido: 7411, status: 'Concluído'};
+  b.analiseItens[1].produzido = 7411;
+  const itens = itensDe(b); itens[1].qtd = 8000;
+  const plano = E.planejar(b, {itens}, meta);
+  assert.deepStrictEqual(plano.erros, []);
+  const u = E.atualizacoes(b, plano, meta);
+  assert.strictEqual(u['pedidos/PED-0002__MRARBS03/status'], 'Produção Parcial');
+  assert.strictEqual(u['pedidos_comerciais/PED-0002/totalValor'], E.totalValorItens(u['pedidos_comerciais/PED-0002/itens']));
+  assert.strictEqual(u['pedidos/PED-0002__MRARBS04/status'], undefined);
+  // encerrada manualmente não reabre; quantidade igual ao produzido não reabre
+  assert.strictEqual(E.statusAposQuantidade({status: 'Concluído', statusManual: 'encerrado', produzido: 5}, 9), null);
+  assert.strictEqual(E.statusAposQuantidade({status: 'Concluído', produzido: 5}, 5), null);
+  assert.strictEqual(E.statusAposQuantidade({status: 'Concluído', produzido: 0}, 5), 'Não Iniciado');
+  assert.strictEqual(E.totalValorItens([{qtd: 10, valorUnitario: 2.5, desconto: 5}, {qtd: 1, valorUnitario: 0}]), 20);
+}
+
 console.log('run_pedido_edicao_test.js: OK');
