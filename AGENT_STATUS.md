@@ -157,6 +157,65 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Desativar e excluir usuário — PUBLICADO (21/10/2026)
+
+- **Pedido:** "quero poder excluir usuarios, é possível?". A tela só trocava
+  papel e marcava módulos — não removia ninguém.
+- **CAUSA RAIZ, medida (era bug, não desatenção):** os 3 logins da Luana
+  nasceram em **0,8 segundo** (14:04:22.950 / 14:04:23.745 / 14:04:23.756).
+  O botão de cadastro em `login.html` **não era desabilitado no envio**, e o
+  projeto aceita várias contas com o **mesmo e-mail** — cada clique criava
+  uma conta. Mesma assinatura em `tom@kuryos.com.br` (x2) e
+  `gustavosilvabraulio20@gmail.com` (x2). Base antes: **25 contas no Auth e
+  24 registros no RTDB para ~19 pessoas**.
+- **As duas operações são diferentes, e é isso que desenha a tela:**
+  1. Desativar/excluir tiram o acesso ao APP — dá hoje, 100% cliente:
+     `auth_check.js` passa a barrar `ativo === false`. **`=== false` de
+     propósito:** registro antigo não tem o campo, e tratar ausência como
+     inativo trancaria os 24 de uma vez no deploy.
+  2. Apagar a **credencial** exige Admin SDK (Cloud Functions, mortas pelo
+     billing). A tela **não consegue**.
+  Daí a lápide `usuarios_removidos/{uid}` com `authPendente`: sem ela a conta
+  viraria fantasma — autentica, lê "acesso pendente" e não aparece em lista
+  nenhuma. **Já existiam 2 assim** (`S48tfSML`, `TReOaKIo`), e eles seguem
+  invisíveis (listar o Auth exige Admin SDK) — registrado em
+  `MELHORIAS_FUTURAS.md`.
+- **Feito:** `shared/gestao-usuarios.js` (motor puro: `estado`, `podeRemover`,
+  `desativar`/`reativar`/`excluir`/`marcarAuthApagado` em caminho PLANO,
+  `duplicados`, `resumo`). `usuarios.html`: coluna **Acesso** com
+  Desativar/Reativar/Excluir, filtro "Mostrar desativados", selo
+  **Desativado** no lugar do papel, e painel que cobra pendente há +7 dias,
+  mesma pessoa com mais de um login, e conta a apagar no Console (com
+  "Já apaguei"). `login.html`: trava de envio nos dois formulários, mensagem
+  "acesso desativado" (em vez de "aguarda aprovação", que faria a pessoa
+  esperar por uma liberação que ninguém daria) e deixa de devolver o
+  desativado ao app — seria **laço** com o `auth_check`.
+- **TRAVAS:** ninguém desativa/exclui a si mesmo, e o **último admin ativo**
+  não sai. A tela escreve o MOTIVO no lugar do botão, para botão ausente não
+  parecer bug.
+- **Limpeza aplicada em produção** (decisão do usuário: só as de hoje):
+  `scripts/limpar-logins-duplicados.js` apagou RTDB **e** Auth dos 3
+  duplicados da Luana (`8y9nlfds`, `oPGc3T5Y`, `ZERXmDp4`), mantendo
+  `EaN7w6eC` (production, o que ela usa). Protocolo do CLAUDE.md seguido:
+  backup em `backups/logins-removidos-*.json`, `--so-um` primeiro, conferido,
+  depois o resto. **Base agora: 21 registros / 22 contas.** Luana com 1 login.
+- **NÃO limpos** (decisão do usuário): `tom@` x2,
+  `gustavosilvabraulio20@` x2, Roberta com `.com` e `.com.br`, e `AadKYuWD`
+  (registro no RTDB **sem** conta no Auth — linha morta). O painel novo
+  aponta todos.
+- **Testes:** `run_gestao_usuarios_test.js` (travas, caminho plano, lápide,
+  idempotência) e `run_usuarios_ui_test.js` (tela real + **3 cliques criando
+  UMA conta**). Como mexi em `auth_check.js`, que toda tela carrega, rodei a
+  bateria inteira: **72 testes de tela, 65 OK e as MESMAS 7 falhas que
+  `origin/main` já tinha** (conferido em worktree limpo no `fdddf58`:
+  encerramento_pedido, inspecao_pa, operacao, painel_rearranjo, portao_bulk,
+  rearranjo_linhas, retrabalhos). **Zero regressão minha.**
+- **Pendente de operação:** o toggle "uma conta por e-mail" no Console
+  (Authentication > Settings) fecharia a porta de vez; a trava de clique corta
+  o caminho comum, mas a config segue permissiva.
+- **Publicado:** `6d63a68` (hosting + regras de banco).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Dossiê do lote: busca por data (21/10/2026)
 
 - **Pedido:** campo de busca pela data no dossiê do lote.
