@@ -124,7 +124,21 @@ async function abrir(browser) {
     }));
     await page.click('.tabs button[data-tab="docs"]');
     assert.match(await page.locator('.tabs button.active').innerText(), /Acompanhar pedido/);
-    await page.selectOption('#dPedido', 'PED-0019');
+    // lista filtrável: contadores, filtros e clique no pedido
+    assert.match(await page.locator('#docChips').innerText(), /Com saldo a produzir 1/);
+    assert.match(await page.locator('#docChips').innerText(), /Concluídos \/ encerrados 0/);
+    assert.match(await page.locator('#docLista').innerText(), /PED-0019[\s\S]*GLOW MAKE UP/);
+    await page.click('#docChips [data-f="concluidos"]');
+    assert.match(await page.locator('#docLista').innerText(), /Nenhum pedido neste filtro/);
+    await page.click('#docChips [data-f="todos"]');
+    await page.fill('#docBusca', 'segundo item');
+    assert.match(await page.locator('#docLista').innerText(), /PED-0019/, 'busca acha pelo produto da linha');
+    await page.fill('#docBusca', 'inexistente');
+    assert.match(await page.locator('#docLista').innerText(), /Nenhum pedido/);
+    await page.fill('#docBusca', '');
+    await page.click('#docChips [data-f="produzir"]');
+    await page.click('#docLista tr[data-id="PED-0019"]');
+    assert.equal(await page.inputValue('#dPedido'), 'PED-0019');
     const corpo = await page.locator('#docResumo').innerText();
     assert.match(corpo, /Em andamento \(1 linha a produzir\)/);
     assert.match(corpo, /GLOW MAKE UP/);
@@ -145,6 +159,8 @@ async function abrir(browser) {
     assert.equal(await page.evaluate(() => window.__db.pedidos['PED-0019__OUTRO'].statusManual || null), null, 'só a linha escolhida');
     await page.waitForSelector('#docResumo [data-ac="reabrir"]');
     assert.match(await page.locator('#docResumo').innerText(), /Produção concluída ou encerrada/);
+    assert.match(await page.locator('#docChips').innerText(), /Com saldo a produzir 0/);
+    assert.match(await page.locator('#docChips').innerText(), /Concluídos \/ encerrados 1/);
 
     await page.click('#docResumo [data-ac="reabrir"]');
     await page.fill('#encTexto', 'cliente pediu o saldo de volta');
