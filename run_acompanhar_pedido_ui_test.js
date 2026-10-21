@@ -122,7 +122,10 @@ async function abrir(browser) {
     await page.evaluate(() => firebase.database().ref().update({
       'pedidos/PED-0019__OUTRO': {id: 'PED-0019', parentPedidoId: 'PED-0019', sku: 'OUTRO', produto: 'SEGUNDO ITEM', qtdTotal: 500, produzido: 500, status: 'Concluído'}
     }));
+    await page.evaluate(() => firebase.database().ref().update({'expedicoes_comerciais/L1': {legado: true, tipoLegado: 'EXPEDIDO', data: '2026-08-20', cliente: 'GLOW MAKE UP', itens: {i1: {pedidoKey: 'PED-0019__GLMKAM04', sku: 'GLMKAM04', qtd: 300}}}}));
     await page.click('.tabs button[data-tab="docs"]');
+    // expedido vem da conciliação (a mesma do Relatório de Pedido), não de campo gravado na linha
+    await page.waitForFunction(() => /300/.test(document.getElementById('docLista').innerText) && !/carregando expedição/.test(document.getElementById('docChips').innerText), null, {timeout: 8000});
     assert.match(await page.locator('.tabs button.active').innerText(), /Acompanhar pedido/);
     // lista filtrável: contadores, filtros e clique no pedido
     assert.match(await page.locator('#docChips').innerText(), /Com saldo a produzir 1/);
