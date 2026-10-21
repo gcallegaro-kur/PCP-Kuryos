@@ -264,8 +264,21 @@ async function abrir(browser, pagina) {
     assert.ok(!/"SIM";600;/.test(lx), 'OP-X está viva, não é empenho preso');
     assert.match(lfim, /;"\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}"$/, 'data em dd/mm/aaaa hh:mm: ' + lfim);
 
+    // PDF: abre a janela de impressão com o relatório. O que precisa estar
+    // certo é o documento (filtro declarado, logo, itens), não o diálogo.
+    await page.click('#fGrupo [data-g="MPGR"]');
+    await page.waitForFunction(() => document.querySelectorAll('#corpo tr[data-c]').length === 1);
+    await page.evaluate(() => { window.print = () => {}; });
+    const [popup] = await Promise.all([page.waitForEvent('popup'), page.click('#btnPdf')]);
+    await popup.waitForFunction(() => document.body && /ALCOOL CEREAL/.test(document.body.innerText), null, {timeout: 5000});
+    const docTxt = await popup.evaluate(() => document.body.innerText);
+    assert.match(docTxt, /ALCOOL CEREAL/);
+    assert.ok(!/FRASCO PET/.test(docTxt), 'o PDF segue o filtro da tela');
+    assert.ok(await popup.evaluate(() => !!document.querySelector('svg')), 'logo da Kuryos no documento');
+    await popup.close();
+
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
-    console.log('OK Consulta de Estoque (tela): busca, filtros vivos, drawer, atalhos, intermediários x embalagens e os dois exports.');
+    console.log('OK Consulta de Estoque (tela): busca, filtros vivos, drawer, atalhos, intermediários x embalagens, os dois exports e o PDF.');
   } finally {
     await browser.close();
   }
