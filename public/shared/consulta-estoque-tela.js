@@ -455,6 +455,34 @@
     baixarCsv('empenhos-', cab, lin);
   }
 
+  /* Relatório em PDF: o mesmo conjunto do CSV (lista filtrada inteira), formatado para imprimir.
+     A janela abre ANTES do fetch do logotipo: depois de um await o navegador trata como popup e bloqueia. */
+  function gerarPdf() {
+    var lista = filtradas();
+    var w = window.open('', '_blank');
+    if (!w) { alert('O navegador bloqueou a janela do relatório. Libere pop-ups para este site e tente de novo.'); return; }
+    w.document.write('<p style="font:14px Arial;padding:24px">Montando o relatório…</p>');
+    var selTxt = function(id) { var s = el(id); return s && s.selectedIndex >= 0 ? s.options[s.selectedIndex].text : ''; };
+    var tag = TAGS.filter(function(x) { return x.t === estado.tag; })[0];
+    var filtros = [
+      ['Busca', estado.q ? '“' + estado.q + '”' : ''],
+      ['Tipo', estado.grupo && CE.GRUPOS[estado.grupo] ? CE.GRUPOS[estado.grupo].rotulo : ''],
+      ['Situação', tag ? tag.r.replace(/^[^A-Za-zÀ-ú]+/, '') : ''],
+      ['Cliente', estado.cliente ? selTxt('fCliente') : '']
+    ];
+    var ordem = selTxt('fOrdem') + (estado.desc ? ' (invertido)' : '');
+    var montar = function(logo) {
+      var u = window.currentUser || {};
+      var html = ConsultaEstoquePdf.documento({rows: lista, kpis: CE.kpis(lista), filtros: filtros, ordem: ordem, emitidoEm: new Date(),
+        emitidoPor: u.nome || u.name || u.email || '', logoSvg: logo});
+      w.document.open(); w.document.write(html); w.document.close(); w.focus();
+    };
+    fetch('kuryos-logo.svg').then(function(r) { return r.ok ? r.text() : ''; })
+      .then(function(t) { return t.replace(/<\?xml[^>]*\?>/, '').trim(); })
+      .catch(function() { return ''; })
+      .then(montar);
+  }
+
   var timer = null;
   el('q').addEventListener('input', function() { clearTimeout(timer); var v = el('q').value; timer = setTimeout(function() { estado.q = v; estado.mostrar = TAM_PAGINA; focoIdx = -1; render(); }, 90); });
   el('qLimpa').onclick = function() { el('q').value = ''; estado.q = ''; render(); el('q').focus(); };
@@ -465,6 +493,7 @@
   el('abaInter').onclick = function() { irParaAba('inter'); };
   el('fundo').onclick = fecharDrawer;
   el('btnCsv').onclick = exportarCsv;
+  el('btnPdf').onclick = gerarPdf;
   el('btnCsvEmp').onclick = exportarEmpenhos;
   el('btnDens').onclick = function() { estado.denso = !estado.denso; el('btnDens').textContent = estado.denso ? '↕ Confortável' : '↕ Compacto'; try { localStorage.setItem('ce-denso', estado.denso ? '1' : '0'); } catch (x) { /* sem storage */ } render(); };
   document.querySelectorAll('thead th[data-o]').forEach(function(th) {

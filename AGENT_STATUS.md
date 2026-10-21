@@ -157,6 +157,13 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Consulta de Estoque: botão "Gerar PDF" (21/10/2026)
+
+- **Pedido:** relatório de inventário da Consulta de Estoque em PDF, com logotipo e visual profissional.
+- **Feito:** `shared/consulta-estoque-pdf.js` (puro) monta um documento A4 paisagem — logotipo, data/autor, filtros aplicados, indicadores, tabela agrupada por tipo com cabeçalho repetido a cada página, totais por unidade (nunca misturando kg com un) e rodapé "Página X de Y". Botão **📄 Gerar PDF** em `consulta_estoque.html` abre o relatório da lista filtrada INTEIRA (mesmo conjunto do CSV) para "Salvar como PDF".
+- **Teste:** `run_consulta_estoque_pdf_test.js`; conferido visualmente no navegador. O teste de tela com Playwright não rodou aqui (Playwright não instalado nesta máquina).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Desativar e excluir usuário — PUBLICADO (21/10/2026)
 
 - **Pedido:** "quero poder excluir usuarios, é possível?". A tela só trocava
