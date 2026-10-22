@@ -136,6 +136,8 @@ async function abrir(browser) {
     await page.click('#abas .tab[data-tab="carteira"]');
     await page.locator('#tabCarteira tr.clicavel', {hasText: 'PED-0002'}).click();
     assert.match(await page.locator('#tabCarteira').innerText(), /PDF enviado à diretoria/);
+    const cabCarteira = await page.locator('#tabCarteira').innerText();
+    assert.ok(/A produzir/i.test(cabCarteira) && /Produzido sem saída/i.test(cabCarteira) && /R\$ a entregar/i.test(cabCarteira), 'carteira separa o que falta produzir do produzido sem saída');
     await page.locator('[data-editar="PED-0002"]').click();
     await page.waitForSelector('#modalEdicao.open');
     assert.match(await page.locator('#edItens').innerText(), /mín\. 3\.696/);

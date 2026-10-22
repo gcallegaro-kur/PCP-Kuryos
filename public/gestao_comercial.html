@@ -569,20 +569,20 @@ function renderCarteira() {
     }
     return true;
   });
-  var tot = lista.reduce(function(a, p) { var vis = visaoCarteira(p); a.q += vis.qtd; a.e += vis.expedido; a.s += p.saldoEntregar; a.v += p.valorSaldo || 0; return a; }, {q: 0, e: 0, s: 0, v: 0});
+  var tot = lista.reduce(function(a, p) { var vis = visaoCarteira(p); a.q += vis.qtd; a.e += vis.expedido; a.s += p.saldoProduzir; a.pr += p.pronto; a.v += p.valorSaldo || 0; return a; }, {q: 0, e: 0, s: 0, pr: 0, v: 0});
   var html = '<thead><tr><th>Pedido</th><th>Nº cliente</th><th>Cliente</th><th>Data</th><th class="num">Idade</th><th>Previsão</th>' +
-    '<th class="num">Pedido</th><th class="num">Produzido</th><th class="num">Expedido</th><th class="num">A entregar</th><th class="num">R$ a entregar</th><th>Condição</th><th>Situação</th></tr></thead><tbody>';
-  if (!lista.length) html += '<tr><td colspan="13" class="vazio">Nenhum pedido neste filtro.</td></tr>';
+    '<th class="num">Pedido</th><th class="num">Produzido</th><th class="num">Expedido</th><th class="num" title="Ainda não produzido: saldo do pedido menos o que a produção já fez">A produzir</th><th class="num" title="Já produzido e sem saída registrada na Expedição: está em palete, esperando conferência ou saiu sem baixa. Detalhe no relatório da Logística.">Produzido sem saída</th><th class="num" title="Saldo do pedido (pedido menos expedido) x preço: o que será faturado quando sair">R$ a entregar</th><th>Condição</th><th>Situação</th></tr></thead><tbody>';
+  if (!lista.length) html += '<tr><td colspan="14" class="vazio">Nenhum pedido neste filtro.</td></tr>';
   lista.forEach(function(p) {
     html += '<tr class="clicavel" data-id="' + esc(p.id) + '"><td><b>' + esc(p.numero) + '</b>' + (p.versao > 1 ? ' <span class="muted">v' + p.versao + '</span>' : '') + '</td>' +
       '<td>' + esc(p.numeroCliente || '—') + '</td><td>' + esc(p.cliente) + '</td><td>' + data(p.dataPedido) + '</td>' +
       '<td class="num">' + (p.idadeDias == null ? '—' : p.idadeDias + 'd') + '</td><td>' + data(p.previsao) + '</td>' +
       '<td class="num">' + un(visaoCarteira(p).qtd) + '</td><td class="num">' + un(visaoCarteira(p).produzido) + '</td><td class="num">' + un(visaoCarteira(p).expedido) + '</td>' +
-      '<td class="num"><b>' + un(p.saldoEntregar) + '</b></td><td class="num">' + (p.valorSaldo != null ? reais(p.valorSaldo, true) : '<span class="muted">sem preço</span>') + '</td>' +
+      '<td class="num"><b>' + un(p.estado === 'ABERTO' ? p.saldoProduzir : 0) + '</b></td><td class="num">' + un(p.estado === 'ABERTO' ? p.pronto : 0) + '</td><td class="num">' + (p.valorSaldo != null ? reais(p.valorSaldo, true) : '<span class="muted">sem preço</span>') + '</td>' +
       '<td>' + esc(p.condicaoPagamento || '—') + (p.frete ? '<div class="muted">' + esc(p.frete) + '</div>' : '') + '</td><td>' + badgesPedido(p) + '</td></tr>';
     if (cartAberto === p.id) html += detalhePedido(p);
   });
-  if (lista.length) html += '<tr><td colspan="6"><b>' + lista.length + ' pedido(s)</b></td><td class="num"><b>' + un(tot.q) + '</b></td><td></td><td class="num"><b>' + un(tot.e) + '</b></td><td class="num"><b>' + un(tot.s) + '</b></td><td class="num"><b>' + (tot.v ? reais(tot.v, true) : '—') + '</b></td><td colspan="2"></td></tr>';
+  if (lista.length) html += '<tr><td colspan="6"><b>' + lista.length + ' pedido(s)</b></td><td class="num"><b>' + un(tot.q) + '</b></td><td></td><td class="num"><b>' + un(tot.e) + '</b></td><td class="num"><b>' + un(tot.s) + '</b></td><td class="num"><b>' + un(tot.pr) + '</b></td><td class="num"><b>' + (tot.v ? reais(tot.v, true) : '—') + '</b></td><td colspan="2"></td></tr>';
   var tab = document.getElementById('tabCarteira');
   tab.innerHTML = html + '</tbody>';
   tab.querySelectorAll('tr.clicavel').forEach(function(tr) {
@@ -610,7 +610,7 @@ function detalhePedido(p) {
       '<td class="num">' + un(i.estoqueWms) + '</td><td class="num">' + un(i.saldoProduzir) + '</td><td class="num">' + preco + desvio + '</td>' +
       '<td>' + data(i.primeiraOp) + '</td><td>' + data(i.ultimaSaida) + (i.cargas ? ' <span class="muted">(' + i.cargas + ' cargas)</span>' : '') + '</td></tr>';
   }).join('');
-  return '<tr class="detalhe"><td colspan="13"><table><thead><tr><th>SKU</th><th>Produto</th><th>Situação</th><th class="num">Pedido</th><th class="num">Produzido</th>' +
+  return '<tr class="detalhe"><td colspan="14"><table><thead><tr><th>SKU</th><th>Produto</th><th>Situação</th><th class="num">Pedido</th><th class="num">Produzido</th>' +
     '<th class="num">Expedido</th><th class="num">Em estoque (WMS)</th><th class="num">A produzir</th><th class="num">Preço</th><th>1ª OP</th><th>Última saída</th></tr></thead><tbody>' +
     linhas + '</tbody></table>' +
     (escondidos ? '<div class="nota"><a href="#" data-todos="' + esc(p.id) + '">Mostrar também os ' + escondidos + ' itens já atendidos ou encerrados</a></div>' : (cartMostrarTodos[p.id] ? '<div class="nota"><a href="#" data-todos="' + esc(p.id) + '">Esconder itens atendidos ou encerrados</a></div>' : '')) +

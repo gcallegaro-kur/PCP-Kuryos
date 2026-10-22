@@ -148,7 +148,7 @@ async function abrir(browser) {
     assert.match(corpo, /GLMKAM04/);
     assert.match(corpo, /SEGUNDO ITEM/);
     assert.match(corpo, /Produzida/);
-    assert.equal(await page.locator('#docResumo [data-ac="encerrar"]').count(), 1, 'só a linha em produção oferece Encerrar');
+    assert.equal(await page.locator('#docResumo [data-ac="encerrar"]').count(), 2, 'toda linha não encerrada oferece Encerrar (produzida ou não)');
     assert.equal(await page.getAttribute('#docEditar', 'href'), 'gestao_comercial.html?tab=pedidos&pedido=PED-0019');
     assert.equal(await page.locator('#aditivo').count(), 0, 'aditivo sem alteração saiu da tela');
     assert.match(await page.locator('#timeline').innerText(), /Pedido liberado ao PCP/, 'evento com nome legível');
