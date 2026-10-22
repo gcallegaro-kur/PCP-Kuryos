@@ -539,6 +539,13 @@ function badgesPedido(p) {
   var mapa = {ABERTO: ['b-blue', 'Aberto'], ATENDIDO: ['b-green', 'Atendido'], FECHADO: ['b-gray', 'Encerrado'], A_CONFERIR: ['b-orange', 'A conferir']};
   var e = mapa[p.estado] || ['b-gray', p.estado];
   b.push('<span class="badge ' + e[0] + '">' + e[1] + '</span>');
+  // Pedido só sai de "Aberto" quando TODAS as linhas fecham: mostra quantas faltam,
+  // senão parece que o encerramento feito no PCP não chegou aqui.
+  if (p.estado === 'ABERTO') {
+    var linhasAbertas = p.itens.filter(function(i) { return i.estado === 'ABERTO'; }).length;
+    var linhasFechadas = p.itens.filter(function(i) { return i.estado === 'FECHADO'; }).length;
+    if (linhasFechadas) b.push('<span class="badge b-gray" title="Encerradas no PCP ou no Comercial. O pedido só sai de Aberto quando todas as linhas fecham.">' + linhasFechadas + ' encerrada' + (linhasFechadas > 1 ? 's' : '') + ' · ' + linhasAbertas + ' em aberto</span>');
+  }
   if (p.atrasado) b.push('<span class="badge b-red">Atrasado ' + p.diasAtraso + 'd</span>');
   if (p.parado) b.push('<span class="badge b-orange" title="Sem OP, apontamento ou saída nos últimos ' + GestaoComercial.DIAS_PARADO + ' dias">Parado</span>');
   if (p.semOpHaDias != null && p.semOpHaDias > 15) b.push('<span class="badge b-orange">Sem OP ' + p.semOpHaDias + 'd</span>');
