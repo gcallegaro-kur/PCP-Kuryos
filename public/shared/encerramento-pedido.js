@@ -72,7 +72,7 @@
     (keys || []).forEach(function(k, i) {
       var p = (pedidos || {})[k];
       // Já encerrada ou concluída (100% / Concluído): nada a encerrar.
-      if (!p || situacao(p) === 'encerrado' || (situacao(p) === 'concluido' && !saldoReabrivel(p))) return;
+      if (!p || situacao(p) === 'encerrado' || (situacao(p) === 'concluido' && !saldoReabrivel(p) && !o.incluirConcluidas)) return;
       var saldo = Math.max(0, num(p.qtdTotal) - num(p.produzido));
       var reg = {motivoTipo: o.motivoTipo, motivo: MOTIVOS[o.motivoTipo], texto: txt(o.texto) || null,
         por: txt(o.por), origem: ORIGENS[o.origem] ? o.origem : 'PCP', em: agora,
@@ -152,7 +152,7 @@
     var pedidos = c.pedidos || {};
     var todas = linhasDoPedido(pedidos, c.pedidoId);
     if (c.keyLinha && todas.indexOf(c.keyLinha) < 0) todas.push(c.keyLinha);
-    var alvoTodas = todas.filter(function(k) { return saldoAcao ? saldoReabrivel(pedidos[k]) : reabrir ? situacao(pedidos[k]) === 'encerrado' : (situacao(pedidos[k]) === 'andamento' || situacao(pedidos[k]) === 'pronto' || saldoReabrivel(pedidos[k])); });
+    var alvoTodas = todas.filter(function(k) { return saldoAcao ? saldoReabrivel(pedidos[k]) : reabrir ? situacao(pedidos[k]) === 'encerrado' : (situacao(pedidos[k]) === 'andamento' || situacao(pedidos[k]) === 'pronto' || situacao(pedidos[k]) === 'concluido'); });
     var linhaP = c.keyLinha ? pedidos[c.keyLinha] : null;
     function linhaTxt(k) {
       var p = pedidos[k] || {};
@@ -191,7 +191,7 @@
       var linhaSel = c.keyLinha || ($('encLinha') && $('encLinha').value);
       if (!linhaSel) { $('encErro').textContent = 'Escolha a linha.'; $('encErro').style.display = ''; return; }
       var keys = [linhaSel];
-      var opc = {motivoTipo: reabrir ? null : $('encMotivo').value, texto: $('encTexto').value, por: c.por, origem: c.origem};
+      var opc = {motivoTipo: reabrir ? null : $('encMotivo').value, texto: $('encTexto').value, por: c.por, origem: c.origem, incluirConcluidas: true};
       var r = saldoAcao ? montarReaberturaSaldo(pedidos, keys, opc) : reabrir ? montarReabertura(pedidos, keys, opc) : montarEncerramento(pedidos, keys, opc);
       if (!r.ok) { $('encErro').textContent = r.erro; $('encErro').style.display = ''; return; }
       btn.disabled = true;

@@ -290,6 +290,7 @@
       });
 
       var soma = function(campo) { return itens.reduce(function(s, i) { return s + n(i[campo]); }, 0); };
+      var somaAbertos = function(campo) { return itens.reduce(function(s, i) { return s + (i.estado === 'ABERTO' ? n(i[campo]) : 0); }, 0); };
       var estados = itens.map(function(i) { return i.estado; });
       var estado = !itens.length ? 'SEM_ITENS'
         : estados.indexOf('ABERTO') !== -1 ? 'ABERTO'
@@ -311,6 +312,8 @@
         percentualNF: pc.percentualNF != null ? n(pc.percentualNF) : null, temComercial: !!pcs[id],
         itens: itens, estado: estado,
         qtd: soma('qtd'), produzido: soma('produzido'), expedido: soma('expedido'),
+        // Só as linhas ainda ABERTAS: a carteira não mostra o que já foi atendido, encerrado ou está a conferir.
+        qtdAberta: somaAbertos('qtd'), produzidoAberto: somaAbertos('produzido'), expedidoAberto: somaAbertos('expedido'),
         saldoEntregar: soma('saldoEntregar'), saldoProduzir: soma('saldoProduzir'), pronto: soma('pronto'), aConferir: soma('aConferir'),
         valor: itens.some(function(i) { return i.valor != null; }) ? arred(soma('valor')) : null,
         valorSaldo: itens.some(function(i) { return i.valorSaldo != null; }) ? arred(soma('valorSaldo')) : null,

@@ -99,4 +99,13 @@ ok('reabrir saldo: Concluído com produzido < pedido volta a produzir, com motiv
   assert.equal(enc.updates['pedidos/A/statusManual'], 'encerrado');
 });
 
+ok('encerrar linha Concluída cheia (pedido antigo, entrega não cobrada): só com incluirConcluidas', () => {
+  const ps = {Z: {sku: 'Z', status: 'Concluído', qtdTotal: 10000, produzido: 10550}};
+  assert.equal(E.montarEncerramento(ps, ['Z'], {motivoTipo: 'OUTRO', texto: 'pedido antigo', por: 'x'}).ok, false, 'por padrão nada a encerrar');
+  const r = E.montarEncerramento(ps, ['Z'], {motivoTipo: 'OUTRO', texto: 'pedido antigo', por: 'x', incluirConcluidas: true});
+  assert.equal(r.ok, true);
+  assert.equal(r.updates['pedidos/Z/statusManual'], 'encerrado');
+  assert.equal(r.updates['pedidos/Z/encerramento'].saldoNaoProduzido, 0);
+});
+
 console.log(`\nrun_encerramento_pedido_test: ${n} OK`);

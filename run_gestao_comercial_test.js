@@ -216,4 +216,23 @@ const ped = (id) => r.pedidos.find((p) => p.id === id);
   assert.strictEqual(v.kpis.carteiraValor, null);
 }
 
+// Carteira só com o que está aberto: item encerrado ou atendido não entra nas somas do pedido aberto.
+{
+  const raw = {
+    clientes: {MISS: {nome: 'MISS RÔSE'}}, produtos: {}, precos_venda: {}, ops: {},
+    pedidos: {
+      'P1__A': {id: 'P1', parentPedidoId: 'P1', sku: 'A', produto: 'A', cliente: 'MISS RÔSE', qtdTotal: 1000, produzido: 300, dataPedido: '2026-09-10'},
+      'P1__B': {id: 'P1', parentPedidoId: 'P1', sku: 'B', produto: 'B', cliente: 'MISS RÔSE', qtdTotal: 5000, produzido: 5000, statusManual: 'encerrado', dataPedido: '2026-09-10'}
+    },
+    pedidos_comerciais: {P1: {cliente: 'MISS RÔSE', clienteKey: 'MISS', dataPedido: '2026-09-10', status: 'LIBERADO_PCP', itens: [{sku: 'A', qtd: 1000, valorUnitario: 2}, {sku: 'B', qtd: 5000, valorUnitario: 2}]}}
+  };
+  const p = G.calcular(raw, HOJE).pedidos.find((x) => x.id === 'P1');
+  assert.strictEqual(p.estado, 'ABERTO');
+  assert.strictEqual(p.qtd, 6000, 'total do pedido segue completo');
+  assert.strictEqual(p.qtdAberta, 1000, 'carteira só conta a linha aberta');
+  assert.strictEqual(p.produzidoAberto, 300);
+  assert.strictEqual(p.saldoEntregar, 1000);
+  assert.strictEqual(p.valorSaldo, 2000, 'valor a entregar só da linha aberta');
+}
+
 console.log('run_gestao_comercial_test.js: OK');

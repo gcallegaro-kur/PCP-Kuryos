@@ -569,7 +569,7 @@ function renderCarteira() {
     }
     return true;
   });
-  var tot = lista.reduce(function(a, p) { a.q += p.qtd; a.e += p.expedido; a.s += p.saldoEntregar; a.v += p.valorSaldo || 0; return a; }, {q: 0, e: 0, s: 0, v: 0});
+  var tot = lista.reduce(function(a, p) { var vis = visaoCarteira(p); a.q += vis.qtd; a.e += vis.expedido; a.s += p.saldoEntregar; a.v += p.valorSaldo || 0; return a; }, {q: 0, e: 0, s: 0, v: 0});
   var html = '<thead><tr><th>Pedido</th><th>Nº cliente</th><th>Cliente</th><th>Data</th><th class="num">Idade</th><th>Previsão</th>' +
     '<th class="num">Pedido</th><th class="num">Produzido</th><th class="num">Expedido</th><th class="num">A entregar</th><th class="num">R$ a entregar</th><th>Condição</th><th>Situação</th></tr></thead><tbody>';
   if (!lista.length) html += '<tr><td colspan="13" class="vazio">Nenhum pedido neste filtro.</td></tr>';
@@ -577,7 +577,7 @@ function renderCarteira() {
     html += '<tr class="clicavel" data-id="' + esc(p.id) + '"><td><b>' + esc(p.numero) + '</b>' + (p.versao > 1 ? ' <span class="muted">v' + p.versao + '</span>' : '') + '</td>' +
       '<td>' + esc(p.numeroCliente || '—') + '</td><td>' + esc(p.cliente) + '</td><td>' + data(p.dataPedido) + '</td>' +
       '<td class="num">' + (p.idadeDias == null ? '—' : p.idadeDias + 'd') + '</td><td>' + data(p.previsao) + '</td>' +
-      '<td class="num">' + un(p.qtd) + '</td><td class="num">' + un(p.produzido) + '</td><td class="num">' + un(p.expedido) + '</td>' +
+      '<td class="num">' + un(visaoCarteira(p).qtd) + '</td><td class="num">' + un(visaoCarteira(p).produzido) + '</td><td class="num">' + un(visaoCarteira(p).expedido) + '</td>' +
       '<td class="num"><b>' + un(p.saldoEntregar) + '</b></td><td class="num">' + (p.valorSaldo != null ? reais(p.valorSaldo, true) : '<span class="muted">sem preço</span>') + '</td>' +
       '<td>' + esc(p.condicaoPagamento || '—') + (p.frete ? '<div class="muted">' + esc(p.frete) + '</div>' : '') + '</td><td>' + badgesPedido(p) + '</td></tr>';
     if (cartAberto === p.id) html += detalhePedido(p);
@@ -588,12 +588,21 @@ function renderCarteira() {
   tab.querySelectorAll('tr.clicavel').forEach(function(tr) {
     tr.addEventListener('click', function() { cartAberto = cartAberto === tr.dataset.id ? null : tr.dataset.id; renderCarteira(); });
   });
+  tab.querySelectorAll('[data-todos]').forEach(function(a) { a.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); cartMostrarTodos[a.dataset.todos] = !cartMostrarTodos[a.dataset.todos]; renderCarteira(); }); });
   tab.querySelectorAll('[data-editar]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); abrirEdicao(b.dataset.editar); }); });
   tab.querySelectorAll('[data-versoes]').forEach(function(b) { b.addEventListener('click', function(e) { e.stopPropagation(); abrirVersoes(b.dataset.versoes); }); });
 }
+/* Pedido em aberto mostra só o que ainda está aberto (itens atendidos, encerrados ou a conferir
+   ficam de fora das somas e do detalhe, a menos que se peça). Pedido já fechado mostra tudo. */
+var cartMostrarTodos = {};
+function visaoCarteira(p) {
+  if (p.estado !== 'ABERTO') return {qtd: p.qtd, produzido: p.produzido, expedido: p.expedido};
+  return {qtd: p.qtdAberta, produzido: p.produzidoAberto, expedido: p.expedidoAberto};
+}
 function detalhePedido(p) {
   var estados = {ABERTO: 'Aberto', ATENDIDO: 'Atendido', FECHADO: 'Encerrado', A_CONFERIR: 'A conferir'};
-  var linhas = p.itens.map(function(i) {
+  var escondidos = p.estado === 'ABERTO' && !cartMostrarTodos[p.id] ? p.itens.filter(function(i) { return i.estado !== 'ABERTO'; }).length : 0;
+  var linhas = p.itens.filter(function(i) { return !escondidos || i.estado === 'ABERTO'; }).map(function(i) {
     var preco = i.preco != null ? reais(i.preco) + ' <span class="muted">(' + (i.fontePreco === 'PEDIDO' ? 'pedido' : 'tabela') + ')</span>' : '<span class="muted">—</span>';
     var desvio = i.desvioTabela != null ? ' <span class="badge ' + (i.desvioTabela < -0.05 ? 'b-red' : 'b-gray') + '">' + (i.desvioTabela >= 0 ? '+' : '') + pct(i.desvioTabela, 1) + ' tabela</span>' : '';
     return '<tr><td>' + esc(i.sku) + '</td><td>' + esc(i.descricao) + '</td><td>' + esc(estados[i.estado] || i.estado) + '</td>' +
@@ -604,8 +613,9 @@ function detalhePedido(p) {
   return '<tr class="detalhe"><td colspan="13"><table><thead><tr><th>SKU</th><th>Produto</th><th>Situação</th><th class="num">Pedido</th><th class="num">Produzido</th>' +
     '<th class="num">Expedido</th><th class="num">Em estoque (WMS)</th><th class="num">A produzir</th><th class="num">Preço</th><th>1ª OP</th><th>Última saída</th></tr></thead><tbody>' +
     linhas + '</tbody></table>' +
+    (escondidos ? '<div class="nota"><a href="#" data-todos="' + esc(p.id) + '">Mostrar também os ' + escondidos + ' itens já atendidos ou encerrados</a></div>' : (cartMostrarTodos[p.id] ? '<div class="nota"><a href="#" data-todos="' + esc(p.id) + '">Esconder itens atendidos ou encerrados</a></div>' : '')) +
     '<div class="nota" style="margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span>Criado por ' + esc(p.criadoPor || '—') + (p.percentualNF != null ? ' · NF ' + p.percentualNF + '%' : '') +
-    (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '') + '</span>' +
+    (p.estado === 'ABERTO' ? (p.valorSaldo != null ? ' · A entregar ' + reais(p.valorSaldo) : '') : (p.valor != null ? ' · Valor do pedido ' + reais(p.valor) + ' (' + pct(p.coberturaPreco) + ' do volume com preço)' : '')) + '</span>' +
     (p.temComercial && podeEditarComercial() && !p.cancelado ? '<button class="btn btn-primary btn-sm" data-editar="' + esc(p.id) + '">Editar pedido</button>' : (!p.temComercial ? '<span class="muted">Pedido antigo, sem cabeçalho comercial: a quantidade se ajusta em Pedidos (PCP).</span>' : '')) +
     (p.versao > 1 ? '<button class="btn btn-ghost btn-sm" data-versoes="' + esc(p.id) + '">Versões (' + p.versao + ')</button>' : '') +
     (!p.temComercial ? '<span class="muted">Pedido antigo sem cadastro comercial: edite pela tela de Pedidos.</span>' : '') +
