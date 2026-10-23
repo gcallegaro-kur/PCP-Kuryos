@@ -3,6 +3,15 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Conferência de PA: SKU e OP maiores (23/10/2026)
+
+- **Pedido:** "deixar tanto o sku do produto quanto o numero da ordem maior".
+- **Feito (só `estoque.html`):** na fila, SKU 18px e OP 16px em destaque (nome do
+  produto fica como apoio); nos modais de Conferência e de Conciliação, OP e SKU
+  em 24px lado a lado. Nenhuma regra mudou.
+- **Teste:** `run_fluxo_ponta_a_ponta_test.js` já falha antes de chegar aqui
+  (modal Encerrar OP, `form.html`) -- não é desta mudança.
+
 ### Claude — Expedição: "Miss Rose" x "MISS ROSE" era cliente diferente (23/10/2026)
 
 - **Pedido:** ao agendar/selecionar cargas com "Miss Rose" e "MISS ROSE", o
