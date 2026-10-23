@@ -99,8 +99,19 @@
      compatível e até 100 paletes. Selecionar tudo sem essas regras montaria
      uma carga que o servidor recusa na hora de confirmar. */
   var LIMITE_PALETES_CARGA = 100;
+  // Mesma regra do servidor (functions/expedicao_regras.js, mesmoCliente):
+  // cadastro igual OU nome igual sem acento, caixa e espaços repetidos.
+  function chaveNomeCliente(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+  function mesmoCliente(a, b) {
+    if (a.clienteKey && b.clienteKey) return a.clienteKey === b.clienteKey;  // cadastro manda
+    var na = chaveNomeCliente(a.cliente), nb = chaveNomeCliente(b.cliente);
+    if (na && nb) return na === nb;
+    return !na && !nb && (a.clienteKey || '') === (b.clienteKey || '');
+  }
   function compativel(a, b) {
-    if ((a.clienteKey || a.cliente) !== (b.clienteKey || b.cliente)) return false;
+    if (!mesmoCliente(a, b)) return false;
     if (JSON.stringify((a.frete || {}).enderecoEntrega || '') !== JSON.stringify((b.frete || {}).enderecoEntrega || '')) return false;
     var ta = (a.frete || {}).tipo || '', tb = (b.frete || {}).tipo || '';
     return !ta || !tb || ta === tb;
@@ -116,7 +127,7 @@
     var incompat = candidatas.length - compat.length;
     if (!jaSelecionadas.length && incompat) {
       var clientes = {};
-      candidatas.forEach(function(l) { clientes[l.clienteKey || l.cliente] = true; });
+      candidatas.forEach(function(l) { clientes[chaveNomeCliente(l.cliente) || l.clienteKey] = true; });
       var n = Object.keys(clientes).length;
       return {selecionar: [], ignoradas: candidatas.length,
         motivo: n > 1 ? 'Os paletes visíveis são de ' + n + ' clientes. Filtre um cliente para selecionar todos.'

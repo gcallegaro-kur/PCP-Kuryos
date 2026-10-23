@@ -19,3 +19,20 @@ assert.equal(grade.diasEstoque('2026-09-01T20:00:00Z', '2026-09-11'), 10);
 assert.equal(grade.diasEstoque('2026-09-11', '2026-09-01'), null);
 assert.equal(grade.diasEstoque('2026-02-30', '2026-09-11'), null);
 console.log('OK grade Expedição: caixas fechadas/parciais, volumes, saldo divergente, dados ausentes e dias em estoque.');
+
+// Mesmo cliente com grafias diferentes (23/10/2026): "Miss Rose" x "MISS ROSE" x
+// "MISS RÔSE" é UM cliente. Pedidos sem clienteKey comparavam o texto cru.
+{
+  const l = (cliente, clienteKey) => ({cliente, clienteKey: clienteKey || '', frete: {enderecoEntrega: 'Rua A', tipo: 'ENTREGA'}});
+  const r = grade.selecionarTodos([l('Miss Rose'), l('MISS ROSE'), l('MISS RÔSE'), l(' miss  rose ', '')], []);
+  assert.equal(r.selecionar.length, 4, 'as quatro grafias formam uma carga só');
+  assert.equal(r.ignoradas, 0);
+  const outro = grade.selecionarTodos([l('Miss Rose'), l('Bria Beauty')], []);
+  assert.equal(outro.selecionar.length, 0, 'cliente diferente continua barrado');
+  assert.match(outro.motivo, /2 clientes/);
+  const misto = grade.selecionarTodos([l('Miss Rose'), l('MISS ROSE', 'MISS')], []);
+  assert.equal(misto.selecionar.length, 2, 'com cadastro de um lado só, vale o nome');
+  const cadastros = grade.selecionarTodos([l('Miss Rose', 'MISS'), l('Miss Rose', 'OUTRO')], []);
+  assert.equal(cadastros.selecionar.length, 0, 'cadastros diferentes dos dois lados: clientes diferentes');
+  console.log('OK grade Expedição: mesmo cliente com grafias diferentes.');
+}

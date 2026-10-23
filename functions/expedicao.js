@@ -1,6 +1,6 @@
 'use strict';
 
-const {analisar} = require('./expedicao_regras');
+const {analisar, mesmoCliente} = require('./expedicao_regras');
 const {agendaDaSaida, snapshotContato, pendente} = require('./agenda_expedicao');
 // Quanto do palete sobe no veículo. Sem "carregar" = palete inteiro (fluxo
 // original). Parcial é por caixas: N caixas completas e, opcionalmente, a
@@ -64,7 +64,7 @@ function prepararSaida(base, data, autor, uid, agora) {
   const linhas = linhasTodas.filter(l => l.carga.unidades > 0);
   if (!linhas.length) erro('invalid-argument', 'Nenhuma unidade marcada como carregada.');
   const primeira = linhas[0];
-  if (linhas.some(l => (l.clienteKey || l.cliente) !== (primeira.clienteKey || primeira.cliente))) erro('failed-precondition', 'Cada carga deve conter paletes do mesmo cliente.');
+  if (linhas.some(l => !mesmoCliente(l, primeira))) erro('failed-precondition', 'Cada carga deve conter paletes do mesmo cliente.');
   if (linhas.some(l => JSON.stringify(l.frete.enderecoEntrega || '') !== JSON.stringify(primeira.frete.enderecoEntrega || ''))) erro('failed-precondition', 'Os pedidos possuem destinos diferentes. Separe as cargas.');
   if (linhas.some(l => l.frete.tipo && (l.frete.tipo === 'FOB' ? 'COLETA' : 'ENTREGA') !== data.tipo)) erro('failed-precondition', 'O transporte deve respeitar o CIF/FOB dos pedidos de origem.');
   const updates = {}, pedidos = {}, porDemanda = {}, porComercial = {};

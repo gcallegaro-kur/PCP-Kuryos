@@ -114,3 +114,11 @@ async function testarHandler() {
 }
 testarHandler().then(()=>console.log('OK Expedição PA: conferência real → paletes, rastreabilidade, baixas atômicas, concorrência, idempotência, permissões, CQ, WMS e legado.')).catch(e=>{console.error(e);process.exitCode=1;});
 module.exports = {fixture, dados};
+{
+  const {mesmoCliente} = require('./functions/expedicao_regras');
+  assert.equal(mesmoCliente({cliente: 'Miss Rose'}, {cliente: 'MISS ROSE'}), true);
+  assert.equal(mesmoCliente({cliente: 'MISS RÔSE'}, {cliente: 'MISS ROSE', clienteKey: 'MISS'}), true, 'cadastro de um lado só: vale o nome');
+  assert.equal(mesmoCliente({cliente: 'Miss Rose', clienteKey: 'MISS'}, {cliente: 'Miss Rose', clienteKey: 'X'}), false, 'cadastros diferentes manda');
+  assert.equal(mesmoCliente({cliente: 'Miss Rose'}, {cliente: 'Bria Beauty'}), false);
+  console.log('OK mesmoCliente: grafias do mesmo cliente.');
+}

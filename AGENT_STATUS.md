@@ -3,6 +3,21 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Expedição: "Miss Rose" x "MISS ROSE" era cliente diferente (23/10/2026)
+
+- **Pedido:** ao agendar/selecionar cargas com "Miss Rose" e "MISS ROSE", o
+  sistema recusava ("só pode incluir carga do mesmo cliente").
+- **Causa (medida em produção):** a regra comparava `clienteKey || cliente`.
+  67 dos 78 pedidos comerciais não têm `clienteKey`, então valia o texto cru:
+  MISS RÔSE (21), MISS ROSE (2+) e Miss Rose (2) eram três clientes.
+- **Feito:** `mesmoCliente(a, b)` em `expedicao_regras.js` (espelho em
+  `public/shared/expedicao.js`, idêntico): cadastro nos dois lados → vale o
+  `clienteKey`; senão, nome sem acento/caixa/espaços repetidos. Usado em
+  `agenda_expedicao.js`, `expedicao.js` e `expedicao-grade.js` (selecionar
+  todos). O nome gravado no pedido não muda.
+- **Não feito:** normalizar/gravar `clienteKey` nos pedidos antigos (cadastro).
+  A regra agora não depende disso.
+
 ### Claude — Pedidos que não conversam: PCP × Gestão Comercial × Comercial (21/10/2026)
 
 - **Pedido:** pente fino nas telas de pedido; pedidos encerrados no PCP abertos na Gestão e valores que não batem.

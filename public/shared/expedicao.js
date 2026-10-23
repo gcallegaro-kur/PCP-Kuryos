@@ -4,6 +4,22 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
   function key(v) { return String(v || '').trim().replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').slice(0, 60); }
+  // Mesmo cliente (23/10/2026). Pedido do usuário: cargas com "Miss Rose" e
+  // "MISS ROSE" eram recusadas como "clientes diferentes". Medido: 67 dos 78
+  // pedidos comerciais não têm clienteKey, e aí a comparação caía no texto
+  // cru -- MISS RÔSE, MISS ROSE e Miss Rose viravam três clientes. Com cadastro
+  // nos dois lados vale o clienteKey; senão, o nome sem acento, caixa e espaços
+  // repetidos. Só compara: o nome gravado no pedido não muda.
+  function chaveNomeCliente(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+  function mesmoCliente(a, b) {
+    a = a || {}; b = b || {};
+    if (a.clienteKey && b.clienteKey) return a.clienteKey === b.clienteKey;  // cadastro manda
+    var na = chaveNomeCliente(a.cliente), nb = chaveNomeCliente(b.cliente);
+    if (na && nb) return na === nb;
+    return !na && !nb && (a.clienteKey || '') === (b.clienteKey || '');
+  }
   // Chave de /pedidos é "<número>__<sku>", e o número aparece nos DOIS
   // formatos na base: 174 OPs gravam '17__PRF-AFEE-0014' para um pedido que
   // existe como '0017__PRF-AFEE-0014', e 17 pedidos reais existem só sem zero
@@ -95,5 +111,5 @@
     });
     return linhas.sort(function(a, b) { return Number(b.disponivel) - Number(a.disponivel) || String(a.lote.validade || '9999').localeCompare(String(b.lote.validade || '9999')) || String(a.lote.identificadorPalete).localeCompare(String(b.lote.identificadorPalete)); });
   }
-  return {analisar: analisar, listar: listar, normalizarChavePedido: normalizarChavePedido, resolverChavePedido: resolverChavePedido};
+  return {analisar: analisar, listar: listar, normalizarChavePedido: normalizarChavePedido, resolverChavePedido: resolverChavePedido, mesmoCliente: mesmoCliente};
 });

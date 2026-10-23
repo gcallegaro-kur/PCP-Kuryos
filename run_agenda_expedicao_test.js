@@ -31,6 +31,17 @@ b.agendamentos_expedicao.agenda_001=cancelada;
 assert.throws(()=>salvar(b,{...dados,revisao:2}),/encerrada/);
 assert.throws(()=>salvar(fixture(),{...dados,dataAgendada:'2026-02-30'}),/data válida/);
 assert.throws(()=>salvar(fixture(),{...dados,paletes:[...paletes,...paletes]}),/duplicado/);
+// Mesmo cliente em grafias diferentes (23/10/2026): Miss Rose x MISS ROSE entra na mesma carga; outro cliente não.
+{
+  const duas=(clienteB)=>{const f=fixture();
+    f.estoque_lotes.SKU.p2={...f.estoque_lotes.SKU.p1,identificadorPalete:'PA-2',opKey:'op2'};
+    f.ops.op2={...f.ops.op,skuPedidoKey:'PED2__SKU'};f.conferencias_pa.op2={...f.conferencias_pa.op};
+    f.pedidos.PED__SKU.cliente='Miss Rose';
+    f.pedidos.PED2__SKU={...f.pedidos.PED__SKU,id:'PED2',parentPedidoId:'PED2',cliente:clienteB};return f;};
+  const dois=[...paletes,{...paletes[0],loteKey:'p2',skuPedidoKey:'PED2__SKU'}];
+  assert.equal(salvar(duas('MISS ROSE'),{...dados,paletes:dois}).paletes.length,2,'Miss Rose e MISS ROSE são o mesmo cliente');
+  assert.throws(()=>salvar(duas('Bria Beauty'),{...dados,paletes:dois}),/mesmo cliente/);
+}
 console.log('OK agenda PA: criação, transporte compartilhado, revisão concorrente, duplicidade, cancelamento e seleção integral.');
 
 // Handler real: o retry da transação relê a revisão e as permissões atuais.

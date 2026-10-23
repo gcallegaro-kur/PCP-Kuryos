@@ -1,5 +1,5 @@
 'use strict';
-const {analisar} = require('./expedicao_regras');
+const {analisar, mesmoCliente} = require('./expedicao_regras');
 function falhar(message, code = 'failed-precondition') { throw Object.assign(new Error(message), {code}); }
 function chave(v) { return typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v); }
 function texto(v, limite = 200) { return String(v || '').trim().slice(0, limite); }
@@ -52,7 +52,7 @@ function prepararAgenda(base, dados, autor, uid, agora) {
     const l = analisar(base, p.itemKey, p.loteKey, hoje);
     if (!l.disponivel) falhar((l.lote.identificadorPalete || p.loteKey) + ': ' + l.motivo);
     if (Number(p.quantidade) !== Number(l.lote.saldoLote) || p.enderecoKey !== l.lote.enderecoKey || p.skuPedidoKey !== l.skuPedidoKey) falhar('O palete mudou. Atualize a seleção antes de agendar.');
-    if (cliente && (clienteKey || cliente) !== (l.clienteKey || l.cliente)) falhar('Agende paletes do mesmo cliente.');
+    if (cliente && !mesmoCliente({cliente, clienteKey}, l)) falhar('Agende paletes do mesmo cliente.');
     const endereco = l.frete.enderecoEntrega || '';
     if (destino != null && JSON.stringify(destino) !== JSON.stringify(endereco)) falhar('Separe cargas com destinos diferentes.');
     if (l.frete.tipo && (l.frete.tipo === 'FOB' ? 'COLETA' : 'ENTREGA') !== dados.tipo) falhar('Respeite o CIF/FOB do pedido.');
