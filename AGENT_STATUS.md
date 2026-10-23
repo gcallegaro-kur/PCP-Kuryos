@@ -170,9 +170,22 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   antigo. Nada de migração de dados.
 - **Arquivos ativos:** nenhum.
 
-## 🚨 INCIDENTE ABERTO — projeto caiu para Spark, billing fechado (19/10/2026)
+## ✅ INCIDENTE ENCERRADO — billing de volta, functions deployam (23/10/2026)
 
-**NÃO tente `firebase deploy --only functions`: vai falhar.** A conta de
+**Resolvido.** Medido em 23/10, não suposto: `firebase deploy --only
+functions:faturamentoCargaPA` **completou com sucesso** ("Successful update
+operation"), e a execução já estava de pé antes disso — solicitação de
+faturamento gravada 23/10 14:28 e NF 14:32 (só a callable escreve), mais 20
+lotes de `registrarRecebimento` depois do corte. Para deployar de um worktree
+novo, rode `npm install` em `functions/` primeiro: sem `node_modules` real a
+análise do CLI dá "Cannot determine backend specification" (junção para o
+`node_modules` de outra pasta também falha).
+
+**O registro abaixo fica como histórico do que foi medido em 19–20/10.**
+
+### Histórico — o que o incidente causou (19/10/2026)
+
+**(na época) NÃO tente `firebase deploy --only functions`: ia falhar.** A conta de
 faturamento do `prod-kuryos` está **fechada** (não só desvinculada). Medido,
 não suposto — a API responde `HTTP 402 "The billing account for the owning
 project is disabled in state closed"`.
