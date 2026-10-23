@@ -212,6 +212,30 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### ⚠ Aviso ao Codex — não commite expedicao.js/expedicao_regras.js por cima (23/10/2026)
+
+Na pasta principal (`producao_firebase_FINAL`) há trabalho **não commitado** em
+`functions/expedicao_regras.js`, `public/shared/expedicao.js`,
+`functions/expedicao.js`, `functions/agenda_expedicao.js`,
+`public/shared/expedicao-grade.js`, `public/auth_check.js`, `public/estoque.html`
+e nos testes de expedição — e a pasta também está **3 commits atrás** do
+`origin/main`, com um commit local (`9ce535a`) que o origin já tem com outro
+hash (`faf8463`).
+
+**O risco:** em `54fdb70` eu corrigi, nos DOIS gêmeos, o campo de validade do
+lote (`lote.validade` → `dataValidade`), que fazia a trava **"Palete vencido"**
+nunca disparar e o **FEFO** ordenar tudo pelo fallback `'9999'`. A cópia que
+está nessa árvore de trabalho é **anterior** à correção — se for commitada por
+cima, o conserto desaparece sem ninguém notar, porque `run_expedicao_test` passa
+com e sem ele (o caminho nunca foi coberto; agora `run_dados_nf_test` cobre).
+
+**O que fazer antes de commitar:** traga a pasta para o `origin/main`
+(`git stash push -u -m codex-expedicao` → `git merge --ff-only origin/main` →
+reaplique) ou confira que `validadeLote` continua nas linhas do "Palete vencido"
+e da ordenação FEFO nos dois arquivos. Eles precisam seguir **byte a byte
+idênticos** (`cmp` limpo). Rode `run_dados_nf_test.js` depois — ele falha se o
+bug voltar.
+
 ### Claude — Dados obrigatórios para emitir NF — PUBLICADO (23/10/2026)
 
 - **Pedido:** data de fabricação e validade do lote **obrigatórias** na emissão
