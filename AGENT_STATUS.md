@@ -199,6 +199,76 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Dados obrigatórios para emitir NF — PUBLICADO (23/10/2026)
+
+- **Pedido:** data de fabricação e validade do lote **obrigatórias** na emissão
+  da NF, mais caixas totais, caixas parciais, SKU e peso.
+- **Medido na solicitação REAL de hoje** (carga Miss Rose `b1f1c379`, 14:28,
+  NF 012 às 14:32): SKU, lote, caixas (34/56/37), caixa parcial (0/0/16) e
+  peso (1.497,6 kg) saem **certos**. **Validade vazia nos três** e **data de
+  fabricação inexistente** na solicitação.
+- **⚠ BUG DE NOME DE CAMPO (a raiz):** o código lia `lote.validade`; o campo
+  é **`dataValidade`** — o nome que `estoque.html`, `kardex.html`,
+  `descarte.html`, `estoque_setor.html` e `conteudo-posicao.js` usam.
+  `lote.validade` existia em **0 dos 176 lotes**.
+- **⚠ A CONSEQUÊNCIA ERA PIOR QUE A NF:** as mesmas duas linhas em
+  `public/shared/expedicao.js` (e no gêmeo `functions/expedicao_regras.js`)
+  são a trava **"Palete vencido"** (`:83`) e a ordenação **FEFO** (`:112`).
+  A trava **nunca disparava** e o FEFO ordenava tudo pelo fallback `'9999'`.
+  **Nenhum teste cobria o caminho** — `run_expedicao_test` passava antes e
+  depois da correção. Corrigido também em `expedicao-grade-tela.js:118`.
+  `run_dados_nf_test` agora prova a trava e o FEFO, e **conferi que a
+  asserção falha se eu reintroduzir o bug**.
+- **Fabricação não se digita:** regra que já existia no laudo de CQ
+  (`qualidade.html`, com comentário) — fim real da OP; sem ela, a emissão;
+  **nunca "hoje"**. Cobertura medida: **100%** nos 99 lotes de PA.
+- **Feito:** `public/shared/dados-nf.js` + `functions/dados_nf.js` (**byte a
+  byte**, com o teste conferindo), usado pela TELA e pela CALLABLE — duas
+  contas em dois lugares divergiriam, e esta vai para dentro de uma nota
+  fiscal. Cada data carrega a **origem** (`origens`). A solicitação passa a
+  levar `dataFabricacao`, `validade`, `caixasParciais`, `volumes` e os totais
+  de volumes/caixas. **Caixa parcial conta como UMA caixa.** Carga **parcial**
+  recalcula a quebra pela quantidade embarcada (declarar as caixas do lote e
+  embarcar menos faria a nota descrever outra carga).
+- **Bloqueio (decisão do usuário: travar e mandar corrigir no cadastro):** a
+  tela desabilita "Enviar solicitação" e diz **SKU + campo + paletes**,
+  apontando `Cadastros › Produtos`; a callable trava igual, porque é ela que
+  grava. **Corrigir o cadastro libera o botão sozinho**, sem recarregar
+  (coberto no teste de tela). Painel novo no topo lista os produtos com
+  estoque que **vão travar**, com lotes e unidades paradas.
+- **Ensaio na base real** (`scripts/ensaio-dados-nf.js`, só leitura):
+  **1 SKU** travaria — `DPGLBS03`, 3 lotes, **7.511 un** (falta prazo de
+  validade e kg/caixa); a **única carga ativa (Miss Rose) PASSA**, 128
+  volumes / 1.497,6 kg. As 4 solicitações antigas tinham fabricação e validade
+  vazias e agora sairiam preenchidas. **Correção do que eu havia estimado:**
+  os "19 SKUs / 40%" contavam lote já expedido; filtrando `saldoLote > 0`,
+  que é o que pode travar faturamento, é **1 SKU**.
+- **1 lote vencido com saldo:** `MPES-00142` / `AK-2026-000630`, venceu
+  03/10/2026, saldo 256,86 — **material recebido, não PA**, então não passa
+  pelo portão de expedição. Nenhum PA com saldo está vencido: o defeito da
+  trava era **latente**, não houve expedição de vencido que a base mostre.
+- **Testes:** `run_dados_nf_test.js` (motor + a trava real de `expedicao.js` +
+  a ligação com `prepararFaturamento`) e `run_faturamento_nf_ui_test.js`
+  (tela real: colunas, bloqueio com SKU/campo/palete, painel, liberação ao
+  corrigir o cadastro). Fixtures de `run_carga_parcial_test.js` e
+  `run_carga_parcial_ui_test.js` ganharam `prazoValidadeMeses` — sem ele a
+  trava nova (corretamente) impedia o faturamento nelas.
+- **Bateria de tela: 76 testes, 66 OK, 10 falhas — as MESMAS 10 que
+  `fd4fb15` já tinha**, conferido uma a uma em worktree limpo. Zero
+  regressão. (A única que eu quebrei, `run_carga_parcial_ui_test.js`, foi a
+  fixture, corrigida.)
+- **Functions ESTÃO VIVAS** — o bloco de incidente de billing de 19/10 está
+  **desatualizado**: solicitação gravada hoje 14:28 e NF 14:32 (só a callable
+  escreve), e 20 lotes de `registrarRecebimento` depois do corte.
+- **Pendente de decisão do usuário:** o **peso da caixa parcial** conta como
+  caixa cheia (444,6 kg onde o proporcional daria 436,8 no item 3 de hoje).
+  Não mexi: é número declarado em nota e `kgCaixa` pode ser peso bruto.
+  Em `MELHORIAS_FUTURAS.md`.
+- **Coordenação:** rebase sobre `abe35cb` sem conflito — conferi que nenhum
+  commit novo do Codex toca os meus arquivos. Gêmeos mantidos idênticos.
+- **Publicado:** `54fdb70`.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Inspeção total de PA: sinalização → inspeção → reprovação de fato → OPs de retrabalho (23/10/2026)
 
 - **Pedido:** a reprovação do lote vira uma *sinalização*; a Produção designa quem revisa tudo item a item (prazo máximo, inconformidades separadas por motivo); a Qualidade decide depois, podendo reprovar parcialmente e por motivos diferentes; cada motivo reprovado vira uma OP de retrabalho; o aprovado sai da quarentena e vai para expedição. Respostas do usuário: Qualidade sinaliza no laudo; prazo FIXO configurável pelo admin; resultado por contagem por motivo; uma OP por motivo.
