@@ -173,8 +173,49 @@
   </div>
   <div class="note-card">
     <b>Faturamento:</b> em <a href="faturamento.html">Faturamento</a>, <b>Solicitar faturamento</b> envia ao Financeiro
-    (cópia à diretoria) paletes, lotes, validades, preços e total. Quando a NF for emitida, <b>Registrar NF</b> — número,
+    (cópia à diretoria) paletes, lotes, <b>data de fabricação, validade, caixas fechadas, caixa parcial, volumes e peso</b>,
+    preços e total. Quando a NF for emitida, <b>Registrar NF</b> — número,
     série, valor, data e chave. A NF vale para todas as viagens da carga. Carga faturada não pode ser cancelada.
+  </div>
+
+  <div class="section-title"><span class="icon">🧾</span> Dados obrigatórios para a nota fiscal</div>
+  <p class="where">Logística › <code>Faturamento</code></p>
+  <p>O Financeiro não emite nota sem estes dados, e por isso <b>Solicitar faturamento trava</b> enquanto faltar
+  qualquer um deles. A tabela da carga mostra cada um, e escreve <b>falta</b> em vermelho no que não tiver.</p>
+  <div class="table-scroll">
+    <table class="field-guide">
+      <thead><tr><th style="width:26%">Dado</th><th>De onde vem</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SKU e lote</strong></td><td>Do próprio palete, como sempre.</td></tr>
+        <tr><td><strong>Data de fabricação</strong></td><td><b>Automática</b>: o fim real da OP que produziu o lote —
+        a mesma data que o laudo da Qualidade usa. Ninguém digita. Se a OP não tiver fim real, encerre a OP.</td></tr>
+        <tr><td><strong>Validade</strong></td><td>A do lote, se gravada. Senão <b>calculada</b>: fabricação +
+        <b>prazo de validade do produto</b> (Cadastros › Produtos). É a falta mais comum.</td></tr>
+        <tr><td><strong>Caixas fechadas e caixa parcial</strong></td><td>Da contagem do palete na Conferência de PA.
+        Quando a carga leva só parte do lote, a quebra é recalculada pela quantidade embarcada — a nota descreve o
+        que vai no caminhão, não o que ficou no palete.</td></tr>
+        <tr><td><strong>Volumes</strong></td><td>Caixas fechadas + 1 quando há caixa parcial. É o que o transportador
+        conta na doca e o que vai no campo de volumes da nota.</td></tr>
+        <tr><td><strong>Peso</strong></td><td>O do lote, se gravado. Senão volumes × <b>kg por caixa</b>
+        (Cadastros › Produtos).</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note-card">
+    <strong>O que fazer quando travar.</strong> A tela diz o <b>SKU</b>, o <b>campo</b> que falta e os <b>paletes</b>
+    afetados, e manda para <b>Cadastros › Produtos</b>. Preenchido ali uma vez, vale para <b>todo lote futuro</b>
+    daquele produto — não é remendo de uma carga. Assim que o cadastro é salvo, o botão libera sozinho, sem
+    recarregar a página.
+  </div>
+  <div class="ok-card">
+    <strong>O aviso vem antes do balcão.</strong> No topo da tela de Faturamento aparece a lista de produtos com
+    estoque que <b>vão travar</b>, com quantos lotes e quantas unidades estão paradas. Corrija esses cadastros em
+    uma passada e nenhuma carga para na hora de faturar.
+  </div>
+  <div class="note-card">
+    <strong>Palete vencido agora é barrado de verdade.</strong> Até 23/10/2026 a trava lia o campo errado e nunca
+    disparava — palete fora da validade podia entrar na carga. Corrigido: palete vencido não fica disponível para
+    montar carga, aparece marcado na carga e a ordem de sugestão (FEFO) volta a pôr na frente o que vence antes.
   </div>
   <div class="note-card">
     <b>Confirme a saída no momento em que a carga sair</b>, no <a href="cargas.html">Acompanhamento de cargas</a>.

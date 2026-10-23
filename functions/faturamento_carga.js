@@ -9,7 +9,8 @@
    diretoria.
 
    Estados em agendamentos_expedicao/{k}/faturamento:
-     SOLICITADO  solicitação registrada (snapshot dos paletes, preço, lote/validade)
+     SOLICITADO  solicitação registrada (snapshot dos paletes, preço, lote,
+                 fabricação, validade, caixas, volumes e peso)
      FATURADO    NF(s) registradas; valem para todas as viagens da carga
    Uma carga aceita mais de uma NF (por pedido, por exemplo): o usuário ainda
    decide o processo e o modelo não deve travar essa decisão.
@@ -17,6 +18,7 @@
    Puro: o handler em index.js aplica numa transação na raiz, como a agenda. */
 
 const {analisar} = require('./expedicao_regras');
+const DadosNF = require('./dados_nf');
 const {ativa, pendente} = require('./agenda_expedicao');
 
 function falhar(message, code = 'failed-precondition') { throw Object.assign(new Error(message), {code}); }
@@ -39,16 +41,27 @@ function itensDaCarga(base, agenda, hoje) {
     const produto = produtoDoSku(base.produtos, lote.itemCodigo) || {};
     const unidades = n(ap.quantidade);
     const preco = n(itemPedido.valorUnitario) > 0 ? n(itemPedido.valorUnitario) : n(l.demanda && l.demanda.valorUnitario);
-    const caixas = n(lote.caixasFechadas), parcial = n(lote.unidadesCaixaParcial);
-    const kgCx = n(lote.pesoPorCaixaKg) || n(produto.kgCaixa);
-    const volumes = caixas + (parcial > 0 ? 1 : 0);
+    /* Fabricacao, validade, caixas, volumes e peso vem do motor
+       `dados_nf.js` (copia byte a byte de public/shared/dados-nf.js), o mesmo
+       que a tela usa para travar antes de chamar. Duas contas em dois lugares
+       divergiriam em uma semana -- e aqui a conta vai para dentro de uma nota
+       fiscal. A validade ANTES era lida de `lote.validade`, campo que nao
+       existe (0 de 176 lotes), e saia sempre vazia. */
+    const nf = DadosNF.derivar({lote, op: l.op || null, produto, quantidade: unidades, sku: lote.itemCodigo || ap.sku || ''});
     return {
       itemKey: ap.itemKey, loteKey: ap.loteKey, identificadorPalete: lote.identificadorPalete || ap.identificadorPalete || '',
       disponivel: l.disponivel, motivo: l.motivo || '',
-      sku: lote.itemCodigo || ap.sku || '', descricao: lote.itemNome || ap.descricao || produto.descricao || '',
-      lote: lote.opLote || lote.loteOrigem || '', validade: lote.validade ? String(lote.validade).slice(0, 10) : '',
-      caixas, unidadesPorCaixa: n(lote.unidadesPorCaixa), caixaParcial: parcial, unidades,
-      pesoKg: n(lote.pesoTotalKg) || (kgCx && volumes ? Math.round(volumes * kgCx * 1000) / 1000 : 0),
+      sku: nf.sku, descricao: lote.itemNome || ap.descricao || produto.descricao || '',
+      lote: nf.lote,
+      // As duas que faltavam na NF:
+      dataFabricacao: nf.dataFabricacao, validade: nf.validade,
+      // De onde cada data veio -- dado fiscal sem procedencia nao se defende.
+      origensNF: nf.origens,
+      caixas: nf.caixasFechadas, unidadesPorCaixa: nf.unidadesPorCaixa,
+      caixaParcial: nf.unidadesCaixaParcial, caixasParciais: nf.caixasParciais,
+      volumes: nf.volumes, unidades,
+      pesoKg: nf.pesoKg,
+      faltasNF: nf.faltas,
       pedidoId: l.pedidoId || ap.pedidoId || '', pedidoNumero: l.pedidoNumero || ap.pedidoNumero || '',
       numeroPedidoCliente: (l.comercial && l.comercial.numeroPedidoCliente) || '',
       precoUnitario: preco, valor: Math.round(unidades * preco * 100) / 100
@@ -77,13 +90,35 @@ function prepararFaturamento(base, dados, autor, uid, agora) {
     const itens = itensDaCarga(base, agenda, hoje);
     const bloqueados = itens.filter(i => !i.disponivel);
     if (bloqueados.length) falhar('Não solicite faturamento de palete que não pode sair: ' + bloqueados.map(i => (i.identificadorPalete || i.loteKey) + ' (' + i.motivo + ')').join('; '));
+    /* Campos obrigatorios da NF (23/10/2026, pedido do usuario): data de
+       fabricacao, validade, SKU, caixas e peso. Trava aqui TAMBEM, e nao so na
+       tela: a callable e quem grava, e uma solicitacao incompleta chegando ao
+       Financeiro e nota emitida errada. Agrupa por SKU porque 12 paletes do
+       mesmo produto sao UM cadastro a corrigir, nao 12 problemas. */
+    const semDados = itens.filter(i => (i.faltasNF || []).length);
+    if (semDados.length) {
+      const porSku = {};
+      semDados.forEach(i => (i.faltasNF || []).forEach(f => {
+        const ch = (f.sku || i.sku || '?') + ' — ' + f.rotulo;
+        (porSku[ch] = porSku[ch] || []).push(i.identificadorPalete || i.loteKey);
+      }));
+      falhar('Falta dado obrigatório para a nota fiscal: ' +
+        Object.keys(porSku).map(k => k + ' (palete ' + porSku[k].join(', ') + ')').join('; ') +
+        '. Complete o cadastro do produto e tente de novo.');
+    }
     const semPreco = itens.filter(i => !(i.precoUnitario > 0)).length;
     const solicitacao = {
       id: dados.solicitacaoId, em: agora, por: autor, porUid: uid, observacoes: texto(dados.observacoes, 2000),
       cliente: agenda.cliente || '', clienteKey: agenda.clienteKey || '', tipo: agenda.tipo, dataAgendada: agenda.dataAgendada,
       janela: agenda.janela || '', enderecoEntrega: agenda.enderecoEntrega || '', transportadora: agenda.transportadora || '',
       itens, totalUnidades: itens.reduce((t, i) => t + i.unidades, 0), totalValor: Math.round(itens.reduce((t, i) => t + i.valor, 0) * 100) / 100,
-      totalPesoKg: Math.round(itens.reduce((t, i) => t + i.pesoKg, 0) * 1000) / 1000, itensSemPreco: semPreco
+      totalPesoKg: Math.round(itens.reduce((t, i) => t + i.pesoKg, 0) * 1000) / 1000,
+      // Volumes totais: o que o transportador conta na doca e o que vai no
+      // campo de volumes da nota.
+      totalVolumes: itens.reduce((t, i) => t + n(i.volumes), 0),
+      totalCaixasFechadas: itens.reduce((t, i) => t + n(i.caixas), 0),
+      totalCaixasParciais: itens.reduce((t, i) => t + n(i.caixasParciais), 0),
+      itensSemPreco: semPreco
     };
     fat.status = 'SOLICITADO';
     fat.solicitadoEm = agora;

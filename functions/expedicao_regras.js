@@ -4,6 +4,19 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
   function key(v) { return String(v || '').trim().replace(/[./[\]#$]/g, '-').replace(/\s+/g, '_').slice(0, 60); }
+  // Validade do lote (23/10/2026). O campo no banco e `dataValidade` -- era
+  // lido como `lote.validade`, que existe em 0 dos 176 lotes. Resultado: a
+  // trava "Palete vencido" logo abaixo NUNCA disparava, e o FEFO ordenava
+  // todos pelo fallback '9999'. Aceita os dois nomes porque lote legado pode
+  // ter o antigo. Mesma regra de `shared/dados-nf.js` (validadeDoLote);
+  // duplicada de proposito para nao criar dependencia de ordem de carga num
+  // modulo que roda no cliente e no servidor.
+  function validadeLote(lote) {
+    var l = lote || {};
+    var v = String(l.dataValidade || l.validade || '').slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+  }
+
   // Mesmo cliente (23/10/2026). Pedido do usuário: cargas com "Miss Rose" e
   // "MISS ROSE" eram recusadas como "clientes diferentes". Medido: 67 dos 78
   // pedidos comerciais não têm clienteKey, e aí a comparação caía no texto
@@ -80,7 +93,7 @@
     else if (!Number.isInteger(Number(lote.saldoLote)) || Number(lote.saldoLote) <= 0 || lote.expedicaoId) motivo = 'Sem saldo disponível';
     else if (!legado && !['LIBERADO_EXPEDICAO', 'APROVADO_CONCESSAO'].includes(lote.status)) motivo = 'Aguardando liberação da Qualidade';
     else if (!legado && (!lote.qualidade || lote.qualidade.decisao !== lote.status)) motivo = 'Laudo da Qualidade ausente ou divergente';
-    else if (lote.validade && String(lote.validade).slice(0, 10) < hoje) motivo = 'Palete vencido';
+    else if (validadeLote(lote) && validadeLote(lote) < hoje) motivo = 'Palete vencido';
     else if (!endereco || endereco.ativo === false || lote.aguardandoEnderecoDefinitivo) motivo = 'Aguardando endereço definitivo ativo';
     else if (!avulso && (op.status !== 'Concluído' || op.sku !== lote.itemCodigo || key(op.sku) !== itemKey)) motivo = 'OP ou produto inconsistente';
     else if (avulso && key(lote.itemCodigo) !== itemKey) motivo = 'Produto inconsistente';
@@ -109,7 +122,7 @@
         if (entry[1].itemTipo === 'produto' && Number(entry[1].saldoLote) > 0) linhas.push(analisar(base, item[0], entry[0], hoje));
       });
     });
-    return linhas.sort(function(a, b) { return Number(b.disponivel) - Number(a.disponivel) || String(a.lote.validade || '9999').localeCompare(String(b.lote.validade || '9999')) || String(a.lote.identificadorPalete).localeCompare(String(b.lote.identificadorPalete)); });
+    return linhas.sort(function(a, b) { return Number(b.disponivel) - Number(a.disponivel) || String(validadeLote(a.lote) || '9999').localeCompare(String(validadeLote(b.lote) || '9999')) || String(a.lote.identificadorPalete).localeCompare(String(b.lote.identificadorPalete)); });
   }
   return {analisar: analisar, listar: listar, normalizarChavePedido: normalizarChavePedido, resolverChavePedido: resolverChavePedido, mesmoCliente: mesmoCliente};
 });

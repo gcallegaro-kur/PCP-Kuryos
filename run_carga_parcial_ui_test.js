@@ -16,7 +16,10 @@ const LONGO = {timeout: 60000};
   try {
     const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
     const state = fixture(); const errors = []; let page;
-    state.produtos = {PA001: {sku: 'PA001', descricao: 'Creme', kgCaixa: 8}};
+    // prazoValidadeMeses entrou em 23/10: sem ele a validade da NF nao sai e
+    // 'Solicitar faturamento' TRAVA (shared/dados-nf.js). A fabricacao vem do
+    // dataFimReal da OP, que a fixture ja tem.
+    state.produtos = {PA001: {sku: 'PA001', descricao: 'Creme', kgCaixa: 8, prazoValidadeMeses: 24}};
     function aplicar(updates) { for (const [path, value] of Object.entries(updates)) { const ps = path.split('/'); let n = state; for (const p of ps.slice(0, -1)) n = n[p] || (n[p] = {}); n[ps.at(-1)] = structuredClone(value); } }
     await context.exposeFunction('serverPA', async (name, dados) => {
       let result;

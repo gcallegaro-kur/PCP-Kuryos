@@ -8,6 +8,11 @@
 (function() {
   var db = firebase.database(), fn = firebase.functions();
   var agendas = {}, formAberto = null, ocupado = false, solicitacaoIds = {};
+  var baseNF = {estoque_lotes: {}, ops: {}, produtos: {}};
+  function validacaoNF(a) {
+    if (!baseNF.estoque_lotes || !Object.keys(baseNF.estoque_lotes).length) return null;  // ainda carregando
+    return DadosNF.validarCarga(a.paletes || [], baseNF, hoje());
+  }
   var destaque = new URLSearchParams(location.search).get('carga');
   var destaqueRolado = false;
   function el(id) { return document.getElementById(id); }
@@ -23,17 +28,44 @@
     var sol = CargasPA.ultimaSolicitacao(a);
     var porPalete = {};
     ((sol && sol.itens) || []).forEach(function(i) { porPalete[i.itemKey + '/' + i.loteKey] = i; });
+    var vNF = validacaoNF(a), porDerivado = {};
+    ((vNF && vNF.itens) || []).forEach(function(i) { porDerivado[i.itemKey + '/' + i.loteKey] = i; });
     var linhas = (a.paletes || []).map(function(p) {
       var i = porPalete[p.itemKey + '/' + p.loteKey] || {};
+      /* Solicitacao antiga nao tem fabricacao/volumes: cai no que a tela
+         calcula agora, para o card nao mostrar em branco o que ja da para
+         saber. O que FOI enviado continua sendo o snapshot `i`. */
+      var d = porDerivado[p.itemKey + '/' + p.loteKey] || {};
+      var fab = i.dataFabricacao || d.dataFabricacao || '';
+      var val = i.validade || d.validade || '';
+      var vol = i.volumes != null ? i.volumes : d.volumes;
+      var cxF = i.caixas != null ? i.caixas : d.caixasFechadas;
+      var cxP = i.caixaParcial != null ? i.caixaParcial : d.unidadesCaixaParcial;
+      var falta = (d.faltas || []).map(function(f) { return f.rotulo; });
       return '<tr><td>' + e(p.identificadorPalete || p.loteKey) + '</td><td><b>' + e(p.sku) + '</b> ' + e(p.descricao || '') + '</td>' +
         '<td>' + e(p.pedidoNumero || '—') + (i.numeroPedidoCliente ? '<div class="sub">PC cliente ' + e(i.numeroPedidoCliente) + '</div>' : '') + '</td>' +
-        '<td>' + e(i.lote || '—') + (i.validade ? '<div class="sub">val. ' + dataBR(i.validade) + '</div>' : '') + '</td>' +
+        '<td>' + e(i.lote || d.lote || '—') +
+          (d.vencido ? '<div class="sub" style="color:#b42318"><b>VENCIDO</b></div>' : '') + '</td>' +
+        '<td>' + (fab ? dataBR(fab) : '<span style="color:#b42318">falta</span>') + '</td>' +
+        '<td>' + (val ? dataBR(val) : '<span style="color:#b42318">falta</span>') + '</td>' +
         '<td class="num">' + num(p.quantidade) + '</td>' +
-        '<td class="num">' + (i.precoUnitario ? brl(i.precoUnitario) : '—') + '</td><td class="num">' + (i.valor ? brl(i.valor) : '—') + '</td></tr>';
+        '<td class="num">' + (cxF == null ? '—' : num(cxF)) + (cxP ? '<div class="sub">+ 1 cx parcial (' + num(cxP) + ' un)</div>' : '') + '</td>' +
+        '<td class="num">' + (vol == null ? '—' : num(vol)) + '</td>' +
+        '<td class="num">' + (i.pesoKg || d.pesoKg ? num(i.pesoKg || d.pesoKg) + ' kg' : '<span style="color:#b42318">falta</span>') + '</td>' +
+        '<td class="num">' + (i.precoUnitario ? brl(i.precoUnitario) : '—') + '</td><td class="num">' + (i.valor ? brl(i.valor) : '—') + '</td>' +
+        (falta.length ? '<td class="warning">' + e(falta.join(', ')) + '</td>' : '<td></td>') + '</tr>';
     }).join('');
     var t = CargasPA.totais(a);
-    return '<table class="carga-itens"><thead><tr><th>Palete</th><th>Produto</th><th>Pedido</th><th>Lote</th><th class="num">Unidades</th><th class="num">Preço un.</th><th class="num">Valor</th></tr></thead><tbody>' + linhas + '</tbody>' +
-      '<tfoot><tr><td colspan="4"><b>Total</b>' + (sol && sol.totalPesoKg ? ' · ' + num(sol.totalPesoKg) + ' kg' : '') + '</td><td class="num"><b>' + num(t.unidades) + '</b></td><td></td><td class="num"><b>' + (sol && sol.totalValor ? brl(sol.totalValor) : '—') + '</b></td></tr></tfoot></table>' +
+    var pesoTot = (sol && sol.totalPesoKg) || (vNF && vNF.totalPesoKg) || 0;
+    var volTot = (sol && sol.totalVolumes != null ? sol.totalVolumes : (vNF && vNF.totalVolumes));
+    return '<table class="carga-itens"><thead><tr><th>Palete</th><th>Produto</th><th>Pedido</th><th>Lote</th>' +
+      '<th>Fabricação</th><th>Validade</th><th class="num">Unidades</th><th class="num">Caixas</th>' +
+      '<th class="num">Volumes</th><th class="num">Peso</th><th class="num">Preço un.</th><th class="num">Valor</th><th>Falta p/ NF</th></tr></thead><tbody>' + linhas + '</tbody>' +
+      '<tfoot><tr><td colspan="6"><b>Total</b>' + (pesoTot ? ' · ' + num(pesoTot) + ' kg' : '') + '</td>' +
+      '<td class="num"><b>' + num(t.unidades) + '</b></td><td></td>' +
+      '<td class="num"><b>' + (volTot == null ? '—' : num(volTot)) + '</b></td>' +
+      '<td class="num"><b>' + (pesoTot ? num(pesoTot) + ' kg' : '—') + '</b></td><td></td>' +
+      '<td class="num"><b>' + (sol && sol.totalValor ? brl(sol.totalValor) : '—') + '</b></td><td></td></tr></tfoot></table>' +
       (!sol ? '<div class="sub">Preços e valores aparecem ao solicitar o faturamento (vêm do pedido).</div>' : sol.itensSemPreco ? '<div class="sub" style="color:#b42318">' + sol.itensSemPreco + ' item(ns) sem preço no pedido.</div>' : '');
   }
 
@@ -58,10 +90,38 @@
     if (!formAberto || formAberto.key !== k) return '';
     var v = formAberto.valores;
     if (formAberto.tipo === 'SOLICITAR') {
+      /* Campos obrigatorios da NF (23/10): o Financeiro nao emite nota sem
+         fabricacao, validade, SKU, caixas e peso. Trava aqui para a pessoa ver
+         o que falta antes de mandar; a callable trava de novo, porque e ela
+         que grava. Agrupado por CADASTRO: 12 paletes do mesmo produto sao um
+         cadastro a corrigir, nao 12 problemas. */
+      var vNFf = validacaoNF(a);
+      var trava = vNFf && !vNFf.ok;
+      var blocoFalta = '';
+      if (trava) {
+        blocoFalta = '<div class="notice error" style="margin:10px 0"><b>Falta dado obrigatório para a nota fiscal.</b>' +
+          '<ul style="margin:8px 0 0 18px;padding:0">' +
+          vNFf.porCadastro.map(function(c) {
+            return '<li><b>' + e(c.sku) + '</b> — ' + e(c.rotulo) + '<br><span class="sub">' + e(c.onde) + '</span>' +
+              '<br><span class="sub">Palete(s): ' + e(c.paletes.join(', ')) + '</span></li>';
+          }).join('') +
+          vNFf.pendencias.filter(function(i) { return i.faltas.some(function(f) { return !f.sku; }); })
+            .map(function(i) {
+              return '<li><b>Palete ' + e(i.identificadorPalete) + '</b> — ' +
+                e(i.faltas.filter(function(f) { return !f.sku; }).map(function(f) { return f.rotulo; }).join(', ')) +
+                '<br><span class="sub">' + e(i.faltas.filter(function(f) { return !f.sku; })[0].onde) + '</span></li>';
+            }).join('') +
+          '</ul><div class="sub" style="margin-top:8px">Corrija e o botão libera sozinho — a tela acompanha o cadastro.</div></div>';
+      }
+      var vencidos = (vNFf && vNFf.vencidos) || [];
+      var blocoVencido = vencidos.length ? '<div class="notice error" style="margin:10px 0"><b>Palete vencido na carga:</b> ' +
+        e(vencidos.map(function(i) { return i.identificadorPalete; }).join(', ')) + '. Tire da carga antes de faturar.</div>' : '';
       return '<div class="carga-form" data-form="' + e(k) + '"><h3>Solicitar faturamento ao Financeiro</h3>' +
-        '<p class="sub">O Financeiro recebe por e-mail (cópia à diretoria) os paletes, lotes, validades, preços e o total desta carga.</p>' +
+        '<p class="sub">O Financeiro recebe por e-mail (cópia à diretoria) os paletes, lotes, <b>fabricação, validade, caixas, volumes e peso</b>, preços e o total desta carga.</p>' +
+        blocoVencido + blocoFalta +
         '<label for="f_obs">Observações para o Financeiro (opcional)</label><textarea id="f_obs" data-campo="observacoes" rows="2" maxlength="2000">' + e(v.observacoes || '') + '</textarea>' +
-        '<p class="carga-erro" id="f_erro">' + e(formAberto.erro || '') + '</p><div class="carga-acoes"><button class="btn ghost" data-fechar>Cancelar</button><button class="btn" data-enviar="SOLICITAR">Enviar solicitação</button></div></div>';
+        '<p class="carga-erro" id="f_erro">' + e(formAberto.erro || '') + '</p><div class="carga-acoes"><button class="btn ghost" data-fechar>Cancelar</button>' +
+        '<button class="btn" data-enviar="SOLICITAR"' + (trava ? ' disabled title="Complete os dados obrigatórios da nota fiscal"' : '') + '>Enviar solicitação</button></div></div>';
     }
     return '<div class="carga-form" data-form="' + e(k) + '"><h3>Registrar NF' + (CargasPA.faturada(a) ? ' adicional' : '') + '</h3>' +
       '<p class="sub">A NF vale para todas as viagens desta carga: o que não couber no veículo segue depois com a mesma nota.</p>' +
@@ -91,7 +151,32 @@
       '</div>') + formHTML(k, a) + '</article>';
   }
 
+  /* Fila de cadastro. Com o bloqueio sendo duro (decisao do usuario em
+     23/10), avisar ANTES deixa de ser cortesia: sem isto a pessoa descobre o
+     que falta na hora de faturar, com o caminhao na doca. Medido em 23/10:
+     19 dos 35 SKUs com lote em estoque sem prazo de validade. */
+  function renderPainelCadastro() {
+    var alvo = el('painelCadastro');
+    if (!alvo) return;
+    if (!Object.keys(baseNF.estoque_lotes || {}).length) { alvo.innerHTML = ''; return; }
+    var fila = DadosNF.skusAConfigurar(baseNF);
+    if (!fila.length) { alvo.innerHTML = ''; return; }
+    alvo.innerHTML = '<div class="notice error"><b>' + fila.length +
+      ' produto(s) com estoque v\u00e3o travar o faturamento</b> por falta de cadastro. ' +
+      'Corrija em <a href="cadastros.html?tab=produtos"><b>Cadastros &rsaquo; Produtos</b></a> ' +
+      'e vale para todo lote futuro.' +
+      '<div class="scroll" style="margin-top:8px"><table><thead><tr><th>SKU</th><th>Produto</th>' +
+      '<th>Falta</th><th style="text-align:right">Lotes</th><th style="text-align:right">Unidades paradas</th></tr></thead><tbody>' +
+      fila.map(function(x) {
+        return '<tr><td><b>' + e(x.sku) + '</b></td><td>' + e(x.descricao || '—') + '</td>' +
+          '<td class="warning">' + e(x.faltam.join(' e ')) + '</td>' +
+          '<td style="text-align:right">' + num(x.lotes) + '</td>' +
+          '<td style="text-align:right">' + num(x.unidades) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+
   function render() {
+    renderPainelCadastro();
     CargasFluxo.render(el('fluxoCargas'), 'faturamento.html', agendas);
     var filtro = el('filtro').value, busca = el('busca').value;
     var lista = CargasPA.listar(agendas, filtro === 'faturadas' ? 'ativas' : filtro, busca);
@@ -133,6 +218,15 @@
     if (!a) return;
     var dados = {agendaKey: k, revisao: a.revisao, acao: acao};
     if (acao === 'SOLICITAR') {
+      // Cinto e suspensorio: o botao ja fica desabilitado, mas um render fora
+      // de hora nao pode deixar passar solicitacao sem os dados da nota.
+      var vEnv = validacaoNF(a);
+      if (vEnv && !vEnv.ok) {
+        formAberto.erro = 'Falta dado obrigatório para a nota fiscal: ' +
+          vEnv.porCadastro.map(function(c) { return c.sku + ' (' + c.rotulo + ')'; }).join('; ') + '.';
+        erro.textContent = formAberto.erro;
+        return;
+      }
       // Mesmo id se a rede falhar e a pessoa repetir: o servidor não duplica.
       dados.solicitacaoId = solicitacaoIds[k] || (solicitacaoIds[k] = crypto.randomUUID().replace(/[^A-Za-z0-9_-]/g, ''));
       dados.observacoes = v.observacoes || '';
@@ -165,4 +259,10 @@
   el('filtro').onchange = render;
   el('busca').oninput = render;
   dbOnValue(db.ref('agendamentos_expedicao'), function(s) { agendas = s.val() || {}; render(); });
+  /* Lote, OP e produto: a tela precisa das tres para travar ANTES de chamar a
+     callable, e para dizer o que falta sem ida e volta ao servidor. A callable
+     continua validando -- ela e quem grava. */
+  dbOnValue(db.ref('estoque_lotes'), function(s) { baseNF.estoque_lotes = s.val() || {}; render(); });
+  dbOnValue(db.ref('ops'), function(s) { baseNF.ops = s.val() || {}; render(); });
+  dbOnValue(db.ref('produtos'), function(s) { baseNF.produtos = s.val() || {}; render(); });
 })();

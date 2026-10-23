@@ -1031,6 +1031,54 @@ duplo clique no cadastro** de `login.html` — que era a causa raiz.
   um ano seria o próximo passo, mas só faz sentido depois de o RH ter o
   desligamento registrado em `rh_colaboradores`.
 
+## Dados obrigatórios da NF — o que ficou de fora (2026-10-23)
+
+Entregue: `shared/dados-nf.js` (+ `functions/dados_nf.js`, byte a byte), data de
+fabricação e validade na solicitação de faturamento, volumes e caixas parciais,
+bloqueio por cadastro em `faturamento-tela.js` **e** na callable, painel da fila
+de cadastro, e a correção do `lote.validade` → `dataValidade` (que também
+devolveu a trava "Palete vencido" e o FEFO).
+
+- **PESO DA CAIXA PARCIAL conta como caixa CHEIA.** Mantido como estava em
+  produção, de propósito: é número declarado em nota fiscal e `kgCaixa` pode
+  ser o peso BRUTO da caixa fechada, caso em que o proporcional subestimaria a
+  embalagem. Medido no item 3 da carga de 23/10: saiu **444,6 kg** onde o
+  proporcional daria **436,8** (37 caixas × 11,7 + 16/48 × 11,7). Diferença de
+  7,8 kg no palete, ~0,5% na carga. **Decisão do usuário pendente**: se
+  `kgCaixa` for peso líquido do conteúdo, o certo é proporcional; se for bruto,
+  o certo é separar tara de conteúdo, e aí falta um campo de tara no cadastro.
+  Onde mexer: `peso` em `public/shared/dados-nf.js`.
+- **Peso líquido x peso bruto não existem separados.** A NF-e tem os dois
+  campos; o sistema tem um só (`kgCaixa`). Enquanto não houver tara da caixa e
+  peso do palete, o Financeiro preenche os dois iguais ou estima.
+- **A validade calculada NÃO é gravada no lote.** Fica derivada em tempo de
+  leitura (fabricação + `prazoValidadeMeses`), e só o snapshot da solicitação
+  congela o valor. É de propósito: gravar criaria uma segunda verdade que não
+  acompanha a correção do cadastro. Se um dia a Anvisa exigir a validade
+  carimbada no lote, o lugar é a Conferência de PA, no nascimento do palete.
+- **`dataFabricacao` do lote só existe nos 21 lotes legado.** Os que o app cria
+  não gravam o campo — a data vem da OP a cada leitura. Funciona (cobertura
+  100%), mas depende de a OP manter `dataFimReal`. Gravar no palete na
+  Conferência de PA tornaria o lote autossuficiente.
+- **Fila de cadastro medida em 23/10 (só lote com saldo > 0):** **1 SKU**,
+  `DPGLBS03`, 3 lotes, **7.511 unidades** — falta prazo de validade e kg por
+  caixa. A única carga ativa (Miss Rose) **passa**. Contando também lote já
+  expedido seriam 19 SKUs, mas lote sem saldo não trava faturamento nenhum.
+- **Um lote vencido com saldo:** `MPES-00142` / `AK-2026-000630`, venceu
+  03/10/2026, saldo 256,86. É **material recebido**, não PA, então não passa
+  pelo portão de expedição — mas aparecia como "não vencido" em toda tela
+  enquanto o campo era lido errado. Destinar pelo Descarte.
+- **A trava "Palete vencido" estava inoperante desde sempre**, não só na NF:
+  `expedicao.js:83` e o gêmeo em `functions/`. Nenhum PA com saldo está vencido
+  hoje, então o defeito era latente — não houve expedição de vencido que a base
+  mostre. O FEFO (`:112`) ordenava tudo pelo fallback `'9999'`.
+- **Nada valida a NF registrada contra a solicitação.** O número, a série e o
+  valor da NF são digitados à mão e ninguém confere se o valor bate com o total
+  solicitado, nem se a chave NF-e tem 44 dígitos válidos. Conferir o valor
+  (com tolerância) seria barato e pegaria nota digitada no pedido errado.
+- **A série da NF fica vazia** (a NF 012 de 23/10 saiu sem série). Não é
+  obrigatório no modelo atual; se o Financeiro usa série, vale exigir.
+
 ## Qualidade
 
 **Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.

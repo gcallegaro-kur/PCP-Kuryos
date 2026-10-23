@@ -28,7 +28,7 @@ function fixture() {
     p1: {numero: 1, caixasFechadas: 12, unidadesPorCaixa: 24, unidadesCaixaParcial: 7, qtdUnidades: 295, enderecoKey: 'A1'},
     p2: {numero: 2, caixasFechadas: 10, unidadesPorCaixa: 24, unidadesCaixaParcial: 0, qtdUnidades: 240, enderecoKey: 'A1'}}}}};
   const base = {usuarios: {u1: {role: 'logistica', nome: 'Logística'}}, ops: {op1: op}, conferencias_pa: {op1: conf},
-    enderecos_estoque: {A1: {codigo: 'PA-A1', ativo: true}}, estoque_lotes: {}, produtos: {PA001: {sku: 'PA001', descricao: 'Creme', kgCaixa: 8}},
+    enderecos_estoque: {A1: {codigo: 'PA-A1', ativo: true}}, estoque_lotes: {}, produtos: {PA001: {sku: 'PA001', descricao: 'Creme', kgCaixa: 8, prazoValidadeMeses: 24}},
     pedidos: {'PED-001__PA001': {id: 'PED-001', parentPedidoId: 'PED-001', sku: 'PA001', cliente: 'Cliente A', produzido: 535}},
     pedidos_comerciais: {'PED-001': {numeroFormatado: 'PED-001', clienteKey: 'c1', cliente: 'Cliente A', status: 'LIBERADO_PCP', numeroPedidoCliente: '34',
       frete: {tipo: 'FOB', enderecoEntrega: 'Rua A, 100'}, itens: [{sku: 'PA001', qtd: 600, valorUnitario: 2.7, expedido: 0}]}},
