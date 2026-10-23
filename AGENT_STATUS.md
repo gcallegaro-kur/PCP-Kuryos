@@ -175,6 +175,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Auditoria geral: toda gravação das telas vira evento (23/10/2026)
+
+- **Pedido:** "toda e qualquer movimentação no sistema" na Auditoria (a conferência de PA do 26295/01 só se descobria lendo o banco).
+- **Feito:** `shared/auditoria-escritas.js` (novo) envolve `set/update/push/remove/transaction` do Reference do Firebase e grava, DEPOIS do sucesso, um evento em `auditoria_geral/{dia}/{id}` (quem, quando, tela, caminho, campos, resumo curto; sem valor em usuários/RH/feedback/custos; ignora o próprio log, contadores e travas). `auth_check.js` carrega o módulo (document.write síncrono) e instala depois do login. `eventos-auditoria.js`: ação `ALTERACAO`, fonte `geral`, reconstrução RETROATIVA da conferência de PA (`conferencias_pa`), filtro por módulo. `auditoria.html`/`auditoria-tela.js`: filtro Módulo e checkbox "histórico retroativo" inclui conferências de PA. `database.rules.json`: nó `auditoria_geral` só-criar, `porUid == auth.uid`, leitura só admin — **exige `firebase deploy --only database`**.
+- **Limite:** gravações do servidor (Cloud Functions) não passam pelo gancho; entram quando as Functions forem republicadas (billing) gravando no mesmo nó via admin SDK. Log só vale a partir do deploy; antes disso só a reconstrução da conferência de PA.
+- **Testes:** `run_auditoria_escritas_test.js` (classificação, resumo, evento, gancho com SDK simulado, linha do tempo); verificado com o SDK real (sem eventos duplicados no push/remove); `run_auditoria_ui_test.js` ajustado.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Pesagens: o que foi pesado no dia + pendências para cobrar (21/10/2026)
 
 - **Pedido:** "consigo verificar o que pesou no dia, isso ajuda a gente ir lá cobrar caso não tenha pesado". Regra do usuário: pesar BEM antes do envase (ideal 3–5 dias); ferramenta para todos, principalmente o PCP.

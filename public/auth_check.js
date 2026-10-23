@@ -271,6 +271,11 @@ function getActivePageName() {
 
 window.currentUser = null;
 
+// Auditoria geral (23/10/2026): carrega, de forma síncrona e antes dos scripts
+// da própria página, o módulo que registra toda gravação feita pelas telas.
+// A instalação acontece abaixo, quando o usuário já está identificado.
+try { if (document.readyState === 'loading') document.write('<script src="shared/auditoria-escritas.js"><\/script>'); } catch (e) {}
+
 (function() {
   // Garante que shared/theme.css (tokens de cor/tipografia da linguagem Apple,
   // aprovada 2026-07-19) esteja carregado antes da sidebar usar as variáveis.
@@ -491,6 +496,11 @@ window.currentUser = null;
               // exatamente como estavam antes desta mudança.
               modulos: profile.modulos || null
             };
+            try {
+              if (window.AuditoriaEscritas && window.firebase) {
+                window.AuditoriaEscritas.instalar(window.firebase, function() { return {usuario: window.currentUser, pagina: activePage}; });
+              }
+            } catch (e) { /* a auditoria nunca impede o uso da tela */ }
 
             // Validação de acessos da página, agora por MÓDULO
             if (!podeAbrirPagina(window.currentUser, activePage)) {

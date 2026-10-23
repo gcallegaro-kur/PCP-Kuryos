@@ -70,7 +70,7 @@ function domFalso() {
     id, innerHTML: '', textContent: '', value: '', checked: false,
     appendChild() {}, addEventListener() {}
   });
-  ['fDe', 'fAte', 'fAcao', 'fLinha', 'fBusca', 'btnBuscar', 'fIncluirOps', 'kpis', 'avisos', 'lista'].forEach(criar);
+  ['fDe', 'fAte', 'fAcao', 'fModulo', 'fLinha', 'fBusca', 'btnBuscar', 'fIncluirOps', 'kpis', 'avisos', 'lista'].forEach(criar);
   return {
     nos,
     document: { getElementById: (id) => nos[id] || criar(id), createElement: () => ({ set value(v) {}, set textContent(v) {} }) }
@@ -90,10 +90,10 @@ const dbFalso = {
 
 (async () => {
   const g = globalThis;
-  const salvos = { document: g.document, EventosAuditoria: g.EventosAuditoria };
+  const salvos = { document: g.document, EventosAuditoria: g.EventosAuditoria, AuditoriaEscritas: g.AuditoriaEscritas };
   const fake = domFalso();
   g.document = fake.document;
-  g.EventosAuditoria = E;
+  g.EventosAuditoria = E; g.AuditoriaEscritas = require('./public/shared/auditoria-escritas');
 
   // Não-admin tem que ser barrado mesmo recebendo o módulo por engano
   Tela.iniciar(dbFalso, { uid: 'u2', nome: 'Robert', role: 'pcp' });
@@ -114,7 +114,7 @@ const dbFalso = {
     'avisa que encerramentos/cancelamentos estão fora e são retroativos');
 
   g.document = salvos.document;
-  g.EventosAuditoria = salvos.EventosAuditoria;
+  g.EventosAuditoria = salvos.EventosAuditoria; g.AuditoriaEscritas = salvos.AuditoriaEscritas;
 
   console.log('OK tela de auditoria: ' + n + ' asserções — janela de dias limitada, cinco pontas registradas, ' +
     'regra do nó só admin e append-only, não-admin barrado, render sem undefined.');

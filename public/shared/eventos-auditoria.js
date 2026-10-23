@@ -60,7 +60,10 @@
     OP_NA_LINHA: 'OP_NA_LINHA',                 // operador escolheu a OP da linha
     PARAR_LINHA: 'PARAR_LINHA',
     RETOMAR_LINHA: 'RETOMAR_LINHA',
-    ENCERRAR_TURNO: 'ENCERRAR_TURNO'
+    ENCERRAR_TURNO: 'ENCERRAR_TURNO',
+    // Auditoria geral (23/10/2026): qualquer outra gravação feita pelas telas
+    // (shared/auditoria-escritas.js) e o histórico reconstruído dos dados.
+    ALTERACAO: 'ALTERACAO'
   };
 
   // Rótulos para a tela. Verbo no passado, porque todo evento já aconteceu.
@@ -78,7 +81,8 @@
     OP_NA_LINHA: 'colocou',
     PARAR_LINHA: 'parou',
     RETOMAR_LINHA: 'retomou',
-    ENCERRAR_TURNO: 'encerrou o turno em'
+    ENCERRAR_TURNO: 'encerrou o turno em',
+    ALTERACAO: 'movimentou'
   };
 
   function texto(v, max) {
@@ -155,6 +159,11 @@
   function descrever(ev) {
     var e = ev || {};
     var quem = e.porUid === 'sistema' ? 'O sistema' : (e.porNome || 'Alguém');
+    if (e.frase) return e.frase;   // eventos reconstruídos já trazem a frase pronta
+    if (e.acao === ACOES.ALTERACAO) {
+      var vb = {set: 'gravou', update: 'alterou', push: 'incluiu', remove: 'EXCLUIU', transaction: 'atualizou'}[e.metodo] || 'mexeu em';
+      return quem + ' ' + vb + ' ' + (e.metodo === 'push' ? 'um(a) ' : '') + (e.rotulo || 'dado') + (e.lote ? ' da OP ' + e.lote : '') + (e.pagina ? ' (tela ' + String(e.pagina).replace(/\.html$/, '') + ')' : '') + '.';
+    }
 
     /* Artigo e contração separados do nome do alvo. Concatenar "de" com um
        alvo que já trazia artigo produzia "de a OP 26273/03" -- e uma tela de
@@ -279,6 +288,33 @@
       });
     });
 
+    // Auditoria geral: gravações das telas, em baldes por dia (auditoria_geral/{dia}/{id}).
+    Object.keys(f.geral || {}).forEach(function(dia) {
+      var doDia = f.geral[dia] || {};
+      Object.keys(doDia).forEach(function(id) {
+        var ev = doDia[id];
+        if (!ev || typeof ev !== 'object') return;
+        saida.push(Object.assign({ id: id, fonte: 'auditoria_geral', acao: ACOES.ALTERACAO,
+          motivo: ev.campos || ev.resumo || null }, ev));
+      });
+    });
+
+    // Conferência de PA: retroativa, vem de conferencias_pa/{op} (conferidoPor/Em).
+    Object.keys(f.conferencias || {}).forEach(function(opKey) {
+      var c = f.conferencias[opKey];
+      if (!c || typeof c !== 'object' || !c.conferidoEm) return;
+      var lote = c.opLote || opKey;
+      saida.push({
+        id: opKey + ':conferenciaPA', fonte: 'conferencias_pa (histórico)', acao: ACOES.ALTERACAO,
+        modulo: 'Logística', rotulo: 'conferência de PA', lote: lote, produto: c.produto || null,
+        porUid: null, porNome: c.conferidoPor || null, em: c.conferidoEm,
+        frase: (c.conferidoPor || 'Alguém') + ' conferiu o PA da OP ' + lote +
+          (c.qtdApontada != null ? ': apontado ' + c.qtdApontada + ' un, contado ' + (c.ultimaContagem != null ? c.ultimaContagem : '—') + ' un' : '') +
+          (c.divergencia ? ' (divergência ' + c.divergencia + ')' : ' (sem divergência)') + '.',
+        motivo: c.conciliacao && c.conciliacao.motivo ? c.conciliacao.motivo : null
+      });
+    });
+
     Object.keys(f.rearranjos || {}).forEach(function(id) {
       var r = f.rearranjos[id];
       if (!r || typeof r !== 'object') return;
@@ -340,13 +376,14 @@
     return (lista || []).filter(function(e) {
       if (f.acao && e.acao !== f.acao) return false;
       if (f.porUid && e.porUid !== f.porUid) return false;
+      if (f.modulo && e.modulo !== f.modulo) return false;
       if (f.linha && e.linhaDe !== f.linha && e.linhaPara !== f.linha) return false;
       if (f.de && e.em && String(e.em).slice(0, 10) < f.de) return false;
       if (f.ate && e.em && String(e.em).slice(0, 10) > f.ate) return false;
       if (busca) {
         // "26273/03", "26273-03" e "2627303" são o mesmo lote -- mesma
         // tolerância que o dossiê do lote já aplica.
-        var alvo = [e.lote, e.pedidoKey, e.produto, e.porNome, e.motivo]
+        var alvo = [e.lote, e.pedidoKey, e.produto, e.porNome, e.motivo, e.rotulo, e.modulo, e.caminho, e.campos, e.resumo]
           .map(function(v) { return String(v == null ? '' : v).toLowerCase(); }).join(' ');
         if (alvo.indexOf(busca) === -1 &&
             alvo.replace(/[^a-z0-9]/g, '').indexOf(compacto) === -1) return false;

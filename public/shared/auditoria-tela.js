@@ -64,6 +64,10 @@
       o.textContent = (EventosAuditoria.ROTULOS[a] || a).replace(/^./, function(c) { return c.toUpperCase(); });
       selAcao.appendChild(o);
     });
+    var selMod = el('fModulo');
+    ['Produção', 'PCP', 'Manipulação', 'Qualidade', 'Logística', 'Compras', 'Comercial', 'Cadastros', 'Manutenção', 'Auditoria 5S', 'Administração', 'RH', 'Outros'].forEach(function(m) {
+      var o = document.createElement('option'); o.value = m; o.textContent = m; selMod.appendChild(o);
+    });
     db.ref('config/linhas').once('value').then(function(s) {
       var linhas = s.val() || [];
       var sel = el('fLinha');
@@ -87,6 +91,19 @@
     });
   }
 
+  function lerGeral(dias) {
+    return Promise.all(dias.map(function(dia) {
+      return db.ref(AuditoriaEscritas.NO + '/' + dia).once('value')
+        .then(function(s) { return { dia: dia, val: s.val() || {} }; })
+        .catch(function() { return { dia: dia, val: {} }; });
+    })).then(function(partes) {
+      var out = {};
+      partes.forEach(function(p) { if (Object.keys(p.val).length) out[p.dia] = p.val; });
+      return out;
+    });
+  }
+  var cacheConf = null;
+
   function carregar() {
     if (carregando) return;
     carregando = true;
@@ -105,20 +122,25 @@
     var querOps = el('fIncluirOps').checked;
     var tarefas = [
       lerEventos(dias),
+      lerGeral(dias),
       db.ref('rearranjos_linhas').once('value').then(function(s) { return s.val() || {}; }).catch(function() { return {}; }),
       querOps ? (cacheOps ? Promise.resolve(cacheOps)
         : db.ref('ops').once('value').then(function(s) { cacheOps = s.val() || {}; return cacheOps; }).catch(function() { return {}; }))
+        : Promise.resolve({}),
+      querOps ? (cacheConf ? Promise.resolve(cacheConf)
+        : db.ref('conferencias_pa').once('value').then(function(s) { cacheConf = s.val() || {}; return cacheConf; }).catch(function() { return {}; }))
         : Promise.resolve({})
     ];
 
     Promise.all(tarefas).then(function(r) {
-      var tempo = EventosAuditoria.linhaDoTempo({ eventos: r[0], rearranjos: r[1], ops: r[2] });
+      var tempo = EventosAuditoria.linhaDoTempo({ eventos: r[0], geral: r[1], rearranjos: r[2], ops: r[3], conferencias: r[4] });
       // O recorte de período vale para TODAS as fontes: rearranjos e OPs são
       // lidos inteiros (não têm balde por dia), então sem este filtro a tela
       // mostraria eventos fora da janela que o admin pediu.
       var filtrado = EventosAuditoria.filtrar(tempo, {
         de: de, ate: ate,
         acao: el('fAcao').value || null,
+        modulo: el('fModulo').value || null,
         linha: el('fLinha').value || null,
         busca: el('fBusca').value || null
       });
@@ -145,7 +167,7 @@
     if (!ctx.querOps) {
       avisos += '<div class="aviso">📋 Encerramentos e cancelamentos de OP estão <b>fora</b> deste resultado. ' +
         'Marque a opção acima para incluí-los — eles vêm das OPs e são <b>retroativos</b>, ' +
-        'ou seja, existem desde antes deste log.</div>';
+        'ou seja, existem desde antes deste log. O mesmo vale para as <b>conferências de PA</b> anteriores à auditoria geral.</div>';
     }
     if (ctx.dias >= MAX_DIAS) {
       avisos += '<div class="aviso">⏱️ O período foi limitado a ' + MAX_DIAS + ' dias por leitura. ' +
@@ -168,7 +190,10 @@
       var frase = EventosAuditoria.descrever(e);
       var meta = [];
       if (e.porNome && e.porUid !== 'sistema') meta.push(esc(e.porNome) + (e.papel ? ' (' + esc(e.papel) + ')' : ''));
+      if (e.modulo) meta.push(esc(e.modulo));
       if (e.motivo) meta.push(esc(e.motivo));
+      if (e.resumo && e.resumo !== e.motivo) meta.push(esc(e.resumo));
+      if (e.caminho) meta.push('<code>' + esc(e.caminho) + '</code>');
       return '<div class="ev">' +
         '<div class="ev-hora">' + esc(fmtQuando(e.em)) + (e.semInstante ? ' <i>sem hora</i>' : '') + '</div>' +
         '<div class="ev-corpo">' +
@@ -199,6 +224,7 @@
     el('fIncluirOps').addEventListener('change', carregar);
     el('fAcao').addEventListener('change', carregar);
     el('fLinha').addEventListener('change', carregar);
+    el('fModulo').addEventListener('change', carregar);
     el('fBusca').addEventListener('keydown', function(ev) { if (ev.key === 'Enter') carregar(); });
     carregar();
   }
