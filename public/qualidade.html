@@ -15,6 +15,8 @@
   <script src="shared/fotos-qualidade.js"></script>
   <script src="shared/inspecao-pa.js"></script>
   <script src="shared/laudo-pa-lote.js"></script>
+  <script src="shared/retrabalho-op.js"></script>
+  <script src="shared/inspecao-total-pa.js"></script>
   <script src="shared/campo-decimal.js"></script><script src="shared/spec-material.js"></script><script src="shared/analise-granel.js"></script>
   <script src="shared/inspecao-embalagem.js"></script>
   <script src="shared/laudo-cq.js"></script>
@@ -1915,6 +1917,9 @@ function abrirLaudo(itemCodigo, loteKey, opKey) {
     lotePA: grupoPa ? {grupo: grupoPa, amostragem: LaudoPaLote.amostragemPorPalete(grupoPa.paletes, InspecaoPA.amostragem)} : null
   };
 
+  // Lote de PA: reprovar começa por SINALIZAR o problema (inspeção total); a reprovação de fato vem depois.
+  document.getElementById('qBtnReprovar').textContent = grupoPa ? 'Sinalizar problema' : 'Reprovar';
+  document.getElementById('qBtnReprovar').title = grupoPa ? 'Bloqueia o lote e abre a fila de inspeção total (Produção)' : '';
   document.getElementById('modalLaudoTitle').textContent =
     (laudoAtual.roteiro === 'PA' ? (grupoPa ? 'Liberação de lote — ' : 'Liberação de palete — ')
       : laudoAtual.roteiro === 'EMBALAGEM' ? 'Análise de embalagem — '
@@ -2484,6 +2489,12 @@ function chamarRegistroLaudo(dados, ctx) {
     return registrarLaudoComRnc(db, laudoAtual.itemCodigo, laudoAtual.loteKey, dados, currentUserNome(), ctx);
   }
   var g = laudoAtual.lotePA.grupo, am = laudoAtual.lotePA.amostragem;
+  if (dados.decisao === 'REPROVADO') {
+    return InspecaoTotalPA.sinalizar(db, g.opKey, g.paletes, {motivo: dados.observacao, fotos: dados.fotos, fotosDispensadas: dados.fotosDispensadas},
+      currentUserNome(), {itemCodigo: laudoAtual.itemCodigo, opLote: g.opLote}).then(function(r) {
+      return r.ok ? {ok: true, decisao: 'INSPECAO_TOTAL', paletes: r.paletes} : r;
+    });
+  }
   if (dados.ck7) {
     dados.ck7.amostragem = {regra: '√N+1 por palete', caixasLote: am.caixasLote, caixasAmostradas: am.caixasAmostradas,
       porPalete: am.porPalete, texto: LaudoPaLote.textoAmostragem(am)};
@@ -2662,6 +2673,7 @@ function salvarLaudo(decisao) {
       msg = r.paletes ? 'Lote liberado — ' + r.paletes + ' palete(s) já disponíveis para a Expedição.' : 'Palete liberado — já disponível para a Expedição.'; tipo = 'success';
     }
     else if (r.decisao === 'APROVADO_CONCESSAO') { msg = 'Lote liberado com concessão' + (r.paletes ? ' (' + r.paletes + ' palete(s))' : '') + ', autorizado por ' + autorizadoPor + '.'; tipo = 'success'; }
+    else if (r.decisao === 'INSPECAO_TOTAL') { msg = 'Problema sinalizado — o lote está bloqueado e foi para a fila de inspeção total. A Produção vai designar quem revisa tudo; depois volte em Inspeção Total para a decisão.'; tipo = 'warning'; }
     else { msg = 'Lote ' + rotuloStatusLote(r.decisao).toLowerCase() + '. O material continua no estoque até ser devolvido ou descartado.'; tipo = 'danger'; }
     if (r.rnc) msg += ' Não conformidade ' + r.rnc + ' aberta automaticamente.';
     // O laudo vale mesmo se a RNC falhar -- mas quem laudou precisa saber

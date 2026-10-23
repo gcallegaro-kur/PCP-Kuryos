@@ -94,7 +94,7 @@ const KURYOS_MODULOS = {
   // `apontamento` continua sendo a da Produção de propósito: as regras do
   // banco e os `modulos` já gravados usam esse nome.
   apontamento:  { rotulo: 'Operação — Produção',   desc: 'Apontamento das linhas, histórico e estoque da fábrica',
-                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html', 'liberacao_linha.html'] },
+                  paginas: ['form.html', 'historico.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html', 'liberacao_linha.html', 'inspecao_total.html'] },
   manipulacao:  { rotulo: 'Operação — Manipulação', desc: 'Pesagem, manipulação do bulk e estoque da manipulação',
                   paginas: ['manipulacao.html', 'pesagens.html', 'estoque_setor.html', 'proximas_ordens.html', 'material_processo.html'] },
   rotulagem:    { rotulo: 'Operação — Rotulagem',  desc: 'Apontamento da rotulagem, histórico e estoque da sala de rótulos',
@@ -105,7 +105,7 @@ const KURYOS_MODULOS = {
   conferencia_pesagem: { rotulo: 'Conferência de Pesagem', desc: 'Qualidade/P&D: conferir a pesagem antes da manipulação',
                   paginas: ['manipulacao.html', 'pesagens.html'] },
   planejamento: { rotulo: 'Planejamento e OPs',    desc: 'Programação, controle de OPs e histórico de apontamentos',
-                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'pesagens.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html', 'consulta_estoque.html', 'o_que_comprar.html'] },
+                  paginas: ['planejamento.html', 'horizonte.html', 'ops.html', 'pesagens.html', 'inspecao_total.html', 'historico.html', 'proximas_ordens.html', 'material_processo.html', 'consulta_estoque.html', 'o_que_comprar.html'] },
   emitir_op:    { rotulo: 'Emitir OP',             desc: 'Criar a ordem de produção que a fábrica executa',
                   paginas: ['emitir_op.html', 'dossie_lote.html', 'pesagens.html'] },
   comercial:    { rotulo: 'Comercial',             desc: 'Orçamentos e pedidos de clientes',
@@ -120,7 +120,7 @@ const KURYOS_MODULOS = {
   logistica:    { rotulo: 'Logística e Estoque',   desc: 'Agendamentos, Estoque/WMS e Separação de Materiais',
                   paginas: ['logistica.html', 'movimentar.html', 'expedicao.html', 'faturamento.html', 'cargas.html', 'relatorio_expedicao.html', 'estoque.html', 'consulta_estoque.html', 'kardex.html', 'separacao_materiais.html', 'descarte.html', 'devolucoes.html', 'proximas_ordens.html', 'material_processo.html'] },
   qualidade:    { rotulo: 'Qualidade',             desc: 'Liberação de lotes, não conformidades e fornecedores',
-                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html', 'checklists_cq.html', 'liberacao_linha.html'] },
+                  paginas: ['qualidade.html', 'qualidade_historico.html', 'dossie_lote.html', 'retrabalhos.html', 'devolucoes.html', 'material_processo.html', 'checklists_cq.html', 'liberacao_linha.html', 'inspecao_total.html'] },
   auditoria5s:  { rotulo: 'Auditoria 5S',        desc: 'Checklist do líder, auditoria da Qualidade e inspeção da Diretoria (5S)',
                   paginas: ['auditoria_5s.html'] },
   // Manutenção › Ativos (19/10): cadastro de máquinas e equipamentos que
@@ -742,6 +742,7 @@ function renderUnifiedNavbar(user) {
     // o tempo todo). Página continua existindo (histórico/dados não
     // apagados), só não é mais oferecida como parte do fluxo ativo.
     temMod('planejamento') && ktLink('ops.html', 'gear', 'Controle de OPs', activePage),
+    (temMod('planejamento') && !temMod('qualidade')) && ktLink('inspecao_total.html', 'flask', 'Inspeção Total de PA', activePage),
     temMod('emitir_op') && ktLink('emitir_op.html', 'pencil', 'Emitir OP', activePage),
     temMod('emitir_op') && ktLink('dossie_lote.html', 'history', 'Dossiê do Lote', activePage),
     (temMod('planejamento') || temMod('emitir_op')) && ktLink('pesagens.html', 'flask', 'Pesagens', activePage),
@@ -803,6 +804,7 @@ function renderUnifiedNavbar(user) {
   const qualidadeGroup = grupo('Qualidade', [
     temMod('qualidade') && ktLink('qualidade.html?tab=fila', 'flask', 'Fila de Inspeção', activePage),
     temMod('qualidade') && ktLink('qualidade.html?tab=rnc', 'alert', 'Não Conformidades', activePage),
+    temMod('qualidade') && ktLink('inspecao_total.html', 'flask', 'Inspeção Total de PA', activePage),
     // Histórico de análises + indicadores (29/09): consulta de todo laudo e KPIs.
     temMod('qualidade') && ktLink('qualidade_historico.html', 'chart', 'Histórico e Indicadores', activePage),
     temMod('qualidade') && ktLink('retrabalhos.html', 'history', 'Retrabalhos', activePage),
@@ -842,6 +844,7 @@ function renderUnifiedNavbar(user) {
       setores.producao && ktLink('proximas_ordens.html?setor=envase', 'list', 'Próximas Ordens', activePage),
       setores.producao && ktLink('form.html', 'pencil', 'Apontamento', activePage),
       setores.producao && !temMod('qualidade') && ktLink('liberacao_linha.html', 'flask', 'Liberação de linha', activePage),
+      setores.producao && !temMod('qualidade') && !temMod('planejamento') && ktLink('inspecao_total.html', 'flask', 'Inspeção Total de PA', activePage),
       setores.producao && ktLink('historico.html', 'history', 'Histórico de Apontamentos', activePage),
       setores.producao && ktLink('estoque_setor.html?setor=producao', 'warehouse', 'Estoque da Fábrica', activePage)
     ]),

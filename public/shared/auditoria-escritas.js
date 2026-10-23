@@ -44,6 +44,7 @@
   var CATALOGO = [
     [/^conferencias_pa\//, 'Logística', 'conferência de PA'],
     [/^ops\/[^/]+\/qualidadePA/, 'Qualidade', 'laudo do PA'],
+    [/^ops\/[^/]+\/inspecaoTotal/, 'Qualidade', 'inspeção total de PA'],
     [/^ops\/[^/]+\/manipulacao\/pesagem\/parcelas/, 'Manipulação', 'pesagem'],
     [/^ops\/[^/]+\/manipulacao\/analise/, 'Qualidade', 'análise do bulk'],
     [/^ops\/[^/]+\/manipulacao/, 'Manipulação', 'manipulação do bulk'],

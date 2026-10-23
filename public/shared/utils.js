@@ -2257,6 +2257,11 @@ var STATUS_LOTE = {
   // uma decisão da Qualidade que ninguém tomou. Está disponível porque a
   // mercadoria está no galpão, e o rótulo deixa a origem à vista.
   LEGADO_ESTOQUE:         { rotulo: 'Estoque legado',         badge: 'badge-gray',   disponivel: true,  aplicaA: 'produto'  },
+  // Inspeção total de PA (23/10/2026): a Qualidade sinalizou um problema no lote;
+  // a Produção revisa tudo item a item e a Qualidade decide depois. EM_RETRABALHO
+  // é o palete esvaziado cujas unidades foram para OPs de retrabalho.
+  INSPECAO_TOTAL:         { rotulo: 'Em inspeção total',      badge: 'badge-orange', disponivel: false, aplicaA: 'produto'  },
+  EM_RETRABALHO:          { rotulo: 'Em retrabalho',          badge: 'badge-orange', disponivel: false, aplicaA: 'produto'  },
   REPROVADO:              { rotulo: 'Reprovado',              badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
   RETIDO:                 { rotulo: 'Retido',                 badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },
   VENCIDO:                { rotulo: 'Vencido',                badge: 'badge-red',    disponivel: false, aplicaA: 'ambos'    },

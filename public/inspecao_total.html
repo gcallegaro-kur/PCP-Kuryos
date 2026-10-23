@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspeção Total de PA</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/manipulacao.js"></script>
+  <script src="shared/laudo-pa-lote.js"></script>
+  <script src="shared/retrabalho-op.js"></script>
+  <script src="shared/inspecao-total-pa.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    :root{--primary:#0a1c69;--success:#0ca30c;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--surface-2:#f9fafb;--tint-green-bg:#d1fae5;--tint-green-fg:#065f46;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
+    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}}
+    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--surface-2:#242426;--tint-green-bg:rgba(16,185,129,.18);--tint-green-fg:#6ee7b7;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:rgba(255,255,255,.08);--tint-blue-bg:rgba(94,131,234,.18);--tint-orange-bg:rgba(251,146,60,.18);--tint-orange-fg:#fdba74}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
+    .header{padding:26px 0 6px;display:flex;align-items:flex-start;justify-content:space-between;max-width:96%;margin:0 auto;gap:10px}
+    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
+    .card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;border-left:4px solid var(--primary)}
+    .card-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .card-header h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .card-body{padding:14px 16px}
+    .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none}
+    .btn-primary{background:var(--primary);color:#fff}.btn-ghost{background:var(--card);border:1.5px solid var(--border);color:var(--text)}
+    .busca{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:16px;color:var(--text);background:var(--card)}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
+    td{padding:7px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    tr.clicavel{cursor:pointer}tr.clicavel:hover{background:var(--tint-blue-bg)}
+    .num{text-align:right;white-space:nowrap}
+    .no-data{text-align:center;padding:24px;color:var(--muted);font-size:13.5px}
+    .hint{font-size:11.5px;color:var(--muted)}
+    .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+    .badge-gray{background:var(--tint-gray-bg);color:var(--muted)}.badge-green{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .badge-orange{background:var(--tint-orange-bg);color:var(--tint-orange-fg)}.badge-red{background:var(--tint-red-bg);color:var(--tint-red-fg)}
+    .badge-blue{background:var(--tint-blue-bg);color:var(--primary)}
+    .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 16px}
+    .campo .rot{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+    .campo .val{font-size:14px;font-weight:600;margin-top:2px;word-break:break-word}
+    .mp{border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;break-inside:avoid}
+    .mp-topo{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .fotos{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+    .foto{width:150px;font-size:11.5px}
+    .foto img{width:150px;height:150px;object-fit:cover;border-radius:10px;border:1px solid var(--border);display:block;background:var(--tint-gray-bg)}
+    .foto.cancelada{opacity:.55}.foto.cancelada .leg b{text-decoration:line-through}
+    .foto .leg{margin-top:4px;line-height:1.35}
+    .sem-foto{width:150px;height:150px;border-radius:10px;border:2px dashed var(--danger);display:flex;align-items:center;justify-content:center;color:var(--danger);font-weight:700}
+    .tempo{border-left:2px solid var(--border);margin-left:6px;padding-left:14px}
+    .ev{position:relative;padding:5px 0;font-size:13px}
+    .ev::before{content:'';position:absolute;left:-20px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--primary)}
+    .ev .quando{font-size:11.5px;color:var(--muted);display:inline-block;min-width:118px}
+    .ev .etapa{font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-right:6px}
+    .aviso{background:var(--tint-orange-bg);color:var(--tint-orange-fg);padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:10px}
+    .rolagem{overflow-x:auto}
+    #dossie{display:none}
+    @media(max-width:700px){
+      .header,.main{max-width:100%;padding-left:12px;padding-right:12px}
+      .header h1{font-size:22px}
+      .foto,.foto img,.sem-foto{width:130px}.foto img,.sem-foto{height:130px}
+      .card-body,.card-header{padding:12px}
+    }
+    /* Impressão / PDF: só o dossiê, sem menu nem busca. */
+    @media print{
+      body{background:#fff;color:#000}
+      .nao-imprime,#kuryos-sidebar,.kt-sidebar,nav,aside{display:none!important}
+      body.has-sidebar{padding-left:0!important;margin-left:0!important}
+      .card{box-shadow:none;border:1px solid #ccc;break-inside:avoid-page}
+      .main,.header{max-width:100%}
+      a{color:#000;text-decoration:none}
+    }
+    .abas{display:flex;gap:6px;margin:6px 0 14px;flex-wrap:wrap}
+    .aba{padding:9px 16px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-weight:700;font-size:13.5px;cursor:pointer}
+    .aba.ativa{background:var(--primary);color:#fff;border-color:var(--primary)}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+    .kpi{background:var(--card);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+    .kpi b{display:block;font-size:24px}.kpi span{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.3px}
+    .ctrl{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+    .ctrl input,.ctrl select{padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:14px}
+    td.num,th.num{text-align:right;white-space:nowrap}
+
+    .btn-danger{background:var(--danger);color:#fff}.btn-success{background:var(--success);color:#fff}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .sec-vazio{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;z-index:100;overflow:auto;padding:30px 12px}
+    .modal-bg.open{display:flex}
+    .modal{background:var(--card);border-radius:16px;max-width:860px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+    .modal-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)}
+    .modal-h h2{font-size:17px}.modal-b{padding:16px 18px}.modal-f{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+    .x{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted)}
+    .campo2{margin-bottom:12px}.campo2 label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .campo2 input,.campo2 textarea,.campo2 select,.dfx input,.dfx select{width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:14px}
+    .pal{border:1.5px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
+    .dfx{display:grid;grid-template-columns:2fr 90px 2fr 34px;gap:6px;margin-top:6px;align-items:center}
+    .alerta{padding:10px 12px;border-radius:10px;margin-bottom:10px;font-size:13px;background:var(--tint-orange-bg);color:var(--tint-orange-fg)}
+    .alerta.erro{background:var(--tint-red-bg);color:var(--tint-red-fg)}.alerta.ok{background:var(--tint-green-bg);color:var(--tint-green-fg)}
+    .resumo-dec{font-size:14px;line-height:1.7;background:var(--surface-2);border-radius:10px;padding:10px 12px;margin-top:8px}
+    .venc{color:var(--danger);font-weight:700}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1d1d1f;color:#fff;padding:10px 18px;border-radius:10px;display:none;z-index:200;max-width:90%}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="header">
+  <div>
+    <h1>Inspeção Total de PA</h1>
+    <div class="header-sub">Problema sinalizado pela Qualidade → a Produção designa quem revisa tudo, com prazo → a Qualidade decide: reprova (retrabalho, uma OP por motivo) e libera o que estiver bom</div>
+  </div>
+</div>
+<div class="main">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card" id="cfgCard" style="display:none"><div class="card-body ctrl">
+    <div><label class="hint" for="cfgPrazo" style="display:block">Prazo máximo da inspeção (horas)</label><input type="number" id="cfgPrazo" min="1" max="240" style="width:110px"></div>
+    <button type="button" class="btn btn-ghost" id="cfgSalvar">Salvar prazo</button>
+    <span class="hint">Vale para as próximas designações (padrão 24 h).</span>
+  </div></div>
+
+  <div class="card"><div class="card-header"><h3>1. Aguardando designação <span class="hint">— a Produção escolhe quem revisa</span></h3></div><div class="card-body rolagem"><table>
+    <thead><tr><th>Lote</th><th>Produto</th><th class="num">Unidades</th><th>Problema sinalizado</th><th>Sinalizado</th><th></th></tr></thead>
+    <tbody id="tbDesig"></tbody></table></div></div>
+
+  <div class="card"><div class="card-header"><h3>2. Em inspeção total <span class="hint">— revisão item a item, separando inconformidades por motivo</span></h3></div><div class="card-body rolagem"><table>
+    <thead><tr><th>Lote</th><th>Produto</th><th class="num">Unidades</th><th>Responsável</th><th>Prazo</th><th></th></tr></thead>
+    <tbody id="tbInsp"></tbody></table></div></div>
+
+  <div class="card"><div class="card-header"><h3>3. Aguardando decisão da Qualidade <span class="hint">— reprovação de fato (parcial, por motivo)</span></h3></div><div class="card-body rolagem"><table>
+    <thead><tr><th>Lote</th><th>Produto</th><th class="num">Inspecionadas</th><th class="num">Não conformes</th><th>Motivos achados</th><th>Inspeção</th><th></th></tr></thead>
+    <tbody id="tbDec"></tbody></table></div></div>
+
+  <div class="card"><div class="card-header"><h3>Decididas <span class="hint">— últimas 20</span></h3></div><div class="card-body rolagem"><table>
+    <thead><tr><th>Lote</th><th>Produto</th><th class="num">Liberadas</th><th class="num">Em retrabalho</th><th>OPs de retrabalho</th><th>Decidido</th></tr></thead>
+    <tbody id="tbFim"></tbody></table></div></div>
+</div>
+
+<!-- Designar -->
+<div class="modal-bg" id="mDesig"><div class="modal">
+  <div class="modal-h"><h2 id="mDesigT">Designar inspeção total</h2><button class="x" data-fechar="mDesig" aria-label="Fechar">×</button></div>
+  <div class="modal-b">
+    <div class="alerta" id="mDesigInfo"></div>
+    <div class="campo2"><label for="dResp">Quem vai revisar tudo, item por item</label><input type="text" id="dResp" list="listaPessoas" autocomplete="off" placeholder="Nome da pessoa"><datalist id="listaPessoas"></datalist></div>
+    <div class="campo2"><label for="dPrazo">Prazo máximo (horas)</label><input type="number" id="dPrazo" min="1" max="240"></div>
+    <div class="hint" id="dErro" style="color:var(--danger)"></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-ghost" data-fechar="mDesig">Cancelar</button><button class="btn btn-primary" id="dOk">Designar</button></div>
+</div></div>
+
+<!-- Resultado da inspeção -->
+<div class="modal-bg" id="mRes"><div class="modal">
+  <div class="modal-h"><h2 id="mResT">Resultado da inspeção</h2><button class="x" data-fechar="mRes" aria-label="Fechar">×</button></div>
+  <div class="modal-b">
+    <div class="alerta" id="mResInfo">Informe, palete a palete, quantas unidades foram inspecionadas e quantas inconformidades de cada motivo foram separadas.</div>
+    <div id="rPaletes"></div>
+    <div class="campo2" id="rJustBox" style="display:none"><label for="rJust">Há unidades sem inspeção — justifique</label><textarea id="rJust" rows="2"></textarea></div>
+    <div class="campo2"><label for="rObs">Observação (opcional)</label><textarea id="rObs" rows="2"></textarea></div>
+    <datalist id="listaMotivos"></datalist>
+    <div class="alerta erro" id="rErro" style="display:none"></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-ghost" data-fechar="mRes">Cancelar</button><button class="btn btn-primary" id="rOk">Concluir inspeção</button></div>
+</div></div>
+
+<!-- Decisão -->
+<div class="modal-bg" id="mDec"><div class="modal">
+  <div class="modal-h"><h2 id="mDecT">Decisão da Qualidade</h2><button class="x" data-fechar="mDec" aria-label="Fechar">×</button></div>
+  <div class="modal-b">
+    <div class="alerta" id="mDecInfo"></div>
+    <div class="rolagem"><table>
+      <thead><tr><th>Motivo</th><th class="num">Achadas</th><th class="num">Reprovar</th><th>Destino do retrabalho</th></tr></thead>
+      <tbody id="decLinhas"></tbody></table></div>
+    <datalist id="listaLinhas"></datalist>
+    <div class="resumo-dec" id="decResumo"></div>
+    <div class="campo2" style="margin-top:10px"><label for="decObs">Observação da decisão</label><textarea id="decObs" rows="2"></textarea></div>
+    <div class="alerta erro" id="decErro" style="display:none"></div>
+  </div>
+  <div class="modal-f"><button class="btn btn-ghost" data-fechar="mDec">Cancelar</button><button class="btn btn-danger" id="decOk">Confirmar decisão</button></div>
+</div></div>
+<div id="toast"></div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+var allOps = {}, estoque = {}, prazoCfg = null, linhasCfg = [], pessoas = [], opsOk = false, estOk = false;
+var alvo = null;   // {opKey, paletes} do modal aberto
+function $(id) { return document.getElementById(id); }
+function fmt(n) { return Number(n).toLocaleString('pt-BR', {maximumFractionDigits: 3}); }
+function quando(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  return isNaN(d) ? '—' : d.toLocaleString('pt-BR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+}
+function toast(msg) { var t = $('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(function() { t.style.display = 'none'; }, 6000); }
+function eu() { return (window.currentUser && (window.currentUser.nome || window.currentUser.email)) || 'desconhecido'; }
+function temPapel(papeis, mods) {
+  var u = window.currentUser; if (!u) return false;
+  if (papeis.indexOf(u.role) >= 0) return true;
+  return mods.some(function(m) { return window.usuarioTemModulo && window.usuarioTemModulo(u, m); });
+}
+function podeProduzir() { return temPapel(['admin', 'production', 'pcp'], ['apontamento', 'planejamento']); }
+function podeDecidir() { return temPapel(['admin', 'qualidade'], ['qualidade']); }
+function prazoPadrao() { return InspecaoTotalPA.prazoHoras(prazoCfg); }
+
+dbOnValue(db.ref('ops'), function(s) { allOps = s.val() || {}; opsOk = true; render(); });
+dbOnValue(db.ref('estoque_lotes'), function(s) { estoque = s.val() || {}; estOk = true; render(); });
+dbOnValue(db.ref('config/inspecaoTotalPrazoHoras'), function(s) { prazoCfg = s.val(); render(); });
+db.ref('config/linhas').once('value').then(function(s) {
+  linhasCfg = s.val() || [];
+  $('listaLinhas').innerHTML = (Array.isArray(linhasCfg) ? linhasCfg : Object.values(linhasCfg)).map(function(l) { return '<option value="' + escapeAttr(l) + '">'; }).join('');
+}).catch(function() {});
+db.ref('usuarios').once('value').then(function(s) {
+  var u = s.val() || {};
+  pessoas = Object.keys(u).map(function(k) { return u[k] && u[k].nome; }).filter(Boolean);
+  $('listaPessoas').innerHTML = pessoas.map(function(n) { return '<option value="' + escapeAttr(n) + '">'; }).join('');
+}).catch(function() {});
+
+function paletesDe(opKey) { return InspecaoTotalPA.paletesDaInspecao(estoque, opKey); }
+function unidades(opKey, insp) {
+  var ps = paletesDe(opKey);
+  return ps.length ? ps.reduce(function(t, p) { return t + Number(p.lote.saldoLote || 0); }, 0) : ((insp.sinalizacao && insp.sinalizacao.saldoLote) || 0);
+}
+
+function render() {
+  if (!opsOk || !estOk) return;
+  var f = InspecaoTotalPA.fila(allOps), agora = new Date().toISOString();
+  var por = function(e) { return f.filter(function(x) { return x.estado === e; }); };
+  var venc = por('EM_INSPECAO').filter(function(x) { var s = InspecaoTotalPA.situacaoPrazo(x.insp, agora); return s && s.vencido; }).length;
+  $('kpis').innerHTML = kpi('Aguardando designação', por('AGUARDANDO_DESIGNACAO').length) + kpi('Em inspeção', por('EM_INSPECAO').length) +
+    kpi('Prazo vencido', venc) + kpi('Aguardando decisão', por('AGUARDANDO_DECISAO').length);
+  $('cfgCard').style.display = temPapel(['admin', 'pcp'], []) ? '' : 'none';
+  if (document.activeElement !== $('cfgPrazo')) $('cfgPrazo').value = prazoPadrao();
+
+  $('tbDesig').innerHTML = por('AGUARDANDO_DESIGNACAO').map(function(x) {
+    return '<tr><td><b>' + escapeHtml(x.lote) + '</b></td><td>' + escapeHtml(x.produto) + '<div class="hint">' + escapeHtml(x.cliente) + '</div></td><td class="num">' + fmt(unidades(x.opKey, x.insp)) + '</td>' +
+      '<td>' + escapeHtml((x.insp.sinalizacao || {}).motivo || '') + '</td><td>' + quando(x.sinalizadoEm) + '<div class="hint">' + escapeHtml((x.insp.sinalizacao || {}).por || '') + '</div></td>' +
+      '<td>' + (podeProduzir() ? '<button class="btn btn-primary" data-acao="designar" data-op="' + escapeAttr(x.opKey) + '">Designar</button>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="sec-vazio">Nenhum lote aguardando designação.</td></tr>';
+
+  $('tbInsp').innerHTML = por('EM_INSPECAO').map(function(x) {
+    var d = x.insp.designacao || {}, s = InspecaoTotalPA.situacaoPrazo(x.insp, agora);
+    return '<tr><td><b>' + escapeHtml(x.lote) + '</b></td><td>' + escapeHtml(x.produto) + '</td><td class="num">' + fmt(unidades(x.opKey, x.insp)) + '</td>' +
+      '<td>' + escapeHtml(d.responsavel || '—') + '<div class="hint">designado por ' + escapeHtml(d.designadoPor || '—') + '</div></td>' +
+      '<td>até ' + quando(d.prazoEm) + '<div class="' + (s && s.vencido ? 'venc' : 'hint') + '">' + escapeHtml(InspecaoTotalPA.textoPrazo(s)) + '</div></td>' +
+      '<td>' + (podeProduzir() ? '<button class="btn btn-primary" data-acao="resultado" data-op="' + escapeAttr(x.opKey) + '">Registrar resultado</button> ' +
+        '<button class="btn btn-ghost" data-acao="designar" data-op="' + escapeAttr(x.opKey) + '">Trocar responsável</button>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="sec-vazio">Nenhuma inspeção em andamento.</td></tr>';
+
+  $('tbDec').innerHTML = por('AGUARDANDO_DECISAO').map(function(x) {
+    var r = x.insp.resultado || {}, mots = Object.keys(r.motivos || {}).map(function(k) { return escapeHtml(r.motivos[k].motivo) + ' (' + r.motivos[k].achada + ')'; });
+    return '<tr><td><b>' + escapeHtml(x.lote) + '</b></td><td>' + escapeHtml(x.produto) + '</td><td class="num">' + fmt(r.inspecionadas || 0) + '</td><td class="num">' + fmt(r.naoConformes || 0) + '</td>' +
+      '<td>' + (mots.join('<br>') || '<span class="hint">nenhuma inconformidade</span>') + '</td>' +
+      '<td>' + escapeHtml(r.por || '') + '<div class="hint">' + quando(r.em) + (r.atrasadoMin ? ' <span class="venc">atrasada ' + r.atrasadoMin + ' min</span>' : '') + '</div></td>' +
+      '<td>' + (podeDecidir() ? '<button class="btn btn-danger" data-acao="decidir" data-op="' + escapeAttr(x.opKey) + '">Decidir</button>' : '<span class="hint">Qualidade decide</span>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="sec-vazio">Nenhuma inspeção aguardando decisão.</td></tr>';
+
+  $('tbFim').innerHTML = por('DECIDIDA').sort(function(a, b) { return String((b.insp.decisao || {}).em).localeCompare(String((a.insp.decisao || {}).em)); }).slice(0, 20).map(function(x) {
+    var d = x.insp.decisao || {}, rts = (d.motivos || []).filter(function(m) { return m.opRetrabalho; });
+    return '<tr><td><a href="dossie_lote.html?op=' + encodeURIComponent(x.opKey) + '"><b>' + escapeHtml(x.lote) + '</b></a></td><td>' + escapeHtml(x.produto) + '</td>' +
+      '<td class="num">' + fmt(d.aprovadas || 0) + '</td><td class="num">' + fmt(d.reprovadas || 0) + '</td>' +
+      '<td>' + (rts.map(function(m) { return escapeHtml(m.opRetrabalho) + ' <span class="hint">' + escapeHtml(m.motivo) + ' (' + m.reprovada + ')</span>'; }).join('<br>') || '—') + '</td>' +
+      '<td>' + quando(d.em) + '<div class="hint">' + escapeHtml(d.por || '') + '</div></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="sec-vazio">Nada decidido ainda.</td></tr>';
+}
+function kpi(rot, val) { return '<div class="kpi"><b>' + val + '</b><span>' + rot + '</span></div>'; }
+setInterval(render, 60000);
+// Os botões dependem de quem está logado; o login resolve depois dos dados.
+(function esperarLogin() { if (!window.currentUser) { setTimeout(esperarLogin, 150); return; } render(); })();
+
+document.addEventListener('click', function(e) {
+  var fechar = e.target.closest('[data-fechar]');
+  if (fechar) { $(fechar.getAttribute('data-fechar')).classList.remove('open'); return; }
+  var b = e.target.closest('[data-acao]');
+  if (!b) return;
+  var op = b.getAttribute('data-op'), acao = b.getAttribute('data-acao');
+  if (acao === 'designar') abrirDesignar(op);
+  else if (acao === 'resultado') abrirResultado(op);
+  else if (acao === 'decidir') abrirDecidir(op);
+});
+
+/* ── Designar ── */
+function abrirDesignar(opKey) {
+  var op = allOps[opKey] || {}, d = (op.inspecaoTotal || {}).designacao || {};
+  alvo = {opKey: opKey, paletes: paletesDe(opKey)};
+  $('mDesigT').textContent = 'Designar inspeção total — ' + (op.lote || opKey);
+  $('mDesigInfo').textContent = 'O lote ' + (op.lote || opKey) + ' está bloqueado. Quem for designado revisa TODAS as unidades, uma a uma, e separa as inconformidades por motivo.';
+  $('dResp').value = d.responsavel || ''; $('dPrazo').value = prazoPadrao(); $('dErro').textContent = '';
+  $('mDesig').classList.add('open');
+}
+$('dOk').addEventListener('click', function() {
+  var btn = this; btn.disabled = true;
+  InspecaoTotalPA.designar(db, alvo.opKey, {responsavel: $('dResp').value, prazoHoras: Number($('dPrazo').value)}, eu()).then(function(r) {
+    btn.disabled = false;
+    if (!r.ok) { $('dErro').textContent = r.erro; return; }
+    $('mDesig').classList.remove('open');
+    toast('Inspeção designada. Prazo: ' + r.prazoHoras + ' h.');
+  });
+});
+
+/* ── Resultado ── */
+function abrirResultado(opKey) {
+  var op = allOps[opKey] || {}, ps = paletesDe(opKey);
+  alvo = {opKey: opKey, paletes: ps};
+  var motivos = {};
+  Object.keys(allOps).forEach(function(k) {
+    var r = (allOps[k].inspecaoTotal || {}).resultado;
+    Object.keys((r && r.motivos) || {}).forEach(function(m) { motivos[r.motivos[m].motivo] = 1; });
+  });
+  $('listaMotivos').innerHTML = Object.keys(motivos).map(function(m) { return '<option value="' + escapeAttr(m) + '">'; }).join('');
+  $('mResT').textContent = 'Resultado da inspeção — ' + (op.lote || opKey);
+  $('rPaletes').innerHTML = ps.map(function(p) {
+    return '<div class="pal" data-palete="' + escapeAttr(p.loteKey) + '"><b>Palete ' + escapeHtml(p.lote.identificadorPalete || p.loteKey) + '</b> <span class="hint">' + fmt(p.lote.saldoLote) + ' un' + (p.lote.enderecoCodigo ? ' · ' + escapeHtml(p.lote.enderecoCodigo) : '') + '</span>' +
+      '<div class="campo2" style="margin-top:8px;max-width:240px"><label>Unidades inspecionadas</label><input type="number" class="r-insp" min="0" step="1" value="' + Number(p.lote.saldoLote || 0) + '"></div>' +
+      '<div class="defeitos"></div><button type="button" class="btn btn-ghost" data-add="1">+ inconformidade</button></div>';
+  }).join('');
+  $('rJust').value = ''; $('rObs').value = ''; $('rErro').style.display = 'none'; $('rJustBox').style.display = 'none';
+  $('mRes').classList.add('open');
+}
+$('rPaletes').addEventListener('click', function(e) {
+  var add = e.target.closest('[data-add]');
+  if (add) {
+    var box = add.parentNode.querySelector('.defeitos'), d = document.createElement('div');
+    d.className = 'dfx';
+    d.innerHTML = '<input type="text" class="r-mot" list="listaMotivos" placeholder="Motivo (ex.: tampa solta)"><input type="number" class="r-qtd" min="1" step="1" placeholder="Qtd"><input type="text" class="r-obs" placeholder="Observação"><button type="button" class="x" data-rm="1" aria-label="Remover">×</button>';
+    box.appendChild(d); return;
+  }
+  var rm = e.target.closest('[data-rm]');
+  if (rm) rm.parentNode.remove();
+});
+$('rPaletes').addEventListener('input', function() {
+  var parcial = Array.prototype.some.call(document.querySelectorAll('#rPaletes .pal'), function(el) {
+    var p = alvo.paletes.filter(function(x) { return x.loteKey === el.getAttribute('data-palete'); })[0];
+    return p && Number(el.querySelector('.r-insp').value) < Number(p.lote.saldoLote || 0);
+  });
+  $('rJustBox').style.display = parcial ? '' : 'none';
+});
+$('rOk').addEventListener('click', function() {
+  var linhas = Array.prototype.map.call(document.querySelectorAll('#rPaletes .pal'), function(el) {
+    return {
+      loteKey: el.getAttribute('data-palete'), inspecionadas: el.querySelector('.r-insp').value === '' ? null : Number(el.querySelector('.r-insp').value),
+      defeitos: Array.prototype.map.call(el.querySelectorAll('.dfx'), function(d) {
+        return {motivo: d.querySelector('.r-mot').value, qtd: d.querySelector('.r-qtd').value === '' ? null : Number(d.querySelector('.r-qtd').value), obs: d.querySelector('.r-obs').value};
+      }).filter(function(d) { return d.motivo.trim() || d.qtd != null; })
+    };
+  });
+  var btn = this; btn.disabled = true;
+  InspecaoTotalPA.registrarResultado(db, alvo.opKey, alvo.paletes, {linhas: linhas, justificativaParcial: $('rJust').value, observacao: $('rObs').value}, eu()).then(function(r) {
+    btn.disabled = false;
+    if (!r.ok) { $('rErro').textContent = r.erro; $('rErro').style.display = ''; return; }
+    $('mRes').classList.remove('open');
+    toast('Inspeção concluída — enviada para a decisão da Qualidade.');
+  });
+});
+
+/* ── Decisão ── */
+function abrirDecidir(opKey) {
+  var op = allOps[opKey] || {}, insp = op.inspecaoTotal || {}, r = insp.resultado || {};
+  alvo = {opKey: opKey, paletes: paletesDe(opKey), resultado: r, op: op};
+  $('mDecT').textContent = 'Decisão da Qualidade — ' + (op.lote || opKey);
+  $('mDecInfo').textContent = 'A inspeção achou ' + (r.naoConformes || 0) + ' unidade(s) não conforme(s) em ' + (r.inspecionadas || 0) + '. Defina, por motivo, quantas são reprovadas (viram OP de retrabalho). O resto fica liberado para expedição.';
+  var mots = r.motivos || {};
+  $('decLinhas').innerHTML = Object.keys(mots).map(function(k) {
+    var m = mots[k];
+    return '<tr data-k="' + escapeAttr(k) + '"><td><b>' + escapeHtml(m.motivo) + '</b>' + (m.obs ? '<div class="hint">' + escapeHtml(m.obs) + '</div>' : '') + '</td><td class="num">' + m.achada + '</td>' +
+      '<td class="num"><input type="number" class="d-rep" min="0" max="' + m.achada + '" step="1" value="' + m.achada + '" style="width:90px;padding:6px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)"></td>' +
+      '<td><div class="dfx" style="grid-template-columns:120px 1fr;margin-top:0"><select class="d-tipo"><option value="linha">Linha</option><option value="rotulagem">Rotulagem</option><option value="posto">Posto</option></select><input type="text" class="d-nome" list="listaLinhas" placeholder="Linha/posto (opcional)"></div></td></tr>';
+  }).join('') || '<tr><td colspan="4" class="sec-vazio">A inspeção não achou inconformidades: o lote inteiro será liberado.</td></tr>';
+  $('decObs').value = ''; $('decErro').style.display = 'none';
+  resumoDecisao();
+  $('mDec').classList.add('open');
+}
+function lerDecisoes() {
+  var d = {};
+  document.querySelectorAll('#decLinhas tr[data-k]').forEach(function(tr) {
+    d[tr.getAttribute('data-k')] = {reprovada: tr.querySelector('.d-rep').value === '' ? 0 : Number(tr.querySelector('.d-rep').value),
+      destino: {tipo: tr.querySelector('.d-tipo').value, nome: tr.querySelector('.d-nome').value.trim()}};
+  });
+  return d;
+}
+function resumoDecisao() {
+  var d = lerDecisoes(), r = alvo.resultado || {}, rep = 0, ops = 0;
+  Object.keys(d).forEach(function(k) { rep += d[k].reprovada || 0; if (d[k].reprovada > 0) ops++; });
+  var total = (alvo.paletes || []).reduce(function(t, p) { return t + Number(p.lote.saldoLote || 0); }, 0);
+  $('decResumo').innerHTML = '<b>' + fmt(Math.max(0, total - rep)) + '</b> un liberadas para expedição · <b>' + fmt(rep) + '</b> un reprovadas · <b>' + ops + '</b> OP(s) de retrabalho (uma por motivo)';
+}
+$('decLinhas').addEventListener('input', resumoDecisao);
+$('decOk').addEventListener('click', function() {
+  var d = lerDecisoes(), rep = Object.keys(d).reduce(function(t, k) { return t + (d[k].reprovada || 0); }, 0);
+  if (!confirm(rep ? 'Confirmar: ' + rep + ' un reprovadas viram OP(s) de retrabalho e o restante é liberado para expedição?\n\nNão dá para desfazer.' : 'Nenhuma unidade reprovada: o lote inteiro será liberado para expedição. Confirmar?')) return;
+  var op = alvo.op, btn = this; btn.disabled = true;
+  var ctx = {itemCodigo: op.sku, itemNome: op.produto, unidade: 'un', loteOrigem: op.lote, opLote: op.lote, op: op};
+  InspecaoTotalPA.decidir(db, alvo.opKey, alvo.paletes, d, $('decObs').value, eu(), ctx, {qualidadeDoLaudo: qualidadeDoLaudo, sanitizeKey: sanitizeKey, abrirRnc: abrirRnc}).then(function(r) {
+    btn.disabled = false;
+    if (!r.ok) { $('decErro').textContent = r.erro; $('decErro').style.display = ''; return; }
+    $('mDec').classList.remove('open');
+    toast(r.aprovadas + ' un liberadas para expedição' + (r.opsRT.length ? '; abertas ' + r.opsRT.length + ' OP(s) de retrabalho: ' + r.opsRT.map(function(x) { return x.lote; }).join(', ') : '') + (r.rnc ? '. RNC ' + r.rnc + '.' : '.') + (r.rncErro ? ' ⚠ RNC não aberta: ' + r.rncErro : ''));
+  });
+});
+
+$('cfgSalvar').addEventListener('click', function() {
+  var h = InspecaoTotalPA.prazoHoras(Number($('cfgPrazo').value));
+  db.ref('config/inspecaoTotalPrazoHoras').set(h).then(function() { toast('Prazo salvo: ' + h + ' h.'); }).catch(function(e) { toast('Não consegui salvar: ' + e.message); });
+});
+</script>
+</body>
+</html>

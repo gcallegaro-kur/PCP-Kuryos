@@ -199,6 +199,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Inspeção total de PA: sinalização → inspeção → reprovação de fato → OPs de retrabalho (23/10/2026)
+
+- **Pedido:** a reprovação do lote vira uma *sinalização*; a Produção designa quem revisa tudo item a item (prazo máximo, inconformidades separadas por motivo); a Qualidade decide depois, podendo reprovar parcialmente e por motivos diferentes; cada motivo reprovado vira uma OP de retrabalho; o aprovado sai da quarentena e vai para expedição. Respostas do usuário: Qualidade sinaliza no laudo; prazo FIXO configurável pelo admin; resultado por contagem por motivo; uma OP por motivo.
+- **Feito:** `shared/inspecao-total-pa.js` (motor + executores com guarda de estado por transaction): `ops/{op}/inspecaoTotal` = máquina `AGUARDANDO_DESIGNACAO → EM_INSPECAO → AGUARDANDO_DECISAO → DECIDIDA` com sinalização, designação (responsável + `prazoEm`), resultado (por palete e motivo, atraso em min) e decisão. Sinalizar bloqueia os paletes (`INSPECAO_TOTAL`); decidir reduz o saldo dos paletes pelo que foi reprovado (recalcula caixas), libera o resto (`LIBERADO_EXPEDICAO`, ou `EM_RETRABALHO` se o palete esvaziou), grava o laudo do lote, cria 1 OP `-RTn` por motivo (`RetrabalhoOp.montar`, `origemInspecaoTotal`) e abre 1 RNC. Tela nova `inspecao_total.html` (3 filas + decididas, prazo em contagem regressiva, modal de designar/resultado/decisão); `qualidade.html`: no lote de PA o botão vira "Sinalizar problema". `utils.js`: status `INSPECAO_TOTAL` e `EM_RETRABALHO`. Menu/acesso: Qualidade, Apontamento (Operação), Planejamento.
+- **Regras do banco (exige `firebase deploy --only database`):** `ops/$op/inspecaoTotal` gravável por Qualidade; Qualidade pode CRIAR `ops/$op` só com `tipoOrdem == RETRABALHO`. Prazo em `config/inspecaoTotalPrazoHoras` (admin/pcp editam na tela).
+- **Testes:** `run_inspecao_total_pa_test.js` (regras puras + fluxo completo contra banco simulado: parcial com 2 motivos, reprovação total, nada reprovado, numeração RT2, laudo já existente), `run_inspecao_total_pa_ui_test.js` (tela real). Itens adiados em `MELHORIAS_FUTURAS.md` (volta ao estoque após o retrabalho, foto por motivo).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Auditoria geral: toda gravação das telas vira evento (23/10/2026)
 
 - **Pedido:** "toda e qualquer movimentação no sistema" na Auditoria (a conferência de PA do 26295/01 só se descobria lendo o banco).

@@ -1465,3 +1465,10 @@ Fica para depois (nenhum é bug):
 - **Fechamento dos temporários: pagamento em lote.** Registrar o pagamento de todos os "em aberto" da semana de uma vez (hoje um por vez, botão Pagar).
 - **Setor do colaborador na admissão/RH Dash.** `rh_colaboradores.setor` é novo e opcional (vale o setor do cargo); preencher os 13 existentes é operação do RH.
 - **Dados na produção:** importar a planilha dos temporários com `bash scripts/importar-temporarios.sh` (o classificador do Claude Code bloqueou a escrita).
+
+## Inspeção total de PA (23/10/2026) — adiado
+- **Volta das peças retrabalhadas ao estoque PA.** A decisão tira as unidades reprovadas do palete e abre as OPs `-RTn`, mas concluir a OP de retrabalho não recria palete nem passa de novo pela Conferência de PA / laudo. Hoje a Logística precisa registrar a entrada (entrada avulsa de PA) quando o retrabalho acabar. Fechar o elo: ao encerrar a OP RT com `origemInspecaoTotal`, gerar o palete em QUARENTENA.
+- **Sinalização por outras áreas.** Só a Qualidade sinaliza (botão do laudo). Logística/Produção sinalizarem um palete exigiria um ponto de entrada próprio.
+- **Foto por inconformidade.** O resultado guarda motivo/quantidade/observação por palete, sem foto por motivo (o Storage também está fora enquanto o billing estiver fechado).
+- **Palete que chega depois da sinalização.** Palete do mesmo lote conferido depois cai na fila de laudo normal (QUARENTENA), sem herdar a inspeção total.
+- **Prazo vencido sem aviso ativo.** A fila destaca o vencido em vermelho, mas não notifica ninguém; um aviso para o PCP/Produção seria o passo seguinte.
