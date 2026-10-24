@@ -152,9 +152,9 @@
      (sem acento, sem caixa). Só lotes com saldo; os que não têm posição no
      WMS entram em `semPosicao` (ficam na Doca/recebimento pendente) e não
      são listados. Ordem: FEFO (validade, depois recebimento). */
-  function buscarLotes(textoBusca, lotes, enderecos, limite) {
+  function buscarLotes(textoBusca, lotes, enderecos, limite, estoque) {
     var palavras = semAcento(textoBusca).split(/\s+/).filter(Boolean);
-    if (!palavras.length) return {lotes: [], total: 0, semPosicao: 0};
+    if (!palavras.length) return {lotes: [], total: 0, semPosicao: 0, semLote: []};
     var achados = [], semPosicao = 0;
     Object.keys(lotes || {}).forEach(function(ik) {
       Object.keys(lotes[ik] || {}).forEach(function(lk) {
@@ -173,7 +173,28 @@
       return String(a.itemCodigo).localeCompare(String(b.itemCodigo), 'pt-BR', {numeric: true}) ||
         String(a.validade || '9999').localeCompare(String(b.validade || '9999')) || String(a.recebido).localeCompare(String(b.recebido));
     });
-    return {lotes: achados.slice(0, limite || 30), total: achados.length, semPosicao: semPosicao};
+    /* Material com saldo no sistema e nenhum lote para esse saldo (nunca foi
+       endereçado): não tem de onde mover, mas a pessoa precisa saber que ele
+       existe e onde resolver. Foi o caso do ET-00069 (1.605 un, 0 lotes). */
+    var semLote = [];
+    if (estoque) {
+      var somaLotes = {};
+      Object.keys(lotes || {}).forEach(function(ik) {
+        Object.keys(lotes[ik] || {}).forEach(function(lk) {
+          var l = lotes[ik][lk] || {}, q = Number(l.saldoLote);
+          if (q > 0 && l.itemTipo !== 'produto') somaLotes[ik] = (somaLotes[ik] || 0) + q;
+        });
+      });
+      Object.keys(estoque).forEach(function(ik) {
+        var e = estoque[ik] || {}, livre = arred((Number(e.saldoAtual) || 0) - (somaLotes[ik] || 0));
+        if (!(livre > 0)) return;
+        var palheiro = semAcento([e.materialCodigo || ik, e.materialNome].join(' '));
+        if (!palavras.every(function(p) { return palheiro.indexOf(p) !== -1; })) return;
+        semLote.push({itemKey: ik, itemCodigo: e.materialCodigo || ik, itemNome: e.materialNome || '', saldo: Number(e.saldoAtual) || 0, semEndereco: livre, unidade: e.unidade || ''});
+      });
+      semLote.sort(function(a, b) { return String(a.itemCodigo).localeCompare(String(b.itemCodigo), 'pt-BR', {numeric: true}); });
+    }
+    return {lotes: achados.slice(0, limite || 30), total: achados.length, semPosicao: semPosicao, semLote: semLote};
   }
 
   /* Dividir UM lote em vários paletes de uma vez (24/10/2026): o recebimento

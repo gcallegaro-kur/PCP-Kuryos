@@ -7,7 +7,7 @@
 (function() {
   var db = firebase.database();
   var M = MovimentacaoWMS;
-  var lotes = {}, enderecos = {}, movimentos = {}, motivos = [], carregado = {lotes: false, enderecos: false};
+  var lotes = {}, enderecos = {}, movimentos = {}, estoqueAgregado = {}, motivos = [], carregado = {lotes: false, enderecos: false};
   var st = {origemKey: '', selecao: {}, destinoKey: '', motivo: '', parcial: {}, ocupado: false, ultimo: null, candidatos: null, div: null};
   var MOTIVO_PADRAO = 'TRANSFERÊNCIA ENTRE ENDEREÇOS';
   function el(id) { return document.getElementById(id); }
@@ -47,9 +47,12 @@
   function renderBusca() {
     var q = el('buscaItem').value, box = el('buscaResultados');
     if (!q.trim()) { box.innerHTML = ''; return; }
-    var r = M.buscarLotes(q, lotes, enderecos, 30);
+    var r = M.buscarLotes(q, lotes, enderecos, 30, estoqueAgregado);
+    var blocoSemLote = r.semLote.length ? '<p class="mv-sub"><b>Com saldo, mas ainda sem posição no WMS</b> (nunca foi endereçado): ' + r.semLote.map(function(x) {
+      return '<b>' + e(x.itemCodigo) + '</b> ' + e(x.itemNome) + ' — ' + num(x.semEndereco) + ' ' + e(x.unidade);
+    }).join('; ') + '. Para endereçar: <a href="estoque.html?tab=enderecamento">Estoque › Endereçamento</a>.</p>' : '';
     if (!r.lotes.length) {
-      box.innerHTML = '<p class="mv-sub">Nenhum lote com saldo e posição para <b>' + e(q) + '</b>.' + (r.semPosicao ? ' ' + r.semPosicao + ' lote(s) ainda sem posição (estão na Doca ou aguardando guarda).' : '') + '</p>';
+      box.innerHTML = (r.semLote.length ? '' : '<p class="mv-sub">Nenhum lote com saldo e posição para <b>' + e(q) + '</b>.' + (r.semPosicao ? ' ' + r.semPosicao + ' lote(s) ainda sem posição (estão na Doca ou aguardando guarda).' : '') + '</p>') + blocoSemLote;
       return;
     }
     box.innerHTML = r.lotes.map(function(l) {
@@ -57,7 +60,7 @@
         '<small>' + e(l.rotulo || '—') + ' · ' + num(l.saldo) + ' ' + e(l.unidade) + ' · 📍 ' + e(l.enderecoCodigo) + ' · ' + tagStatus(l.status) +
         (l.validade ? ' · val. ' + e(String(l.validade).slice(0, 10).split('-').reverse().join('/')) : '') + '</small></button>';
     }).join('') + (r.total > r.lotes.length ? '<p class="mv-sub">Mostrando ' + r.lotes.length + ' de ' + r.total + '. Digite mais para afinar.</p>' : '') +
-      (r.semPosicao ? '<p class="mv-sub">' + r.semPosicao + ' lote(s) ainda sem posição não aparecem aqui.</p>' : '');
+      (r.semPosicao ? '<p class="mv-sub">' + r.semPosicao + ' lote(s) ainda sem posição não aparecem aqui.</p>' : '') + blocoSemLote;
     box.querySelectorAll('[data-lote]').forEach(function(b) {
       b.onclick = function() {
         var p = b.dataset.lote.split('/'), l = (lotes[p[0]] || {})[p[1]];
@@ -409,6 +412,7 @@
 
   dbOnValue(db.ref('estoque_lotes'), function(s) { lotes = s.val() || {}; carregado.lotes = true; if (!st.ocupado) render(); if (deURL && carregado.enderecos) { el('deCodigo').value = deURL; lerOrigem(deURL); deURL = null; } });
   dbOnValue(db.ref('enderecos_estoque'), function(s) { enderecos = s.val() || {}; carregado.enderecos = true; renderEtiquetasFiltro(); if (!st.ocupado) render(); renderUltimas(); if (deURL && carregado.lotes) { el('deCodigo').value = deURL; lerOrigem(deURL); deURL = null; } });
+  dbOnValue(db.ref('estoque'), function(s) { estoqueAgregado = s.val() || {}; if (!st.ocupado) renderBusca(); });
   dbOnValue(db.ref('movimentos_estoque'), function(s) { movimentos = s.val() || {}; renderUltimas(); });
   dbOnValue(db.ref('config/motivosMovimentoEstoque'), function(s) {
     var v = s.val() || [];

@@ -3,6 +3,14 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Endereçamento por dono + busca avisa saldo sem posição (24/10/2026)
+
+- **Pedido:** ET-00069 tem saldo mas não aparece no filtro (Movimentar).
+- **Causa:** o item tem 1.605 un (da MISS ROSE, ajuste manual de 01/10) e **zero lotes**: nunca foi endereçado. A busca do Movimentar lista lotes com posição; não havia lote para mostrar.
+- **Feito:** a busca do Movimentar agora lista também "saldo sem posição" (saldo do item − lotes) com link para Estoque › Endereçamento. O Endereçamento ganhou **"De quem é o material?"**: o que falta endereçar é calculado por dono (Kuryos geral e cada cliente de porCliente), e o lote nasce com `propriedade` correta. Antes era um número só e o lote da MISS ROSE nasceria como da Kuryos.
+- **Dados:** ET-00072 (506+510) e EP-00203 (11.200 do recebimento + 1.200 de saldo anterior + ajuste +1.200) corrigidos em produção, com backup em `backups/`.
+- **Testes:** run_enderecamento_trava_ui_test.js, run_movimentar_busca_divisao_ui_test.js, run_movimentacao_wms_test.js.
+
 ### Claude — Movimentar: busca pelo item + divisão em paletes; trava no Endereçamento; ET-00071 corrigido (24/10/2026)
 
 - **Pedido:** dividir o recebimento de 2.096 cx (ET-00071) em 600/600/606/290; campo de busca por nome/código para ganhar tempo.

@@ -22,6 +22,10 @@ function dados() {
         propriedade: {tipo: 'KURYOS'}, destino: {clienteKey: 'FEBELLABEAUTY', clienteNome: 'FEBELLA BEAUTY', pedidos: ['PED-0010']}}},
       'MP-1': {a: {itemCodigo: 'MP-1', itemNome: 'ÁLCOOL CEREAL', itemTipo: 'material', saldoLote: 90, unidade: 'kg', loteInterno: 'AK-2026-000001', enderecoKey: 'GAL-1-1-1', enderecoCodigo: 'GAL-1.1.1', status: 'LIBERADO', dataValidade: '2027-01-01'}}
     },
+    estoque: {
+      'ET-00071': {materialCodigo: 'ET-00071', materialNome: 'CAIXA DE EMBARQUE 48 UNID. BODY SPLASH FEBELLA 200ML', saldoAtual: 2096, unidade: 'un'},
+      'ET-00069': {materialCodigo: 'ET-00069', materialNome: 'CAIXA DE EMBARQUE BODY SPLASH ARABE 371X280X197 200ML', saldoAtual: 1605, unidade: 'un', porCliente: {MISS: {clienteNome: 'MISS ROSE', saldoAtual: 1605}}}
+    },
     movimentos_estoque: {}
   };
 }
@@ -133,6 +137,12 @@ async function abrir(browser, uid, estadoInicial, pagina) {
     await page.waitForSelector('#buscaItem');
     await page.waitForFunction(() => document.getElementById('btnDoca') && !document.getElementById('btnDoca').disabled);
 
+    // ET-00069: tem saldo e nenhum lote -> não dá para mover, mas a busca avisa onde resolver
+    await page.fill('#buscaItem', 'et-00069');
+    const sl = await page.locator('#buscaResultados').innerText();
+    assert.match(sl, /sem posição no WMS/); assert.match(sl, /ET-00069/); assert.match(sl, /1\.605 un/);
+    assert.equal(await page.locator('#buscaResultados a[href="estoque.html?tab=enderecamento"]').count(), 1);
+    assert.equal(await page.locator('#buscaResultados [data-lote]').count(), 0);
     // Busca pelo item: nome, sem acento/caixa; leva ao passo 2
     await page.fill('#buscaItem', 'alcool');
     assert.match(await page.locator('#buscaResultados').innerText(), /MP-1[\s\S]*AK-2026-000001[\s\S]*GAL-1\.1\.1/);

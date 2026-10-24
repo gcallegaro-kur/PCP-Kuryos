@@ -437,6 +437,7 @@
       <div class="card-title">Adicionar posição</div>
       <div class="form-grid" style="padding:16px">
         <div class="form-group"><label>Endereço *</label><div id="edEnderecoCampo"></div></div>
+        <div class="form-group" id="edDonoBox"><label>De quem é o material? *</label><select id="edDono"></select><div class="field-hint" id="edDonoHint"></div></div>
         <div class="form-group"><label>Quantidade *</label><input type="number" id="edQtd" min="0" step="any"></div>
         <div class="form-group"><label>Lote (opcional)</label><input type="text" id="edLote" placeholder="Lote do fornecedor, se souber..."></div>
         <div class="form-group"><label>Validade (opcional)</label><input type="date" id="edValidade"></div>
@@ -1468,6 +1469,29 @@ function edSomaEnderecada(itemKey) {
   return Object.values(allEstoqueLotes[itemKey] || {}).reduce(function(s, l) { return s + (l && l.saldoLote || 0); }, 0);
 }
 
+/* Quanto de cada dono ainda não tem endereço (24/10/2026). O saldo do item se
+   divide em Kuryos (geral) e clientes (porCliente); os lotes endereçados
+   carregam o dono em `propriedade`. O que falta endereçar de cada dono é a
+   parte dele no saldo menos o que os lotes dele já somam. Era um número só
+   (total - lotes): material de cliente endereçado aqui virava lote da Kuryos
+   -- o caso do ET-00069 (1.605 un da Miss Rôse sem nenhum lote). */
+function edSemEnderecoPorDono(itemKey) {
+  var partes = PropriedadeEstoque.saldoPorDono(allEstoque[itemKey] || {});
+  var jaK = 0, jaC = {};
+  Object.values(allEstoqueLotes[itemKey] || {}).forEach(function(l) {
+    var q = Number(l && l.saldoLote) || 0;
+    if (!q) return;
+    var d = PropriedadeEstoque.donoDoLote(l);
+    if (d.tipo === 'CLIENTE') jaC[d.clienteKey] = (jaC[d.clienteKey] || 0) + q; else jaK += q;
+  });
+  var arr = function(v) { return Math.round(v * 1000) / 1000; };
+  var lista = [{chave: '', nome: 'Kuryos (estoque geral)', livre: arr(Math.max(0, partes.geral - jaK))}];
+  Object.keys(partes.porCliente).forEach(function(ck) {
+    lista.push({chave: ck, nome: nomeClienteEstoque(ck), livre: arr(Math.max(0, partes.porCliente[ck] - (jaC[ck] || 0)))});
+  });
+  return lista;
+}
+
 function renderResumoEnderecamento() {
   var hint = document.getElementById('edResumoHint');
   if (!edItemAtual) { hint.textContent = ''; return; }
@@ -1476,10 +1500,21 @@ function renderResumoEnderecamento() {
     // Produto acabado não tem hoje um saldo agregado separado (mesma
     // limitação já registrada na Fase 1) -- só material tem "conhecido".
     var conhecido = (allEstoque[edItemAtual.key] && allEstoque[edItemAtual.key].saldoAtual) || 0;
-    var semEndereco = Math.max(0, Math.round((conhecido - jaEnderecado) * 1000) / 1000);
+    var donos = edSemEnderecoPorDono(edItemAtual.key);
+    var semEndereco = donos.reduce(function(s, d) { return s + d.livre; }, 0);
+    semEndereco = Math.round(semEndereco * 1000) / 1000;
+    var selDono = document.getElementById('edDono'), atualDono = selDono.value;
+    selDono.innerHTML = donos.map(function(d) {
+      return '<option value="' + escapeAttr(d.chave) + '">' + escapeHtml(d.nome) + ' — sem endereço: ' + fmtNum(d.livre) + '</option>';
+    }).join('');
+    var existe = donos.some(function(d) { return d.chave === atualDono; });
+    selDono.value = existe ? atualDono : ((donos.filter(function(d) { return d.livre > 0; })[0] || donos[0]).chave);
+    document.getElementById('edDonoBox').style.display = '';
+    document.getElementById('edDonoHint').textContent = donos.length > 1 ? 'Escolha de quem é o que está no chão: o lote nasce com esse dono.' : '';
     hint.innerHTML = 'Conhecido: <b>' + fmtNum(conhecido) + '</b> ' + escapeHtml(edItemAtual.unidade || '') +
       ' · Já endereçado: <b>' + fmtNum(jaEnderecado) + '</b> · Sem endereço ainda: <b' + (semEndereco > 0 ? ' style="color:var(--warning)"' : '') + '>' + fmtNum(semEndereco) + '</b>';
   } else {
+    document.getElementById('edDonoBox').style.display = 'none';
     hint.innerHTML = 'Já endereçado: <b>' + fmtNum(jaEnderecado) + '</b> ' + escapeHtml(edItemAtual.unidade || '') +
       ' · Produto acabado não tem saldo agregado separado nesta fase -- só o que já foi endereçado (aqui ou na conclusão de OP) é rastreado.';
   }
@@ -1526,11 +1561,12 @@ function edAdicionarPosicao() {
   // aconteceu com o ET-00071 (recebimento de 2.096 + 4 paletes "iniciais" = 4.191
   // nos lotes, saldo 2.096). Dividir um recebimento é Movimentar.
   if (edItemAtual.tipo === 'material') {
-    var conhecidoEd = (allEstoque[edItemAtual.key] && allEstoque[edItemAtual.key].saldoAtual) || 0;
-    var semEnderecoEd = Math.max(0, Math.round((conhecidoEd - edSomaEnderecada(edItemAtual.key)) * 1000) / 1000);
+    var donoSel = document.getElementById('edDono').value;
+    var linhaDono = edSemEnderecoPorDono(edItemAtual.key).filter(function(d) { return d.chave === donoSel; })[0] || {nome: 'este dono', livre: 0};
+    var semEnderecoEd = linhaDono.livre;
     if (qtd > semEnderecoEd + 0.0005) {
-      showAlert('Não dá para endereçar ' + fmtNum(qtd) + ': o sistema só tem ' + fmtNum(semEnderecoEd) + ' sem endereço para este item.' +
-        (semEnderecoEd === 0 ? ' O material já tem lote com posição (por exemplo, o do recebimento). Para dividir em paletes, use Movimentar material → "Dividir em vários paletes".' : ' Para o que já tem lote, use Movimentar material.'), 'danger');
+      showAlert('Não dá para endereçar ' + fmtNum(qtd) + ' como "' + linhaDono.nome + '": o sistema só tem ' + fmtNum(semEnderecoEd) + ' sem endereço nessa parte.' +
+        (semEnderecoEd === 0 ? ' Se o material já tem lote com posição (por exemplo, o do recebimento), use Movimentar material → "Dividir em vários paletes". Se é de outro dono, escolha-o na lista.' : ' Para o que já tem lote, use Movimentar material.'), 'danger');
       return;
     }
   }
@@ -1538,6 +1574,11 @@ function edAdicionarPosicao() {
   var validade = document.getElementById('edValidade').value || null;
   var enderecoInfo = allEnderecosEstoque[enderecoKey];
 
+  var propriedadeEd = null;
+  if (edItemAtual.tipo === 'material') {
+    var ckEd = document.getElementById('edDono').value;
+    propriedadeEd = ckEd ? {tipo: 'CLIENTE', clienteKey: ckEd, clienteNome: nomeClienteEstoque(ckEd)} : {tipo: 'KURYOS'};
+  }
   document.getElementById('btnEdAddPosicao').disabled = true;
   putawayEstoqueLote(db, edItemAtual.tipo, edItemAtual.codigo, {
     itemNome: edItemAtual.nome, unidade: edItemAtual.unidade,
@@ -1546,6 +1587,7 @@ function edAdicionarPosicao() {
     saldoLote: qtd, qtdOriginal: qtd,
     enderecoKey: enderecoKey, enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || null,
     origemTipo: 'endereco_inicial', origemRef: null,
+    propriedade: propriedadeEd,
     criadoPor: currentUserNome()
   }).then(function() {
     edSessaoEnderecamento.push({ enderecoCodigo: (enderecoInfo && enderecoInfo.codigo) || enderecoKey, qtd: qtd, lote: loteTexto, validade: validade });

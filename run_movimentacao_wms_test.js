@@ -143,4 +143,18 @@ eq(M.ultimas(movs, enderecos).map(m => [m.de, m.para]), [['FAB-1.1.1', 'GAL-1.1.
   ok(!p.ok && p.erros.some(e => /produto acabado/.test(e)), 'produto acabado não divide');
 }
 
+// 11. Material com saldo e sem nenhum lote (ET-00069): aparece como "sem posição".
+{
+  const L = {'ET-1': {r: {itemCodigo: 'ET-1', itemNome: 'Caixa A', itemTipo: 'material', saldoLote: 100, enderecoKey: 'GAL-1-1-1'}}};
+  const E = {'ET-1': {materialCodigo: 'ET-1', materialNome: 'Caixa A', saldoAtual: 100, unidade: 'un'},
+    'ET-69': {materialCodigo: 'ET-69', materialNome: 'CAIXA BODY SPLASH ARABE', saldoAtual: 1605, unidade: 'un'},
+    'ET-70': {materialCodigo: 'ET-70', materialNome: 'CAIXA ZERADA', saldoAtual: 0, unidade: 'un'},
+    'ET-71': {materialCodigo: 'ET-71', materialNome: 'CAIXA PARCIAL', saldoAtual: 500, unidade: 'un'}};
+  L['ET-71'] = {x: {itemCodigo: 'ET-71', itemTipo: 'material', saldoLote: 200, enderecoKey: 'GAL-1-1-1'}};
+  const r = M.buscarLotes('caixa', L, enderecos, 30, E);
+  eq(r.semLote.map(x => [x.itemCodigo, x.semEndereco]), [['ET-69', 1605], ['ET-71', 300]], 'sem lote e parcial; zerado e totalmente endereçado ficam de fora');
+  eq(M.buscarLotes('arabe', L, enderecos, 30, E).semLote.length, 1, 'busca pelo nome');
+  eq(M.buscarLotes('caixa', L, enderecos, 30).semLote, [], 'sem o agregado, não lista');
+  eq(M.buscarLotes('', L, enderecos, 30, E).semLote, []);
+}
 console.log('run_movimentacao_wms_test: ' + n + ' verificações OK');

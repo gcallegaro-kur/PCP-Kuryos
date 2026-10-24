@@ -13,11 +13,14 @@ function dados() {
     config: {linhas: ['Linha 1']},
     materiais: {
       'ET-00071': {tipo: 'ET', mpCodigo: 'ET-00071', mpNome: 'CAIXA DE EMBARQUE 48', unidade: 'un'},
-      'ET-00099': {tipo: 'ET', mpCodigo: 'ET-00099', mpNome: 'CAIXA ANTIGA SEM ENDERECO', unidade: 'un'}
+      'ET-00099': {tipo: 'ET', mpCodigo: 'ET-00099', mpNome: 'CAIXA ANTIGA SEM ENDERECO', unidade: 'un'},
+      'ET-00069': {tipo: 'ET', mpCodigo: 'ET-00069', mpNome: 'CAIXA BODY SPLASH ARABE', unidade: 'un'}
     },
+    clientes: {MISS: {nome: 'MISS ROSE'}},
     estoque: {
       'ET-00071': {materialCodigo: 'ET-00071', materialNome: 'CAIXA DE EMBARQUE 48', saldoAtual: 2096, unidade: 'un'},
-      'ET-00099': {materialCodigo: 'ET-00099', materialNome: 'CAIXA ANTIGA SEM ENDERECO', saldoAtual: 500, unidade: 'un'}
+      'ET-00099': {materialCodigo: 'ET-00099', materialNome: 'CAIXA ANTIGA SEM ENDERECO', saldoAtual: 500, unidade: 'un'},
+      'ET-00069': {materialCodigo: 'ET-00069', materialNome: 'CAIXA BODY SPLASH ARABE', saldoAtual: 1605, unidade: 'un', porCliente: {MISS: {clienteNome: 'MISS ROSE', saldoAtual: 1605}}}
     },
     enderecos_estoque: {
       'GAL-2-1-1': {codigo: 'GAL-2.1.1', area: 'GALPÃO', rua: 2, predio: 1, nivel: 1, ativo: true},
@@ -136,9 +139,9 @@ async function abrir(browser, uid, estadoInicial, pagina) {
     const {page, errors} = await abrir(browser, 'u1', dados(), 'estoque.html');
     const db = () => page.evaluate(() => window.__db);
     await page.click('[data-tab="enderecamento"]');
-    await page.waitForFunction(() => typeof edSelecionarItem === 'function' && typeof allEstoque !== 'undefined' && Object.keys(allEstoque).length === 2 && typeof allEnderecosEstoque !== 'undefined' && Object.keys(allEnderecosEstoque).length >= 2 && typeof allEstoqueLotes !== 'undefined' && Object.keys(allEstoqueLotes).length >= 1, null, {timeout: 10000});
-    const tentar = async (codigo, nome, qtd) => {
-      await page.evaluate(([c, n]) => { edSelecionarItem({key: c, tipo: 'material', codigo: c, nome: n, unidade: 'un'}); document.getElementById('edEndereco').value = 'GAL-4-3-15'; }, [codigo, nome]);
+    await page.waitForFunction(() => typeof edSelecionarItem === 'function' && typeof allEstoque !== 'undefined' && Object.keys(allEstoque).length === 3 && typeof allEnderecosEstoque !== 'undefined' && Object.keys(allEnderecosEstoque).length >= 2 && typeof allEstoqueLotes !== 'undefined' && Object.keys(allEstoqueLotes).length >= 1, null, {timeout: 10000});
+    const tentar = async (codigo, nome, qtd, dono) => {
+      await page.evaluate(([c, n, d]) => { edSelecionarItem({key: c, tipo: 'material', codigo: c, nome: n, unidade: 'un'}); document.getElementById('edEndereco').value = 'GAL-4-3-15'; document.getElementById('edDono').value = d || ''; }, [codigo, nome, dono]);
       await page.fill('#edQtd', String(qtd));
       await page.click('#btnEdAddPosicao');
     };
@@ -160,6 +163,18 @@ async function abrir(browser, uid, estadoInicial, pagina) {
     d = await db();
     const novo = Object.values(d.estoque_lotes['ET-00099'])[0];
     assert.deepEqual([novo.saldoLote, novo.enderecoKey, novo.origemTipo], [300, 'GAL-4-3-15', 'endereco_inicial']);
+    // ET-00069: 1.605 un são da MISS ROSE e não têm nenhum lote. Como "Kuryos" não há o que endereçar;
+    // como MISS ROSE o lote nasce com o dono certo.
+    await tentar('ET-00069', 'CAIXA BODY SPLASH ARABE', 100, '');
+    await page.waitForFunction(() => /Kuryos \(estoque geral\)": o sistema só tem 0/.test(document.body.innerText), null, {timeout: 5000});
+    d = await db();
+    assert.equal(Object.keys(d.estoque_lotes['ET-00069'] || {}).length, 0, 'como Kuryos não há saldo sem endereço');
+    assert.match(await page.locator('#edDono').innerText(), /MISS ROSE — sem endereço: 1\.605/);
+    await tentar('ET-00069', 'CAIXA BODY SPLASH ARABE', 1605, 'MISS');
+    await page.waitForFunction(() => window.__db.estoque_lotes['ET-00069'] && Object.keys(window.__db.estoque_lotes['ET-00069']).length === 1, null, {timeout: 5000});
+    d = await db();
+    const lm = Object.values(d.estoque_lotes['ET-00069'])[0];
+    assert.deepEqual([lm.saldoLote, lm.propriedade.tipo, lm.propriedade.clienteKey, lm.propriedade.clienteNome], [1605, 'CLIENTE', 'MISS', 'MISS ROSE'], 'o lote nasce da MISS ROSE');
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
     console.log('OK Endereçamento: trava quando passa do que está sem endereço; dentro do saldo continua gravando.');
   } finally { await browser.close(); }
