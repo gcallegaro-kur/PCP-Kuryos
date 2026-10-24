@@ -5055,7 +5055,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var ehAjuste = itemKey === itemAjusteKey;
     if (!editavel) {
       return '<tr data-item="' + escapeAttr(itemKey) + '">' +
-        '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(it.mpNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td>' +
+        '<td>' + escapeHtml(it.mpCodigo || '') + ' — ' + escapeHtml(nomeAtualDoMaterial(it.mpCodigo, it.mpNome)) + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td>' +
         '<td>' + escapeHtml(it.fase || '') + '</td>' +
         '<td>' + escapeHtml(String(it.ordemAdicao != null ? it.ordemAdicao : '')) + '</td>' +
         '<td>' + fmtNum(it.percentualMM || 0) + '%</td>' +
@@ -5127,6 +5127,16 @@ document.addEventListener('DOMContentLoaded', function() {
   function findMaterialByCodigo(codigo) {
     return allMateriais[sanitizeKey(codigo)] || Object.values(allMateriais).find(function(m) { return m.mpCodigo === codigo; });
   }
+  // Nome pra EXIBIR um item de BOM/Fórmula (24/10/2026): o do cadastro de
+  // materiais, pelo código. O nome gravado no item é só uma cópia do dia em que
+  // o item foi salvo -- renomear o insumo deixava 762 de 1.211 itens do BOM
+  // com nome velho (52 versões aprovadas), e a única saída era criar versão.
+  // O que a aprovação trava é código e quantidade, não o nome. Se o material
+  // sumiu do cadastro, cai na cópia gravada.
+  function nomeAtualDoMaterial(codigo, nomeGravado) {
+    var m = codigo ? findMaterialByCodigo(codigo) : null;
+    return (m && String(m.mpNome || '').trim()) || nomeGravado || '';
+  }
   function salvarItemFormula(formKey, itemKey) {
     var row = document.querySelector('#formulaBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
     if (!row) return;
@@ -5186,7 +5196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var itemKey = entry[0], it = entry[1];
         if (!editavel) {
           var nLeit = pecasPorUnidadeBom(it);
-          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(it.materialNome || '') + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + (nLeit ? '1 a cada ' + fmtNum(nLeit) + ' peças' : fmtNum(it.qtdPorPeca || 0)) + '</td><td></td></tr>';
+          return '<tr><td>' + escapeHtml(it.materialCodigo || '') + ' — ' + escapeHtml(nomeAtualDoMaterial(it.materialCodigo, it.materialNome)) + (it.pendente ? ' <span class="badge badge-red">Pendente</span>' : '') + '</td><td>' + (nLeit ? '1 a cada ' + fmtNum(nLeit) + ' peças' : fmtNum(it.qtdPorPeca || 0)) + '</td><td></td></tr>';
         }
         return '<tr data-item="' + escapeAttr(itemKey) + '">' +
           '<td><input type="text" class="b-mat-busca" data-item="' + escapeAttr(itemKey) + '" placeholder="Buscar por código, nome ou fornecedor..." value="' + escapeAttr(labelDoMaterialForm(it.materialCodigo)) + '" autocomplete="off">' +

@@ -3,6 +3,22 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — BOM/Fórmula mostram o nome ATUAL do insumo (24/10/2026)
+
+- **Pedido:** renomear um insumo não atualizava o BOM; só nova versão.
+- **Causa:** o item do BOM grava `materialNome` (cópia) ao ser salvo. Medido em
+  produção: 762 de 1.211 itens com nome diferente do cadastro, 232 de 268
+  versões (52 aprovadas). A aprovação trava código e quantidade, não o nome.
+- **Feito:** `cadastros.html` — `nomeAtualDoMaterial(codigo, gravado)` nas
+  visões somente-leitura de BOM e Fórmula (versões aprovadas); material fora do
+  cadastro cai na cópia. `form.html` — o consumo do apontamento usa o nome do
+  cadastro (`mat.mpNome`) em vez do `materialNome` do BOM. Nada migrado nem
+  regravado; as versões aprovadas continuam intactas.
+- **Teste:** `run_bom_nome_atual_ui_test.js` (falha sem a correção). UI tests
+  rodam com `channel: 'chrome'`; no worktree, junction para `node_modules`.
+- **Não feito:** emissão de OP já usava o nome atual; MRP/insumos e custos ainda
+  leem a cópia do item (só exibição).
+
 ### Claude — Conferência de PA: SKU e OP maiores (23/10/2026)
 
 - **Pedido:** "deixar tanto o sku do produto quanto o numero da ordem maior".

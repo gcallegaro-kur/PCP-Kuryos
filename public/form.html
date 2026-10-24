@@ -3293,7 +3293,7 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
         var mat = allMateriaisForm[sanitizeKey(it.materialCodigo)] || Object.values(allMateriaisForm).find(function(m) { return m && m.mpCodigo === it.materialCodigo; });
         return {
           mpCodigo: it.materialCodigo,
-          mpNome: it.materialNome,
+          mpNome: (mat && String(mat.mpNome || '').trim()) || it.materialNome,  // nome atual do cadastro; o do BOM é cópia
           quantidade: Math.round((qtdReal * (it.qtdPorPeca || 0)) * 1000) / 1000,
           unidade: (mat && mat.unidade) || 'un',
           origem: 'bom'
