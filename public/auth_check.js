@@ -137,6 +137,11 @@ const KURYOS_MODULOS = {
   // Não entra em MODULOS_POR_PAPEL de propósito -- só `admin`, que recebe
   // todos os módulos, e quem o ADM marcar explicitamente. Um log de
   // auditoria visível para os auditados perde a função.
+  // Alterar titularidade do estoque (24/10): de quem é o material (Kuryos ou cliente).
+  // Fora de MODULOS_POR_PAPEL de propósito -- só `admin`, que recebe todos os
+  // módulos, e quem o ADM marcar (ex.: Diretoria). A Cloud Function confere de novo.
+  titularidade: { rotulo: 'Titularidade do Estoque', desc: 'Mudar de quem é o material em estoque (Kuryos ou um cliente), com motivo e registro',
+                  paginas: ['titularidade.html'] },
   auditoria:    { rotulo: 'Auditoria do Sistema', desc: 'Quem apontou, com qual login, quem alocou OP na linha e quem encerrou (dado sensível)',
                   paginas: ['auditoria.html'] },
   rh:           { rotulo: 'RH — Pessoas',          desc: 'Colaboradores, avaliação de desempenho e férias',
@@ -788,6 +793,7 @@ function renderUnifiedNavbar(user) {
     temMod('logistica') && ktLink('estoque.html?tab=agregado', 'warehouse', 'Estoque', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=posicoes', 'warehouse', 'WMS', activePage),
     temMod('logistica') && ktLink('kardex.html', 'list', 'Kardex', activePage),
+    temMod('titularidade') && ktLink('titularidade.html', 'tag', 'Titularidade do Estoque', activePage),
     // Movimentar (29/09): de onde → o quê → para onde, para o celular.
     temMod('logistica') && ktLink('movimentar.html', 'truck', 'Movimentar material', activePage),
     temMod('logistica') && ktLink('estoque.html?tab=conferenciapa', 'clipboard', 'Conferência de PA', activePage),

@@ -3,6 +3,15 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Alterar titularidade do estoque (24/10/2026)
+
+- **Pedido:** mudar de quem é o material (Kuryos/cliente) depois do recebimento; só admin/diretoria.
+- **Antes:** a titularidade nasce no PC e trava no recebimento; não havia caminho.
+- **Feito:** módulo `titularidade` (admin recebe todos; ADM marca quem mais, ex.: Diretoria — não existe papel "diretoria"), página `titularidade.html` (busca o item, mostra dono do saldo/lotes, troca com quantidade, novo dono e motivo obrigatório, pré-visualização), Cloud Function `alterarTitularidadeEstoque` (admin ou módulo, transaction, idempotente por operacaoKey, grava em `estoque/{item}/trocasTitularidade` e em `movimentos_estoque` tipo `troca_titularidade`). Regra pura em `shared/titularidade.js` (cópia byte a byte em `functions/`). Kardex: tipo novo `troca_titularidade` razão `nenhuma` (sem isso um tipo desconhecido contaria no saldo).
+- **Regras:** muda lote (inteiro, ou parcial dividindo o lote no mesmo endereço) e `porCliente` juntos; `saldoAtual` total nunca muda; DESTINO (cliente/pedido de compra) não é tocado; saldo sem lote só até o que o dono atual não tem em lotes; recusa se o agregado do dono for menor que a quantidade (mandar corrigir o saldo antes).
+- **Testes:** run_titularidade_test.js (regra + Cloud Function em vm), run_titularidade_ui_test.js.
+- **Fora:** troca de destino/pedido; produto acabado; `run_relatorio_expedicao_test.js` já falha ("todas as linhas sem filtro", 1 x 5) sem relação com isto.
+
 ### Claude — Endereçamento por dono + busca avisa saldo sem posição (24/10/2026)
 
 - **Pedido:** ET-00069 tem saldo mas não aparece no filtro (Movimentar).

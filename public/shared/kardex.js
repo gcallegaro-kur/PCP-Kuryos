@@ -53,6 +53,8 @@
     ajuste_manual:             {rotulo: 'Ajuste de saldo',            natureza: 'AJUSTE',   razao: 'item'},
     inventario:                {rotulo: 'Ajuste de inventário (lote)', natureza: 'AJUSTE',  razao: 'lote'},
     transferencia:             {rotulo: 'Transferência de endereço',  natureza: 'TRANSFERENCIA', razao: 'nenhuma'},
+    // Troca de dono (cliente/Kuryos): o saldo físico não muda; só informa.
+    troca_titularidade:        {rotulo: 'Troca de titularidade',        natureza: 'TRANSFERENCIA', razao: 'nenhuma'},
     qualidade:                 {rotulo: 'Laudo da Qualidade',         natureza: 'QUALIDADE', razao: 'nenhuma'},
     // Sintético (não existe no banco): lote importado da planilha antiga,
     // que nunca teve movimento de entrada no log.

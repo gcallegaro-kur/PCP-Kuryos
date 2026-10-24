@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Titularidade do Estoque</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-functions-compat.js"></script>
+<script src="shared/utils.js"></script><script src="auth_check.js"></script><script src="shared/propriedade-estoque.js"></script><script src="shared/titularidade.js"></script><link rel="stylesheet" href="shared/theme.css">
+<style>
+body{margin:0;background:#f5f6fa;font-family:var(--font-ui);color:#182230}.wrap{max-width:1180px;margin:auto;padding:26px 18px}h1{margin:0}h2{font-size:18px;margin:0 0 10px}.sub{font-size:13px;color:#667085;margin-top:5px}
+.card{background:#fff;border-radius:15px;padding:18px;margin-top:16px;border:1px solid #eaecf0}
+.tt-busca{width:100%;box-sizing:border-box;font-size:17px;padding:12px;border:2px solid #0a1c69;border-radius:10px}
+.tt-opcao{display:block;width:100%;text-align:left;padding:11px 12px;margin:6px 0;border:1px solid #d0d5dd;border-radius:10px;background:#fff;font:inherit;cursor:pointer}
+.tt-opcao small{display:block;color:#475467;margin-top:2px}
+.tt-tab{width:100%;border-collapse:collapse;font-size:14px}.tt-tab th{text-align:left;font-size:12px;color:#667085;padding:8px 6px;border-bottom:1px solid #eaecf0}.tt-tab td{padding:9px 6px;border-bottom:1px solid #f2f4f7;vertical-align:top}.tt-tab .num{text-align:right;white-space:nowrap}
+.tt-tag{display:inline-block;padding:2px 9px;border-radius:12px;font-size:12px;font-weight:600}.tt-k{background:#eef2ff;color:#0a1c69}.tt-c{background:#fff4e5;color:#9a5b00}.tt-q{background:#fef0c7;color:#93370d}.tt-ok{background:#dcfae6;color:#067647}
+.tt-aviso{padding:12px 14px;border-radius:10px;margin-top:14px}.tt-aviso.ok{background:#dcfae6;color:#067647}.tt-aviso.erro{background:#fee4e2;color:#b42318}.tt-aviso.info{background:#eef2ff;color:#0a1c69}
+.tt-fundo{position:fixed;inset:0;background:rgba(16,24,40,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}.tt-modal{background:#fff;border-radius:16px;padding:22px;max-width:560px;width:100%;max-height:92vh;overflow:auto}
+.tt-modal label{display:block;margin-top:12px;font-size:13px;font-weight:600}.tt-modal input,.tt-modal select,.tt-modal textarea{width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:2px solid #d0d5dd;border-radius:9px;font-family:inherit}
+.tt-resumo{margin-top:14px;padding:12px;border-radius:10px;background:#f2f4f7;font-size:14px}.tt-resumo.erro{background:#fee4e2;color:#b42318}
+.tt-acoes{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.tt-btn{border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer;background:#0a1c69;color:#fff}.tt-btn.ghost{background:#fff;color:#0a1c69;border:1px solid #d0d5dd}.tt-btn:disabled{opacity:.5;cursor:not-allowed}
+.tt-link{background:none;border:0;color:#17479e;text-decoration:underline;font:inherit;cursor:pointer;padding:2px}
+@media (max-width:640px){.tt-tab thead{display:none}.tt-tab td{display:block;padding:4px 6px;border:0}.tt-tab tr{display:block;border-bottom:1px solid #eaecf0;padding:8px 0}}
+</style></head><body class="kuryos-theme has-sidebar"><main class="wrap">
+<h1>Titularidade do estoque</h1>
+<p class="sub">De quem é o material em estoque: <b>Kuryos</b> (estoque geral) ou de um <b>cliente</b>. A troca muda o lote e o saldo por cliente juntos, fica registrada (quem, quando, por quê) e não muda o saldo físico nem o destino/pedido de compra. Só administrador ou quem recebeu este módulo.</p>
+<div id="resultado" class="tt-aviso" role="status" aria-live="polite" hidden></div>
+
+<section class="card"><h2>1. Qual item?</h2>
+<label for="busca" class="sub">Código ou nome (ex.: ET-00069, caixa body splash)</label>
+<input id="busca" class="tt-busca" type="search" autocomplete="off" placeholder="Digite para procurar…">
+<div id="resultados"></div></section>
+
+<section class="card" id="painelItem" hidden><h2 id="itemTitulo"></h2><p class="sub" id="itemResumo"></p>
+<h3 style="font-size:15px;margin:14px 0 4px">De quem é o saldo</h3>
+<table class="tt-tab"><thead><tr><th>Dono</th><th class="num">Saldo</th><th class="num">Em lotes</th><th class="num">Sem lote</th><th></th></tr></thead><tbody id="donos"></tbody></table>
+<h3 style="font-size:15px;margin:18px 0 4px">Lotes</h3>
+<table class="tt-tab"><thead><tr><th>Lote</th><th>Posição</th><th class="num">Saldo</th><th>Situação</th><th>Dono</th><th>Destino (pedido de compra)</th><th></th></tr></thead><tbody id="lotes"></tbody></table>
+</section>
+
+<section class="card"><h2>Últimas trocas</h2><table class="tt-tab"><thead><tr><th>Quando</th><th>Item</th><th class="num">Quantidade</th><th>De → Para</th><th>Motivo</th><th>Quem</th></tr></thead><tbody id="historico"><tr><td colspan="6">Carregando…</td></tr></tbody></table></section>
+</main>
+<script>var firebaseConfig={apiKey:'AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw',authDomain:'prod-kuryos.firebaseapp.com',databaseURL:kuryosDatabaseURL('https://prod-kuryos-default-rtdb.firebaseio.com'),projectId:'prod-kuryos',storageBucket:'prod-kuryos.firebasestorage.app',messagingSenderId:'323674581733',appId:'1:323674581733:web:e283a491c0c2bd6025420c'};firebase.initializeApp(firebaseConfig);kuryosConnectEmulatorsIfLocal();</script><script src="shared/titularidade-tela.js"></script>
+</body></html>
