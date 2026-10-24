@@ -1770,6 +1770,12 @@ var allOps = {}, allConferenciasPA = {};
 var INICIO_FLUXO_CONFERENCIA_PA = '2026-09-10T00:00:00.000Z';
 
 function qtdApontadaPA(op) {
+  // OP de retrabalho (inspeção total) credita no campo do SEU destino: posto -> produzidoPosto, rotulagem -> produzidoRotulagem.
+  // Lido só de produzidoLinha, o lote retrabalhado em posto nunca aparecia na Conferência de PA.
+  if (op && op.tipoOrdem === 'RETRABALHO') {
+    var campoRt = {linha: 'produzidoLinha', rotulagem: 'produzidoRotulagem', posto: 'produzidoPosto'}[op.retrabalhoDestino] || 'produzidoLinha';
+    return Number(op[campoRt]) || 0;
+  }
   return typeof getProduzido === 'function' ? getProduzido(op || {}, 'linha') : ((op || {}).produzidoLinha || (op || {}).produzido || 0);
 }
 function arredondarQtdPA(v) { return Math.round((parseFloat(v) || 0) * 1000) / 1000; }

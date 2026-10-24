@@ -9,8 +9,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
   <script src="shared/utils.js"></script>
   <script src="shared/manipulacao.js"></script>
+  <script src="shared/anexos.js"></script>
+  <script src="shared/fotos-qualidade.js"></script>
   <script src="shared/laudo-pa-lote.js"></script>
   <script src="shared/retrabalho-op.js"></script>
   <script src="shared/inspecao-total-pa.js"></script>
@@ -177,6 +180,7 @@
       <thead><tr><th>Motivo</th><th class="num">Achadas</th><th class="num">Reprovar</th><th>Destino do retrabalho</th></tr></thead>
       <tbody id="decLinhas"></tbody></table></div>
     <datalist id="listaLinhas"></datalist>
+    <div id="decFotos" style="margin-top:8px"></div>
     <div class="resumo-dec" id="decResumo"></div>
     <div class="campo2" style="margin-top:10px"><label for="decObs">Observação da decisão</label><textarea id="decObs" rows="2"></textarea></div>
     <div class="alerta erro" id="decErro" style="display:none"></div>
@@ -198,6 +202,8 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 kuryosConnectEmulatorsIfLocal();
 var db = firebase.database();
+var storage = (typeof firebase.storage === 'function') ? firebase.storage() : null;   // só as fotos dependem dele
+var galeriasRes = {};   // loteKey -> montagem de fotos do palete
 
 var allOps = {}, estoque = {}, prazoCfg = null, linhasCfg = [], pessoas = [], opsOk = false, estOk = false;
 var alvo = null;   // {opKey, paletes} do modal aberto
@@ -328,8 +334,13 @@ function abrirResultado(opKey) {
   $('rPaletes').innerHTML = ps.map(function(p) {
     return '<div class="pal" data-palete="' + escapeAttr(p.loteKey) + '"><b>Palete ' + escapeHtml(p.lote.identificadorPalete || p.loteKey) + '</b> <span class="hint">' + fmt(p.lote.saldoLote) + ' un' + (p.lote.enderecoCodigo ? ' · ' + escapeHtml(p.lote.enderecoCodigo) : '') + '</span>' +
       '<div class="campo2" style="margin-top:8px;max-width:240px"><label>Unidades inspecionadas</label><input type="number" class="r-insp" min="0" step="1" value="' + Number(p.lote.saldoLote || 0) + '"></div>' +
-      '<div class="defeitos"></div><button type="button" class="btn btn-ghost" data-add="1">+ inconformidade</button></div>';
+      '<div class="defeitos"></div><button type="button" class="btn btn-ghost" data-add="1">+ inconformidade</button>' +
+      '<div class="campo2" style="margin-top:10px"><label>Fotos das inconformidades (opcional)</label><div class="r-fotos"></div></div></div>';
   }).join('');
+  galeriasRes = {};
+  document.querySelectorAll('#rPaletes .pal').forEach(function(el) {
+    galeriasRes[el.getAttribute('data-palete')] = FotosQualidade.montar(el.querySelector('.r-fotos'), {});
+  });
   $('rJust').value = ''; $('rObs').value = ''; $('rErro').style.display = 'none'; $('rJustBox').style.display = 'none';
   $('mRes').classList.add('open');
 }
@@ -361,7 +372,16 @@ $('rOk').addEventListener('click', function() {
     };
   });
   var btn = this; btn.disabled = true;
-  InspecaoTotalPA.registrarResultado(db, alvo.opKey, alvo.paletes, {linhas: linhas, justificativaParcial: $('rJust').value, observacao: $('rObs').value}, eu()).then(function(r) {
+  // As fotos sobem agora, na hora de concluir: inspeção cancelada não deixa arquivo órfão.
+  Promise.all(linhas.map(function(l) {
+    var g = galeriasRes[l.loteKey];
+    if (!g || !g.total()) return Promise.resolve(l);
+    return FotosQualidade.enviar(storage, g.pendentes(), {contexto: 'inspecao_total', chave: sanitizeKey(alvo.opKey) + '_' + l.loteKey, autor: eu()}).then(function(f) { l.fotos = f; return l; });
+  })).then(function(comFotos) {
+    return InspecaoTotalPA.registrarResultado(db, alvo.opKey, alvo.paletes, {linhas: comFotos, justificativaParcial: $('rJust').value, observacao: $('rObs').value}, eu());
+  }, function(err) {
+    return {ok: false, erro: 'Não consegui enviar as fotos (' + (err && err.message) + '). Tente de novo ou remova as fotos para concluir sem elas.'};
+  }).then(function(r) {
     btn.disabled = false;
     if (!r.ok) { $('rErro').textContent = r.erro; $('rErro').style.display = ''; return; }
     $('mRes').classList.remove('open');
@@ -382,6 +402,9 @@ function abrirDecidir(opKey) {
       '<td class="num"><input type="number" class="d-rep" min="0" max="' + m.achada + '" step="1" value="' + m.achada + '" style="width:90px;padding:6px;border:1.5px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)"></td>' +
       '<td><div class="dfx" style="grid-template-columns:120px 1fr;margin-top:0"><select class="d-tipo"><option value="linha">Linha</option><option value="rotulagem">Rotulagem</option><option value="posto">Posto</option></select><input type="text" class="d-nome" list="listaLinhas" placeholder="Linha/posto (opcional)"></div></td></tr>';
   }).join('') || '<tr><td colspan="4" class="sec-vazio">A inspeção não achou inconformidades: o lote inteiro será liberado.</td></tr>';
+  $('decFotos').innerHTML = (r.linhas || []).filter(function(l) { return l.fotos && l.fotos.length; }).map(function(l) {
+    return '<span class="hint">Palete ' + escapeHtml(l.palete) + ':</span> ' + FotosQualidade.botao(l.fotos, 'Inspeção total — palete ' + l.palete);
+  }).join(' &nbsp; ');
   $('decObs').value = ''; $('decErro').style.display = 'none';
   resumoDecisao();
   $('mDec').classList.add('open');

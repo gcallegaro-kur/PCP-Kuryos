@@ -210,6 +210,32 @@ function bancoFalso(dados) {
     assert.match((await I.sinalizar(b5, g5.opKey, g5.paletes, {motivo: 'x'}, 'Qua', ctx)).erro, /já tem laudo/);
     assert.equal(b5.db.ops['26280-01'].inspecaoTotal, undefined, 'a reserva é solta');
   }
+  // ── Fotos por palete, pedido da expedição, laudo avulso bloqueado, Conferência de PA ──
+  {
+    const f = [{id: 'a', url: 'u'}];
+    const v = I.validarResultado(paletes, {linhas: [{loteKey: 'pa_1', inspecionadas: 1440, fotos: f, defeitos: [{motivo: 'x', qtd: 1}]}, {loteKey: 'pa_2', inspecionadas: 720}]});
+    assert.deepEqual(v.resultado.linhas[0].fotos, f); assert.equal(v.resultado.linhas[1].fotos, null);
+    const b6 = bancoFalso(base()), r6 = [];
+    const g6 = L.filaLotes(b6.db.estoque_lotes)[0], c6 = Object.assign({}, ctx, {op: Object.assign({}, b6.db.ops['26280-01'], {skuPedidoKey: 'PED-1__SKU1'})});
+    await I.sinalizar(b6, g6.opKey, g6.paletes, {motivo: 'x'}, 'Qua', c6); await I.designar(b6, g6.opKey, {responsavel: 'Ana'}, 'Prod');
+    const pi = I.paletesDaInspecao(b6.db.estoque_lotes, '26280-01');
+    await I.registrarResultado(b6, g6.opKey, pi, {linhas: [{loteKey: 'pa_1', inspecionadas: 1440, fotos: f, defeitos: [{motivo: 'A', qtd: 5}]}, {loteKey: 'pa_2', inspecionadas: 720}]}, 'Ana');
+    assert.deepEqual(b6.db.ops['26280-01'].inspecaoTotal.resultado.linhas[0].fotos, f, 'as fotos ficam no resultado');
+    const d = await I.decidir(b6, g6.opKey, pi, {a: {reprovada: 5}}, '', 'Qua', c6, deps(r6));
+    assert.equal(b6.db.ops['26280-01-RT1'].skuPedidoKeyExpedicao, 'PED-1__SKU1', 'a OP RT guarda o pedido da original só para a expedição');
+    assert.equal(b6.db.ops['26280-01-RT1'].skuPedidoKey, '', 'e continua sem skuPedidoKey: não credita o pedido duas vezes');
+    // Laudo avulso de palete que chegou depois da sinalização: bloqueado.
+    const b7 = bancoFalso(base()); const g7 = L.filaLotes(b7.db.estoque_lotes)[0];
+    await I.sinalizar(b7, g7.opKey, g7.paletes, {motivo: 'x'}, 'Qua', ctx);
+    b7.db.estoque_lotes.SKU1.pa_9 = pal(9);   // chegou depois: QUARENTENA
+    const g7b = L.filaLotes(b7.db.estoque_lotes)[0];
+    const lr = await L.registrarLaudoPaLote(b7, g7b.opKey, g7b.paletes, {decisao: 'LIBERADO_EXPEDICAO'}, 'Qua', {itemCodigo: 'SKU1', amostragem: null}, deps([]));
+    assert.equal(lr.ok, false); assert.match(lr.erro, /em inspeção total/);
+    assert.equal(b7.db.ops['26280-01'].qualidadePA, undefined, 'a reserva do laudo é solta');
+    // Conferência de PA: a OP RT é lida pelo campo do SEU destino.
+    const est = fs.readFileSync('public/estoque.html', 'utf8');
+    assert.match(est, /op\.tipoOrdem === 'RETRABALHO'[\s\S]*produzidoPosto/);
+  }
   // ── Ligações: status, regras do banco, acesso e telas ──
   assert.equal(ctxU.rotuloStatusLote('INSPECAO_TOTAL'), 'Em inspeção total'); assert.equal(ctxU.loteDisponivel('INSPECAO_TOTAL'), false);
   assert.equal(ctxU.rotuloStatusLote('EM_RETRABALHO'), 'Em retrabalho'); assert.equal(ctxU.loteDisponivel('EM_RETRABALHO'), false);

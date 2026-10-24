@@ -178,6 +178,15 @@
     }).then(function(res) {
       if (!res || !res.committed) return {ok: false, erro: 'Este lote já tem laudo registrado — alguém decidiu antes.'};
       reservou = true;
+      // Lote com inspeção total aberta (sinalizado pela Qualidade) não recebe laudo avulso: o
+      // palete que chegou depois da sinalização espera a decisão da inspeção.
+      return dbRef.ref('ops/' + chaveOp(opKey) + '/inspecaoTotal/estado').once('value').then(function(es) {
+        if (es.val()) return soltar().then(function() {
+          return {ok: false, erro: 'Este lote está em inspeção total (' + es.val() + '). Aguarde a decisão da inspeção antes de laudar o palete que chegou depois.'};
+        });
+        return gravarLaudo();
+      });
+      function gravarLaudo() {
       // Estado fresco de cada palete.
       return Promise.all(paletes.map(function(p) {
         return dbRef.ref('estoque_lotes/' + p.itemKey + '/' + p.loteKey).once('value').then(function(s) { return s.val(); });
@@ -212,6 +221,7 @@
           }).catch(function(err) { r.rnc = null; r.rncErro = err.message; return r; });
         });
       });
+      }
     }).catch(function(err) {
       return soltar().then(function() { return {ok: false, erro: err.message}; });
     });

@@ -60,7 +60,11 @@
   function analisar(base, itemKey, loteKey, hoje) {
     var lote = (base.estoque_lotes[itemKey] || {})[loteKey] || {};
     var op = (base.ops || {})[lote.opKey] || {};
-    var skuPedidoKey = resolverChavePedido(base.pedidos, lote.skuPedidoKey || op.skuPedidoKey || '');
+    // OP de retrabalho (inspeção total) não tem skuPedidoKey de propósito -- é o que impede
+    // creditar a produção ao pedido duas vezes. O pedido do palete retrabalhado é o da OP
+    // ORIGINAL, guardado em skuPedidoKeyExpedicao só para a expedição.
+    var pedidoDaOp = op.skuPedidoKey || op.skuPedidoKeyExpedicao || '';
+    var skuPedidoKey = resolverChavePedido(base.pedidos, lote.skuPedidoKey || pedidoDaOp);
     var demanda = (base.pedidos || {})[skuPedidoKey] || {};
     var pedidoId = demanda.parentPedidoId || key(demanda.id);
     var comercial = (base.pedidos_comerciais || {})[pedidoId];
@@ -106,7 +110,7 @@
     // então é skuPedidoKeyOrigem, a chave da OP no momento da importação --
     // a proteção continua valendo, contra o campo certo. A comparação ignora
     // só o zero à esquerda: número ou SKU diferente continua sendo mudança.
-    else if (!avulso && vinculoGravado && normalizarChavePedido(op.skuPedidoKey) !== normalizarChavePedido(vinculoGravado)) motivo = 'Vínculo do pedido mudou após a conferência';
+    else if (!avulso && vinculoGravado && normalizarChavePedido(pedidoDaOp) !== normalizarChavePedido(vinculoGravado)) motivo = 'Vínculo do pedido mudou após a conferência';
     else if ([demanda.status, demanda.pedidoComercialStatus, comercial && comercial.status].some(function(s) { return /cancelad/i.test(s || ''); })) motivo = 'Pedido cancelado';
     else if (comercial && !Object.values(comercial.itens || {}).some(function(i) { return i.sku === lote.itemCodigo; })) motivo = 'Produto não consta no pedido comercial';
     var pedido = comercial || demanda;

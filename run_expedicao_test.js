@@ -86,6 +86,13 @@ multi.pedidos_comerciais['PED-002'].clienteKey='c1';multi.pedidos_comerciais['PE
 multi.pedidos_comerciais['PED-002'].frete.enderecoEntrega='Rua A, 100';multi.pedidos_comerciais['PED-002'].frete.tipo='FOB';assert.throws(()=>executar(multi,dupla),/CIF\/FOB/);
 assert.equal(listar(fixture(),'2026-09-11').length,1);
 assert.equal(analisar(fixture(),'PA001','pa_op1_p1','2026-09-11').disponivel,true);
+// OP de retrabalho (inspeção total): sem skuPedidoKey de propósito; a expedição usa o pedido da OP original.
+{const rt=fixture();Object.assign(rt.ops.op1,{tipoOrdem:'RETRABALHO',skuPedidoKey:'',skuPedidoKeyExpedicao:'PED-001__PA001'});
+ assert.equal(analisar(rt,'PA001','pa_op1_p1','2026-09-11').disponivel,true,'palete retrabalhado expede pelo pedido da OP original');
+ assert.equal(executar(rt).carga.itens[0].pedidoNumero,'PED-001');
+ const sem=fixture();Object.assign(sem.ops.op1,{tipoOrdem:'RETRABALHO',skuPedidoKey:''});
+ assert.match(analisar(sem,'PA001','pa_op1_p1','2026-09-11').motivo,/Vínculo|Pedido de origem/,'sem o campo, continua bloqueado');
+ const c=fixture();assert.equal(fs.readFileSync('functions/conferencia_pa.js','utf8').includes('op.skuPedidoKey || op.skuPedidoKeyExpedicao'),true,'a conferência grava o pedido da origem no palete');}
 assert.equal(fs.readFileSync('functions/expedicao_regras.js','utf8'),fs.readFileSync('public/shared/expedicao.js','utf8'),'Regras da UI e do servidor devem ser iguais');
 assert.equal(require('./ler_regras').lerRegras().rules.expedicoes_comerciais['.write'],false);
 

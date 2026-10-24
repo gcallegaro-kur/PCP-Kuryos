@@ -126,7 +126,8 @@
       });
       if (soma > insp) erros.push('Palete ' + nome + ': os defeitos somam ' + soma + ', mais que as ' + insp + ' inspecionadas.');
       totalInsp += insp;
-      return {loteKey: l.loteKey, palete: nome, saldo: saldo, inspecionadas: insp, defeitos: defeitos, naoConformes: soma};
+      var fotos = Array.isArray(l.fotos) && l.fotos.length ? l.fotos.slice(0, 6) : null;
+      return {loteKey: l.loteKey, palete: nome, saldo: saldo, inspecionadas: insp, defeitos: defeitos, naoConformes: soma, fotos: fotos};
     }).filter(Boolean);
     (paletes || []).forEach(function(p) {
       if (!vistos[p.loteKey]) erros.push('Falta a inspeção do palete ' + (p.lote.identificadorPalete || p.loteKey) + '.');
@@ -229,6 +230,8 @@
         qtdPlanejada: qtd, observacao: m.obs || obsFinal, destino: destino
       });
       nova.origemInspecaoTotal = {opKey: chaveOp(o.opKey), motivo: m.motivo, motivoKey: k};
+      // A expedição do palete retrabalhado usa o pedido da OP original (a OP RT não tem skuPedidoKey de propósito).
+      nova.skuPedidoKeyExpedicao = op.skuPedidoKey || null;
       existentes[nova.lote] = true;
       var chave = deps.sanitizeKey(nova.lote);
       updates['ops/' + chave] = nova;
