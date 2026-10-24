@@ -1521,6 +1521,19 @@ function edAdicionarPosicao() {
   var qtd = parseFloat(document.getElementById('edQtd').value);
   if (!enderecoKey) { showAlert('Selecione o endereço.', 'danger'); return; } // destino sempre manual, nunca automático
   if (isNaN(qtd) || qtd <= 0) { showAlert('Informe uma quantidade válida.', 'danger'); return; }
+  // Trava (24/10/2026): esta aba cria lote NOVO para o que o sistema conhece e
+  // ainda não tem endereço. Passar disso duplica o estoque nos lotes -- foi o que
+  // aconteceu com o ET-00071 (recebimento de 2.096 + 4 paletes "iniciais" = 4.191
+  // nos lotes, saldo 2.096). Dividir um recebimento é Movimentar.
+  if (edItemAtual.tipo === 'material') {
+    var conhecidoEd = (allEstoque[edItemAtual.key] && allEstoque[edItemAtual.key].saldoAtual) || 0;
+    var semEnderecoEd = Math.max(0, Math.round((conhecidoEd - edSomaEnderecada(edItemAtual.key)) * 1000) / 1000);
+    if (qtd > semEnderecoEd + 0.0005) {
+      showAlert('Não dá para endereçar ' + fmtNum(qtd) + ': o sistema só tem ' + fmtNum(semEnderecoEd) + ' sem endereço para este item.' +
+        (semEnderecoEd === 0 ? ' O material já tem lote com posição (por exemplo, o do recebimento). Para dividir em paletes, use Movimentar material → "Dividir em vários paletes".' : ' Para o que já tem lote, use Movimentar material.'), 'danger');
+      return;
+    }
+  }
   var loteTexto = document.getElementById('edLote').value.trim();
   var validade = document.getElementById('edValidade').value || null;
   var enderecoInfo = allEnderecosEstoque[enderecoKey];

@@ -3,6 +3,14 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Movimentar: busca pelo item + divisão em paletes; trava no Endereçamento; ET-00071 corrigido (24/10/2026)
+
+- **Pedido:** dividir o recebimento de 2.096 cx (ET-00071) em 600/600/606/290; campo de busca por nome/código para ganhar tempo.
+- **Causa:** os 4 paletes foram lançados na aba Endereçamento (`origemTipo endereco_inicial`), que cria lote NOVO sem olhar o lote do recebimento: soma dos lotes 4.191 x saldo 2.096, e 4 `recebimento_pc` falsos no Kardex. Medido: 27 itens com soma dos lotes > saldo (3 com o mesmo padrão: ET-00071, ET-00072, EP-00203).
+- **Dados (feito, com backup em `backups/ET-00071-*`):** removidos os 4 lotes e os 4 movimentos duplicados; lote `AK-2026-000650` zerado; criados 4 lotes filhos (600/600/606/290) com mesmo lote interno, quarentena e destino Febella. Soma dos lotes 2.096 = saldo. O 3º palete estava gravado 605; usei 606 (o total só fecha assim).
+- **Código:** `movimentacao-wms.js` (`buscarLotes`, `planejarDivisao`), `movimentar-tela.js/.html/.css` (busca + "Dividir em vários paletes"), `estoque.html` (Endereçamento recusa quantidade acima do "sem endereço"), manual da Logística. Testes: `run_movimentacao_wms_test.js`, `run_movimentar_busca_divisao_ui_test.js`, `run_enderecamento_trava_ui_test.js`.
+- **Aberto:** ET-00072 e EP-00203 têm o mesmo padrão (recebimento + lote inicial) e não foram corrigidos; os outros 24 itens com soma > saldo têm outra causa, não investigada.
+
 ### Claude — BOM/Fórmula mostram o nome ATUAL do insumo (24/10/2026)
 
 - **Pedido:** renomear um insumo não atualizava o BOM; só nova versão.

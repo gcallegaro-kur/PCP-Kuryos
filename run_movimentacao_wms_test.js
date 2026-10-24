@@ -88,4 +88,59 @@ const movs = {'MP-1': {m1: {tipo: 'transferencia', ref: 'FAB-1-1-1 -> GAL-1-1-1'
   m2: {tipo: 'consumo', em: '2026-09-29T11:00:00Z'}}};
 eq(M.ultimas(movs, enderecos).map(m => [m.de, m.para]), [['FAB-1.1.1', 'GAL-1.1.1']]);
 
+// 9. Busca pelo item (24/10): código, nome, lote; sem acento/caixa; várias palavras.
+{
+  const L = {
+    'ET-00071': {r: {itemCodigo: 'ET-00071', itemNome: 'CAIXA DE EMBARQUE 48 UNID. BODY SPLASH FEBELLA', itemTipo: 'material', saldoLote: 2096, unidade: 'un', loteInterno: 'AK-2026-000650', enderecoKey: 'GAL-1-1-1', status: 'QUARENTENA', dataRecebimento: '2026-10-23'},
+      z: {itemCodigo: 'ET-00071', itemNome: 'CAIXA DE EMBARQUE 48 UNID. BODY SPLASH FEBELLA', itemTipo: 'material', saldoLote: 0, enderecoKey: 'GAL-1-1-1'}},
+    'MP-1': lotes['MP-1'],
+    'SEM-POS': {s: {itemCodigo: 'SEM-POS', itemNome: 'Caixa sem posição', itemTipo: 'material', saldoLote: 5}}
+  };
+  eq(M.buscarLotes('et-00071', L, enderecos).lotes.map(l => l.loteKey), ['r'], 'por código, ignora lote zerado');
+  eq(M.buscarLotes('caixa 48 FEBELLA', L, enderecos).lotes.length, 1, 'várias palavras, qualquer ordem/caixa');
+  eq(M.buscarLotes('ALCOOL', L, enderecos).lotes.map(l => l.loteKey), ['a', 'b'], 'sem acento: Álcool');
+  eq(M.buscarLotes('ak-2026-000650', L, enderecos).lotes[0].enderecoCodigo, 'GAL-1.1.1', 'por lote interno');
+  const sp = M.buscarLotes('caixa', L, enderecos);
+  eq([sp.lotes.length, sp.semPosicao], [1, 1], 'lote sem posição não é listado, mas é contado');
+  eq(M.buscarLotes('   ', L, enderecos).lotes, [], 'busca vazia não lista nada');
+  eq(M.buscarLotes('zzz', L, enderecos).total, 0);
+}
+
+// 10. Dividir um lote em vários paletes (24/10): 2.096 = 600 + 600 + 606 + 290.
+{
+  const ends = Object.assign({}, enderecos, {'GAL-1-1-2': {codigo: 'GAL-1.1.2', area: 'GALPÃO', rua: 1, predio: 1, nivel: 2}, 'GAL-1-1-3': {codigo: 'GAL-1.1.3', area: 'GALPÃO', rua: 1, predio: 1, nivel: 3},
+    'GAL-1-1-4': {codigo: 'GAL-1.1.4', area: 'GALPÃO', rua: 1, predio: 1, nivel: 4}, 'GAL-1-1-5': {codigo: 'GAL-1.1.5', area: 'GALPÃO', rua: 1, predio: 1, nivel: 5}});
+  const L = {'ET-1': {r: {itemCodigo: 'ET-1', itemNome: 'Caixa', itemTipo: 'material', saldoLote: 2096, unidade: 'un', loteInterno: 'AK-1', enderecoKey: 'GAL-1-1-1', status: 'QUARENTENA'}}};
+  const base = {origemKey: 'GAL-1-1-1', itemKey: 'ET-1', loteKey: 'r', lotes: L, enderecos: ends, motivo: 'X'};
+  const quatro = [{qtd: '600', destinoKey: 'GAL-1-1-2'}, {qtd: '600', destinoKey: 'GAL-1-1-3'}, {qtd: '606', destinoKey: 'GAL-1-1-4'}, {qtd: '290', destinoKey: 'GAL-1-1-5'}];
+  let p = M.planejarDivisao(Object.assign({linhas: quatro}, base));
+  ok(p.ok, 'fecha: ' + p.erros.join('|')); eq(p.operacoes.length, 4); eq([p.soma, p.falta], [2096, 0]);
+  ok(/4 palete\(s\)/.test(p.resumo) && /606 → GAL-1\.1\.4/.test(p.resumo), p.resumo);
+  eq(p.operacoes.every(o => o.tipo === 'SEPARAR'), true);
+  p = M.planejarDivisao(Object.assign({linhas: [quatro[0], quatro[1], {qtd: '', destinoKey: ''}]}, base));
+  ok(p.ok && p.falta === 896 && /896 un continuam em GAL-1\.1\.1/.test(p.resumo), 'sobra fica na origem; linha vazia é ignorada');
+  p = M.planejarDivisao(Object.assign({linhas: quatro.concat([{qtd: '1', destinoKey: 'GAL-1-1-1'}])}, base));
+  ok(!p.ok && p.erros.some(e => /passa do saldo|origem/.test(e)), 'não deixa passar do saldo / destino = origem');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '700', destinoKey: 'GAL-1-1-2'}, {qtd: '700', destinoKey: 'GAL-1-1-3'}, {qtd: '700', destinoKey: 'GAL-1-1-4'}]}, base));
+  ok(!p.ok && p.erros.some(e => /passa do saldo/.test(e)), '2.100 > 2.096');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '10', destinoKey: 'GAL-1-1-2'}, {qtd: '10', destinoKey: 'GAL-1-1-2'}]}, base));
+  ok(!p.ok && p.erros.some(e => /já foi usada/.test(e)), 'mesma posição duas vezes');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '10.5', destinoKey: 'GAL-1-1-2'}]}, base));
+  ok(!p.ok && p.erros.some(e => /inteiro/.test(e)), 'unidade inteira');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '10', destinoKey: ''}]}, base));
+  ok(!p.ok && p.erros.some(e => /posição de destino/.test(e)), 'falta destino');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '10', destinoKey: 'FAB-9-9-9'}]}, base));
+  ok(!p.ok, 'posição bloqueada');
+  p = M.planejarDivisao(Object.assign({linhas: [{qtd: '10', destinoKey: 'DOC-1-1-1'}, {qtd: '10', destinoKey: 'DOC-1-1-1'}]}, base));
+  ok(p.ok, 'Doca aceita vários paletes');
+  p = M.planejarDivisao(Object.assign({linhas: []}, base));
+  ok(!p.ok, 'sem paletes');
+  p = M.planejarDivisao(Object.assign({}, base, {linhas: quatro, motivo: ''}));
+  ok(!p.ok && p.erros.some(e => /motivo/.test(e)));
+  p = M.planejarDivisao(Object.assign({}, base, {linhas: quatro, itemKey: 'PA1', loteKey: 'p1', lotes}));
+  ok(!p.ok, 'lote que não está na origem');
+  p = M.planejarDivisao({origemKey: 'FAB-1-1-1', itemKey: 'PA1', loteKey: 'p1', lotes, enderecos, motivo: 'X', linhas: [{qtd: '5', destinoKey: 'FAB-1-1-2'}]});
+  ok(!p.ok && p.erros.some(e => /produto acabado/.test(e)), 'produto acabado não divide');
+}
+
 console.log('run_movimentacao_wms_test: ' + n + ' verificações OK');

@@ -146,6 +146,75 @@
       separacoes: ops.filter(function(o) { return o.tipo === 'SEPARAR'; }).length};
   }
 
+  /* Busca de lote pelo ITEM (24/10/2026). Pedido do usuário: achar o material
+     pelo nome ou código e endereçar, sem precisar saber o AK-… de cabeça.
+     Cada palavra digitada precisa aparecer em código, nome, SKU ou lote
+     (sem acento, sem caixa). Só lotes com saldo; os que não têm posição no
+     WMS entram em `semPosicao` (ficam na Doca/recebimento pendente) e não
+     são listados. Ordem: FEFO (validade, depois recebimento). */
+  function buscarLotes(textoBusca, lotes, enderecos, limite) {
+    var palavras = semAcento(textoBusca).split(/\s+/).filter(Boolean);
+    if (!palavras.length) return {lotes: [], total: 0, semPosicao: 0};
+    var achados = [], semPosicao = 0;
+    Object.keys(lotes || {}).forEach(function(ik) {
+      Object.keys(lotes[ik] || {}).forEach(function(lk) {
+        var l = lotes[ik][lk] || {};
+        if (!(Number(l.saldoLote) > 0)) return;
+        var palheiro = semAcento([l.itemCodigo || ik, l.itemNome, l.loteInterno, l.loteOrigem, l.identificadorPalete, l.opLote].join(' '));
+        if (!palavras.every(function(p) { return palheiro.indexOf(p) !== -1; })) return;
+        if (!l.enderecoKey) { semPosicao++; return; }
+        achados.push({itemKey: ik, loteKey: lk, itemCodigo: l.itemCodigo || ik, itemNome: l.itemNome || '', itemTipo: l.itemTipo || '',
+          saldo: Number(l.saldoLote), unidade: l.unidade || (l.itemTipo === 'produto' ? 'un' : ''), status: l.status || 'LIBERADO',
+          rotulo: rotuloLote(l), validade: l.dataValidade || l.validade || '', recebido: l.dataRecebimento || '',
+          enderecoKey: l.enderecoKey, enderecoCodigo: l.enderecoCodigo || ((enderecos || {})[l.enderecoKey] || {}).codigo || l.enderecoKey});
+      });
+    });
+    achados.sort(function(a, b) {
+      return String(a.itemCodigo).localeCompare(String(b.itemCodigo), 'pt-BR', {numeric: true}) ||
+        String(a.validade || '9999').localeCompare(String(b.validade || '9999')) || String(a.recebido).localeCompare(String(b.recebido));
+    });
+    return {lotes: achados.slice(0, limite || 30), total: achados.length, semPosicao: semPosicao};
+  }
+
+  /* Dividir UM lote em vários paletes de uma vez (24/10/2026): o recebimento
+     de 2.096 caixas virou 600 + 600 + 606 + 290 em quatro posições.
+     d: {origemKey, itemKey, loteKey, linhas: [{qtd, destinoKey}], lotes,
+     enderecos, motivo}. Cada linha vira uma SEPARAÇÃO do mesmo lote (o motor
+     de sempre: lote interno, validade, dono e destino do cliente seguem o
+     pedaço). A soma pode ficar abaixo do saldo -- o resto continua na
+     origem --, nunca acima. Linha totalmente vazia é ignorada. */
+  function planejarDivisao(dados) {
+    var d = dados || {}, erros = [], ops = [];
+    var l = conteudo(d.origemKey, d.lotes).filter(function(x) { return x.itemKey === d.itemKey && x.loteKey === d.loteKey; })[0];
+    if (!l) erros.push('O lote não está mais nesta posição. Escolha a origem de novo.');
+    else if (l.itemTipo === 'produto') erros.push('Palete de produto acabado se move inteiro: não dá para dividir.');
+    var soma = 0, vistos = {};
+    (d.linhas || []).forEach(function(li, i) {
+      var q = li.qtd === '' || li.qtd == null ? null : n(li.qtd);
+      if (q == null && !li.destinoKey) return;
+      var rot = 'Palete ' + (i + 1);
+      if (!(q > 0)) return erros.push(rot + ': informe a quantidade (maior que zero).');
+      if (l && l.unidade === 'un' && Math.floor(q) !== q) return erros.push(rot + ': use número inteiro de unidades.');
+      if (!li.destinoKey) return erros.push(rot + ': escolha a posição de destino.');
+      var s = situacaoDestino(li.destinoKey, d.origemKey, d.enderecos, d.lotes, [{itemKey: d.itemKey, loteKey: d.loteKey}]);
+      if (s.tipo === 'MESMA' || s.tipo === 'BLOQUEADA' || s.tipo === 'INEXISTENTE') return erros.push(rot + ': ' + s.texto);
+      if (vistos[li.destinoKey] && s.tipo !== 'DOCA') return erros.push(rot + ': a posição ' + s.codigo + ' já foi usada em outro palete desta divisão.');
+      vistos[li.destinoKey] = true;
+      soma = arred(soma + q);
+      ops.push({tipo: 'SEPARAR', itemKey: d.itemKey, loteKey: d.loteKey, qtd: arred(q), destinoKey: li.destinoKey, destinoCodigo: s.codigo,
+        destinoTipo: s.tipo, itemCodigo: l ? l.itemCodigo : d.itemKey, rotulo: l ? l.rotulo : '', unidade: l ? l.unidade : ''});
+    });
+    if (l && !ops.length && !erros.length) erros.push('Informe ao menos um palete (quantidade e posição).');
+    if (l && soma > arred(l.saldo)) erros.push('A soma dos paletes (' + soma.toLocaleString('pt-BR') + ') passa do saldo do lote (' + l.saldo.toLocaleString('pt-BR') + ').');
+    if (!texto(d.motivo)) erros.push('Escolha o motivo.');
+    var falta = l ? arred(l.saldo - soma) : 0;
+    var resumo = ops.length ? 'Dividir ' + (l ? l.itemCodigo + (l.rotulo ? ' (' + l.rotulo + ')' : '') : '') + ' em ' + ops.length + ' palete(s): ' +
+      ops.map(function(o) { return o.qtd.toLocaleString('pt-BR') + ' → ' + o.destinoCodigo; }).join('; ') +
+      (falta > 0 ? '. Os outros ' + falta.toLocaleString('pt-BR') + ' ' + (l ? l.unidade : '') + ' continuam em ' + (((d.enderecos || {})[d.origemKey] || {}).codigo || d.origemKey) : '') + '.' : '';
+    return {ok: !erros.length, erros: erros, operacoes: ops, soma: soma, falta: falta, saldo: l ? l.saldo : 0, resumo: resumo,
+      temOcupada: ops.some(function(o) { return o.destinoTipo === 'OCUPADA'; })};
+  }
+
   // Últimas transferências, para a pessoa ver o que acabou de acontecer.
   function ultimas(movimentos, enderecos, limite) {
     var lista = [];
@@ -163,5 +232,5 @@
   }
 
   return {chaveCodigo: chaveCodigo, ehDoca: ehDoca, reconhecer: reconhecer, conteudo: conteudo, situacaoDestino: situacaoDestino,
-    sugerirLivres: sugerirLivres, planejar: planejar, ultimas: ultimas};
+    sugerirLivres: sugerirLivres, planejar: planejar, ultimas: ultimas, buscarLotes: buscarLotes, planejarDivisao: planejarDivisao};
 });

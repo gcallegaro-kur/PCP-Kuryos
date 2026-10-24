@@ -8,7 +8,7 @@
   var db = firebase.database();
   var M = MovimentacaoWMS;
   var lotes = {}, enderecos = {}, movimentos = {}, motivos = [], carregado = {lotes: false, enderecos: false};
-  var st = {origemKey: '', selecao: {}, destinoKey: '', motivo: '', parcial: {}, ocupado: false, ultimo: null, candidatos: null};
+  var st = {origemKey: '', selecao: {}, destinoKey: '', motivo: '', parcial: {}, ocupado: false, ultimo: null, candidatos: null, div: null};
   var MOTIVO_PADRAO = 'TRANSFERÊNCIA ENTRE ENDEREÇOS';
   function el(id) { return document.getElementById(id); }
   function e(v) { return escapeHtml(String(v == null ? '' : v)); }
@@ -23,7 +23,7 @@
 
   /* ── 1. De onde ── */
   function definirOrigem(key, somenteLote) {
-    st.origemKey = key; st.selecao = {}; st.parcial = {}; st.candidatos = null;
+    st.origemKey = key; st.selecao = {}; st.parcial = {}; st.candidatos = null; st.div = null;
     var itens = M.conteudo(key, lotes);
     // Palete lido: marca só ele. Posição lida: marca tudo (o palete inteiro).
     itens.forEach(function(l) { var id = l.itemKey + '/' + l.loteKey; st.selecao[id] = {mover: !somenteLote || somenteLote === id, qtd: ''}; });
@@ -40,6 +40,132 @@
       aviso(''); definirOrigem(r.enderecoKey, r.itemKey + '/' + r.loteKey);
     } else if (r.tipo === 'VARIOS') { st.candidatos = r.candidatos; render(); }
     else aviso('Nada encontrado para <b>' + e(r.codigo) + '</b>. Confira o código da posição (ex.: FAB-1.1.1), do palete (PA-…) ou do lote (AK-…).', 'erro');
+  }
+
+  /* ── Busca pelo item (24/10): código, nome ou lote; escolher um resultado
+     leva direto ao passo 2 com o lote marcado. ── */
+  function renderBusca() {
+    var q = el('buscaItem').value, box = el('buscaResultados');
+    if (!q.trim()) { box.innerHTML = ''; return; }
+    var r = M.buscarLotes(q, lotes, enderecos, 30);
+    if (!r.lotes.length) {
+      box.innerHTML = '<p class="mv-sub">Nenhum lote com saldo e posição para <b>' + e(q) + '</b>.' + (r.semPosicao ? ' ' + r.semPosicao + ' lote(s) ainda sem posição (estão na Doca ou aguardando guarda).' : '') + '</p>';
+      return;
+    }
+    box.innerHTML = r.lotes.map(function(l) {
+      return '<button type="button" class="mv-opcao" data-lote="' + e(l.itemKey + '/' + l.loteKey) + '"><b>' + e(l.itemCodigo) + '</b> ' + e(l.itemNome) +
+        '<small>' + e(l.rotulo || '—') + ' · ' + num(l.saldo) + ' ' + e(l.unidade) + ' · 📍 ' + e(l.enderecoCodigo) + ' · ' + tagStatus(l.status) +
+        (l.validade ? ' · val. ' + e(String(l.validade).slice(0, 10).split('-').reverse().join('/')) : '') + '</small></button>';
+    }).join('') + (r.total > r.lotes.length ? '<p class="mv-sub">Mostrando ' + r.lotes.length + ' de ' + r.total + '. Digite mais para afinar.</p>' : '') +
+      (r.semPosicao ? '<p class="mv-sub">' + r.semPosicao + ' lote(s) ainda sem posição não aparecem aqui.</p>' : '');
+    box.querySelectorAll('[data-lote]').forEach(function(b) {
+      b.onclick = function() {
+        var p = b.dataset.lote.split('/'), l = (lotes[p[0]] || {})[p[1]];
+        if (!l || !l.enderecoKey) return;
+        el('buscaItem').value = ''; box.innerHTML = ''; aviso('');
+        definirOrigem(l.enderecoKey, b.dataset.lote);
+      };
+    });
+  }
+
+  /* ── Dividir um lote em vários paletes (24/10) ── */
+  function loteDaDivisao() { var p = st.div.id.split('/'); return {itemKey: p[0], loteKey: p[1]}; }
+  function planoDiv() {
+    var l = loteDaDivisao();
+    return M.planejarDivisao({origemKey: st.origemKey, itemKey: l.itemKey, loteKey: l.loteKey, linhas: st.div.linhas, lotes: lotes, enderecos: enderecos, motivo: st.motivo});
+  }
+  function planoAtivo() { return st.div ? planoDiv() : plano(); }
+  function iniciarDivisao(id) {
+    st.div = {id: id, linhas: [{qtd: '', cod: '', destinoKey: ''}, {qtd: '', cod: '', destinoKey: ''}]};
+    render();
+    var i = el('divLista').querySelector('[data-dq]'); if (i) i.focus();
+  }
+  function sobraDaLinha(idx) {
+    var l = loteDaDivisao(), lote = (lotes[l.itemKey] || {})[l.loteKey] || {};
+    var outros = st.div.linhas.reduce(function(s, li, i) { var q = Number(String(li.qtd).replace(',', '.')); return i === idx || !(q > 0) ? s : s + q; }, 0);
+    return Math.round((Number(lote.saldoLote || 0) - outros) * 1000) / 1000;
+  }
+  function statusLinhaDivisao(li) {
+    if (!li.destinoKey) return li.cod ? {cls: 'erro', txt: 'Código não reconhecido: use uma posição (ex.: GAL-4.3.15).'} : {cls: '', txt: ''};
+    var l = loteDaDivisao(), s = M.situacaoDestino(li.destinoKey, st.origemKey, enderecos, lotes, [{itemKey: l.itemKey, loteKey: l.loteKey}]);
+    var ruim = s.tipo === 'MESMA' || s.tipo === 'BLOQUEADA' || s.tipo === 'INEXISTENTE';
+    return {cls: ruim ? 'erro' : (s.tipo === 'LIVRE' || s.tipo === 'DOCA' ? 'ok' : ''), txt: (ruim ? '' : '✓ ') + codigoEnd(li.destinoKey) + ' · ' + (s.texto || '')};
+  }
+  function renderDivFalta() {
+    if (!st.div) return;
+    var pd = planoDiv();
+    el('divFalta').innerHTML = pd.falta < 0 ? '<b>Passou do saldo em ' + num(-pd.falta) + '.</b>' :
+      'Distribuído: <b>' + num(pd.soma) + '</b> de ' + num(pd.saldo) + (pd.falta > 0 ? ' · falta <b>' + num(pd.falta) + '</b>' : ' · <b>fechou</b> ✓');
+  }
+  function renderDividir() {
+    var box = el('passoDividir');
+    box.hidden = !st.div || !st.origemKey;
+    if (box.hidden) return;
+    var pd = planoDiv();
+    el('divResumo').textContent = 'saldo do lote: ' + num(pd.saldo);
+    el('divLista').innerHTML = st.div.linhas.map(function(li, i) {
+      var sl = statusLinhaDivisao(li);
+      return '<div class="mv-div-linha"><input type="text" inputmode="decimal" data-dq="' + i + '" value="' + e(li.qtd) + '" placeholder="Qtd" aria-label="Quantidade do palete ' + (i + 1) + '">' +
+        '<div class="cod-box"><input class="cod" type="text" data-dc="' + i + '" value="' + e(li.cod) + '" placeholder="Posição (ex.: GAL-4.3.15)" autocapitalize="characters" aria-label="Posição do palete ' + (i + 1) + '"></div>' +
+        '<button class="btn ghost" type="button" data-dmapa="' + i + '" title="Escolher no mapa">🗺️</button>' +
+        '<div class="mv-div-status ' + sl.cls + '">' + e(sl.txt) + ' <button class="mv-link" type="button" data-dresto="' + i + '">usar o que falta</button> <button class="mv-link" type="button" data-dremover="' + i + '">remover</button></div></div>';
+    }).join('');
+    var L = el('divLista');
+    L.querySelectorAll('[data-dq]').forEach(function(inp) {
+      inp.oninput = function() { st.div.linhas[inp.dataset.dq].qtd = inp.value; renderDivFalta(); renderConfirmar(); };
+      inp.onkeydown = function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); var c = L.querySelector('[data-dc="' + inp.dataset.dq + '"]'); if (c) c.focus(); } };
+    });
+    L.querySelectorAll('[data-dc]').forEach(function(inp) {
+      var i = Number(inp.dataset.dc);
+      inp.oninput = function() { st.div.linhas[i].cod = inp.value; st.div.linhas[i].destinoKey = ''; renderConfirmar(); };
+      var resolver = function() {
+        var li = st.div.linhas[i], r = M.reconhecer(inp.value, enderecos, {});
+        if (r.tipo === 'ENDERECO') { li.destinoKey = r.enderecoKey; li.cod = codigoEnd(r.enderecoKey); } else { li.destinoKey = ''; li.cod = inp.value; }
+        render();
+        if (li.destinoKey) { var prox = L.querySelector('[data-dq="' + (i + 1) + '"]'); (prox || el('divAdd')).focus(); }
+      };
+      inp.onchange = resolver;
+      inp.onkeydown = function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); resolver(); } };
+    });
+    L.querySelectorAll('[data-dmapa]').forEach(function(b) {
+      b.onclick = function() {
+        var i = Number(b.dataset.dmapa);
+        SeletorEndereco.abrir({fonte: fonte, valor: st.div.linhas[i].destinoKey, preferirPosicao: true, ignorar: null,
+          titulo: 'Palete ' + (i + 1) + ': para onde vai', subtitulo: '',
+          onEscolher: function(key) { st.div.linhas[i].destinoKey = key; st.div.linhas[i].cod = codigoEnd(key); render(); }});
+      };
+    });
+    L.querySelectorAll('[data-dresto]').forEach(function(b) {
+      b.onclick = function() { var i = Number(b.dataset.dresto), q = sobraDaLinha(i); st.div.linhas[i].qtd = q > 0 ? String(q) : ''; render(); };
+    });
+    L.querySelectorAll('[data-dremover]').forEach(function(b) {
+      b.onclick = function() { st.div.linhas.splice(Number(b.dataset.dremover), 1); if (!st.div.linhas.length) st.div.linhas.push({qtd: '', cod: '', destinoKey: ''}); render(); };
+    });
+    renderDivFalta();
+  }
+  async function moverDivisao() {
+    var p = planoDiv();
+    if (st.ocupado || !p.ok) return;
+    if (p.temOcupada && !confirm('Alguma posição já tem material. O palete novo vai para o MESMO palete de lá. Confirmar?')) return;
+    st.ocupado = true; renderConfirmar();
+    var l = loteDaDivisao(), lote = (lotes[l.itemKey] || {})[l.loteKey] || {};
+    var cod = sanitizeKey(lote.itemCodigo || '') === l.itemKey ? lote.itemCodigo : l.itemKey;
+    var feitos = [], falha = '';
+    for (var i = 0; i < p.operacoes.length; i++) {
+      var o = p.operacoes[i];
+      try {
+        var r = await separarParcialLoteEndereco(db, lote.itemTipo || 'material', cod, l.loteKey, o.qtd, o.destinoKey, st.motivo, autor(), null, {origemTipo: 'movimentacao'});
+        if (!r || r.abatidoReal !== o.qtd) throw new Error('o lote não tinha mais ' + num(o.qtd) + ' disponível');
+        feitos.push(o);
+      } catch (err) { falha = 'Palete ' + (i + 1) + ' (' + o.destinoCodigo + '): ' + (err.message || 'erro'); break; }
+    }
+    st.ocupado = false;
+    var msg = feitos.length ? '✓ Dividido em ' + feitos.length + ' palete(s): ' + e(feitos.map(function(o) { return num(o.qtd) + ' → ' + o.destinoCodigo; }).join('; ')) + '.' : '';
+    if (falha) msg += (msg ? '<br>' : '') + '⚠ Parou aqui: ' + e(falha) + '. O que já foi gravado está acima; confira o lote e continue só com o que falta.';
+    aviso(msg, falha ? 'erro' : 'ok');
+    st.origemKey = ''; st.selecao = {}; st.parcial = {}; st.destinoKey = ''; st.div = null; st.ultimo = null;
+    el('deCodigo').value = ''; el('paraCodigo').value = '';
+    render(); el('buscaItem').focus();
   }
 
   /* ── 3. Para onde ── */
@@ -86,7 +212,7 @@
     }
     if (!st.origemKey) { box.innerHTML = ''; el('passoOque').hidden = true; return; }
     el('deEscolhido').innerHTML = '<span class="mv-local">' + e(codigoEnd(st.origemKey)) + '</span> <span class="mv-sub">' + e(areaEnd(st.origemKey)) + '</span> <button class="mv-link" id="trocarOrigem">trocar</button>';
-    el('trocarOrigem').onclick = function() { st.origemKey = ''; st.selecao = {}; el('deCodigo').value = ''; render(); el('deCodigo').focus(); };
+    el('trocarOrigem').onclick = function() { st.origemKey = ''; st.div = null; st.selecao = {}; el('deCodigo').value = ''; render(); el('deCodigo').focus(); };
     box.innerHTML = '';
     // 2. O quê
     var itens = M.conteudo(st.origemKey, lotes);
@@ -108,17 +234,22 @@
           '<button class="mv-link" data-etq="' + e(id) + '">🏷️ etiqueta</button></div>';
       }).join('');
     var todos = el('marcarTodos');
-    if (todos) todos.onchange = function() { itens.forEach(function(l) { var id = l.itemKey + '/' + l.loteKey; st.selecao[id] = {mover: todos.checked, qtd: ''}; }); render(); };
-    el('oqueLista').querySelectorAll('[data-mover]').forEach(function(c) { c.onchange = function() { st.selecao[c.dataset.mover] = {mover: c.checked, qtd: ''}; render(); }; });
+    if (todos) todos.onchange = function() { st.div = null; itens.forEach(function(l) { var id = l.itemKey + '/' + l.loteKey; st.selecao[id] = {mover: todos.checked, qtd: ''}; }); render(); };
+    el('oqueLista').querySelectorAll('[data-mover]').forEach(function(c) { c.onchange = function() { st.div = null; st.selecao[c.dataset.mover] = {mover: c.checked, qtd: ''}; render(); }; });
     el('oqueLista').querySelectorAll('[data-abrir-parcial]').forEach(function(b) { b.onclick = function() { st.parcial[b.dataset.abrirParcial] = true; render(); var i = el('oqueLista').querySelector('[data-qtd="' + CSS.escape(b.dataset.abrirParcial) + '"]'); if (i) i.focus(); }; });
     el('oqueLista').querySelectorAll('[data-tudo]').forEach(function(b) { b.onclick = function() { delete st.parcial[b.dataset.tudo]; st.selecao[b.dataset.tudo].qtd = ''; render(); }; });
     el('oqueLista').querySelectorAll('[data-etq]').forEach(function(b) { b.onclick = function() { imprimirLotes([b.dataset.etq]); }; });
     if (itens.length > 1) el('oqueLista').insertAdjacentHTML('beforeend', '<button class="mv-link" id="etqTodos">🏷️ etiquetas de todos os lotes desta posição</button>');
+    var marcadosMat = itens.filter(function(l) { return (st.selecao[l.itemKey + '/' + l.loteKey] || {}).mover; });
+    if (marcadosMat.length === 1 && marcadosMat[0].itemTipo !== 'produto' && !st.div) {
+      el('oqueLista').insertAdjacentHTML('beforeend', '<div><button class="btn" id="btnDividir" type="button">✂️ Dividir em vários paletes</button> <span class="mv-sub">ex.: 600 + 600 + 606 + 290 em posições diferentes</span></div>');
+      el('btnDividir').onclick = function() { iniciarDivisao(marcadosMat[0].itemKey + '/' + marcadosMat[0].loteKey); };
+    }
     var bt = el('etqTodos'); if (bt) bt.onclick = function() { imprimirLotes(itens.map(function(l) { return l.itemKey + '/' + l.loteKey; })); };
     el('oqueLista').querySelectorAll('[data-qtd]').forEach(function(i) { i.oninput = function() { st.selecao[i.dataset.qtd].qtd = i.value; renderConfirmar(); }; });
   }
   function renderDestino() {
-    el('passoPara').hidden = !st.origemKey;
+    el('passoPara').hidden = !st.origemKey || !!st.div;
     if (!st.origemKey) return;
     var p = plano(), d = p.destino;
     el('paraEscolhido').innerHTML = st.destinoKey ? '<span class="mv-local">' + e(codigoEnd(st.destinoKey)) + '</span> <span class="mv-sub">' + e(areaEnd(st.destinoKey)) + '</span> <button class="mv-link" id="trocarDestino">trocar</button>' : '';
@@ -134,11 +265,11 @@
   function renderConfirmar() {
     el('passoConfirmar').hidden = !st.origemKey;
     if (!st.origemKey) return;
-    var p = plano();
+    var p = planoAtivo();
     el('confResumo').textContent = p.resumo || 'Marque o que vai e escolha o destino.';
     el('confErros').innerHTML = p.erros.length && (st.destinoKey || p.operacoes.length) ? p.erros.map(function(x) { return '<li>' + e(x) + '</li>'; }).join('') : '';
     el('btnMover').disabled = st.ocupado || !p.ok;
-    el('btnMover').textContent = st.ocupado ? 'Movendo…' : p.operacoes.length ? (p.paleteInteiro && p.operacoes.length > 1 ? 'Mover o palete inteiro' : 'Mover ' + p.operacoes.length + ' lote(s)') + (st.destinoKey ? ' para ' + codigoEnd(st.destinoKey) : '') : 'Mover';
+    el('btnMover').textContent = st.ocupado ? 'Movendo…' : st.div ? (p.operacoes.length ? 'Dividir em ' + p.operacoes.length + ' palete(s)' : 'Dividir') : p.operacoes.length ? (p.paleteInteiro && p.operacoes.length > 1 ? 'Mover o palete inteiro' : 'Mover ' + p.operacoes.length + ' lote(s)') + (st.destinoKey ? ' para ' + codigoEnd(st.destinoKey) : '') : 'Mover';
   }
   function renderUltimas() {
     var ls = M.ultimas(movimentos, enderecos, 15);
@@ -149,12 +280,13 @@
   function render() {
     if (!carregado.lotes || !carregado.enderecos) return;
     el('deEscolhido').innerHTML = '';
-    renderOrigem(); renderDestino(); renderConfirmar();
+    renderBusca(); renderOrigem(); renderDividir(); renderDestino(); renderConfirmar();
     el('motivo').innerHTML = motivos.map(function(m) { return '<option' + (m === st.motivo ? ' selected' : '') + '>' + e(m) + '</option>'; }).join('');
   }
 
   /* ── Mover ── */
   async function mover() {
+    if (st.div) return moverDivisao();
     var p = plano();
     if (st.ocupado || !p.ok) return;
     if (p.destino.tipo === 'OCUPADA' && !confirm('A posição ' + p.destino.codigo + ' já tem material. Vai para o MESMO palete. Confirmar?')) return;
@@ -257,6 +389,9 @@
   el('deCodigo').addEventListener('change', function() { lerOrigem(this.value); });
   el('paraCodigo').addEventListener('keydown', function(ev) { if (ev.key === 'Enter') { ev.preventDefault(); lerDestino(this.value); } });
   el('paraCodigo').addEventListener('change', function() { lerDestino(this.value); });
+  el('buscaItem').addEventListener('input', renderBusca);
+  el('divAdd').onclick = function() { if (!st.div) return; st.div.linhas.push({qtd: '', cod: '', destinoKey: ''}); render(); var qs = el('divLista').querySelectorAll('[data-dq]'); if (qs.length) qs[qs.length - 1].focus(); };
+  el('divCancelar').onclick = function() { st.div = null; render(); };
   el('btnMapaDe').onclick = function() { abrirMapa('de'); };
   el('btnMapaPara').onclick = function() { abrirMapa('para'); };
   el('btnDoca').onclick = function() { var k = SeletorEndereco.docaPadrao(enderecos); if (k) definirOrigem(k); };
