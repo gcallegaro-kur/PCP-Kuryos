@@ -1556,6 +1556,27 @@ function edAdicionarPosicao() {
   var qtd = parseFloat(document.getElementById('edQtd').value);
   if (!enderecoKey) { showAlert('Selecione o endereço.', 'danger'); return; } // destino sempre manual, nunca automático
   if (isNaN(qtd) || qtd <= 0) { showAlert('Informe uma quantidade válida.', 'danger'); return; }
+  /* Trava (24/10/2026, segunda parte): produto acabado NÃO entra por aqui.
+     A trava de excesso logo abaixo só vale para material, porque material tem
+     saldo agregado em `estoque/{cod}` para comparar. PA não tem: o saldo de PA
+     É a soma dos lotes, então criar lote aqui cria estoque do nada e não há
+     nada para contradizer -- não existe excesso a detectar.
+
+     E não é só a quantidade. `putawayEstoqueLote` grava `status: 'LIBERADO'`
+     e, para produto, um movimento `producao_op` / "ENTRADA DE PRODUÇÃO". Ou
+     seja: o PA entraria vendável sem laudo da Qualidade e o Kardex diria que
+     a linha produziu, sem OP, sem apontamento e sem consumo de material.
+     Caso real: HIG-NEXT-0001, 3.968 un, 24/10 14:54.
+
+     PA ganha endereço no nascimento (Conferência de PA, Entrada avulsa de PA)
+     e muda de lugar pelo Movimentar. Medido em 24/10: 0 dos 40 lotes de PA
+     com saldo estão sem endereço -- esta aba nunca foi necessária para PA. */
+  if (edItemAtual.tipo === 'produto') {
+    showAlert('Produto acabado não entra pelo Endereçamento: aqui o lote nasce LIBERADO e o Kardex registra como "entrada de produção", sem OP e sem laudo da Qualidade. ' +
+      'PA que veio da linha entra pela Conferência de PA. PA sem OP (devolução antiga, sobra encontrada) entra por Devoluções → "Entrada avulsa de PA", que passa pela quarentena e pelo laudo. ' +
+      'Para mudar um palete de posição, use Movimentar material.', 'danger');
+    return;
+  }
   // Trava (24/10/2026): esta aba cria lote NOVO para o que o sistema conhece e
   // ainda não tem endereço. Passar disso duplica o estoque nos lotes -- foi o que
   // aconteceu com o ET-00071 (recebimento de 2.096 + 4 paletes "iniciais" = 4.191

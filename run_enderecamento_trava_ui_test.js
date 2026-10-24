@@ -175,7 +175,35 @@ async function abrir(browser, uid, estadoInicial, pagina) {
     d = await db();
     const lm = Object.values(d.estoque_lotes['ET-00069'])[0];
     assert.deepEqual([lm.saldoLote, lm.propriedade.tipo, lm.propriedade.clienteKey, lm.propriedade.clienteNome], [1605, 'CLIENTE', 'MISS', 'MISS ROSE'], 'o lote nasce da MISS ROSE');
+    /* PRODUTO ACABADO não entra pelo Endereçamento.
+       Caso real (24/10/2026): o usuário conseguiu "subir estoque" de
+       HIG-NEXT-0001 por aqui -- 3.968 un, status LIBERADO, e um movimento
+       `producao_op` / "ENTRADA DE PRODUÇÃO" no Kardex, sem OP, sem
+       apontamento e sem laudo da Qualidade.
+
+       A trava de excesso acima não pega PA porque ela compara com o saldo
+       agregado de `estoque/{cod}`, e PA não tem saldo agregado: o saldo de
+       PA É a soma dos lotes. Criar lote aqui cria estoque do nada e não há
+       excesso a detectar -- por isso a recusa é pelo TIPO, não pela conta. */
+    await page.evaluate(() => {
+      edSelecionarItem({key: 'HIG-NEXT-0001', tipo: 'produto', codigo: 'HIG-NEXT-0001', nome: 'SPIRULINA VERDE 120 CAPSULAS', unidade: 'un'});
+      document.getElementById('edEndereco').value = 'GAL-4-3-15';
+    });
+    await page.fill('#edQtd', '3968');
+    await page.click('#btnEdAddPosicao');
+    await page.waitForFunction(() => /Produto acabado não entra pelo Endereçamento/.test(document.body.innerText), null, {timeout: 5000});
+    const txtPa = await page.locator('body').innerText();
+    assert.match(txtPa, /Conferência de PA/, 'a recusa diz por onde o PA da linha entra');
+    assert.match(txtPa, /Entrada avulsa de PA/, 'e por onde entra o PA sem OP');
+    assert.match(txtPa, /Movimentar material/, 'e por onde se muda um palete de posição');
+    d = await db();
+    assert.equal(Object.keys(d.estoque_lotes['HIG-NEXT-0001'] || {}).length, 0,
+      'nenhum lote de PA pode nascer aqui');
+    // E nada de movimento falso de produção no Kardex.
+    const movPa = (d.movimentos_estoque || {})['HIG-NEXT-0001'] || {};
+    assert.equal(Object.keys(movPa).length, 0, 'nem movimento `producao_op` sem OP');
+
     assert.deepEqual(errors, [], 'erros na tela: ' + errors.join(' | '));
-    console.log('OK Endereçamento: trava quando passa do que está sem endereço; dentro do saldo continua gravando.');
+    console.log('OK Endereçamento: trava quando passa do que está sem endereço, recusa produto acabado, e dentro do saldo continua gravando.');
   } finally { await browser.close(); }
 })().catch((e) => { console.error(e); process.exit(1); });
