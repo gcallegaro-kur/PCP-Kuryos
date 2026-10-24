@@ -275,6 +275,7 @@ var allProdutos = {}, allMateriais = {}, allFormulas = {}, allBom = {}, allEspec
 var allAlocacoes = {}, allOps = {}, allPedidos = {}, configPlanejamento = {diasSemana:[1,2,3,4,5], feriados:{}};
 var produtoSelecionado = null; // {key, ...campos}
 var formulaEscolhida = null;   // registro de formulas/ escolhido (APROVADA de preferência)
+var emissaoBloqueadaMotivo = '';   // não vazio = produto sem Fórmula + BOM + Especificação aprovados (24/10/2026)
 var bomEscolhido = null;
 var pedidoVinculado = null; // {pedidoKey, pedido, aloc} -- aloc é opcional (só se houver bloco congelado casando). null = OP avulsa.
 var vinculoJaEscolhido = false; // true assim que alguma seleção (automática ou manual) acontece pro produto atual -- ver renderAlocacoesDoProduto
@@ -451,6 +452,8 @@ function selecionarProduto(key) {
   }
   formulaEscolhida = achado.registro;
   bomEscolhido = bomDaVersao(allBom, key, formulaEscolhida.versao) || { itens: {} };
+  emissaoBloqueadaMotivo = '';
+  document.getElementById('btnEmitir').disabled = false;
   if (!achado.temAprovada) {
     // Fórmula, BOM e Especificação têm aprovação própria agora (pedido do
     // usuário: "3 aprovações... as 3 aprovadas" definem a versão como
@@ -466,8 +469,18 @@ function selecionarProduto(key) {
     if ((bomEscolhido.status || 'RASCUNHO') !== 'APROVADA') faltando.push('BOM');
     if ((especEscolhida.status || 'RASCUNHO') !== 'APROVADA') faltando.push('Especificação');
     warnBox.style.display = 'block';
-    warnBox.textContent = '⚠️ Nenhuma versão com Fórmula + BOM + Especificação todas aprovadas pra este produto -- usando a versão mais recente (' + formulaEscolhida.versao + '), ainda falta aprovar: ' + faltando.join(', ') + '. Emitir mesmo assim é permitido, mas confira com os responsáveis antes de liberar o lote.';
+    // BLOQUEIO (24/10/2026, decisão do usuário: "vamos bloquear, pra ter que ajustar
+    // tudo na marra, senão nunca é ajustado"). Antes era só aviso. A tela continua
+    // mostrando o cálculo, para o PCP ver o que falta, mas não deixa emitir.
+    var quem = {'Fórmula': 'P&D e Qualidade', 'BOM': 'PCP e Comercial', 'Especificação': 'P&D e Qualidade'};
+    emissaoBloqueadaMotivo = 'Não dá para emitir: ' + p.sku + ' (versão ' + formulaEscolhida.versao + ') ainda não tem tudo aprovado. Falta aprovar — ' +
+      faltando.map(function(f) { return f + ' (' + quem[f] + ')'; }).join('; ') + '. Aprove em Cadastros › Fórmulas / BOM / Especificações e volte aqui.';
+    warnBox.className = 'alert alert-danger';
+    warnBox.style.display = 'block';
+    warnBox.textContent = '⛔ ' + emissaoBloqueadaMotivo;
+    document.getElementById('btnEmitir').disabled = true;
   } else {
+    warnBox.className = 'alert alert-warning';
     warnBox.style.display = 'none';
   }
 
@@ -1233,6 +1246,7 @@ function reservarLoteEEmitir(tentativasRestantes, janela) {
 
 /* ── Emissão ── */
 function emitirOP() {
+  if (emissaoBloqueadaMotivo) { showAlert(emissaoBloqueadaMotivo, 'danger'); return; }
   if (!produtoSelecionado || !calc || calc.pecasPrevistas <= 0) {
     showAlert('Preencha o dimensionamento do lote antes de emitir.', 'danger');
     return;
@@ -1355,7 +1369,7 @@ function emitirOP() {
   }).catch(function(err) {
     showAlert('Erro ao emitir OP: ' + err.message, 'danger');
   }).finally(function() {
-    document.getElementById('btnEmitir').disabled = false;
+    document.getElementById('btnEmitir').disabled = !!emissaoBloqueadaMotivo;
   });
 }
 

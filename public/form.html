@@ -3327,6 +3327,12 @@ function baixarEstoqueConsumo(op, qtdReal, tipoMovimentacao, ref) {
     vistosBom[it.mpCodigo] = 1; return true;
   });
   if (!calc.itens.length) return Promise.resolve();
+  // O material que a OP usou (Substituir na emissão) manda sobre o do BOM padrão:
+  // sem isto a baixa e a reserva caíam no código errado (ver substituicoesDaOp).
+  calc.itens = aplicarSubstituicoesOp(calc.itens, op, allMateriaisForm).filter(function(it) {
+    return !materialSemControleEstoque(it.mpCodigo, allMateriaisForm);
+  });
+  if (!calc.itens.length) return Promise.resolve();
   // Decisão do usuário (17/09): a matéria-prima do granel sai do estoque na
   // PESAGEM (manipulacao.html). Quando a OP tem essa fase com baixa aplicada,
   // o envase consome só a embalagem (BOM) -- senão a mesma MP sairia duas

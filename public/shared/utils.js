@@ -540,6 +540,45 @@ function opEstaAtiva(op) {
   return status !== 'Concluído' && status !== 'Cancelado' && status !== 'Aguardando Confirmação';
 }
 
+/* Substituições de material feitas na EMISSÃO da OP (24/10/2026).
+   "Substituir" (emitir_op.html) grava em ops/{lote}/materiaisConsumo o material
+   escolhido em mpCodigo e o ORIGINAL do BOM/fórmula em substituiMpCodigo. O
+   apontamento, porém, recalculava o consumo só pelo BOM padrão e baixava o
+   original: o saldo do frasco/sobretampa/caixa que a OP de fato usou nunca
+   descia (EP-00106 em -71.999 e o alternativo em positivo; a reserva ficava
+   presa no código errado). Devolve {codigoOriginal: codigoUsado}. */
+function substituicoesDaOp(op) {
+  var mapa = {};
+  Object.values((op && op.materiaisConsumo) || {}).forEach(function(i) {
+    if (i && i.substituiMpCodigo && i.mpCodigo && i.substituiMpCodigo !== i.mpCodigo) mapa[i.substituiMpCodigo] = i.mpCodigo;
+  });
+  return mapa;
+}
+
+/* Troca, nos itens de consumo calculados pelo BOM/fórmula, o material original
+   pelo que a OP guardou. A quantidade segue a do item original (a proporção é a
+   do BOM; só o material físico muda). Dois itens que caem no mesmo código se
+   somam. `materiais`: cadastro (por chave ou lista) para o nome atual. */
+function aplicarSubstituicoesOp(itens, op, materiais) {
+  var mapa = substituicoesDaOp(op);
+  if (!Object.keys(mapa).length) return itens;
+  function acharMaterial(codigo) {
+    var lista = materiais || {};
+    return lista[sanitizeKey(codigo)] || Object.values(lista).find(function(m) { return m && m.mpCodigo === codigo; }) || null;
+  }
+  var saida = [], indice = {};
+  (itens || []).forEach(function(it) {
+    var novo = mapa[it.mpCodigo];
+    var item = novo ? Object.assign({}, it, {mpCodigo: novo, mpNome: ((acharMaterial(novo) || {}).mpNome) || it.mpNome, substituiDe: it.mpCodigo}) : it;
+    var chave = (item.origem || '') + '|' + item.mpCodigo;
+    if (indice[chave] != null) {
+      var antes = saida[indice[chave]];
+      saida[indice[chave]] = Object.assign({}, antes, {quantidade: Math.round((antes.quantidade + item.quantidade) * 1000) / 1000});
+    } else { indice[chave] = saida.length; saida.push(item); }
+  });
+  return saida;
+}
+
 // A OP continua ALOCADA na linha/rotulagem até ser de fato encerrada (Concluído
 // ou Cancelado). 'Aguardando Confirmação' NÃO tira a OP do card: o status vira
 // sozinho ao bater 95% da meta (computeOpStatus), e a OP sumia do Painel de

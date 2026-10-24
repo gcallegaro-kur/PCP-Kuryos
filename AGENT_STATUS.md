@@ -3,6 +3,13 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Saneamento de cadastro/BOM: onda 0 (24/10/2026)
+
+- **Decisões do usuário:** aprovam PCP, P&D e Qualidade; padrão de nome especificado ao máximo; **emitir OP sem Fórmula+BOM+Especificação aprovadas passa a BLOQUEAR** ("pra ter que ajustar na marra"); OPs fecham por variante, sem misturar insumos; un/cx nunca muda por variante.
+- **Feito:** (1) apontamento (`baixarEstoqueConsumo`, form.html) baixa o material que a OP usou (`substituiMpCodigo`, via `aplicarSubstituicoesOp` em utils.js), com reserva e WMS no mesmo código — antes baixava sempre o BOM padrão (EP-00106 em -71.999); (2) emitir_op.html bloqueia emissão sem as 3 aprovações, dizendo o que falta e quem aprova.
+- **Testes:** run_substituicao_apontamento_test.js (roda a função real de form.html), run_emitir_op_bloqueio_ui_test.js.
+- **Falta (próximos):** nome genérico/duplicado barrado no cadastro de material; caixa derivada do un/cx do produto; relatório Excel da onda 1 (29 SKUs com OP em aberto + MRARBS); variantes homologadas no BOM (aprovação PCP+P&D+Qualidade) com checagem de rótulo (altura rotulável - 10 mm); apontamento/MRP por variante. Medido: 164 itens de BOM sem código, 127 produtos ativos sem BOM, 314 sem BOM aprovado, 99 sem un/cx, 14 grupos de nomes idênticos (101 códigos), BOM duplicado por caixa em 4 produtos. ET-00072 e EP-00203 já foram corrigidos (o bloco anterior ainda diz "aberto").
+
 ### Claude — Alterar titularidade do estoque (24/10/2026)
 
 - **Pedido:** mudar de quem é o material (Kuryos/cliente) depois do recebimento; só admin/diretoria.
