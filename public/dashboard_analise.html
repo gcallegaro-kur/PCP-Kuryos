@@ -645,6 +645,14 @@ function loadFirebaseAndRun() {
             RAW.producao.push({
               dt: dt,
               dt_fim: dtFim,
+              // Dia a que a produção PERTENCE: o dia do apontamento, que é a
+              // chave do nó registros/{data}. NÃO se deriva de `dt`, porque
+              // `dt` virou `periodoInicio` logo acima -- e turno aberto num
+              // dia e encerrado dias depois jogaria a produção toda para o
+              // dia de abertura. Regra do usuário (24/10): "por mais que uma
+              // OP atravesse vários dias, cada produção pertence ao dia que
+              // está sendo produzida", e o apontamento diário é a referência.
+              diaProd: date,
               h: h,
               u: u,
               uph: uph,
@@ -724,15 +732,36 @@ function _weekStart(d) {
 }
 // Helper: cria Date so se for valida, senao null
 const _safeDate = v => { if (!v) return null; const d = new Date(v); return isNaN(d.getTime()) ? null : d; };
+// YYYY-MM-DD do RELÓGIO LOCAL. `toISOString()` converte para UTC e, em UTC−3,
+// devolve o dia seguinte para qualquer hora a partir das 21h.
+const _ymdLocal = d => d ? d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') : null;
 
 function preprocessRawData() {
+/* Duas datas no mesmo registro, e misturá-las era a origem da divergência
+   entre este painel e o Dashboard Diário (medido em 23/10: 54.751 aqui x
+   60.450 lá, na janela 19–23/10, diferença de 5.699 un em 2 apontamentos):
+
+   - `_d` / `dt_fim`  = INSTANTE real (periodoInicio → periodoFim). Serve para
+     a distribuição por hora do dia (prodHourlyAlloc) e para o cálculo de u/h,
+     que precisam do relógio de verdade.
+   - `_ymd` / `_ym` / `_wk` = DIA A QUE A PRODUÇÃO PERTENCE, que é o dia do
+     apontamento (`diaProd`, a chave do nó registros/{data}).
+
+   Antes, `_ymd` saía de `dt` com `toISOString()`, e isso errava de dois jeitos
+   ao mesmo tempo: (1) `dt` é o início do turno, então um turno aberto em 16/10
+   e encerrado em 19/10 contava a produção toda em 16/10; (2) `toISOString()`
+   converte para UTC, e em UTC−3 todo apontamento das 21h em diante pulava para
+   o dia seguinte (10 registros na base, 26.691 un).
+   `diaProd` é string e entra sem passar por Date: não há fuso para errar. */
 RAW.producao.forEach(p => {
   p._d = _safeDate(p.dt);
-  p._ymd = p._d ? p._d.toISOString().slice(0,10) : null;
-  p._ym = p._d ? p._d.getFullYear() + '-' + String(p._d.getMonth()+1).padStart(2,'0') : null;
-  p._wk = p._d ? _weekStart(p._d) : null;
+  p._ymd = p.diaProd || (p._d ? _ymdLocal(p._d) : null);
+  // Meio-dia local para derivar mês/semana: ±3h de fuso não muda o dia.
+  const _dDia = p._ymd ? _safeDate(p._ymd + 'T12:00:00') : null;
+  p._ym = _dDia ? _dDia.getFullYear() + '-' + String(_dDia.getMonth()+1).padStart(2,'0') : null;
+  p._wk = _dDia ? _weekStart(_dDia) : null;
   // alloc: array de {dia, u, h, frac} - pre-calculado no Python por horas uteis.
-  // Fallback: se nao houver alloc, cria alocacao trivial no dia de inicio.
+  // Fallback: se nao houver alloc, cria alocacao trivial no dia da producao.
   if (!p.alloc || !p.alloc.length) {
     p.alloc = p._ymd ? [{dia: p._ymd, u: p.u, h: p.h, frac: 1}] : [];
   }

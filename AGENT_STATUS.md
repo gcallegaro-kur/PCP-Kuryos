@@ -67,6 +67,51 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Depois (21/10):** aba Acompanhar pedido no Comercial; lixeira some em pedido comercial no PCP; Reabrir saldo + Encerrar em linha Concluída com produzido < pedido (encerramento-pedido.js: saldoReabrivel, montarReaberturaSaldo; filtro "Concluídos com saldo (decidir)"; entram em "Pedem ação").
 - **Não feito de propósito (decisão do PCP/Comercial):** reabrir ou encerrar as 106 linhas históricas, e
   corrigir os totais de 0011/26/05/0020 — não sei qual lado está certo. Orçamento→pedido sem vínculo segue.
+
+### Claude — Dashboard Geral: produção pertence ao dia do apontamento (24/10/2026)
+
+- **Pedido:** o usuário somou o produzido dia a dia no Dashboard Diário
+  (19–23/10) e deu **60.450**; o mesmo filtro no Dashboard Geral deu
+  **54.751**. Diferença de **5.699 un**, em exatamente 2 apontamentos.
+- **Causa:** as duas telas datavam o MESMO registro por coisas diferentes. O
+  Diário usa o dia do apontamento (chave do nó `registros/{data}`); o Geral
+  montava `_ymd` a partir de `dt`, e `dt` passa a ser `periodoInicio` quando
+  o registro tem `horasTrabalhadas`. Turno aberto 16/10 e encerrado 19/10
+  fazia o Geral contar tudo em 16/10 — fora da janela pedida.
+- **Segundo defeito no mesmo lugar:** `_ymd` saía de `toISOString()`, que
+  converte para UTC. Em UTC−3, apontamento das 21h em diante pulava para o
+  dia seguinte (10 registros na base, 26.691 un).
+- **Terceiro:** o Geral discordava de si mesmo — o filtro de período usava
+  `_ymd` (início do turno) e os gráficos de evolução usavam `alloc[].dia`
+  (dia do nó). KPI e barras da mesma tela, datas diferentes.
+- **Regra definida pelo usuário (24/10):** "por mais que uma OP atravesse
+  vários dias, cada produção pertence ao dia que está sendo produzida", e o
+  apontamento diário é a referência.
+- **Feito:** registro carrega `diaProd` = a chave do nó; `_ymd`/`_ym`/`_wk` e
+  o fallback do `alloc` saem dele, sem passar por `Date` (não há fuso para
+  errar). `_d`/`dt_fim`/`h` continuam sendo o instante real, porque
+  `prodHourlyAlloc` (visão por hora do dia) e o u/h dependem do relógio.
+  Helper novo `_ymdLocal`. Nenhum `toISOString` sobrou no bloco de produção.
+- **Conferido contra a base:** 19–23/10 passou a dar **60.450 = 60.450**, e
+  outubro inteiro **164.082 nos dois** — consertar a semana não quebrou o mês.
+- **Testes:** `run_dashboard_geral_dia_test.js` (26 verificações, roda o
+  código real via `vm`, **fixa `TZ=America/Sao_Paulo`** senão em UTC o bug não
+  aparece e o teste passa à toa). Conferido que falha se a regra voltar atrás.
+- **Fica em aberto, não é bug de tela:** 28 "turnos" com mais de 24h, até
+  **94h**, somando 93.288 un. São turnos abertos e encerrados dias depois.
+  Estragam data, u/h e rendimento ao mesmo tempo; o certo é barrar ou
+  sinalizar no fechamento. Combinado com o usuário como próximo passo.
+- **Divergência adormecida:** as duas telas classificam setor por nós de
+  config DIFERENTES — Diário lê `cfg.linhas`/`cfg.postosTrabalho` e cai no
+  fallback `startsWith('linha')`; Geral lê `cfg.rotulagem`/`cfg.postos`. Hoje
+  dão o mesmo resultado (0 divergências medidas na janela), mas um recurso
+  chamado p.ex. "Rotuladora 01" seria excluído pelo Diário e contado como
+  envase pelo Geral. Não mexi: unificar muda totais históricos e é decisão do
+  usuário.
+- **NÃO PUBLIQUEI.** `git status` mostra trabalho do Codex sem commit em
+  `public/` (auth_check.js, estoque.html, shared/expedicao*.js, pesagens.html,
+  shared/pesagens-dia.js). `firebase deploy --only hosting` manda o disco, não
+  o commit — publicaria isso junto. Commitado e aguardando a pasta limpar.
 - **Arquivos ativos:** nenhum.
 
 ### Claude — Kardex: relatório de entradas de todos os itens (20/10/2026)
