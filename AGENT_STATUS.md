@@ -3,6 +3,12 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Saneamento onda 0 (cont.): padrão de nome e caixa pelo un/cx (24/10/2026)
+
+- **Feito:** `shared/nome-material.js` — salvar material em Cadastros bloqueia nome genérico/curto, embalagem sem medida (precisa de número) e nome repetido (sem acento/caixa) entre embalagens; material INATIVO fica de fora. BOM: a caixa de embarque (material ET) usa SEMPRE o un/cx do produto (campo travado, qtd = 1 ÷ un/cx); produto sem un/cx → não grava a caixa e manda cadastrar.
+- **Testes:** run_nome_material_test.js, run_bom_caixa_uncx_ui_test.js.
+- **Atenção:** BOMs já gravados com N diferente do un/cx só se corrigem ao reabrir/salvar a caixa; o relatório da onda 1 lista essas divergências.
+
 ### Claude — Saneamento de cadastro/BOM: onda 0 (24/10/2026)
 
 - **Decisões do usuário:** aprovam PCP, P&D e Qualidade; padrão de nome especificado ao máximo; **emitir OP sem Fórmula+BOM+Especificação aprovadas passa a BLOQUEAR** ("pra ter que ajustar na marra"); OPs fecham por variante, sem misturar insumos; un/cx nunca muda por variante.

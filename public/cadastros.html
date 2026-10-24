@@ -14,6 +14,7 @@
   <script src="shared/itens-cadastro.js"></script>
   <script src="shared/pendencias-produto.js"></script>
   <script src="shared/exportar-cadastros.js"></script>
+  <script src="shared/nome-material.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -2351,6 +2352,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var nome = document.getElementById('fNome-mat').value.trim();
     if (!nome) { showAlert('Nome / descrição é obrigatório.', 'danger'); return; }
     var tipo = document.getElementById('fTipo').value;
+    // Padrão de nome (24/10/2026): ver shared/nome-material.js. Material INATIVO fica de fora
+    // (os 3 "INATIVO" legados não precisam de nome novo para continuar inativos).
+    if (document.getElementById('fAtivo-mat').checked) {
+      var vNome = NomeMaterial.validar(nome, tipo, editingKey ? (allMateriais[editingKey] || {}).mpCodigo || editingKey : null, allMateriais);
+      if (!vNome.ok) { showAlert('Nome do material: ' + vNome.erros.join(' '), 'danger'); return; }
+    }
 
     var unidadeCompraVal = document.getElementById('fUnidadeCompra-mat').value;
     var fatorConvVal = document.getElementById('fFatorConversao-mat').value;
@@ -5205,9 +5212,14 @@ document.addEventListener('DOMContentLoaded', function() {
           // "1 a cada N peças" (01/10): a caixa de 48 deixa de ser 0,020833.
           // Preenchido a partir da fração antiga quando ela é 1/N redondo.
           (function() {
-            var n = pecasPorUnidadeBom(it);
-            return '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (n ? '' : (it.qtdPorPeca != null ? it.qtdPorPeca : '')) + '"' + (n ? ' placeholder="—"' : '') + ' aria-label="Quantidade por peça">' +
-              '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)">ou 1 a cada <input type="number" class="b-pecas" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" style="width:72px" value="' + (n || '') + '" aria-label="Peças por unidade"> peças</div></td>';
+            // Caixa de embarque (24/10/2026, decisão do usuário: "a unidade por caixa nunca muda, mesmo
+            // variando os frascos; se mudar, muda no cadastro"): o "1 a cada N" vem SEMPRE do un/cx do
+            // PRODUTO e não se digita aqui -- um campo a menos para errar.
+            var caixa = caixaDoProdutoNoBom(it);
+            var n = caixa.travada ? caixa.unCx : pecasPorUnidadeBom(it);
+            var trava = caixa.travada ? ' readonly title="Vem do un/cx do produto (Cadastros > Produtos). Para mudar, altere lá."' : '';
+            return '<td><input type="number" class="b-qtd" data-item="' + escapeAttr(itemKey) + '" min="0" step="any" value="' + (n ? '' : (it.qtdPorPeca != null ? it.qtdPorPeca : '')) + '"' + (n ? ' placeholder="—"' : '') + trava + ' aria-label="Quantidade por peça">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:var(--muted)">ou 1 a cada <input type="number" class="b-pecas" data-item="' + escapeAttr(itemKey) + '" min="1" step="1" style="width:72px" value="' + (n || '') + '"' + trava + ' aria-label="Peças por unidade"> peças' + (caixa.travada ? ' <span title="un/cx do produto">🔒 un/cx do produto</span>' : '') + (caixa.semUnCx ? ' <b style="color:var(--danger)">cadastre o un/cx do produto</b>' : '') + '</div></td>';
           })() +
           '<td><button class="btn btn-danger-ghost btn-sm b-remove" data-item="' + escapeAttr(itemKey) + '" title="Remover item" aria-label="Remover item">×</button></td></tr>';
       }).join('');
@@ -5245,6 +5257,13 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
   }
+  // Caixa de embarque do BOM: {travada: tem un/cx no produto, unCx, semUnCx: é caixa mas o produto não tem un/cx}.
+  function caixaDoProdutoNoBom(it) {
+    var mat = findMaterialByCodigo(it && it.materialCodigo);
+    if (!mat || mat.tipo !== 'ET') return {travada: false, unCx: null, semUnCx: false};
+    var un = parseInt((allProdutos[produtoSelecionadoKey] || {}).unCx, 10);
+    return un > 0 ? {travada: true, unCx: un, semUnCx: false} : {travada: false, unCx: null, semUnCx: true};
+  }
   function salvarItemBom(key, itemKey) {
     var row = document.querySelector('#bomBody-form tr[data-item="' + CSS.escape(itemKey) + '"]');
     if (!row) return;
@@ -5261,6 +5280,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // "1 a cada N peças": N inteiro grava pecasPorUnidade e qtdPorPeca = 1/N
     // (6 casas) para quem ainda lê só qtdPorPeca.
     var nPecas = parseInt((row.querySelector('.b-pecas') || {}).value, 10);
+    var caixaSalvar = caixaDoProdutoNoBom({materialCodigo: materialCodigo});
+    if (caixaSalvar.semUnCx) {
+      showAlert('Esta é uma caixa de embarque e o produto ainda não tem "unidades por caixa" (un/cx). Cadastre em Cadastros > Produtos antes: a quantidade da caixa no BOM é sempre 1 ÷ un/cx.', 'danger');
+      renderBomTab(key);
+      return;
+    }
+    if (caixaSalvar.travada) nPecas = caixaSalvar.unCx;
     if (nPecas > 0) {
       data.pecasPorUnidade = nPecas;
       data.qtdPorPeca = Math.round(1e6 / nPecas) / 1e6;
