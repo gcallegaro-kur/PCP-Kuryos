@@ -17,6 +17,7 @@
   <script src="shared/retrabalhos-gestao.js"></script>
   <script src="shared/retrabalhos-tela.js"></script>
   <script src="shared/utils.js"></script>
+  <script src="shared/horas-turno.js"></script>
   <script src="shared/manipulacao.js"></script>
   <script src="shared/checklists.js"></script>
   <script src="shared/liberacao-linha.js"></script>
@@ -2509,9 +2510,55 @@ function fmtDataHora(iso) {
 // Hoje só existem turnos dentro do mesmo dia (6h-14h / 14h-22h) -- sem
 // virada de meia-noite, então a duração é sempre um diff simples. Se um dia
 // existir turno que atravessa a meia-noite, ajusta aqui.
+/* Tempo DECORRIDO. "A OP está aberta há 73h" é verdade e serve para a tela.
+   Não serve para `horasTrabalhadas` -- ver horasTrabalhadasPeriodo abaixo. */
 function horasDesde(isoInicio) {
   var ms = Date.now() - new Date(isoInicio).getTime();
   return Math.max(ms / 3600000, 0);
+}
+
+/* Tempo TRABALHADO. Era aqui que estava o erro: os três lugares que gravam
+   `horasTrabalhadas` usavam o decorrido. Turno aberto na segunda e fechado na
+   quinta gravava 73h de trabalho, e o tempo parado entrava como produzido --
+   estragando un/h e rendimento. Medido em 24/10/2026: 526 registros com
+   período somavam 5.457h gravadas contra 2.733h pela janela do turno, com
+   casos de 94h.
+
+   A conta vive em shared/horas-turno.js (pura, testada em
+   run_horas_turno_test.js): por dia civil, a interseção com a janela do turno
+   menos a pausa, e nunca mais que o teto do dia; dia trabalhado fora do turno
+   (sábado, madrugada) conta o tempo real limitado ao turno, em vez de zerar.
+
+   CUIDADO AO LER O NÚMERO: num período que atravessa dias parados, a conta
+   assume turno cheio nos dias do meio. É muito menos errado que o decorrido,
+   mas continua sendo estimativa -- por isso o registro sai marcado com
+   `horasEstimadas` quando o período atravessa mais de um dia. */
+function cfgTurnoAtual() {
+  return {
+    modoOperacaoTurno: configModoOperacaoTurno, turnoFixoNome: configTurnoFixoNome,
+    turnos: configTurnos, turnoHorarios: configTurnoHorarios,
+    turnoHorariosFim: configTurnoHorariosFim, turnoHorariosFimSexta: configTurnoHorariosFimSexta,
+    turnoPausas: configTurnoPausas
+  };
+}
+function horasTrabalhadasPeriodo(inicioISO, fimISO) {
+  if (typeof HorasTurno === 'undefined') return Math.max((new Date(fimISO) - new Date(inicioISO)) / 3600000, 0);
+  return HorasTurno.horasUteis(inicioISO, fimISO, cfgTurnoAtual(), guessShift());
+}
+/* Confere o período antes de gravar. Devolve true para seguir.
+   Período que atravessa dias não é barrado: às vezes a produção mesmo
+   atravessou. Mas o operador vê o que vai ser gravado, dia por dia, e pode
+   cancelar -- é a diferença entre uma estimativa declarada e uma silenciosa. */
+function confirmarPeriodoTrabalhado(inicioISO, fimISO) {
+  if (typeof HorasTurno === 'undefined') return true;
+  var r = HorasTurno.conferir(inicioISO, fimISO, cfgTurnoAtual(), guessShift(), configToleranciaEncerramentoMin);
+  if (r.ok) return true;
+  var det = r.dias.map(function(d) {
+    return '  ' + d.dia.split('-').reverse().join('/') + ': ' + d.horas + 'h' + (d.foraDoTurno ? ' (fora do turno)' : '');
+  }).join('\n');
+  return confirm('Confira o período antes de gravar:\n\n' + r.avisos.join('\n') +
+    '\n\nHoras que serão gravadas (' + r.horas + 'h no total):\n' + det +
+    '\n\nGravar assim?');
 }
 
 // ── Abrir OP ─────────────────────────────────────────────────────────
@@ -2609,7 +2656,10 @@ function updateRitmoHint() {
     hintEl.textContent = '⚠️ Quantidade digitada é menor que o já registrado (' + fmtNum(apontado) + ' un.) — confira antes de salvar.';
     return;
   }
-  var horas = horasDesde(op.abertaDesde);
+  // Ritmo é un/h TRABALHADA. Com o decorrido, uma OP aberta há 73h mostrava
+  // "em 73h · 43 un/h" aqui e o registro gravava 9h e ~350 un/h -- a tela
+  // discordando do que ela mesma ia salvar.
+  var horas = horasTrabalhadasPeriodo(op.abertaDesde, new Date().toISOString());
   if (!horas) {
     hintEl.className = 'form-hint prog';
     hintEl.textContent = 'Produzido neste período: ' + fmtNum(delta) + ' un.';
@@ -3872,34 +3922,6 @@ function retroPausaDoTurno() {
   return (turno && configTurnoPausas[turno]) || null;
 }
 
-// Duração útil em minutos entre dois instantes (podem ser dias diferentes),
-// descontando a pausa do turno em cada dia civil coberto pelo intervalo --
-// só a parte da pausa que efetivamente cai dentro do intervalo é descontada,
-// pra lidar direito com início/fim que caem no meio de uma pausa.
-function duracaoUtilMinutos(dataIniStr, horaIni, dataFimStr, horaFim, pausa) {
-  if (!dataIniStr || !horaIni || !dataFimStr || !horaFim) return 0;
-  var iniTs = new Date(dataIniStr + 'T00:00:00').getTime() + toMinDia(horaIni) * 60000;
-  var fimTs = new Date(dataFimStr + 'T00:00:00').getTime() + toMinDia(horaFim) * 60000;
-  if (fimTs <= iniTs) return 0;
-  var totalMin = (fimTs - iniTs) / 60000;
-  if (!pausa || !pausa.inicio || !pausa.fim) return totalMin;
-  var pausaIniMin = toMinDia(pausa.inicio), pausaFimMin = toMinDia(pausa.fim);
-  if (pausaFimMin <= pausaIniMin) return totalMin;
-  var dIni = new Date(dataIniStr + 'T00:00:00').getTime();
-  var dFim = new Date(dataFimStr + 'T00:00:00').getTime();
-  var dias = Math.round((dFim - dIni) / 86400000) + 1;
-  var descontado = 0;
-  for (var i = 0; i < dias; i++) {
-    var diaTs = dIni + i * 86400000;
-    var pausaIniAbs = diaTs + pausaIniMin * 60000;
-    var pausaFimAbs = diaTs + pausaFimMin * 60000;
-    var overlapIni = Math.max(iniTs, pausaIniAbs);
-    var overlapFim = Math.min(fimTs, pausaFimAbs);
-    if (overlapFim > overlapIni) descontado += (overlapFim - overlapIni) / 60000;
-  }
-  return Math.max(0, totalMin - descontado);
-}
-
 // Achado da auditoria ("apareceram 6 diferentes registros pra 1 turno
 // lançado"): isto gerava um registro por HORA cheia de envase, resquício do
 // modelo antigo de grade horária -- não é como o resto do sistema hoje
@@ -3911,50 +3933,39 @@ function duracaoUtilMinutos(dataIniStr, horaIni, dataFimStr, horaFim, pausa) {
 // cada um com o horário real de início/fim daquele dia (periodoInicio/
 // periodoFim -- shared/utils.js#fmtRegistroRange já sabe mostrar isso na
 // coluna Hora do Histórico, sem precisar mexer lá) e horas úteis reais
-// (pausa do turno descontada, mesma conta de duracaoUtilMinutos, só que
-// por dia em vez de period inteiro) -- é esse horasUteis que vira
-// horasTrabalhadas no registro, e é o que alimenta o motor de ritmo
-// demonstrado com uma amostra de verdade, em vez de fragmentos de 1h cada.
+// (janela do turno e pausa descontadas por dia, em shared/horas-turno.js)
+// -- é esse horasUteis que vira horasTrabalhadas no registro, e é o que
+// alimenta o motor de ritmo com uma amostra de verdade, em vez de
+// fragmentos de 1h cada.
+/* Antes esta função recortava pelo DIA CIVIL (00:00→24:00) e só descontava a
+   pausa. Nos dias do MEIO de um período longo isso dava 23h de trabalho por
+   dia -- o lote 26184/05 ficou com 179 un em 23h, 18 dias seguidos, 7,8 un/h.
+   A conta passou para shared/horas-turno.js, que recorta pela JANELA DO TURNO
+   e nunca devolve mais que o teto do dia. Uma regra só, no mesmo lugar que os
+   três caminhos de fechamento usam. */
 function buildDiaPeriodsMultiDia(dataIniStr, horaIni, dataFimStr, horaFim, pausa) {
   if (!dataIniStr || !horaIni || !dataFimStr || !horaFim) return [];
-  var iniTs = new Date(dataIniStr + 'T00:00:00').getTime() + toMinDia(horaIni) * 60000;
-  var fimTs = new Date(dataFimStr + 'T00:00:00').getTime() + toMinDia(horaFim) * 60000;
-  if (fimTs <= iniTs) return [];
-  var pausaIniMin = (pausa && pausa.inicio) ? toMinDia(pausa.inicio) : null;
-  var pausaFimMin = (pausa && pausa.fim) ? toMinDia(pausa.fim) : null;
-  var dIniDia = new Date(dataIniStr + 'T00:00:00').getTime();
-  var dFimDia = new Date(dataFimStr + 'T00:00:00').getTime();
-  var nDias = Math.round((dFimDia - dIniDia) / 86400000) + 1;
-  var out = [];
-  for (var i = 0; i < nDias; i++) {
-    var diaTs = dIniDia + i * 86400000;
-    var segIni = Math.max(iniTs, diaTs);
-    var segFim = Math.min(fimTs, diaTs + 86400000);
-    if (segFim <= segIni) continue;
-    var totalMin = (segFim - segIni) / 60000;
-    var descontado = 0;
-    if (pausaIniMin != null && pausaFimMin != null && pausaFimMin > pausaIniMin) {
-      var pausaIniAbs = diaTs + pausaIniMin * 60000;
-      var pausaFimAbs = diaTs + pausaFimMin * 60000;
-      var overlapIni = Math.max(segIni, pausaIniAbs);
-      var overlapFim = Math.min(segFim, pausaFimAbs);
-      if (overlapFim > overlapIni) descontado = (overlapFim - overlapIni) / 60000;
-    }
-    var d = new Date(diaTs);
-    out.push({
-      data: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()),
-      periodoInicioISO: new Date(segIni).toISOString(),
-      periodoFimISO: new Date(segFim).toISOString(),
-      // "hora" fica arredondada pra hora cheia (não o minuto exato do
-      // período, que já está em periodoInicioISO) -- é só uma chave de
-      // casamento com os blocos horários da Grade Semanal
-      // (planejamento.html#buildBlockHTML), nunca a fonte de verdade do
-      // horário exibido (isso é sempre periodoInicio/periodoFim).
-      horaInicioFmt: pad(new Date(segIni).getHours()) + ':00',
-      horasUteis: Math.max(0, (totalMin - descontado) / 60)
+  var iniIso = new Date(new Date(dataIniStr + 'T00:00:00').getTime() + toMinDia(horaIni) * 60000).toISOString();
+  var fimIso = new Date(new Date(dataFimStr + 'T00:00:00').getTime() + toMinDia(horaFim) * 60000).toISOString();
+  if (typeof HorasTurno === 'undefined') return [];
+  // A pausa escolhida na tela do retroativo manda sobre a da config.
+  var cfg = cfgTurnoAtual();
+  if (pausa && pausa.inicio && pausa.fim) cfg = Object.assign({}, cfg, {pausa: pausa, turnoPausas: null});
+  return HorasTurno.diasDoPeriodo(iniIso, fimIso, cfg, document.getElementById('rTurno') ? document.getElementById('rTurno').value : null)
+    .map(function(d) {
+      return {
+        data: d.dia,
+        periodoInicioISO: d.inicioIso,
+        periodoFimISO: d.fimIso,
+        // "hora" arredondada pra hora cheia (não o minuto exato, que já está
+        // em periodoInicioISO) -- é só chave de casamento com os blocos da
+        // Grade Semanal (planejamento.html#buildBlockHTML), nunca a fonte de
+        // verdade do horário exibido.
+        horaInicioFmt: pad(new Date(d.inicioIso).getHours()) + ':00',
+        horasUteis: d.horas,
+        foraDoTurno: d.foraDoTurno
+      };
     });
-  }
-  return out;
 }
 
 function fmtHorasMin(min) {
@@ -3969,9 +3980,14 @@ function calcRetroMultiDia() {
   var envaseIniData = document.getElementById('rDataEnvaseIni').value, envaseIniHora = document.getElementById('rHoraEnvaseIni').value;
   var envaseFimData = document.getElementById('rDataEnvaseFim').value, envaseFimHora = document.getElementById('rHoraEnvaseFim').value;
 
-  var setupMin = duracaoUtilMinutos(setupIniData, setupIniHora, setupFimData, setupFimHora, pausa);
-  var envaseMin = duracaoUtilMinutos(envaseIniData, envaseIniHora, envaseFimData, envaseFimHora, pausa);
   var envaseDias = buildDiaPeriodsMultiDia(envaseIniData, envaseIniHora, envaseFimData, envaseFimHora, pausa);
+  /* `envaseMin` é a SOMA DOS DIAS, não uma segunda conta sobre o mesmo
+     período: é ela que mostra o un/h ao operador (updateRetroCalc), e um un/h
+     na tela diferente do que vai para o registro seria pior que não mostrar.
+     `duracaoUtilMinutos` não recorta pela janela do turno, por isso saiu daqui. */
+  var envaseMin = envaseDias.reduce(function(s, d) { return s + d.horasUteis * 60; }, 0);
+  var setupDias = buildDiaPeriodsMultiDia(setupIniData, setupIniHora, setupFimData, setupFimHora, pausa);
+  var setupMin = setupDias.reduce(function(s, d) { return s + d.horasUteis * 60; }, 0);
 
   if (!envaseDias.length) return null;
   return {
@@ -4607,10 +4623,15 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
   };
   Object.assign(registro, assinaturaApontamento());
   if (periodoInicioCalc && periodoInicioCalc < agora) {
+    if (!confirmarPeriodoTrabalhado(periodoInicioCalc, agora)) { btn.disabled = false; btn.textContent = '🏁 Finalizar OP'; return; }
     registro.periodoInicio = periodoInicioCalc;
     registro.periodoFim = agora;
-    var horasCalc = (new Date(agora).getTime() - new Date(periodoInicioCalc).getTime()) / 3600000;
+    // Horas da janela do turno, não o decorrido entre os apontamentos.
+    var horasCalc = horasTrabalhadasPeriodo(periodoInicioCalc, agora);
     if (horasCalc > 0) registro.horasTrabalhadas = Math.round(horasCalc * 100) / 100;
+    if (typeof HorasTurno !== 'undefined' && HorasTurno.atravessaDias(periodoInicioCalc, agora, cfgTurnoAtual(), guessShift())) {
+      registro.horasEstimadas = true;
+    }
   }
   if (hasDeviation && justificativa) {
     registro.justificativaDivergencia = justificativa;
@@ -4684,7 +4705,9 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
   var opAntesTotal = op;
   var inicioISO = op.abertaDesde;
   var fimISO    = new Date().toISOString();
-  var horas    = horasDesde(inicioISO);
+  // Horas TRABALHADAS (janela do turno), não o decorrido: é este número que
+  // vai para o registro e que divide o un/h logo abaixo.
+  var horas    = horasTrabalhadasPeriodo(inicioISO, new Date().toISOString());
 
   if (!operador) { reenable(); alert('Informe o operador.'); return; }
   if (!qtdTotal) { reenable(); alert('Informe a quantidade total produzida na OP.'); return; }
@@ -5396,7 +5419,8 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
   var produto = op.produto || '';
   var inicioISO = op[campoInicio];
   var fimISO = new Date().toISOString();
-  var horas = horasDesde(inicioISO);
+  // Trabalhado pela janela do turno, não decorrido -- ver horasTrabalhadasPeriodo.
+  var horas = horasTrabalhadasPeriodo(inicioISO, fimISO);
   var apontado = getProduzido(op, tipo);
   var delta = Math.max((qtdTotal || 0) - apontado, 0);
   var ritmo = horas > 0 ? Math.round(delta / horas) : 0;

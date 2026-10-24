@@ -3,6 +3,53 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — horasTrabalhadas não pode ser relógio cru (24/10/2026)
+
+- **Problema:** `fechamento_op` e `apontamento_total` gravam
+  `horasTrabalhadas = (agora − periodoInicio)/3600000` — relógio cru. Se
+  ninguém apontou por 3 dias, grava 73h de trabalho. Medido: 207 registros
+  sujos (jul–out/2026), pior caso 94h, 4.529h gravadas contra ~1.200h
+  possíveis. Dividir por dia civil NÃO resolve (4.529h → 4.414h): a grandeza
+  está errada, não a distribuição.
+- **Teto real:** turno único fixo 07:00–17:00 (16:00 sexta), pausa 12:00–13:00
+  → 9h úteis, 8h na sexta.
+- **Cuidado medido:** NÃO recortar cegamente na janela — há produção fora dela
+  (16 registros de sábado, 12 de domingo, apontamentos de 00:00 a 23:00).
+  Recorte cego apagaria produção real e zeraria o divisor do rateio.
+- **Feito:** `shared/horas-turno.js` (puro) com a regra: por dia civil, a
+  interseção com a janela do turno menos a pausa, nunca mais que o teto do
+  dia; dia trabalhado fora do turno conta o tempo real limitado ao turno em
+  vez de zerar (há 28 registros reais de fim de semana). Período acima de 60
+  dias é recusado em vez de truncado em silêncio — `new Date(null)` é 1970 e
+  passava por data válida, devolvendo 3.537h; o teste pegou.
+- **Fiação (4 pontos, não 3):** os três que gravam `horasTrabalhadas` mais o
+  hint de ritmo do Modo Avançado, que calculava un/h com o decorrido — a tela
+  mostrava "em 73h · 43 un/h" e o registro salvaria 9h e ~350 un/h.
+  `horasDesde` fica, só para exibir tempo DECORRIDO ("a OP está aberta há
+  73h" é verdade). `envaseMin` do retroativo passou a ser a soma dos dias,
+  senão o un/h da tela discordaria do registro. `duracaoUtilMinutos` removida
+  (não recortava pela janela e ficou sem uso). `buildDiaPeriodsMultiDia`
+  delega ao módulo — era ela que dava 23h aos dias do meio.
+- **Aviso, não trava:** período multi-dia ou fora do turno abre um `confirm()`
+  com o detalhe dia a dia antes de gravar, e o registro sai marcado
+  `horasEstimadas: true`. Não barra porque às vezes a produção atravessou
+  mesmo; o que não pode é gravar estimativa em silêncio.
+- **Ensaio na base:** 526 registros com período somavam 5.457h gravadas e
+  passam a 2.733h (50%), zero dias acima do teto. **Limite honesto:** em
+  período que atravessa dias parados a conta assume turno cheio nos dias do
+  meio — lote 26258/04 fica com 120 un em 34,5h. Menos errado que o
+  decorrido, mas ainda estimativa. Medir de verdade exige o operador declarar
+  os dias trabalhados; é o próximo passo se o usuário quiser.
+- **Testes:** `run_horas_turno_test.js` (55 verificações, TZ fixo em
+  America/Sao_Paulo, inclui asserções de fonte que travam a fiação).
+  Conferido que falha se o decorrido voltar.
+- **Pendente de decisão do usuário:** os 207 registros históricos — marcar a
+  hora como não confiável (recomendado) ou gravar a estimativa recortada.
+- **Achado de passagem, NÃO é meu:** `run_apontamento_encerramento_test.js`
+  já falhava antes desta mudança (`aplicarSubstituicoesOp is not defined` no
+  contexto `vm` do teste). Conferido trocando o `form.html` pelo de HEAD.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Saneamento onda 0 (cont.): padrão de nome e caixa pelo un/cx (24/10/2026)
 
 - **Feito:** `shared/nome-material.js` — salvar material em Cadastros bloqueia nome genérico/curto, embalagem sem medida (precisa de número) e nome repetido (sem acento/caixa) entre embalagens; material INATIVO fica de fora. BOM: a caixa de embarque (material ET) usa SEMPRE o un/cx do produto (campo travado, qtd = 1 ÷ un/cx); produto sem un/cx → não grava a caixa e manda cadastrar.
