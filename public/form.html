@@ -4707,11 +4707,12 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
   var fimISO    = new Date().toISOString();
   // Horas TRABALHADAS (janela do turno), não o decorrido: é este número que
   // vai para o registro e que divide o un/h logo abaixo.
-  var horas    = horasTrabalhadasPeriodo(inicioISO, new Date().toISOString());
+  var horas    = horasTrabalhadasPeriodo(inicioISO, fimISO);
 
   if (!operador) { reenable(); alert('Informe o operador.'); return; }
   if (!qtdTotal) { reenable(); alert('Informe a quantidade total produzida na OP.'); return; }
   if (!horas) { reenable(); alert('Período de duração zero — aguarde um pouco antes de encerrar.'); return; }
+  if (!confirmarPeriodoTrabalhado(inicioISO, fimISO)) { reenable(); return; }
   var qtdEsperada = parseInt(op.qtdPlanejada || 0) || 0;
   var temDesvio = qtdEsperada > 0 && qtdTotal !== qtdEsperada;
   if (temDesvio && !obs) {
@@ -4744,6 +4745,10 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
     timestamp: fimISO,
     tipo: 'fechamento_op',
     horasTrabalhadas: Math.round(horas * 100) / 100,
+    // Período que atravessa dias: a hora é derivada da janela do turno, e a
+    // conta assume turno cheio nos dias do meio. Marcar é o que permite ao
+    // relatório tratar isso como estimativa em vez de medição.
+    horasEstimadas: typeof HorasTurno !== 'undefined' && HorasTurno.atravessaDias(inicioISO, fimISO, cfgTurnoAtual(), guessShift()),
     periodoInicio: inicioISO,
     periodoFim: fimISO,
     qtdTotalOP: qtdTotal,
@@ -5433,6 +5438,8 @@ function fecharAlocacaoOP(lote, qtdTotal, operador, opts) {
     quantidade: delta, operador: operador, turno: guessShift(),
     timestamp: fimISO, tipo: tipoEvento,
     horasTrabalhadas: Math.round(horas * 100) / 100,
+    // Ver a nota no outro fechamento: multi-dia significa hora derivada.
+    horasEstimadas: typeof HorasTurno !== 'undefined' && HorasTurno.atravessaDias(inicioISO, fimISO, cfgTurnoAtual(), guessShift()),
     periodoInicio: inicioISO, periodoFim: fimISO, qtdTotalOP: qtdTotal
   };
   Object.assign(registro, assinaturaApontamento());
@@ -5591,6 +5598,12 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
   // não sabia se o clique registrou e podia tocar de novo. Mesmo padrão de
   // texto de "Finalizar OP" (opForm).
   var textoOriginal = btn.textContent;
+  /* Confere o período AQUI, não dentro de fecharAlocacaoOP: aquela função
+     também é chamada em laço no encerramento em lote, e um confirm() por item
+     viraria uma fila de diálogos. Aqui é ação única do operador. */
+  var _opConf = findOpByLote(encerrarOpAlvoAtual.lote);
+  var _iniConf = _opConf && _opConf[campoAberturaInicio(encerrarOpAlvoAtual.tipo)];
+  if (_iniConf && !confirmarPeriodoTrabalhado(_iniConf, new Date().toISOString())) return;
   btn.disabled = true;
   btn.textContent = 'Encerrando...';
   // Snapshot imutável: o modal pode ser fechado enquanto a rede responde;

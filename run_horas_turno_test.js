@@ -158,8 +158,14 @@ eq(H.conferir('2026-01-01T07:00:00', '2026-10-19T17:00:00', CFG, null, 15).ok, f
   // Período suspeito é confirmado com o operador, não gravado em silêncio.
   ok(/function confirmarPeriodoTrabalhado\(/.test(src), 'existe a confirmação do período');
   ok(/confirmarPeriodoTrabalhado\(periodoInicioCalc, agora\)/.test(src), 'e o fechamento de OP a chama');
-  ok(/registro\.horasEstimadas = true/.test(src),
-    'período multi-dia sai marcado como estimativa — a hora ali é derivada, não medida');
+  // Os TRES pontos de gravacao marcam a estimativa, nao so um: na primeira
+  // versao eu liguei a marca e a confirmacao em um lugar so, e os quatro
+  // fechamentos de 26/10 (21h a 26h, 4 dias) sairam sem marca nenhuma.
+  // Conta ATRIBUICAO, nao mencao: o cabecalho tambem fala de horasEstimadas.
+  eq((src.match(/horasEstimadas(?:: typeof HorasTurno|\s*=\s*true)/g) || []).length, 3,
+    'os tres registros de fechamento marcam horasEstimadas');
+  eq((src.match(/confirmarPeriodoTrabalhado\(/g) || []).length, 4,
+    'a confirmacao e definida 1x e chamada nos 3 fechamentos');
 }
 
 console.log('OK Horas de turno: teto por dia, fora do turno não zera, multi-dia reconhecido, fiação do form.html travada (' + n + ' verificações).');
