@@ -10,9 +10,20 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Escopo:** Histórico vira relatório (uma linha por item recebido, cruzada com o lote
   e com o item do PC): filtros, indicadores, exportação CSV; cartões antigos ficam como
   visão "Por recebimento". Worktree `wt-entradas`.
-- **Arquivos ativos:** `public/logistica.html`, `public/shared/relatorio-entradas.js`,
-  `run_relatorio_entradas_test.js`, `run_relatorio_entradas_ui_test.js`,
-  `public/manual_logistica.html`, `AGENT_STATUS.md`.
+- **Feito:** `shared/relatorio-entradas.js` (puro: `linhas`, `situacaoCq`, `filtrar`,
+  `resumo` com total por unidade, `csv`) + aba Histórico de `logistica.html` (filtros,
+  indicadores, tabela por item com detalhe/ações, visão por recebimento, CSV). Ensaio
+  na base: 104 itens / 59 recebimentos, 104/104 resolvem lote e item do PC; 7 aguardando
+  CQ (mais antigo 12 dias), 7 MP sem validade. Testes: `run_relatorio_entradas_test.js`
+  e `run_relatorio_entradas_ui_test.js`; 5 testes de UI da Logística seguem passando.
+- **INCIDENTE (27/10 19:24):** o `main` LOCAL de `producao_firebase_FINAL` divergiu do
+  `origin/main` (base 9a75542). Os 5 commits de vínculos/Emitir OP (33fe412..cc65be3)
+  ficaram só nele, e o deploy feito dele tirou do ar o rascunho do laudo e os filtros
+  da Qualidade (d3a0fcb, f609e1e: `rascunho-cq.js`/`filtro-qualidade.js` em 404).
+  Integrado no merge `1f0291a` e publicado junto com este relatório. **Quem usa o
+  checkout principal: `git pull` antes de qualquer deploy** — o `main` local continua
+  atrás do origin até isso.
+- **PUBLICADO** (hosting + regras) a partir do merge; sem arquivos ativos.
 
 ### Claude — Saneamento dos vínculos pedido↔linha↔OP (27/10/2026)
 
