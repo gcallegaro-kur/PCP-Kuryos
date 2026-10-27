@@ -41,8 +41,8 @@ linha por item, com o link para onde está o detalhe.
 
 | Frente | Item | Bloqueio | Detalhe |
 |---|---|---|---|
-| Custos | **Fase 0**: fila de preço de material por impacto no custo; marcar material fornecido pelo cliente; % de impostos sobre a venda; lista de SKUs sem fórmula (20) ou sem BOM (17) | nenhum: pronto para começar | `PLANO_CUSTOS_RESULTADO.md` |
-| Custos | Fases 1–6: orçado → realizado por OP → LPD e painel da diretoria → simulação de pontos em 3 meses → piloto na TV (4 semanas) → bônus oficial | preços da Fase 0 | `PLANO_CUSTOS_RESULTADO.md` |
+| Custos | **Fases 0 e 1, no `erpkuryos`**: custo gravado no lote no recebimento; preço dos 83 materiais que cobrem 80% do custo; de-para ingrediente do P&D → material; material do cliente no legado; motor de custo e LP padrão (reaproveita `bb245a0`) | nenhum: pronto para começar | `PLANO_CUSTOS_RESULTADO.md` |
+| Custos | Fases 2–6, no `erpkuryos`: realizado por OP → LPD e painel da diretoria → simulação de pontos em 3 meses → piloto na TV (4 semanas) → bônus oficial | virada da fábrica para o `erpkuryos` e importação do histórico do `prod-kuryos` | `PLANO_CUSTOS_RESULTADO.md` |
 | Qualidade | **A4**: assepsia de reator/tacho (CK-3) ligada ao início da pesagem, no mesmo padrão da alocação de linha | reatores cadastrados em Ativos (K1); hoje há 0 ativos | `PLANO_QUALIDADE.md` |
 | Qualidade | Fase B: "Relatar problema" de qualquer tela, com triagem de RNC; ronda CK-6 de 1 em 1 h com aviso sonoro; sirene na fábrica via relé Wi-Fi | sirene: compra do relé (K5) | `PLANO_QUALIDADE.md` |
 | Qualidade | Fase C: CK-1 por tipo de embalagem, RA numerada, CK-2 de conferência de documentos (aviso, sem trava) | — | `PLANO_QUALIDADE.md` |
@@ -68,7 +68,7 @@ linha por item, com o link para onde está o detalhe.
 | Qualidade | K2: revisar e publicar os checklists (os 3 modelos existem); K3: definir quem libera e dar os acessos; K4: limite de lotes para cremes | uso pleno da Liberação de linha |
 | Qualidade | K6: quem faz a triagem de "Relatar problema"; K7: planilha de retenção, caixas numeradas e responsável pelos vencimentos | Fases B e D |
 | Qualidade | K8: data para ligar a trava (`config/liberacaoLinha` ainda vazio, então só avisa); K9: faixas de pH e densidade nas especificações e a densidade do HDR-MISS-0002 (1,0 × 0,95) | trava real; pesagem certa |
-| Compras/Financeiro | Preços de material (229 usados, só 15 com preço), % de impostos, custo fixo mensal | Custos Fases 1–6 |
+| Compras/Financeiro | Preços de material no `erpkuryos` (10 com preço pago; 175 ingredientes com estimativa do P&D), % de impostos, custo fixo mensal, custo-hora por linha | Custos Fases 0–6 |
 | RH/Contador | Validar a forma do bônus (PLR ou outra) | Custos Fase 6 |
 | Diretoria | Compartilhar a página do plano de custos (menu Share) | — |
 | Comercial | Cadastrar os responsáveis e atribuir os 60 clientes (hoje 0) | carteira por responsável |
@@ -85,6 +85,7 @@ linha por item, com o link para onde está o detalhe.
 | NF | Peso da caixa parcial: proporcional ou caixa cheia? `kgCaixa` é peso líquido ou bruto? | "Dados obrigatórios da NF" |
 | Dashboard | Unificar a classificação de setor entre Diário e Geral? Isso muda os totais históricos | `AGENT_STATUS.md` › Dashboard Geral |
 | Usuários | Dar lápide às 2 contas do Auth invisíveis na tela e limpar as duplicatas de setembro? | "Desativar e excluir usuário" |
+| Custos | Data da virada da fábrica para o `erpkuryos`; cobertura mínima para pontuar (custo completo ou mínimo PAGO/COTADO); criar papel Diretoria ou manter ADM | `PLANO_CUSTOS_RESULTADO.md` › Em aberto |
 
 ---
 

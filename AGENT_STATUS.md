@@ -3,6 +3,13 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
+
+- **Decisão do usuário:** a fábrica migra para o `erpkuryos`; o plano de custos e resultado é construído lá (revê o "neste app" de 20/10). O `prod-kuryos` opera até a virada e fornece o histórico.
+- **Feito:** `PLANO_CUSTOS_RESULTADO.md` trocado pelo rascunho de 26/10 com as correções: §10 sem contradição (tabela "Revistas em 27/10"), pontos = **LP padrão** × fator (era "LP orçado", ambíguo com o orçamento do CRM), fases e pendências apontando a virada. Painel de `MELHORIAS_FUTURAS.md` atualizado.
+- **Só documento:** nenhum código, nenhum deploy. Números de 26/10 foram medidos no `erpkuryos` e não conferidos daqui.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — horasTrabalhadas não pode ser relógio cru (24/10/2026)
 
 - **Problema:** `fechamento_op` e `apontamento_total` gravam
