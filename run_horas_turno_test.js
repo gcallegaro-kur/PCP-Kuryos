@@ -168,4 +168,24 @@ eq(H.conferir('2026-01-01T07:00:00', '2026-10-19T17:00:00', CFG, null, 15).ok, f
     'a confirmacao e definida 1x e chamada nos 3 fechamentos');
 }
 
-console.log('OK Horas de turno: teto por dia, fora do turno não zera, multi-dia reconhecido, fiação do form.html travada (' + n + ' verificações).');
+/* ── Incremento zero no encerramento ──
+   27/10/2026, lote 26295/02 (PERFUME ABELHINHA 30ML): a Linha 3 tinha 816
+   registradas, o modal de encerramento abre com o campo preenchido com o JA
+   REGISTRADO, e o fechamento gravou 0. A producao do dia (total 1.221,
+   faltavam 405) nao entrou. Havia trava para total MENOR que o registrado,
+   nenhuma para IGUAL -- e o valor padrao do campo era exatamente o que grava
+   zero. */
+{
+  const fs = require('fs');
+  const src = fs.readFileSync('public/form.html', 'utf8');
+  ok(/function confirmarIncrementoZero\(/.test(src), 'existe a confirmacao de incremento zero');
+  eq((src.match(/confirmarIncrementoZero\(/g) || []).length, 4,
+    'definida 1x e chamada nos 3 pontos que fecham OP');
+  ok(/delta === 0/.test(src), 'o hint trata o zero como caso proprio');
+  ok(/vai registrar ZERO/.test(src), 'e avisa em texto de alerta, nao em cinza');
+  // A trava do menor continua: zero confirma, menor recusa.
+  eq((src.match(/O total final não pode ser menor que o já registrado/g) || []).length, 3,
+    'as tres travas de total menor seguem no lugar');
+}
+
+console.log('OK Horas de turno: teto por dia, fora do turno não zera, multi-dia reconhecido, fiação e trava de incremento zero (' + n + ' verificações).');

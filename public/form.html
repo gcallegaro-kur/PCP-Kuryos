@@ -2510,6 +2510,31 @@ function fmtDataHora(iso) {
 // Hoje só existem turnos dentro do mesmo dia (6h-14h / 14h-22h) -- sem
 // virada de meia-noite, então a duração é sempre um diff simples. Se um dia
 // existir turno que atravessa a meia-noite, ajusta aqui.
+/* O campo de encerramento é a quantidade TOTAL da OP, não o incremento. O
+   modal abre com ele preenchido com o que já está registrado (para o operador
+   ter a referência na tela), e aí o valor padrão é justamente o que grava
+   ZERO: total − já registrado = 0.
+
+   Aconteceu em 27/10/2026, lote 26295/02 (PERFUME ABELHINHA 30ML): a Linha 3
+   tinha 816 registradas, o modal abriu com 816, o fechamento gravou 0 e a
+   produção real do dia (total 1.221, faltavam 405) não entrou. O hint dizia
+   "Produzido neste período: 0 un." em texto cinza, e como 816 ≠ 1.200
+   planejadas o campo de justificativa apareceu -- tudo com cara de fluxo
+   normal. Havia trava para total MENOR que o registrado, nenhuma para IGUAL.
+
+   Zero é legítimo às vezes (encerrar uma OP que não produziu mais nada), por
+   isso confirma em vez de barrar -- mas tem que ser escolha, não o padrão. */
+function confirmarIncrementoZero(qtdTotal, apontado) {
+  if (Number(qtdTotal) !== Number(apontado)) return true;
+  return confirm('Atenção: isto vai registrar ZERO unidades.\n\n' +
+    'O campo é o TOTAL produzido na OP, não o que foi produzido agora. ' +
+    'Você informou ' + fmtNum(qtdTotal) + ', que é exatamente o que já está registrado — ' +
+    'então nada será acrescentado.\n\n' +
+    'Se a OP produziu mais, feche esta janela e informe o TOTAL acumulado ' +
+    '(o já registrado + o de agora).\n\n' +
+    'Encerrar mesmo assim, sem acrescentar produção?');
+}
+
 /* Tempo DECORRIDO. "A OP está aberta há 73h" é verdade e serve para a tela.
    Não serve para `horasTrabalhadas` -- ver horasTrabalhadasPeriodo abaixo. */
 function horasDesde(isoInicio) {
@@ -4573,6 +4598,7 @@ document.getElementById('opForm').addEventListener('submit', function(e) {
     alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontado) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
     return;
   }
+  if (!confirmarIncrementoZero(qtdTotal, apontado)) { btn.disabled=false; btn.textContent='🏁 Finalizar OP'; return; }
 
   // Validar justificativa se houver desvio
   var qtdEsperada = parseInt(this.dataset.opQtdEsperada || 0) || 0;
@@ -4731,6 +4757,7 @@ document.getElementById('totalForm').addEventListener('submit', function(e) {
     alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontado) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
     return;
   }
+  if (!confirmarIncrementoZero(qtdTotal, apontado)) { reenable(); return; }
   delta = Math.max(delta, 0);
   var ritmo = horas > 0 ? Math.round(delta / horas) : 0;
 
@@ -5541,6 +5568,11 @@ function updateEncerrarOpTurnoRitmoHint() {
   } else if (delta < 0) {
     hintEl.className = 'form-hint manual';
     hintEl.textContent = '⚠️ Quantidade digitada é menor que o já registrado (' + fmtNum(apontado) + ' un.) — confira antes de salvar.' + refPlanejada;
+  } else if (delta === 0) {
+    // O campo abre preenchido com o já registrado, então ZERO é o padrão.
+    // Em cinza, "0 un." passava por valor normal -- ver confirmarIncrementoZero.
+    hintEl.className = 'form-hint manual';
+    hintEl.textContent = '⚠️ Isto vai registrar ZERO un. O campo é o TOTAL da OP: para acrescentar o que foi produzido agora, some ao já registrado (' + fmtNum(apontado) + ' un.).' + refPlanejada;
   } else {
     var campoInicio = campoAberturaInicio(encerrarOpAlvoAtual.tipo);
     var horas = op[campoInicio] ? horasDesde(op[campoInicio]) : 0;
@@ -5589,6 +5621,7 @@ document.getElementById('btnConfirmarEncerrarOpTurno').addEventListener('click',
     alert('O total final não pode ser menor que o já registrado (' + fmtNum(apontadoAlvo) + ' un.). Para reduzir uma quantidade, corrija o apontamento existente no Histórico.');
     return;
   }
+  if (!confirmarIncrementoZero(qtd, apontadoAlvo)) return;
   var contagemSobras = validarSobrasOuAvisar(sobrasCtl.turno);
   if (!contagemSobras.ok) return;
   var btn = this;
