@@ -19,7 +19,19 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   pedidos `05` (FEBELLA) e `0005` (SAFIRA).
 - **NÃO renomear** as linhas chaveadas por descrição: `estoque_lotes` guarda
   `skuPedidoKey` apontando para elas (ex.: pa_26292-01_p1).
-- **Arquivos ativos:** `scripts/sanear-vinculos-pedido.js` (novo).
+- **CORREÇÃO 27/10 (usuário):** o palete travado é do **pedido 30**, não do
+  0011. A onda 26292/26293/26299 toda é produção do pedido 30; 6 OPs ficaram
+  chaveadas no 0011/11 por erro de vínculo. E `11__BODY_SPLASH...` não é
+  duplicata de um pedido: é gaveta com 1 OP do 0011 (26177/02) e 1 do 30
+  (26293/02). O `--fundir-duplicadas` jogaria as duas no 0011 e creditaria
+  4.608 un no pedido errado — **guarda da onda** adicionada para barrar isso.
+- **Regra da onda:** OP pertence ao mesmo pedido das irmãs de lote. Varredura
+  achou **8 ondas divididas** entre pedidos diferentes (7 além do MRARBS07).
+- **Fecho do MRARBS07 (usuário):** saldo do 0011 foi atendido pelo PED-0008
+  (6.614 un produzidas de 4.800, paletes já EXPEDIDO). 0011 e PED-0008 vão a
+  encerrado; fica aberto só o `30__MRARBS07`.
+- **Arquivos ativos:** `scripts/sanear-vinculos-pedido.js`,
+  `scripts/corrigir-mrarbs07-onda-pedido-30.js` (novo).
 
 ### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
 

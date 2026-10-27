@@ -255,18 +255,44 @@ const DUPLICADA_PARA = '0011__BODY_SPLASH_LEAO_DO_DESERTO_BOURBON_200ml';
   // ─── 5. o plano de gravação ────────────────────────────────────────────
   const updates = {};
   religar.forEach((i) => i.itens.forEach((x) => { updates['ops/' + x.ok + '/skuPedidoKey'] = i.alvo; }));
+  // GUARDA DA ONDA. Medido em 27/10: `11__BODY_SPLASH...` não é duplicata de
+  // um pedido só -- guardava 1 OP do pedido 0011 (26177/02) e 1 do pedido 30
+  // (26293/02). Fundir às cegas creditaria 4.608 un do 30 no 0011. A regra:
+  // uma OP pertence ao mesmo pedido das irmãs da sua onda (prefixo do lote).
+  // Se alguma OP da linha a fundir tem onda que não aparece na linha destino,
+  // ela é de outro pedido -- transferir pela tela de Ops (lápis) primeiro.
+  const onda = (lote) => String(lote || '').split('/')[0];
+  let fusaoBarrada = null;
   if (FUNDIR && pedidos[DUPLICADA_DE] && pedidos[DUPLICADA_PARA]) {
-    Object.entries(ops).forEach(([ok, o]) => {
-      if (o && o.skuPedidoKey === DUPLICADA_DE) updates['ops/' + ok + '/skuPedidoKey'] = DUPLICADA_PARA;
+    const ondasDoDestino = new Set();
+    Object.values(ops).forEach((o) => {
+      if (o && o.skuPedidoKey === DUPLICADA_PARA) ondasDoDestino.add(onda(o.lote));
     });
-    updates['pedidos/' + DUPLICADA_DE] = null;
+    const forasteiras = Object.entries(ops).filter(([, o]) =>
+      o && o.skuPedidoKey === DUPLICADA_DE && !CANC.includes(o.status) && !ondasDoDestino.has(onda(o.lote)));
+    if (forasteiras.length) {
+      fusaoBarrada = forasteiras.map(([, o]) => o.lote + ' (onda ' + onda(o.lote) + ')');
+    } else {
+      Object.entries(ops).forEach(([ok, o]) => {
+        if (o && o.skuPedidoKey === DUPLICADA_DE) updates['ops/' + ok + '/skuPedidoKey'] = DUPLICADA_PARA;
+      });
+      updates['pedidos/' + DUPLICADA_DE] = null;
+    }
   }
 
   console.log('');
   console.log('=== PLANO ===');
   console.log('  repontar skuPedidoKey em ' + Object.keys(updates).filter((k) => k.startsWith('ops/')).length + ' OP(s)');
-  if (FUNDIR) console.log('  apagar a linha duplicada ' + DUPLICADA_DE + ' (qtdTotal ' + f(n((pedidos[DUPLICADA_DE] || {}).qtdTotal)) + ')');
-  else if (dups.length) console.log('  (linha duplicada NÃO será tocada — passe --fundir-duplicadas)');
+  if (fusaoBarrada) {
+    console.log('');
+    console.log('  !! FUSÃO BARRADA PELA GUARDA DA ONDA !!');
+    console.log('     ' + DUPLICADA_DE + ' guarda OP de outro pedido:');
+    fusaoBarrada.forEach((x) => console.log('       ' + x + ' -- onda ausente na linha destino'));
+    console.log('     Transfira essa(s) OP pela tela Ops (lápis ✏️) para o pedido');
+    console.log('     certo ANTES de fundir. Nada da fusão foi incluído no plano.');
+  } else if (FUNDIR) {
+    console.log('  apagar a linha duplicada ' + DUPLICADA_DE + ' (qtdTotal ' + f(n((pedidos[DUPLICADA_DE] || {}).qtdTotal)) + ')');
+  } else if (dups.length) console.log('  (linha duplicada NÃO será tocada — passe --fundir-duplicadas)');
 
   // recálculo de produzido, só sob pedido explícito
   let recalc = {};
