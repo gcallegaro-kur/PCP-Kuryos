@@ -30,8 +30,18 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Fecho do MRARBS07 (usuário):** saldo do 0011 foi atendido pelo PED-0008
   (6.614 un produzidas de 4.800, paletes já EXPEDIDO). 0011 e PED-0008 vão a
   encerrado; fica aberto só o `30__MRARBS07`.
-- **Arquivos ativos:** `scripts/sanear-vinculos-pedido.js`,
-  `scripts/corrigir-mrarbs07-onda-pedido-30.js` (novo).
+- **APLICADO em 27/10/2026 pelo usuário** (os 4 comandos). Conferido lendo a
+  base: 6 OPs em `30__MRARBS07` (produzido 25.745, igual à soma das OPs),
+  linha `11__` apagada, 26177/02 em `0011__`, `0011__` 59.533/60.000 e
+  `PED-0008__` 6.614 ambas **encerradas**. Portão da Expedição: o motivo
+  "Produto não consta no pedido comercial" zerou (era 1 palete) e
+  PA-26292-01-P1 está LIBERADO.
+- **Pendente, não é deste conserto:** PA-26282-03-P1 (MRARBS12, 1.792 un)
+  trava por `op.status !== 'Concluído'` — a OP 26282/03 tem `dataFimReal` de
+  27/10 20:10 mas segue "Em Produção", e `produzidoLinha` 2.656 ≠
+  `produzidoRotulagem` 3.360. Encerrar a OP libera; conferir antes a diferença
+  de 704 un entre linha e rotulagem.
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
 
