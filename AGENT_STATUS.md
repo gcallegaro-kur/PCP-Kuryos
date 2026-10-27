@@ -365,6 +365,10 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Busca e filtros na Fila de Inspeção e nas RNCs (27/10/2026) — EM ANDAMENTO
+
+- **Arquivos ativos:** `public/qualidade.html`, `public/shared/filtro-qualidade.js` (novo), `public/manual_qualidade.html`, testes novos `run_filtro_qualidade_*.js`, `AGENT_STATUS.md`.
+
 ### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — PUBLICADO
 
 - **Pedido:** o que se digita no laudo/análise de granel se perdia ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento".
