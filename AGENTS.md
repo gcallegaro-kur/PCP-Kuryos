@@ -17,6 +17,10 @@ Este repositório é mantido por mais de um agente. Leia `CLAUDE.md` e
    diretório e registre no status qual commit foi publicado.
 6. Ao terminar, atualize o seu bloco com o que mudou, validação feita, commit
    (se houver) e qualquer pendência.
+7. Toda pendência que ficar para depois entra também no painel **"Em aberto
+   para execução"** no topo de `MELHORIAS_FUTURAS.md` (código nosso, dependência
+   da Kuryos ou decisão do usuário). Item feito sai de lá no mesmo commit. É dali
+   que se responde "o que está em aberto?" somando todos os chats.
 
 Para trabalho realmente simultâneo, cada agente deve usar sua própria branch
 e worktree; a integração ocorre por commits, nunca copiando arquivos entre

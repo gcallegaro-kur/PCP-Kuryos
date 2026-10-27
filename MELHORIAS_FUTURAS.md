@@ -22,6 +22,72 @@ se for um gap que o modelo não tem, acrescente-o lá também.
 
 ---
 
+## ▶ Em aberto para execução — painel consolidado (atualizado em 27/10/2026)
+
+**Para que serve.** Este é o único lugar que responde "o que está em aberto?" somando
+todos os chats. O resto deste arquivo é o detalhe por tema; aqui fica só a fila, em uma
+linha por item, com o link para onde está o detalhe.
+
+**Regra para todo chat (Claude ou Codex):**
+- Ao terminar um trabalho, adicione aqui o que ficou em aberto, na tabela certa:
+  - código que nós executamos;
+  - o que depende da Kuryos;
+  - decisão que só o usuário toma.
+- Item feito sai daqui no mesmo commit, com o hash ao lado, por exemplo
+  `~~item~~ feito em abc1234`. Item riscado há mais de 15 dias pode ser apagado.
+- Não duplique: confira com `grep` antes de inserir. Se o item já existe, atualize-o.
+
+### A. Código: próximos a executar (nós)
+
+| Frente | Item | Bloqueio | Detalhe |
+|---|---|---|---|
+| Custos | **Fase 0**: fila de preço de material por impacto no custo; marcar material fornecido pelo cliente; % de impostos sobre a venda; lista de SKUs sem fórmula (20) ou sem BOM (17) | nenhum: pronto para começar | `PLANO_CUSTOS_RESULTADO.md` |
+| Custos | Fases 1–6: orçado → realizado por OP → LPD e painel da diretoria → simulação de pontos em 3 meses → piloto na TV (4 semanas) → bônus oficial | preços da Fase 0 | `PLANO_CUSTOS_RESULTADO.md` |
+| Qualidade | **A4**: assepsia de reator/tacho (CK-3) ligada ao início da pesagem, no mesmo padrão da alocação de linha | reatores cadastrados em Ativos (K1); hoje há 0 ativos | `PLANO_QUALIDADE.md` |
+| Qualidade | Fase B: "Relatar problema" de qualquer tela, com triagem de RNC; ronda CK-6 de 1 em 1 h com aviso sonoro; sirene na fábrica via relé Wi-Fi | sirene: compra do relé (K5) | `PLANO_QUALIDADE.md` |
+| Qualidade | Fase C: CK-1 por tipo de embalagem, RA numerada, CK-2 de conferência de documentos (aviso, sem trava) | — | `PLANO_QUALIDADE.md` |
+| Qualidade | Fase D: retenção por caixa numerada com fila de vencimento; calibração CK-8 nos Ativos; aviso no celular | planilha de retenção (K7) | `PLANO_QUALIDADE.md` |
+| Cadastro/BOM | Saneamento, onda 1, em andamento por outro chat:<br>- barrar nome genérico ou duplicado no cadastro de material;<br>- relatório Excel dos 29 SKUs com OP em aberto + MRARBS;<br>- variantes homologadas no BOM (PCP + P&D + Qualidade) com checagem de rótulo;<br>- apontamento e MRP por variante | — | `AGENT_STATUS.md` › Saneamento onda 0 |
+| Apontamento | Barrar ou sinalizar no fechamento turno com mais de 24 h (28 casos, até 94 h, 93.288 un) | combinado com o usuário como próximo passo | `AGENT_STATUS.md` › Dashboard Geral |
+| Apontamento | Operador declara os dias trabalhados, para medir horas de verdade | "se o usuário quiser" | `AGENT_STATUS.md` › horasTrabalhadas |
+| Pedidos | Gravar o nome do cliente do cadastro e o `clienteKey` nos pedidos antigos (Miss Rôse ×3, Glow ×2, Briá ×2) | oferecido, sem resposta | "Adiados entre 07 e 19/10" |
+| Planejamento | Regra dos 95% ("pronto para encerrar") no Planejamento e no Dashboard | — | "Adiados entre 07 e 19/10" |
+| Qualidade | RNC automática quando o granel é liberado com restrição | oferecido, não pedido | "Adiados entre 07 e 19/10" |
+| Inspeção de PA | Avisar PCP/Produção quando o prazo da inspeção total vence | — | "Inspeção total de PA" |
+| Analytics | Relatório de perdas consolidado entre lotes | o usuário preferiu adiar | "Adiados entre 07 e 19/10" |
+| Comercial | Aviso ao responsável comercial: recompra atrasada e pedido parado (`checkNotificacoes`); KPI de carteira por responsável | billing voltou em 23/10: destravado | "Responsável comercial por cliente" |
+| Usuários | Function `excluirUsuario` para apagar a credencial pela tela | billing voltou: destravado | "Desativar e excluir usuário" |
+| Testes | Consertar os testes de tela quebrados no main:<br>- encerramento_pedido;<br>- inspecao_pa;<br>- operacao;<br>- painel_rearranjo;<br>- portao_bulk;<br>- apontamento_encerramento | — | "Adiados entre 07 e 19/10" |
+| Planejamento | Roadmap de planejamento, OP-eficiência e apontamento (fases restantes) | — | `PLANO_PLANEJAMENTO_PCP.md` |
+
+### B. Depende da Kuryos (operação/cadastro, não código)
+
+| Quem | Item | Destrava |
+|---|---|---|
+| Qualidade/Manutenção | **K1**: cadastrar os ativos (linhas, reatores, tachos, instrumentos). Hoje há 0 | A4 e calibração |
+| Qualidade | K2: revisar e publicar os checklists (os 3 modelos existem); K3: definir quem libera e dar os acessos; K4: limite de lotes para cremes | uso pleno da Liberação de linha |
+| Qualidade | K6: quem faz a triagem de "Relatar problema"; K7: planilha de retenção, caixas numeradas e responsável pelos vencimentos | Fases B e D |
+| Qualidade | K8: data para ligar a trava (`config/liberacaoLinha` ainda vazio, então só avisa); K9: faixas de pH e densidade nas especificações e a densidade do HDR-MISS-0002 (1,0 × 0,95) | trava real; pesagem certa |
+| Compras/Financeiro | Preços de material (229 usados, só 15 com preço), % de impostos, custo fixo mensal | Custos Fases 1–6 |
+| RH/Contador | Validar a forma do bônus (PLR ou outra) | Custos Fase 6 |
+| Diretoria | Compartilhar a página do plano de custos (menu Share) | — |
+| Comercial | Cadastrar os responsáveis e atribuir os 60 clientes (hoje 0) | carteira por responsável |
+| Cadastro | `DPGLBS03`: prazo de validade e kg por caixa (trava NF de 7.511 un); destinar o `MPES-00142` vencido pelo Descarte | faturamento; estoque limpo |
+| ADM | Ligar "uma conta por e-mail" no Console do Firebase | fim das contas duplicadas |
+| PCP | MRP: lead time e lote mínimo dos ~20 materiais de maior giro; inventário do "Dia D" | MRP e saldo confiáveis |
+
+### C. Decisões pendentes do usuário
+
+| Tema | Pergunta | Detalhe |
+|---|---|---|
+| Apontamento | 207 registros históricos de horas: marcar como não confiáveis (recomendado) ou gravar a estimativa recortada? | `AGENT_STATUS.md` › horasTrabalhadas |
+| Pedidos | 106 linhas "Concluído" com produzido menor que o pedido: reabrir ou encerrar? E os totais de 0011/26/05/0020: qual lado está certo? | `AGENT_STATUS.md` › Pedidos que não conversam |
+| NF | Peso da caixa parcial: proporcional ou caixa cheia? `kgCaixa` é peso líquido ou bruto? | "Dados obrigatórios da NF" |
+| Dashboard | Unificar a classificação de setor entre Diário e Geral? Isso muda os totais históricos | `AGENT_STATUS.md` › Dashboard Geral |
+| Usuários | Dar lápide às 2 contas do Auth invisíveis na tela e limpar as duplicatas de setembro? | "Desativar e excluir usuário" |
+
+---
+
 ## Sequência por setor / Próximas Ordens — o que ficou para depois (2026-09-29)
 
 Entregue: o PCP ordena a fila de cada setor no Planejamento (aba *Sequência por
