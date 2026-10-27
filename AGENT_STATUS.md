@@ -3,6 +3,24 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Saneamento dos vínculos pedido↔linha↔OP (27/10/2026)
+
+- **Gatilho:** palete PA-26292-01-P1 (MRARBS07, 4.656 un) travado em Montar
+  Carga com "Produto não consta no pedido comercial". Causa: a carga do
+  pedido 0011 perdeu uma linha — a planilha de origem tem 7 SKUs/210.000 un,
+  `pedidos_comerciais/0011` tem 6 SKUs/150.000 un.
+- **Medido na base:** 67 chaves de `skuPedidoKey` em OPs sem linha em
+  `/pedidos` (210 OPs, 341.879 un). Destas, a maioria o próprio app já
+  resolve via `resolvePedidoKeyBySkuKey` (tolera zero à esquerda e chave
+  por descrição); o que o app NÃO resolve é produção que não entra em
+  pedido nenhum. Mais: 1 linha duplicada (0011__/11__ do MRARBS07), 6 linhas
+  chaveadas pela descrição, 2 SKUs com linha no PCP e ausentes do pedido
+  comercial (0011/MRARBS07 e 05/FBBS0004), e colisão de numeração entre os
+  pedidos `05` (FEBELLA) e `0005` (SAFIRA).
+- **NÃO renomear** as linhas chaveadas por descrição: `estoque_lotes` guarda
+  `skuPedidoKey` apontando para elas (ex.: pa_26292-01_p1).
+- **Arquivos ativos:** `scripts/sanear-vinculos-pedido.js` (novo).
+
 ### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
 
 - **Decisão do usuário:** a fábrica migra para o `erpkuryos`; o plano de custos e resultado é construído lá (revê o "neste app" de 20/10). O `prod-kuryos` opera até a virada e fornece o histórico.
