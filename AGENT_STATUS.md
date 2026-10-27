@@ -365,6 +365,11 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — EM ANDAMENTO
+
+- **Pedido:** o que é digitado no laudo/análise de granel se perde ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento" na fila.
+- **Arquivos ativos:** `public/qualidade.html`, `public/shared/rascunho-cq.js` (novo), `database.rules.json` (nó `qualidade_rascunhos`), testes novos `run_rascunho_cq_*.js`, `AGENT_STATUS.md`.
+
 ### ⚠ Aviso ao Codex — não commite expedicao.js/expedicao_regras.js por cima (23/10/2026)
 
 Na pasta principal (`producao_firebase_FINAL`) há trabalho **não commitado** em
