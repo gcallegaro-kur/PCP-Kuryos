@@ -17,6 +17,7 @@
   <script src="shared/propriedade-estoque.js"></script>
   <script src="shared/rotas-pc.js"></script>
   <script src="shared/calendario-logistica.js"></script>
+  <script src="shared/relatorio-entradas.js"></script>
   <script src="shared/seletor-endereco.js"></script>
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -68,6 +69,47 @@
     .progresso-bar-wrap{background:var(--tint-gray-bg);border-radius:20px;height:8px;overflow:hidden;margin:8px 0}
     .progresso-bar{background:var(--success);height:100%;border-radius:20px;transition:width .3s}
     table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+    /* Relatório de entradas (Histórico) */
+    .he-filtros{padding:12px 14px}
+    .he-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .he-toolbar-2{margin-top:10px}
+    .he-toolbar select,.he-toolbar input[type=date]{width:auto;padding:7px 9px;font-size:12.5px}
+    .he-busca{flex:1 1 260px;min-width:200px;width:auto;padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card)}
+    .he-datas{align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .he-check{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+    .he-check input{width:auto}
+    .he-visao{display:inline-flex;gap:4px}
+    .he-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+    .he-kpi{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;height:100%;text-align:left;border:1.5px solid transparent}
+    .he-kpi-rot{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+    .he-kpi-val{font-size:22px;font-weight:750;margin-top:4px;font-variant-numeric:tabular-nums}
+    .he-kpi-qtd{font-size:14px;font-weight:700;line-height:1.35}
+    .he-kpi-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+    .he-kpi-alerta .he-kpi-val{color:var(--tint-orange-fg)}
+    .he-kpi-perigo .he-kpi-val{color:var(--danger)}
+    .he-kpi-ativo{border-color:var(--primary)}
+    .he-kpi-btn{all:unset;display:block;cursor:pointer;border-radius:14px}
+    .he-kpi-btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+    .he-tabela-card{border-left:none;padding:0}
+    .he-tabela-wrap{overflow-x:auto}
+    .he-tabela{margin:0;min-width:980px}
+    .he-tabela th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--border)}
+    .he-tabela td{padding:8px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:top}
+    .he-tabela small{color:var(--muted);font-size:11px}
+    .he-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .he-row{cursor:pointer}
+    .he-row:hover,.he-row.he-aberta{background:var(--surface-2)}
+    .he-row:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+    .he-cancelada td{opacity:.55;text-decoration:line-through}
+    .he-det td{background:var(--surface-2);padding:10px 12px 4px}
+    .he-extra{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;margin-bottom:10px}
+    .he-extra b{color:var(--muted);font-weight:650}
+    .he-obs{flex-basis:100%}
+    .he-vencido{color:var(--danger);font-weight:700}
+    .he-vence-logo{color:var(--tint-orange-fg);font-weight:700}
+    .he-parcial{color:var(--tint-orange-fg);font-weight:700}
+    .he-devolvido{color:var(--danger)!important}
+    @media(max-width:600px){.he-toolbar select,.he-busca{flex:1 1 100%;width:100%}.he-kpi-val{font-size:19px}}
     thead th{background:var(--surface-2);padding:7px 10px;text-align:left;font-weight:700;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border)}
     td{padding:6px 10px;border-bottom:1px solid var(--tint-gray-bg);vertical-align:middle}
     .agendamento-box{background:color-mix(in srgb, var(--primary) 6%, var(--card));border:1px solid color-mix(in srgb, var(--primary) 20%, var(--border));border-radius:10px;padding:10px 12px;font-size:12.5px;margin:8px 0}
@@ -133,6 +175,41 @@
     <div id="receberList"></div>
   </div>
   <div class="tab-panel" id="tab-historico">
+    <div class="card he-filtros">
+      <div class="he-toolbar">
+        <input type="search" id="hBusca" class="he-busca" placeholder="Buscar material, código, NF, PC, fornecedor, lote, endereço..." aria-label="Buscar nas entradas">
+        <select id="hPeriodo" aria-label="Período">
+          <option value="30">Últimos 30 dias</option>
+          <option value="7">Últimos 7 dias</option>
+          <option value="90">Últimos 90 dias</option>
+          <option value="">Todo o histórico</option>
+          <option value="custom">Escolher datas…</option>
+        </select>
+        <span id="hDatas" class="he-datas" style="display:none">
+          <input type="date" id="hDe" aria-label="De"> <span>a</span> <input type="date" id="hAte" aria-label="Até">
+        </span>
+        <select id="hOrigem" aria-label="Fornecedor ou origem"></select>
+        <select id="hTipo" aria-label="Tipo de material">
+          <option value="">Todos os tipos</option>
+          <option value="MATERIA_PRIMA">Matéria-prima</option>
+          <option value="EMBALAGEM">Embalagem</option>
+        </select>
+        <select id="hCq" aria-label="Situação no CQ"></select>
+        <select id="hDono" aria-label="Dono do material"></select>
+        <label class="he-check"><input type="checkbox" id="hCancelados"> Incluir cancelados</label>
+      </div>
+      <div class="he-toolbar he-toolbar-2">
+        <div class="he-visao" role="group" aria-label="Visão">
+          <button type="button" class="btn btn-sm" data-visao="tabela">Tabela por item</button>
+          <button type="button" class="btn btn-sm" data-visao="cartoes">Por recebimento</button>
+        </div>
+        <span id="hResumoFiltro" class="field-hint"></span>
+        <span style="flex:1"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="hLimpar">Limpar filtros</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="hExportar">⬇ Exportar para Excel</button>
+      </div>
+    </div>
+    <div id="hKpis" class="he-kpis"></div>
     <div id="historicoList"></div>
   </div>
   <div class="tab-panel" id="tab-calendario">
@@ -659,46 +736,229 @@ function checklistBadgeHtml(p) {
     (completo ? ' <span style="color:var(--success)">✓ completo</span>' : ' <span style="color:var(--warning)">⚠ pendência</span>') + '</div>';
 }
 
-/* ══════════════ Aba Histórico ══════════════ */
+/* ══════════════ Aba Histórico — relatório de entradas (27/10/2026) ══════════════
+   Pedido do usuário: "quero um relatório melhor de entradas de materiais ...
+   no histórico temos poucas informações". O cartão mostrava PC, NF, lote e
+   quantidade; agora cada item recebido vira uma linha cruzada com o lote
+   (situação no CQ, validade, endereço e saldo de hoje) e com o item do PC
+   (pedido × recebido). Regras em shared/relatorio-entradas.js. A visão "Por
+   recebimento" mantém os cartões, com Reimprimir, Cancelar e Devolver; na
+   tabela, clicar na linha abre o mesmo cartão. */
+var histVisao = 'tabela';
+var histAberto = null;      // 'pcKey/recKey/linhaKey' expandido na tabela
+var HIST_TETO_TABELA = 300; // só o desenho; a exportação leva tudo o que passou no filtro
+
+function hv(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+function filtroHistorico() {
+  var periodo = hv('hPeriodo'), de = '', ate = '';
+  if (periodo === 'custom') { de = hv('hDe'); ate = hv('hAte'); }
+  else if (periodo) de = toLocalISODate(new Date(Date.now() - Number(periodo) * 86400000));
+  return {busca: hv('hBusca'), de: de, ate: ate, origem: hv('hOrigem'), tipo: hv('hTipo'), cq: hv('hCq'),
+    dono: hv('hDono'), cancelados: document.getElementById('hCancelados').checked};
+}
+function preencherSelectHist(id, valores, todos, rotulo) {
+  var el = document.getElementById(id), atual = el.value;
+  el.innerHTML = '<option value="">' + escapeHtml(todos) + '</option>' + valores.map(function(v) {
+    return '<option value="' + escapeAttr(v) + '">' + escapeHtml(rotulo ? rotulo(v) : v) + '</option>';
+  }).join('');
+  el.value = valores.indexOf(atual) >= 0 ? atual : '';
+}
+function linhasHistorico() {
+  return RelatorioEntradas.linhas({pedidosCompra: allPedidosCompra, estoqueLotes: allEstoqueLotes});
+}
+function fmtQtdUn(q, un) { return fmtNum(q) + (un ? ' ' + escapeHtml(un) : ''); }
+function classeValidade(dia) {
+  if (!dia) return '';
+  var hoje = toLocalISODate(new Date());
+  if (dia < hoje) return 'he-vencido';
+  var limite = toLocalISODate(new Date(Date.now() + 90 * 86400000));
+  return dia <= limite ? 'he-vence-logo' : '';
+}
+function diaBr(dia) { return dia ? dia.split('-').reverse().join('/') : '—'; }
+
 function renderHistoricoList() {
   var box = document.getElementById('historicoList');
-  var recebimentos = [];
-  Object.entries(allPedidosCompra).forEach(function(pcEntry) {
-    Object.entries(pcEntry[1].recebimentos || {}).forEach(function(recEntry) {
-      recebimentos.push({pedidoKey:pcEntry[0], pedido:pcEntry[1], recebimentoKey:recEntry[0], recebimento:recEntry[1]});
-    });
+  if (!box || typeof RelatorioEntradas === 'undefined') return;
+  var todas = linhasHistorico();
+  preencherSelectHist('hOrigem', RelatorioEntradas.opcoes(todas, 'origem'), 'Todos os fornecedores');
+  preencherSelectHist('hDono', RelatorioEntradas.opcoes(todas, 'dono'), 'Kuryos e clientes');
+  preencherSelectHist('hCq', RelatorioEntradas.ORDEM_CQ.filter(function(k) { return k !== 'SEM_LOTE'; }), 'Qualquer situação no CQ',
+    function(k) { return RelatorioEntradas.CQ[k].rotulo; });
+  document.querySelectorAll('.he-visao [data-visao]').forEach(function(b) {
+    b.className = 'btn btn-sm ' + (b.dataset.visao === histVisao ? 'btn-primary' : 'btn-ghost');
   });
-  recebimentos.sort(function(a, b) { return (b.recebimento.criadoEm || b.recebimento.data || '').localeCompare(a.recebimento.criadoEm || a.recebimento.data || ''); });
-  if (!recebimentos.length) {
+  var f = filtroHistorico();
+  var rows = RelatorioEntradas.filtrar(todas, f);
+  renderKpisHistorico(RelatorioEntradas.resumo(rows), f);
+  document.getElementById('hResumoFiltro').textContent = rows.length + ' de ' +
+    RelatorioEntradas.filtrar(todas, {cancelados: f.cancelados}).length + ' itens recebidos';
+  if (!todas.length) {
     box.innerHTML = '<div class="card"><div class="no-data">Nenhum recebimento registrado ainda.</div></div>';
     return;
   }
-  var totalRecebimentos = recebimentos.length;
-  recebimentos = recebimentos.slice(0, historicoLimite);
-  box.innerHTML = '<div class="field-hint" style="margin:0 0 10px">Exibindo ' + recebimentos.length + ' de ' + totalRecebimentos + ' recebimento(s), do mais recente para o mais antigo.</div>' + recebimentos.map(function(reg) {
-    var rec = reg.recebimento, cancelado = rec.status === 'CANCELADO';
-    var linhas = Object.entries(rec.itensRecebidos || {});
-    var operavel = !!rec.idempotencyKey && linhas.length > 0 && linhas.every(function(entry) { return !!entry[1].loteKey; });
-    var itensHtml = linhas.map(function(entry) {
-      var l = entry[1], q = l.entradaQualidade || {}, disponivelDevolver = Math.max(0, Number(l.qtdRecebidaAgora || 0) - Number(l.qtdDevolvida || 0));
-      return '<div style="padding:8px 0;border-top:1px solid var(--tint-gray-bg);display:flex;justify-content:space-between;gap:10px;align-items:center">' +
-        '<div><b>' + escapeHtml(q.loteInterno || 'Legado sem AK automático') + '</b> · ' + escapeHtml(l.materialCodigo || '') + ' — ' + escapeHtml(l.materialNome || '') +
-        '<div class="field-hint">Lote fornecedor: ' + escapeHtml(q.loteOrigem || '—') + ' · ' + fmtNum(l.qtdRecebidaAgora) + ' ' + escapeHtml(l.unidade || '') +
-        (l.qtdDevolvida ? ' · devolvido: ' + fmtNum(l.qtdDevolvida) : '') + '</div></div>' +
-        (!cancelado && operavel && q.loteInterno && l.loteKey && disponivelDevolver > 0 ? '<button class="btn btn-ghost btn-sm btn-devolver-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '" data-linha="' + escapeAttr(entry[0]) + '" data-max="' + escapeAttr(String(disponivelDevolver)) + '">Devolver</button>' : '') + '</div>';
-    }).join('');
-    return '<div class="pc-card"><div class="pc-card-head"><div><div class="pc-titulo">' + escapeHtml(reg.pedido.numeroFormatado || reg.pedidoKey) + ' — ' + escapeHtml(nomeOrigemPedido(reg.pedido)) + '</div>' +
-      '<div class="pc-sub">Recebido em ' + fmtData(rec.data || rec.criadoEm) + ' · NF ' + escapeHtml(rec.notaFiscal || '—') + ' · por ' + escapeHtml(rec.recebidoPor || '—') + '</div></div>' +
-      '<span class="badge ' + (cancelado ? 'badge-red' : 'badge-green') + '">' + (cancelado ? 'Cancelado' : 'Recebido') + '</span></div>' + itensHtml +
-      '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-ghost btn-sm btn-etiquetas-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">🏷️ Reimprimir etiquetas</button>' +
-      (!cancelado && operavel ? '<button class="btn btn-ghost btn-sm btn-cancelar-rec" style="color:var(--danger)" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">Cancelar recebimento</button>' : '') + '</div></div>';
-  }).join('') + (historicoLimite < totalRecebimentos ? '<button id="btnMaisHistorico" class="btn btn-ghost" style="width:100%;justify-content:center">Mostrar mais recebimentos</button>' : '');
-  box.querySelectorAll('.btn-etiquetas-rec').forEach(function(btn) { btn.addEventListener('click', function() { reimprimirRecebimento(btn.dataset.pc, btn.dataset.rec); }); });
-  box.querySelectorAll('.btn-cancelar-rec').forEach(function(btn) { btn.addEventListener('click', function() { cancelarRecebimentoTela(btn.dataset.pc, btn.dataset.rec); }); });
-  box.querySelectorAll('.btn-devolver-rec').forEach(function(btn) { btn.addEventListener('click', function() { devolverRecebimentoTela(btn.dataset.pc, btn.dataset.rec, btn.dataset.linha, Number(btn.dataset.max)); }); });
+  if (!rows.length) {
+    box.innerHTML = '<div class="card"><div class="no-data">Nenhuma entrada com esses filtros.</div></div>';
+    return;
+  }
+  box.innerHTML = histVisao === 'cartoes' ? htmlHistoricoCartoes(rows) : htmlHistoricoTabela(rows);
+  ligarAcoesRecebimento(box);
   var mais = document.getElementById('btnMaisHistorico');
   if (mais) mais.addEventListener('click', function() { historicoLimite += 100; renderHistoricoList(); });
 }
+
+function renderKpisHistorico(r, f) {
+  function kpi(rotulo, valor, sub, extra) {
+    return '<div class="he-kpi' + (extra || '') + '"><div class="he-kpi-rot">' + rotulo + '</div><div class="he-kpi-val">' + valor + '</div>' +
+      (sub ? '<div class="he-kpi-sub">' + sub + '</div>' : '') + '</div>';
+  }
+  var qtds = r.porUnidade.map(function(u) { return fmtQtdUn(u.qtd, u.unidade); }).join(' · ') || '—';
+  var cqAtivo = f.cq === 'AGUARDANDO';
+  document.getElementById('hKpis').innerHTML =
+    kpi('Recebimentos', fmtNum(r.recebimentos), fmtNum(r.itens) + (r.itens === 1 ? ' item · ' : ' itens · ') + fmtNum(r.origens) + (r.origens === 1 ? ' origem' : ' origens')) +
+    kpi('Quantidade recebida', '<span class="he-kpi-qtd">' + qtds + '</span>', 'somada por unidade') +
+    '<button type="button" class="he-kpi-btn" data-kpi-cq="AGUARDANDO" title="' + (cqAtivo ? 'Mostrar todas as situações' : 'Mostrar só o que aguarda o CQ') + '">' +
+    kpi('Aguardando CQ', fmtNum(r.aguardandoCq), r.maisAntigoCqDias != null ? 'mais antigo há ' + r.maisAntigoCqDias + ' dia(s)' : 'nada parado',
+      (r.aguardandoCq ? ' he-kpi-alerta' : '') + (cqAtivo ? ' he-kpi-ativo' : '')) + '</button>' +
+    kpi('Reprovados ou bloqueados', fmtNum(r.problemas), '', r.problemas ? ' he-kpi-perigo' : '') +
+    kpi('MP sem validade', fmtNum(r.mpSemValidade), 'matéria-prima recebida sem data', r.mpSemValidade ? ' he-kpi-alerta' : '') +
+    kpi('Com devolução', fmtNum(r.devolucoes), 'itens devolvidos ao fornecedor');
+}
+
+function htmlHistoricoTabela(rows) {
+  var visiveis = rows.slice(0, HIST_TETO_TABELA);
+  var corpo = visiveis.map(function(r) {
+    var chave = r.pcKey + '/' + r.recKey + '/' + r.linhaKey, cq = RelatorioEntradas.CQ[r.cq];
+    var pedido = r.qtdPedida != null && r.qtdPedida > 0
+      ? '<small>' + (r.qtdRecebidaPc != null && r.qtdRecebidaPc < r.qtdPedida
+          ? 'PC: ' + fmtNum(r.qtdRecebidaPc) + ' de ' + fmtNum(r.qtdPedida) + ' <span class="he-parcial">parcial</span>'
+          : 'PC: ' + fmtNum(r.qtdRecebidaPc != null ? r.qtdRecebidaPc : r.qtd) + ' de ' + fmtNum(r.qtdPedida)) + '</small>' : '';
+    var linha = '<tr class="he-row' + (histAberto === chave ? ' he-aberta' : '') + (r.recCancelado ? ' he-cancelada' : '') + '" data-rec="' + escapeAttr(chave) + '" tabindex="0">' +
+      '<td>' + diaBr(r.dia) + '<br><small>NF ' + escapeHtml(r.nf || '—') + '</small></td>' +
+      '<td><b>' + escapeHtml(r.pc) + '</b><br><small>' + escapeHtml(r.origem) + '</small></td>' +
+      '<td><b>' + escapeHtml(r.codigo) + '</b> ' + escapeHtml(r.material) + '<br><small>' +
+        escapeHtml(RelatorioEntradas.TIPOS[r.tipo] || r.tipo || '') + (r.dono !== 'Kuryos' ? ' · de ' + escapeHtml(r.dono) : '') + '</small></td>' +
+      '<td class="he-num"><b>' + fmtQtdUn(r.qtd, r.unidade) + '</b>' + (r.devolvido ? '<br><small class="he-devolvido">devolvido ' + fmtNum(r.devolvido) + '</small>' : '') + (pedido ? '<br>' + pedido : '') + '</td>' +
+      '<td>' + escapeHtml(r.loteInterno || '—') + '<br><small>forn.: ' + escapeHtml(r.loteFornecedor || '—') + '</small></td>' +
+      '<td class="' + classeValidade(r.validade) + '">' + diaBr(r.validade) + '</td>' +
+      '<td><span class="badge badge-' + cq.cor + '">' + escapeHtml(cq.rotulo) + '</span>' +
+        (r.diasEsperandoCq != null ? '<br><small>há ' + r.diasEsperandoCq + ' dia(s)</small>' : (r.inspecionadoEm ? '<br><small>em ' + diaBr(r.inspecionadoEm) + '</small>' : '')) + '</td>' +
+      '<td>' + escapeHtml(r.enderecoAtual || '—') + (r.saldoLote != null ? '<br><small>saldo ' + fmtQtdUn(r.saldoLote, r.unidade) + '</small>' : '') + '</td>' +
+      '</tr>';
+    if (histAberto === chave) linha += '<tr class="he-det"><td colspan="8">' + htmlDetalheEntrada(r) + '</td></tr>';
+    return linha;
+  }).join('');
+  return '<div class="card he-tabela-card"><div class="he-tabela-wrap"><table class="he-tabela"><thead><tr>' +
+    '<th>Data / NF</th><th>PC / origem</th><th>Material</th><th class="he-num">Quantidade</th><th>Lote</th><th>Validade</th><th>CQ</th><th>Endereço / saldo hoje</th>' +
+    '</tr></thead><tbody>' + corpo + '</tbody></table></div>' +
+    (rows.length > visiveis.length ? '<div class="field-hint" style="padding:10px 14px">Mostrando ' + visiveis.length + ' de ' + rows.length +
+      ' itens. Refine os filtros ou use "Exportar para Excel" para ver todos.</div>' : '') +
+    '<div class="field-hint" style="padding:8px 14px 12px">Clique numa linha para ver o recebimento completo, reimprimir etiquetas, cancelar ou devolver.</div></div>';
+}
+
+function htmlDetalheEntrada(r) {
+  var p = allPedidosCompra[r.pcKey] || {}, rec = (p.recebimentos || {})[r.recKey];
+  function nota(v) { return v == null ? '—' : v + '/5'; }
+  var extra = '<div class="he-extra">' +
+    '<span><b>Recebido por</b> ' + escapeHtml(r.recebidoPor || '—') + ' em ' + fmtDataHora(r.data) + '</span>' +
+    '<span><b>Volumes</b> ' + (r.volumes != null ? fmtNum(r.volumes) : '—') + ' · <b>amostra</b> ' + (r.amostra != null ? fmtNum(r.amostra) : '—') + '</span>' +
+    '<span><b>Veículo</b> ' + nota(r.notaVeiculo) + ' · <b>embalagem</b> ' + nota(r.notaEmbalagem) + '</span>' +
+    '<span><b>Certificado do fornecedor</b> ' + (r.certificado ? 'sim' : 'não') + '</span>' +
+    (r.observacoes ? '<span class="he-obs"><b>Observações</b> ' + escapeHtml(r.observacoes) + '</span>' : '') + '</div>';
+  return extra + (rec ? htmlCartaoRecebimento({pedidoKey: r.pcKey, pedido: p, recebimentoKey: r.recKey, recebimento: rec}) : '');
+}
+
+function htmlHistoricoCartoes(rows) {
+  var vistos = {}, regs = [];
+  rows.forEach(function(r) {
+    var k = r.pcKey + '/' + r.recKey;
+    if (vistos[k]) return;
+    vistos[k] = true;
+    var p = allPedidosCompra[r.pcKey] || {}, rec = (p.recebimentos || {})[r.recKey];
+    if (rec) regs.push({pedidoKey: r.pcKey, pedido: p, recebimentoKey: r.recKey, recebimento: rec});
+  });
+  var total = regs.length;
+  regs = regs.slice(0, historicoLimite);
+  return '<div class="field-hint" style="margin:0 0 10px">Exibindo ' + regs.length + ' de ' + total + ' recebimento(s), do mais recente para o mais antigo.</div>' +
+    regs.map(htmlCartaoRecebimento).join('') +
+    (historicoLimite < total ? '<button id="btnMaisHistorico" class="btn btn-ghost" style="width:100%;justify-content:center">Mostrar mais recebimentos</button>' : '');
+}
+
+function htmlCartaoRecebimento(reg) {
+  var rec = reg.recebimento, cancelado = rec.status === 'CANCELADO';
+  var linhas = Object.entries(rec.itensRecebidos || {});
+  var operavel = !!rec.idempotencyKey && linhas.length > 0 && linhas.every(function(entry) { return !!entry[1].loteKey; });
+  var itensHtml = linhas.map(function(entry) {
+    var l = entry[1], q = l.entradaQualidade || {}, disponivelDevolver = Math.max(0, Number(l.qtdRecebidaAgora || 0) - Number(l.qtdDevolvida || 0));
+    return '<div style="padding:8px 0;border-top:1px solid var(--tint-gray-bg);display:flex;justify-content:space-between;gap:10px;align-items:center">' +
+      '<div><b>' + escapeHtml(q.loteInterno || 'Legado sem AK automático') + '</b> · ' + escapeHtml(l.materialCodigo || '') + ' — ' + escapeHtml(l.materialNome || '') +
+      '<div class="field-hint">Lote fornecedor: ' + escapeHtml(q.loteOrigem || '—') + ' · ' + fmtNum(l.qtdRecebidaAgora) + ' ' + escapeHtml(l.unidade || '') +
+      (l.qtdDevolvida ? ' · devolvido: ' + fmtNum(l.qtdDevolvida) : '') + '</div></div>' +
+      (!cancelado && operavel && q.loteInterno && l.loteKey && disponivelDevolver > 0 ? '<button class="btn btn-ghost btn-sm btn-devolver-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '" data-linha="' + escapeAttr(entry[0]) + '" data-max="' + escapeAttr(String(disponivelDevolver)) + '">Devolver</button>' : '') + '</div>';
+  }).join('');
+  return '<div class="pc-card"><div class="pc-card-head"><div><div class="pc-titulo">' + escapeHtml(reg.pedido.numeroFormatado || reg.pedidoKey) + ' — ' + escapeHtml(nomeOrigemPedido(reg.pedido)) + '</div>' +
+    '<div class="pc-sub">Recebido em ' + fmtData(rec.data || rec.criadoEm) + ' · NF ' + escapeHtml(rec.notaFiscal || '—') + ' · por ' + escapeHtml(rec.recebidoPor || '—') + '</div></div>' +
+    '<span class="badge ' + (cancelado ? 'badge-red' : 'badge-green') + '">' + (cancelado ? 'Cancelado' : 'Recebido') + '</span></div>' + itensHtml +
+    '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-ghost btn-sm btn-etiquetas-rec" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">🏷️ Reimprimir etiquetas</button>' +
+    (!cancelado && operavel ? '<button class="btn btn-ghost btn-sm btn-cancelar-rec" style="color:var(--danger)" data-pc="' + escapeAttr(reg.pedidoKey) + '" data-rec="' + escapeAttr(reg.recebimentoKey) + '">Cancelar recebimento</button>' : '') + '</div></div>';
+}
+
+function ligarAcoesRecebimento(box) {
+  box.querySelectorAll('.btn-etiquetas-rec').forEach(function(btn) { btn.addEventListener('click', function() { reimprimirRecebimento(btn.dataset.pc, btn.dataset.rec); }); });
+  box.querySelectorAll('.btn-cancelar-rec').forEach(function(btn) { btn.addEventListener('click', function() { cancelarRecebimentoTela(btn.dataset.pc, btn.dataset.rec); }); });
+  box.querySelectorAll('.btn-devolver-rec').forEach(function(btn) { btn.addEventListener('click', function() { devolverRecebimentoTela(btn.dataset.pc, btn.dataset.rec, btn.dataset.linha, Number(btn.dataset.max)); }); });
+}
+
+function exportarHistoricoCsv() {
+  var rows = RelatorioEntradas.filtrar(linhasHistorico(), filtroHistorico());
+  if (!rows.length) { showAlert('Nenhuma entrada com esses filtros para exportar.', 'danger'); return; }
+  var blob = new Blob(['\ufeff' + RelatorioEntradas.csv(rows)], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'entradas-materiais-' + toLocalISODate(new Date()) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+}
+
+(function ligarFiltrosHistorico() {
+  ['hBusca', 'hDe', 'hAte'].forEach(function(id) { document.getElementById(id).addEventListener('input', renderHistoricoList); });
+  ['hPeriodo', 'hOrigem', 'hTipo', 'hCq', 'hDono', 'hCancelados'].forEach(function(id) {
+    document.getElementById(id).addEventListener('change', function() {
+      if (id === 'hPeriodo') document.getElementById('hDatas').style.display = hv('hPeriodo') === 'custom' ? 'inline-flex' : 'none';
+      renderHistoricoList();
+    });
+  });
+  document.querySelectorAll('.he-visao [data-visao]').forEach(function(b) {
+    b.addEventListener('click', function() { histVisao = b.dataset.visao; renderHistoricoList(); });
+  });
+  document.getElementById('hLimpar').addEventListener('click', function() {
+    ['hBusca', 'hDe', 'hAte', 'hOrigem', 'hTipo', 'hCq', 'hDono'].forEach(function(id) { document.getElementById(id).value = ''; });
+    document.getElementById('hPeriodo').value = '30';
+    document.getElementById('hDatas').style.display = 'none';
+    document.getElementById('hCancelados').checked = false;
+    renderHistoricoList();
+  });
+  document.getElementById('hExportar').addEventListener('click', exportarHistoricoCsv);
+  document.getElementById('hKpis').addEventListener('click', function(e) {
+    var b = e.target.closest('[data-kpi-cq]');
+    if (!b) return;
+    var sel = document.getElementById('hCq');
+    sel.value = sel.value === b.dataset.kpiCq ? '' : b.dataset.kpiCq;
+    renderHistoricoList();
+  });
+  var box = document.getElementById('historicoList');
+  function alternar(tr) {
+    histAberto = histAberto === tr.dataset.rec ? null : tr.dataset.rec;
+    renderHistoricoList();
+  }
+  box.addEventListener('click', function(e) {
+    var tr = e.target.closest('tr.he-row');
+    if (tr) alternar(tr);
+  });
+  box.addEventListener('keydown', function(e) {
+    var tr = e.target.closest && e.target.closest('tr.he-row');
+    if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); alternar(tr); }
+  });
+})();
 
 function lotesEtiquetaDoRecebimento(pedidoKey, recebimentoKey) {
   var p = allPedidosCompra[pedidoKey] || {}, rec = p.recebimentos && p.recebimentos[recebimentoKey] || {};
@@ -1447,6 +1707,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     dbOnValue(db.ref('estoque_lotes'), function(snap) {
       allEstoqueLotes = snap.val() || {};
+      renderHistoricoList(); // situação no CQ, endereço e saldo de hoje vêm do lote
     });
   } catch (err) {
     setStatus(false, 'Erro');

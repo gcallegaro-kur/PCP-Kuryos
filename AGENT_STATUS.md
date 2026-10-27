@@ -3,6 +3,17 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Relatório de entradas de materiais na Logística › Histórico (27/10/2026)
+
+- **Pedido:** "quero um relatório melhor de entradas de materiais ... agendamentos >
+  histórico, onde temos poucas informações".
+- **Escopo:** Histórico vira relatório (uma linha por item recebido, cruzada com o lote
+  e com o item do PC): filtros, indicadores, exportação CSV; cartões antigos ficam como
+  visão "Por recebimento". Worktree `wt-entradas`.
+- **Arquivos ativos:** `public/logistica.html`, `public/shared/relatorio-entradas.js`,
+  `run_relatorio_entradas_test.js`, `run_relatorio_entradas_ui_test.js`,
+  `public/manual_logistica.html`, `AGENT_STATUS.md`.
+
 ### Claude — Saneamento dos vínculos pedido↔linha↔OP (27/10/2026)
 
 - **Gatilho:** palete PA-26292-01-P1 (MRARBS07, 4.656 un) travado em Montar
