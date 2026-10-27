@@ -13,6 +13,8 @@
   <script src="shared/utils.js"></script>
   <script src="shared/anexos.js"></script>
   <script src="shared/fotos-qualidade.js"></script>
+  <script src="shared/rascunho-cq.js"></script>
+  <script src="shared/filtro-qualidade.js"></script>
   <script src="shared/inspecao-pa.js"></script>
   <script src="shared/laudo-pa-lote.js"></script>
   <script src="shared/retrabalho-op.js"></script>
@@ -100,6 +102,15 @@
     .modal-header h2{font-size:16px;font-weight:700}
     .modal-close{background:none;border:none;color:white;font-size:22px;cursor:pointer;line-height:1;opacity:.8}
     .modal-body{padding:20px;max-height:70vh;overflow-y:auto}
+    /* Barras de filtro: lado a lado na tela larga (o estilo global deixa o select com 100%). */
+    .kt-toolbar > select.kt-select{width:auto !important;flex:0 1 auto;max-width:260px}
+    .kt-toolbar > .kt-search{flex:1 1 280px}
+    @media (max-width:640px){.kt-toolbar > select.kt-select{width:100% !important;max-width:none;flex:1 1 100%}}
+    .rnc-periodo{display:flex;align-items:center;gap:6px;white-space:nowrap;margin:0}
+    .rnc-periodo input{width:auto;padding:7px 8px}
+    .q-filtro-resumo{margin:-6px 0 12px}
+    .q-filtro-resumo button{margin-left:6px}
+    .rascunho-status{margin-right:auto;align-self:center;font-size:12px}
     .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2);flex-wrap:wrap}
     .form-group{margin-bottom:14px}
     .form-group:last-child{margin-bottom:0}
@@ -204,6 +215,24 @@
     <!-- Uma fila por tipo de análise (29/09): pedido do usuário, "para não
          poluir tudo em um único lugar". Ver tudo junto é opção da analista,
          lembrada no aparelho, não o padrão. -->
+    <!-- Busca e filtros (27/10/2026): valem para todas as abas e para os
+         cartões de granel; a contagem de cada aba passa a ser a do filtro. -->
+    <div class="kt-toolbar" id="qFiltros">
+      <div class="kt-search"><span>🔎</span><input type="text" id="qBusca" placeholder="Buscar por código, nome, lote, NF, fornecedor, pedido, OP ou posição..." aria-label="Buscar na fila de inspeção"></div>
+      <select class="kt-select" id="qFiltroForn" aria-label="Fornecedor ou origem"><option value="">Todo fornecedor / origem</option></select>
+      <select class="kt-select" id="qFiltroEspera" aria-label="Tempo de espera">
+        <option value="">Qualquer espera</option>
+        <option value="3">Esperando há mais de 3 dias</option>
+        <option value="7">Esperando há mais de 7 dias</option>
+      </select>
+      <select class="kt-select" id="qFiltroSituacao" aria-label="Situação do laudo">
+        <option value="">Iniciados ou não</option>
+        <option value="preenchimento">✎ Em preenchimento</option>
+        <option value="nao_iniciado">Não iniciados</option>
+      </select>
+      <button type="button" class="btn btn-ghost btn-sm" id="qLimparFiltros" style="display:none">Limpar filtros</button>
+    </div>
+    <div class="field-hint q-filtro-resumo" id="qFiltroResumo" style="display:none"></div>
     <div class="q-tipos" id="qTipos"></div>
     <div class="section-note" id="qTipoVazio" style="display:none"></div>
 
@@ -283,7 +312,7 @@
     </div>
 
     <div class="kt-toolbar">
-      <div class="kt-search"><span>🔎</span><input type="text" id="rncSearch" placeholder="Buscar por número, item, fornecedor ou descrição..."></div>
+      <div class="kt-search"><span>🔎</span><input type="text" id="rncSearch" placeholder="Buscar por número, item, lote, OP, fornecedor, descrição, causa ou responsável..." aria-label="Buscar não conformidades"></div>
       <select class="kt-select" id="rncFiltroStatus">
         <option value="ABERTAS">Abertas e em análise</option>
         <option value="">Todas</option>
@@ -297,6 +326,10 @@
         <option value="MAIOR">Maior</option>
         <option value="MENOR">Menor</option>
       </select>
+      <select class="kt-select" id="rncFiltroOrigem" aria-label="Origem"><option value="">Toda origem</option></select>
+      <select class="kt-select" id="rncFiltroForn" aria-label="Fornecedor"><option value="">Todo fornecedor</option></select>
+      <label class="rnc-periodo field-hint">Aberta de <input type="date" id="rncDe" aria-label="Aberta a partir de"> até <input type="date" id="rncAte" aria-label="Aberta até"></label>
+      <button type="button" class="btn btn-ghost btn-sm" id="rncLimpar" style="display:none">Limpar filtros</button>
       <button class="btn btn-primary" id="btnNovaRnc">+ Nova RNC</button>
     </div>
 
@@ -492,6 +525,7 @@
     <div class="modal-header"><h2 id="modalGranelTitle">Análise do granel</h2><button class="modal-close" id="modalGranelClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="qGranelInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div id="qRascunhoAvisoGranel" class="section-note" style="display:none;margin-bottom:14px"></div>
       <div class="plano-wrap">
         <div class="plano-head"><span id="qGranelPlanoTitulo">Ensaios do granel</span><span id="qGranelPlanoResumo"></span></div>
         <div class="plano-scroll"><table class="plano-tabela"><tbody id="qGranelPlanoBody"></tbody></table></div>
@@ -523,7 +557,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="qGranelCancelar">Cancelar</button>
+      <span class="field-hint rascunho-status" id="qRascunhoGranel" aria-live="polite"></span>
+      <button class="btn btn-ghost" id="qGranelCancelar" title="Fecha e guarda o que já foi preenchido">Fechar</button>
       <button class="btn btn-danger" id="qGranelReprovar">Reprovar granel</button>
       <button class="btn btn-restricao" id="qGranelRestringir">Liberar com restrição</button>
       <button class="btn btn-green" id="qGranelLiberar">Liberar para envase</button>
@@ -586,6 +621,7 @@
     <div class="modal-header"><h2 id="modalLaudoTitle">Laudo de Qualidade</h2><button class="modal-close" id="modalLaudoClose" title="Fechar" aria-label="Fechar">×</button></div>
     <div class="modal-body">
       <div id="qLoteInfo" class="field-hint" style="margin-bottom:14px"></div>
+      <div id="qRascunhoAvisoLaudo" class="section-note" style="display:none;margin-bottom:14px"></div>
       <div id="qRecebimentoInfo" class="section-note" style="display:none;margin-bottom:14px"></div>
 
       <!-- Plano de inspeção: só aparece quando o item tem especificação -->
@@ -814,7 +850,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" id="modalLaudoCancel">Cancelar</button>
+      <span class="field-hint rascunho-status" id="qRascunhoLaudo" aria-live="polite"></span>
+      <button class="btn btn-ghost" id="modalLaudoCancel" title="Fecha e guarda o que já foi preenchido">Fechar</button>
       <button class="btn btn-ghost" id="qBtnEmitirLaudo" title="Emitir o Relatório de Análise deste lote em PDF">🖨 Emitir laudo</button>
       <button class="btn btn-ghost" id="qBtnReter" title="Segura o lote sem decidir ainda">⏸ Reter</button>
       <button class="btn btn-danger" id="qBtnReprovar">Reprovar</button>
@@ -1079,12 +1116,15 @@ dbOnValue(db.ref('estoque_lotes'), function(snap) {
   lotesCarregados = true;
   setStatus(true, 'Conectado');
   renderFila(); renderFornecedores();
+  if (rncExpandida) renderRncs(); // o botão "Laudo do lote" do detalhe depende dos lotes
   atenderEmissaoPedida();
 }, { onError: function(e) { setStatus(false, 'Erro de conexão'); showAlert('Não foi possível ler os lotes: ' + e.message, 'danger'); } });
 
 dbOnValue(db.ref('nao_conformidades'), function(snap) {
   allRncs = snap.val() || {};
+  rncsCarregadas = true;
   renderRncs(); renderFila(); renderFornecedores();
+  atenderRncPedida();
 }, { onError: function(e) { showAlert('Não foi possível ler as não conformidades: ' + e.message, 'danger'); } });
 
 dbOnValue(db.ref('pedidos_compra'), function(snap) {
@@ -1118,6 +1158,34 @@ function atenderEmissaoPedida() {
   emissaoPedidaUrl = null;
   abrirEmissaoLaudo(pedido.item, pedido.lote);
 }
+/* Link direto para uma RNC (27/10/2026, pedido do usuário):
+   ?tab=rnc&rnc=RNC-2026-0031 -- do Histórico e Indicadores -- abre a aba
+   filtrada naquela não conformidade, com o detalhe expandido. Antes o link
+   caía na lista inteira e a pessoa tinha de procurar de novo. */
+var rncPedidaUrl = new URLSearchParams(location.search).get('rnc');
+var rncsCarregadas = false;
+function chaveDaRnc(numero) {
+  if (allRncs[numero]) return numero;
+  return Object.keys(allRncs).filter(function(k) { return (allRncs[k] || {}).numero === numero; })[0] || null;
+}
+function atenderRncPedida() {
+  if (!rncPedidaUrl || !rncsCarregadas) return;
+  var numero = rncPedidaUrl;
+  rncPedidaUrl = null;
+  mostrarRnc(chaveDaRnc(numero), numero);
+}
+// Mostra UMA RNC: filtros limpos (inclusive situação = Todas), busca pelo
+// número e detalhe aberto. Sem a RNC no banco, fica só a busca pelo número.
+function mostrarRnc(chave, numero) {
+  limparFiltrosRnc(true);
+  document.getElementById('rncSearch').value = (chave && (allRncs[chave] || {}).numero) || numero || chave || '';
+  rncExpandida = chave || null;
+  ativarAbaQualidade('rnc', true);
+  renderRncs();
+  var bt = chave && document.querySelector('#rncBody .rnc-expandir[data-rnc="' + CSS.escape(chave) + '"]');
+  if (bt) bt.closest('tr').scrollIntoView({block: 'center'});
+}
+
 dbOnValue(db.ref('fornecedores'), function(snap) {
   allFornecedores = snap.val() || {};
   var sel = document.getElementById('rncFornecedor');
@@ -1148,6 +1216,189 @@ var laudoAtual = null; // { itemCodigo, loteKey, lote, itemTipo, plano, resultad
 var allParametrosPa = {};
 var allOpsQualidade = {};
 var granelAtual = null; // {opKey, op, espec, resultados}
+
+/* ── Rascunho do laudo (27/10/2026) ──
+   Pedido do usuário: o que se digita no laudo e na análise do granel se
+   perdia ao clicar fora, apertar Esc ou trocar de tela. Cada alteração agenda
+   a gravação em qualidade_rascunhos (shared/rascunho-cq.js); fechar o popup
+   e sair da página gravam na hora. A fila mostra "Em preenchimento" e, ao
+   reabrir, tudo volta. A decisão registrada apaga o rascunho. Fotos não
+   entram: só sobem para o Storage junto com a decisão. */
+var allRascunhosCq = {};
+dbOnValue(db.ref(RascunhoCQ.NO), function(snap) {
+  allRascunhosCq = snap.val() || {};
+  renderFila();
+  renderFilaGranel();
+});
+var IGNORAR_RASCUNHO = ['qEmbQtd', 'qCk7PesoQtd'];
+var autosaveLaudo = RascunhoCQ.criarAutosave(gravarRascunhoLaudo, 800);
+var autosaveGranel = RascunhoCQ.criarAutosave(gravarRascunhoGranel, 800);
+
+function usuarioRascunho() {
+  var au = firebase.auth().currentUser;
+  return {nome: currentUserNome(), uid: au ? au.uid : null};
+}
+function statusRascunho(id, texto) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = texto || '';
+}
+function avisoRascunho(id, reg) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = reg ? '' : 'none';
+  el.innerHTML = reg
+    ? '✎ <b>Continuando o preenchimento</b> salvo ' + escapeHtml(RascunhoCQ.horaCurta(reg.atualizadoEm)) +
+      (reg.por ? ' por ' + escapeHtml(reg.por) : '') + '. As fotos não ficam no rascunho: anexe-as antes de decidir. ' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-descartar-rascunho>Descartar e começar de novo</button>'
+    : '';
+}
+function seloRascunho(chave) {
+  var reg = allRascunhosCq[chave];
+  return reg ? '<br><span class="badge badge-orange" title="O laudo já foi começado e está salvo. Abra para continuar.">✎ ' +
+    escapeHtml(RascunhoCQ.rotulo(reg)) + '</span>' : '';
+}
+function gravarRascunho(chave, tipo, ids, conteudo, statusId) {
+  var reg = RascunhoCQ.montarRegistro(tipo, ids, conteudo, usuarioRascunho(), new Date().toISOString(), allRascunhosCq[chave]);
+  if (!reg) { statusRascunho(statusId, '⚠ Preenchimento grande demais para o rascunho'); return Promise.resolve(); }
+  allRascunhosCq[chave] = reg;
+  statusRascunho(statusId, 'Salvando…');
+  return db.ref(RascunhoCQ.NO + '/' + chave).set(reg).then(function() {
+    statusRascunho(statusId, 'Rascunho salvo às ' + RascunhoCQ.horaCurta(reg.atualizadoEm).slice(6));
+  }).catch(function(e) {
+    statusRascunho(statusId, '⚠ Rascunho NÃO salvo: ' + e.message);
+  });
+}
+function apagarRascunho(chave) {
+  delete allRascunhosCq[chave];
+  return db.ref(RascunhoCQ.NO + '/' + chave).remove().catch(function(e) { console.error('Falha ao apagar rascunho:', e); });
+}
+
+// Laudo (MP, embalagem, PA)
+function gravarRascunhoLaudo() {
+  var l = laudoAtual;
+  if (!l || l.concluido || !l.chaveRascunho) return;
+  return gravarRascunho(l.chaveRascunho, 'LAUDO', {
+    itemCodigo: l.itemCodigo, loteKey: l.loteKey, opKey: l.lotePA ? l.lotePA.grupo.opKey : null
+  }, {
+    estado: {
+      resultados: l.resultados,
+      ck7: {respostas: l.ck7.respostas, pesos: l.ck7.pesos},
+      emb: {respostas: l.emb.respostas, amostras: l.emb.amostras},
+      resPa: l.resPa ? {fq: l.resPa.fq, micro: l.resPa.micro} : null
+    },
+    campos: RascunhoCQ.coletarCampos(document.getElementById('modalLaudoBg'), IGNORAR_RASCUNHO)
+  }, 'qRascunhoLaudo');
+}
+function restaurarRascunhoLaudo() {
+  var reg = allRascunhosCq[laudoAtual.chaveRascunho];
+  var c = RascunhoCQ.ler(reg);
+  avisoRascunho('qRascunhoAvisoLaudo', c ? reg : null);
+  statusRascunho('qRascunhoLaudo', c ? 'Rascunho recuperado — continua salvando sozinho' : 'O que você preencher é salvo sozinho');
+  if (!c) return;
+  var e = c.estado || {};
+  laudoAtual.resultados = e.resultados || {};
+  if (e.ck7) { laudoAtual.ck7.respostas = e.ck7.respostas || {}; laudoAtual.ck7.pesos = e.ck7.pesos || []; }
+  if (e.emb) { laudoAtual.emb.respostas = e.emb.respostas || {}; laudoAtual.emb.amostras = e.emb.amostras || []; }
+  if (e.resPa && laudoAtual.resPa) {
+    if (e.resPa.fq) laudoAtual.resPa.fq = e.resPa.fq;
+    if (e.resPa.micro) laudoAtual.resPa.micro = e.resPa.micro;
+  }
+  RascunhoCQ.aplicarCampos(document.getElementById('modalLaudoBg'), c.campos);
+  // Campos montados a partir do modelo: remonta com o que voltou.
+  laudoAtual.ck7.camposMontados = false;
+  laudoAtual.emb.camposMontados = false;
+  renderPlanoInspecao();
+  renderCk7();
+  renderEmbalagem();
+  if (laudoAtual.resPa) renderResultadosPa();
+}
+function concluirRascunhoLaudo() {
+  autosaveLaudo.cancelar();
+  if (!laudoAtual) return;
+  laudoAtual.concluido = true;
+  if (laudoAtual.chaveRascunho) apagarRascunho(laudoAtual.chaveRascunho);
+}
+
+// Análise do granel
+function gravarRascunhoGranel() {
+  var g = granelAtual;
+  if (!g || g.concluido || !g.chaveRascunho) return;
+  return gravarRascunho(g.chaveRascunho, 'GRANEL', {opKey: g.opKey}, {
+    estado: {
+      resultados: g.resultados,
+      restricaoAberta: document.getElementById('qGranelRestricaoBox').style.display !== 'none'
+    },
+    campos: RascunhoCQ.coletarCampos(document.getElementById('modalGranelBg'), IGNORAR_RASCUNHO)
+  }, 'qRascunhoGranel');
+}
+function restaurarRascunhoGranel() {
+  var reg = allRascunhosCq[granelAtual.chaveRascunho];
+  var c = RascunhoCQ.ler(reg);
+  avisoRascunho('qRascunhoAvisoGranel', c ? reg : null);
+  statusRascunho('qRascunhoGranel', c ? 'Rascunho recuperado — continua salvando sozinho' : 'O que você preencher é salvo sozinho');
+  if (!c) return;
+  var e = c.estado || {};
+  granelAtual.resultados = e.resultados || {};
+  RascunhoCQ.aplicarCampos(document.getElementById('modalGranelBg'), c.campos);
+  if (e.restricaoAberta) {
+    document.getElementById('qGranelRestricaoBox').style.display = '';
+    document.getElementById('qGranelRestringir').textContent = 'Confirmar liberação com restrição';
+  }
+  renderPlanoGranel();
+}
+function concluirRascunhoGranel() {
+  autosaveGranel.cancelar();
+  if (!granelAtual) return;
+  granelAtual.concluido = true;
+  if (granelAtual.chaveRascunho) apagarRascunho(granelAtual.chaveRascunho);
+}
+
+/* Qualquer alteração no corpo do popup agenda a gravação. Escuta na bolha,
+   depois do handler do próprio campo, que já atualizou o modelo. Clique em
+   botão conta (+ unidade, remover amostra, NA...). */
+function ligarAutosave(bgId, atual, autosave, statusId) {
+  var corpo = document.querySelector('#' + bgId + ' .modal-body');
+  var marcar = function() {
+    if (!atual()) return;
+    autosave.agendar();
+    statusRascunho(statusId, 'Alterações sendo salvas…');
+  };
+  corpo.addEventListener('input', marcar);
+  corpo.addEventListener('change', marcar);
+  corpo.addEventListener('click', function(ev) {
+    var t = ev.target;
+    if (t && t.closest && t.closest('[data-descartar-rascunho]')) return;
+    if (t && t.closest && t.closest('button')) marcar();
+  });
+  return marcar;
+}
+ligarAutosave('modalLaudoBg', function() { return laudoAtual; }, autosaveLaudo, 'qRascunhoLaudo');
+var marcarGranel = ligarAutosave('modalGranelBg', function() { return granelAtual; }, autosaveGranel, 'qRascunhoGranel');
+
+// "Descartar e começar de novo": apaga o rascunho e reabre o formulário limpo.
+document.getElementById('qRascunhoAvisoLaudo').addEventListener('click', function(ev) {
+  if (!ev.target.closest('[data-descartar-rascunho]') || !laudoAtual) return;
+  if (!confirm('Descartar tudo o que foi preenchido neste laudo e começar de novo?')) return;
+  var l = laudoAtual;
+  autosaveLaudo.cancelar();
+  apagarRascunho(l.chaveRascunho);
+  abrirLaudo(l.itemCodigo, l.loteKey, l.lotePA ? l.lotePA.grupo.opKey : undefined);
+});
+document.getElementById('qRascunhoAvisoGranel').addEventListener('click', function(ev) {
+  if (!ev.target.closest('[data-descartar-rascunho]') || !granelAtual) return;
+  if (!confirm('Descartar tudo o que foi preenchido nesta análise e começar de novo?')) return;
+  var opKey = granelAtual.opKey;
+  autosaveGranel.cancelar();
+  apagarRascunho(granelAtual.chaveRascunho);
+  abrirLaudoGranel(opKey);
+});
+
+// Sair da página (menu, outra aba, fechar o navegador) grava o pendente.
+function gravarRascunhosPendentes() { autosaveLaudo.agora(); autosaveGranel.agora(); }
+window.addEventListener('pagehide', gravarRascunhosPendentes);
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') gravarRascunhosPendentes();
+});
 dbOnValue(db.ref('ops'), function(snap) { allOpsQualidade = snap.val() || {}; renderFilaGranel(); renderFilaCorrecao(); });
 dbOnValue(db.ref('parametros_pa'), function(snap) { allParametrosPa = snap.val() || {}; });
 
@@ -1190,12 +1441,109 @@ function filaCompleta() {
     return da < db2 ? -1 : da > db2 ? 1 : 0;
   });
 }
-function contagemPorTipo() {
+/* ── Busca e filtros da fila (27/10/2026): shared/filtro-qualidade.js ──
+   A tela descreve cada item (o texto onde a busca procura, o fornecedor ou
+   "Produção interna", a espera em dias e se tem rascunho); o módulo decide. */
+function valorCampo(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+function filtrosFila() {
+  return {busca: valorCampo('qBusca'), fornecedor: valorCampo('qFiltroForn'),
+    espera: valorCampo('qFiltroEspera'), situacao: valorCampo('qFiltroSituacao')};
+}
+function descritorFila(f) {
+  if (f.ehLotePa) {
+    var g = f.g;
+    return {
+      texto: [g.itemCodigo, g.itemNome, g.loteOrigem, g.opLote, g.opKey, (g.enderecos || []).join(' '),
+        (g.paletes || []).map(function(p) { return (p.lote || {}).identificadorPalete || ''; }).join(' ')],
+      fornecedor: FiltroQualidade.PRODUCAO_INTERNA, dias: diasDesde((g.criadoEm || '').slice(0, 10)),
+      rascunho: !!allRascunhosCq[RascunhoCQ.chaveLaudo(g.itemCodigo, null, g.opKey)]
+    };
+  }
+  var lote = (allEstoqueLotes[f.itemKey] || {})[f.loteKey] || {};
+  var forn = fornecedorDoLote(lote, allPedidosCompra);
+  var rec = lote.recebimento || {};
+  return {
+    texto: [f.itemCodigo, f.itemNome, f.loteOrigem, lote.loteInterno, rec.loteInterno, rec.notaFiscal ? 'NF ' + rec.notaFiscal : '',
+      rec.skuFornecedor, forn && forn.fornecedorNome, forn && forn.pedidoNumero, f.enderecoCodigo, lote.opLote, lote.identificadorPalete],
+    fornecedor: forn ? forn.fornecedorNome : (f.itemTipo === 'produto' ? FiltroQualidade.PRODUCAO_INTERNA : ''),
+    dias: diasDesde(f.dataRecebimento || f.criadoEm),
+    rascunho: !!allRascunhosCq[RascunhoCQ.chaveLaudo(f.itemCodigo, f.loteKey)]
+  };
+}
+function descritorGranel(o) {
+  var man = (o.manipulacao && o.manipulacao.manipulacao) || {};
+  return {texto: [o.lote, o.key, o.produto, o.sku, o.cliente, man.por], fornecedor: FiltroQualidade.PRODUCAO_INTERNA,
+    dias: man.fim ? diasDesde(String(man.fim).slice(0, 10)) : null, rascunho: !!allRascunhosCq[RascunhoCQ.chaveGranel(o.key)]};
+}
+function descritorCorrecao(o) {
+  var an = ((o.manipulacao || {}).analise) || {};
+  return {texto: [o.lote, o.key, o.produto, o.sku, o.cliente, an.por, an.observacao], fornecedor: FiltroQualidade.PRODUCAO_INTERNA,
+    dias: an.em ? diasDesde(String(an.em).slice(0, 10)) : null, rascunho: false};
+}
+function passaFiltroFila(descritor) { return FiltroQualidade.passaFila(descritor, filtrosFila()); }
+
+// comFiltro: as abas mostram quantos itens o filtro deixa em cada tipo.
+function contagemPorTipo(comFiltro) {
   var c = {mp: 0, embalagem: 0, bulk: 0, pa: 0};
-  filaCompleta().forEach(function(f) { c[tipoFilaDoLote(f.itemTipo, f.itemCodigo)]++; });
-  c.bulk = opsGranelPendentes().length + opsBulkReprovado().length;
+  filaCompleta().forEach(function(f) {
+    if (comFiltro && !passaFiltroFila(descritorFila(f))) return;
+    c[tipoFilaDoLote(f.itemTipo, f.itemCodigo)]++;
+  });
+  c.bulk = opsGranelPendentes().filter(function(o) { return !comFiltro || passaFiltroFila(descritorGranel(o)); }).length +
+    opsBulkReprovado().filter(function(o) { return !comFiltro || passaFiltroFila(descritorCorrecao(o)); }).length;
   return c;
 }
+
+/* Lista de fornecedores: só os que aparecem na fila agora. Só redesenha o
+   select quando a lista muda, senão fecharia na mão de quem está escolhendo. */
+var opcoesFornFilaAtual = null;
+function atualizarOpcoesFornFila() {
+  var sel = document.getElementById('qFiltroForn');
+  if (!sel) return;
+  var atual = sel.value;
+  var nomes = filaCompleta().map(function(f) { return descritorFila(f).fornecedor; });
+  if (opsGranelPendentes().length || opsBulkReprovado().length) nomes.push(FiltroQualidade.PRODUCAO_INTERNA);
+  if (atual) nomes.push(atual);
+  var ops = FiltroQualidade.opcoes(nomes);
+  var chave = ops.join('|');
+  if (chave === opcoesFornFilaAtual) return;
+  opcoesFornFilaAtual = chave;
+  sel.innerHTML = '<option value="">Todo fornecedor / origem</option>' +
+    ops.map(function(n) { return '<option value="' + escapeAttr(n) + '">' + escapeHtml(n) + '</option>'; }).join('');
+  sel.value = atual;
+}
+
+// Resumo do filtro: o que ficou nesta aba e o que achou nas outras.
+function atualizarResumoFiltroFila() {
+  var f = filtrosFila(), ativos = FiltroQualidade.filtrosAtivosFila(f);
+  document.getElementById('qLimparFiltros').style.display = ativos ? '' : 'none';
+  var box = document.getElementById('qFiltroResumo');
+  if (!ativos) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  var atual = tipoFilaAtual(), c = contagemPorTipo(true);
+  var total = c.mp + c.embalagem + c.bulk + c.pa;
+  var aqui = atual === 'tudo' ? total : c[atual];
+  var fora = TIPOS_FILA.filter(function(t) { return atual !== 'tudo' && t.k !== atual && c[t.k]; });
+  box.style.display = '';
+  box.innerHTML = '<b>Filtro ligado:</b> ' + (aqui ? aqui + ' item(ns) nesta aba' : 'nada nesta aba') +
+    (fora.length ? ' · também em ' + fora.map(function(t) { return escapeHtml(t.rot) + ' (' + c[t.k] + ')'; }).join(', ') +
+      ' <button type="button" class="btn btn-ghost btn-sm" data-filtro-ver-tudo>Ver tudo</button>' : '') +
+    (!total ? ' — nenhum item da fila corresponde.' : '');
+}
+function renderFilaInteira() { renderFila(); renderFilaGranel(); renderFilaCorrecao(); }
+['qBusca', 'qFiltroForn', 'qFiltroEspera', 'qFiltroSituacao'].forEach(function(id) {
+  document.getElementById(id).addEventListener(id === 'qBusca' ? 'input' : 'change', renderFilaInteira);
+});
+document.getElementById('qLimparFiltros').addEventListener('click', function() {
+  ['qBusca', 'qFiltroForn', 'qFiltroEspera', 'qFiltroSituacao'].forEach(function(id) { document.getElementById(id).value = ''; });
+  renderFilaInteira();
+  document.getElementById('qBusca').focus();
+});
+document.getElementById('qFiltroResumo').addEventListener('click', function(ev) {
+  if (!ev.target.closest('[data-filtro-ver-tudo]')) return;
+  tipoFila = 'tudo';
+  lembrarTipoFila(tipoFila);
+  renderFilaInteira();
+});
 function tipoFilaAtual() {
   if (tipoFila) return tipoFila;
   var validos = TIPOS_FILA.map(function(t) { return t.k; }).concat(['tudo']);
@@ -1214,7 +1562,7 @@ function bulkVisivelNaFila() { var t = tipoFilaAtual(); return t === 'bulk' || t
 function renderTiposFila() {
   var box = document.getElementById('qTipos');
   if (!box) return;
-  var atual = tipoFilaAtual(), c = contagemPorTipo();
+  var atual = tipoFilaAtual(), c = contagemPorTipo(true);
   var total = c.mp + c.embalagem + c.bulk + c.pa;
   box.innerHTML = TIPOS_FILA.map(function(t) {
     return '<button type="button" class="q-tipo' + (atual === t.k ? ' on' : '') + '" data-tipo-fila="' + t.k + '">' + escapeHtml(t.rot) +
@@ -1233,7 +1581,8 @@ function renderTiposFila() {
   var vazio = document.getElementById('qTipoVazio');
   if (atual === 'bulk' && !c.bulk) {
     vazio.style.display = '';
-    vazio.textContent = 'Nenhum bulk aguardando análise. O bulk chega aqui quando a Manipulação clica em "Fechar manipulação".';
+    vazio.textContent = contagemPorTipo().bulk ? 'Nenhum bulk com esse filtro.'
+      : 'Nenhum bulk aguardando análise. O bulk chega aqui quando a Manipulação clica em "Fechar manipulação".';
   } else vazio.style.display = 'none';
 }
 
@@ -1245,7 +1594,8 @@ function linhaFilaLotePa(g) {
     ? '<br><span class="badge badge-orange" title="Paletes ainda não conferidos pela Logística entram no lote e herdam a decisão.">' + g.aguardandoConferencia + ' palete(s) ainda sem conferência</span>' : '';
   return '<tr>' +
     '<td><span class="badge badge-purple">PA</span> <b>' + escapeHtml(g.itemCodigo) + '</b> <span class="badge badge-purple" title="Checklist de produto acabado (CK-7)">CK-7</span>' +
-      (g.itemNome ? '<br><span class="field-hint">' + escapeHtml(g.itemNome) + '</span>' : '') + '</td>' +
+      (g.itemNome ? '<br><span class="field-hint">' + escapeHtml(g.itemNome) + '</span>' : '') +
+      seloRascunho(RascunhoCQ.chaveLaudo(g.itemCodigo, null, g.opKey)) + '</td>' +
     '<td>' + escapeHtml(g.loteOrigem || '—') + '<br><span class="field-hint"><b>Lote inteiro</b> · ' + g.paletes.length + ' palete(s) · ' + fmtNum(g.caixasTotal) + ' caixa(s)</span>' +
       (g.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(g.dataValidade) + '</span>' : '') + aviso + '</td>' +
     '<td><span class="field-hint">Produção interna</span></td>' +
@@ -1254,7 +1604,7 @@ function linhaFilaLotePa(g) {
     '<td style="text-align:right">' + fmtNum(g.saldoTotal) + ' ' + escapeHtml(g.unidade || '') + '</td>' +
     '<td>' + fmtData((g.criadoEm || '').slice(0, 10)) + badgeDias + '</td>' +
     '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(g.itemCodigo) + '" data-laudo-primeiro="' + escapeAttr(g.paletes[0].loteKey) +
-      '" data-laudo-op="' + escapeAttr(g.opKey) + '">🔬 Laudar lote</button></td>' +
+      '" data-laudo-op="' + escapeAttr(g.opKey) + '">' + (allRascunhosCq[RascunhoCQ.chaveLaudo(g.itemCodigo, null, g.opKey)] ? '✎ Continuar laudo' : '🔬 Laudar lote') + '</button></td>' +
   '</tr>';
 }
 
@@ -1266,6 +1616,9 @@ function renderFila() {
   var fila = filaCompleta().filter(function(f) {
     return tipoAtual === 'tudo' || tipoFilaDoLote(f.itemTipo, f.itemCodigo) === tipoAtual;
   });
+  var filaFiltrada = fila.filter(function(f) { return passaFiltroFila(descritorFila(f)); });
+  atualizarOpcoesFornFila();
+  atualizarResumoFiltroFila();
 
   var esperaMax = 0;
   fila.forEach(function(f) {
@@ -1301,12 +1654,15 @@ function renderFila() {
   document.getElementById('qStatReprovados').textContent = fmtNum(rep);
   document.getElementById('qStatRncAbertas').textContent = fmtNum(rncAbertas);
   var rotTipo = (TIPOS_FILA.filter(function(t) { return t.k === tipoAtual; })[0] || {}).rot;
-  document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação' + (rotTipo ? ' — ' + rotTipo : '') + ' (' + fila.length + ')';
+  document.getElementById('qFilaTitulo').textContent = 'Aguardando liberação' + (rotTipo ? ' — ' + rotTipo : '') +
+    ' (' + (filaFiltrada.length === fila.length ? fila.length : filaFiltrada.length + ' de ' + fila.length) + ')';
 
-  if (!fila.length) {
+  if (!filaFiltrada.length && fila.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nada com esse filtro nesta aba.</td></tr>';
+  } else if (!fila.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="no-data">Nada aguardando laudo. Material recebido em Logística e palete conferido aparecem aqui automaticamente.</td></tr>';
   } else {
-    tbody.innerHTML = fila.map(function(f) {
+    tbody.innerHTML = filaFiltrada.map(function(f) {
       if (f.ehLotePa) return linhaFilaLotePa(f.g);
       var dias = diasDesde(f.dataRecebimento || f.criadoEm);
       // Espera longa é o sinal que importa: material parado ocupando posição
@@ -1332,7 +1688,8 @@ function renderFila() {
           (f.itemTipo === 'produto'
             ? ' <span class="badge badge-purple" title="Checklist de produto acabado (CK-7)">CK-7</span>'
             : espec ? ' <span class="badge badge-blue" title="Tem plano de inspeção cadastrado">📋</span>' : '') +
-          (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') + '</td>' +
+          (f.itemNome ? '<br><span class="field-hint">' + escapeHtml(f.itemNome) + '</span>' : '') +
+          seloRascunho(RascunhoCQ.chaveLaudo(f.itemCodigo, f.loteKey)) + '</td>' +
         '<td>' + escapeHtml(f.loteOrigem || '—') +
           (f.dataValidade ? '<br><span class="field-hint">val. ' + fmtData(f.dataValidade) + '</span>' : '') + '</td>' +
         '<td>' + origem + '</td>' +
@@ -1340,7 +1697,7 @@ function renderFila() {
         '<td>' + escapeHtml(f.enderecoCodigo || '—') + '</td>' +
         '<td style="text-align:right">' + fmtNum(f.saldoLote) + ' ' + escapeHtml(f.unidade || '') + '</td>' +
         '<td>' + fmtData(f.dataRecebimento || f.criadoEm) + badgeDias + '</td>' +
-        '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(f.itemCodigo) + '" data-laudo-lote="' + escapeAttr(f.loteKey) + '">🔬 Laudar</button></td>' +
+        '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-laudo-item="' + escapeAttr(f.itemCodigo) + '" data-laudo-lote="' + escapeAttr(f.loteKey) + '">' + (allRascunhosCq[RascunhoCQ.chaveLaudo(f.itemCodigo, f.loteKey)] ? '✎ Continuar laudo' : '🔬 Laudar') + '</button></td>' +
       '</tr>';
     }).join('');
     tbody.querySelectorAll('[data-laudo-lote]').forEach(function(btn) {
@@ -1359,12 +1716,18 @@ function renderFila() {
   if (tipoAtual !== 'tudo') recentes = recentes.filter(function(x) {
     return tipoFilaDoLote(x.lote.itemTipo, x.lote.itemCodigo) === tipoAtual;
   });
+  var buscaFila = valorCampo('qBusca');
+  if (FiltroQualidade.normalizar(buscaFila)) recentes = recentes.filter(function(x) {
+    var l = x.lote, q = l.qualidade || {};
+    return FiltroQualidade.casaBusca([l.itemCodigo, l.itemNome, l.loteOrigem, l.loteInterno, l.opLote, q.inspecionadoPor,
+      rotuloStatusLote(q.decisao), (l.recebimento || {}).notaFiscal], buscaFila);
+  });
   recentes.sort(function(a, b) {
     return (b.lote.qualidade.inspecionadoEm || '') < (a.lote.qualidade.inspecionadoEm || '') ? -1 : 1;
   });
   var hb = document.getElementById('qHistBody');
   if (!recentes.length) {
-    hb.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum laudo registrado ainda.</td></tr>';
+    hb.innerHTML = '<tr><td colspan="6" class="no-data">' + (FiltroQualidade.normalizar(buscaFila) ? 'Nenhum laudo recente com essa busca.' : 'Nenhum laudo registrado ainda.') + '</td></tr>';
   } else {
     // A RNC automática não guarda ponteiro de volta no lote; achar por
     // loteKey mantém o vínculo visível sem duplicar dado nos dois lados.
@@ -1402,10 +1765,7 @@ function renderFila() {
     hb.querySelectorAll('.ir-rnc').forEach(function(a) {
       a.addEventListener('click', function(ev) {
         ev.preventDefault();
-        document.getElementById('rncSearch').value = a.getAttribute('data-rnc');
-        document.getElementById('rncFiltroStatus').value = '';
-        renderRncs();
-        ativarAbaQualidade('rnc', true);
+        mostrarRnc(a.getAttribute('data-rnc'));
       });
     });
   }
@@ -1421,18 +1781,18 @@ function opsGranelPendentes() {
 }
 
 function renderFilaGranel() {
-  var lista = opsGranelPendentes();
+  var lista = opsGranelPendentes().filter(function(o) { return passaFiltroFila(descritorGranel(o)); });
   document.getElementById('qCardGranel').style.display = lista.length && bulkVisivelNaFila() ? '' : 'none';
   renderTiposFila();
   document.getElementById('qGranelResumo').textContent = lista.length + ' lote(s)';
   document.getElementById('qGranelBody').innerHTML = lista.map(function(o) {
     var man = (o.manipulacao && o.manipulacao.manipulacao) || {};
-    return '<tr><td><b>' + escapeHtml(o.lote || o.key) + '</b></td>' +
+    return '<tr><td><b>' + escapeHtml(o.lote || o.key) + '</b>' + seloRascunho(RascunhoCQ.chaveGranel(o.key)) + '</td>' +
       '<td>' + escapeHtml(o.produto || '—') + '<div class="field-hint">' + escapeHtml(o.sku || '') + '</div></td>' +
       '<td>' + escapeHtml(man.por || '—') + '</td>' +
       '<td style="text-align:right">' + (man.rendimento != null ? fmtNum(man.rendimento) + ' kg' : '—') + '</td>' +
       '<td>' + fmtDataHora(man.fim) + '</td>' +
-      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-granel="' + escapeAttr(o.key) + '">🧪 Analisar granel</button></td></tr>';
+      '<td style="text-align:right"><button class="btn btn-primary btn-sm" data-granel="' + escapeAttr(o.key) + '">' + (allRascunhosCq[RascunhoCQ.chaveGranel(o.key)] ? '✎ Continuar análise' : '🧪 Analisar granel') + '</button></td></tr>';
   }).join('');
   document.getElementById('qGranelBody').querySelectorAll('[data-granel]').forEach(function(b) {
     b.addEventListener('click', function() { abrirLaudoGranel(b.getAttribute('data-granel')); });
@@ -1440,6 +1800,7 @@ function renderFilaGranel() {
 }
 
 function abrirLaudoGranel(opKey) {
+  if (granelAtual) autosaveGranel.agora();
   var op = allOpsQualidade[opKey];
   if (!op) return;
   granelAtual = {opKey: opKey, op: op, espec: especificacaoVigente(allEspecificacoes, op.sku), resultados: {}};
@@ -1480,7 +1841,10 @@ function abrirLaudoGranel(opKey) {
   if (fotosGranel) fotosGranel.limpar();
   fotosGranel = FotosQualidade.montar(document.getElementById('qFotosGranel'), {permiteDispensa: true});
   renderPlanoGranel();
+  granelAtual.chaveRascunho = RascunhoCQ.chaveGranel(opKey);
+  restaurarRascunhoGranel();
   document.getElementById('modalGranelBg').classList.add('open');
+  document.querySelector('#modalGranelBg .modal-body').scrollTop = 0;
 }
 
 function temEspecGranel() {
@@ -1583,6 +1947,7 @@ function atualizarLinhasGranel() {
 }
 
 function fecharModalGranel() {
+  autosaveGranel.agora();
   document.getElementById('modalGranelBg').classList.remove('open');
   granelAtual = null;
 }
@@ -1668,6 +2033,7 @@ function decidirGranel(decisao) {
     }, currentUserNome()).catch(function(e) { return {ok: false, erro: e.message}; });
   }).then(function(rnc) {
     decidindoGranel = false;
+    concluirRascunhoGranel();
     fecharModalGranel();
     showAlert(decisao !== 'REPROVAR'
       ? (comRestricao ? 'Granel liberado COM RESTRIÇÃO (autorizado por ' + restricaoAut + '). O envase deste lote já pode ser alocado.' : 'Granel liberado. O envase deste lote já pode ser alocado.') +
@@ -1683,6 +2049,7 @@ document.getElementById('qGranelReprovar').addEventListener('click', function() 
 document.getElementById('qGranelRestringir').addEventListener('click', function() {
   var box = document.getElementById('qGranelRestricaoBox');
   if (box.style.display === 'none') {
+    marcarGranel();
     box.style.display = '';
     if (!document.getElementById('qGranelRestricaoAut').value) document.getElementById('qGranelRestricaoAut').value = currentUserNome() || '';
     this.textContent = 'Confirmar liberação com restrição';
@@ -1710,7 +2077,7 @@ function opsBulkReprovado() {
     .sort(function(a, b) { return String((b.manipulacao.analise || {}).em || '').localeCompare(String((a.manipulacao.analise || {}).em || '')); });
 }
 function renderFilaCorrecao() {
-  var lista = opsBulkReprovado();
+  var lista = opsBulkReprovado().filter(function(o) { return passaFiltroFila(descritorCorrecao(o)); });
   document.getElementById('qCardCorrecao').style.display = lista.length && bulkVisivelNaFila() ? '' : 'none';
   renderTiposFila();
   document.getElementById('qCorrecaoResumo').textContent = lista.length + ' lote(s)';
@@ -1884,6 +2251,7 @@ function roteiroDoLote(itemTipo, itemCodigo) {
 }
 
 function abrirLaudo(itemCodigo, loteKey, opKey) {
+  if (laudoAtual) autosaveLaudo.agora();
   var itemKey = sanitizeKey(itemCodigo);
   var lote = (allEstoqueLotes[itemKey] || {})[loteKey];
   if (!lote) { showAlert('Este lote não está mais disponível.', 'danger'); return; }
@@ -1996,7 +2364,12 @@ function abrirLaudo(itemCodigo, loteKey, opKey) {
   renderPlanoInspecao();
   renderCk7();
   renderEmbalagem();
+  laudoAtual.chaveRascunho = RascunhoCQ.chaveLaudo(itemCodigo, loteKey, grupoPa ? grupoPa.opKey : null);
+  restaurarRascunhoLaudo();
   document.getElementById('modalLaudoBg').classList.add('open');
+  // Reabrir começa do topo, onde está o aviso de rascunho (o corpo guardava a
+  // rolagem da última vez). Depois do 'open': escondido, o ajuste é ignorado.
+  document.querySelector('#modalLaudoBg .modal-body').scrollTop = 0;
 }
 
 function renderPlanoInspecao() {
@@ -2470,6 +2843,7 @@ function renderCk7() {
 }
 
 function fecharModalLaudo() {
+  autosaveLaudo.agora();
   document.getElementById('modalLaudoBg').classList.remove('open');
   laudoAtual = null;
 }
@@ -2666,6 +3040,7 @@ function salvarLaudo(decisao) {
         eanCaixa: par.eanCaixa || null, atualizadoEm: new Date().toISOString(), atualizadoPor: currentUserNome()
       }).catch(function(e) { console.error('Falha ao guardar parâmetros de PA:', e); });
     }
+    concluirRascunhoLaudo();
     fecharModalLaudo();
     var msg, tipo;
     if (r.decisao === 'LIBERADO') { msg = 'Lote liberado — já disponível para a Separação de Materiais.'; tipo = 'success'; }
@@ -3131,9 +3506,7 @@ var rncAlvo = null;
 function renderRncs() {
   var tbody = document.getElementById('rncBody');
   if (!tbody) return;
-  var busca = norm(document.getElementById('rncSearch').value);
-  var fStatus = document.getElementById('rncFiltroStatus').value;
-  var fClasse = document.getElementById('rncFiltroClasse').value;
+  var filtros = filtrosRnc();
   var anoAtual = String(new Date().getFullYear());
 
   var todas = Object.keys(allRncs).map(function(n) {
@@ -3159,16 +3532,11 @@ function renderRncs() {
   document.getElementById('rncStatAno').textContent = fmtNum(noAno);
   document.getElementById('rncStatIdade').textContent = (abertas + analise) ? fmtNum(idadeMax) : '—';
 
+  atualizarOpcoesFornRnc(todas);
   var lista = todas.filter(function(r) {
-    if (fStatus === 'ABERTAS') { if (!(RNC_STATUS[r.status] || {}).aberta) return false; }
-    else if (fStatus && r.status !== fStatus) return false;
-    if (fClasse && r.classificacao !== fClasse) return false;
-    if (busca) {
-      var alvo = norm([r.numero, r.itemCodigo, r.itemNome, r.fornecedorNome, r.descricao, r.opLote].join(' '));
-      if (alvo.indexOf(busca) === -1) return false;
-    }
-    return true;
+    return FiltroQualidade.passaRnc(r, filtros, function(st) { return !!(RNC_STATUS[st] || {}).aberta; });
   });
+  document.getElementById('rncLimpar').style.display = FiltroQualidade.filtrosAtivosRnc(filtros) ? '' : 'none';
   // Aberta antes de concluída; dentro disso, crítica antes; depois a mais
   // antiga primeiro -- é a ordem de quem precisa ser tratado.
   lista.sort(function(a, b) {
@@ -3181,7 +3549,8 @@ function renderRncs() {
     return (a.abertaEm || '') < (b.abertaEm || '') ? (aa === 0 ? -1 : 1) : (aa === 0 ? 1 : -1);
   });
 
-  document.getElementById('rncCount').textContent = 'Não conformidades (' + lista.length + ')';
+  document.getElementById('rncCount').textContent = 'Não conformidades (' +
+    (FiltroQualidade.filtrosAtivosRnc(filtros) ? lista.length + ' de ' + todas.length : lista.length) + ')';
   if (!lista.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="no-data">' +
       (todas.length ? 'Nenhuma RNC com esse filtro.' : 'Nenhuma não conformidade registrada. Reprovar um lote na Fila de Inspeção abre uma automaticamente.') +
@@ -3230,6 +3599,9 @@ function renderRncs() {
       }).catch(function(e) { b.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
     });
   });
+  tbody.querySelectorAll('[data-rnc-laudo-item]').forEach(function(b) {
+    b.addEventListener('click', function() { abrirEmissaoLaudo(b.getAttribute('data-rnc-laudo-item'), b.getAttribute('data-rnc-laudo-lote')); });
+  });
   tbody.querySelectorAll('.rnc-encerrar').forEach(function(b) {
     b.addEventListener('click', function() { abrirModalEncerrarRnc(b.getAttribute('data-rnc')); });
   });
@@ -3254,12 +3626,52 @@ function detalheRncHtml(r) {
     campo('Responsável pela ação', r.responsavelAcao) +
     campo('Prazo', r.prazoAcao ? fmtData(r.prazoAcao) : '') +
     campo('Disposição', RNC_DISPOSICAO[r.disposicao] || r.disposicao) +
-    (r.encerradaPor ? campo('Encerrada por', r.encerradaPor + ' em ' + fmtDataHora(r.encerradaEm)) : '');
+    (r.encerradaPor ? campo('Encerrada por', r.encerradaPor + ' em ' + fmtDataHora(r.encerradaEm)) : '') +
+    botaoLaudoDaRnc(r);
+}
+// O laudo impresso existe só para lote em estoque que já foi laudado.
+function botaoLaudoDaRnc(r) {
+  if (!r.itemCodigo || !r.loteKey) return '';
+  var l = (allEstoqueLotes[sanitizeKey(r.itemCodigo)] || {})[r.loteKey];
+  if (!l || !l.qualidade || !l.qualidade.inspecionadoEm) return '';
+  return '<div style="margin-top:8px"><button type="button" class="btn btn-ghost btn-sm" data-rnc-laudo-item="' + escapeAttr(r.itemCodigo) +
+    '" data-rnc-laudo-lote="' + escapeAttr(r.loteKey) + '">🖨 Laudo do lote ' + escapeHtml(r.loteOrigem || '') + '</button></div>';
 }
 
-['rncSearch', 'rncFiltroStatus', 'rncFiltroClasse'].forEach(function(id) {
+/* Filtros das RNCs (27/10/2026): origem, fornecedor e período de abertura
+   somados à busca, situação e classificação. Regras em shared/filtro-qualidade.js. */
+var IDS_FILTRO_RNC = ['rncSearch', 'rncFiltroStatus', 'rncFiltroClasse', 'rncFiltroOrigem', 'rncFiltroForn', 'rncDe', 'rncAte'];
+function filtrosRnc() {
+  return {busca: valorCampo('rncSearch'), status: valorCampo('rncFiltroStatus'), classe: valorCampo('rncFiltroClasse'),
+    origem: valorCampo('rncFiltroOrigem'), fornecedor: valorCampo('rncFiltroForn'), de: valorCampo('rncDe'), ate: valorCampo('rncAte')};
+}
+// status ABERTAS é o padrão; todoStatus=true abre para "Todas" (ir para uma RNC específica).
+function limparFiltrosRnc(todoStatus) {
+  IDS_FILTRO_RNC.forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('rncFiltroStatus').value = todoStatus ? '' : 'ABERTAS';
+}
+document.getElementById('rncFiltroOrigem').innerHTML = '<option value="">Toda origem</option>' +
+  Object.keys(RNC_ORIGEM).map(function(k) { return '<option value="' + k + '">' + escapeHtml(RNC_ORIGEM[k]) + '</option>'; }).join('');
+var opcoesFornRncAtual = null;
+function atualizarOpcoesFornRnc(todas) {
+  var sel = document.getElementById('rncFiltroForn');
+  var atual = sel.value;
+  var ops = FiltroQualidade.opcoes(todas.map(function(r) { return r.fornecedorNome; }).concat(atual ? [atual] : []));
+  var chave = ops.join('|');
+  if (chave === opcoesFornRncAtual) return;
+  opcoesFornRncAtual = chave;
+  sel.innerHTML = '<option value="">Todo fornecedor</option>' +
+    ops.map(function(n) { return '<option value="' + escapeAttr(n) + '">' + escapeHtml(n) + '</option>'; }).join('');
+  sel.value = atual;
+}
+IDS_FILTRO_RNC.forEach(function(id) {
   document.getElementById(id).addEventListener('input', renderRncs);
   document.getElementById(id).addEventListener('change', renderRncs);
+});
+document.getElementById('rncLimpar').addEventListener('click', function() {
+  limparFiltrosRnc(false);
+  renderRncs();
+  document.getElementById('rncSearch').focus();
 });
 
 /* ─────────── Modal RNC ─────────── */
@@ -3655,16 +4067,21 @@ document.getElementById('modalEspClose').addEventListener('click', function() { 
 document.getElementById('modalEspCancel').addEventListener('click', function() { document.getElementById('modalEspBg').classList.remove('open'); });
 
 // Fechar modal clicando fora / com Esc -- mesmo comportamento das outras telas.
+// O laudo passa por fecharModalLaudo, que grava o rascunho antes de fechar.
+function fecharModalPorId(id) {
+  var el = document.getElementById(id);
+  if (!el.classList.contains('open')) return;
+  if (id === 'modalLaudoBg') fecharModalLaudo();
+  else el.classList.remove('open');
+}
 ['modalLaudoBg', 'modalRncBg', 'modalEspBg'].forEach(function(id) {
   document.getElementById(id).addEventListener('click', function(ev) {
-    if (ev.target === this) this.classList.remove('open');
+    if (ev.target === this) fecharModalPorId(id);
   });
 });
 document.addEventListener('keydown', function(ev) {
   if (ev.key !== 'Escape') return;
-  ['modalLaudoBg', 'modalRncBg', 'modalEspBg'].forEach(function(id) {
-    document.getElementById(id).classList.remove('open');
-  });
+  ['modalLaudoBg', 'modalRncBg', 'modalEspBg'].forEach(fecharModalPorId);
 });
 </script>
 <!-- Laudo impresso (shared/laudo-cq.js monta, shared/laudo-cq.css pagina).

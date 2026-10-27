@@ -228,6 +228,13 @@
     },
     // Liberação de linha (19/10, PLANO_QUALIDADE.md A3): CK-4 assepsia + CK-5 first article por OP.
     // Operador registra a limpeza; a Qualidade verifica; o líder assina. Inspeção APROVADA não muda mais.
+    "qualidade_rascunhos": {
+      ".read": "auth != null",
+      "$chave": {
+        ".write": "auth != null && (root.child('usuarios').child(auth.uid).child('role').val() == 'admin' || root.child('usuarios').child(auth.uid).child('role').val() == 'qualidade' || root.child('usuarios').child(auth.uid).child('role').val() == 'pcp' || root.child('usuarios').child(auth.uid).child('modulos').child('qualidade').val() == true)",
+        ".validate": "newData.hasChildren(['tipo', 'dados', 'atualizadoEm']) && newData.child('dados').isString() && newData.child('dados').val().length <= 200000 && (newData.child('tipo').val() == 'LAUDO' || newData.child('tipo').val() == 'GRANEL')"
+      }
+    },
     "inspecoes_cq": {
       ".read": "auth != null",
       "$id": {

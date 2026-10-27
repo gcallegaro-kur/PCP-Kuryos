@@ -451,6 +451,22 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Busca e filtros na Fila de Inspeção e nas RNCs + link direto para RNC (27/10/2026) — PUBLICADO
+
+- **Pedidos:** (1) busca e filtros na fila de inspeção e nas RNCs; (2) o link de RNC no Histórico e Indicadores caía na lista inteira — abrir já filtrado, "ou até abrindo o laudo".
+- **Feito:** `shared/filtro-qualidade.js` (puro: busca por palavras sem acento, fornecedor por nome normalizado, espera, situação/rascunho; RNC por situação, classe, origem, fornecedor, período). Fila: barra acima das abas (vale para todas as abas, cartões de bulk/correção e laudos recentes), contagem das abas pelo filtro, aviso "também em Embalagem (1) · Ver tudo", título "(n de m)", topo segue com a fila inteira. RNC: origem, fornecedor, período de/até, busca ampliada (lote, pedido, causa, ação, pessoas), "Limpar filtros", "(n de m)". `?tab=rnc&rnc=NUM` abre filtrado com o detalhe expandido (situação vai para Todas); o detalhe ganha "🖨 Laudo do lote" quando a RNC veio de lote laudado; o atalho dos Laudos recentes usa o mesmo caminho. `qualidade_historico.html` passa o número no link. Selects das barras lado a lado (o estilo global os deixava com 100%).
+- **Testes:** `run_filtro_qualidade_test.js`, `run_filtro_qualidade_ui_test.js` OK; 8 testes de tela da Qualidade OK (inclui o do rascunho).
+- **Arquivos ativos:** nenhum.
+
+### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — PUBLICADO
+
+- **Pedido:** o que se digita no laudo/análise de granel se perdia ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento".
+- **Feito:** `shared/rascunho-cq.js` (puro: chaves, registro com o conteúdo como texto JSON — o RTDB descartaria null de lista e chave com ponto —, coletar/aplicar campos por id, gravação adiada de 800 ms). `qualidade.html`: autosave por delegação no corpo dos dois popups (laudo e granel), grava na hora ao fechar/clicar fora/Esc/página oculta, recupera ao abrir (campos com id + modelo: ensaios, CK-7, pesos, embalagem, resultados de PA, caixa de restrição do granel), aviso com "Descartar e começar de novo", selo "✎ Em preenchimento — quem, quando" e botão "Continuar" na fila; a decisão apaga o rascunho. "Cancelar" virou "Fechar". Regra `qualidade_rascunhos` (admin/qualidade/pcp/módulo qualidade gravam; todos leem; tipo/dados/tamanho validados). Manual da Qualidade atualizado.
+- **Achado no teste de tela:** `{set: setTimeout}` chamado como método dá "Illegal invocation" no navegador — o teste unitário com relógio falso não pegava; o de tela agora confere a gravação com o popup aberto.
+- **Testes:** `run_rascunho_cq_test.js`, `run_rascunho_cq_ui_test.js`, `run_rascunho_cq_rules_test.js` (emulador) OK; 7 testes de tela antigos da Qualidade OK; `run_inspecao_pa_ui_test.js` falha igual no main (já listado).
+- **Fora:** fotos no rascunho, trava entre duas analistas, limpeza de órfão — em MELHORIAS_FUTURAS.
+- **Arquivos ativos:** nenhum.
+
 ### ⚠ Aviso ao Codex — não commite expedicao.js/expedicao_regras.js por cima (23/10/2026)
 
 Na pasta principal (`producao_firebase_FINAL`) há trabalho **não commitado** em
