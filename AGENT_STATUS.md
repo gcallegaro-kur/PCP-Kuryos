@@ -365,9 +365,12 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
-### Claude — Busca e filtros na Fila de Inspeção e nas RNCs (27/10/2026) — EM ANDAMENTO
+### Claude — Busca e filtros na Fila de Inspeção e nas RNCs + link direto para RNC (27/10/2026) — PUBLICADO
 
-- **Arquivos ativos:** `public/qualidade.html`, `public/shared/filtro-qualidade.js` (novo), `public/manual_qualidade.html`, testes novos `run_filtro_qualidade_*.js`, `AGENT_STATUS.md`.
+- **Pedidos:** (1) busca e filtros na fila de inspeção e nas RNCs; (2) o link de RNC no Histórico e Indicadores caía na lista inteira — abrir já filtrado, "ou até abrindo o laudo".
+- **Feito:** `shared/filtro-qualidade.js` (puro: busca por palavras sem acento, fornecedor por nome normalizado, espera, situação/rascunho; RNC por situação, classe, origem, fornecedor, período). Fila: barra acima das abas (vale para todas as abas, cartões de bulk/correção e laudos recentes), contagem das abas pelo filtro, aviso "também em Embalagem (1) · Ver tudo", título "(n de m)", topo segue com a fila inteira. RNC: origem, fornecedor, período de/até, busca ampliada (lote, pedido, causa, ação, pessoas), "Limpar filtros", "(n de m)". `?tab=rnc&rnc=NUM` abre filtrado com o detalhe expandido (situação vai para Todas); o detalhe ganha "🖨 Laudo do lote" quando a RNC veio de lote laudado; o atalho dos Laudos recentes usa o mesmo caminho. `qualidade_historico.html` passa o número no link. Selects das barras lado a lado (o estilo global os deixava com 100%).
+- **Testes:** `run_filtro_qualidade_test.js`, `run_filtro_qualidade_ui_test.js` OK; 8 testes de tela da Qualidade OK (inclui o do rascunho).
+- **Arquivos ativos:** nenhum.
 
 ### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — PUBLICADO
 
