@@ -365,10 +365,14 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
-### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — EM ANDAMENTO
+### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — PUBLICADO
 
-- **Pedido:** o que é digitado no laudo/análise de granel se perde ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento" na fila.
-- **Arquivos ativos:** `public/qualidade.html`, `public/shared/rascunho-cq.js` (novo), `database.rules.json` (nó `qualidade_rascunhos`), testes novos `run_rascunho_cq_*.js`, `AGENT_STATUS.md`.
+- **Pedido:** o que se digita no laudo/análise de granel se perdia ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento".
+- **Feito:** `shared/rascunho-cq.js` (puro: chaves, registro com o conteúdo como texto JSON — o RTDB descartaria null de lista e chave com ponto —, coletar/aplicar campos por id, gravação adiada de 800 ms). `qualidade.html`: autosave por delegação no corpo dos dois popups (laudo e granel), grava na hora ao fechar/clicar fora/Esc/página oculta, recupera ao abrir (campos com id + modelo: ensaios, CK-7, pesos, embalagem, resultados de PA, caixa de restrição do granel), aviso com "Descartar e começar de novo", selo "✎ Em preenchimento — quem, quando" e botão "Continuar" na fila; a decisão apaga o rascunho. "Cancelar" virou "Fechar". Regra `qualidade_rascunhos` (admin/qualidade/pcp/módulo qualidade gravam; todos leem; tipo/dados/tamanho validados). Manual da Qualidade atualizado.
+- **Achado no teste de tela:** `{set: setTimeout}` chamado como método dá "Illegal invocation" no navegador — o teste unitário com relógio falso não pegava; o de tela agora confere a gravação com o popup aberto.
+- **Testes:** `run_rascunho_cq_test.js`, `run_rascunho_cq_ui_test.js`, `run_rascunho_cq_rules_test.js` (emulador) OK; 7 testes de tela antigos da Qualidade OK; `run_inspecao_pa_ui_test.js` falha igual no main (já listado).
+- **Fora:** fotos no rascunho, trava entre duas analistas, limpeza de órfão — em MELHORIAS_FUTURAS.
+- **Arquivos ativos:** nenhum.
 
 ### ⚠ Aviso ao Codex — não commite expedicao.js/expedicao_regras.js por cima (23/10/2026)
 

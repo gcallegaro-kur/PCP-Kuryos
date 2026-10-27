@@ -54,6 +54,7 @@ linha por item, com o link para onde está o detalhe.
 | Planejamento | Regra dos 95% ("pronto para encerrar") no Planejamento e no Dashboard | — | "Adiados entre 07 e 19/10" |
 | Qualidade | RNC automática quando o granel é liberado com restrição | oferecido, não pedido | "Adiados entre 07 e 19/10" |
 | Inspeção de PA | Avisar PCP/Produção quando o prazo da inspeção total vence | — | "Inspeção total de PA" |
+| Qualidade | Rascunho do laudo: guardar também as fotos; limpar rascunho órfão | — | "Rascunho do laudo — o que ficou de fora" |
 | Analytics | Relatório de perdas consolidado entre lotes | o usuário preferiu adiar | "Adiados entre 07 e 19/10" |
 | Comercial | Aviso ao responsável comercial: recompra atrasada e pedido parado (`checkNotificacoes`); KPI de carteira por responsável | billing voltou em 23/10: destravado | "Responsável comercial por cliente" |
 | Usuários | Function `excluirUsuario` para apagar a credencial pela tela | billing voltou: destravado | "Desativar e excluir usuário" |
@@ -1149,6 +1150,15 @@ devolveu a trava "Palete vencido" e o FEFO).
 ## Qualidade
 
 **Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.
+
+### Rascunho do laudo — o que ficou de fora (27/10/2026)
+
+Entregue: `shared/rascunho-cq.js` + `qualidade_rascunhos/{chave}`; laudo (MP, embalagem, PA por lote) e análise do granel gravam enquanto a analista digita, ao fechar/clicar fora/Esc e quando a página fica oculta; a fila mostra "✎ Em preenchimento" e "Continuar"; a decisão apaga.
+
+- **Fotos não entram no rascunho.** Só sobem ao Storage junto com a decisão (`FotosQualidade.enviar`). Para guardá-las seria preciso subir na hora em que são anexadas, numa pasta provisória, e apagar as descartadas. O aviso do popup avisa a analista.
+- **Duas pessoas no mesmo laudo: a última gravação vence.** Não há trava de edição; o aviso mostra quem salvou por último. Se virar problema, o caminho é avisar ao abrir quando outro uid salvou há menos de X minutos.
+- **Rascunho órfão.** Se o lote sai da fila por outro caminho (decisão em outra tela, devolução, ajuste de estoque), o rascunho fica no banco sem aparecer em lugar nenhum. É pequeno (texto); uma limpeza dos rascunhos sem item na fila resolveria.
+- **Outros popups da Qualidade** (correção do bulk, RNC, especificação de MP, Liberação de linha) não têm rascunho — o pedido foi a Fila de Inspeção.
 
 ### CK-3, CK-4 e CK-5 — decisões de 19/10/2026 (em construção)
 
