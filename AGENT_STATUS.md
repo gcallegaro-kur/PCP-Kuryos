@@ -69,6 +69,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   no modal de apontamento ("botão de menu por cima do título") — **falha
   pré-existente**, reproduzida com a versão de HEAD sem minha mudança.
   `run_sequencia_setor_rules_test.js` exige emulador na 9023 (ambiental).
+- **PUBLICADO em 27/10/2026, `32a20c1`** (Hosting, `prod-kuryos`). Conferido
+  por HTTP em `emitir_op.html`: `prefixoLoteHoje`, `ondaDoSkuPorPedido`,
+  `keys.length === 1 && !vinculoJaEscolhido`, o aviso de ambiguidade, o selo
+  da onda no cartao e a guarda da emissao. O deploy subiu **1 arquivo**.
+- **Nota para quem for publicar:** o `firebase.json` ja ignora
+  `**/*-gcallegaropc.*`, entao os rascunhos do Codex em `public/` nao vao no
+  deploy mesmo estando fora do git (seguem 404). Nao precisa tirar da pasta.
 - **Arquivos ativos:** nenhum.
 
 ### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
