@@ -380,29 +380,71 @@ function renderAlocacoesDoProduto() {
   // avulsa nunca. vinculoJaEscolhido existe só pra isso: marca que já
   // houve UMA escolha (automática ou manual) pra este produto -- só
   // reseta quando troca de produto (selecionarProduto).
-  if (keys.length && !vinculoJaEscolhido) selecionarVinculo(keys[0]);
+  //
+  // SÓ auto-seleciona quando há UM candidato (27/10/2026). Com dois ou mais a
+  // escolha era posicional e silenciosa: pedidosDoProduto() ordena por
+  // priority, e quando NENHUMA das linhas tem priority a ordem cai no
+  // Object.keys -- arbitrária. Foi assim que 6 OPs do MRARBS07 foram creditadas
+  // ao pedido 0011 enquanto as irmãs da mesma onda iam pro 30, e o palete
+  // PA-26292-01-P1 travou na Expedição com "Produto não consta no pedido
+  // comercial" (o comercial do 0011 não lista o SKU; o do 30 lista). Com dois
+  // ou mais candidatos nada vem marcado: a pessoa escolhe.
+  var ambiguo = keys.length > 1;
+  if (keys.length === 1 && !vinculoJaEscolhido) selecionarVinculo(keys[0]);
+
+  var prefixoOnda = prefixoLoteHoje();
+  var onda = ondaDoSkuPorPedido(produtoSelecionado.sku, prefixoOnda);
+  var chavesOnda = Object.keys(onda);
+
   var el = document.getElementById('alocacaoLista');
   var htmlOpcoes = keys.map(function(key) {
     var p = allPedidos[key];
     var saldo = (p.qtdTotal || 0) - (p.produzido || 0);
     var aloc = alocacaoCongeladaDoPedido(key);
     var sel = pedidoVinculado && pedidoVinculado.pedidoKey === key;
+    var daOnda = onda[key] || [];
     return '<div class="aloc-opt' + (sel ? ' sel' : '') + '" data-key="' + escapeAttr(key) + '">' +
       '<div class="aloc-opt-info"><b>Pedido ' + escapeHtml(p.id || key) + ' · ' + escapeHtml(p.cliente || '—') + '</b>' +
       '<div class="aloc-opt-meta">Saldo: ' + fmtNum(saldo) + ' de ' + fmtNum(p.qtdTotal || 0) + ' un.' +
-        (p.priority != null ? ' · prioridade ' + p.priority : '') +
+        (p.priority != null ? ' · prioridade ' + p.priority : (ambiguo ? ' · <b>sem prioridade</b>' : '')) +
         (aloc ? ' · 📅 já tem bloco programado (' + escapeHtml(aloc.linha || '?') + ')' : '') +
+        (daOnda.length ? '<br>✔️ <b>' + daOnda.length + ' OP de hoje já foi pra este pedido</b> (' + escapeHtml(daOnda.join(', ')) + ')' : '') +
       '</div></div>' +
       (sel ? '<span class="badge badge-green">Selecionado</span>' : '') +
     '</div>';
   }).join('');
-  var semVinculoSel = !pedidoVinculado;
+
+  // Nada marcado quando ainda não houve escolha: senão "Emitir sem vincular"
+  // apareceria como Selecionado e um Enter distraído sairia com OP avulsa.
+  var semVinculoSel = !pedidoVinculado && vinculoJaEscolhido;
+
+  var htmlAmbiguo = (ambiguo && !vinculoJaEscolhido)
+    ? '<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px">' +
+      '⚠️ <b>' + keys.length + ' pedidos abertos deste produto.</b> Escolha qual recebe esta OP. ' +
+      'Nada vem pré-selecionado de propósito: a escolha automática já mandou produção pro pedido errado.</div>'
+    : '';
+
+  // Pra onde a onda de HOJE foi. Aparece inclusive quando o destino não está
+  // mais na lista de candidatos (pedido encerrado no meio do dia) -- que é
+  // justamente o caso que engana.
+  var htmlOnda = chavesOnda.length
+    ? '<div class="field-hint" style="margin-top:2px">Hoje (onda ' + escapeHtml(prefixoOnda) + ') já saíram OPs deste produto para: ' +
+      chavesOnda.map(function(ck) {
+        var p = ck ? allPedidos[ck] : null;
+        var alvo = ck ? (p ? (p.id || ck) : ck + ' (pedido não encontrado)') : 'sem vínculo (avulsa)';
+        return '<b>' + escapeHtml(String(alvo)) + '</b> — ' + onda[ck].length + ' OP (' + escapeHtml(onda[ck].join(', ')) + ')';
+      }).join(' · ') +
+      (chavesOnda.length > 1
+        ? '. <b>A onda está dividida entre pedidos diferentes</b> — confira se é intencional.'
+        : '.') +
+      '</div>'
+    : '';
   var htmlSemVinculo = '<div class="aloc-opt' + (semVinculoSel ? ' sel' : '') + '" data-key="">' +
     '<div class="aloc-opt-info"><b>⚠️ Emitir sem vincular (OP avulsa)</b>' +
     '<div class="aloc-opt-meta">Só use pra exceção de verdade -- amostra, teste, retrabalho sem pedido. Não conta pra atendimento de nenhum pedido.</div></div>' +
     (semVinculoSel ? '<span class="badge badge-orange">Selecionado</span>' : '') +
   '</div>';
-  el.innerHTML = htmlOpcoes + htmlSemVinculo +
+  el.innerHTML = htmlAmbiguo + htmlOpcoes + htmlSemVinculo + htmlOnda +
     (keys.length ? '' : '<div class="field-hint" style="margin-top:2px">Nenhum pedido ativo com saldo pendente pra este produto -- confira em Pedidos se o pedido certo está cadastrado e não concluído.</div>');
   el.querySelectorAll('.aloc-opt').forEach(function(div) {
     div.addEventListener('click', function() { selecionarVinculo(div.getAttribute('data-key')); });
@@ -1083,12 +1125,39 @@ function validarMateriaisConsumo() {
 }
 
 /* ── Numeração de lote (AADDD/NN) -- mesmo formato já em produção nos milhares de OPs existentes ── */
-function proximoLote() {
+/* O prefixo do lote É o dia da emissão (ano2 + dia do ano): 26292 = dia 292
+   de 2026. É o que chamamos de "onda" -- todas as OPs emitidas no mesmo dia
+   dividem o prefixo. Extraído de proximoLote() porque a tela precisa do
+   prefixo de hoje ANTES de emitir, pra mostrar pra onde a onda foi. */
+function prefixoLoteHoje() {
   var hoje = new Date();
   var ano2 = String(hoje.getFullYear() % 100).padStart(2, '0');
   var inicioAno = new Date(hoje.getFullYear(), 0, 1);
   var diaDoAno = Math.floor((hoje - inicioAno) / 86400000) + 1;
-  var prefixo = ano2 + String(diaDoAno).padStart(3, '0');
+  return ano2 + String(diaDoAno).padStart(3, '0');
+}
+
+/* OPs de um SKU emitidas na mesma onda (mesmo dia), agrupadas pelo pedido que
+   cada uma credita. Base da prevenção: achado em 27/10/2026, 8 ondas da base
+   estavam divididas entre pedidos diferentes -- MRARBS07 teve 26292/01 e
+   26293/02 no pedido 0011 enquanto as irmãs de onda foram pro 30, e uma delas
+   travou um palete inteiro na Expedição. OP do mesmo SKU no mesmo dia
+   pertence, na prática, ao mesmo pedido; quando uma foge do grupo é quase
+   sempre vínculo errado. Cancelada não conta. */
+function ondaDoSkuPorPedido(sku, prefixo) {
+  var porChave = {};
+  Object.keys(allOps).forEach(function(k) {
+    var o = allOps[k];
+    if (!o || o.sku !== sku || o.status === 'Cancelado') return;
+    if (String(o.lote || '').split('/')[0] !== prefixo) return;
+    var ck = o.skuPedidoKey || '';
+    (porChave[ck] = porChave[ck] || []).push(o.lote);
+  });
+  return porChave;
+}
+
+function proximoLote() {
+  var prefixo = prefixoLoteHoje();
   var counterPath = 'config/contadores/lotesPorDia/' + prefixo;
   // Reusa o mesmo helper de contador seguro contra corrida de shared/utils.js
   // (já usado pra numeração de SKU) em vez de reimplementar a .transaction()
@@ -1291,6 +1360,14 @@ function emitirOP() {
   // pra esse produto e mesmo assim ninguém foi selecionado (ou o próprio
   // "Emitir sem vincular" foi escolhido de propósito), confirma
   // explicitamente antes de seguir.
+  // Com dois ou mais pedidos abertos do SKU, nada vem pré-selecionado (ver
+  // renderAlocacoesDoProduto). Aqui não cabe perguntar "confirma a exceção?":
+  // ninguém escolheu ainda, e um OK apressado viraria OP avulsa por descuido.
+  // Barra em vez de confirmar.
+  if (!pedidoVinculado && !vinculoJaEscolhido && pedidosDoProduto(produtoSelecionado.sku).length > 1) {
+    showAlert('Há mais de um pedido aberto deste produto. Escolha qual recebe esta OP -- ou "Emitir sem vincular", se for exceção de verdade.', 'danger');
+    return;
+  }
   if (!pedidoVinculado && pedidosDoProduto(produtoSelecionado.sku).length > 0) {
     if (!confirm('Existe pedido ativo com saldo pra este produto e a OP vai sair sem vincular a nenhum. Confirma que é mesmo uma exceção (amostra, teste, retrabalho)?')) return;
   }

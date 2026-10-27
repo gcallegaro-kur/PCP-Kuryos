@@ -43,6 +43,34 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   de 704 un entre linha e rotulagem.
 - **Arquivos ativos:** nenhum.
 
+### Claude — Prevenção do vínculo errado na emissão de OP (27/10/2026)
+
+- **Gatilho:** os 8 casos de "onda dividida" (OPs do mesmo SKU e do mesmo dia
+  apontando para pedidos diferentes) têm uma causa só: `emitir_op.html`
+  pré-selecionava `keys[0]` quando havia mais de um pedido aberto do SKU,
+  silenciosamente. Se as duas linhas não tiverem `priority`, a ordem cai no
+  `Object.keys` e a escolha é arbitrária.
+- **Onda = o dia.** `proximoLote()` monta o prefixo como `ano2 + diaDoAno`
+  (26292 = dia 292 de 2026). A heurística é "mesmo SKU, mesmo dia, mesmo
+  pedido" — por isso acerta.
+- **Feito:** (a) só auto-seleciona quando há UM candidato; com dois ou mais a
+  pessoa escolhe. (b) cada candidato mostra quantas OPs do SKU já saíram hoje
+  para ele, e um aviso diz para onde a onda de hoje foi.
+- **Decisão do usuário (recusada por mim, com motivo):** NÃO pedir
+  encerramento do pedido anterior quando entra pedido novo do mesmo SKU. Duas
+  linhas abertas do mesmo SKU é legítimo (hoje: MRARBS04 com PED-0002 e
+  PED-0003, prio 62 e 63), e `encerramento` congela um retrato de
+  produzido/saldo — encerrar antes da hora grava número errado.
+- **Teste:** `run_emitir_op_vinculo_ambiguo_ui_test.js` (novo, passa). Cobre
+  auto-seleção com 1 candidato, nada marcado com 2+, aviso, a onda no cartão
+  certo, bloqueio da emissão, escolha explícita e avulsa deliberada.
+- **Regressão conferida:** `run_emitir_op_bloqueio_ui_test.js` e
+  `run_explosao_massa_test.js` passam. `run_fluxo_ponta_a_ponta_test.js` para
+  no modal de apontamento ("botão de menu por cima do título") — **falha
+  pré-existente**, reproduzida com a versão de HEAD sem minha mudança.
+  `run_sequencia_setor_rules_test.js` exige emulador na 9023 (ambiental).
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Plano de custos revisto: base `erpkuryos` (27/10/2026)
 
 - **Decisão do usuário:** a fábrica migra para o `erpkuryos`; o plano de custos e resultado é construído lá (revê o "neste app" de 20/10). O `prod-kuryos` opera até a virada e fornece o histórico.
