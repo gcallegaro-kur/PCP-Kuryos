@@ -2746,8 +2746,11 @@ var RNC_CLASSIFICACAO = {
 var RNC_STATUS = {
   ABERTA:     { rotulo: 'Aberta',      badge: 'badge-red',    aberta: true  },
   EM_ANALISE: { rotulo: 'Em análise',  badge: 'badge-orange', aberta: true  },
-  // RNC parada esperando resposta de terceiro NÃO é RNC esquecida. Sem este
-  // estado, o SLA do Painel cobrava a Qualidade por uma bola que não é dela.
+  // RNC parada esperando resposta de terceiro NÃO é RNC esquecida. Antes deste
+  // estado havia só duas saidas, e as duas mentiam: deixar em ABERTA (e o
+  // Painel cobra, porque `painel-gargalos.js` põe na fila de 72h tudo que
+  // esta com `status === 'ABERTA'` literal) ou dar Assumir (o Painel cala, mas
+  // a RNC passa a parecer que alguem esta trabalhando nela).
   // Continua `aberta: true`: ainda há material bloqueado e assunto a fechar.
   AGUARDANDO_CLIENTE: { rotulo: 'Aguardando cliente', badge: 'badge-purple', aberta: true },
   CONCLUIDA:  { rotulo: 'Concluída',   badge: 'badge-green',  aberta: false }

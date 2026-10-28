@@ -45,10 +45,13 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 
 **O que faltava, e e o motivo de cada mudanca:**
 
-1. **Nao havia estado para "esperando o cliente".** RNC parada por dependencia
-   de terceiro ficava indistinguivel de RNC esquecida (28 das 34 abertas
-   estavam fora do SLA de 72h do Painel). Novo `RNC_STATUS.AGUARDANDO_CLIENTE`,
-   com `aberta: true` -- ainda ha material bloqueado.
+1. **Nao havia estado para "esperando o cliente".** Havia so duas saidas, e as
+   duas mentiam: deixar em ABERTA (e o Painel cobra -- `painel-gargalos.js`
+   poe na fila de 72h tudo que esta com `status === 'ABERTA'` LITERAL, nao pelo
+   `RNC_STATUS[...].aberta`) ou dar Assumir, que cala o Painel mas faz a RNC
+   parecer que alguem esta trabalhando nela. Novo
+   `RNC_STATUS.AGUARDANDO_CLIENTE`, com `aberta: true` -- ainda ha material
+   bloqueado, e tambem fica fora da fila do Painel, que so conta ABERTA.
 2. **Nao havia caminho de REPROVADO para APROVADO_CONCESSAO.** O status ja
    existia em `STATUS_LOTE` (disponivel, exige `autorizadoPor`), mas quem o
    gravava era `registrarLaudoQualidade`, que ABORTA fora de QUARENTENA. Ou
