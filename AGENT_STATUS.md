@@ -520,6 +520,7 @@ Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa
   (`~~item~~ feito em hash`) vira concluído; a tela marca o que é novo ou concluído desde a última visita. Regra nova:
   depois de mexer no painel, rodar o gerador e commitar o JSON (`run_backlog_test.js` trava se estiver velho).
 - Estoque › Lotes Vencendo (28/10): coluna "Ver kardex →" em cada lote, abre `kardex.html?item=<código do item>` (teste: `run_lotes_vencendo_kardex_test.js`).
+- Aviso: `run_coerencia_modulos_test.js` acusa `PainelMovimentosTela` (commit cda6363) por falso positivo: `shared/painel-movimentos-tela.js` exporta com `root.X = {...}` e o detector só reconhece `root.X = factory()`. A tela funciona; ajustar o detector ou o padrão do módulo.
 - Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
   (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
 - `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.
