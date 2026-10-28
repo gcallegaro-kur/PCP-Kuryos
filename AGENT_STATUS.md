@@ -21,7 +21,14 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   checkout principal, rodar `git fetch && git status -sb` e conferir que nao ha
   "behind". Se houver, `git merge origin/main` ANTES. Conferir tambem que os
   arquivos novos do ar continuam existindo no disco.
-- **Recuperado:** merge de `origin/main` (19 commits) + republicacao.
+- **Recuperado:** merge de `origin/main` (19 commits) + republicacao. 12/12
+  arquivos conferidos em 200 por HTTP; `auth_check.js` do ar identico a arvore.
+- **FECHADO:** `main` empurrado para o origin (`525a837`), local == origin.
+  Varredura dos ~100 worktrees e das branches: nao sobrou nada publicado fora
+  do main. O unico commit de fora e `8fdd2ee` (10/09), ja superado -- a
+  correcao dele esta no main e `run_qualidade_pa_tipo_test.js` passa.
+- **Nota pre-existente, nao e deste incidente:** `index.html` nunca existiu no
+  repo (0 commits) e a raiz do site responde 404; o acesso e por `login.html`.
 
 ### Claude — Retrabalho na fila da Manipulacao (28/10/2026) — EM ANDAMENTO
 
