@@ -71,7 +71,7 @@ function validarPaletes(paletes, enderecos) {
   return {lista, total: arredondar(total)};
 }
 
-function prepararFinalizacao({opKey, op, conf, enderecos, lotesItem, autor, conciliacao, agora}) {
+function prepararFinalizacao({opKey, op, conf, enderecos, lotesItem, rncExistente, autor, conciliacao, agora}) {
   if (!op || op.status !== "Concluído") erro("failed-precondition", "A OP precisa estar definitivamente concluída pelo PCP antes da entrada do PA.");
   const apontada = arredondar(op.produzidoLinha != null ? op.produzidoLinha : op.produzido);
   if (apontada <= 0) erro("failed-precondition", "A OP não possui quantidade produzida válida.");
@@ -143,7 +143,13 @@ function prepararFinalizacao({opKey, op, conf, enderecos, lotesItem, autor, conc
   updates[base + "finalizacaoId"] = finalId;
   updates[base + "rncNumero"] = rncNumero;
 
-  if (rncNumero) {
+  // A chave da RNC automatica e derivada da OP ("RNC-PA-{op}"), entao uma
+  // refinalizacao da MESMA OP cai na MESMA chave. Como isto aqui entra num
+  // update multipath (set, nao transaction), escrever sem perguntar zerava a
+  // RNC para ABERTA e apagava causaRaiz/acaoCorretiva de quem ja a tratou.
+  // So criamos a RNC quando ela ainda nao existe; o vinculo
+  // (`conferencias_pa/.../rncNumero`) continua sendo escrito nos dois casos.
+  if (rncNumero && !rncExistente) {
     updates["nao_conformidades/" + rncNumero] = {
       numero: rncNumero, status: "ABERTA", classificacao: Math.abs(diferenca) / apontada >= 0.02 ? "MAIOR" : "MENOR",
       origem: "PRODUCAO", descricao: "Divergência entre produção apontada e PA recebido pela Logística. " + String(conciliacao.observacao).trim(),

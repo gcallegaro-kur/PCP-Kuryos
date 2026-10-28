@@ -63,6 +63,17 @@ assert(planoDiv.diferenca === -10 && planoDiv.rncNumero === 'RNC-PA-26247-06', '
 assert(planoDiv.updates['nao_conformidades/RNC-PA-26247-06'].qtdEnvolvida === 10, 'RNC não preservou quantidade envolvida');
 assert(planoDiv.updates['conferencias_pa/26247-06/status'] === 'CONFERIDO_COM_DIVERGENCIA', 'Conciliação não preservou divergência');
 
+/* A chave da RNC automática é derivada da OP, então refinalizar a MESMA OP cai
+   na MESMA chave -- e isto é um update multipath, não transaction. Sem o guarda,
+   a segunda passada zerava a RNC para ABERTA e apagava a causa raiz e a ação
+   corretiva de quem já a tinha tratado. O vínculo continua sendo escrito. */
+const rncJaTratada = { numero:'RNC-PA-26247-06', status:'CONCLUIDA', causaRaiz:'Avaria no transporte interno',
+  acaoCorretiva:'Reforço do filme nos paletes', disposicao:'DESCARTE' };
+const planoRetratado = prepararFinalizacao({ ...base, conf:divergente, conciliacao, rncExistente:rncJaTratada });
+assert(planoRetratado.rncNumero === 'RNC-PA-26247-06', 'Refinalização perdeu o vínculo com a RNC');
+assert(planoRetratado.updates['conferencias_pa/26247-06/rncNumero'] === 'RNC-PA-26247-06', 'Vínculo da conferência não foi reescrito');
+assert(!('nao_conformidades/RNC-PA-26247-06' in planoRetratado.updates), 'Refinalização sobrescreveu uma RNC já tratada');
+
 expectError(() => prepararFinalizacao({ ...base, op:{...op, status:'Aguardando Confirmação'}, conf:exata }), 'definitivamente concluída');
 expectError(() => prepararFinalizacao({ ...base, op:{...op, produzidoLinha:1001}, conf:exata }), 'quantidade da OP mudou');
 const enderecoInativo = JSON.parse(JSON.stringify(exata));

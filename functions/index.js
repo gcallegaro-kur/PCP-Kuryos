@@ -2083,7 +2083,9 @@ exports.finalizarConferenciaPA = onCall(async (request) => {
     ]);
     const op = opSnap.val();
     const lotesSnap = op && op.sku ? await db.ref("estoque_lotes/" + itemFromOp(op)).once("value") : null;
-    return {op, conf: confSnap.val(), enderecos: endSnap.val() || {}, lotesItem: lotesSnap ? lotesSnap.val() || {} : {}};
+    const rncSnap = await db.ref("nao_conformidades/RNC-PA-" + sanitizeKey(opKey).toUpperCase()).once("value");
+    return {op, conf: confSnap.val(), enderecos: endSnap.val() || {}, lotesItem: lotesSnap ? lotesSnap.val() || {} : {},
+      rncExistente: rncSnap.val() || null};
   };
   const autor = user.nome || request.auth.token.name || request.auth.token.email || uid;
   const conciliacao = data.conciliacao && typeof data.conciliacao === "object" ? {
@@ -2122,7 +2124,7 @@ exports.finalizarConferenciaPA = onCall(async (request) => {
     if (lockVigente) return;
     try {
       const validado = prepararFinalizacao({opKey, op: contexto.op, conf: atual, enderecos: contexto.enderecos,
-        lotesItem: contexto.lotesItem, autor, conciliacao, agora: reservaEm});
+        lotesItem: contexto.lotesItem, rncExistente: contexto.rncExistente, autor, conciliacao, agora: reservaEm});
       if (validado.finalId !== plano.finalId) throw Object.assign(new Error("As contagens mudaram durante a finalização. Tente novamente."), {code: "aborted"});
     } catch (e) {
       erroTransacao = e;
