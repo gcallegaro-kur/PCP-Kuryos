@@ -30,7 +30,8 @@
     conferencia_pa: 24, faturamento: 24, carregar: 24, rnc: 72, sc_aprovar: 24, sc_cotar: 48, pc_enviar: 24, pc_atrasados: 0,
     devolucoes: 72, descartes: 72,
     orc_elaboracao: 72, orc_resposta: 168, cadastro_produto: 72, pedido_sem_op: 240, pedido_encerrar: 168, pedido_saldo: 168,
-    usuarios_pendentes: 24
+    usuarios_pendentes: 24,
+    cad_prazo_validade: 0, cad_kg_caixa: 0, cad_un_caixa: 0, cad_formula: 0, cad_formula_aprovada: 0, cad_bom: 0, cad_cliente: 0, cad_prod_hora: 0
   };
 
   /* Ordem do fluxo, setor dono, nome e tela de destino de cada etapa. */
@@ -64,9 +65,17 @@
     {id: 'pc_atrasados', fase: 'Compras', setor: 'Compras', titulo: 'Entrega do fornecedor atrasada', href: 'compras.html'},
     {id: 'devolucoes', fase: 'Retornos', setor: 'Logística', titulo: 'Devolução autorizada a receber', href: 'devolucoes.html'},
     {id: 'descartes', fase: 'Retornos', setor: 'Logística', titulo: 'Descarte aguardando decisão', href: 'descarte.html'},
+    {id: 'cad_prazo_validade', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem prazo de validade (trava a NF)', href: 'cadastros.html'},
+    {id: 'cad_kg_caixa', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem peso da caixa (peso da carga, NF e etiqueta)', href: 'cadastros.html'},
+    {id: 'cad_un_caixa', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem unidades por caixa', href: 'cadastros.html'},
+    {id: 'cad_formula', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem fórmula (O que comprar e MRP não calculam)', href: 'cadastros.html'},
+    {id: 'cad_formula_aprovada', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU com fórmula, mas nenhuma versão aprovada', href: 'cadastros.html'},
+    {id: 'cad_bom', fase: 'Cadastros', setor: 'Cadastros', titulo: 'Fórmula sem BOM (insumos não calculados)', href: 'cadastros.html'},
+    {id: 'cad_cliente', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem cliente válido no cadastro', href: 'cadastros.html'},
+    {id: 'cad_prod_hora', fase: 'Cadastros', setor: 'Cadastros', titulo: 'SKU sem ritmo de produção (prodHoraRef)', href: 'cadastros.html'},
     {id: 'usuarios_pendentes', fase: 'Gestão', setor: 'ADM', titulo: 'Usuário aguardando liberação de acesso', href: 'usuarios.html'}
   ];
-  var FASES = ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Gestão'];
+  var FASES = ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Cadastros', 'Gestão'];
 
   function ts(v) { var t = Date.parse(v); return isNaN(t) ? null : t; }
   function txt(v) { return String(v == null ? '' : v).trim(); }
@@ -229,6 +238,10 @@
       });
     }
 
+    // Cadastros: o que falta no cadastro dos SKUs que estão em uso agora (OP ativa, pedido aberto
+    // ou produto acabado em estoque). SKU parado, sem uso, não entra: o ruído esconderia o que trava.
+    if (d.produtos && chaves(d.produtos).length) analisarCadastros(d, ops, filas, opAtiva);
+
     // ADM: contas novas esperando liberação.
     chaves(d.usuarios).forEach(function(k) {
       var u = d.usuarios[k] || {};
@@ -320,6 +333,86 @@
     });
     var totais = etapas.reduce(function(t, e) { t.n += e.n; t.atrasados += e.atrasados; if (e.severidade === 'critico') t.criticas++; return t; }, {n: 0, atrasados: 0, criticas: 0});
     return {etapas: etapas, setores: setores, totais: totais, fases: FASES, agora: agora};
+  }
+
+
+  /* ── Cadastros dos SKUs em uso ── */
+  function skuDe(v) { return txt(v).toUpperCase(); }
+  function chaveVersao(sku, versao) { return sku + '__' + versao; }
+  function bomDaVersao(bom, sku, versao) {
+    if (!bom) return null;
+    var k = chaveVersao(sku, versao);
+    if (bom[k]) return bom[k];
+    var alvo = k.toLowerCase();
+    var hit = Object.keys(bom).filter(function(x) { return String(x).toLowerCase() === alvo; }).sort()[0];
+    return hit ? bom[hit] : null;
+  }
+
+  function analisarCadastros(d, ops, filas, opAtiva) {
+    var uso = {};
+    function ocupa(sku) { sku = skuDe(sku); return sku ? (uso[sku] = uso[sku] || {ops: 0, pedidos: 0, lotes: 0, lotesSemValidade: 0, lotesSemPeso: 0}) : null; }
+    chaves(ops).forEach(function(k) { var op = ops[k] || {}; if (opAtiva(op)) { var u = ocupa(op.sku); if (u) u.ops++; } });
+    chaves(d.pedidos).forEach(function(k) {
+      var p = d.pedidos[k] || {};
+      if (p.canceladoPorComercial === true || txt(p.statusManual).toLowerCase() === 'encerrado') return;
+      var st = txt(p.status).toLowerCase();
+      if (st.indexOf('conclu') === 0 || !(num(p.qtdTotal) > num(p.produzido))) return;
+      var u = ocupa(p.sku); if (u) u.pedidos++;
+    });
+    chaves(d.estoque_lotes).forEach(function(ik) {
+      chaves(d.estoque_lotes[ik]).forEach(function(lk) {
+        var l = d.estoque_lotes[ik][lk] || {};
+        if (l.itemTipo !== 'produto' || !(num(l.saldoLote) > 0)) return;
+        var u = ocupa(l.itemCodigo || ik); if (!u) return;
+        u.lotes++;
+        if (!dia(l.dataValidade)) u.lotesSemValidade++;
+        if (!num(l.pesoPorCaixaKg) && !num(l.pesoTotalKg)) u.lotesSemPeso++;
+      });
+    });
+
+    var porSku = {};
+    chaves(d.produtos).forEach(function(k) { var p = d.produtos[k] || {}; porSku[skuDe(p.sku || k)] = p; });
+    var formulasPorSku = {};
+    chaves(d.formulas).forEach(function(k) { var f = d.formulas[k] || {}; var sk = skuDe(f.codProduto); if (sk) (formulasPorSku[sk] = formulasPorSku[sk] || []).push(f); });
+    var temBom = !!(d.bom && chaves(d.bom).length), temFormulas = chaves(d.formulas).length > 0;
+
+    function resumoUso(u) {
+      var t = [];
+      if (u.ops) t.push(u.ops + (u.ops > 1 ? ' OPs ativas' : ' OP ativa'));
+      if (u.pedidos) t.push(u.pedidos + (u.pedidos > 1 ? ' pedidos abertos' : ' pedido aberto'));
+      if (u.lotes) t.push(u.lotes + (u.lotes > 1 ? ' lotes em estoque' : ' lote em estoque'));
+      return t.join(' · ');
+    }
+    function lance(id, sku, p, u, motivoBloqueio) {
+      filas[id].push({rotulo: sku + (p.descricao ? ' — ' + txt(p.descricao) : '') + (p.cliente ? ' (' + txt(p.cliente) + ')' : ''), idadeH: null,
+        atrasado: !!motivoBloqueio, motivo: motivoBloqueio || '', detalhe: resumoUso(u)});
+    }
+
+    Object.keys(uso).forEach(function(sku) {
+      var u = uso[sku], p = porSku[sku];
+      if (!p) return; // SKU sem cadastro nenhum: o aviso certo é "Produto não encontrado", de outro fluxo
+      var abertoOuOp = u.ops > 0 || u.pedidos > 0;
+      if (!(num(p.prazoValidadeMeses) > 0)) lance('cad_prazo_validade', sku, p, u, u.lotesSemValidade > 0 ? u.lotesSemValidade + ' lote(s) em estoque sem validade: a NF não sai' : '');
+      if (!(num(p.kgCaixa) > 0)) lance('cad_kg_caixa', sku, p, u, u.lotesSemPeso > 0 ? 'sem peso da caixa no cadastro nem no lote: carga e NF sem peso' : (u.ops > 0 ? 'OP ativa: a etiqueta da caixa sai sem peso' : ''));
+      if (!(num(p.unCx) > 0)) lance('cad_un_caixa', sku, p, u, u.lotes > 0 || u.ops > 0 ? 'paletização e carga sem unidades por caixa' : '');
+      if (!(num(p.prodHoraRef) > 0)) lance('cad_prod_hora', sku, p, u, abertoOuOp ? 'o planejamento não consegue estimar o prazo' : '');
+      var ck = txt(p.clienteKey);
+      if (!ck || !(d.clientes || {})[ck]) lance('cad_cliente', sku, p, u, u.lotes > 0 || abertoOuOp ? 'sem cliente válido: dono do estoque, pedido e faturamento ficam incertos' : '');
+      if (temFormulas && abertoOuOp) {
+        var fs = formulasPorSku[sku] || [];
+        if (!fs.length) lance('cad_formula', sku, p, u, 'O que comprar e o MRP não calculam este SKU');
+        else {
+          var aprovadas = fs.filter(function(f) { return f.status === 'APROVADA'; });
+          if (!aprovadas.length) lance('cad_formula_aprovada', sku, p, u, 'o cálculo usa a versão mais recente, que ninguém aprovou');
+          if (temBom) {
+            var pool = aprovadas.length ? aprovadas : fs;
+            var f0 = pool.slice().sort(function(a, b) { return num(String(b.versao).replace(/\D/g, '')) - num(String(a.versao).replace(/\D/g, '')); })[0];
+            var b = bomDaVersao(d.bom, p.sku ? txt(p.sku) : sku, f0.versao);
+            if (!b || !chaves(b.itens).length) lance('cad_bom', sku, p, u, 'a versão ' + txt(f0.versao) + ' não tem BOM: nenhum insumo é calculado');
+          }
+        }
+      }
+    });
   }
 
   // Unidades apontadas na linha (mesma regra da Conferência de PA, estoque.html).

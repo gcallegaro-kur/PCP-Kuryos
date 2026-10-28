@@ -62,6 +62,7 @@ linha por item, com o link para onde está o detalhe.
 | Planejamento | Roadmap de planejamento, OP-eficiência e apontamento (fases restantes) | — | `PLANO_PLANEJAMENTO_PCP.md` |
 | Painel de Controle | Tela para o admin ajustar os prazos (SLA) por etapa; calibrar contra a base real (ensaiado só com dados sintéticos); retrato diário para ver tendência | — | "Painel de Controle e Início" |
 | Início | Cartões que faltam: Conferência de PA pendente (extrair a regra de `estoque.html` para `shared/`), fila de inspeção da Qualidade, Comercial; cartão-resumo do painel para o admin | — | "Painel de Controle e Início" |
+| Painel de Controle | Cadastros de MATERIAIS no painel (lead time e lote mínimo dos de maior giro para o MRP, unidade, fornecedor); hoje só os SKUs em uso têm checagem | — | "Painel de Controle e Início" |
 
 ### B. Depende da Kuryos (operação/cadastro, não código)
 

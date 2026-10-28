@@ -97,7 +97,7 @@ assert.equal(setorDe('Cadastros').atrasados, 1); assert.equal(setorDe('ADM').atr
 
 // Fluxo e estrutura
 assert.equal(r.etapas.length, P.ETAPAS.length);
-assert.deepEqual(r.fases, ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Gestão']);
+assert.deepEqual(r.fases, ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Cadastros', 'Gestão']);
 P.ETAPAS.forEach((x) => assert.ok(P.SLA_PADRAO_H[x.id] !== undefined, 'SLA padrão para ' + x.id));
 
 // Etapa a etapa
