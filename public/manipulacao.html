@@ -392,9 +392,17 @@ var FASES_ABERTAS_MANIPULACAO = {AGUARDANDO_PESAGEM: 1, PESADO: 1, CONFERIDO: 1,
 function bulkAberto(o) {
   return !!(o && o.manipulacao) && !!FASES_ABERTAS_MANIPULACAO[Manipulacao.estado(o)];
 }
+/* Retrabalho não entra: `RetrabalhoOp.DESTINOS` é linha | rotulagem | posto --
+   manipulação não é destino possível. O sistema já afirmava isso nos dois
+   outros pontos que decidem o assunto (`Manipulacao.exigeBulk` devolve false e
+   `SequenciaSetor.etapa('manipulacao', op)` devolve null para retrabalho);
+   esta lista era o único que não perguntava, então a OP de retrabalho caía em
+   "Lotes em produção" e ia pedir pesagem a quem não tem o que pesar -- ela não
+   refabrica o produto, não tem `materiaisConsumo` e não tem fórmula a pesar.
+   Achado do usuário em 28/10/2026 com a 26282/13-RT1 (destino rotulagem). */
 function opsAtivas() {
   return Object.keys(allOps).map(function(k) { return Object.assign({key: k}, allOps[k]); })
-    .filter(function(o) { return o && o.lote && o.status !== 'Cancelado' && (o.status !== 'Concluído' || bulkAberto(o)); })
+    .filter(function(o) { return o && o.lote && !Manipulacao.ehRetrabalho(o) && o.status !== 'Cancelado' && (o.status !== 'Concluído' || bulkAberto(o)); })
     .sort(function(a, b) { return String(b.dataEmissao || '').localeCompare(String(a.dataEmissao || '')); })
     .slice(0, 60);
 }

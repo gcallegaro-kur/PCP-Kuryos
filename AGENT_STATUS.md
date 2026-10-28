@@ -3,6 +3,36 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Retrabalho na fila da Manipulacao (28/10/2026) — EM ANDAMENTO
+
+- **Gatilho (usuario):** a OP 26282/13-RT1 (retrabalho, destino `rotulagem`,
+  HDR-MISS-0002, 1.525 un) aparece em "Lotes em producao" na Manipulacao.
+- **Causa:** `manipulacao.html:395 opsAtivas()` filtra so por lote/status. A
+  regra certa JA existe em dois lugares: `sequencia-setor.js:66` devolve null
+  para manipulacao quando `ehRetrabalho(op)`, e `manipulacao.js:181 exigeBulk`
+  devolve false. `RetrabalhoOp.DESTINOS` e linha|rotulagem|posto -- manipulacao
+  nao e destino possivel. Esta lista era o unico ponto que nao perguntava.
+- **Feito:** `ehRetrabalho` passou a ser exportado por `shared/manipulacao.js`
+  (existia desde 22/09 mas nao estava no export) e `opsAtivas()` passou a
+  usa-lo. Nao e regra nova: e tirar a divergencia entre os tres pontos que
+  decidem quem esta na manipulacao.
+- **Teste:** estendido `run_manipulacao_ui_test.js` (fixture 26260/05-RT1 +
+  3 assercoes), em vez de arquivo novo, porque as regras da lista ja sao
+  todas asseridas ali. CUIDADO com fixture nesse teste: a busca do Dossie por
+  "rose nectar" assere 2 lotes, entao produto/cliente novos nao podem casar
+  com MISS ROSE/NECTAR -- cai na linha 564. Bati nisso ao rodar.
+- **Regressao:** manipulacao, sequencia_setor, retrabalho_op, retrabalhos,
+  retrabalho_migracao, retrabalho_op_ui, retrabalho_posto_ui, retrabalhos_ui e
+  emitir_op_vinculo_ambiguo_ui -- todos passam.
+- **NAO mexido, decisao do usuario pendente:** (1) 32 das 51 OPs da fila nao
+  tem `formulaVersao` (nada a pesar) e 2 ja estao LIBERADO; `sequencia-setor.js`
+  as excluiria, mas o comentario em manipulacao.html:388 registra que filtrar
+  demais JA quebrou essa tela uma vez (ninguem conseguia fechar a manipulacao).
+  (2) A 26282/13-RT1 tem `linha: ''`, entao nao esta alocada a recurso nenhum e
+  nao aparece em fila de posto/rotulagem; a obs diz "AGUARDANDO ROTULO DO
+  CLIENTE", pode ser proposital.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Saneamento dos vínculos pedido↔linha↔OP (27/10/2026)
 
 - **Gatilho:** palete PA-26292-01-P1 (MRARBS07, 4.656 un) travado em Montar

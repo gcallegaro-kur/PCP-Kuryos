@@ -25,7 +25,17 @@ function dados() {
         cliente: 'TAWUS', status: 'Concluído', qtdPlanejada: 500, dataEmissao: '2026-09-16T08:00:00',
         manipulacao: {status: 'EM_MANIPULACAO', manipulacao: {inicio: '2026-09-17T09:00:00', por: 'Ana'}}},
       '26260-04': {lote: '26260/04', sku: 'MRARBS04', produto: 'CREME TESTE',
-        cliente: 'TAWUS', status: 'Concluído', qtdPlanejada: 500, manipulacao: {status: 'LIBERADO'}}
+        cliente: 'TAWUS', status: 'Concluído', qtdPlanejada: 500, manipulacao: {status: 'LIBERADO'}},
+      // Caso 26282/13-RT1 (28/10): OP de retrabalho caía em "Lotes em produção"
+      // e pedia pesagem a quem não tem o que pesar. Retrabalho não refabrica o
+      // produto: sem skuPedidoKey, sem materiaisConsumo e sem fórmula a pesar.
+      // produto/cliente propositalmente iguais aos de 26260-03/04: a busca do
+      // Dossiê por "rose nectar" assere 2 lotes, e MISS RÔSE + NÉCTAR aqui
+      // faria virar 3 (colisão de fixture, não bug -- achado ao rodar).
+      '26260-05-RT1': {lote: '26260/05-RT1', sku: 'MRARBS04', produto: 'CREME TESTE',
+        cliente: 'TAWUS', status: 'Não Iniciado', qtdPlanejada: 300, dataEmissao: '2026-09-18T08:00:00',
+        tipoOrdem: 'RETRABALHO', retrabalhoDe: '26260/05', retrabalhoDestino: 'rotulagem',
+        retrabalhoMotivo: 'Inspeção total: AUSÊNCIA TOTAL DE RÓTULO', skuPedidoKey: ''}
     },
     produtos: {MRARBS04: {sku: 'MRARBS04', descricao: 'BODY SPLASH NÉCTAR DAS TAMARAS', cliente: 'MISS RÔSE',
       clienteKey: 'MISS', volume: 200, unidadeVolume: 'ml', densidadeGranel: 0.9}},
@@ -180,6 +190,13 @@ async function campo(page, seletor, valor) {
     assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/03'}).count(), 1,
       'OP concluída com bulk ainda em manipulação continua na lista, senão ninguém fecha e a Qualidade nunca recebe');
     assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/04'}).count(), 0, 'bulk já liberado: sai da lista');
+    // DESTINOS do retrabalho é linha | rotulagem | posto -- manipulação não é
+    // destino possível, e sequencia-setor.js já devolvia null para este caso.
+    assert.equal(await page.locator('#mListaBody tr', {hasText: '26260/05-RT1'}).count(), 0,
+      'OP de retrabalho não aparece na Manipulação: não tem bulk a pesar');
+    assert.equal(await page.evaluate(() => Manipulacao.ehRetrabalho({tipoOrdem: 'RETRABALHO'})), true,
+      'Manipulacao.ehRetrabalho exportado (a tela depende dele)');
+    assert.equal(await page.evaluate(() => Manipulacao.ehRetrabalho({})), false, 'OP normal não é retrabalho');
     // Dossiê é ferramenta de gestão (Qualidade/PCP): o operador não vê.
     assert.equal(await page.locator('.kt-sidebar a[href="dossie_lote.html"]').count(), 0, 'operador sem Dossiê no menu');
     assert.equal(await page.locator('#mDossie').count(), 0, 'sem botão de dossiê na tela do operador');

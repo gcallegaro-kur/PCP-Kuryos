@@ -653,6 +653,7 @@
     baixasPorLote: baixasPorLote, proximaPendente: proximaPendente, situacaoLotes: situacaoLotes,
     devolucaoDoItem: devolucaoDoItem, pendentesDevolucao: pendentesDevolucao,
     fase: fase, estado: estado, rotulo: rotulo, podeEnvasar: podeEnvasar, exigeBulk: exigeBulk,
+    ehRetrabalho: ehRetrabalho,
     PORTAO_BULK_DESDE: PORTAO_BULK_DESDE,
     linhasPesagem: linhasPesagem, validarPesagem: validarPesagem,
     validarConferencia: validarConferencia, resumoManipulacao: resumoManipulacao,
