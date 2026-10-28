@@ -128,6 +128,7 @@
     {p: 'admin.html', r: 'Ajustes / Config', i: 'sliders', b: 'ADM'},
     {p: 'usuarios.html', r: 'Usuários', i: 'people', b: 'ADM'},
     {p: 'auditoria.html', r: 'Auditoria', i: 'history', b: 'ADM'},
+    {p: 'backlog.html', r: 'Roadmap do sistema', i: 'list', b: 'ADM'},
 
     // ── RH
     {p: 'rh_dashboard.html', r: 'Dash', i: 'dashboard', b: 'RH'},

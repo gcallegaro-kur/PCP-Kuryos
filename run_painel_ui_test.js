@@ -22,7 +22,8 @@ const dados = () => ({
       manipulacao: {status: 'CONFERIDO', conferencia: {em: antes(2)}}}
   },
   conferencias_pa: {}, agendamentos_expedicao: {}, nao_conformidades: {n1: {status: 'ABERTA', numero: 'RNC-1', criadoEm: antes(100)}},
-  solicitacoes_compra: {}, pedidos_compra: {}, devolucoes_cliente: {}, solicitacoes_descarte: {}
+  solicitacoes_compra: {}, pedidos_compra: {}, devolucoes_cliente: {}, solicitacoes_descarte: {},
+  pedidos: {'P1__SKU1': {id: 'P1', produto: 'Body Splash', cliente: 'Miss Rose', qtdTotal: 1000, produzido: 960, ultimoApontamento: antes(24 * 10)}}
 });
 
 async function abrir(browser, uid) {
@@ -64,13 +65,18 @@ async function abrir(browser, uid) {
     let {page, erros} = await abrir(browser, 'adm');
     await page.waitForSelector('#fases details.etapa');
     const kpis = await page.locator('#kpis .kpi').allInnerTexts();
-    assert.match(kpis[0], /^3\s+itens atrasados/, 'conferência de pesagem + CQ do bulk + RNC');
+    assert.match(kpis[0], /^4\s+itens atrasados/, 'conferência de pesagem + CQ do bulk + RNC + pedido pronto parado');
     assert.match(kpis[1], /^1\s+etapas críticas/, 'CQ do bulk há 50h, prazo 24h');
-    assert.match(kpis[2], /^4\s+itens em fila/);
+    assert.match(kpis[2], /^5\s+itens em fila/);
     const setores = await page.locator('#setores .setor h3').allInnerTexts();
     assert.equal(setores[0], 'Qualidade', 'o setor com mais atraso vem primeiro');
     assert.equal(await page.locator('#setores .setor').first().evaluate((e) => e.classList.contains('quente')), true);
     assert.equal(await page.locator('[data-cobrar="Manipulação"]').isDisabled(), true, 'sem atraso, sem cobrança');
+    // Comercial: o pedido pronto para encerrar aparece e dá para cobrar.
+    assert.ok(setores.includes('Comercial'));
+    await page.locator('details.etapa[data-id="pedido_encerrar"] summary').click();
+    assert.match(await page.locator('details.etapa[data-id="pedido_encerrar"] .itens').innerText(), /P1 — Body Splash \(Miss Rose\)[\s\S]*96% produzido \(960 de 1000 un\)|P1 — Body Splash \(Miss Rose\)[\s\S]*10 dias/);
+    assert.equal(await page.locator('details.etapa[data-id="pedido_encerrar"] .abrir').getAttribute('href'), 'pedidos.html');
     // Etapas vazias ficam ocultas até pedir.
     assert.equal(await page.locator('details.etapa[data-id="rotulagem"]').count(), 0);
     await page.check('#verVazias');

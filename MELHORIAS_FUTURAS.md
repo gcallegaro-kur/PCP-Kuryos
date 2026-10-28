@@ -60,6 +60,8 @@ linha por item, com o link para onde está o detalhe.
 | Usuários | Function `excluirUsuario` para apagar a credencial pela tela | billing voltou: destravado | "Desativar e excluir usuário" |
 | Testes | Consertar os testes de tela quebrados no main:<br>- encerramento_pedido;<br>- inspecao_pa;<br>- operacao;<br>- painel_rearranjo;<br>- portao_bulk;<br>- apontamento_encerramento | — | "Adiados entre 07 e 19/10" |
 | Planejamento | Roadmap de planejamento, OP-eficiência e apontamento (fases restantes) | — | `PLANO_PLANEJAMENTO_PCP.md` |
+| Painel de Controle | Tela para o admin ajustar os prazos (SLA) por etapa; calibrar contra a base real (ensaiado só com dados sintéticos); retrato diário para ver tendência | — | "Painel de Controle e Início" |
+| Início | Cartões que faltam: Conferência de PA pendente (extrair a regra de `estoque.html` para `shared/`), fila de inspeção da Qualidade, Comercial; cartão-resumo do painel para o admin | — | "Painel de Controle e Início" |
 
 ### B. Depende da Kuryos (operação/cadastro, não código)
 

@@ -7,10 +7,11 @@ const SequenciaSetor = require('./public/shared/sequencia-setor.js');
 const PerdasEtapa = require('./public/shared/perdas-etapa.js');
 const CargasPA = require('./public/shared/cargas-pa.js');
 const InspecaoTotalPA = require('./public/shared/inspecao-total-pa.js');
+const EncerramentoPedido = require('./public/shared/encerramento-pedido.js');
 
 const agora = Date.parse('2026-10-27T15:00:00Z');
 const antes = (h) => new Date(agora - h * 3600000).toISOString();
-const lib = {SequenciaSetor, PerdasEtapa, CargasPA, InspecaoTotalPA};
+const lib = {SequenciaSetor, PerdasEtapa, CargasPA, InspecaoTotalPA, EncerramentoPedido};
 
 const ops = {
   // A: envase amanhã cedo, nada feito: separação e pesagem atrasadas; entra na fila do envase sem atraso.
@@ -53,16 +54,50 @@ const dados = {
   pedidos_compra: {p1: {status: 'ABERTO', numero: 'PC-1', criadoEm: antes(5)}, p2: {status: 'ENVIADO', numero: 'PC-2', dataPrevistaEntrega: '2026-10-20'},
     p3: {status: 'RECEBIDO_TOTAL', dataPrevistaEntrega: '2026-10-01'}},
   devolucoes_cliente: {d1: {status: 'AUTORIZADA', numero: 'DEV-1', criadoEm: antes(10)}},
-  solicitacoes_descarte: {x1: {status: 'SOLICITADO', numero: 'DESC-1'}}
+  solicitacoes_descarte: {x1: {status: 'SOLICITADO', numero: 'DESC-1'}},
+  orcamentos: {
+    o1: {status: 'EM_ELABORACAO', numero: 'ORC-1', cliente: 'Cli A', criadoEm: antes(100)},
+    o2: {status: 'ENVIADO', numero: 'ORC-2', cliente: 'Cli B', enviadoEm: antes(24 * 10), validade: '2026-12-01'},
+    o3: {status: 'ENVIADO', numero: 'ORC-3', cliente: 'Cli C', enviadoEm: antes(24), validade: '2026-10-20'},
+    o4: {status: 'ENVIADO', numero: 'ORC-4', cliente: 'Cli D', enviadoEm: antes(24), validade: '2026-12-01'},
+    o5: {status: 'ACEITO', numero: 'ORC-5'}
+  },
+  solicitacoes_cadastro_produto: {c1: {status: 'PENDENTE_CADASTRO', descricao: 'Creme novo', criadoEm: antes(100)}, c2: {status: 'CADASTRADO'}},
+  pedidos: {
+    'P1__SKU1': {id: 'P1', produto: 'Pronto 96%', cliente: 'CLI', qtdTotal: 1000, produzido: 960, ultimoApontamento: antes(24 * 10)},
+    'P2__SKU2': {id: 'P2', produto: 'Pronto recente', qtdTotal: 1000, produzido: 980, ultimoApontamento: antes(5)},
+    'P3__SKU3': {id: 'P3', produto: 'Concluído com saldo', status: 'Concluído', qtdTotal: 1000, produzido: 700, ultimoApontamento: antes(24 * 2)},
+    'P4__SKU4': {id: 'P4', produto: 'Sem OP', qtdTotal: 500, produzido: 0, dataPedido: '2026-10-01'},
+    'P5__SKU5': {id: 'P5', produto: 'Com OP', qtdTotal: 500, produzido: 0, dataPedido: '2026-10-01'},
+    'P6__SKU6': {id: 'P6', produto: 'Encerrado', statusManual: 'encerrado', qtdTotal: 500, produzido: 490},
+    'P7__SKU7': {id: 'P7', produto: 'Cancelado', canceladoPorComercial: true, qtdTotal: 500, produzido: 0, dataPedido: '2026-09-01'},
+    'P8__SKU8': {id: 'P8', produto: 'Concluído inteiro', status: 'Concluído', qtdTotal: 500, produzido: 500}
+  },
+  usuarios: {u1: {nome: 'Novo', email: 'n@k.com', role: 'pending', created_at: antes(48)}, u2: {nome: 'Ok', role: 'pcp'}, u3: {nome: 'Fora', role: 'pending', ativo: false}}
 };
+dados.ops['20-1'] = {status: 'Programado', lote: '20/01', produto: 'Pedido 5', skuPedidoKey: 'P5__SKU5', qtdPlanejada: 500, separacaoConcluida: true};
 
 const r = P.analisar(dados, {agora, lib});
 const e = Object.fromEntries(r.etapas.map((x) => [x.id, x]));
 const resumo = (id) => [e[id].n, e[id].atrasados];
+const setorDe = (nome) => r.setores.find((x) => x.setor === nome);
+
+// Comercial e pedidos
+assert.deepEqual(resumo('orc_elaboracao'), [1, 1]);
+assert.deepEqual(resumo('orc_resposta'), [3, 2], 'enviado há 10 dias e proposta vencida atrasam; o de ontem com validade futura, não');
+assert.match(e.orc_resposta.itens.find((i) => i.rotulo.startsWith('ORC-3')).motivo, /proposta vencida em 20\/10\/2026 sem resposta/);
+assert.deepEqual(resumo('cadastro_produto'), [1, 1]);
+assert.deepEqual(resumo('pedido_encerrar'), [2, 1], '96% e 98% são prontos; só o parado há 10 dias atrasa');
+assert.match(e.pedido_encerrar.itens[0].detalhe, /96% produzido \(960 de 1000 un\)/);
+assert.deepEqual(resumo('pedido_saldo'), [1, 0], 'concluído com saldo: decisão pendente, parado há 2 dias');
+assert.deepEqual(resumo('pedido_sem_op'), [1, 1], 'P4 sem OP há 26 dias; P5 tem OP; P7 cancelado e P6/P8 encerrados ficam fora');
+assert.deepEqual(resumo('usuarios_pendentes'), [1, 1], 'só a conta pendente e ativa; passou de 24h');
+assert.equal(setorDe('Comercial').atrasados, 1 + 2 + 1 + 0, 'orçamento parado, 2 sem resposta, 1 pedido a encerrar');
+assert.equal(setorDe('Cadastros').atrasados, 1); assert.equal(setorDe('ADM').atrasados, 1);
 
 // Fluxo e estrutura
 assert.equal(r.etapas.length, P.ETAPAS.length);
-assert.deepEqual(r.fases, ['Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos']);
+assert.deepEqual(r.fases, ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Gestão']);
 P.ETAPAS.forEach((x) => assert.ok(P.SLA_PADRAO_H[x.id] !== undefined, 'SLA padrão para ' + x.id));
 
 // Etapa a etapa
@@ -75,7 +110,7 @@ assert.deepEqual(resumo('aguardando_manipular'), [1, 0]);
 assert.deepEqual(resumo('manipulacao'), [1, 1], 'em manipulação há 30h, prazo 24h');
 assert.deepEqual(resumo('cq_granel'), [1, 1]);
 assert.equal(e.cq_granel.severidade, 'critico', 'atrasado e há mais de 2x o prazo');
-assert.deepEqual(resumo('bulk_envase'), [1, 1], 'F: bulk liberado há 100h e a linha não começou');
+assert.deepEqual(resumo('bulk_envase'), [2, 1], 'F: bulk liberado há 100h e a linha não começou; 20/01 está pronta, sem data de entrada, sem atraso');
 assert.deepEqual(resumo('envase'), [1, 1], 'só G está rodando, e passou do fim planejado');
 assert.match(e.envase.itens[0].motivo, /fim planejado em 26\/10\/2026 e faltam 60 un/);
 assert.deepEqual(resumo('rotulagem'), [0, 0], 'sem OP com rótulo, sem fila');
@@ -105,7 +140,7 @@ const setor = Object.fromEntries(r.setores.map((s) => [s.setor, s]));
 assert.equal(setor['Qualidade'].atrasados, 3, 'conferência de pesagem + bulk CQ + RNC');
 assert.equal(setor['Produção'].atrasados, 4, 'bulk sem envase, envase atrasado, inspeção sem responsável e em andamento vencida');
 assert.equal(setor['Logística'].atrasados, 3, 'separação, conferência de PA e carga para sair');
-assert.equal(setor['Manipulação'].atrasados, 2); assert.equal(setor['Faturamento'].atrasados, 1); assert.equal(setor['Compras'].atrasados, 2); assert.equal(setor['PCP'].atrasados, 0);
+assert.equal(setor['Manipulação'].atrasados, 2); assert.equal(setor['Faturamento'].atrasados, 1); assert.equal(setor['Compras'].atrasados, 2); assert.equal(setor['PCP'].atrasados, 1, 'pedido sem OP emitida');
 assert.equal(r.setores[0].atrasados >= r.setores[r.setores.length - 1].atrasados, true);
 assert.equal(r.totais.n, r.etapas.reduce((t, x) => t + x.n, 0));
 assert.equal(r.totais.atrasados, r.etapas.reduce((t, x) => t + x.atrasados, 0));

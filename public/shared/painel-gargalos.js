@@ -28,11 +28,19 @@
     confirmar_pcp: 24, separacao: 72, pesagem: 72, conferencia_pesagem: 4, aguardando_manipular: 24, manipulacao: 24,
     cq_granel: 24, bulk_envase: 72, envase: 0, rotulagem: 0, insp_designar: 4, insp_executar: 0, insp_decidir: 24,
     conferencia_pa: 24, faturamento: 24, carregar: 24, rnc: 72, sc_aprovar: 24, sc_cotar: 48, pc_enviar: 24, pc_atrasados: 0,
-    devolucoes: 72, descartes: 72
+    devolucoes: 72, descartes: 72,
+    orc_elaboracao: 72, orc_resposta: 168, cadastro_produto: 72, pedido_sem_op: 240, pedido_encerrar: 168, pedido_saldo: 168,
+    usuarios_pendentes: 24
   };
 
   /* Ordem do fluxo, setor dono, nome e tela de destino de cada etapa. */
   var ETAPAS = [
+    {id: 'orc_elaboracao', fase: 'Comercial', setor: 'Comercial', titulo: 'Orçamento em elaboração parado', href: 'comercial.html'},
+    {id: 'orc_resposta', fase: 'Comercial', setor: 'Comercial', titulo: 'Orçamento enviado sem resposta do cliente', href: 'comercial.html'},
+    {id: 'cadastro_produto', fase: 'Comercial', setor: 'Cadastros', titulo: 'Produto novo aguardando cadastro', href: 'cadastros.html'},
+    {id: 'pedido_encerrar', fase: 'Comercial', setor: 'Comercial', titulo: 'Pedido pronto para encerrar (95% ou mais)', href: 'pedidos.html'},
+    {id: 'pedido_saldo', fase: 'Comercial', setor: 'Comercial', titulo: 'Pedido concluído com saldo: encerrar ou reabrir', href: 'pedidos.html'},
+    {id: 'pedido_sem_op', fase: 'Planejar', setor: 'PCP', titulo: 'Pedido aberto sem OP emitida', href: 'pedidos.html'},
     {id: 'confirmar_pcp', fase: 'Planejar', setor: 'PCP', titulo: 'OP concluída aguardando confirmação do PCP', href: 'estoque.html?tab=conferenciapa'},
     {id: 'separacao', fase: 'Planejar', setor: 'Logística', titulo: 'OP aguardando separação de materiais', href: 'proximas_ordens.html?setor=separacao'},
     {id: 'pesagem', fase: 'Manipular', setor: 'Manipulação', titulo: 'Aguardando pesagem', href: 'manipulacao.html'},
@@ -55,9 +63,10 @@
     {id: 'pc_enviar', fase: 'Compras', setor: 'Compras', titulo: 'Pedido de compra a enviar', href: 'compras.html'},
     {id: 'pc_atrasados', fase: 'Compras', setor: 'Compras', titulo: 'Entrega do fornecedor atrasada', href: 'compras.html'},
     {id: 'devolucoes', fase: 'Retornos', setor: 'Logística', titulo: 'Devolução autorizada a receber', href: 'devolucoes.html'},
-    {id: 'descartes', fase: 'Retornos', setor: 'Logística', titulo: 'Descarte aguardando decisão', href: 'descarte.html'}
+    {id: 'descartes', fase: 'Retornos', setor: 'Logística', titulo: 'Descarte aguardando decisão', href: 'descarte.html'},
+    {id: 'usuarios_pendentes', fase: 'Gestão', setor: 'ADM', titulo: 'Usuário aguardando liberação de acesso', href: 'usuarios.html'}
   ];
-  var FASES = ['Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos'];
+  var FASES = ['Comercial', 'Planejar', 'Manipular', 'Produzir', 'Qualidade', 'Expedir', 'Compras', 'Retornos', 'Gestão'];
 
   function ts(v) { var t = Date.parse(v); return isNaN(t) ? null : t; }
   function txt(v) { return String(v == null ? '' : v).trim(); }
@@ -180,6 +189,50 @@
           fimPlano != null && fimPlano < agora ? 'fim planejado já passou e faltam ' + Math.round(eRot.restante) + ' un' : '',
           'faltam ' + Math.round(eRot.restante) + ' un'));
       }
+    });
+
+    // Comercial: orçamentos.
+    chaves(d.orcamentos).forEach(function(k) {
+      var oc = d.orcamentos[k] || {}, rot = (txt(oc.numero) || k) + (oc.cliente ? ' — ' + txt(oc.cliente) : '');
+      if (oc.status === 'EM_ELABORACAO') filas.orc_elaboracao.push(porIdade(rot, primeiroTs(oc, 'criadoEm'), agora, sla.orc_elaboracao));
+      else if (oc.status === 'ENVIADO') {
+        var desde = primeiroTs(oc, 'enviadoEm', 'criadoEm'), idade = desde == null ? null : (agora - desde) / H;
+        var venc = dia(oc.validade);
+        var motivo = venc && venc < hoje ? 'proposta vencida em ' + venc.split('-').reverse().join('/') + ' sem resposta' : porSla(idade, sla.orc_resposta);
+        filas.orc_resposta.push(item(rot, desde, agora, motivo));
+      }
+    });
+    chaves(d.solicitacoes_cadastro_produto).forEach(function(k) {
+      var sc = d.solicitacoes_cadastro_produto[k] || {};
+      if (sc.status === 'PENDENTE_CADASTRO') {
+        filas.cadastro_produto.push(porIdade(txt(sc.descricao) || txt(sc.produto) || txt(sc.nome) || k, primeiroTs(sc, 'criadoEm', 'em'), agora, sla.cadastro_produto));
+      }
+    });
+
+    // Comercial/PCP: pedidos (linhas SKU) a encerrar, com saldo a decidir, ou sem OP.
+    var EP = lib.EncerramentoPedido;
+    if (EP) {
+      var comOp = {};
+      chaves(ops).forEach(function(k) { var op = ops[k] || {}; if (txt(op.skuPedidoKey) && txt(op.status) !== 'Cancelado') comOp[txt(op.skuPedidoKey)] = true; });
+      chaves(d.pedidos).forEach(function(k) {
+        var p = d.pedidos[k] || {};
+        if (!p || p.canceladoPorComercial === true) return;
+        var sit = EP.situacao(p), pct = EP.percentual(p);
+        var rotP = (txt(p.id) || k) + (p.produto ? ' — ' + txt(p.produto) : '') + (p.cliente ? ' (' + txt(p.cliente) + ')' : '');
+        var resumoP = pct + '% produzido (' + Math.round(num(p.produzido)) + ' de ' + Math.round(num(p.qtdTotal)) + ' un)';
+        var ult = primeiroTs(p, 'ultimoApontamento');
+        if (sit === 'pronto') filas.pedido_encerrar.push(porIdade(rotP, ult, agora, sla.pedido_encerrar, resumoP));
+        else if (EP.saldoReabrivel(p)) filas.pedido_saldo.push(porIdade(rotP, ult, agora, sla.pedido_saldo, resumoP));
+        else if (sit === 'andamento' && num(p.qtdTotal) > 0 && num(p.produzido) === 0 && !comOp[k]) {
+          filas.pedido_sem_op.push(porIdade(rotP, primeiroTs(p, 'dataPedido', 'criadoEm'), agora, sla.pedido_sem_op, num(p.qtdTotal) + ' un pedidas'));
+        }
+      });
+    }
+
+    // ADM: contas novas esperando liberação.
+    chaves(d.usuarios).forEach(function(k) {
+      var u = d.usuarios[k] || {};
+      if (u.role === 'pending' && !u.desativado && u.ativo !== false) filas.usuarios_pendentes.push(porIdade(txt(u.nome) || txt(u.email) || k, primeiroTs(u, 'created_at', 'criadoEm'), agora, sla.usuarios_pendentes, txt(u.email)));
     });
 
     // Inspeção total de PA (a Qualidade sinaliza; Produção executa; Qualidade decide).

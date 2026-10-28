@@ -30,7 +30,9 @@ Memória completa (histórico, decisões antigas, projetos vizinhos):
   duplicata com `grep` antes de inserir, sem perguntar.
 - **Deploy e git andam juntos.** Todo `firebase deploy --only hosting --project prod-kuryos`
   é seguido, no mesmo turno e sem perguntar, de `git add` + `commit` descritivo +
-  `git push origin main`. O repo existe para o dev do Kuryos ERP acompanhar o progresso —
+  `git push origin main`. Antes do deploy, se o painel "Em aberto para execução" de
+  `MELHORIAS_FUTURAS.md` mudou, rode `node scripts/gerar-backlog.js` (alimenta a tela
+  Roadmap do sistema do usuário). O repo existe para o dev do Kuryos ERP acompanhar o progresso —
   GitHub desatualizado em relação à produção anula o propósito.
 - **Enquadramento de consultor, não de revisor de código.** Em conversas de
   roadmap/funcionalidade, lidere pela razão de negócio e pela priorização
