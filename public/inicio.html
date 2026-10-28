@@ -19,40 +19,92 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
   <style>
-    :root{--primary:#0a1c69;--danger:#d03b3b;--warning:#c9910a;--bg:#f5f5f7;--card:#fff;--border:#d2d2d7;--text:#1d1d1f;--muted:#6e6e73;--tint-red-bg:#fee2e2;--tint-red-fg:#991b1b;--tint-gray-bg:#f3f4f6;--tint-blue-bg:#eff6ff;--tint-orange-bg:#fff7ed;--tint-orange-fg:#c2410c}
-    @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:#2c2c2e;--tint-blue-bg:rgba(94,131,234,.16);--tint-orange-bg:rgba(249,115,22,.18);--tint-orange-fg:#fdba74}}
-    :root[data-theme="dark"]{color-scheme:dark;--primary:#5e83ea;--bg:#000;--card:#1c1c1e;--border:#38383a;--text:#f5f5f7;--muted:#98989d;--tint-red-bg:rgba(239,68,68,.18);--tint-red-fg:#fca5a5;--tint-gray-bg:#2c2c2e;--tint-blue-bg:rgba(94,131,234,.16);--tint-orange-bg:rgba(249,115,22,.18);--tint-orange-fg:#fdba74}
+    /* Identidade Kuryos: o azul-marinho da logo (--accent-deep → --accent) e os tons de apoio do tema. */
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:var(--font-ui);background:var(--bg);color:var(--text);min-height:100vh}
-    .header{padding:26px 0 6px;max-width:96%;margin:0 auto}
-    .header h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
-    .header-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
-    .main{padding:0 0 40px;max-width:96%;margin:0 auto}
-    h2{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:22px 0 10px}
-    .pend{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-    .cartao{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--warning);border-radius:14px;padding:14px 16px;text-decoration:none;color:var(--text);min-height:76px}
-    .cartao:hover{background:var(--tint-blue-bg)}
-    .cartao.alerta{border-left-color:var(--danger)}
-    .cartao .n{font-size:30px;font-weight:700;letter-spacing:-.02em;min-width:42px;text-align:center}
-    .cartao.alerta .n{color:var(--danger)}
-    .cartao b{display:block;font-size:14px}
-    .cartao small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
-    .vazio{background:var(--card);border:1px dashed var(--border);border-radius:14px;padding:16px;color:var(--muted);font-size:13.5px}
-    .areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-    .area{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
-    .area h3{font-size:13px;font-weight:700;margin-bottom:6px}
-    .area .sub{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:8px 0 2px}
-    .area a{display:block;padding:7px 4px;font-size:13.5px;color:var(--text);text-decoration:none;border-radius:8px}
-    .area a:hover{background:var(--tint-blue-bg);color:var(--primary)}
-    @media (max-width:700px){.area a{padding:14px 6px}}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--ink);min-height:100vh}
+    .pagina{max-width:1240px;margin:0 auto;padding:22px 24px 48px}
+
+    .hero{position:relative;overflow:hidden;border-radius:26px;padding:30px 34px;color:#fff;
+      background:linear-gradient(125deg,#050f38 0%,#0a1c69 52%,#2e4fc0 135%);
+      box-shadow:0 18px 40px -22px rgba(10,28,105,.7);display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+    .hero::before,.hero::after{content:"";position:absolute;border-radius:50%;pointer-events:none}
+    .hero::before{width:420px;height:420px;right:-90px;top:-210px;border:56px solid rgba(255,255,255,.07)}
+    .hero::after{width:240px;height:240px;right:150px;bottom:-150px;background:radial-gradient(circle,rgba(143,163,232,.28),transparent 68%)}
+    .hero>*{position:relative;z-index:1}
+    .hero-logo{height:34px;width:auto;display:block;filter:brightness(0) invert(1);opacity:.96;margin-bottom:22px}
+    .hero-chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:4px 11px;border-radius:99px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);margin-bottom:10px}
+    .hero h1{font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+    .hero-sub{font-size:14px;color:rgba(255,255,255,.72);margin-top:6px}
+    .resumo{min-width:190px;text-align:right;padding:14px 18px;border-radius:18px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(6px)}
+    .resumo b{display:block;font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1}
+    .resumo span{display:block;font-size:12.5px;color:rgba(255,255,255,.74);margin-top:5px}
+    .resumo.ok b{font-size:22px}
+
+    h2{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.7px;margin:30px 2px 12px}
+    h2::after{content:"";flex:1;height:1px;background:var(--line)}
+
+    .pend{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+    .cartao{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:16px 18px;text-decoration:none;color:var(--ink);min-height:84px;box-shadow:var(--shadow);transition:transform .15s ease,border-color .15s ease}
+    .cartao:hover{transform:translateY(-2px);border-color:var(--accent)}
+    .cartao .ico{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:color-mix(in srgb,var(--warn) 22%,transparent);color:#9a6b00}
+    :root[data-theme="dark"] .cartao .ico{color:var(--warn)}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cartao .ico{color:var(--warn)}}
+    .cartao.alerta .ico{background:color-mix(in srgb,var(--critical) 16%,transparent);color:var(--critical)}
+    .ico svg{width:23px;height:23px}
+    .cartao .n{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1;min-width:34px;text-align:center}
+    .cartao.alerta .n{color:var(--critical)}
+    .cartao b{display:block;font-size:14px;line-height:1.25}
+    .cartao small{display:block;font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.3}
+    .vazio{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px dashed var(--line);border-radius:var(--radius-md);padding:18px;color:var(--ink-soft);font-size:14px}
+    .vazio .ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);flex:none}
+    .vazio .ico svg{width:20px;height:20px}
+
+    .areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;align-items:start}
+    .area{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:16px 14px 10px;box-shadow:var(--shadow)}
+    .area .topo{display:flex;align-items:center;gap:11px;padding:0 4px 10px;margin-bottom:4px;border-bottom:1px solid var(--line)}
+    .area .ico{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--tom,var(--accent)) 13%,transparent);color:var(--tom,var(--accent))}
+    .area .ico svg{width:19px;height:19px}
+    .area h3{font-size:14.5px;font-weight:700;letter-spacing:-.01em;flex:1}
+    .area .qtd{font-size:11px;font-weight:700;color:var(--ink-soft);background:color-mix(in srgb,var(--ink) 7%,transparent);border-radius:99px;padding:2px 8px}
+    .area .sub{font-size:10.5px;font-weight:700;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.6px;margin:10px 6px 2px}
+    .area a{display:flex;align-items:center;justify-content:space-between;padding:8px 8px;font-size:13.5px;color:var(--ink);text-decoration:none;border-radius:9px;transition:background .12s ease,padding-left .12s ease}
+    .area a::after{content:"›";color:var(--ink-mute);font-size:17px;line-height:1;opacity:0;transition:opacity .12s ease}
+    .area a:hover{background:color-mix(in srgb,var(--tom,var(--accent)) 10%,transparent);color:var(--tom,var(--accent));padding-left:12px}
+    .area a:hover::after{opacity:1}
+
+    .rodape{margin-top:38px;text-align:center;color:var(--ink-mute);font-size:12px}
+    .rodape img{height:20px;display:block;margin:0 auto 8px;opacity:.55}
+    :root[data-theme="dark"] .rodape img{filter:brightness(0) invert(1)}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .rodape img{filter:brightness(0) invert(1)}}
+
+    @media (prefers-reduced-motion:no-preference){
+      .hero,.cartao,.area{animation:sobe .45s ease both}
+      .area:nth-child(2){animation-delay:.04s}.area:nth-child(3){animation-delay:.08s}.area:nth-child(4){animation-delay:.12s}
+      @keyframes sobe{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    }
+    @media (max-width:700px){
+      .pagina{padding:14px 16px 40px}
+      .hero{padding:22px 20px;border-radius:22px}
+      .hero h1{font-size:26px}
+      .hero-logo{height:28px;margin-bottom:18px}
+      .resumo{width:100%;text-align:left;display:flex;align-items:baseline;gap:10px}
+      .resumo b{font-size:28px}
+      .area a{padding:14px 8px}
+    }
   </style>
 </head>
 <body class="kuryos-theme has-sidebar">
-<div class="header">
-  <h1 id="ola">Início</h1>
-  <div class="header-sub" id="sub"></div>
-</div>
-<div class="main">
+<div class="pagina">
+  <div class="hero">
+    <div>
+      <img class="hero-logo" src="kuryos-logo.svg" alt="Kuryos — Indústria de Cosméticos">
+      <span class="hero-chip" id="chipPapel"></span>
+      <h1 id="ola">Início</h1>
+      <div class="hero-sub" id="sub"></div>
+    </div>
+    <div class="resumo" id="resumo" style="display:none"></div>
+  </div>
+
   <section id="secPend" style="display:none">
     <h2>Precisa de você</h2>
     <div class="pend" id="pend"></div>
@@ -61,6 +113,11 @@
     <h2>Suas áreas</h2>
     <div class="areas" id="areas"></div>
   </section>
+
+  <footer class="rodape">
+    <img src="kuryos-logo.svg" alt="">
+    Sistema de Produção · Kuryos Indústria de Cosméticos
+  </footer>
 </div>
 
 <script>
@@ -82,6 +139,18 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(
 
 var dados = {}, carregadas = {}, cartoes = [], ctx = null;
 
+var PAPEIS = {admin: 'Administrador', pcp: 'PCP', rh: 'RH Central', gestor: 'Gestor de Linha', qualidade: 'Qualidade',
+  rotulagem: 'Rotulagem', logistica: 'Logística', production: 'Produção'};
+// Ícone e tom (cores do tema) de cada bloco: só três matizes, para a página seguir harmônica.
+var AZUL = 'var(--s1)', VERDE = 'var(--s3)', OURO = 'var(--s2)', NEUTRO = 'var(--ink-soft)';
+var BLOCO_VISUAL = {
+  'Analytics': ['dashboard', AZUL], 'Comercial': ['chart', AZUL], 'Pedidos e Rastreio': ['history', AZUL], 'PCP': ['calendar', AZUL],
+  'Compras': ['cart', OURO], 'Armazém': ['warehouse', VERDE], 'Operação': ['gear', VERDE], 'Qualidade': ['flask', VERDE],
+  'Expedição': ['truck', VERDE], 'Manutenção': ['gear', OURO], 'Cadastros': ['tag', OURO], 'ADM': ['sliders', NEUTRO],
+  'RH': ['people', OURO], 'Ajuda': ['book', NEUTRO]
+};
+function icone(nome) { return typeof ktIcon === 'function' && nome ? ktIcon(nome) : ''; }
+
 function montarContexto() {
   var u = window.currentUser;
   return {
@@ -95,6 +164,7 @@ function saudacao() {
   var u = window.currentUser, h = new Date().getHours();
   var periodo = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
   $('ola').textContent = periodo + ', ' + String(u.nome || '').split(' ')[0];
+  $('chipPapel').textContent = PAPEIS[u.role] || 'Kuryos';
   var dia = new Date().toLocaleDateString('pt-BR', {weekday: 'long', day: '2-digit', month: 'long'});
   $('sub').textContent = dia.charAt(0).toUpperCase() + dia.slice(1);
 }
@@ -102,31 +172,44 @@ function saudacao() {
 function desenharAreas() {
   var blocos = KuryosNav.blocos(ctx);
   $('areas').innerHTML = blocos.map(function(b) {
-    var sub = null;
+    var sub = null, v = BLOCO_VISUAL[b.nome] || ['dashboard', AZUL];
     var links = b.itens.map(function(it) {
       var cab = '';
       if (it.s !== sub) { sub = it.s; if (it.s) cab = '<div class="sub">' + esc(it.s) + '</div>'; }
       return cab + '<a href="' + esc(it.h) + '">' + esc(it.r) + '</a>';
     }).join('');
-    return '<div class="area"><h3>' + esc(b.nome) + '</h3>' + links + '</div>';
+    return '<div class="area" style="--tom:' + v[1] + '"><div class="topo"><span class="ico">' + icone(v[0]) + '</span><h3>' + esc(b.nome) +
+      '</h3><span class="qtd">' + b.itens.length + '</span></div>' + links + '</div>';
   }).join('') || '<div class="vazio">Seu usuário ainda não tem nenhuma área liberada. Peça a um administrador em Usuários.</div>';
 }
 
+function desenharResumo(lista, prontos) {
+  var el = $('resumo');
+  if (!cartoes.length || (!lista.length && !prontos)) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  if (!lista.length) { el.className = 'resumo ok'; el.innerHTML = '<b>Tudo em dia</b><span>nada esperando por você</span>'; return; }
+  var total = lista.reduce(function(t, p) { return t + p.n; }, 0);
+  el.className = 'resumo';
+  el.innerHTML = '<b>' + total + '</b><span>' + (total === 1 ? 'item espera por você' : 'itens esperam por você') + '</span>';
+}
+
 function desenharPendencias() {
-  if (!cartoes.length) { $('secPend').style.display = 'none'; return; }
+  if (!cartoes.length) { $('secPend').style.display = 'none'; $('resumo').style.display = 'none'; return; }
   $('secPend').style.display = '';
   var prontos = cartoes.every(function(c) { return c.fontes.every(function(f) { return carregadas[f]; }); });
   var lista = KuryosNav.pendencias(cartoes, dados, {
     InspecaoTotalPA: window.InspecaoTotalPA, PesagensDia: window.PesagensDia, CargasPA: window.CargasPA,
     hoje: window.PesagensDia ? PesagensDia.diaLocal(new Date().toISOString()) : '', agora: Date.now()
   });
+  desenharResumo(lista, prontos);
   if (!lista.length) {
-    $('pend').innerHTML = '<div class="vazio">' + (prontos ? 'Nada esperando por você agora nas suas áreas.' : 'Carregando…') + '</div>';
+    $('pend').innerHTML = '<div class="vazio"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>' +
+      (prontos ? 'Nada esperando por você agora nas suas áreas.' : 'Carregando…') + '</div>';
     return;
   }
   $('pend').innerHTML = lista.map(function(p) {
-    return '<a class="cartao ' + (p.tom === 'alerta' ? 'alerta' : '') + '" href="' + esc(p.href) + '"><span class="n">' + p.n + '</span>' +
-      '<span><b>' + esc(p.titulo) + '</b><small>' + esc(p.texto || '') + '</small></span></a>';
+    return '<a class="cartao ' + (p.tom === 'alerta' ? 'alerta' : '') + '" href="' + esc(p.href) + '"><span class="ico">' + icone(p.i) + '</span>' +
+      '<span class="n">' + p.n + '</span><span><b>' + esc(p.titulo) + '</b><small>' + esc(p.texto || '') + '</small></span></a>';
   }).join('');
 }
 

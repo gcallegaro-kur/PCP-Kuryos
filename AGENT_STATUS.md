@@ -480,6 +480,10 @@ Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa
   individual de módulos): nenhum link se perdeu, nenhum duplicado, nenhum sem acesso.
 - Testes: `run_navegacao_test.js`, `run_inicio_ui_test.js`, `run_menu_sanfona_ui_test.js` (blocos renomeados),
   `run_coerencia_modulos_test.js`.
+- Visual do Início (27/10, 2ª passada): faixa de abertura com a logo, gradiente azul-marinho da marca, papel da
+  pessoa e resumo "N itens esperam por você"; cartões com ícone; áreas com ícone/tom por bloco (3 matizes do tema);
+  claro, escuro e celular conferidos. Cuidado: `auth_check.js` remove o primeiro `<header>` da página (cabeçalho
+  legado) — não use essa tag em tela nova.
 - Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
   (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
 - `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.

@@ -207,7 +207,7 @@
      destino precisa abrir) e como contar. Quem não vê o cartão também não gera
      a leitura dos dados dele. */
   var CARTOES = [
-    {id: 'inspecao_total', titulo: 'Inspeção total de PA', pagina: 'inspecao_total.html', fontes: ['ops'],
+    {id: 'inspecao_total', i: 'flask', titulo: 'Inspeção total de PA', pagina: 'inspecao_total.html', fontes: ['ops'],
       calcular: function(d, lib) {
         if (!lib.InspecaoTotalPA) return null;
         var fila = lib.InspecaoTotalPA.fila(d.ops).filter(function(f) { return f.estado !== 'DECIDIDA'; });
@@ -225,7 +225,7 @@
         if (decidir) partes.push(decidir + ' aguardando decisão');
         return {n: fila.length, tom: vencidas ? 'alerta' : 'aviso', texto: partes.join(' · ') || 'em andamento'};
       }},
-    {id: 'pesagens', titulo: 'Pesagens para cobrar', pagina: 'pesagens.html', fontes: ['ops', 'programacao'],
+    {id: 'pesagens', i: 'flask', titulo: 'Pesagens para cobrar', pagina: 'pesagens.html', fontes: ['ops', 'programacao'],
       q: function(c) { return c.temMod('planejamento') || c.temMod('emitir_op'); },
       calcular: function(d, lib) {
         if (!lib.PesagensDia) return null;
@@ -237,21 +237,21 @@
         if (f) partes.push(f + ' fora da meta');
         return {n: r.cobrar, tom: a ? 'alerta' : 'aviso', texto: partes.join(' · ')};
       }},
-    {id: 'cargas_faturar', titulo: 'Cargas a faturar', pagina: 'faturamento.html', fontes: ['agendamentos_expedicao'],
+    {id: 'cargas_faturar', i: 'clipboard', titulo: 'Cargas a faturar', pagina: 'faturamento.html', fontes: ['agendamentos_expedicao'],
       calcular: function(d, lib) {
         if (!lib.CargasPA) return null;
         var c = lib.CargasPA.contagem(d.agendamentos_expedicao);
         var n = (c.AGENDADA || 0) + (c.FATURAMENTO_SOLICITADO || 0);
         return n ? {n: n, tom: 'aviso', texto: 'agendadas ou com faturamento solicitado'} : null;
       }},
-    {id: 'cargas_carregar', titulo: 'Cargas para carregar', pagina: 'cargas.html', fontes: ['agendamentos_expedicao'],
+    {id: 'cargas_carregar', i: 'truck', titulo: 'Cargas para carregar', pagina: 'cargas.html', fontes: ['agendamentos_expedicao'],
       calcular: function(d, lib) {
         if (!lib.CargasPA) return null;
         var c = lib.CargasPA.contagem(d.agendamentos_expedicao);
         var n = (c.FATURADA || 0) + (c.AGUARDANDO_EMBARQUE || 0);
         return n ? {n: n, tom: 'aviso', texto: 'faturadas, aguardando carregamento e saída'} : null;
       }},
-    {id: 'rnc_abertas', titulo: 'Não conformidades abertas', pagina: 'qualidade.html', href: 'qualidade.html?tab=rnc', fontes: ['nao_conformidades'],
+    {id: 'rnc_abertas', i: 'alert', titulo: 'Não conformidades abertas', pagina: 'qualidade.html', href: 'qualidade.html?tab=rnc', fontes: ['nao_conformidades'],
       q: function(c) { return c.temMod('qualidade'); },
       calcular: function(d) {
         var n = 0;
@@ -278,7 +278,7 @@
     cartoes.forEach(function(c) {
       var r = null;
       try { r = c.calcular(dados, lib || {}); } catch (e) { r = null; }
-      if (r && r.n) out.push({id: c.id, titulo: c.titulo, href: c.href || c.pagina, n: r.n, tom: r.tom, texto: r.texto});
+      if (r && r.n) out.push({id: c.id, i: c.i, titulo: c.titulo, href: c.href || c.pagina, n: r.n, tom: r.tom, texto: r.texto});
     });
     out.sort(function(a, b) { return (a.tom === 'alerta' ? 0 : 1) - (b.tom === 'alerta' ? 0 : 1); });
     return out;
