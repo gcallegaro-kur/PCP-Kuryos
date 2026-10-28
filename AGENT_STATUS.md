@@ -489,6 +489,12 @@ Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa
   entregas atrasadas), Logística (devoluções a receber, descartes aguardando decisão). Contagens conferidas só com
   dados sintéticos: não rodei contra a base real. Ficou de fora: Conferência de PA pendente (a regra mora inline em
   `estoque.html › renderConferenciaPA`; extrair para `shared/` antes de virar cartão) e fila de inspeção da Qualidade.
+- **Painel de Controle** (27/10, 4ª passada) — `public/painel.html` + `public/shared/painel-gargalos.js` (motor puro, testado em
+  `run_painel_gargalos_test.js`; tela em `run_painel_ui_test.js`). Módulo novo `painel` (só admin + quem o ADM marcar).
+  23 etapas do fluxo (Planejar → Manipular → Produzir → Qualidade → Expedir → Compras → Retornos), cada uma com setor
+  dono, fila, idade e atraso; ranking de setores por atraso e botão "Copiar cobrança" por setor. Atraso = data que o
+  sistema já conhece, senão SLA em horas por etapa (`config/painelSlaHoras`); sem data de entrada, só conta na fila.
+  Ensaiado só com dados sintéticos; calibrar contra a base real. Backlog em MELHORIAS_FUTURAS.md.
 - Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
   (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
 - `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.

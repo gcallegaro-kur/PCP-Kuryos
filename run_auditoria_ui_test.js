@@ -46,8 +46,9 @@ eq(chaveDaPagina, chaveReal, 'o firebaseConfig é o mesmo das outras páginas, n
 const authCheck = fs.readFileSync(path.join(__dirname, 'public/auth_check.js'), 'utf8');
 ok(/auditoria:\s*\{/.test(authCheck), 'módulo `auditoria` existe em KURYOS_MODULOS');
 ok(/auditoria.html/.test(authCheck), 'a página está declarada no módulo');
-ok(/temMod\('auditoria'\)[\s\S]{0,120}auditoria.html/.test(authCheck),
-  'e tem link na navbar atrás do módulo');
+// O menu é montado pelo registro de telas (shared/navegacao.js): a tela só aparece a quem abre a página (módulo).
+const registroNav = fs.readFileSync(path.join(__dirname, 'public/shared/navegacao.js'), 'utf8');
+ok(/\{p: 'auditoria\.html'[^}]*b: 'ADM'/.test(registroNav), 'e tem link no menu (registro de telas), liberado pelo módulo da página');
 // A regra mais importante: NÃO entrar no padrão de nenhum papel além de admin
 const porPapel = authCheck.slice(authCheck.indexOf('MODULOS_POR_PAPEL'), authCheck.indexOf('MODULOS_POR_PAPEL') + 1400);
 ok(!/'auditoria'/.test(porPapel),

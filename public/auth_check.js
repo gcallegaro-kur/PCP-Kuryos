@@ -132,6 +132,10 @@ const KURYOS_MODULOS = {
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
                   paginas: ['usuarios.html'] },
+  // Painel de Controle (27/10): onde o fluxo está parado e com quem (visão de gestão).
+  // Fora de MODULOS_POR_PAPEL de propósito: só `admin` e quem o ADM marcar.
+  painel:       { rotulo: 'Painel de Controle', desc: 'Filas, idade e atraso de cada etapa do fluxo, por setor, com a cobrança pronta (visão de gestão)',
+                  paginas: ['painel.html'] },
   // Auditoria da programação (07/10): quem tirou/pôs uma OP na linha, quem
   // encerrou, e o que o SERVIDOR fez sozinho (vínculo automático no criarOP).
   // Não entra em MODULOS_POR_PAPEL de propósito -- só `admin`, que recebe

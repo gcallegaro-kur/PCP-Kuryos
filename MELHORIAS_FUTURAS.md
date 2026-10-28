@@ -1597,3 +1597,12 @@ Fica para depois (nenhum é bug):
 - *(Feito em 24/10)* Fotos por palete no resultado (opcionais); foto por MOTIVO individual segue adiada. O envio depende do Storage (billing).
 - *(Feito em 24/10)* Palete que chega depois da sinalização: laudo avulso bloqueado até a decisão da inspeção.
 - **Prazo vencido sem aviso ativo.** A fila destaca o vencido em vermelho, mas não notifica ninguém; um aviso para o PCP/Produção seria o passo seguinte.
+
+## Painel de Controle e Início (27/10/2026) — adiado
+
+- **Tela para o admin ajustar os prazos (SLA) por etapa.** Hoje o painel lê `config/painelSlaHoras/<etapa>` (horas), mas só dá para gravar pelo console. Os prazos de partida (`SLA_PADRAO_H` em `shared/painel-gargalos.js`) são folgados de propósito.
+- **Rodar o painel contra a base real e calibrar.** O motor só foi ensaiado com dados sintéticos (o acesso à base de produção foi negado na sessão). Conferir cada contagem contra a tela de origem e ajustar os prazos.
+- **Histórico do gargalo.** O painel mostra o agora; guardar um retrato diário (n e atrasados por etapa) permitiria ver tendência e cobrar por evolução, não só pelo estado.
+- **Conferência de PA duplicada.** A regra da fila de PA existe em `estoque.html` (renderConferenciaPA) e em `shared/painel-gargalos.js`; um teste trava só o marco de corte. Extrair para um módulo `shared/` único.
+- **Cartões do Início ainda sem fonte:** Conferência de PA pendente, fila de inspeção da Qualidade e Comercial (orçamento aguardando resposta).
+- **Painel dentro do Início para o admin:** um cartão-resumo "N etapas críticas" levando ao painel.

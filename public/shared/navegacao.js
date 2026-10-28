@@ -28,6 +28,7 @@
      o: posição dentro do bloco (número ou função do contexto); sem ele vale a ordem do registro. */
   var TELAS = [
     // ── Analytics
+    {p: 'painel.html', r: 'Painel de Controle', i: 'gear', b: 'Analytics'},
     {p: 'dashboard.html', r: 'Dashboard Diário', i: 'dashboard', b: 'Analytics'},
     {p: 'dashboard_analise.html', r: 'Dashboard Geral', i: 'history', b: 'Analytics'},
 
