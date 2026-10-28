@@ -15,8 +15,8 @@ const dados = () => ({
   agendamentos_expedicao: {a1: {status: 'AGENDADA'}, a2: {status: 'AGENDADA'}, a3: {status: 'EXPEDIDO_PARCIAL'}},
   nao_conformidades: {n1: {status: 'ABERTA'}},
   ops: {
-    '1-1': {lote: '1/01', produto: 'A', inspecaoTotal: {estado: 'AGUARDANDO_DESIGNACAO', sinalizacao: {em: '2026-10-26T10:00:00Z'}}},
-    '2-1': {lote: '2/01', produto: 'B', inspecaoTotal: {estado: 'EM_INSPECAO', designacao: {prazoEm: '2000-01-01T00:00:00Z'}, sinalizacao: {em: '2026-10-25T10:00:00Z'}}}
+    '1-1': {status: 'Concluído', lote: '1/01', produto: 'A', inspecaoTotal: {estado: 'AGUARDANDO_DESIGNACAO', sinalizacao: {em: '2026-10-26T10:00:00Z'}}},
+    '2-1': {status: 'Concluído', lote: '2/01', produto: 'B', inspecaoTotal: {estado: 'EM_INSPECAO', designacao: {prazoEm: '2000-01-01T00:00:00Z'}, sinalizacao: {em: '2026-10-25T10:00:00Z'}}}
   },
   programacao: {}
 });
@@ -86,10 +86,11 @@ async function abrir(browser, uid) {
     assert.deepEqual(erros, []);
     await page.close();
 
-    // Rotulagem: sem cartões, a seção some; só o atalho da Operação.
+    // Rotulagem: tem cartão da fila, mas nada na fila: resumo "Tudo em dia"; só o atalho da Operação.
     ({page, erros} = await abrir(browser, 'rot'));
     await page.waitForSelector('#areas .area');
-    assert.equal(await page.locator('#secPend').isVisible(), false);
+    await page.waitForFunction(() => /Tudo em dia/.test(document.querySelector('#resumo').innerText));
+    assert.match(await page.locator('#pend').innerText(), /Nada esperando por você/);
     assert.ok((await page.locator('#areas .area h3').allInnerTexts()).includes('Operação'));
     assert.deepEqual(erros, []);
     if (process.env.INICIO_SCREENSHOT) { await page.close(); ({page} = await abrir(browser, 'qua')); await page.waitForSelector('#pend .cartao'); await page.screenshot({path: process.env.INICIO_SCREENSHOT}); }

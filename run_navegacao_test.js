@@ -9,6 +9,8 @@ const Nav = require('./public/shared/navegacao.js');
 const InspecaoTotalPA = require('./public/shared/inspecao-total-pa.js');
 const PesagensDia = require('./public/shared/pesagens-dia.js');
 const CargasPA = require('./public/shared/cargas-pa.js');
+const SequenciaSetor = require('./public/shared/sequencia-setor.js');
+const PerdasEtapa = require('./public/shared/perdas-etapa.js');
 
 // Extrai de auth_check.js o trecho puro (módulos, papéis, podeAbrirPagina).
 const fonte = fs.readFileSync('public/auth_check.js', 'utf8');
@@ -126,28 +128,42 @@ comModulo.forEach((p) => assert.ok(doRegistro.has(p) || foraDoMenu.has(p), 'pág
 
 // 4) Cartões da tela inicial: quem vê o quê, e só lê o que precisa.
 const cartoesDe = (user) => Nav.cartoesVisiveis(ctxDe(user)).map((c) => c.id);
-assert.deepEqual(cartoesDe(perfis.logistica).sort(), ['cargas_carregar', 'cargas_faturar']);
-assert.deepEqual(cartoesDe(perfis.rotulagem), []);
+assert.deepEqual(cartoesDe(perfis.logistica).sort(), ['cargas_carregar', 'cargas_faturar', 'descartes', 'devolucoes_receber', 'fila_separacao']);
+assert.deepEqual(cartoesDe(perfis.rotulagem), ['fila_rotulagem']);
+assert.deepEqual(cartoesDe(perfis.soCompras).sort(), ['pc_atrasados', 'pc_enviar', 'sc_aprovar', 'sc_cotar']);
+assert.deepEqual(cartoesDe(perfis.soManipulacao).sort(), ['fila_manipulacao']);
 assert.ok(cartoesDe(perfis.qualidade).includes('rnc_abertas') && cartoesDe(perfis.qualidade).includes('inspecao_total'));
 assert.ok(!cartoesDe(perfis.qualidade).includes('cargas_faturar'));
 assert.ok(cartoesDe(perfis.production).includes('inspecao_total') && cartoesDe(perfis.production).includes('pesagens'));
 assert.ok(!cartoesDe(perfis.production).includes('rnc_abertas'));
-assert.deepEqual(Nav.fontesNecessarias(Nav.cartoesVisiveis(ctxDe(perfis.logistica))), ['agendamentos_expedicao'], 'logística só lê as cargas');
+assert.deepEqual(Nav.fontesNecessarias(Nav.cartoesVisiveis(ctxDe(perfis.logistica))), ['agendamentos_expedicao', 'ops', 'devolucoes_cliente', 'solicitacoes_descarte'], 'logística só lê o que os seus cartões usam');
 
 // 5) Contagem dos cartões com dados de verdade.
-const lib = {InspecaoTotalPA, PesagensDia, CargasPA, hoje: '2026-10-27', agora: new Date('2026-10-27T12:00:00Z').getTime()};
+const lib = {InspecaoTotalPA, PesagensDia, CargasPA, SequenciaSetor, PerdasEtapa, hoje: '2026-10-27', agora: new Date('2026-10-27T12:00:00Z').getTime()};
 const ops = {
-  '1-1': {lote: '1/01', produto: 'A', inspecaoTotal: {estado: 'AGUARDANDO_DESIGNACAO', sinalizacao: {em: '2026-10-26T10:00:00Z'}}},
-  '2-1': {lote: '2/01', produto: 'B', inspecaoTotal: {estado: 'EM_INSPECAO', designacao: {prazoEm: '2026-10-27T08:00:00Z'}, sinalizacao: {em: '2026-10-25T10:00:00Z'}}},
-  '3-1': {lote: '3/01', produto: 'C', inspecaoTotal: {estado: 'AGUARDANDO_DECISAO', sinalizacao: {em: '2026-10-24T10:00:00Z'}}},
-  '4-1': {lote: '4/01', produto: 'D', inspecaoTotal: {estado: 'DECIDIDA'}},
-  '5-1': {lote: '5/01', produto: 'E'}
+  '1-1': {status: 'Concluído', lote: '1/01', produto: 'A', inspecaoTotal: {estado: 'AGUARDANDO_DESIGNACAO', sinalizacao: {em: '2026-10-26T10:00:00Z'}}},
+  '2-1': {status: 'Concluído', lote: '2/01', produto: 'B', inspecaoTotal: {estado: 'EM_INSPECAO', designacao: {prazoEm: '2026-10-27T08:00:00Z'}, sinalizacao: {em: '2026-10-25T10:00:00Z'}}},
+  '3-1': {status: 'Concluído', lote: '3/01', produto: 'C', inspecaoTotal: {estado: 'AGUARDANDO_DECISAO', sinalizacao: {em: '2026-10-24T10:00:00Z'}}},
+  '4-1': {status: 'Concluído', lote: '4/01', produto: 'D', inspecaoTotal: {estado: 'DECIDIDA'}},
+  '5-1': {status: 'Concluído', lote: '5/01', produto: 'E'}
 };
 const dados = {
   ops, programacao: {},
   agendamentos_expedicao: {a1: {status: 'AGENDADA'}, a2: {status: 'AGENDADA'}},
-  nao_conformidades: {n1: {status: 'ABERTA'}, n2: {status: 'FECHADA'}, n3: {status: 'ABERTA'}}
+  nao_conformidades: {n1: {status: 'ABERTA'}, n2: {status: 'FECHADA'}, n3: {status: 'ABERTA'}},
+  solicitacoes_compra: {s1: {status: 'PENDENTE'}, s2: {status: 'APROVADA'}, s3: {status: 'APROVADA'}, s4: {status: 'REJEITADA'}},
+  pedidos_compra: {
+    p1: {status: 'ABERTO'},
+    p2: {status: 'ENVIADO', dataPrevistaEntrega: '2026-10-20'},
+    p3: {status: 'RECEBIDO_PARCIAL', dataPrevistaEntrega: '2026-10-26T00:00:00Z'},
+    p4: {status: 'ENVIADO', dataPrevistaEntrega: '2026-10-30'},
+    p5: {status: 'RECEBIDO_TOTAL', dataPrevistaEntrega: '2026-10-01'}
+  },
+  devolucoes_cliente: {d1: {status: 'AUTORIZADA'}, d2: {status: 'RECEBIDA'}},
+  solicitacoes_descarte: {x1: {status: 'SOLICITADO'}, x2: {status: 'CONCLUIDO'}}
 };
+dados.ops['10-1'] = {status: 'Programado', lote: '10/01', produto: 'F', qtdPlanejada: 100, formulaVersao: 'F1__v1'};
+dados.ops['11-1'] = {status: 'Em Produção', lote: '11/01', produto: 'G', qtdPlanejada: 100, produzidoLinha: 40, abertaDesde: '2026-10-27T07:00:00', separacaoConcluida: true};
 const todos = Nav.pendencias(Nav.CARTOES, dados, lib);
 const porId = Object.fromEntries(todos.map((p) => [p.id, p]));
 assert.equal(porId.inspecao_total.n, 3, 'decidida e OP comum não entram na fila');
@@ -156,6 +172,15 @@ assert.match(porId.inspecao_total.texto, /1 sem responsável · 1 com prazo venc
 assert.equal(todos[0].tom, 'alerta', 'alertas vêm primeiro');
 assert.equal(porId.rnc_abertas.n, 2);
 assert.equal(porId.cargas_faturar.n, 2);
+assert.equal(porId.sc_aprovar.n, 1); assert.equal(porId.sc_cotar.n, 2);
+assert.equal(porId.pc_enviar.n, 1);
+assert.equal(porId.pc_atrasados.n, 2, 'só ENVIADO/RECEBIDO_PARCIAL com data vencida; recebido total e data futura não contam');
+assert.equal(porId.pc_atrasados.tom, 'alerta');
+assert.equal(porId.devolucoes_receber.n, 1); assert.equal(porId.descartes.n, 1);
+assert.equal(porId.fila_separacao.n, 1, 'só a OP ativa sem separação concluída');
+assert.equal(porId.fila_envase.n, 2); assert.match(porId.fila_envase.texto, /1 em andamento · 1 aguardando/);
+assert.equal(porId.fila_manipulacao.n, 1, 'manipulação: OP com fórmula e sem fase iniciada');
+assert.ok(!porId.fila_rotulagem, 'sem OP com rótulo, sem cartão');
 assert.ok(!porId.cargas_carregar, 'cartão sem pendência não aparece');
 assert.deepEqual(Nav.pendencias(Nav.CARTOES, {}, lib), [], 'sem dados nenhum cartão aparece nem quebra');
 assert.deepEqual(Nav.pendencias([{id: 'x', titulo: 'x', pagina: 'x', fontes: [], calcular() { throw new Error('boom'); }}], {}, lib), [], 'cartão que falha some sem derrubar a tela');

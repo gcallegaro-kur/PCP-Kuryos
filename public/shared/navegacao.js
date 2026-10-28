@@ -206,6 +206,33 @@
      Cada cartão declara de quais nós do banco precisa, quem o vê (a página de
      destino precisa abrir) e como contar. Quem não vê o cartão também não gera
      a leitura dos dados dele. */
+  function contar(no, status) {
+    var n = 0;
+    Object.keys(no || {}).forEach(function(k) { if ((no[k] || {}).status === status) n++; });
+    return n;
+  }
+
+  /* Cartão da fila de um setor: quantas OPs esperam e quantas já estão rodando.
+     A regra de "está na fila" é a da própria tela Próximas Ordens (SequenciaSetor.etapa). */
+  function cartaoFila(id, setor, titulo, icone, q) {
+    return {id: id, i: icone, titulo: titulo, pagina: 'proximas_ordens.html', href: 'proximas_ordens.html?setor=' + setor, fontes: ['ops'], q: q,
+      calcular: function(d, lib) {
+        if (!lib.SequenciaSetor) return null;
+        var ctx = {temRotulagem: lib.PerdasEtapa ? function(op) {
+          return lib.PerdasEtapa.embalagensDaOp(op, null, null).some(function(i) { return i.tipo === 'Rótulos'; });
+        } : null};
+        var n = 0, andamento = 0;
+        Object.keys(d.ops || {}).forEach(function(k) {
+          var e = lib.SequenciaSetor.etapa(setor, d.ops[k], ctx);
+          if (!e) return;
+          n++;
+          if (e.emAndamento) andamento++;
+        });
+        if (!n) return null;
+        return {n: n, tom: 'aviso', texto: andamento ? andamento + ' em andamento · ' + (n - andamento) + ' aguardando' : 'nenhuma iniciada'};
+      }};
+  }
+
   var CARTOES = [
     {id: 'inspecao_total', i: 'flask', titulo: 'Inspeção total de PA', pagina: 'inspecao_total.html', fontes: ['ops'],
       calcular: function(d, lib) {
@@ -257,7 +284,45 @@
         var n = 0;
         Object.keys(d.nao_conformidades || {}).forEach(function(k) { if ((d.nao_conformidades[k] || {}).status === 'ABERTA') n++; });
         return n ? {n: n, tom: 'aviso', texto: 'aguardando alguém assumir'} : null;
-      }}
+      }},
+
+    // ── Fila de cada setor (as mesmas "Próximas Ordens", contadas por SequenciaSetor.etapa)
+    cartaoFila('fila_separacao', 'separacao', 'OPs para separar', 'list',
+      function(c) { return c.temMod('logistica'); }),
+    cartaoFila('fila_envase', 'envase', 'OPs na fila do envase', 'list',
+      function(c) { return c.setores.producao; }),
+    cartaoFila('fila_manipulacao', 'manipulacao', 'Lotes na fila da manipulação', 'flask',
+      function(c) { return c.setores.manipulacao; }),
+    cartaoFila('fila_rotulagem', 'rotulagem', 'OPs na fila da rotulagem', 'list',
+      function(c) { return c.setores.rotulagem; }),
+
+    // ── Compras
+    {id: 'sc_aprovar', i: 'cart', titulo: 'Solicitações de compra para aprovar', pagina: 'compras.html', fontes: ['solicitacoes_compra'],
+      q: function(c) { return c.temMod('compras'); },
+      calcular: function(d) { var n = contar(d.solicitacoes_compra, 'PENDENTE'); return n ? {n: n, tom: 'aviso', texto: 'aguardando aprovação'} : null; }},
+    {id: 'sc_cotar', i: 'cart', titulo: 'Solicitações aprovadas para cotar', pagina: 'compras.html', fontes: ['solicitacoes_compra'],
+      q: function(c) { return c.temMod('compras'); },
+      calcular: function(d) { var n = contar(d.solicitacoes_compra, 'APROVADA'); return n ? {n: n, tom: 'aviso', texto: 'prontas para virar cotação'} : null; }},
+    {id: 'pc_enviar', i: 'cart', titulo: 'Pedidos de compra para enviar', pagina: 'compras.html', fontes: ['pedidos_compra'],
+      q: function(c) { return c.temMod('compras'); },
+      calcular: function(d) { var n = contar(d.pedidos_compra, 'ABERTO'); return n ? {n: n, tom: 'aviso', texto: 'emitidos, ainda não enviados ao fornecedor'} : null; }},
+    {id: 'pc_atrasados', i: 'alert', titulo: 'Entregas de compra atrasadas', pagina: 'compras.html', fontes: ['pedidos_compra'],
+      q: function(c) { return c.temMod('compras'); },
+      calcular: function(d, lib) {
+        var n = 0;
+        Object.keys(d.pedidos_compra || {}).forEach(function(k) {
+          var p = d.pedidos_compra[k] || {}, prev = String(p.dataPrevistaEntrega || '').slice(0, 10);
+          if ((p.status === 'ENVIADO' || p.status === 'RECEBIDO_PARCIAL') && prev && prev < lib.hoje) n++;
+        });
+        return n ? {n: n, tom: 'alerta', texto: 'passaram da data prevista de entrega'} : null;
+      }},
+
+    // ── Logística
+    {id: 'devolucoes_receber', i: 'history', titulo: 'Devoluções para receber', pagina: 'devolucoes.html', href: 'devolucoes.html', fontes: ['devolucoes_cliente'],
+      q: function(c) { return c.temMod('logistica'); },
+      calcular: function(d) { var n = contar(d.devolucoes_cliente, 'AUTORIZADA'); return n ? {n: n, tom: 'aviso', texto: 'autorizadas, aguardando chegada'} : null; }},
+    {id: 'descartes', i: 'clipboard', titulo: 'Descartes aguardando decisão', pagina: 'descarte.html', fontes: ['solicitacoes_descarte'],
+      calcular: function(d) { var n = contar(d.solicitacoes_descarte, 'SOLICITADO'); return n ? {n: n, tom: 'aviso', texto: 'solicitados, sem decisão'} : null; }}
   ];
 
   /* Cartões que esta pessoa pode ver (a página de destino abre e a condição extra vale). */

@@ -484,6 +484,11 @@ Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa
   pessoa e resumo "N itens esperam por você"; cartões com ícone; áreas com ícone/tom por bloco (3 matizes do tema);
   claro, escuro e celular conferidos. Cuidado: `auth_check.js` remove o primeiro `<header>` da página (cabeçalho
   legado) — não use essa tag em tela nova.
+- Mais cartões no Início (27/10, 3ª passada): fila de cada setor (separação, envase, manipulação, rotulagem — mesma
+  regra de `SequenciaSetor.etapa` das Próximas Ordens), Compras (solicitações a aprovar/cotar, pedidos a enviar,
+  entregas atrasadas), Logística (devoluções a receber, descartes aguardando decisão). Contagens conferidas só com
+  dados sintéticos: não rodei contra a base real. Ficou de fora: Conferência de PA pendente (a regra mora inline em
+  `estoque.html › renderConferenciaPA`; extrair para `shared/` antes de virar cartão) e fila de inspeção da Qualidade.
 - Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
   (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
 - `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.
