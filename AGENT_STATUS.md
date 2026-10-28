@@ -3,6 +3,25 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### Claude — Painel de movimentações do WMS (27/10/2026)
+
+- **Pedido:** "a mesma coisa com histórico de movimentações, no wms ... algo dinâmico,
+  visual, até mais ilustrativo e que transmita a informação ... de forma precisa e rápida".
+- **Escopo:** aba "Histórico de Movimentações" de `estoque.html` (hoje só um link para o
+  Kardex) vira painel: indicadores por natureza, barras por dia, rankings de endereço/
+  item/pessoa e linha do tempo filtrável, ao vivo. Worktree `wt-movs`.
+- **Feito:** motor puro `shared/painel-movimentos.js` (usa `Kardex.tipoInfo`; conta
+  movimentos, nunca soma qtd de unidades diferentes; baixa FEFO `consumo` é espelho e fica
+  fora por padrão; sem autor = "Automático"; endereço-chave vira código) + tela
+  `painel-movimentos-tela.js/.css` (indicadores clicáveis, barras empilhadas por dia com
+  tooltip e clique no dia, rankings com filtro cruzado, linha do tempo que abre o Kardex,
+  CSV, ao vivo). Lê `movimentos_estoque` só ao abrir a aba. Paleta de 7 naturezas
+  validada (CVD) em claro e escuro. Ensaio na base: 2.806 movimentos, 30 dias = 1.902 em
+  312 itens; doca DOC-1.1.1 lidera; 1.147 automáticos.
+- **Testes:** `run_painel_movimentos_test.js`, `run_painel_movimentos_ui_test.js`; os 8
+  testes de tela que abrem `estoque.html` seguem passando.
+- **PUBLICADO**; sem arquivos ativos.
+
 ### Claude — Relatório de entradas de materiais na Logística › Histórico (27/10/2026)
 
 - **Pedido:** "quero um relatório melhor de entradas de materiais ... agendamentos >
