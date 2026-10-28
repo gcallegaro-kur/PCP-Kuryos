@@ -373,39 +373,46 @@ try { if (document.readyState === 'loading' && typeof KuryosNav === 'undefined')
       .kt-backdrop.open { opacity: 1; pointer-events: auto; }
     }
     @media (prefers-reduced-motion: reduce) { .kt-sidebar { transition: none; } }
-    .kt-brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 10px; cursor: pointer; }
-    .kt-brand-logo { height: 26px; width: auto; display: block; }
-    /* A logo é navy sólido (não tem variante clara) — no modo escuro ela some
-       contra o fundo escuro da sidebar, então inverte pra branco só ali. */
-    @media (prefers-color-scheme: dark) {
-      :root:where(:not([data-theme="light"])) .kt-brand-logo { filter: brightness(0) invert(1); }
-    }
-    :root[data-theme="dark"] .kt-brand-logo { filter: brightness(0) invert(1); }
+    /* Identidade Kuryos (28/10): a marca vira um bloco azul-marinho com a logo em branco, no
+       mesmo gradiente da tela Início; cada módulo ganha ícone e cor própria (--tom). */
+    .kt-brand { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 15px 16px 13px; cursor: pointer;
+      border-radius: 16px; border: 1px solid rgba(255,255,255,.1); background: linear-gradient(125deg, #050f38 0%, #0a1c69 55%, #2e4fc0 135%); box-shadow: 0 12px 24px -16px rgba(10,28,105,.9); flex: none; }
+    .kt-brand::after { content: ""; position: absolute; width: 130px; height: 130px; right: -46px; top: -70px; border-radius: 50%; border: 18px solid rgba(255,255,255,.08); pointer-events: none; }
+    .kt-brand-logo { position: relative; z-index: 1; height: 24px; width: auto; display: block; filter: brightness(0) invert(1); }
+    .kt-brand-sub { position: relative; z-index: 1; font-size: 9.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: rgba(255,255,255,.68); }
     .kt-nav-group { display: flex; flex-direction: column; gap: 2px; }
     /* Menu em sanfona (29/09): "os menus ficaram muito grandes, condensados e
        abrir caso a caso". O título do bloco é um botão; o corpo abre e fecha. */
-    .kt-nav-cap { font-size: 11px; font-weight: 600; color: var(--ink-mute, #86868b); text-transform: uppercase; letter-spacing: .06em; padding: 6px 12px 4px;
-      display: flex; align-items: center; gap: 6px; width: 100%; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; border-radius: 8px; }
-    .kt-nav-cap:hover { color: var(--ink, #1d1d1f); }
+    .kt-nav-group { --tom: var(--accent, #2456d6); }
+    .kt-nav-cap { font-size: 11.5px; font-weight: 700; color: var(--ink-soft, #6e6e73); text-transform: uppercase; letter-spacing: .07em; padding: 6px 8px;
+      display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; border-radius: 10px; }
+    .kt-nav-cap:hover { color: var(--ink, #1d1d1f); background: color-mix(in srgb, var(--tom) 8%, transparent); }
+    .kt-cap-ico { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+      background: color-mix(in srgb, var(--tom) 14%, transparent); color: var(--tom); }
+    .kt-cap-ico svg { width: 15px; height: 15px; }
+    .kt-nav-group.tem-ativo .kt-cap-ico { background: var(--tom); color: #fff; }
     .kt-nav-cap .kt-cap-txt { flex: 1; }
     .kt-nav-cap .kt-cap-n { font-size: 10.5px; font-weight: 700; letter-spacing: 0; min-width: 18px; text-align: center; padding: 0 5px; border-radius: 9px;
       background: color-mix(in srgb, var(--ink, #1d1d1f) 7%, transparent); color: var(--ink-mute, #86868b); }
     .kt-nav-cap .kt-cap-chev { width: 14px; height: 14px; flex: none; transition: transform .18s ease; }
     .kt-nav-group.fechado .kt-cap-chev { transform: rotate(-90deg); }
     .kt-nav-group:not(.fechado) .kt-cap-n { display: none; }
-    .kt-nav-group.tem-ativo > .kt-nav-cap { color: var(--accent, #2456d6); }
-    .kt-nav-body { display: flex; flex-direction: column; gap: 2px; }
+    .kt-nav-group.tem-ativo > .kt-nav-cap { color: var(--ink, #1d1d1f); }
+    .kt-nav-body { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 21px; padding-left: 8px; border-left: 2px solid color-mix(in srgb, var(--tom) 28%, transparent); }
     .kt-nav-group.fechado .kt-nav-body { display: none; }
     .kt-sanfona-off .kt-nav-cap, .kt-nav-group.fixo .kt-nav-cap { cursor: default; }
     .kt-sanfona-off .kt-cap-chev, .kt-sanfona-off .kt-cap-n, .kt-nav-group.fixo .kt-cap-chev, .kt-nav-group.fixo .kt-cap-n { display: none; }
-    .kt-nav-top { margin: 0 0 4px; }
-    .kt-nav-sub { font-size: 11.5px; font-weight: 700; color: var(--ink-soft, #515154); padding: 6px 12px 2px; }
-    .kt-nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 9px; color: var(--ink-soft, #6e6e73); font-size: 13.5px; font-weight: 500; cursor: pointer; text-decoration: none; }
-    .kt-nav-link svg { width: 18px; height: 18px; flex: none; }
-    .kt-nav-link.active { background: var(--accent, #2456d6); color: #fff; font-weight: 600; }
-    .kt-nav-link:not(.active):hover { background: color-mix(in srgb, var(--ink, #1d1d1f) 6%, transparent); }
-    .kt-sidebar-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--line, #d2d2d7); }
-    .kt-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--s2, #c9910a); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; }
+    .kt-nav-top { margin: 0 0 2px; }
+    .kt-nav-top .kt-nav-link { font-weight: 600; background: color-mix(in srgb, var(--accent, #2456d6) 8%, transparent); color: var(--ink, #1d1d1f); }
+    .kt-nav-sub { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-mute, #86868b); padding: 8px 10px 2px; }
+    .kt-nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; color: var(--ink-soft, #6e6e73); font-size: 13.5px; font-weight: 500; cursor: pointer; text-decoration: none; transition: background .12s ease, color .12s ease; }
+    .kt-nav-link svg { width: 17px; height: 17px; flex: none; }
+    .kt-nav-link.active { background: linear-gradient(125deg, #0a1c69 0%, #2e4fc0 140%); color: #fff; font-weight: 600; box-shadow: 0 8px 16px -10px rgba(10,28,105,.95); }
+    :root[data-theme="dark"] .kt-nav-link.active { background: linear-gradient(125deg, #2e4fc0 0%, #5e83ea 140%); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kt-nav-link.active { background: linear-gradient(125deg, #2e4fc0 0%, #5e83ea 140%); } }
+    .kt-nav-link:not(.active):hover { background: color-mix(in srgb, var(--tom, var(--accent, #2456d6)) 10%, transparent); color: var(--ink, #1d1d1f); }
+    .kt-sidebar-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line, #d2d2d7); border-radius: 14px; background: color-mix(in srgb, var(--ink, #1d1d1f) 4%, transparent); flex: none; }
+    .kt-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #0a1c69, #2e4fc0); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; }
     .kt-sidebar-foot .who { flex: 1; min-width: 0; }
     .kt-sidebar-foot .name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .kt-sidebar-foot .role { font-size: 11px; color: var(--ink-mute, #86868b); }
@@ -706,8 +713,10 @@ function renderUnifiedNavbar(user) {
     const corpo = itens.join('');
     if (!corpo) return '';
     const n = (corpo.match(/class="kt-nav-link/g) || []).length;
-    return '<div class="kt-nav-group" data-grupo="' + titulo + '">' +
-      '<button type="button" class="kt-nav-cap" aria-expanded="true"><span class="kt-cap-txt">' + titulo + '</span>' +
+    // Cada bloco leva o ícone e a cor definidos no registro de telas (KuryosNav.VISUAL).
+    const vis = (window.KuryosNav && window.KuryosNav.VISUAL && window.KuryosNav.VISUAL[titulo]) || null;
+    return '<div class="kt-nav-group" data-grupo="' + titulo + '"' + (vis ? ' style="--tom:' + vis[1] + '"' : '') + '>' +
+      '<button type="button" class="kt-nav-cap" aria-expanded="true">' + (vis ? '<span class="kt-cap-ico">' + ktIcon(vis[0]) + '</span>' : '') + '<span class="kt-cap-txt">' + titulo + '</span>' +
       '<span class="kt-cap-n">' + n + '</span>' +
       '<svg class="kt-cap-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>' +
       '</button><div class="kt-nav-body">' + corpo + '</div></div>';
@@ -744,7 +753,7 @@ function renderUnifiedNavbar(user) {
   // papel novo (foi assim que 'pcp' e 'qualidade' foram esquecidos antes).
   var brandHome = homeDoUsuario(user);
   sidebar.innerHTML =
-    '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"></div>' +
+    '<div class="kt-brand" onclick="window.location.href=\'' + brandHome + '\'"><img class="kt-brand-logo" src="kuryos-logo.svg" alt="Kuryos"><span class="kt-brand-sub">Sistema de Produção</span></div>' +
     inicioLink + gruposHtml +
     '<div class="kt-sidebar-foot">' +
       '<span class="kt-avatar">' + initials + '</span>' +

@@ -159,6 +159,16 @@
     {p: 'manual_referencia.html', r: 'Referência do Sistema', i: 'book', b: 'Ajuda'}
   ];
 
+  /* Ícone (ktIcons em auth_check.js) e cor de cada bloco: três matizes do tema, para o menu
+     lateral e a tela Início seguirem a mesma identidade. */
+  var AZUL = 'var(--s1)', VERDE = 'var(--s3)', OURO = 'var(--s2)', NEUTRO = 'var(--ink-soft)';
+  var VISUAL = {
+    'Analytics': ['dashboard', AZUL], 'Comercial': ['chart', AZUL], 'Pedidos e Rastreio': ['history', AZUL], 'PCP': ['calendar', AZUL],
+    'Compras': ['cart', OURO], 'Armazém': ['warehouse', VERDE], 'Operação': ['gear', VERDE], 'Qualidade': ['flask', VERDE],
+    'Expedição': ['truck', VERDE], 'Manutenção': ['gear', OURO], 'Cadastros': ['tag', OURO], 'ADM': ['sliders', NEUTRO],
+    'RH': ['people', OURO], 'Ajuda': ['book', NEUTRO]
+  };
+
   function valor(v, ctx) { return typeof v === 'function' ? v(ctx) : v; }
 
   /* Telas com mais de uma casa entram na ordem natural de cada bloco: na
@@ -351,6 +361,6 @@
     return out;
   }
 
-  return {BLOCOS: BLOCOS, TELAS: TELAS, CARTOES: CARTOES, EXPEDICAO: EXPEDICAO, blocos: blocos,
+  return {BLOCOS: BLOCOS, VISUAL: VISUAL, TELAS: TELAS, CARTOES: CARTOES, EXPEDICAO: EXPEDICAO, blocos: blocos,
     cartoesVisiveis: cartoesVisiveis, fontesNecessarias: fontesNecessarias, pendencias: pendencias};
 });

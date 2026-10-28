@@ -143,14 +143,7 @@ var dados = {}, carregadas = {}, cartoes = [], ctx = null;
 
 var PAPEIS = {admin: 'Administrador', pcp: 'PCP', rh: 'RH Central', gestor: 'Gestor de Linha', qualidade: 'Qualidade',
   rotulagem: 'Rotulagem', logistica: 'Logística', production: 'Produção'};
-// Ícone e tom (cores do tema) de cada bloco: só três matizes, para a página seguir harmônica.
-var AZUL = 'var(--s1)', VERDE = 'var(--s3)', OURO = 'var(--s2)', NEUTRO = 'var(--ink-soft)';
-var BLOCO_VISUAL = {
-  'Analytics': ['dashboard', AZUL], 'Comercial': ['chart', AZUL], 'Pedidos e Rastreio': ['history', AZUL], 'PCP': ['calendar', AZUL],
-  'Compras': ['cart', OURO], 'Armazém': ['warehouse', VERDE], 'Operação': ['gear', VERDE], 'Qualidade': ['flask', VERDE],
-  'Expedição': ['truck', VERDE], 'Manutenção': ['gear', OURO], 'Cadastros': ['tag', OURO], 'ADM': ['sliders', NEUTRO],
-  'RH': ['people', OURO], 'Ajuda': ['book', NEUTRO]
-};
+var AZUL = 'var(--s1)';
 function icone(nome) { return typeof ktIcon === 'function' && nome ? ktIcon(nome) : ''; }
 
 function montarContexto() {
@@ -174,7 +167,7 @@ function saudacao() {
 function desenharAreas() {
   var blocos = KuryosNav.blocos(ctx);
   $('areas').innerHTML = blocos.map(function(b) {
-    var sub = null, v = BLOCO_VISUAL[b.nome] || ['dashboard', AZUL];
+    var sub = null, v = KuryosNav.VISUAL[b.nome] || ['dashboard', AZUL];
     var links = b.itens.map(function(it) {
       var cab = '';
       if (it.s !== sub) { sub = it.s; if (it.s) cab = '<div class="sub">' + esc(it.s) + '</div>'; }
