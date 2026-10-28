@@ -47,6 +47,7 @@ linha por item, com o link para onde está o detalhe.
 | Qualidade | Fase B: "Relatar problema" de qualquer tela, com triagem de RNC; ronda CK-6 de 1 em 1 h com aviso sonoro; sirene na fábrica via relé Wi-Fi | sirene: compra do relé (K5) | `PLANO_QUALIDADE.md` |
 | Qualidade | Fase C: CK-1 por tipo de embalagem, RA numerada, CK-2 de conferência de documentos (aviso, sem trava) | — | `PLANO_QUALIDADE.md` |
 | Qualidade | Fase D: retenção por caixa numerada com fila de vencimento; calibração CK-8 nos Ativos; aviso no celular | planilha de retenção (K7) | `PLANO_QUALIDADE.md` |
+| Expedição | Palete de PA: **unir paletes** (operação inversa do desmembramento) e **desmembrar dentro da Conferência de PA**, antes de a OP virar palete; hoje o desmembramento só existe na Montar Carga | — | `shared/desmembrar-palete.js`, `AGENT_STATUS.md` › Desmembrar palete |
 | Cadastro/BOM | Saneamento, onda 1, em andamento por outro chat:<br>- barrar nome genérico ou duplicado no cadastro de material;<br>- relatório Excel dos 29 SKUs com OP em aberto + MRARBS;<br>- variantes homologadas no BOM (PCP + P&D + Qualidade) com checagem de rótulo;<br>- apontamento e MRP por variante | — | `AGENT_STATUS.md` › Saneamento onda 0 |
 | Apontamento | Barrar ou sinalizar no fechamento turno com mais de 24 h (28 casos, até 94 h, 93.288 un) | combinado com o usuário como próximo passo | `AGENT_STATUS.md` › Dashboard Geral |
 | Apontamento | Operador declara os dias trabalhados, para medir horas de verdade | "se o usuário quiser" | `AGENT_STATUS.md` › horasTrabalhadas |

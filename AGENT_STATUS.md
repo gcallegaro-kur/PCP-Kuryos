@@ -30,6 +30,26 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Nota pre-existente, nao e deste incidente:** `index.html` nunca existiu no
   repo (0 commits) e a raiz do site responde 404; o acesso e por `login.html`.
 
+### Claude — Desmembrar palete de PA na Montar Carga (28/10/2026)
+
+- **Gatilho (usuario):** o apontamento de PA juntou paletes que fisicamente sao
+  separados. Lotes 26292/01 (50 cx + 47 cx), 26286/05 (24+24+14 cx + parcial 80 un),
+  26293/01 (44 cx + parcial 17 un, 56 cx), 26293/03 (56+41 cx), 26293/02 (39+56 cx).
+- **Feito:** `shared/desmembrar-palete.js` (regras puras + gravacao) e botao
+  "✂️ Desmembrar" em `expedicao.html` (via `expedicao-grade-tela.js`). O original
+  fica com a 1a parte; os demais nascem do mesmo lote (copia integral: OP, pedido,
+  status da Qualidade, validade, endereco, `criadoEm`) com `identificadorPalete`
+  -P(n+1) e chave `pa_{op}_p{n}`. Soma de caixas e de unidades nao muda; a caixa
+  parcial vai inteira para um palete so; palete em carga agendada e recusado.
+  Original e conferido numa transacao e restaurado se a gravacao dos novos falhar.
+  Movimento `transferencia` / `DESMEMBRAMENTO DE PALETE` por palete novo no Kardex.
+  Rastro em `desmembramento` (no original: filhos e saldo antes; no novo: de onde veio).
+- **Testes:** `run_desmembrar_palete_test.js` (regras, os 5 lotes do pedido, numeracao,
+  recusas, gravacao e rollback) e `run_desmembrar_palete_ui_test.js` (tela real).
+- **Nao feito (MELHORIAS_FUTURAS):** unir paletes (operacao inversa) e desmembrar
+  dentro da Conferencia de PA, antes de a OP virar palete.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — RNC: consulta ao cliente e uso sob concessao (28/10/2026)
 
 - **Gatilho (usuario):** caso real. Rotulo fornecido para a BIOFLORA reprovou

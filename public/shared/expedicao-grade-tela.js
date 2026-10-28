@@ -113,12 +113,13 @@ function renderPaletes(){
     return '<tr class="'+(selecionado?'selected':!l.disponivel?'blocked':'')+'"><td><input type="checkbox" aria-label="Selecionar '+e(l.lote.identificadorPalete||l.loteKey)+'" data-palete="'+e(k)+'" '+(selecionado?'checked ':'')+(bloqueado?'disabled':'')+'></td>'+
       '<td><span class="state '+(!l.disponivel?'pending':ag?'scheduled':'')+'">'+(!l.disponivel?'Pendente':ag?'Agendado':'Disponível')+'</span>'+(!l.disponivel?'<div class="sub product">'+e(l.motivo)+'</div>':'')+(l.avulso&&!ag&&/LIBERADO_EXPEDICAO|APROVADO_CONCESSAO/.test(l.lote.status||'')?'<div><button type="button" class="btn ghost" data-vincular="'+e(k)+'">'+(l.skuPedidoKey?'Trocar pedido':'Vincular a pedido')+'</button></div>':'')+(ag?'<div class="sub">'+e(etapaAg.curto)+'</div><div><a class="btn ghost" data-agenda="'+e(ag[0])+'" href="cargas.html?carga='+encodeURIComponent(ag[0])+'">Acompanhar</a></div>':'')+'</td>'+
       '<td>'+e(l.cliente)+'</td><td>'+e(l.pedidoNumero||'Sem vínculo')+'</td><td class="product"><b>'+e(l.lote.itemCodigo)+'</b><div class="sub">'+e(l.lote.itemNome)+'</div></td>'+
-      '<td>'+e(l.lote.opLote||l.lote.opKey)+'<div class="sub">'+e(l.lote.identificadorPalete||l.loteKey)+'</div></td><td>'+composicaoHTML(l.lote)+'</td><td class="numeric"><b>'+num(l.lote.saldoLote)+'</b></td>'+celulasPeso(l)+
+      '<td>'+e(l.lote.opLote||l.lote.opKey)+'<div class="sub">'+e(l.lote.identificadorPalete||l.loteKey)+'</div>'+(!ag&&!enviando&&DesmembrarPalete.podeDesmembrar(l.lote)?'<div><button type="button" class="btn ghost" data-desmembrar="'+e(k)+'" title="O apontamento juntou paletes que fisicamente são separados: divide este palete em vários, sem mexer no total">✂️ Desmembrar</button></div>':'')+'</td><td>'+composicaoHTML(l.lote)+'</td><td class="numeric"><b>'+num(l.lote.saldoLote)+'</b></td>'+celulasPeso(l)+
       '<td>'+e(l.endereco.codigo||l.lote.enderecoCodigo||'—')+'</td><td class="numeric">'+(dias==null?'—':dias)+'</td>'+
       '<td class="extra-col">'+dataBR(l.op.dataFimReal)+'</td><td class="extra-col">'+dataBR(l.lote.criadoEm)+'</td><td class="extra-col">'+dataBR(l.lote.dataValidade || l.lote.validade)+'</td></tr>';
   }).join('')||'<tr><td colspan="15">Nenhum palete neste filtro. O PA aparece após a conferência no estoque.</td></tr>';
   selecionaveisVisiveis=enviando?[]:linhas.filter(function(l){return l.disponivel&&!agendaDoPalete(idLinha(l));});
   el('paletes').querySelectorAll('[data-vincular]').forEach(function(b){b.onclick=function(){abrirVinculoEstoque(b.dataset.vincular);};});
+  el('paletes').querySelectorAll('[data-desmembrar]').forEach(function(b){b.onclick=function(){abrirDesmembrar(b.dataset.desmembrar);};});
   el('paletes').querySelectorAll('[data-palete]').forEach(function(x){x.onchange=function(){var l=linhas.find(function(a){return idLinha(a)===x.dataset.palete;});if(x.checked){if(!Object.keys(selecionados).length&&l.frete.tipo)el('tipo').value=l.frete.tipo==='FOB'?'COLETA':'ENTREGA';selecionados[idLinha(l)]=l;}else delete selecionados[idLinha(l)];renderPaletes();};});
   resumo();
 }
@@ -192,6 +193,64 @@ function abrirVinculoEstoque(k){
   if(bg.querySelector('#vincDesfazer'))bg.querySelector('#vincDesfazer').onclick=function(){
     EntradaAvulsaPA.desvincular(db,partes[0],partes[1],autor).then(function(r){if(!r.ok){bg.querySelector('#vincErro').textContent=r.erro;return;}fechar();aviso('Vínculo desfeito.');});
   };
+}
+
+/* Desmembrar palete (28/10/2026): o apontamento do PA juntou num palete o que
+   fisicamente são dois ou três. A divisão fica aqui, na Montar Carga, porque é
+   onde o erro aparece (o peso e o nº de volumes não batem com a carga).
+   Regras e gravação em shared/desmembrar-palete.js. */
+function abrirDesmembrar(k){
+  var ids=k.split('/'), lote=((base.estoque_lotes[ids[0]]||{})[ids[1]])||null;
+  if(!lote)return aviso('Palete não encontrado.',true);
+  if(agendaDoPalete(k))return aviso('Este palete já está numa carga agendada. Retire-o da carga antes de desmembrar.',true);
+  var c=DesmembrarPalete.composicaoAtual(lote);
+  if(!c)return aviso('A composição deste palete não fecha com o saldo. Corrija antes de desmembrar.',true);
+  var partes=[{caixas:c.caixas,parcial:c.parcial},{caixas:'',parcial:''}], gravando=false;
+  var bg=document.createElement('div');
+  bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
+  bg.innerHTML='<div style="background:var(--card,#fff);color:var(--text,#1d1d1f);border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.35)">'+
+    '<h2 style="margin:0 0 6px;font-size:18px">Desmembrar palete</h2>'+
+    '<div class="sub" style="margin-bottom:12px">'+e(lote.itemCodigo)+' — '+e(lote.itemNome)+' · lote '+e(lote.opLote||lote.loteOrigem||'—')+' · palete <b>'+e(lote.identificadorPalete||ids[1])+'</b><br>'+
+    'Hoje: <b>'+num(c.caixas)+' cx × '+num(c.multiplo||0)+(c.parcial?' + 1 parcial de '+num(c.parcial)+' un':'')+' = '+num(c.saldo)+' un</b> · endereço '+e(lote.enderecoCodigo||'—')+'</div>'+
+    '<div class="sub" style="margin-bottom:8px">Digite quantas caixas ficam em cada palete. O primeiro mantém o código atual; os demais ganham código novo, no mesmo endereço.</div>'+
+    '<div id="dmLinhas"></div>'+
+    '<div><button type="button" class="btn ghost" id="dmMais">+ Adicionar palete</button></div>'+
+    '<div id="dmMsg" class="sub" style="margin-top:10px;font-weight:700"></div>'+
+    '<div id="dmErro" class="sub" style="color:#d03b3b;margin-top:6px"></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button type="button" class="btn ghost" id="dmFechar">Cancelar</button><button type="button" class="btn" id="dmOk" disabled>Desmembrar</button></div></div>';
+  document.body.appendChild(bg);
+  function desenhar(){
+    el('dmLinhas').innerHTML=partes.map(function(p,i){
+      var cx=Number(p.caixas||0), pc=Number(p.parcial||0), un=cx*(c.multiplo||0)+pc;
+      return '<div style="display:flex;gap:8px;align-items:end;margin-bottom:8px">'+
+        '<div style="min-width:78px;font-weight:700;padding-bottom:9px">Palete '+(i+1)+'</div>'+
+        '<label style="flex:1;font-size:11px;font-weight:700">Caixas<input type="number" min="0" step="1" data-dm="'+i+'" data-campo="caixas" value="'+e(p.caixas)+'" style="width:100%;padding:8px"></label>'+
+        (c.parcial?'<label style="flex:1;font-size:11px;font-weight:700">Un. na parcial<input type="number" min="0" step="1" data-dm="'+i+'" data-campo="parcial" value="'+e(p.parcial)+'" style="width:100%;padding:8px"></label>':'')+
+        '<div class="sub" style="min-width:74px;text-align:right;padding-bottom:9px">'+(un>0?num(un)+' un':'—')+'</div>'+
+        (i>=2?'<button type="button" class="btn ghost" data-dmrm="'+i+'" aria-label="Remover palete '+(i+1)+'">✕</button>':'<div style="width:38px"></div>')+'</div>';
+    }).join('');
+    el('dmLinhas').querySelectorAll('input').forEach(function(x){x.oninput=function(){partes[Number(x.dataset.dm)][x.dataset.campo]=x.value;validar();var s=x.parentNode.parentNode.querySelector('.sub');var p=partes[Number(x.dataset.dm)],u=Number(p.caixas||0)*(c.multiplo||0)+Number(p.parcial||0);if(s)s.textContent=u>0?num(u)+' un':'—';};});
+    el('dmLinhas').querySelectorAll('[data-dmrm]').forEach(function(b){b.onclick=function(){partes.splice(Number(b.dataset.dmrm),1);desenhar();validar();};});
+    el('dmMais').disabled=partes.length>=DesmembrarPalete.MAX_PARTES;
+  }
+  function validar(){
+    var r=DesmembrarPalete.conferir(lote,partes);
+    el('dmMsg').textContent=r.ok?'Confere: '+num(c.caixas)+' caixas'+(c.parcial?' + parcial de '+num(c.parcial)+' un':'')+' em '+partes.length+' paletes.':r.mensagem;
+    el('dmMsg').style.color=r.ok?'#176b40':'#9a6700';
+    el('dmOk').disabled=!r.ok||gravando;
+  }
+  function fechar(){bg.remove();}
+  el('dmMais').onclick=function(){partes.push({caixas:'',parcial:''});desenhar();validar();};
+  el('dmFechar').onclick=fechar;
+  el('dmOk').onclick=function(){
+    if(gravando)return;gravando=true;el('dmOk').disabled=true;el('dmErro').textContent='';
+    var autor=(window.currentUser&&window.currentUser.nome)||'Logística';
+    DesmembrarPalete.executar(db,{itemKey:ids[0],loteKey:ids[1],partes:partes,autor:autor,emCarga:function(i,l){return !!agendaDoPalete(i+'/'+l);}}).then(function(r){
+      fechar();delete selecionados[k];
+      aviso('Palete desmembrado em '+(r.novos.length+1)+': '+(lote.identificadorPalete||ids[1])+(r.novos.length?' e '+r.novos.map(function(n){return n.identificador;}).join(', '):'')+'. Cada um mantém o endereço '+(lote.enderecoCodigo||'atual')+'.');
+    }).catch(function(err){gravando=false;el('dmErro').textContent=err.message||String(err);validar();});
+  };
+  desenhar();validar();
 }
 
 /* Cliente sem acento, caixa e espaço repetido (19/10/2026): "MISS RÔSE",
