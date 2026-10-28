@@ -56,6 +56,18 @@
 
   function legendaLimpa(v) { return texto(v).slice(0, LEGENDA_MAX) || null; }
 
+  /* Perfil do anexo. `imagem` (padrão) é o que os laudos sempre usaram;
+     `documento` também aceita PDF -- pedido pelo fluxo de concessão
+     (28/10/2026), onde o anexo é a AUTORIZAÇÃO DO CLIENTE: um e-mail ou um
+     termo assinado. Exigir print de PDF ali enfraqueceria exatamente a prova
+     que o anexo existe para guardar. `Anexos` já tinha o perfil pronto. */
+  function perfilDe(o) { return (o || {}).perfil === 'documento' ? 'documento' : 'imagem'; }
+  function ehPdf(x) {
+    var t = texto(x && (x.type || x.tipo || x.contentType)).toLowerCase();
+    if (t.indexOf('pdf') >= 0) return true;
+    return /\.pdf($|\?)/i.test(texto(x && (x.nome || x.name || x.url)));
+  }
+
   /* contexto: 'laudo' | 'bulk' | 'rnc' | 'rnc-encerramento'. Um nível só de pasta
      (o Anexos.caminho tira a barra), casando com a regra do Storage. */
   function caminho(contexto, chave, nomeOriginal, agoraMs) {
@@ -76,7 +88,7 @@
     if (!fila.length) return Promise.resolve([]);
     var t0 = Date.now();
     return Promise.all(fila.map(function(p, i) {
-      var v = Anexos.validar(p.arquivo, {perfil: 'imagem'});
+      var v = Anexos.validar(p.arquivo, {perfil: perfilDe(o)});
       if (!v.ok) return Promise.reject(new Error(v.erros.join(' ')));
       var caminhoArq = caminho(o.contexto, o.chave, p.arquivo.name, t0 + i);
       var ref = storage.ref(caminhoArq);
@@ -109,6 +121,9 @@
       '.fq-it img{display:block;width:100%;height:100px;object-fit:cover;background:#f3f4f6}' +
       '.fq-it input[type=text]{width:100%;box-sizing:border-box;border:0;border-top:1px solid var(--border,#e5e7eb);padding:6px 8px;font-size:12px;background:transparent;color:var(--text,#111)}' +
       '.fq-x{position:absolute;top:4px;right:4px;border:0;background:rgba(0,0,0,.6);color:#fff;border-radius:999px;width:24px;height:24px;cursor:pointer;line-height:1}' +
+      '.fq-doc{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;' +
+        'height:100px;background:#f3f4f6;color:var(--muted,#6b7280);font-size:22px;text-align:center;padding:4px}' +
+      '.fq-doc span{font-size:10.5px;line-height:1.2;word-break:break-all;max-width:100%}' +
       '.fq-erro{color:var(--danger,#b91c1c);font-size:12px;margin-top:6px}' +
       '.fq-link{border:0;background:color-mix(in srgb,var(--primary,#1e3a8a) 10%,transparent);color:var(--primary,#1e3a8a);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700;cursor:pointer}' +
       '.fq-gal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px}' +
@@ -131,7 +146,9 @@
     var aviso = '';
     el.innerHTML =
       '<div class="fq"><div class="fq-top">' +
-      '<label class="fq-btn"><input type="file" accept="image/*" multiple>📷 Anexar foto</label>' +
+      '<label class="fq-btn"><input type="file" accept="' +
+        (perfilDe(o) === 'documento' ? 'image/*,application/pdf' : 'image/*') + '" multiple>' +
+        (perfilDe(o) === 'documento' ? '📎 Anexar arquivo' : '📷 Anexar foto') + '</label>' +
       '<span class="fq-cont"></span>' +
       (o.permiteDispensa ? '<label class="fq-sem"><input type="checkbox" class="fq-sem-cb"> Não há o que fotografar</label>' : '') +
       '</div><div class="fq-lista"></div><div class="fq-erro"></div></div>';
@@ -151,7 +168,10 @@
       input.disabled = itens.length >= MAX_FOTOS;
       erroEl.textContent = aviso;
       listaEl.innerHTML = itens.map(function(it, i) {
-        return '<div class="fq-it"><img src="' + esc(it.url) + '" alt="Foto ' + (i + 1) + '">' +
+        var capa = ehPdf(it.arquivo)
+          ? '<div class="fq-doc" title="' + esc(it.arquivo.name || '') + '">📄<span>' + esc(it.arquivo.name || 'PDF') + '</span></div>'
+          : '<img src="' + esc(it.url) + '" alt="Anexo ' + (i + 1) + '">';
+        return '<div class="fq-it">' + capa +
           '<button type="button" class="fq-x" data-i="' + i + '" title="Remover esta foto">×</button>' +
           '<input type="text" maxlength="' + LEGENDA_MAX + '" placeholder="Legenda (opcional)" data-i="' + i + '" value="' + esc(it.legenda) + '"></div>';
       }).join('');
@@ -172,7 +192,7 @@
       var lim = podeAdicionar(itens.length, novos.length);
       aviso = lim.erro || '';
       novos.slice(0, lim.aceitas).forEach(function(arq) {
-        var v = Anexos.validar(arq, {perfil: 'imagem'});
+        var v = Anexos.validar(arq, {perfil: perfilDe(o)});
         if (!v.ok) { aviso = (arq.name || 'Arquivo') + ': ' + v.erros.join(' '); return; }
         itens.push({arquivo: arq, legenda: '', url: (window.URL && URL.createObjectURL) ? URL.createObjectURL(arq) : ''});
       });
@@ -208,7 +228,10 @@
     bg.innerHTML = '<div class="fq-gal" role="dialog" aria-label="Fotos"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px">' +
       '<h3>📷 ' + esc(g.titulo || 'Fotos') + ' (' + g.fotos.length + ')</h3><button type="button" class="fq-link fq-fechar">Fechar</button></div>' +
       '<div class="fq-gal-grid">' + g.fotos.map(function(f) {
-        return '<figure><a href="' + esc(f.url) + '" target="_blank" rel="noopener"><img src="' + esc(f.url) + '" alt="' + esc(f.legenda || 'Foto') + '" loading="lazy"></a>' +
+        var vista = ehPdf(f)
+          ? '<div class="fq-doc" style="height:150px">📄<span>' + esc(f.nome || 'Documento PDF') + '</span></div>'
+          : '<img src="' + esc(f.url) + '" alt="' + esc(f.legenda || 'Foto') + '" loading="lazy">';
+        return '<figure><a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + vista + '</a>' +
           '<figcaption>' + (f.legenda ? '<b>' + esc(f.legenda) + '</b><br>' : '') + esc(f.enviadoPor || '') + (f.enviadoEm ? ' · ' + esc(new Date(f.enviadoEm).toLocaleString('pt-BR')) : '') + '</figcaption></figure>';
       }).join('') + '</div></div>';
     function fechar() { if (bg.parentNode) bg.parentNode.removeChild(bg); }
@@ -217,6 +240,6 @@
     document.body.appendChild(bg);
   }
 
-  return {MAX_FOTOS: MAX_FOTOS, LEGENDA_MAX: LEGENDA_MAX, lista: lista, podeAdicionar: podeAdicionar, exigencia: exigencia,
+  return {MAX_FOTOS: MAX_FOTOS, LEGENDA_MAX: LEGENDA_MAX, ehPdf: ehPdf, lista: lista, podeAdicionar: podeAdicionar, exigencia: exigencia,
     caminho: caminho, registro: registro, enviar: enviar, montar: montar, botao: botao, abrir: abrir};
 });

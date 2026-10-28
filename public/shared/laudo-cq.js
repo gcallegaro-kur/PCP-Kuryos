@@ -452,11 +452,328 @@
     '</div>';
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     FOR-QUA-0001 — REGISTRO DE NÃO CONFORMIDADE (RNC)
+
+     Reproduz o formulário Word que a Qualidade já usa, lido da "RNC - 0052"
+     emitida em 28/10/2026 (rótulo B´BALM SEA SAPHIRE, cliente BIOFLORA).
+     Mesma regra dos outros laudos deste arquivo: reproduzir, não melhorar --
+     é documento de SGQ que vai para o cliente e que a auditoria compara com
+     o do mês passado. O ganho aqui é a ORIGEM dos dados.
+
+     DUAS COISAS A CONFERIR CONTRA O WORD ORIGINAL:
+     - As seções 5 e 7 não existem na camada de texto do PDF: a 4 vai direto
+       à 6, e o bloco "Método utilizado / Causa raiz" aparece solto antes da
+       8 -- é claramente o conteúdo da 7. Aqui a 7 recebe o título "ANÁLISE
+       DE CAUSA" e a 5 NÃO é emitida: a numeração fica fiel ao que se pôde
+       verificar, em vez de inventar seção em documento de SGQ.
+     - A "Origem da NC" do formulário (auditoria interna/externa, cliente,
+       produção, inspeção, fornecedor, outro) NÃO é o vocabulário do
+       `RNC_ORIGEM` do sistema (recebimento, produção, expedição, cliente,
+       interna). ORIGEM_FORMULARIO faz o de-para, e o que não tem caixa
+       própria sai em "Outro" com o rótulo do sistema escrito, para não
+       perder a informação. Na 0052 a Roberta marcou "Inspeção" para uma RNC
+       de recebimento -- é esse o de-para adotado.
+     ══════════════════════════════════════════════════════════════════ */
+  var ORIGEM_FORMULARIO = {
+    RECEBIMENTO: 'Inspeção',
+    PRODUCAO: 'Produção',
+    CLIENTE: 'Cliente',
+    EXPEDICAO: 'Outro',
+    INTERNA: 'Outro'
+  };
+  var CAIXAS_ORIGEM = ['Auditoria interna', 'Auditoria externa', 'Cliente', 'Produção', 'Inspeção', 'Fornecedor'];
+  var CLASSES_RNC = ['Crítica', 'Maior', 'Menor'];
+  var ROTULO_CLASSE = { CRITICA: 'Crítica', MAIOR: 'Maior', MENOR: 'Menor' };
+  var METODOS_CAUSA = ['5 Porquês', 'Ishikawa', 'FMEA'];
+
+  function blocoOrigemRnc(d) {
+    var caixa = ORIGEM_FORMULARIO[d.origem] || 'Outro';
+    var outro = caixa === 'Outro' ? (d.origemRotulo || d.origem || '') : '';
+    return '<div class="laudo-campo-linha">' +
+      CAIXAS_ORIGEM.map(function(t) { return '<span class="laudo-par">' + opcao(caixa === t, t) + '</span>'; }).join('') +
+      '<span class="laudo-par">' + opcao(caixa === 'Outro', 'Outro') + ': ' +
+        '<span class="laudo-campo" style="min-width:120px">' + esc(outro) + '</span></span>' +
+    '</div>';
+  }
+
+  /* Seção 6 -- as perguntas de contenção. São sim/não de TRÊS valores: sim,
+     não e "ninguém respondeu". Em documento de BPF, pergunta não respondida
+     tem de sair vazia: imprimir "Não" por falta de dado afirmaria contenção
+     que ninguém verificou, que é exatamente o que o cliente e o auditor leem. */
+  var PERGUNTAS_CONTENCAO = [
+    ['loteBloqueado', 'O lote do produto foi bloqueado no estoque interno?'],
+    ['materiaisBloqueados', 'As matérias-primas, granéis e/ou materiais de embalagem envolvidos no desvio foram bloqueados no estoque interno?'],
+    ['outrosImpactados', 'Há outros produtos/lotes que podem ter sido impactados pelo mesmo desvio? Se sim, liste quais no campo de observação.'],
+    ['outrosBloqueados', 'Caso a resposta acima seja "sim", estes itens também foram bloqueados no estoque interno?'],
+    ['houveExpedicao', 'Houve expedição do lote reprovado e/ou de outros lotes possivelmente impactados pelo desvio? Se sim, liste quais no campo de observação.'],
+    ['equipesAvisadas', 'As equipes internas foram avisadas sobre o RNC?']
+  ];
+  function blocoContencao(c) {
+    var dados = c || {};
+    return '<div class="laudo-ident">' + PERGUNTAS_CONTENCAO.map(function(p) {
+      var v = dados[p[0]];
+      return '<div class="laudo-campo-linha"><span class="laudo-par">' + esc(p[1]) + '</span>' +
+        '<span class="laudo-par">' + sn(v === true ? true : v === false ? false : null) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function blocoEscala(rotulo, valor, opcoes) {
+    return '<div class="laudo-campo-linha"><span class="laudo-par"><b>' + esc(rotulo) + ':</b></span>' +
+      opcoes.map(function(o) { return '<span class="laudo-par">' + opcao(valor === o, o) + '</span>'; }).join('') +
+    '</div>';
+  }
+
+  /* A consulta ao cliente. Só sai impressa quando existe: RNC sem consulta
+     não deve carregar uma seção vazia sugerindo que faltou perguntar. */
+  function blocoConsultaCliente(cc) {
+    if (!cc || !cc.notificadoEm) return '';
+    var r = cc.resposta || null;
+    return '<div class="laudo-h">Consulta ao cliente</div>' +
+      '<div class="laudo-ident">' +
+        linhaCampo([
+          campo('Cliente notificado em', data(cc.notificadoEm), '110px'),
+          campo('Por', cc.notificadoPor, '150px'),
+          campo('Meio', cc.meio, '110px')
+        ]) +
+        linhaCampo([
+          campo('Contato', cc.contatoNome, '170px'),
+          campo('E-mail', cc.contatoEmail, '190px')
+        ]) +
+        (cc.observacao ? '<div class="laudo-linha-info">' + esc(cc.observacao) + '</div>' : '') +
+        '<div class="laudo-campo-linha">' +
+          '<span class="laudo-par">' + opcao(!r, 'Aguardando resposta') + '</span>' +
+          '<span class="laudo-par">' + opcao(!!r && r.decisao === 'LIBEROU', 'Cliente AUTORIZOU o uso (concessão)') + '</span>' +
+          '<span class="laudo-par">' + opcao(!!r && r.decisao === 'REPROVOU', 'Cliente REPROVOU') + '</span>' +
+        '</div>' +
+        (r
+          ? linhaCampo([
+              campo('Respondido em', data(r.respondidoEm), '110px'),
+              campo('Autorizado por', r.autorizadoPor, '170px'),
+              campo('Cargo', r.cargo, '130px')
+            ]) +
+            linhaCampo([
+              campo('Meio da resposta', r.meio, '130px'),
+              campo('Evidência anexada', r.evidencia, '200px')
+            ]) +
+            (r.restricao ? '<div class="laudo-linha-info"><b>Restrição de uso:</b> ' + esc(r.restricao) + '</div>' : '')
+          : '') +
+      '</div>';
+  }
+
+  function paginaRnc(dados) {
+    var d = dados || {};
+    var risco = d.risco || {};
+    var ef = d.eficacia || {};
+    var enc = d.encerramento || {};
+    var metodoOutro = !!d.metodo && METODOS_CAUSA.indexOf(d.metodo) < 0;
+    return '<div class="laudo-page">' +
+      cabecalho('FOR-QUA-0001 — Versão 00', 'Setor: CQ',
+        'RELATÓRIO DE NÃO CONFORMIDADE — RNC',
+        'Sistema de Gestão da Qualidade — ISO 9001:2015') +
+      '<div class="laudo-ident">' + linhaCampo([
+        campo('Data de emissão', data(d.dataEmissao), '110px'),
+        campo('Elaborado por', d.elaboradoPor, '170px'),
+        campo('Aprovado por', enc.aprovadoPor, '170px')
+      ]) + '</div>' +
+
+      titulo(1, 'IDENTIFICAÇÃO DA NÃO CONFORMIDADE') +
+      '<div class="laudo-ident">' +
+        linhaCampo([
+          campo('RNC nº', d.numero, '140px'),
+          campo('Data de abertura', data(d.dataAbertura), '110px')
+        ]) +
+        linhaCampo([campo('Nome do produto', d.produto, '420px')]) +
+        linhaCampo([
+          campo('Cliente', d.cliente, '190px'),
+          campo('Lote', d.lote, '150px')
+        ]) +
+        linhaCampo([
+          campo('Fornecedor', d.fornecedor, '190px'),
+          campo('Área / Processo', d.area, '150px')
+        ]) +
+        linhaCampo([campo('Produto / Serviço', d.produtoServico, '190px')]) +
+        '<div class="laudo-linha-info"><b>Origem da NC:</b></div>' +
+        blocoOrigemRnc(d) +
+      '</div>' +
+
+      titulo(2, 'DESCRIÇÃO DA NÃO CONFORMIDADE') +
+      '<div class="laudo-obs">' + esc(d.descricao || '') + '</div>' +
+
+      titulo(3, 'CLASSIFICAÇÃO DA NÃO CONFORMIDADE') +
+      '<div class="laudo-ident">' +
+        linhaCampo([campo('Procedimento', d.procedimento, '220px')]) +
+        '<div class="laudo-campo-linha">' +
+          CLASSES_RNC.map(function(c) {
+            return '<span class="laudo-par">' + opcao(ROTULO_CLASSE[d.classificacao] === c, c) + '</span>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+
+      titulo(4, 'EVIDÊNCIA OBJETIVA') +
+      (d.fotos && d.fotos.length
+        ? '<div class="laudo-nota-peq">' + esc(d.fotos.length) + ' registro(s) fotográfico(s) anexado(s) à RNC no sistema.</div>'
+        : '') +
+      '<div class="laudo-obs">' + esc(d.evidencia || '') + '</div>' +
+
+      titulo(6, 'CORREÇÃO / AÇÃO DE CONTENÇÃO IMEDIATA') +
+      '<div class="laudo-obs">' + esc(d.acaoImediata || '') + '</div>' +
+      '<div class="laudo-ident">' + linhaCampo([
+        campo('Responsável', d.responsavelAcaoImediata, '170px'),
+        campo('Prazo', data(d.prazoAcaoImediata), '110px')
+      ]) + '</div>' +
+      blocoContencao(d.contencao) +
+      (d.observacaoContencao ? '<div class="laudo-obs">' + esc(d.observacaoContencao) + '</div>' : '') +
+
+      blocoConsultaCliente(d.consultaCliente) +
+
+      titulo(7, 'ANÁLISE DE CAUSA') +
+      '<div class="laudo-campo-linha">' +
+        METODOS_CAUSA.map(function(m) {
+          return '<span class="laudo-par">' + opcao(d.metodo === m, m) + '</span>';
+        }).join('') +
+        '<span class="laudo-par">' + opcao(metodoOutro, 'Outro') +
+          ': <span class="laudo-campo" style="min-width:120px">' + esc(metodoOutro ? d.metodo : '') + '</span></span>' +
+      '</div>' +
+      '<div class="laudo-linha-info"><b>Causa raiz identificada:</b></div>' +
+      '<div class="laudo-obs">' + esc(d.causaRaiz || '') + '</div>' +
+
+      titulo(8, 'PLANO DE AÇÃO E AÇÃO CORRETIVA') +
+      '<div class="laudo-obs">' + esc(d.planoAcao || '') + '</div>' +
+      '<div class="laudo-ident">' + linhaCampo([
+        campo('Responsável', d.responsavelAcao, '170px'),
+        campo('Prazo', data(d.prazoAcao), '110px'),
+        campo('Disposição do material', d.disposicao, '180px')
+      ]) + '</div>' +
+
+      titulo(9, 'AVALIAÇÃO PÓS-AÇÃO (RISCO RESIDUAL)') +
+      '<div class="laudo-ident">' +
+        blocoEscala('Probabilidade', risco.probabilidade, ['Baixa', 'Média', 'Alta']) +
+        blocoEscala('Impacto', risco.impacto, ['Baixo', 'Médio', 'Alto']) +
+        blocoEscala('Risco residual', risco.residual, ['Aceitável', 'Não aceitável']) +
+      '</div>' +
+
+      titulo(10, 'VERIFICAÇÃO DA EFICÁCIA') +
+      '<div class="laudo-nota-peq">(ISO 9001 — Cláusula 10.2.1 d)</div>' +
+      '<div class="laudo-linha-info"><b>Descrição da verificação:</b></div>' +
+      '<div class="laudo-obs">' + esc(ef.descricao || '') + '</div>' +
+      '<div class="laudo-ident">' +
+        '<div class="laudo-campo-linha">' +
+          '<span class="laudo-par"><b>Resultado:</b></span>' +
+          '<span class="laudo-par">' + opcao(ef.resultado === 'APROVADO', 'Aprovado') + '</span>' +
+          '<span class="laudo-par">' + opcao(ef.resultado === 'REPROVADO', 'Reprovado') + '</span>' +
+        '</div>' +
+        linhaCampo([
+          campo('Data', data(ef.data), '110px'),
+          campo('Responsável', ef.responsavel, '170px')
+        ]) +
+      '</div>' +
+
+      titulo(11, 'ENCERRAMENTO') +
+      '<div class="laudo-ident">' + linhaCampo([
+        campo('Data de encerramento', data(enc.data), '110px'),
+        campo('Aprovado por', enc.aprovadoPor, '190px')
+      ]) + '</div>' +
+      rodapeResponsavel(d, 'Data do registro') +
+    '</div>';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     TERMO DE ANUÊNCIA E ISENÇÃO DE RESPONSABILIDADE
+
+     O documento que a Kuryos manda assinar quando o cliente, CIENTE da
+     reprovação, autoriza usar o material. Não é laudo: é o papel que liga a
+     reprovação da Kuryos à autorização nominal de quem respondeu por ela.
+
+     A redação das cláusulas abaixo é operacional, montada sobre os fatos
+     gravados na RNC. O texto de RESPONSABILIDADE CIVIL precisa de validação
+     jurídica antes de virar padrão da casa -- este módulo produz o documento
+     e os fatos; não substitui o advogado da Kuryos.
+     ══════════════════════════════════════════════════════════════════ */
+  function paginaTermoConcessao(dados) {
+    var d = dados || {};
+    var cc = d.consultaCliente || {};
+    var r = cc.resposta || {};
+    var itemTexto = [d.produto, d.lote ? 'lote ' + d.lote : null].filter(Boolean).join(', ');
+    return '<div class="laudo-page">' +
+      cabecalho('FOR-QUA-0001 — anexo', 'Setor: CQ',
+        'TERMO DE ANUÊNCIA E ISENÇÃO DE RESPONSABILIDADE',
+        'Uso de material sob concessão — ' + (d.numero || '')) +
+
+      '<div class="laudo-ident">' +
+        linhaCampo([
+          campo('RNC nº', d.numero, '140px'),
+          campo('Data de abertura', data(d.dataAbertura), '110px')
+        ]) +
+        linhaCampo([
+          campo('Cliente', d.cliente, '220px'),
+          campo('Fornecedor do material', d.fornecedor, '190px')
+        ]) +
+        linhaCampo([campo('Material / produto', itemTexto, '420px')]) +
+      '</div>' +
+
+      '<div class="laudo-h">1. Do resultado da inspeção</div>' +
+      '<div class="laudo-obs">' +
+        'A Kuryos, em sua inspeção de qualidade, REPROVOU o material acima identificado. ' +
+        'A não conformidade constatada foi registrada na ' + esc(d.numero || 'RNC') +
+        ', classificada como ' + esc(ROTULO_CLASSE[d.classificacao] || d.classificacao || '') +
+        ', nos seguintes termos:' +
+      '</div>' +
+      '<div class="laudo-obs">' + esc(d.descricao || '') + '</div>' +
+      (d.evidencia ? '<div class="laudo-obs">' + esc(d.evidencia) + '</div>' : '') +
+
+      '<div class="laudo-h">2. Da contenção adotada</div>' +
+      '<div class="laudo-obs">' +
+        'Em decorrência da reprovação, o lote foi BLOQUEADO no estoque da Kuryos e sua ' +
+        'utilização em produção foi suspensa' +
+        (cc.notificadoEm ? ', e o cliente foi formalmente notificado em ' + esc(data(cc.notificadoEm)) +
+          (cc.contatoNome ? ', na pessoa de ' + esc(cc.contatoNome) : '') +
+          (cc.meio ? ' (' + esc(cc.meio) + ')' : '') : '') + '.' +
+      '</div>' +
+      (d.acaoImediata ? '<div class="laudo-obs">' + esc(d.acaoImediata) + '</div>' : '') +
+
+      '<div class="laudo-h">3. Da autorização do cliente</div>' +
+      '<div class="laudo-obs">' +
+        'O CLIENTE, ciente da reprovação e da não conformidade descritas acima, ' +
+        'AUTORIZA expressamente a utilização do material no estado em que se encontra, ' +
+        'declarando que a decisão é sua e que foi tomada com pleno conhecimento do desvio.' +
+      '</div>' +
+      (r.restricao ? '<div class="laudo-obs"><b>Restrição de uso declarada pelo cliente:</b> ' + esc(r.restricao) + '</div>' : '') +
+
+      '<div class="laudo-h">4. Da isenção de responsabilidade</div>' +
+      '<div class="laudo-obs">' +
+        'Por ser decisão do CLIENTE, e tendo a Kuryos cumprido seu dever de identificar, ' +
+        'registrar, conter e comunicar a não conformidade, o CLIENTE assume integralmente ' +
+        'a responsabilidade pelas consequências decorrentes do desvio aqui descrito, ' +
+        'isentando a Kuryos de responsabilidade quanto a tais consequências. ' +
+        'Esta isenção alcança exclusivamente a não conformidade descrita no item 1 e o ' +
+        'lote nela identificado, não se estendendo a qualquer outro desvio, lote ou ' +
+        'obrigação da Kuryos.' +
+      '</div>' +
+
+      '<div class="laudo-h">5. Assinaturas</div>' +
+      '<div class="laudo-ident">' +
+        linhaCampo([
+          campo('Pelo cliente — nome', r.autorizadoPor, '220px'),
+          campo('Cargo', r.cargo, '160px')
+        ]) +
+        linhaCampo([
+          campo('Documento (CPF/RG)', null, '160px'),
+          campo('Data', data(r.respondidoEm), '110px')
+        ]) +
+        '<div class="laudo-assina-bloco"><div class="laudo-assina-rotulo">Assinatura do representante do cliente</div></div>' +
+      '</div>' +
+      rodapeResponsavel(d, 'Data de emissão do termo') +
+    '</div>';
+  }
+
   return {
     MICRO_PADRAO: MICRO_PADRAO, NOTA_MICRO: NOTA_MICRO, DISPENSA_MICRO: DISPENSA_MICRO,
     cnc: cnc, tabelaPesos: tabelaPesos, blocoMicro: blocoMicro,
     paginaProdutoAcabado: paginaProdutoAcabado,
     paginaMateriaPrima: paginaMateriaPrima, paginaEmbalagem: paginaEmbalagem,
+    ORIGEM_FORMULARIO: ORIGEM_FORMULARIO, PERGUNTAS_CONTENCAO: PERGUNTAS_CONTENCAO,
+    paginaRnc: paginaRnc, paginaTermoConcessao: paginaTermoConcessao,
     nomeArquivo: nomeArquivo
   };
 });

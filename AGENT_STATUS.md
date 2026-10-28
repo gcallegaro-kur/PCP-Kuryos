@@ -30,6 +30,118 @@ o bloco do agente que você está operando e mantenha o histórico curto.
 - **Nota pre-existente, nao e deste incidente:** `index.html` nunca existiu no
   repo (0 commits) e a raiz do site responde 404; o acesso e por `login.html`.
 
+### Claude — RNC: consulta ao cliente e uso sob concessao (28/10/2026)
+
+- **Gatilho (usuario):** caso real. Rotulo fornecido para a BIOFLORA reprovou
+  no teste de exposicao ao perfume (RNC 0052, lote AK-2026-000671, fornecedor
+  AGIL GRAFICA). O cliente pode, ciente da reprovacao, autorizar o uso -- e a
+  Kuryos precisa "ter uma RNC comprovando a minha reprovacao e a anuencia do
+  cliente", mais um relatorio para mandar ao cliente (hoje feito em Word).
+- **ARQUIVOS MEXIDOS:** `functions/conferencia_pa.js`, `functions/index.js`,
+  `public/shared/utils.js`, `public/shared/laudo-cq.js`,
+  `public/shared/fotos-qualidade.js`, `public/qualidade.html`,
+  `run_conferencia_pa_server_test.js`, `run_coerencia_modulos_test.js`,
+  `run_rnc_concessao_test.js` (novo).
+
+**O que faltava, e e o motivo de cada mudanca:**
+
+1. **Nao havia estado para "esperando o cliente".** RNC parada por dependencia
+   de terceiro ficava indistinguivel de RNC esquecida (28 das 34 abertas
+   estavam fora do SLA de 72h do Painel). Novo `RNC_STATUS.AGUARDANDO_CLIENTE`,
+   com `aberta: true` -- ainda ha material bloqueado.
+2. **Nao havia caminho de REPROVADO para APROVADO_CONCESSAO.** O status ja
+   existia em `STATUS_LOTE` (disponivel, exige `autorizadoPor`), mas quem o
+   gravava era `registrarLaudoQualidade`, que ABORTA fora de QUARENTENA. Ou
+   seja: so dava para conceder ANTES de reprovar, e a sequencia da vida real e
+   o contrario. `liberarLoteSobConcessao` abre essa transicao, e preserva
+   `lote.qualidade` (o laudo de reprovacao) -- e metade do que exime a empresa.
+3. **A disposicao CONCESSAO nao exigia a anuencia.** `encerrarRnc` agora recusa
+   CONCESSAO sem resposta `LIBEROU` gravada. As demais disposicoes seguem sem
+   exigir cliente nenhum.
+
+**Novas funcoes em utils.js:** `consultarClienteRnc` (notifica; exige nome do
+contato e meio), `registrarRespostaClienteRnc` (LIBEROU exige nome E ANEXO; ao
+liberar, chama a concessao do lote quando a RNC aponta item+lote),
+`liberarLoteSobConcessao`.
+
+**Documentos (`shared/laudo-cq.js`, funcoes puras):** `paginaRnc` reproduz o
+FOR-QUA-0001 lido do PDF da RNC 0052, e `paginaTermoConcessao` emite o Termo de
+Anuencia e Isencao. Botoes no detalhe da RNC; o termo so aparece com anuencia
+gravada.
+
+**CUIDADO / pendente de conferencia contra o Word original:**
+- As secoes **5** e **7** do FOR-QUA-0001 nao existem na camada de texto do
+  PDF (a 4 vai direto a 6; o bloco "Metodo/Causa raiz" vem solto antes da 8).
+  A 7 recebeu o titulo "ANALISE DE CAUSA" e a **5 nao e emitida** -- numeracao
+  fiel ao verificavel em vez de secao inventada em documento de SGQ.
+- A "Origem da NC" do formulario (auditoria interna/externa, cliente,
+  producao, inspecao, fornecedor, outro) NAO e o vocabulario do `RNC_ORIGEM`
+  do sistema. `LaudoCQ.ORIGEM_FORMULARIO` faz o de-para (RECEBIMENTO ->
+  "Inspecao", como a Roberta marcou na 0052); o que nao tem caixa sai em
+  "Outro" com o rotulo do sistema escrito.
+- As secoes **9 (risco residual)** e **10 (verificacao da eficacia)** sao
+  exigencia ISO que o sistema NAO guarda: saem em branco para preencher no
+  papel. Se for para o sistema guardar, e campo novo no encerramento.
+- Pergunta de contencao sem resposta sai **vazia**, nunca "Nao": marcar por
+  falta de dado afirmaria contencao que ninguem verificou, e e o que o cliente
+  e o auditor leem.
+
+**Anexo em PDF:** `FotosQualidade` ganhou `perfil: 'documento'` (o `Anexos` ja
+tinha o perfil pronto, com `application/pdf`). A autorizacao do cliente
+costuma ser PDF assinado; exigir print dele enfraqueceria a propria prova.
+Padrao continua `imagem`, nada mais mudou de comportamento.
+
+**Lote na abertura da RNC:** a RNC manual ganhou seletor de lote de estoque
+(lista os lotes do item digitado, com status). Era por isso que so 3 das 38
+RNCs tinham `loteKey` e que a disposicao nao tinha em que agir.
+
+**RNC automatica da Conferencia de PA nao sobrescreve mais tratativa.** A chave
+e derivada da OP (`RNC-PA-{op}`), entao refinalizar a MESMA OP caia na MESMA
+chave -- e e update multipath, nao transaction: zerava a RNC para ABERTA e
+apagava causaRaiz/acaoCorretiva. `prepararFinalizacao` passou a receber
+`rncExistente` e so cria quando nao existe; o vinculo continua sendo escrito.
+Risco era estreito (exige reabrir a conferencia a mao, nao ha caminho na tela),
+mas 3 RNCs estavam expostas.
+
+**Regressao:** rnc_concessao (novo), recebimento_qualidade (valida a sintaxe
+dos scripts de qualidade.html), filtro_qualidade, fotos_qualidade,
+qualidade_pa_tipo, qualidade_historico, conferencia_pa_server, carga_parcial e
+coerencia_modulos -- todos passam.
+
+**`run_coerencia_modulos_test.js` tinha DOIS falsos positivos, corrigidos:**
+- O detector de export so via `root.X = factory()`, e
+  `shared/painel-movimentos-tela.js` faz `root.PainelMovimentosTela = {...}`.
+  Acusava `estoque.html` de guardar `typeof` de global inexistente. Agora
+  qualquer atribuicao em `root` conta.
+- Ele lia COMENTARIO como uso: o comentario que eu mesmo pus em
+  `manipulacao.html` (26e74c9, hoje) citando `RetrabalhoOp.DESTINOS` e
+  `SequenciaSetor.etapa(...)` fazia o teste exigir as duas tags <script> numa
+  tela que nao chama nenhuma das duas. Agora as checagens 3 e 4 leem o codigo
+  sem comentario. 419 verificacoes passam.
+
+**ACHADO PRE-EXISTENTE, NAO E MEU (para quem cuidar do menu):**
+`run_inspecao_total_pa_test.js:246` exige `'inspecao_total.html'` >= 6 vezes em
+`public/auth_check.js`, que tem **3**. O arquivo esta limpo e seu ultimo commit
+e `59b0547 feat(menu): menu lateral com identidade Kuryos` -- o menu saiu do
+auth_check para `shared/navegacao.js`, onde a pagina ESTA (4 ocorrencias). A
+pagina nao esta quebrada; o teste e que ficou olhando para o lugar antigo.
+Nao mexi: e a assercao que precisa apontar para `navegacao.js`.
+
+**Outras falhas da varredura, todas ambientais/pre-existentes:** os
+`*_rules_test.js` exigem emulador em 127.0.0.1:9023; `run_tabela_fixa_test.js`
+pede navegador do Playwright nao instalado; `run_etiquetas_leitura_test.js` pede
+`@zxing/library`; `run_entrada_avulsa_pa_test.js` e
+`run_relatorio_expedicao_test.js` nao carregam nenhum arquivo que eu toquei.
+
+**NAO FEITO, decisao do usuario pendente:**
+- Item 3 da conversa (dono da RNC na abertura): o usuario disse que hoje so a
+  Roberta opera qualidade e que o gargalo e treinamento, nao o sistema. O
+  estado AGUARDANDO_CLIENTE ja resolve a parte que era do sistema -- separar
+  "parada por nossa conta" de "parada esperando terceiro".
+- Secoes 9 e 10 do FOR-QUA-0001 como campo no sistema (hoje saem em branco).
+- `nao_conformidades` continua SEM `.validate` em `database.rules.json`: a
+  maquina de estados e so client-side.
+
 ### Claude — Retrabalho na fila da Manipulacao (28/10/2026) — EM ANDAMENTO
 
 - **Gatilho (usuario):** a OP 26282/13-RT1 (retrabalho, destino `rotulagem`,

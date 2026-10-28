@@ -29,6 +29,23 @@ let n = 0;
 const falhas = [];
 function checa(cond, msg) { n++; if (!cond) falhas.push(msg); }
 
+/* Comentário não é uso. Em 28/10/2026 um comentário de `manipulacao.html`
+   que EXPLICAVA a regra ("`RetrabalhoOp.DESTINOS` é linha|rotulagem|posto",
+   "`SequenciaSetor.etapa(...)` devolve null") fez este teste exigir as duas
+   tags <script> numa tela que não chama nenhuma das duas em execução. Um
+   guarda que acende no comentário ensina a ignorá-lo -- ou, pior, a "corrigir"
+   a tela carregando módulo que ela não usa.
+
+   Tira comentário de bloco, de linha e de HTML. No comentário de
+   linha, `//` depois de `:` fica (é `https://`), senão a varredura comeria o
+   resto de linhas que têm URL e esconderia uso real. */
+function semComentarios(src) {
+  return src
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
 // Cópias de conflito do OneDrive (sufixo -<maquina>) não são telas do app.
 const ehConflito = (f) => /-[a-z0-9]+\.html$/i.test(f) && /-gcallegaro|-desktop|conflito|conflict/i.test(f);
 
@@ -37,9 +54,15 @@ const globais = new Set();
 const arquivosShared = fs.readdirSync(DIR_SHARED).filter((f) => f.endsWith('.js'));
 arquivosShared.forEach((f) => {
   const src = fs.readFileSync(path.join(DIR_SHARED, f), 'utf8');
-  // Padrão UMD do repo:  else root.NomeDoGlobal = factory();
-  const m = src.match(/root\.([A-Za-z_$][\w$]*)\s*=\s*factory\(/);
-  if (m) globais.add(m[1]);
+  /* Padrão UMD do repo:  else root.NomeDoGlobal = factory();
+     Mas não só: `shared/painel-movimentos-tela.js` faz
+     `root.PainelMovimentosTela = {iniciar: iniciar}`, e o detector antigo (que
+     exigia `= factory(`) não o via -- acusava `estoque.html` de guardar um
+     `typeof` de global inexistente quando o módulo É carregado e o global
+     existe. Vale a regra geral: o que é atribuído em `root` é global. */
+  const reRoot = /root\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
+  let r;
+  while ((r = reRoot.exec(src))) globais.add(r[1]);
   // Módulos antigos expõem direto em window/globalThis
   const re = /(?:window|globalThis)\.([A-Z][\w$]*)\s*=/g;
   let x;
@@ -63,6 +86,9 @@ checa(htmls.length > 20, 'esperava achar as telas do app em public/');
 
 htmls.forEach((f) => {
   const src = fs.readFileSync(path.join(DIR_PUB, f), 'utf8');
+  // As checagens 3 e 4 olham USO em execução, então leem o código sem
+  // comentário. A 2 usa o original: tag <script> não vive em comentário.
+  const codigo = semComentarios(src);
 
   // ── 2. toda tag <script src="shared/...js"> existe em disco ──
   const reSrc = /<script[^>]+src=["'](shared\/[^"']+\.js)["']/g;
@@ -76,7 +102,7 @@ htmls.forEach((f) => {
   // ── 3. todo `typeof Nome` guardado aponta para um global que existe ──
   const reTypeof = /typeof\s+([A-Z][\w$]*)\s*(?:!==|===|!=|==)\s*['"]undefined['"]/g;
   let t;
-  while ((t = reTypeof.exec(src))) {
+  while ((t = reTypeof.exec(codigo))) {
     const nome = t[1];
     if (EXTERNOS.has(nome)) continue;
     checa(globais.has(nome),
@@ -88,7 +114,7 @@ htmls.forEach((f) => {
   // Pega o caso inverso: usa EventosAuditoria.x mas esqueceu a tag <script>.
   globais.forEach((g) => {
     const usa = new RegExp('\\b' + g + '\\s*\\.[a-zA-Z_$]');
-    if (!usa.test(src)) return;
+    if (!usa.test(codigo)) return;
     // Acha o arquivo que exporta esse global
     const dono = arquivosShared.find((a) => {
       const m = fs.readFileSync(path.join(DIR_SHARED, a), 'utf8')

@@ -318,6 +318,7 @@
         <option value="">Todas</option>
         <option value="ABERTA">Só abertas</option>
         <option value="EM_ANALISE">Só em análise</option>
+        <option value="AGUARDANDO_CLIENTE">Só aguardando cliente</option>
         <option value="CONCLUIDA">Só concluídas</option>
       </select>
       <select class="kt-select" id="rncFiltroClasse">
@@ -939,6 +940,16 @@
             <select id="rncFornecedor"><option value="">— não se aplica —</option></select>
           </div>
         </div>
+        <!-- Lote de estoque (28/10/2026). Sem ele a disposição não tem em que
+             agir: era por isso que só 3 das 38 RNCs tinham `loteKey` e que
+             "devolver/descartar/conceder" terminava no texto. A lista vem dos
+             lotes do item digitado acima -- ninguém redigita número de lote. -->
+        <div class="form-group">
+          <label>Lote de estoque</label>
+          <select id="rncLote"><option value="">— digite o item acima para listar os lotes —</option></select>
+          <div class="field-hint">É o que liga a RNC ao material parado. Com o lote apontado, a
+            disposição do encerramento consegue agir sobre ele; sem ele, a RNC vira só registro.</div>
+        </div>
         <div class="form-grid">
           <div class="form-group">
             <label>Quantidade envolvida</label>
@@ -960,6 +971,96 @@
         <div class="form-group">
           <label>Fotos da não conformidade <span class="field-hint" style="font-weight:400">(até 6)</span></label>
           <div id="rncFotosAbertura"></div>
+        </div>
+      </div>
+
+      <!-- Consulta ao cliente (28/10/2026) -->
+      <div id="rncCamposCliente" style="display:none">
+        <div class="field-hint" style="margin-bottom:12px">
+          Material reprovado que depende de decisão do cliente. A RNC passa a
+          <b>Aguardando cliente</b> e para de ser cobrada como atraso da Qualidade —
+          mas segue aberta, porque o material continua bloqueado.
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Quem foi notificado *</label>
+            <input type="text" id="rncCliContato" placeholder="Nome da pessoa no cliente">
+          </div>
+          <div class="form-group">
+            <label>E-mail</label>
+            <input type="text" id="rncCliEmail" placeholder="contato@cliente.com">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Meio *</label>
+            <select id="rncCliMeio">
+              <option value="E-mail">E-mail</option>
+              <option value="Documento formal">Documento formal</option>
+              <option value="Reunião">Reunião</option>
+              <option value="Telefone">Telefone</option>
+              <option value="WhatsApp">WhatsApp</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data da notificação</label>
+            <input type="date" id="rncCliData">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Observação</label>
+          <input type="text" id="rncCliObs" placeholder="O que foi enviado (ex: FOR-QUA-0001 com as fotos)">
+        </div>
+      </div>
+
+      <!-- Resposta do cliente -->
+      <div id="rncCamposResposta" style="display:none">
+        <div class="form-group">
+          <label>O cliente *</label>
+          <select id="rncRespDecisao">
+            <option value="">— escolha —</option>
+            <option value="LIBEROU">AUTORIZOU o uso, ciente da reprovação</option>
+            <option value="REPROVOU">REPROVOU — não autoriza o uso</option>
+          </select>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Quem respondeu *</label>
+            <input type="text" id="rncRespQuem" placeholder="Nome de quem assina pelo cliente">
+          </div>
+          <div class="form-group">
+            <label>Cargo</label>
+            <input type="text" id="rncRespCargo" placeholder="Ex: Gerente de Qualidade">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Meio da resposta</label>
+            <select id="rncRespMeio">
+              <option value="E-mail">E-mail</option>
+              <option value="Documento assinado">Documento assinado</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="Reunião (ata)">Reunião (ata)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data da resposta</label>
+            <input type="date" id="rncRespData">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Restrição de uso declarada pelo cliente</label>
+          <input type="text" id="rncRespRestricao" placeholder="Ex: usar somente neste lote; não aplicar em área de contato">
+        </div>
+        <div class="form-group">
+          <label>Referência da evidência</label>
+          <input type="text" id="rncRespEvidencia" placeholder="Ex: e-mail de 30/10/2026, assunto &quot;Liberação rótulo SEA SAPHIRE&quot;">
+        </div>
+        <div class="form-group" id="rncRespAnexoBox">
+          <label>Autorização do cliente <span class="field-hint" style="font-weight:400">(imagem ou PDF)</span></label>
+          <div id="rncRespAnexos"></div>
+          <div class="field-hint">Obrigatório quando o cliente AUTORIZA: é este anexo que comprova a
+            anuência. Sem ele a concessão não se registra — e é exatamente a peça que exime a Kuryos.</div>
         </div>
       </div>
 
@@ -995,8 +1096,11 @@
           </select>
           <div class="field-hint">
             A disposição é decisão separada do laudo: reprovar diz que não serve, a disposição diz
-            o que se faz com o material. Registrá-la aqui não movimenta o estoque — a saída
-            (devolução ou descarte) continua sendo lançada em Estoque, com movimento próprio.
+            o que se faz com o material. Devolução e descarte não movimentam estoque daqui — a
+            saída continua sendo lançada em Estoque, com movimento próprio.
+            <b>&quot;Usar com concessão&quot; é a exceção:</b> exige que a notificação ao cliente e a
+            resposta autorizando o uso já estejam registradas nesta RNC, com o anexo da
+            autorização, e é ela que libera o lote como <i>Aprovado c/ concessão</i>.
           </div>
         </div>
         <div class="form-group">
@@ -2854,7 +2958,7 @@ function botoesLaudo() {
   return ['qBtnLiberar', 'qBtnReprovar', 'qBtnConcessao', 'qBtnReter'].map(function(id) { return document.getElementById(id); });
 }
 
-var fotosLaudo = null, fotosGranel = null, fotosRncAbertura = null, fotosRncEncerramento = null, decidindoGranel = false;
+var fotosLaudo = null, fotosGranel = null, fotosRncAbertura = null, fotosRncEncerramento = null, fotosRncResposta = null, decidindoGranel = false;
 /* Grava o laudo. PA com lote (OP): UM laudo para todos os paletes, com a
    amostragem de caixas palete a palete dentro dele. Os demais: um laudo por
    lote/palete, como sempre. */
@@ -3564,6 +3668,11 @@ function renderRncs() {
     var dias = diasDesde(r.abertaEm);
     var acoes = '';
     if (r.status === 'ABERTA') acoes += '<button class="btn btn-ghost btn-sm rnc-assumir" data-rnc="' + escapeAttr(r._key) + '">▶ Assumir</button> ';
+    // Consulta ao cliente: só antes de haver resposta, e nunca em RNC concluída.
+    if (r.status === 'ABERTA' || r.status === 'EM_ANALISE') {
+      if (!r.consultaCliente) acoes += '<button class="btn btn-ghost btn-sm rnc-cliente" data-rnc="' + escapeAttr(r._key) + '" title="Notificar o cliente e parar o relógio desta RNC">📧 Cliente</button> ';
+    }
+    if (r.status === 'AGUARDANDO_CLIENTE') acoes += '<button class="btn btn-ghost btn-sm rnc-resposta" data-rnc="' + escapeAttr(r._key) + '" title="Registrar a resposta do cliente">📥 Resposta</button> ';
     if ((RNC_STATUS[r.status] || {}).aberta) acoes += '<button class="btn btn-primary btn-sm rnc-encerrar" data-rnc="' + escapeAttr(r._key) + '">✓ Encerrar</button>';
     var linha = '<tr>' +
       '<td><button class="btn btn-ghost btn-sm rnc-expandir" data-rnc="' + escapeAttr(r._key) + '">' + (rncExpandida === r._key ? '▾' : '▸') + '</button> <b>' + escapeHtml(r.numero) + '</b>' +
@@ -3605,6 +3714,15 @@ function renderRncs() {
   tbody.querySelectorAll('.rnc-encerrar').forEach(function(b) {
     b.addEventListener('click', function() { abrirModalEncerrarRnc(b.getAttribute('data-rnc')); });
   });
+  tbody.querySelectorAll('.rnc-cliente').forEach(function(b) {
+    b.addEventListener('click', function() { abrirModalConsultaCliente(b.getAttribute('data-rnc')); });
+  });
+  tbody.querySelectorAll('.rnc-resposta').forEach(function(b) {
+    b.addEventListener('click', function() { abrirModalRespostaCliente(b.getAttribute('data-rnc')); });
+  });
+  tbody.querySelectorAll('[data-rnc-doc]').forEach(function(b) {
+    b.addEventListener('click', function() { imprimirRelatorioRnc(b.getAttribute('data-rnc-doc'), b.getAttribute('data-doc') === 'termo'); });
+  });
 }
 
 function campo(rotulo, valor) {
@@ -3627,7 +3745,98 @@ function detalheRncHtml(r) {
     campo('Prazo', r.prazoAcao ? fmtData(r.prazoAcao) : '') +
     campo('Disposição', RNC_DISPOSICAO[r.disposicao] || r.disposicao) +
     (r.encerradaPor ? campo('Encerrada por', r.encerradaPor + ' em ' + fmtDataHora(r.encerradaEm)) : '') +
+    blocoConsultaClienteHtml(r) +
+    botoesDocumentosRnc(r) +
     botaoLaudoDaRnc(r);
+}
+
+/* A cadeia da concessão, na ordem que exime a empresa: reprovação -> lote
+   bloqueado -> cliente notificado -> anuência nominal com anexo. Mostrar isso
+   junto é o ponto: cada peça separada não prova nada. */
+function blocoConsultaClienteHtml(r) {
+  var cc = r.consultaCliente;
+  if (!cc) return '';
+  var h = '<div class="rnc-campo" style="margin-top:8px"><b>Cliente notificado:</b> ' +
+    escapeHtml(cc.contatoNome || '') + (cc.contatoEmail ? ' &lt;' + escapeHtml(cc.contatoEmail) + '&gt;' : '') +
+    ' · ' + escapeHtml(cc.meio || '') + ' · ' + fmtData(cc.notificadoEm) +
+    (cc.notificadoPor ? ' (por ' + escapeHtml(cc.notificadoPor) + ')' : '') + '</div>';
+  if (cc.observacao) h += campo('O que foi enviado', cc.observacao);
+  var resp = cc.resposta;
+  if (!resp) {
+    var d = diasDesde(cc.notificadoEm);
+    return h + '<div class="rnc-campo"><span class="badge badge-purple">aguardando resposta' +
+      (d != null ? ' há ' + d + 'd' : '') + '</span></div>';
+  }
+  h += '<div class="rnc-campo"><b>Resposta do cliente:</b> <span class="badge ' +
+    (resp.decisao === 'LIBEROU' ? 'badge-purple' : 'badge-red') + '">' +
+    (resp.decisao === 'LIBEROU' ? 'AUTORIZOU o uso' : 'REPROVOU') + '</span> ' +
+    escapeHtml(resp.autorizadoPor || '') + (resp.cargo ? ' — ' + escapeHtml(resp.cargo) : '') +
+    ' · ' + fmtData(resp.respondidoEm) + (resp.meio ? ' · ' + escapeHtml(resp.meio) : '') +
+    (resp.anexos ? ' ' + FotosQualidade.botao(resp.anexos, (r.numero || '') + ' · autorização do cliente') : '') + '</div>';
+  if (resp.restricao) h += campo('Restrição de uso', resp.restricao);
+  if (resp.evidencia) h += campo('Evidência', resp.evidencia);
+  return h;
+}
+
+/* Os dois documentos que saem desta RNC. O termo só aparece quando há
+   autorização do cliente gravada -- emitir termo de isenção sem a anuência
+   seria produzir um papel que não se sustenta. */
+function botoesDocumentosRnc(r) {
+  var temAnuencia = !!(r.consultaCliente && r.consultaCliente.resposta && r.consultaCliente.resposta.decisao === 'LIBEROU');
+  return '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
+    '<button type="button" class="btn btn-ghost btn-sm" data-rnc-doc="' + escapeAttr(r._key) + '" data-doc="rnc">🖨 Relatório da RNC (FOR-QUA-0001)</button>' +
+    (temAnuencia ? '<button type="button" class="btn btn-ghost btn-sm" data-rnc-doc="' + escapeAttr(r._key) + '" data-doc="termo">🖨 Termo de anuência e isenção</button>' : '') +
+  '</div>';
+}
+
+/* Monta os dados do FOR-QUA-0001 a partir do que está gravado. As perguntas
+   de contenção que o sistema SABE responder saem respondidas; as que ele não
+   sabe saem em branco, para a Qualidade preencher no papel. Chutar "Não" ali
+   afirmaria contenção que ninguém verificou -- e é o que o cliente lê. */
+function dadosRncDoc(r) {
+  var lote = r.itemCodigo && r.loteKey ? (allEstoqueLotes[sanitizeKey(r.itemCodigo)] || {})[r.loteKey] : null;
+  // "Já liberado sob concessão" também responde SIM: esteve bloqueado, e é o
+  // `concessao.statusAnterior` que prova. Ler só o status de hoje diria "não".
+  var bloqueado = lote ? (!loteDisponivel(lote.status) || !!lote.concessao) : undefined;
+  var ehMaterial = r.itemTipo !== 'produto';
+  var mat = r.itemCodigo ? allMateriais[sanitizeKey(r.itemCodigo)] : null;
+  return {
+    numero: r.numero,
+    dataAbertura: r.abertaEm,
+    dataEmissao: r.abertaEm,
+    produto: r.itemNome || r.itemCodigo || null,
+    cliente: r.cliente || (lote ? lote.cliente : null) || null,
+    lote: r.loteOrigem || (lote ? lote.loteOrigem : null) || null,
+    fornecedor: r.fornecedorNome || null,
+    area: RNC_ORIGEM[r.origem] || r.origem || null,
+    produtoServico: (mat && mat.tipoMaterial) ? mat.tipoMaterial : (ehMaterial ? 'Material' : 'Produto acabado'),
+    origem: r.origem,
+    origemRotulo: RNC_ORIGEM[r.origem] || r.origem || null,
+    classificacao: r.classificacao,
+    descricao: r.descricao || null,
+    fotos: FotosQualidade.lista(r.fotos),
+    acaoImediata: r.acaoImediata || null,
+    responsavelAcaoImediata: r.emAnalisePor || r.abertaPor || null,
+    contencao: {loteBloqueado: bloqueado, materiaisBloqueados: ehMaterial ? bloqueado : undefined},
+    consultaCliente: r.consultaCliente || null,
+    causaRaiz: r.causaRaiz || null,
+    planoAcao: r.acaoCorretiva || null,
+    responsavelAcao: r.responsavelAcao || null,
+    prazoAcao: r.prazoAcao || null,
+    disposicao: RNC_DISPOSICAO[r.disposicao] || r.disposicao || null,
+    encerramento: {data: r.encerradaEm || null, aprovadoPor: r.encerradaPor || null},
+    elaboradoPor: r.abertaPor || null,
+    responsavel: {nome: r.encerradaPor || r.emAnalisePor || r.abertaPor || ''},
+    dataAnalise: r.encerradaEm || r.abertaEm
+  };
+}
+function imprimirRelatorioRnc(numero, termo) {
+  var r = allRncs[numero];
+  if (!r) { showAlert('RNC não encontrada.', 'danger'); return; }
+  var dados = dadosRncDoc(Object.assign({_key: numero}, r));
+  document.getElementById('laudoPrintArea').innerHTML =
+    termo ? LaudoCQ.paginaTermoConcessao(dados) : LaudoCQ.paginaRnc(dados);
+  imprimirComNome(LaudoCQ.nomeArquivo(termo ? 'Termo de anuencia' : 'FOR-QUA-0001 - RNC', dados));
 }
 // O laudo impresso existe só para lote em estoque que já foi laudado.
 function botaoLaudoDaRnc(r) {
@@ -3677,10 +3886,10 @@ document.getElementById('rncLimpar').addEventListener('click', function() {
 /* ─────────── Modal RNC ─────────── */
 function abrirModalNovaRnc() {
   rncModo = 'ABRIR'; rncAlvo = null;
+  document.getElementById('rncLote').innerHTML = '<option value="">— digite o item acima para listar os lotes —</option>';
   document.getElementById('modalRncTitle').textContent = 'Nova não conformidade';
   document.getElementById('rncContexto').style.display = 'none';
-  document.getElementById('rncCamposAbertura').style.display = '';
-  document.getElementById('rncCamposEncerramento').style.display = 'none';
+  mostrarBlocoRnc('Abertura');
   document.getElementById('rncBtnSalvar').textContent = 'Abrir RNC';
   document.getElementById('rncClassificacao').value = 'MAIOR';
   document.getElementById('rncOrigem').value = 'RECEBIMENTO';
@@ -3704,8 +3913,7 @@ function abrirModalEncerrarRnc(numero) {
     escapeHtml((RNC_CLASSIFICACAO[r.classificacao] || {}).rotulo || '') + ' · ' +
     escapeHtml(r.itemCodigo || '') + (r.fornecedorNome ? ' · ' + escapeHtml(r.fornecedorNome) : '') +
     '<br>' + escapeHtml(r.descricao || '');
-  document.getElementById('rncCamposAbertura').style.display = 'none';
-  document.getElementById('rncCamposEncerramento').style.display = '';
+  mostrarBlocoRnc('Encerramento');
   document.getElementById('rncBtnSalvar').textContent = 'Encerrar RNC';
   ['rncCausaRaiz', 'rncAcaoCorretiva', 'rncResponsavel', 'rncPrazo'].forEach(function(id) {
     document.getElementById(id).value = '';
@@ -3715,6 +3923,62 @@ function abrirModalEncerrarRnc(numero) {
   fotosRncEncerramento = FotosQualidade.montar(document.getElementById('rncFotosEncerramento'), {});
   document.getElementById('modalRncBg').classList.add('open');
 }
+/* O modal da RNC tem quatro faces agora (abrir, notificar cliente, registrar
+   resposta, encerrar). Uma função decide qual aparece: com quatro blocos,
+   ligar/desligar na mão em cada abertura é como sobra um bloco visível. */
+var BLOCOS_RNC = ['Abertura', 'Cliente', 'Resposta', 'Encerramento'];
+function mostrarBlocoRnc(qual) {
+  BLOCOS_RNC.forEach(function(b) {
+    document.getElementById('rncCampos' + b).style.display = b === qual ? '' : 'none';
+  });
+}
+function contextoRncHtml(numero, r) {
+  return '<b>' + escapeHtml(r.numero || numero) + '</b> · ' +
+    escapeHtml((RNC_CLASSIFICACAO[r.classificacao] || {}).rotulo || '') + ' · ' +
+    escapeHtml(r.itemCodigo || '') + (r.fornecedorNome ? ' · ' + escapeHtml(r.fornecedorNome) : '') +
+    '<br>' + escapeHtml(r.descricao || '');
+}
+function hojeIso() { return new Date().toISOString().slice(0, 10); }
+
+function abrirModalConsultaCliente(numero) {
+  var r = allRncs[numero] || {};
+  rncModo = 'CLIENTE'; rncAlvo = numero;
+  document.getElementById('modalRncTitle').textContent = 'Notificar cliente — ' + (r.numero || numero);
+  var ctx = document.getElementById('rncContexto');
+  ctx.style.display = ''; ctx.innerHTML = contextoRncHtml(numero, r);
+  mostrarBlocoRnc('Cliente');
+  document.getElementById('rncBtnSalvar').textContent = 'Registrar notificação';
+  ['rncCliContato', 'rncCliEmail', 'rncCliObs'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('rncCliMeio').value = 'E-mail';
+  document.getElementById('rncCliData').value = hojeIso();
+  document.getElementById('modalRncBg').classList.add('open');
+}
+
+function abrirModalRespostaCliente(numero) {
+  var r = allRncs[numero] || {};
+  rncModo = 'RESPOSTA'; rncAlvo = numero;
+  document.getElementById('modalRncTitle').textContent = 'Resposta do cliente — ' + (r.numero || numero);
+  var cc = r.consultaCliente || {};
+  var ctx = document.getElementById('rncContexto');
+  ctx.style.display = '';
+  ctx.innerHTML = contextoRncHtml(numero, r) +
+    '<br><b>Notificado:</b> ' + escapeHtml(cc.contatoNome || '') + ' · ' + escapeHtml(cc.meio || '') +
+    ' · ' + fmtData(cc.notificadoEm);
+  mostrarBlocoRnc('Resposta');
+  document.getElementById('rncBtnSalvar').textContent = 'Registrar resposta';
+  ['rncRespQuem', 'rncRespCargo', 'rncRespRestricao', 'rncRespEvidencia'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('rncRespDecisao').value = '';
+  document.getElementById('rncRespMeio').value = cc.meio === 'E-mail' ? 'E-mail' : 'Documento assinado';
+  document.getElementById('rncRespData').value = hojeIso();
+  if (fotosRncResposta) fotosRncResposta.limpar();
+  // perfil `documento`: a autorização do cliente costuma ser um PDF assinado,
+  // e exigir print de PDF enfraqueceria justamente a prova que se guarda aqui.
+  fotosRncResposta = FotosQualidade.montar(document.getElementById('rncRespAnexos'), {perfil: 'documento'});
+  document.getElementById('modalRncBg').classList.add('open');
+}
+
 function fecharModalRnc() { document.getElementById('modalRncBg').classList.remove('open'); }
 document.getElementById('btnNovaRnc').addEventListener('click', abrirModalNovaRnc);
 document.getElementById('modalRncClose').addEventListener('click', fecharModalRnc);
@@ -3730,7 +3994,33 @@ document.getElementById('rncItemCodigo').addEventListener('input', function() {
   if (allProdutos[k]) hint.textContent = '✓ Produto: ' + nomeItem(cod);
   else if (allMateriais[k]) hint.textContent = '✓ Material: ' + nomeItem(cod);
   else hint.textContent = '⚠ Não encontrado no cadastro — a RNC será aberta com o código como digitado.';
+  preencherLotesRnc(cod);
 });
+
+/* Os lotes do item, para escolher em vez de digitar. Mostra o status junto:
+   quem abre a RNC está olhando para o material parado, e é o status que diz
+   qual deles é. Mais recente primeiro -- é quase sempre o que acabou de dar
+   problema. */
+function preencherLotesRnc(cod) {
+  var sel = document.getElementById('rncLote');
+  if (!sel) return;
+  var atual = sel.value;
+  var lotes = cod ? (allEstoqueLotes[sanitizeKey(cod)] || {}) : {};
+  var keys = Object.keys(lotes).sort(function(a, b) {
+    return String((lotes[b] || {}).criadoEm || '').localeCompare(String((lotes[a] || {}).criadoEm || ''));
+  });
+  if (!keys.length) {
+    sel.innerHTML = '<option value="">' + (cod ? '— este item não tem lote em estoque —' : '— digite o item acima para listar os lotes —') + '</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— não se aplica —</option>' + keys.map(function(k) {
+    var l = lotes[k] || {};
+    return '<option value="' + escapeAttr(k) + '">' + escapeHtml(l.loteOrigem || k) +
+      ' · ' + escapeHtml(rotuloStatusLote(l.status)) +
+      (l.saldoLote != null ? ' · ' + fmtNum(l.saldoLote) + ' ' + escapeHtml(l.unidade || '') : '') + '</option>';
+  }).join('');
+  if (atual && lotes[atual]) sel.value = atual;
+}
 
 document.getElementById('rncBtnSalvar').addEventListener('click', function() {
   var btn = this;
@@ -3741,6 +4031,44 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
     fecharModalRnc();
     showAlert(msgOk(r), 'success');
   };
+  if (rncModo === 'CLIENTE') {
+    consultarClienteRnc(db, rncAlvo, {
+      contatoNome: document.getElementById('rncCliContato').value,
+      contatoEmail: document.getElementById('rncCliEmail').value.trim() || null,
+      meio: document.getElementById('rncCliMeio').value,
+      notificadoEm: document.getElementById('rncCliData').value || null,
+      observacao: document.getElementById('rncCliObs').value.trim() || null
+    }, currentUserNome())
+      .then(function(r) { terminar(r, function() { return 'Cliente notificado. A RNC ficou aguardando resposta.'; }); })
+      .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+    return;
+  }
+  if (rncModo === 'RESPOSTA') {
+    var alvoResp = rncAlvo;
+    var decisao = document.getElementById('rncRespDecisao').value;
+    FotosQualidade.enviar(storage, fotosRncResposta ? fotosRncResposta.pendentes() : [], {
+      contexto: 'rnc-anuencia', chave: alvoResp, autor: currentUserNome(), perfil: 'documento'
+    }).then(function(anexos) {
+      return registrarRespostaClienteRnc(db, alvoResp, {
+        decisao: decisao,
+        autorizadoPor: document.getElementById('rncRespQuem').value,
+        cargo: document.getElementById('rncRespCargo').value.trim() || null,
+        meio: document.getElementById('rncRespMeio').value,
+        respondidoEm: document.getElementById('rncRespData').value || null,
+        restricao: document.getElementById('rncRespRestricao').value.trim() || null,
+        evidencia: document.getElementById('rncRespEvidencia').value.trim() || null,
+        anexos: anexos
+      }, currentUserNome());
+    }).then(function(r) {
+      terminar(r, function(x) {
+        if (x.avisoLote) return x.avisoLote;
+        return x.decisao === 'LIBEROU'
+          ? 'Anuência registrada e lote liberado como "Aprovado c/ concessão". Emita o termo de isenção no detalhe da RNC.'
+          : 'Resposta registrada: o cliente reprovou. O lote segue bloqueado.';
+      });
+    }).catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+    return;
+  }
   if (rncModo === 'ENCERRAR') {
     var alvoEnc = rncAlvo;
     FotosQualidade.enviar(storage, fotosRncEncerramento ? fotosRncEncerramento.pendentes() : [], {
@@ -3762,6 +4090,8 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
   var fornKey = document.getElementById('rncFornecedor').value;
   var codigo = document.getElementById('rncItemCodigo').value.trim();
   var qtd = document.getElementById('rncQtd').value;
+  var loteSel = document.getElementById('rncLote').value;
+  var loteObj = loteSel && codigo ? (allEstoqueLotes[sanitizeKey(codigo)] || {})[loteSel] : null;
   FotosQualidade.enviar(storage, fotosRncAbertura ? fotosRncAbertura.pendentes() : [], {
     contexto: 'rnc', chave: 'nova-' + Date.now(), autor: currentUserNome()
   }).then(function(fotosEnviadas) {
@@ -3775,6 +4105,11 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
     itemNome: codigo ? nomeItem(codigo) : null,
     qtdEnvolvida: qtd === '' ? null : Number(qtd),
     opLote: document.getElementById('rncOp').value.trim() || null,
+    // O lote é o que torna a disposição capaz de agir lá na ponta.
+    loteKey: loteSel || null,
+    loteOrigem: loteObj ? (loteObj.loteOrigem || loteSel) : null,
+    itemTipo: loteObj ? (loteObj.itemTipo || null) : (codigo && allProdutos[sanitizeKey(codigo)] ? 'produto' : codigo ? 'material' : null),
+    cliente: loteObj ? (loteObj.cliente || null) : null,
     fornecedorKey: fornKey || null,
     fornecedorNome: fornKey ? ((allFornecedores[fornKey] || {}).nome || null) : null
   }, currentUserNome());

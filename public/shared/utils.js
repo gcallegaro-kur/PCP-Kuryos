@@ -2746,6 +2746,10 @@ var RNC_CLASSIFICACAO = {
 var RNC_STATUS = {
   ABERTA:     { rotulo: 'Aberta',      badge: 'badge-red',    aberta: true  },
   EM_ANALISE: { rotulo: 'Em análise',  badge: 'badge-orange', aberta: true  },
+  // RNC parada esperando resposta de terceiro NÃO é RNC esquecida. Sem este
+  // estado, o SLA do Painel cobrava a Qualidade por uma bola que não é dela.
+  // Continua `aberta: true`: ainda há material bloqueado e assunto a fechar.
+  AGUARDANDO_CLIENTE: { rotulo: 'Aguardando cliente', badge: 'badge-purple', aberta: true },
   CONCLUIDA:  { rotulo: 'Concluída',   badge: 'badge-green',  aberta: false }
 };
 // Destino do material da NC. É decisão separada do laudo: reprovar diz que
@@ -2880,9 +2884,18 @@ function encerrarRnc(dbRef, numero, dados, autor) {
     return Promise.resolve({ ok: false, erro: 'Escolha a disposição do material.' });
   }
   var agora = new Date().toISOString();
+  // CONCESSAO é a única disposição que transfere responsabilidade para fora da
+  // Kuryos, e por isso a única cuja prova o sistema tem de guardar. Sem a
+  // resposta LIBEROU do cliente gravada (com anexo), era possível encerrar
+  // "usar com concessão" sem que ninguém tivesse autorizado nada.
+  var faltaAnuencia = false;
   return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
     if (!atual) return atual;
     if (atual.status === 'CONCLUIDA') return; // aborta: não reencerra
+    if (d.disposicao === 'CONCESSAO') {
+      var cc = atual.consultaCliente || {};
+      if (!cc.resposta || cc.resposta.decisao !== 'LIBEROU') { faltaAnuencia = true; return; }
+    }
     atual.status = 'CONCLUIDA';
     atual.causaRaiz = String(d.causaRaiz).trim();
     atual.acaoCorretiva = String(d.acaoCorretiva).trim();
@@ -2896,6 +2909,9 @@ function encerrarRnc(dbRef, numero, dados, autor) {
     return atual;
   }).then(function(res) {
     if (!res || !res.committed) {
+      if (faltaAnuencia) {
+        return { ok: false, erro: 'Para encerrar com "usar com concessão", registre antes a notificação ao cliente e a resposta autorizando o uso, com o anexo da autorização.' };
+      }
       return { ok: false, erro: 'Esta RNC já foi concluída.' };
     }
     return { ok: true, numero: numero };
@@ -2915,6 +2931,203 @@ function assumirRnc(dbRef, numero, autor) {
     return atual;
   }).then(function(res) {
     if (!res || !res.committed) return { ok: false, erro: 'Esta RNC já saiu do status Aberta.' };
+    return { ok: true };
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CONSULTA AO CLIENTE E USO SOB CONCESSÃO (28/10/2026)
+
+   Pedido do usuário, a partir de um caso real: rótulo fornecido para o
+   cliente BIOFLORA reprovou no teste de exposição ao perfume (RNC 0052,
+   lote AK-2026-000671). O cliente pode, ciente da reprovação, autorizar o
+   uso -- e nesse caso a Kuryos precisa "ter uma RNC comprovando a minha
+   reprovação e a anuência do cliente".
+
+   O QUE FALTAVA NO SISTEMA, e é o motivo deste bloco existir:
+
+   1. **Não havia estado para "esperando o cliente".** A RNC ficava em
+      ABERTA/EM_ANALISE, indistinguível de RNC esquecida. Das 34 RNCs
+      abertas medidas em 28/10, 28 estavam fora do SLA de 72h do Painel --
+      e RNC parada porque dependemos de resposta de terceiro NÃO é lapso.
+      Sem o estado, o Painel cobrava a Qualidade por algo que não é dela.
+
+   2. **Não havia caminho de REPROVADO para APROVADO_CONCESSAO.** O status
+      `APROVADO_CONCESSAO` já existia em `STATUS_LOTE` (disponível, exige
+      `autorizadoPor`), mas quem o grava é `registrarLaudoQualidade`, que
+      ABORTA se `atual.status !== 'QUARENTENA'`. Ou seja: só dava para
+      conceder ANTES de reprovar. A sequência da vida real é o contrário --
+      testa, reprova, bloqueia, pergunta ao cliente, cliente libera --
+      e para ela não havia transição nenhuma. É o que
+      `liberarLoteSobConcessao` abre, e só ela.
+
+   3. **A disposição CONCESSAO não exigia a anuência.** Era texto livre num
+      enum: dava para encerrar "usar com concessão" sem que ninguém tivesse
+      autorizado nada. Agora `encerrarRnc` recusa CONCESSAO sem resposta
+      LIBEROU registrada -- é exatamente a disposição que transfere
+      responsabilidade, e a única cuja prova o sistema tem de guardar.
+
+   A ordem importa e é ela que exime: reprovação datada -> lote bloqueado ->
+   cliente notificado (para quem, quando, por qual meio) -> anuência nominal
+   COM evidência anexada -> lote liberado carregando a marca da concessão.
+   O PDF é o artefato; a cadeia é a defesa. Por isso cada passo é um
+   registro próprio, e não um campo que se preenche no fim.
+   ══════════════════════════════════════════════════════════════════════ */
+
+// Notifica o cliente e para o relógio. Sai de ABERTA/EM_ANALISE; não é
+// encerramento -- a RNC continua aberta, só deixa de ser cobrada como se a
+// bola estivesse com a Qualidade.
+function consultarClienteRnc(dbRef, numero, dados, autor) {
+  var d = dados || {};
+  if (!numero) return Promise.resolve({ ok: false, erro: 'RNC não identificada.' });
+  if (!d.contatoNome || !String(d.contatoNome).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Informe quem foi notificado no cliente — a notificação precisa ter destinatário com nome.' });
+  }
+  if (!d.meio || !String(d.meio).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Informe por qual meio o cliente foi notificado (e-mail, documento, reunião).' });
+  }
+  var agora = new Date().toISOString();
+  var motivo = null;
+  return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status === 'CONCLUIDA') { motivo = 'Esta RNC já foi concluída.'; return; }
+    if (atual.status === 'AGUARDANDO_CLIENTE') { motivo = 'O cliente já foi notificado nesta RNC.'; return; }
+    atual.status = 'AGUARDANDO_CLIENTE';
+    atual.consultaCliente = {
+      notificadoEm: d.notificadoEm || agora,
+      notificadoPor: autor || null,
+      contatoNome: String(d.contatoNome).trim(),
+      contatoEmail: d.contatoEmail ? String(d.contatoEmail).trim() : null,
+      meio: String(d.meio).trim(),
+      observacao: d.observacao ? String(d.observacao).trim() : null,
+      registradoEm: agora
+    };
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: motivo || 'Não foi possível registrar a notificação ao cliente.' };
+    return { ok: true, numero: numero };
+  });
+}
+
+/* A resposta do cliente. LIBEROU exige nome de quem autorizou E evidência
+   anexada -- é a peça que exime a Kuryos, e afirmar que ela existe sem ela
+   estar no sistema é pior que não ter: cria um registro que não se sustenta
+   numa auditoria nem numa discussão com o cliente.
+
+   Quando a RNC aponta item e lote, a liberação do lote sob concessão sai
+   daqui também. Se ela falhar, a ANUÊNCIA continua gravada e a resposta diz
+   o que faltou: perder a prova por causa de um status de estoque seria
+   trocar o documento pelo efeito colateral. */
+function registrarRespostaClienteRnc(dbRef, numero, dados, autor) {
+  var d = dados || {};
+  if (!numero) return Promise.resolve({ ok: false, erro: 'RNC não identificada.' });
+  if (d.decisao !== 'LIBEROU' && d.decisao !== 'REPROVOU') {
+    return Promise.resolve({ ok: false, erro: 'Informe se o cliente autorizou o uso ou reprovou.' });
+  }
+  if (!d.autorizadoPor || !String(d.autorizadoPor).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Informe o nome de quem respondeu pelo cliente — resposta sem nome não comprova anuência.' });
+  }
+  var anexos = (d.anexos && d.anexos.length) ? d.anexos : null;
+  if (d.decisao === 'LIBEROU' && !anexos) {
+    return Promise.resolve({ ok: false, erro: 'Anexe a autorização do cliente (e-mail, documento assinado). É ela que comprova a anuência — sem o anexo a concessão não se registra.' });
+  }
+  var agora = new Date().toISOString();
+  var motivo = null;
+  var rncDepois = null;
+  return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status === 'CONCLUIDA') { motivo = 'Esta RNC já foi concluída.'; return; }
+    if (!atual.consultaCliente || !atual.consultaCliente.notificadoEm) {
+      motivo = 'Registre primeiro a notificação ao cliente — a resposta precisa ter a que pergunta responde.';
+      return;
+    }
+    if (atual.consultaCliente.resposta) { motivo = 'A resposta do cliente já foi registrada nesta RNC.'; return; }
+    atual.consultaCliente.resposta = {
+      decisao: d.decisao,
+      autorizadoPor: String(d.autorizadoPor).trim(),
+      cargo: d.cargo ? String(d.cargo).trim() : null,
+      meio: d.meio ? String(d.meio).trim() : null,
+      respondidoEm: d.respondidoEm || agora,
+      restricao: d.restricao ? String(d.restricao).trim() : null,
+      evidencia: d.evidencia ? String(d.evidencia).trim() : null,
+      anexos: anexos,
+      registradoPor: autor || null,
+      registradoEm: agora
+    };
+    // Volta a ser trabalho da Qualidade: há resposta, há o que encerrar.
+    atual.status = 'EM_ANALISE';
+    // Sugestão, não decisão: quem encerra escolhe a disposição.
+    atual.disposicaoSugerida = d.decisao === 'LIBEROU' ? 'CONCESSAO' : 'DEVOLUCAO';
+    rncDepois = atual;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: motivo || 'Não foi possível registrar a resposta do cliente.' };
+    var r = { ok: true, numero: numero, decisao: d.decisao };
+    var rnc = rncDepois || {};
+    if (d.decisao !== 'LIBEROU' || !rnc.itemCodigo || !rnc.loteKey) {
+      // Sem item+lote na RNC não há o que liberar: a Qualidade faz pela tela
+      // de estoque. É o caso das RNCs abertas à mão, que não pedem o lote.
+      r.loteLiberado = false;
+      if (d.decisao === 'LIBEROU') r.avisoLote = 'Anuência gravada. Esta RNC não aponta lote de estoque, então o lote não foi liberado automaticamente.';
+      return r;
+    }
+    return liberarLoteSobConcessao(dbRef, rnc.itemCodigo, rnc.loteKey, {
+      rnc: numero,
+      autorizadoPor: rnc.consultaCliente.resposta.autorizadoPor,
+      cargo: rnc.consultaCliente.resposta.cargo,
+      cliente: rnc.cliente || null,
+      restricao: rnc.consultaCliente.resposta.restricao,
+      em: rnc.consultaCliente.resposta.respondidoEm
+    }, autor).then(function(rl) {
+      r.loteLiberado = !!rl.ok;
+      if (!rl.ok) r.avisoLote = 'Anuência gravada, mas o lote não foi liberado: ' + rl.erro;
+      return r;
+    });
+  });
+}
+
+/* A transição que não existia: REPROVADO/RETIDO -> APROVADO_CONCESSAO.
+   `registrarLaudoQualidade` não serve aqui porque aborta fora de QUARENTENA,
+   e nem deveria servir: o laudo de reprovação NÃO pode ser sobrescrito. Ele é
+   a prova de que a Kuryos reprovou, que é metade do que exime a empresa.
+   Então `qualidade` fica intacto e a concessão entra ao lado, com o status
+   anterior guardado -- dá para ler o lote e ver as duas coisas: foi
+   reprovado, e foi liberado sob autorização de quem. */
+function liberarLoteSobConcessao(dbRef, itemCodigo, loteKey, dados, autor) {
+  var d = dados || {};
+  if (!itemCodigo || !loteKey) return Promise.resolve({ ok: false, erro: 'Lote não identificado.' });
+  if (!d.autorizadoPor || !String(d.autorizadoPor).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Concessão exige o nome de quem autorizou.' });
+  }
+  if (!d.rnc) {
+    return Promise.resolve({ ok: false, erro: 'Concessão exige a RNC que a documenta.' });
+  }
+  var PERMITIDOS = { REPROVADO: 1, RETIDO: 1, QUARENTENA: 1 };
+  var agora = new Date().toISOString();
+  var motivo = null;
+  return dbRef.ref('estoque_lotes/' + sanitizeKey(itemCodigo) + '/' + loteKey).transaction(function(atual) {
+    if (!atual) return atual;
+    if (atual.status === 'APROVADO_CONCESSAO') { motivo = 'Este lote já está liberado sob concessão.'; return; }
+    if (!PERMITIDOS[atual.status]) {
+      motivo = 'Lote em "' + rotuloStatusLote(atual.status) + '" não entra em concessão.';
+      return;
+    }
+    atual.concessao = {
+      rnc: d.rnc,
+      autorizadoPor: String(d.autorizadoPor).trim(),
+      cargo: d.cargo || null,
+      cliente: d.cliente || null,
+      restricao: d.restricao || null,
+      autorizadoEm: d.em || agora,
+      statusAnterior: atual.status,
+      registradoPor: autor || null,
+      registradoEm: agora
+    };
+    atual.status = 'APROVADO_CONCESSAO';
+    atual.atualizadoEm = agora;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: motivo || 'Lote não encontrado.' };
     return { ok: true };
   });
 }
