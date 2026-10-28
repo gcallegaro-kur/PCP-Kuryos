@@ -50,6 +50,65 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   dentro da Conferencia de PA, antes de a OP virar palete.
 - **Arquivos ativos:** nenhum.
 
+### Claude — RNC: cancelamento de duplicata (28/10/2026)
+
+- **Gatilho (usuario):** o caso BIOFLORA foi aberto DUAS vezes --
+  `RNC-2026-009` (com lote `AK-2026-000671` e fornecedor certos) e
+  `RNC-2026-010` (nome do item digitado no campo de codigo, sem lote, sem
+  fornecedor). Nao havia como tirar a duplicata da frente: encerrar exigia
+  causa raiz + acao corretiva, ou seja, INVENTAR analise para uma RNC sem fato
+  proprio -- e ainda a contaria nos indicadores como NC tratada.
+- **ARQUIVOS MEXIDOS:** `public/shared/utils.js`,
+  `public/shared/laudo-cq.js`, `public/shared/laudo-cq.css`,
+  `public/shared/filtro-qualidade.js`, `public/qualidade.html`,
+  `run_rnc_cancelamento_test.js` (novo).
+
+**O que entrou:** `RNC_STATUS.CANCELADA` (`aberta: false`) e
+`cancelarRnc(dbRef, numero, {motivo, duplicataDe}, autor)`. Botao "✖ Cancelar"
+na linha da RNC (so enquanto aberta e sem resposta do cliente) e novo bloco
+`#rncCamposCancelamento` no modal, com a RNC que permanece valida escolhida de
+uma LISTA (digitar o numero aqui recria o problema que o cancelamento resolve).
+Filtro ganhou "So canceladas"; `FiltroQualidade.textoRnc` passou a incluir
+`motivoCancelamento` e `duplicataDe`, para achar pelo motivo.
+
+**O que o cancelamento NAO faz, de proposito:**
+- **nao mexe no lote.** Se o material esta bloqueado, o bloqueio e do laudo e
+  da RNC que fica. Desbloquear por cancelamento de duplicata liberaria
+  material reprovado por ato administrativo. Travado em teste.
+- **nao cancela RNC concluida** (ja tem causa raiz, acao e disposicao) nem
+  **RNC com resposta do cliente gravada** -- essa RNC E a prova da consulta, e
+  o lote em `APROVADO_CONCESSAO` aponta para o numero dela.
+- **nao apaga e nao renumera.** Registro, numero e descricao ficam;
+  `proximoNumeroRnc` continua derivando da maior chave, entao o numero
+  cancelado nao e reaproveitado. O relatorio da RNC cancelada SAI, com a faixa
+  `.laudo-cancelada` antes do corpo, dizendo motivo e qual RNC permanece
+  valida: esconder deixaria numero sem papel na sequencia, e emitir limpo
+  viraria um FOR-QUA-0001 valido de uma NC que nao existe.
+
+**Contadores conferidos, nenhum precisou mudar:** `qualidade.html` (stat
+"RNCs abertas") e `calcularBoletim` em `utils.js` leem
+`RNC_STATUS[...].aberta`; `painel-gargalos.js:267` compara `!== 'ABERTA'`;
+`andon-cadeia.js:136` tem whitelist `ABERTA || EM_ANALISE`. CANCELADA fica
+fora dos tres. `auditoria-escritas.js` classifica por PATH, nao por status.
+
+**Decisao do usuario sobre numeracao (28/10/2026):** seguir a sequencia DO
+SISTEMA (`RNC-2026-NNN`) e ir ajustando; NAO tentar continuar a sequencia do
+Word (que estava em 0052). Motivo dado: forcar a continuidade atrapalha o
+sistema. Ou seja, o `0052` do Word e o `RNC-2026-009` do sistema sao o mesmo
+evento com numeros diferentes, e a partir de agora vale o do sistema.
+
+**Regressao:** `run_rnc_cancelamento_test.js` (novo) + rnc_concessao,
+recebimento_qualidade (valida a sintaxe dos scripts de `qualidade.html`),
+filtro_qualidade, fotos_qualidade, qualidade_pa_tipo, qualidade_historico,
+coerencia_modulos, carga_parcial, conferencia_pa_server, painel_gargalos e
+desmembrar_palete (do Codex, depois do merge) -- todos passam.
+
+**NAO FEITO (sem alteracao desde o bloco abaixo):** secoes 9/10 do
+FOR-QUA-0001 como campo; secoes 5/7 pendentes de conferir contra o Word
+original; `nao_conformidades` continua SEM `.validate` em
+`database.rules.json` (conferido: so `.read`/`.write`), entao a maquina de
+estados -- CANCELADA inclusive -- e so client-side.
+
 ### Claude — RNC: consulta ao cliente e uso sob concessao (28/10/2026)
 
 - **Gatilho (usuario):** caso real. Rotulo fornecido para a BIOFLORA reprovou

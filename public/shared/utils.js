@@ -2753,7 +2753,10 @@ var RNC_STATUS = {
   // a RNC passa a parecer que alguem esta trabalhando nela).
   // Continua `aberta: true`: ainda há material bloqueado e assunto a fechar.
   AGUARDANDO_CLIENTE: { rotulo: 'Aguardando cliente', badge: 'badge-purple', aberta: true },
-  CONCLUIDA:  { rotulo: 'Concluída',   badge: 'badge-green',  aberta: false }
+  CONCLUIDA:  { rotulo: 'Concluída',   badge: 'badge-green',  aberta: false },
+  // Duplicata ou abertura equivocada. `aberta: false` tira das filas e dos
+  // indicadores, mas o registro e o NÚMERO ficam, com o motivo escrito.
+  CANCELADA:  { rotulo: 'Cancelada',   badge: 'badge-gray',   aberta: false }
 };
 // Destino do material da NC. É decisão separada do laudo: reprovar diz que
 // não serve; a disposição diz o que se FAZ com ele -- e é a que gera
@@ -2935,6 +2938,60 @@ function assumirRnc(dbRef, numero, autor) {
   }).then(function(res) {
     if (!res || !res.committed) return { ok: false, erro: 'Esta RNC já saiu do status Aberta.' };
     return { ok: true };
+  });
+}
+
+/* Cancelar uma RNC que não devia existir (28/10/2026).
+
+   Pedido do usuário depois de o caso BIOFLORA ter sido aberto duas vezes --
+   `RNC-2026-009` e `RNC-2026-010`, mesmo lote, mesmo evento. Os estados eram
+   abrir -> analisar -> aguardar -> concluir, e nenhum servia: para tirar a
+   duplicata da frente o sistema exigia causa raiz e ação corretiva, ou seja,
+   obrigava a Qualidade a INVENTAR análise para uma RNC que não tem fato
+   próprio. E a duplicata encerrada entraria nos indicadores como NC tratada,
+   contando duas vezes o mesmo problema.
+
+   Cancelar NÃO apaga. O registro fica, o número fica na sequência (cancelar
+   não renumera nada) e o motivo fica escrito -- um número que falta sem
+   explicação é exatamente o que um auditor pergunta.
+
+   O que o cancelamento deliberadamente NÃO faz:
+   - não mexe no lote. Se o material está bloqueado, o bloqueio é do laudo e
+     da RNC que fica, não desta; desbloquear por cancelamento de duplicata
+     liberaria material reprovado por um ato administrativo.
+   - não cancela RNC que já tem resposta do cliente. Essa RNC É a prova da
+     consulta, e o lote liberado sob concessão aponta para o número dela. */
+function cancelarRnc(dbRef, numero, dados, autor) {
+  var d = dados || {};
+  if (!numero) return Promise.resolve({ ok: false, erro: 'RNC não identificada.' });
+  if (!d.motivo || !String(d.motivo).trim()) {
+    return Promise.resolve({ ok: false, erro: 'Escreva por que esta RNC está sendo cancelada — o número continua na base, e o motivo é o que explica o cancelamento.' });
+  }
+  if (d.duplicataDe && String(d.duplicataDe).trim() === String(numero).trim()) {
+    return Promise.resolve({ ok: false, erro: 'A RNC que permanece válida não pode ser ela mesma.' });
+  }
+  var agora = new Date().toISOString();
+  var recusa = null;
+  return dbRef.ref('nao_conformidades/' + numero).transaction(function(atual) {
+    if (!atual) { recusa = 'RNC não encontrada.'; return; }
+    if (atual.status === 'CANCELADA') { recusa = 'Esta RNC já está cancelada.'; return; }
+    if (atual.status === 'CONCLUIDA') {
+      recusa = 'RNC concluída não se cancela: ela já tem causa raiz, ação corretiva e disposição registradas.';
+      return;
+    }
+    if ((atual.consultaCliente || {}).resposta) {
+      recusa = 'Esta RNC já tem resposta do cliente registrada: é ela que comprova a consulta, e o lote em concessão aponta para este número. Cancele a outra.';
+      return;
+    }
+    atual.status = 'CANCELADA';
+    atual.canceladaEm = agora;
+    atual.canceladaPor = autor || null;
+    atual.motivoCancelamento = String(d.motivo).trim();
+    atual.duplicataDe = d.duplicataDe ? String(d.duplicataDe).trim() : null;
+    return atual;
+  }).then(function(res) {
+    if (!res || !res.committed) return { ok: false, erro: recusa || 'Não foi possível cancelar esta RNC.' };
+    return { ok: true, numero: numero };
   });
 }
 

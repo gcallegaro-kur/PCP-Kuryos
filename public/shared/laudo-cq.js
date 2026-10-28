@@ -561,6 +561,21 @@
       '</div>';
   }
 
+  /* RNC cancelada ainda imprime -- e imprime DIZENDO que está cancelada.
+     Esconder o relatório deixaria um número sem papel na sequência; emitir o
+     relatório normal seria pior, porque viraria um FOR-QUA-0001 válido de uma
+     não conformidade que não existe. A faixa vem antes de tudo, e nomeia a
+     RNC que permanece válida quando o cancelamento foi por duplicidade. */
+  function faixaCancelada(d) {
+    if (!d.cancelada) return '';
+    return '<div class="laudo-cancelada">RNC CANCELADA' +
+      (d.canceladaEm ? ' EM ' + data(d.canceladaEm) : '') +
+      (d.canceladaPor ? ' POR ' + esc(d.canceladaPor) : '') +
+      '<div class="laudo-cancelada-motivo">' + esc(d.motivoCancelamento || '') +
+      (d.duplicataDe ? ' · Permanece válida a ' + esc(d.duplicataDe) : '') +
+      '</div></div>';
+  }
+
   function paginaRnc(dados) {
     var d = dados || {};
     var risco = d.risco || {};
@@ -571,6 +586,7 @@
       cabecalho('FOR-QUA-0001 — Versão 00', 'Setor: CQ',
         'RELATÓRIO DE NÃO CONFORMIDADE — RNC',
         'Sistema de Gestão da Qualidade — ISO 9001:2015') +
+      faixaCancelada(d) +
       '<div class="laudo-ident">' + linhaCampo([
         campo('Data de emissão', data(d.dataEmissao), '110px'),
         campo('Elaborado por', d.elaboradoPor, '170px'),

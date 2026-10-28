@@ -59,7 +59,7 @@
   function textoRnc(r) {
     return [r.numero, r.itemCodigo, r.itemNome, r.fornecedorNome, r.descricao, r.opLote, r.loteOrigem,
       r.pedidoNumero, r.acaoImediata, r.causaRaiz, r.acaoCorretiva, r.abertaPor, r.emAnalisePor,
-      r.responsavelAcao, r.encerradaPor];
+      r.responsavelAcao, r.encerradaPor, r.motivoCancelamento, r.duplicataDe];
   }
   function passaRnc(r, f, aberta) {
     f = f || {};

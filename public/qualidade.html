@@ -320,6 +320,7 @@
         <option value="EM_ANALISE">Só em análise</option>
         <option value="AGUARDANDO_CLIENTE">Só aguardando cliente</option>
         <option value="CONCLUIDA">Só concluídas</option>
+        <option value="CANCELADA">Só canceladas</option>
       </select>
       <select class="kt-select" id="rncFiltroClasse">
         <option value="">Toda classificação</option>
@@ -1062,6 +1063,24 @@
           <div class="field-hint">Obrigatório quando o cliente AUTORIZA: é este anexo que comprova a
             anuência. Sem ele a concessão não se registra — e é exatamente a peça que exime a Kuryos.</div>
         </div>
+      </div>
+
+      <!-- Cancelamento: duplicata ou abertura equivocada -->
+      <div id="rncCamposCancelamento" style="display:none">
+        <div class="form-group">
+          <label>Por que esta RNC está sendo cancelada *</label>
+          <textarea id="rncCancMotivo" rows="2" placeholder="Ex: duplicata — o mesmo lote já foi registrado em outra RNC"></textarea>
+          <div class="field-hint">O registro e o número <b>não são apagados</b>: ficam na base marcados como
+            cancelados, e o relatório sai com a faixa de cancelamento. Número que falta na sequência sem
+            explicação é o que o auditor pergunta.</div>
+        </div>
+        <div class="form-group">
+          <label>RNC que permanece válida</label>
+          <select id="rncCancDuplicata"><option value="">— nenhuma (abertura equivocada) —</option></select>
+          <div class="field-hint">Preencha quando for duplicata: é o que liga este número ao que de fato trata o caso.</div>
+        </div>
+        <div class="field-hint">Cancelar <b>não libera o lote</b>. Se o material está bloqueado, o bloqueio é do
+          laudo e da RNC que fica.</div>
       </div>
 
       <!-- Encerramento -->
@@ -3673,6 +3692,11 @@ function renderRncs() {
       if (!r.consultaCliente) acoes += '<button class="btn btn-ghost btn-sm rnc-cliente" data-rnc="' + escapeAttr(r._key) + '" title="Notificar o cliente e parar o relógio desta RNC">📧 Cliente</button> ';
     }
     if (r.status === 'AGUARDANDO_CLIENTE') acoes += '<button class="btn btn-ghost btn-sm rnc-resposta" data-rnc="' + escapeAttr(r._key) + '" title="Registrar a resposta do cliente">📥 Resposta</button> ';
+    // Cancelar só enquanto a RNC está aberta e não carrega resposta do
+    // cliente -- com a anuência dentro, é ela a prova, e `cancelarRnc` recusa.
+    if ((RNC_STATUS[r.status] || {}).aberta && !(r.consultaCliente || {}).resposta) {
+      acoes += '<button class="btn btn-ghost btn-sm rnc-cancelar" data-rnc="' + escapeAttr(r._key) + '" title="Duplicata ou abertura equivocada: cancela sem exigir causa raiz">✖ Cancelar</button> ';
+    }
     if ((RNC_STATUS[r.status] || {}).aberta) acoes += '<button class="btn btn-primary btn-sm rnc-encerrar" data-rnc="' + escapeAttr(r._key) + '">✓ Encerrar</button>';
     var linha = '<tr>' +
       '<td><button class="btn btn-ghost btn-sm rnc-expandir" data-rnc="' + escapeAttr(r._key) + '">' + (rncExpandida === r._key ? '▾' : '▸') + '</button> <b>' + escapeHtml(r.numero) + '</b>' +
@@ -3720,6 +3744,9 @@ function renderRncs() {
   tbody.querySelectorAll('.rnc-resposta').forEach(function(b) {
     b.addEventListener('click', function() { abrirModalRespostaCliente(b.getAttribute('data-rnc')); });
   });
+  tbody.querySelectorAll('.rnc-cancelar').forEach(function(b) {
+    b.addEventListener('click', function() { abrirModalCancelarRnc(b.getAttribute('data-rnc')); });
+  });
   tbody.querySelectorAll('[data-rnc-doc]').forEach(function(b) {
     b.addEventListener('click', function() { imprimirRelatorioRnc(b.getAttribute('data-rnc-doc'), b.getAttribute('data-doc') === 'termo'); });
   });
@@ -3745,9 +3772,21 @@ function detalheRncHtml(r) {
     campo('Prazo', r.prazoAcao ? fmtData(r.prazoAcao) : '') +
     campo('Disposição', RNC_DISPOSICAO[r.disposicao] || r.disposicao) +
     (r.encerradaPor ? campo('Encerrada por', r.encerradaPor + ' em ' + fmtDataHora(r.encerradaEm)) : '') +
+    blocoCancelamentoHtml(r) +
     blocoConsultaClienteHtml(r) +
     botoesDocumentosRnc(r) +
     botaoLaudoDaRnc(r);
+}
+
+// O motivo do cancelamento vai junto do registro: é ele que responde por que
+// este número existe e não tem tratativa.
+function blocoCancelamentoHtml(r) {
+  if (r.status !== 'CANCELADA') return '';
+  var dup = r.duplicataDe ? (allRncs[r.duplicataDe] || {}) : null;
+  return '<div class="rnc-campo" style="margin-top:8px"><b>Cancelada</b> em ' + fmtDataHora(r.canceladaEm) +
+    (r.canceladaPor ? ' por ' + escapeHtml(r.canceladaPor) : '') + '</div>' +
+    campo('Motivo do cancelamento', r.motivoCancelamento) +
+    (r.duplicataDe ? campo('Permanece válida', (dup.numero || r.duplicataDe)) : '');
 }
 
 /* A cadeia da concessão, na ordem que exime a empresa: reprovação -> lote
@@ -3825,6 +3864,11 @@ function dadosRncDoc(r) {
     prazoAcao: r.prazoAcao || null,
     disposicao: RNC_DISPOSICAO[r.disposicao] || r.disposicao || null,
     encerramento: {data: r.encerradaEm || null, aprovadoPor: r.encerradaPor || null},
+    cancelada: r.status === 'CANCELADA',
+    canceladaEm: r.canceladaEm || null,
+    canceladaPor: r.canceladaPor || null,
+    motivoCancelamento: r.motivoCancelamento || null,
+    duplicataDe: r.duplicataDe ? ((allRncs[r.duplicataDe] || {}).numero || r.duplicataDe) : null,
     elaboradoPor: r.abertaPor || null,
     responsavel: {nome: r.encerradaPor || r.emAnalisePor || r.abertaPor || ''},
     dataAnalise: r.encerradaEm || r.abertaEm
@@ -3926,7 +3970,7 @@ function abrirModalEncerrarRnc(numero) {
 /* O modal da RNC tem quatro faces agora (abrir, notificar cliente, registrar
    resposta, encerrar). Uma função decide qual aparece: com quatro blocos,
    ligar/desligar na mão em cada abertura é como sobra um bloco visível. */
-var BLOCOS_RNC = ['Abertura', 'Cliente', 'Resposta', 'Encerramento'];
+var BLOCOS_RNC = ['Abertura', 'Cliente', 'Resposta', 'Cancelamento', 'Encerramento'];
 function mostrarBlocoRnc(qual) {
   BLOCOS_RNC.forEach(function(b) {
     document.getElementById('rncCampos' + b).style.display = b === qual ? '' : 'none';
@@ -3976,6 +4020,38 @@ function abrirModalRespostaCliente(numero) {
   // perfil `documento`: a autorização do cliente costuma ser um PDF assinado,
   // e exigir print de PDF enfraqueceria justamente a prova que se guarda aqui.
   fotosRncResposta = FotosQualidade.montar(document.getElementById('rncRespAnexos'), {perfil: 'documento'});
+  document.getElementById('modalRncBg').classList.add('open');
+}
+
+/* Cancelar duplicata. A RNC que permanece válida vem de uma lista, não
+   digitada: errar o número aqui cria exatamente o problema que o cancelamento
+   veio resolver -- duas RNCs sem ligação entre si. As do mesmo item vêm
+   primeiro, porque é delas que a duplicata nasce. */
+function abrirModalCancelarRnc(numero) {
+  var r = allRncs[numero] || {};
+  rncModo = 'CANCELAR'; rncAlvo = numero;
+  document.getElementById('modalRncTitle').textContent = 'Cancelar ' + (r.numero || numero);
+  var ctx = document.getElementById('rncContexto');
+  ctx.style.display = ''; ctx.innerHTML = contextoRncHtml(numero, r);
+  mostrarBlocoRnc('Cancelamento');
+  document.getElementById('rncBtnSalvar').textContent = 'Cancelar RNC';
+  document.getElementById('rncCancMotivo').value = '';
+  var outras = Object.keys(allRncs).filter(function(k) {
+    return k !== numero && allRncs[k].status !== 'CANCELADA';
+  }).sort(function(a, b) {
+    var ma = allRncs[a].itemCodigo === r.itemCodigo ? 0 : 1;
+    var mb = allRncs[b].itemCodigo === r.itemCodigo ? 0 : 1;
+    return ma !== mb ? ma - mb : String(b).localeCompare(String(a));
+  });
+  document.getElementById('rncCancDuplicata').innerHTML =
+    '<option value="">— nenhuma (abertura equivocada) —</option>' +
+    outras.map(function(k) {
+      var o = allRncs[k];
+      return '<option value="' + escapeAttr(k) + '">' + escapeHtml(o.numero || k) +
+        (o.itemCodigo === r.itemCodigo ? ' · mesmo item' : '') +
+        ' · ' + escapeHtml((RNC_STATUS[o.status] || {}).rotulo || o.status || '') +
+        ' · ' + escapeHtml(o.itemCodigo || '') + '</option>';
+    }).join('');
   document.getElementById('modalRncBg').classList.add('open');
 }
 
@@ -4067,6 +4143,15 @@ document.getElementById('rncBtnSalvar').addEventListener('click', function() {
           : 'Resposta registrada: o cliente reprovou. O lote segue bloqueado.';
       });
     }).catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
+    return;
+  }
+  if (rncModo === 'CANCELAR') {
+    cancelarRnc(db, rncAlvo, {
+      motivo: document.getElementById('rncCancMotivo').value,
+      duplicataDe: document.getElementById('rncCancDuplicata').value || null
+    }, currentUserNome())
+      .then(function(r) { terminar(r, function() { return 'RNC cancelada. O registro e o número continuam na base, com o motivo.'; }); })
+      .catch(function(e) { btn.disabled = false; showAlert('Erro: ' + e.message, 'danger'); });
     return;
   }
   if (rncModo === 'ENCERRAR') {
