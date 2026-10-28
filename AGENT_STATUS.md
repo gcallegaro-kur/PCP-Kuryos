@@ -495,6 +495,11 @@ Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa
   dono, fila, idade e atraso; ranking de setores por atraso e botão "Copiar cobrança" por setor. Atraso = data que o
   sistema já conhece, senão SLA em horas por etapa (`config/painelSlaHoras`); sem data de entrada, só conta na fila.
   Ensaiado só com dados sintéticos; calibrar contra a base real. Backlog em MELHORIAS_FUTURAS.md.
+- **Roadmap do sistema** (27/10, 5ª passada) — `public/backlog.html`, módulo `backlog` (só admin + quem o ADM marcar, bloco ADM).
+  Checklist automático: `scripts/gerar-backlog.js` lê o painel "Em aberto para execução" de `MELHORIAS_FUTURAS.md`
+  (tabelas A código nosso / B depende da Kuryos / C decisões do usuário) e grava `public/backlog.json`; item riscado
+  (`~~item~~ feito em hash`) vira concluído; a tela marca o que é novo ou concluído desde a última visita. Regra nova:
+  depois de mexer no painel, rodar o gerador e commitar o JSON (`run_backlog_test.js` trava se estiver velho).
 - Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
   (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
 - `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.

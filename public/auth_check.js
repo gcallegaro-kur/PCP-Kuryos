@@ -132,6 +132,10 @@ const KURYOS_MODULOS = {
                   paginas: ['admin.html'] },
   usuarios:     { rotulo: 'Gestão de Usuários',    desc: 'Ver a lista de usuários do sistema',
                   paginas: ['usuarios.html'] },
+  // Roadmap do sistema (27/10): checklist do que falta implementar, gerado do backlog do repositório.
+  // Fora de MODULOS_POR_PAPEL de propósito: só `admin` e quem o ADM marcar.
+  backlog:      { rotulo: 'Roadmap do sistema', desc: 'Checklist automático do que ainda falta implementar, do que depende da Kuryos e das decisões pendentes',
+                  paginas: ['backlog.html'] },
   // Painel de Controle (27/10): onde o fluxo está parado e com quem (visão de gestão).
   // Fora de MODULOS_POR_PAPEL de propósito: só `admin` e quem o ADM marcar.
   painel:       { rotulo: 'Painel de Controle', desc: 'Filas, idade e atraso de cada etapa do fluxo, por setor, com a cobrança pronta (visão de gestão)',
