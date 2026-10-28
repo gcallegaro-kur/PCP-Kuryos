@@ -455,22 +455,10 @@
     // papéis 'pcp'/'rh'/'gestor' foram criados -- só reconhecia
     // 'admin'/'production'/'rotulagem'. Mesmo destino de página que
     // auth_check.js já usa pra cada papel (isPcpAdmin, rhHome).
-    if (role === 'admin' || role === 'pcp') {
-      window.location.href = 'dashboard.html';
-    } else if (role === 'production' || role === 'rotulagem') {
-      window.location.href = 'form.html';
-    } else if (role === 'logistica') {
-      window.location.href = 'logistica.html';
-    } else if (role === 'rh') {
-      window.location.href = 'rh_dashboard.html';
-    } else if (role === 'gestor') {
-      window.location.href = 'rh_avaliacao.html';
-    } else if (role === 'qualidade') {
-      // Módulo de Qualidade: pousa na fila de inspeção, sua tela de
-      // trabalho. Adicionado JUNTO com a criação do papel, de propósito --
-      // foi exatamente esta função que deixou o perfil 'pcp' de fora quando
-      // ele nasceu, e o usuário caiu em "Perfil desconhecido" ao logar.
-      window.location.href = 'qualidade.html?tab=fila';
+    // Todos os perfis conhecidos entram pelo Início, que mostra o que espera pela
+    // pessoa e os atalhos das áreas dela (shared/navegacao.js).
+    if (['admin', 'pcp', 'production', 'rotulagem', 'logistica', 'rh', 'gestor', 'qualidade'].indexOf(role) !== -1) {
+      window.location.href = 'inicio.html';
     } else {
       showFeedback('error', 'Perfil desconhecido no sistema.');
     }

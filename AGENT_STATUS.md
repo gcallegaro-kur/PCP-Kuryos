@@ -462,6 +462,29 @@ functions (os secrets precisam estar acessíveis de novo).
 
 ## Em andamento
 
+### Claude — Menu por registro único + tela Início (27/10/2026) — PUBLICADO
+
+Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa o quê.
+- **Registro único** `public/shared/navegacao.js` (UMD, testado em node): cada tela é declarada
+  uma vez, com a sua "casa" (bloco); aparece para quem consegue abrir a página
+  (`podeAbrirPagina`). Acabaram as condições `!temMod(...)` e os links repetidos em 2–4 blocos.
+  Blocos: Analytics · Comercial · Pedidos e Rastreio · PCP · Compras · Armazém · Operação ·
+  Qualidade · Expedição · Manutenção · Cadastros · ADM · RH · Ajuda. A Logística se dividiu em
+  Armazém e Expedição; as 3 etapas da expedição são UM link (a faixa `CargasFluxo` leva entre elas).
+  Link novo de menu = uma linha em `TELAS`.
+- **`public/inicio.html`**: entrada de todos os perfis (login e `homeDoUsuario` apontam para ela).
+  "Precisa de você" = cartões com contagem (inspeção total, pesagens a cobrar, cargas a faturar/carregar,
+  RNC abertas), cada um só para quem abre a página de destino e só lendo os nós que ele precisa;
+  "Suas áreas" = atalhos do mesmo registro. Cartão novo = uma entrada em `CARTOES`.
+- **Acesso não mudou.** Conferido por regressão (menu antigo × novo, 14 perfis, incl. marcação
+  individual de módulos): nenhum link se perdeu, nenhum duplicado, nenhum sem acesso.
+- Testes: `run_navegacao_test.js`, `run_inicio_ui_test.js`, `run_menu_sanfona_ui_test.js` (blocos renomeados),
+  `run_coerencia_modulos_test.js`.
+- Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
+  (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
+- `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.
+- **Arquivos ativos:** nenhum.
+
 ### Claude — Busca e filtros na Fila de Inspeção e nas RNCs + link direto para RNC (27/10/2026) — PUBLICADO
 
 - **Pedidos:** (1) busca e filtros na fila de inspeção e nas RNCs; (2) o link de RNC no Histórico e Indicadores caía na lista inteira — abrir já filtrado, "ou até abrindo o laudo".
