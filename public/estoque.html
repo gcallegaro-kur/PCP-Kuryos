@@ -295,8 +295,8 @@
       <div class="card-title" id="lvCount">Lotes vencendo</div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Situação</th><th style="text-align:right">Saldo</th></tr></thead>
-          <tbody id="lvBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+          <thead><tr><th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Situação</th><th style="text-align:right">Saldo</th><th></th></tr></thead>
+          <tbody id="lvBody"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1418,7 +1418,7 @@ function renderLotesVencendo() {
   document.getElementById('lvCount').textContent = 'Lotes vencendo em até ' + dias + ' dias (' + linhas.length + ')';
   var tbody = document.getElementById('lvBody');
   if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum lote vencendo nesse período.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum lote vencendo nesse período.</td></tr>';
     return;
   }
   tbody.innerHTML = linhas.map(function(x) {
@@ -1436,6 +1436,8 @@ function renderLotesVencendo() {
       '<td>' + fmtData(l.dataValidade) + '</td>' +
       '<td>' + situacao + '</td>' +
       '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+      // Investigar o item: o Kardex mostra todas as movimentações dele (aceita o código ou a chave do item).
+      '<td style="text-align:right;white-space:nowrap"><a class="btn btn-ghost btn-sm" style="text-decoration:none" href="kardex.html?item=' + encodeURIComponent(l.itemCodigo || x.itemKey) + '" title="Abrir o Kardex deste item para ver todas as movimentações">Ver kardex →</a></td>' +
     '</tr>';
   }).join('');
 }
