@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Controle</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="shared/navegacao.js"></script>
+  <script src="shared/painel-gargalos.js"></script>
+  <script src="shared/sequencia-setor.js"></script>
+  <script src="shared/perdas-etapa.js"></script>
+  <script src="shared/cargas-pa.js"></script>
+  <script src="shared/inspecao-total-pa.js"></script>
+  <script src="shared/encerramento-pedido.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--ink);min-height:100vh}
+    .pagina{max-width:1240px;margin:0 auto;padding:22px 24px 48px}
+
+    .topo{position:relative;overflow:hidden;border-radius:24px;padding:26px 30px;color:#fff;background:linear-gradient(125deg,#050f38 0%,#0a1c69 52%,#2e4fc0 135%);
+      box-shadow:0 18px 40px -22px rgba(10,28,105,.7);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+    .topo::before{content:"";position:absolute;width:380px;height:380px;right:-80px;top:-200px;border-radius:50%;border:50px solid rgba(255,255,255,.07);pointer-events:none}
+    .topo>*{position:relative;z-index:1}
+    .topo img{height:28px;filter:brightness(0) invert(1);opacity:.95;display:block;margin-bottom:16px}
+    .topo h1{font-size:30px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+    .topo p{font-size:13.5px;color:rgba(255,255,255,.74);margin-top:6px}
+    .kpis{display:flex;gap:10px;flex-wrap:wrap}
+    .kpi{min-width:118px;padding:12px 16px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);text-align:right}
+    .kpi b{display:block;font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+    .kpi span{display:block;font-size:11.5px;color:rgba(255,255,255,.74);margin-top:5px}
+    .kpi.alerta b{color:#ffb4b4}
+
+    h2{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.7px;margin:30px 2px 12px}
+    h2::after{content:"";flex:1;height:1px;background:var(--line)}
+    .barra{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 2px 0;font-size:12.5px;color:var(--ink-soft)}
+    .barra label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+    .leg{display:inline-flex;align-items:center;gap:5px}
+    .dot{width:9px;height:9px;border-radius:50%;display:inline-block;background:var(--ink-mute)}
+    .dot.ok{background:var(--good)}.dot.atencao{background:var(--warn)}.dot.critico{background:var(--critical)}.dot.vazio{background:var(--line)}
+
+    .fases{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+    .fase{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow);overflow:hidden}
+    .fase>h3{font-size:13.5px;font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+    .fase>h3 small{font-weight:600;font-size:11.5px;color:var(--ink-soft)}
+    details.etapa{border-bottom:1px solid var(--line)}
+    details.etapa:last-child{border-bottom:0}
+    details.etapa>summary{list-style:none;display:flex;align-items:center;gap:11px;padding:11px 16px;cursor:pointer;min-height:48px}
+    details.etapa>summary::-webkit-details-marker{display:none}
+    details.etapa>summary:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+    .et-tit{flex:1;min-width:0;font-size:13px;line-height:1.3}
+    .et-tit small{display:block;color:var(--ink-mute);font-size:11px;margin-top:1px}
+    .et-n{font-size:20px;font-weight:700;letter-spacing:-.02em;min-width:26px;text-align:right}
+    .et-late{font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:color-mix(in srgb,var(--critical) 14%,transparent);color:var(--critical);white-space:nowrap}
+    .et-old{font-size:11px;color:var(--ink-mute);white-space:nowrap}
+    .itens{padding:2px 16px 12px 36px;font-size:12.5px}
+    .it{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px dashed var(--line)}
+    .it:first-child{border-top:0}
+    .it .r{min-width:0}
+    .it .r small{display:block;color:var(--ink-mute);font-size:11px}
+    .it .t{white-space:nowrap;text-align:right;font-weight:600}
+    .it.tarde .t{color:var(--critical)}
+    .abrir{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none}
+
+    .setores{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+    .setor{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow);padding:16px}
+    .setor.quente{border-color:color-mix(in srgb,var(--critical) 45%,var(--line))}
+    .setor .cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+    .setor h3{font-size:15px;font-weight:700}
+    .setor .big{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1}
+    .setor.quente .big{color:var(--critical)}
+    .setor .sub{font-size:12px;color:var(--ink-soft);margin:2px 0 10px}
+    .setor ul{list-style:none;margin-bottom:12px;font-size:12.5px}
+    .setor li{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px dashed var(--line)}
+    .setor li:first-child{border-top:0}
+    .btn{padding:9px 14px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%}
+    .btn.primario{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff}
+    :root[data-theme="dark"] .btn.primario{background:var(--accent);border-color:var(--accent);color:#000}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primario{background:var(--accent);border-color:var(--accent);color:#000}}
+    .btn[disabled]{opacity:.5;cursor:default}
+    .rodape{margin-top:30px;font-size:12px;color:var(--ink-mute);line-height:1.5}
+    .carregando{padding:30px;text-align:center;color:var(--ink-soft)}
+    @media (max-width:700px){
+      .pagina{padding:14px 16px 40px}.topo{padding:20px;border-radius:20px}.topo h1{font-size:25px}
+      .kpis{width:100%}.kpi{flex:1;min-width:0;text-align:left}
+      details.etapa>summary{padding:13px 14px;min-height:52px}.itens{padding-left:20px}
+    }
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <img src="kuryos-logo.svg" alt="Kuryos">
+      <h1>Painel de Controle</h1>
+      <p>Onde o fluxo está parado e com quem · <span id="atualizado">carregando…</span></p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <div class="barra">
+    <span class="leg"><span class="dot critico"></span>crítico</span>
+    <span class="leg"><span class="dot atencao"></span>com atraso</span>
+    <span class="leg"><span class="dot ok"></span>no prazo</span>
+    <label><input type="checkbox" id="verVazias"> mostrar etapas sem fila</label>
+  </div>
+
+  <h2>Cobrança por setor</h2>
+  <div class="setores" id="setores"><div class="carregando">Carregando os dados…</div></div>
+
+  <h2>Fluxo, etapa por etapa</h2>
+  <div class="fases" id="fases"></div>
+
+  <p class="rodape">Atraso = passou da data que o sistema já conhece (fim planejado, data da carga, prazo da inspeção, entrega prevista) ou do prazo da etapa em horas. Sem data de entrada, o item aparece na fila mas não conta como atrasado.
+    Os prazos de partida são folgados de propósito; ajuste em <code>config/painelSlaHoras/&lt;etapa&gt;</code> (horas).</p>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+var db = firebase.database();
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+
+var FONTES = ['ops', 'conferencias_pa', 'agendamentos_expedicao', 'nao_conformidades', 'solicitacoes_compra', 'pedidos_compra',
+  'devolucoes_cliente', 'solicitacoes_descarte', 'pedidos', 'orcamentos', 'solicitacoes_cadastro_produto', 'usuarios',
+  'produtos', 'formulas', 'bom', 'clientes', 'estoque_lotes'];
+var dados = {}, carregadas = {}, slaH = {}, analise = null, aberta = {}, agendado = null;
+var LIB = function() {
+  return {SequenciaSetor: window.SequenciaSetor, PerdasEtapa: window.PerdasEtapa, CargasPA: window.CargasPA, InspecaoTotalPA: window.InspecaoTotalPA, EncerramentoPedido: window.EncerramentoPedido};
+};
+
+function sevRank(s) { return {critico: 0, atencao: 1, ok: 2, vazio: 3}[s]; }
+
+function desenhar() {
+  agendado = null;
+  if (!FONTES.every(function(f) { return carregadas[f]; })) return;
+  analise = PainelGargalos.analisar(dados, {lib: LIB(), slaH: slaH});
+  var t = analise.totais;
+  $('kpis').innerHTML =
+    '<div class="kpi ' + (t.atrasados ? 'alerta' : '') + '"><b>' + t.atrasados + '</b><span>itens atrasados</span></div>' +
+    '<div class="kpi ' + (t.criticas ? 'alerta' : '') + '"><b>' + t.criticas + '</b><span>etapas críticas</span></div>' +
+    '<div class="kpi"><b>' + t.n + '</b><span>itens em fila</span></div>';
+  $('atualizado').textContent = 'atualizado às ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  desenharSetores();
+  desenharFases();
+}
+
+function desenharSetores() {
+  var lista = analise.setores.filter(function(s) { return s.n > 0; });
+  $('setores').innerHTML = lista.map(function(s) {
+    var tarde = s.etapas.filter(function(e) { return e.atrasados; });
+    var linhas = (tarde.length ? tarde : s.etapas.slice(0, 3)).slice(0, 4).map(function(e) {
+      return '<li><span>' + esc(e.titulo) + '</span><b>' + (e.atrasados ? e.atrasados + ' de ' + e.n : e.n) + '</b></li>';
+    }).join('');
+    return '<div class="setor ' + (s.atrasados ? 'quente' : '') + '"><div class="cab"><h3>' + esc(s.setor) + '</h3><span class="big">' + s.atrasados + '</span></div>' +
+      '<div class="sub">' + (s.atrasados ? 'fora do prazo' : 'nada fora do prazo') + ' · ' + s.n + ' em fila</div><ul>' + linhas + '</ul>' +
+      '<button type="button" class="btn ' + (s.atrasados ? 'primario' : '') + '" data-cobrar="' + esc(s.setor) + '"' + (s.atrasados ? '' : ' disabled') + '>' +
+      (s.atrasados ? 'Copiar cobrança' : 'Sem pendência para cobrar') + '</button></div>';
+  }).join('') || '<div class="carregando">Nenhuma fila no momento.</div>';
+}
+
+function itemHtml(i) {
+  var quando = PainelGargalos.formatarIdade(i.idadeH);
+  return '<div class="it ' + (i.atrasado ? 'tarde' : '') + '"><span class="r">' + esc(i.rotulo) +
+    (i.motivo || i.detalhe ? '<small>' + esc(i.motivo || i.detalhe) + '</small>' : '') + '</span><span class="t">' + (i.idadeH == null ? 'sem data' : quando) + '</span></div>';
+}
+
+function desenharFases() {
+  var ver = $('verVazias').checked;
+  $('fases').innerHTML = analise.fases.map(function(f) {
+    var etapas = analise.etapas.filter(function(e) { return e.fase === f && (ver || e.n > 0); });
+    if (!etapas.length) return '';
+    var tarde = etapas.reduce(function(t, e) { return t + e.atrasados; }, 0);
+    var corpo = etapas.map(function(e) {
+      var abertoAttr = aberta[e.id] ? ' open' : '';
+      var mostrar = e.itens.slice(0, 12).map(itemHtml).join('') + (e.itens.length > 12 ? '<div class="it"><span class="r">… e mais ' + (e.itens.length - 12) + '</span></div>' : '');
+      return '<details class="etapa" data-id="' + esc(e.id) + '"' + abertoAttr + '><summary><span class="dot ' + e.severidade + '"></span>' +
+        '<span class="et-tit">' + esc(e.titulo) + '<small>' + esc(e.setor) + (e.slaH ? ' · prazo ' + e.slaH + 'h' : '') + '</small></span>' +
+        (e.atrasados ? '<span class="et-late">' + e.atrasados + ' atrasado' + (e.atrasados > 1 ? 's' : '') + '</span>' : '') +
+        (e.maisAntigaH != null && e.n ? '<span class="et-old">+ antigo ' + PainelGargalos.formatarIdade(e.maisAntigaH) + '</span>' : '') +
+        '<span class="et-n">' + e.n + '</span></summary>' +
+        '<div class="itens">' + (mostrar || '<div class="it"><span class="r">Nada na fila.</span></div>') + '<a class="abrir" href="' + esc(e.href) + '">Abrir a tela →</a></div></details>';
+    }).join('');
+    return '<div class="fase"><h3>' + esc(f) + '<small>' + (tarde ? tarde + ' atrasado' + (tarde > 1 ? 's' : '') : 'em dia') + '</small></h3>' + corpo + '</div>';
+  }).join('');
+}
+
+function agendar() { if (!agendado) agendado = setTimeout(desenhar, 200); }
+
+function copiar(texto) {
+  if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(texto);
+  return new Promise(function(ok, falha) {
+    var ta = document.createElement('textarea'); ta.value = texto; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy') ? ok() : falha(); } catch (e) { falha(e); } ta.remove();
+  });
+}
+
+document.addEventListener('click', function(ev) {
+  var b = ev.target.closest('[data-cobrar]');
+  if (!b || !analise) return;
+  var texto = PainelGargalos.textoCobranca(b.getAttribute('data-cobrar'), analise, 6);
+  var original = b.textContent;
+  copiar(texto).then(function() { b.textContent = 'Copiado ✓'; }, function() { b.textContent = 'Não foi possível copiar'; });
+  setTimeout(function() { b.textContent = original; }, 2200);
+});
+document.addEventListener('toggle', function(ev) {
+  var d = ev.target;
+  if (d && d.classList && d.classList.contains('etapa')) aberta[d.getAttribute('data-id')] = d.open;
+}, true);
+$('verVazias').addEventListener('change', function() { if (analise) desenharFases(); });
+
+function iniciar() {
+  FONTES.forEach(function(f) {
+    dbOnValue(db.ref(f), function(s) { dados[f] = s.val() || {}; carregadas[f] = true; agendar(); },
+      {onError: function() { carregadas[f] = true; dados[f] = dados[f] || {}; agendar(); }});
+  });
+  // Prazos ajustados pelo admin (opcional).
+  dbOnValue(db.ref('config/painelSlaHoras'), function(s) { slaH = s.val() || {}; agendar(); }, {onError: function() {}});
+}
+(function esperarLogin() { if (!window.currentUser) { setTimeout(esperarLogin, 150); return; } iniciar(); })();
+</script>
+</body>
+</html>

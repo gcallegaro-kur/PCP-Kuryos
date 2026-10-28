@@ -54,11 +54,15 @@ linha por item, com o link para onde está o detalhe.
 | Planejamento | Regra dos 95% ("pronto para encerrar") no Planejamento e no Dashboard | — | "Adiados entre 07 e 19/10" |
 | Qualidade | RNC automática quando o granel é liberado com restrição | oferecido, não pedido | "Adiados entre 07 e 19/10" |
 | Inspeção de PA | Avisar PCP/Produção quando o prazo da inspeção total vence | — | "Inspeção total de PA" |
+| Qualidade | Rascunho do laudo: guardar também as fotos; limpar rascunho órfão | — | "Rascunho do laudo — o que ficou de fora" |
 | Analytics | Relatório de perdas consolidado entre lotes | o usuário preferiu adiar | "Adiados entre 07 e 19/10" |
 | Comercial | Aviso ao responsável comercial: recompra atrasada e pedido parado (`checkNotificacoes`); KPI de carteira por responsável | billing voltou em 23/10: destravado | "Responsável comercial por cliente" |
 | Usuários | Function `excluirUsuario` para apagar a credencial pela tela | billing voltou: destravado | "Desativar e excluir usuário" |
 | Testes | Consertar os testes de tela quebrados no main:<br>- encerramento_pedido;<br>- inspecao_pa;<br>- operacao;<br>- painel_rearranjo;<br>- portao_bulk;<br>- apontamento_encerramento | — | "Adiados entre 07 e 19/10" |
 | Planejamento | Roadmap de planejamento, OP-eficiência e apontamento (fases restantes) | — | `PLANO_PLANEJAMENTO_PCP.md` |
+| Painel de Controle | Tela para o admin ajustar os prazos (SLA) por etapa; calibrar contra a base real (ensaiado só com dados sintéticos); retrato diário para ver tendência | — | "Painel de Controle e Início" |
+| Início | Cartões que faltam: Conferência de PA pendente (extrair a regra de `estoque.html` para `shared/`), fila de inspeção da Qualidade, Comercial; cartão-resumo do painel para o admin | — | "Painel de Controle e Início" |
+| Painel de Controle | Cadastros de MATERIAIS no painel (lead time e lote mínimo dos de maior giro para o MRP, unidade, fornecedor); hoje só os SKUs em uso têm checagem | — | "Painel de Controle e Início" |
 
 ### B. Depende da Kuryos (operação/cadastro, não código)
 
@@ -1150,6 +1154,15 @@ devolveu a trava "Palete vencido" e o FEFO).
 
 **Plano de ação fechado em 19/10/2026: ver `PLANO_QUALIDADE.md`** (fases A–D, decisões D1–D12 e o que fica com a Kuryos, K1–K9). Os itens abaixo continuam como contexto.
 
+### Rascunho do laudo — o que ficou de fora (27/10/2026)
+
+Entregue: `shared/rascunho-cq.js` + `qualidade_rascunhos/{chave}`; laudo (MP, embalagem, PA por lote) e análise do granel gravam enquanto a analista digita, ao fechar/clicar fora/Esc e quando a página fica oculta; a fila mostra "✎ Em preenchimento" e "Continuar"; a decisão apaga.
+
+- **Fotos não entram no rascunho.** Só sobem ao Storage junto com a decisão (`FotosQualidade.enviar`). Para guardá-las seria preciso subir na hora em que são anexadas, numa pasta provisória, e apagar as descartadas. O aviso do popup avisa a analista.
+- **Duas pessoas no mesmo laudo: a última gravação vence.** Não há trava de edição; o aviso mostra quem salvou por último. Se virar problema, o caminho é avisar ao abrir quando outro uid salvou há menos de X minutos.
+- **Rascunho órfão.** Se o lote sai da fila por outro caminho (decisão em outra tela, devolução, ajuste de estoque), o rascunho fica no banco sem aparecer em lugar nenhum. É pequeno (texto); uma limpeza dos rascunhos sem item na fila resolveria.
+- **Outros popups da Qualidade** (correção do bulk, RNC, especificação de MP, Liberação de linha) não têm rascunho — o pedido foi a Fila de Inspeção.
+
 ### CK-3, CK-4 e CK-5 — decisões de 19/10/2026 (em construção)
 
 O usuário pediu as três rotinas (assepsia do reator, assepsia da linha e
@@ -1587,3 +1600,12 @@ Fica para depois (nenhum é bug):
 - *(Feito em 24/10)* Fotos por palete no resultado (opcionais); foto por MOTIVO individual segue adiada. O envio depende do Storage (billing).
 - *(Feito em 24/10)* Palete que chega depois da sinalização: laudo avulso bloqueado até a decisão da inspeção.
 - **Prazo vencido sem aviso ativo.** A fila destaca o vencido em vermelho, mas não notifica ninguém; um aviso para o PCP/Produção seria o passo seguinte.
+
+## Painel de Controle e Início (27/10/2026) — adiado
+
+- **Tela para o admin ajustar os prazos (SLA) por etapa.** Hoje o painel lê `config/painelSlaHoras/<etapa>` (horas), mas só dá para gravar pelo console. Os prazos de partida (`SLA_PADRAO_H` em `shared/painel-gargalos.js`) são folgados de propósito.
+- **Rodar o painel contra a base real e calibrar.** O motor só foi ensaiado com dados sintéticos (o acesso à base de produção foi negado na sessão). Conferir cada contagem contra a tela de origem e ajustar os prazos.
+- **Histórico do gargalo.** O painel mostra o agora; guardar um retrato diário (n e atrasados por etapa) permitiria ver tendência e cobrar por evolução, não só pelo estado.
+- **Conferência de PA duplicada.** A regra da fila de PA existe em `estoque.html` (renderConferenciaPA) e em `shared/painel-gargalos.js`; um teste trava só o marco de corte. Extrair para um módulo `shared/` único.
+- **Cartões do Início ainda sem fonte:** Conferência de PA pendente, fila de inspeção da Qualidade e Comercial (orçamento aguardando resposta).
+- **Painel dentro do Início para o admin:** um cartão-resumo "N etapas críticas" levando ao painel.

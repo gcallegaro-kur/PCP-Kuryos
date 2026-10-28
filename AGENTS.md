@@ -21,6 +21,10 @@ Este repositório é mantido por mais de um agente. Leia `CLAUDE.md` e
    para execução"** no topo de `MELHORIAS_FUTURAS.md` (código nosso, dependência
    da Kuryos ou decisão do usuário). Item feito sai de lá no mesmo commit. É dali
    que se responde "o que está em aberto?" somando todos os chats.
+   Esse painel alimenta a tela **Roadmap do sistema** (`public/backlog.html`) do
+   usuário: depois de mexer nele, rode `node scripts/gerar-backlog.js` e inclua
+   `public/backlog.json` no commit (o teste `run_backlog_test.js` falha se estiver
+   desatualizado).
 
 Para trabalho realmente simultâneo, cada agente deve usar sua própria branch
 e worktree; a integração ocorre por commits, nunca copiando arquivos entre

@@ -3,6 +3,26 @@
 Este é o ponto de passagem de contexto entre Codex e Claude. Atualize somente
 o bloco do agente que você está operando e mantenha o histórico curto.
 
+### INCIDENTE REPETIDO — deploy do main local atrasado (28/10/2026)
+
+- **O que aconteceu:** publiquei hosting 2x do checkout principal com o `main`
+  LOCAL 19 commits atras do `origin/main`. O deploy sobe o DIRETORIO, entao o
+  site inteiro voltou para a versao antiga e 12 arquivos cairam em 404:
+  `inicio.html`, `shared/navegacao.js` (menu novo), `painel.html`,
+  `shared/painel-gargalos.js`, `shared/painel-movimentos{,-tela}.js`,
+  `shared/painel-movimentos.css`, `backlog.html`, `backlog.json`,
+  `shared/filtro-qualidade.js`, `shared/rascunho-cq.js`,
+  `shared/relatorio-entradas.js`.
+- **Eu ja tinha causado o mesmo em 27/10 19:24** (registrado em 720bb97, merge
+  `1f0291a`), e a instrucao estava escrita lah: "git pull antes de qualquer
+  deploy". Conferi `git status` (limpo) e isso NAO protege: status limpo nada
+  diz sobre o ar estar a frente do checkout.
+- **REGRA, para qualquer agente:** antes de `firebase deploy --only hosting` do
+  checkout principal, rodar `git fetch && git status -sb` e conferir que nao ha
+  "behind". Se houver, `git merge origin/main` ANTES. Conferir tambem que os
+  arquivos novos do ar continuam existindo no disco.
+- **Recuperado:** merge de `origin/main` (19 commits) + republicacao.
+
 ### Claude — Retrabalho na fila da Manipulacao (28/10/2026) — EM ANDAMENTO
 
 - **Gatilho (usuario):** a OP 26282/13-RT1 (retrabalho, destino `rotulagem`,
@@ -32,6 +52,47 @@ o bloco do agente que você está operando e mantenha o histórico curto.
   nao aparece em fila de posto/rotulagem; a obs diz "AGUARDANDO ROTULO DO
   CLIENTE", pode ser proposital.
 - **Arquivos ativos:** nenhum.
+
+### Claude — Painel de movimentações do WMS (27/10/2026)
+
+- **Pedido:** "a mesma coisa com histórico de movimentações, no wms ... algo dinâmico,
+  visual, até mais ilustrativo e que transmita a informação ... de forma precisa e rápida".
+- **Escopo:** aba "Histórico de Movimentações" de `estoque.html` (hoje só um link para o
+  Kardex) vira painel: indicadores por natureza, barras por dia, rankings de endereço/
+  item/pessoa e linha do tempo filtrável, ao vivo. Worktree `wt-movs`.
+- **Feito:** motor puro `shared/painel-movimentos.js` (usa `Kardex.tipoInfo`; conta
+  movimentos, nunca soma qtd de unidades diferentes; baixa FEFO `consumo` é espelho e fica
+  fora por padrão; sem autor = "Automático"; endereço-chave vira código) + tela
+  `painel-movimentos-tela.js/.css` (indicadores clicáveis, barras empilhadas por dia com
+  tooltip e clique no dia, rankings com filtro cruzado, linha do tempo que abre o Kardex,
+  CSV, ao vivo). Lê `movimentos_estoque` só ao abrir a aba. Paleta de 7 naturezas
+  validada (CVD) em claro e escuro. Ensaio na base: 2.806 movimentos, 30 dias = 1.902 em
+  312 itens; doca DOC-1.1.1 lidera; 1.147 automáticos.
+- **Testes:** `run_painel_movimentos_test.js`, `run_painel_movimentos_ui_test.js`; os 8
+  testes de tela que abrem `estoque.html` seguem passando.
+- **PUBLICADO**; sem arquivos ativos.
+
+### Claude — Relatório de entradas de materiais na Logística › Histórico (27/10/2026)
+
+- **Pedido:** "quero um relatório melhor de entradas de materiais ... agendamentos >
+  histórico, onde temos poucas informações".
+- **Escopo:** Histórico vira relatório (uma linha por item recebido, cruzada com o lote
+  e com o item do PC): filtros, indicadores, exportação CSV; cartões antigos ficam como
+  visão "Por recebimento". Worktree `wt-entradas`.
+- **Feito:** `shared/relatorio-entradas.js` (puro: `linhas`, `situacaoCq`, `filtrar`,
+  `resumo` com total por unidade, `csv`) + aba Histórico de `logistica.html` (filtros,
+  indicadores, tabela por item com detalhe/ações, visão por recebimento, CSV). Ensaio
+  na base: 104 itens / 59 recebimentos, 104/104 resolvem lote e item do PC; 7 aguardando
+  CQ (mais antigo 12 dias), 7 MP sem validade. Testes: `run_relatorio_entradas_test.js`
+  e `run_relatorio_entradas_ui_test.js`; 5 testes de UI da Logística seguem passando.
+- **INCIDENTE (27/10 19:24):** o `main` LOCAL de `producao_firebase_FINAL` divergiu do
+  `origin/main` (base 9a75542). Os 5 commits de vínculos/Emitir OP (33fe412..cc65be3)
+  ficaram só nele, e o deploy feito dele tirou do ar o rascunho do laudo e os filtros
+  da Qualidade (d3a0fcb, f609e1e: `rascunho-cq.js`/`filtro-qualidade.js` em 404).
+  Integrado no merge `1f0291a` e publicado junto com este relatório. **Quem usa o
+  checkout principal: `git pull` antes de qualquer deploy** — o `main` local continua
+  atrás do origin até isso.
+- **PUBLICADO** (hosting + regras) a partir do merge; sem arquivos ativos.
 
 ### Claude — Saneamento dos vínculos pedido↔linha↔OP (27/10/2026)
 
@@ -469,6 +530,73 @@ functions (os secrets precisam estar acessíveis de novo).
 **Arquivos ativos:** nenhum.
 
 ## Em andamento
+
+### Claude — Menu por registro único + tela Início (27/10/2026) — PUBLICADO
+
+Pedido do usuário: relayout dos menus e uma tela inicial, sem mudar quem acessa o quê.
+- **Registro único** `public/shared/navegacao.js` (UMD, testado em node): cada tela é declarada
+  uma vez, com a sua "casa" (bloco); aparece para quem consegue abrir a página
+  (`podeAbrirPagina`). Acabaram as condições `!temMod(...)` e os links repetidos em 2–4 blocos.
+  Blocos: Analytics · Comercial · Pedidos e Rastreio · PCP · Compras · Armazém · Operação ·
+  Qualidade · Expedição · Manutenção · Cadastros · ADM · RH · Ajuda. A Logística se dividiu em
+  Armazém e Expedição; as 3 etapas da expedição são UM link (a faixa `CargasFluxo` leva entre elas).
+  Link novo de menu = uma linha em `TELAS`.
+- **`public/inicio.html`**: entrada de todos os perfis (login e `homeDoUsuario` apontam para ela).
+  "Precisa de você" = cartões com contagem (inspeção total, pesagens a cobrar, cargas a faturar/carregar,
+  RNC abertas), cada um só para quem abre a página de destino e só lendo os nós que ele precisa;
+  "Suas áreas" = atalhos do mesmo registro. Cartão novo = uma entrada em `CARTOES`.
+- **Acesso não mudou.** Conferido por regressão (menu antigo × novo, 14 perfis, incl. marcação
+  individual de módulos): nenhum link se perdeu, nenhum duplicado, nenhum sem acesso.
+- Testes: `run_navegacao_test.js`, `run_inicio_ui_test.js`, `run_menu_sanfona_ui_test.js` (blocos renomeados),
+  `run_coerencia_modulos_test.js`.
+- Visual do Início (27/10, 2ª passada): faixa de abertura com a logo, gradiente azul-marinho da marca, papel da
+  pessoa e resumo "N itens esperam por você"; cartões com ícone; áreas com ícone/tom por bloco (3 matizes do tema);
+  claro, escuro e celular conferidos. Cuidado: `auth_check.js` remove o primeiro `<header>` da página (cabeçalho
+  legado) — não use essa tag em tela nova.
+- Mais cartões no Início (27/10, 3ª passada): fila de cada setor (separação, envase, manipulação, rotulagem — mesma
+  regra de `SequenciaSetor.etapa` das Próximas Ordens), Compras (solicitações a aprovar/cotar, pedidos a enviar,
+  entregas atrasadas), Logística (devoluções a receber, descartes aguardando decisão). Contagens conferidas só com
+  dados sintéticos: não rodei contra a base real. Ficou de fora: Conferência de PA pendente (a regra mora inline em
+  `estoque.html › renderConferenciaPA`; extrair para `shared/` antes de virar cartão) e fila de inspeção da Qualidade.
+- **Painel de Controle** (27/10, 4ª passada) — `public/painel.html` + `public/shared/painel-gargalos.js` (motor puro, testado em
+  `run_painel_gargalos_test.js`; tela em `run_painel_ui_test.js`). Módulo novo `painel` (só admin + quem o ADM marcar).
+  30 etapas do fluxo (Comercial → Planejar → Manipular → Produzir → Qualidade → Expedir → Compras → Retornos → Gestão; Comercial inclui orçamentos parados, pedido pronto para encerrar, pedido concluído com saldo e produto novo aguardando cadastro), cada uma com setor
+  dono, fila, idade e atraso; ranking de setores por atraso e botão "Copiar cobrança" por setor. Atraso = data que o
+  sistema já conhece, senão SLA em horas por etapa (`config/painelSlaHoras`); sem data de entrada, só conta na fila.
+  Ensaiado só com dados sintéticos; calibrar contra a base real. Backlog em MELHORIAS_FUTURAS.md.
+- **Roadmap do sistema** (27/10, 5ª passada) — `public/backlog.html`, módulo `backlog` (só admin + quem o ADM marcar, bloco ADM).
+  Checklist automático: `scripts/gerar-backlog.js` lê o painel "Em aberto para execução" de `MELHORIAS_FUTURAS.md`
+  (tabelas A código nosso / B depende da Kuryos / C decisões do usuário) e grava `public/backlog.json`; item riscado
+  (`~~item~~ feito em hash`) vira concluído; a tela marca o que é novo ou concluído desde a última visita. Regra nova:
+  depois de mexer no painel, rodar o gerador e commitar o JSON (`run_backlog_test.js` trava se estiver velho).
+- Estoque › Lotes Vencendo (28/10): coluna "Ver kardex →" em cada lote, abre `kardex.html?item=<código do item>` (teste: `run_lotes_vencendo_kardex_test.js`).
+- Aviso: `run_coerencia_modulos_test.js` acusa `PainelMovimentosTela` (commit cda6363) por falso positivo: `shared/painel-movimentos-tela.js` exporta com `root.X = {...}` e o detector só reconhece `root.X = factory()`. A tela funciona; ajustar o detector ou o padrão do módulo.
+- Menu lateral com identidade (28/10): marca em bloco azul-marinho com a logo branca, ícone e cor por bloco (`KuryosNav.VISUAL`, o mesmo da tela Início), trilho colorido, item ativo em gradiente, rodapé em cartão. Só CSS/markup em `auth_check.js`; menu e acesso inalterados.
+- **Painel de Controle › Cadastros** (28/10): 8 etapas novas (38 no total), fase "Cadastros", setor Cadastros. Só olham SKUs EM USO
+  (OP ativa, pedido aberto ou PA em estoque): sem prazo de validade (trava a NF), sem peso da caixa (carga/NF/etiqueta), sem un/cx,
+  sem fórmula, fórmula sem versão aprovada, fórmula sem BOM, sem cliente válido, sem `prodHoraRef`. "Atrasado" = o vazio
+  bloqueia algo agora (ex.: lote em estoque sem validade). Teste: `run_painel_cadastros_test.js`. Materiais (lead time, lote mínimo,
+  unidade, fornecedor) ficaram de fora.
+- Pendente (combinado com o usuário): níveis Ver/Operar/Aprovar por módulo e abas com módulo próprio
+  (ex.: Fórmulas dentro de Cadastros) — depois do menu novo no ar.
+- `run_operacao_ui_test.js` já falhava antes (espera o papel `production` sem `feedback`); não é desta mudança.
+- **Arquivos ativos:** nenhum.
+
+### Claude — Busca e filtros na Fila de Inspeção e nas RNCs + link direto para RNC (27/10/2026) — PUBLICADO
+
+- **Pedidos:** (1) busca e filtros na fila de inspeção e nas RNCs; (2) o link de RNC no Histórico e Indicadores caía na lista inteira — abrir já filtrado, "ou até abrindo o laudo".
+- **Feito:** `shared/filtro-qualidade.js` (puro: busca por palavras sem acento, fornecedor por nome normalizado, espera, situação/rascunho; RNC por situação, classe, origem, fornecedor, período). Fila: barra acima das abas (vale para todas as abas, cartões de bulk/correção e laudos recentes), contagem das abas pelo filtro, aviso "também em Embalagem (1) · Ver tudo", título "(n de m)", topo segue com a fila inteira. RNC: origem, fornecedor, período de/até, busca ampliada (lote, pedido, causa, ação, pessoas), "Limpar filtros", "(n de m)". `?tab=rnc&rnc=NUM` abre filtrado com o detalhe expandido (situação vai para Todas); o detalhe ganha "🖨 Laudo do lote" quando a RNC veio de lote laudado; o atalho dos Laudos recentes usa o mesmo caminho. `qualidade_historico.html` passa o número no link. Selects das barras lado a lado (o estilo global os deixava com 100%).
+- **Testes:** `run_filtro_qualidade_test.js`, `run_filtro_qualidade_ui_test.js` OK; 8 testes de tela da Qualidade OK (inclui o do rascunho).
+- **Arquivos ativos:** nenhum.
+
+### Claude — Rascunho do laudo na Fila de Inspeção (27/10/2026) — PUBLICADO
+
+- **Pedido:** o que se digita no laudo/análise de granel se perdia ao clicar fora, trocar de tela etc. Salvar enquanto digita, com status "Em preenchimento".
+- **Feito:** `shared/rascunho-cq.js` (puro: chaves, registro com o conteúdo como texto JSON — o RTDB descartaria null de lista e chave com ponto —, coletar/aplicar campos por id, gravação adiada de 800 ms). `qualidade.html`: autosave por delegação no corpo dos dois popups (laudo e granel), grava na hora ao fechar/clicar fora/Esc/página oculta, recupera ao abrir (campos com id + modelo: ensaios, CK-7, pesos, embalagem, resultados de PA, caixa de restrição do granel), aviso com "Descartar e começar de novo", selo "✎ Em preenchimento — quem, quando" e botão "Continuar" na fila; a decisão apaga o rascunho. "Cancelar" virou "Fechar". Regra `qualidade_rascunhos` (admin/qualidade/pcp/módulo qualidade gravam; todos leem; tipo/dados/tamanho validados). Manual da Qualidade atualizado.
+- **Achado no teste de tela:** `{set: setTimeout}` chamado como método dá "Illegal invocation" no navegador — o teste unitário com relógio falso não pegava; o de tela agora confere a gravação com o popup aberto.
+- **Testes:** `run_rascunho_cq_test.js`, `run_rascunho_cq_ui_test.js`, `run_rascunho_cq_rules_test.js` (emulador) OK; 7 testes de tela antigos da Qualidade OK; `run_inspecao_pa_ui_test.js` falha igual no main (já listado).
+- **Fora:** fotos no rascunho, trava entre duas analistas, limpeza de órfão — em MELHORIAS_FUTURAS.
+- **Arquivos ativos:** nenhum.
 
 ### ⚠ Aviso ao Codex — não commite expedicao.js/expedicao_regras.js por cima (23/10/2026)
 

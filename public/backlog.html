@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roadmap do sistema</title>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://prod-kuryos-default-rtdb.firebaseio.com">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="shared/utils.js"></script>
+  <script src="auth_check.js"></script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="shared/theme.css">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font-ui);background:var(--bg);color:var(--ink);min-height:100vh}
+    .pagina{max-width:1100px;margin:0 auto;padding:22px 24px 48px}
+
+    .topo{position:relative;overflow:hidden;border-radius:24px;padding:26px 30px;color:#fff;background:linear-gradient(125deg,#050f38 0%,#0a1c69 52%,#2e4fc0 135%);
+      box-shadow:0 18px 40px -22px rgba(10,28,105,.7);display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+    .topo::before{content:"";position:absolute;width:380px;height:380px;right:-80px;top:-200px;border-radius:50%;border:50px solid rgba(255,255,255,.07);pointer-events:none}
+    .topo>*{position:relative;z-index:1}
+    .topo img{height:28px;filter:brightness(0) invert(1);opacity:.95;display:block;margin-bottom:16px}
+    .topo h1{font-size:30px;font-weight:700;letter-spacing:-.025em;line-height:1.1}
+    .topo p{font-size:13.5px;color:rgba(255,255,255,.74);margin-top:6px;max-width:560px}
+    .kpis{display:flex;gap:10px;flex-wrap:wrap}
+    .kpi{min-width:116px;padding:12px 16px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);text-align:right}
+    .kpi b{display:block;font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+    .kpi span{display:block;font-size:11.5px;color:rgba(255,255,255,.74);margin-top:5px}
+
+    .filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 2px 0}
+    .filtros input[type=search]{flex:1;min-width:200px;padding:10px 14px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-size:14px}
+    .filtros select{padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font-size:14px}
+    .filtros label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-soft);cursor:pointer}
+
+    h2{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.7px;margin:30px 2px 6px}
+    h2::after{content:"";flex:1;height:1px;background:var(--line)}
+    h2 .n{font-weight:700;color:var(--ink);background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:99px;padding:1px 9px;letter-spacing:0}
+    .dica{font-size:12.5px;color:var(--ink-mute);margin:0 2px 10px}
+
+    .lista{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow);overflow:hidden}
+    .item{display:flex;gap:13px;padding:14px 16px;border-top:1px solid var(--line);align-items:flex-start}
+    .item:first-child{border-top:0}
+    .item .chk{flex:none;width:22px;height:22px;margin-top:1px;border-radius:7px;border:2px solid var(--line);display:grid;place-items:center;color:#fff;background:transparent}
+    .item.feito .chk{background:var(--good);border-color:var(--good)}
+    .item .chk svg{width:14px;height:14px;opacity:0}
+    .item.feito .chk svg{opacity:1}
+    .item .corpo{flex:1;min-width:0}
+    .item .txt{font-size:14px;line-height:1.45}
+    .item.feito .txt{color:var(--ink-mute);text-decoration:line-through}
+    .item .txt code{font-size:12px;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:5px;padding:1px 5px}
+    .item ul{margin:6px 0 0 18px;font-size:13px;color:var(--ink-soft);line-height:1.45}
+    .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .chip{font-size:11px;font-weight:600;border-radius:99px;padding:2px 9px;background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink-soft)}
+    .chip.frente{background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent)}
+    .chip.bloq{background:color-mix(in srgb,var(--warn) 22%,transparent);color:#8a5d00}
+    :root[data-theme="dark"] .chip.bloq{color:var(--warn)}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip.bloq{color:var(--warn)}}
+    .chip.novo{background:var(--accent-deep);color:#fff}
+    :root[data-theme="dark"] .chip.novo{background:var(--accent);color:#000}
+    @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip.novo{background:var(--accent);color:#000}}
+    .chip.ok{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+    .vazio{padding:22px;text-align:center;color:var(--ink-soft);font-size:13.5px}
+    .rodape{margin-top:28px;font-size:12px;color:var(--ink-mute);line-height:1.55}
+    @media (max-width:700px){.pagina{padding:14px 16px 40px}.topo{padding:20px;border-radius:20px}.topo h1{font-size:25px}.kpis{width:100%}.kpi{flex:1;min-width:0;text-align:left}.item{padding:14px 12px}}
+  </style>
+</head>
+<body class="kuryos-theme has-sidebar">
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <img src="kuryos-logo.svg" alt="Kuryos">
+      <h1>Roadmap do sistema</h1>
+      <p>O que ainda falta construir, o que depende da Kuryos e o que espera decisão sua. Montado sozinho a partir do backlog do repositório: você não preenche nada.</p>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <div class="filtros">
+    <input type="search" id="busca" placeholder="Buscar no roadmap…" aria-label="Buscar">
+    <select id="frente" aria-label="Frente"><option value="">Todas as frentes</option></select>
+    <label><input type="checkbox" id="verFeitos" checked> mostrar concluídos</label>
+  </div>
+
+  <div id="conteudo"><div class="vazio">Carregando…</div></div>
+
+  <p class="rodape" id="rodape"></p>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey: "AIzaSyAKfI4MTbydlskdg5lMuvESfLIBhlPwQdw",
+  authDomain: "prod-kuryos.firebaseapp.com",
+  databaseURL: kuryosDatabaseURL("https://prod-kuryos-default-rtdb.firebaseio.com"),
+  projectId: "prod-kuryos",
+  storageBucket: "prod-kuryos.firebasestorage.app",
+  messagingSenderId: "323674581733",
+  appId: "1:323674581733:web:e283a491c0c2bd6025420c"
+};
+firebase.initializeApp(firebaseConfig);
+kuryosConnectEmulatorsIfLocal();
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]; }); }
+// Markdown mínimo do backlog: **negrito** e `código`.
+function md(s) { return esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
+
+var dados = null, novos = {}, concluidos = {};
+var DICA = {
+  A: 'Trabalho que nós executamos. Quando um chat termina algo, o item é riscado no backlog com o commit e aparece aqui como concluído.',
+  B: 'Não é código: depende de gente da Kuryos (cadastro, operação, compra). Está aqui porque trava item da lista acima.',
+  C: 'Perguntas que só você responde. Enquanto estiverem abertas, o trabalho relacionado fica parado ou segue pelo caminho conservador.'
+};
+var ICONE_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+function quando(iso) {
+  if (!iso) return '';
+  var d = new Date(iso); if (isNaN(d)) return '';
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+}
+
+// "Novo desde a última visita": compara com o que esta pessoa já viu neste aparelho.
+function marcarNovidades() {
+  var u = window.currentUser || {};
+  var chave = 'kt.roadmap.visto.' + (u.uid || u.email || '');
+  var anterior = null;
+  try {
+    var guardado = sessionStorage.getItem(chave + '.base');
+    anterior = guardado ? JSON.parse(guardado) : null;
+    if (!anterior) { var l = localStorage.getItem(chave); anterior = l ? JSON.parse(l) : null; sessionStorage.setItem(chave + '.base', JSON.stringify(anterior || {})); }
+  } catch (e) { anterior = null; }
+  var atual = {};
+  dados.secoes.forEach(function(s) { s.itens.forEach(function(i) { atual[i.id] = i.feito ? 'f' : 'a'; }); });
+  if (anterior && Object.keys(anterior).length) {
+    Object.keys(atual).forEach(function(id) {
+      if (!anterior[id]) { if (atual[id] === 'a') novos[id] = true; }
+      else if (anterior[id] === 'a' && atual[id] === 'f') concluidos[id] = true;
+    });
+  }
+  try { localStorage.setItem(chave, JSON.stringify(atual)); } catch (e) { /* sem armazenamento: só não marca novidade */ }
+}
+
+function itemHtml(i) {
+  var chips = '';
+  if (i.grupo) chips += '<span class="chip frente">' + esc(i.grupo) + '</span>';
+  var extras = i.extras || {};
+  Object.keys(extras).forEach(function(k) {
+    if (/detalhe/i.test(k)) chips += '<span class="chip" title="Onde está o detalhe">' + md(extras[k]) + '</span>';
+    else chips += '<span class="chip bloq" title="' + esc(k) + '">' + esc(k) + ': ' + md(extras[k]) + '</span>';
+  });
+  if (i.feito) chips += '<span class="chip ok">concluído' + (i.hash ? ' · ' + esc(i.hash) : '') + '</span>';
+  if (novos[i.id]) chips += '<span class="chip novo">novo desde sua última visita</span>';
+  if (concluidos[i.id]) chips += '<span class="chip novo">concluído desde sua última visita</span>';
+  var subs = (i.subitens || []).length ? '<ul>' + i.subitens.map(function(s) { return '<li>' + md(s) + '</li>'; }).join('') + '</ul>' : '';
+  return '<div class="item ' + (i.feito ? 'feito' : '') + '" data-id="' + esc(i.id) + '"><span class="chk" aria-hidden="true">' + ICONE_OK + '</span>' +
+    '<div class="corpo"><div class="txt">' + md(i.texto) + '</div>' + subs + '<div class="meta">' + chips + '</div></div></div>';
+}
+
+function filtrar(i) {
+  var f = $('frente').value, q = $('busca').value.trim().toLowerCase();
+  if (f && i.grupo !== f) return false;
+  if (!$('verFeitos').checked && i.feito) return false;
+  if (q) {
+    var alvo = (i.grupo + ' ' + i.texto + ' ' + (i.subitens || []).join(' ') + ' ' + Object.keys(i.extras || {}).map(function(k) { return i.extras[k]; }).join(' ')).toLowerCase();
+    if (alvo.indexOf(q) < 0) return false;
+  }
+  return true;
+}
+
+function desenhar() {
+  if (!dados) return;
+  var r = dados.resumo || {};
+  function abertos(l) { return r[l] ? r[l].total - r[l].feitos : 0; }
+  var feitos = (r.A ? r.A.feitos : 0) + (r.B ? r.B.feitos : 0) + (r.C ? r.C.feitos : 0);
+  $('kpis').innerHTML =
+    '<div class="kpi"><b>' + abertos('A') + '</b><span>a construir</span></div>' +
+    '<div class="kpi"><b>' + abertos('B') + '</b><span>dependem da Kuryos</span></div>' +
+    '<div class="kpi"><b>' + abertos('C') + '</b><span>decisões suas</span></div>' +
+    '<div class="kpi"><b>' + feitos + '</b><span>concluídos recentes</span></div>';
+
+  var grupos = {};
+  dados.secoes.forEach(function(s) { s.itens.forEach(function(i) { if (i.grupo) grupos[i.grupo] = true; }); });
+  var sel = $('frente'), atualSel = sel.value;
+  if (sel.options.length <= 1) {
+    Object.keys(grupos).sort().forEach(function(g) { var o = document.createElement('option'); o.value = g; o.textContent = g; sel.appendChild(o); });
+    sel.value = atualSel;
+  }
+
+  $('conteudo').innerHTML = dados.secoes.map(function(s) {
+    var lista = s.itens.filter(filtrar);
+    var abertosSecao = s.itens.filter(function(i) { return !i.feito; }).length;
+    return '<h2>' + esc(s.letra + '. ' + s.titulo) + ' <span class="n">' + abertosSecao + '</span></h2><div class="dica">' + esc(DICA[s.letra] || '') + '</div>' +
+      '<div class="lista">' + (lista.length ? lista.map(itemHtml).join('') : '<div class="vazio">Nada por aqui com esses filtros.</div>') + '</div>';
+  }).join('');
+
+  $('rodape').textContent = 'Fonte: ' + dados.fonte + (dados.atualizadoEm ? ' (atualizado em ' + dados.atualizadoEm + ')' : '') +
+    ' · gerado em ' + quando(dados.geradoEm) + (dados.commit ? ' · commit ' + dados.commit : '') +
+    '. O backlog é mantido pelos chats (Claude e Codex): cada um risca o que entregou com o hash do commit.';
+}
+
+function carregar() {
+  fetch('backlog.json?v=' + Date.now(), {cache: 'no-store'}).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(j) {
+    dados = j; marcarNovidades(); desenhar();
+  }).catch(function(e) {
+    $('conteudo').innerHTML = '<div class="vazio">Não foi possível carregar o roadmap (' + esc(e.message) + ').</div>';
+  });
+}
+['busca', 'frente', 'verFeitos'].forEach(function(id) { $(id).addEventListener(id === 'busca' ? 'input' : 'change', desenhar); });
+(function esperarLogin() { if (!window.currentUser) { setTimeout(esperarLogin, 150); return; } carregar(); })();
+</script>
+</body>
+</html>

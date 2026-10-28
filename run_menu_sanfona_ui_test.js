@@ -135,12 +135,12 @@ const estado = (page) => page.$$eval('.kt-nav-group', (gs) => gs.map((g) => [g.g
     assert.match(await capQualidade.innerText(), /QUALIDADE\s*\d+/i, 'fechado mostra quantos links tem');
     assert.equal(await page.locator('.kt-nav-group[data-grupo="Qualidade"] .kt-nav-link').first().isVisible(), false);
     assert.equal(await capQualidade.getAttribute('aria-expanded'), 'false');
-    // Abrir Qualidade; depois Logística fecha a Qualidade (a da tela atual segue aberta).
+    // Abrir Qualidade; depois Armazém fecha a Qualidade (a da tela atual segue aberta).
     await capQualidade.click();
     assert.equal(await page.locator('.kt-nav-group[data-grupo="Qualidade"] .kt-nav-link').first().isVisible(), true);
-    await page.locator('.kt-nav-group[data-grupo="Logística"] .kt-nav-cap').click();
+    await page.locator('.kt-nav-group[data-grupo="Armazém"] .kt-nav-cap').click();
     e = await estado(page);
-    assert.deepEqual(e.filter(([n, a]) => a && fixos.indexOf(n) < 0).map(([n]) => n).sort(), ['Logística', 'Operação']);
+    assert.deepEqual(e.filter(([n, a]) => a && fixos.indexOf(n) < 0).map(([n]) => n).sort(), ['Armazém', 'Operação']);
     // O bloco da tela atual não fecha.
     await page.locator('.kt-nav-group[data-grupo="Operação"] .kt-nav-cap').click();
     assert.equal(await page.locator('.kt-nav-group[data-grupo="Operação"]').evaluate((g) => g.classList.contains('fechado')), false);
@@ -148,7 +148,7 @@ const estado = (page) => page.$$eval('.kt-nav-group', (gs) => gs.map((g) => [g.g
     await page.reload();
     await page.waitForSelector('.kt-nav-group');
     e = await estado(page);
-    assert.deepEqual(e.filter(([n, a]) => a && fixos.indexOf(n) < 0).map(([n]) => n).sort(), ['Logística', 'Operação'], 'lembra o último aberto');
+    assert.deepEqual(e.filter(([n, a]) => a && fixos.indexOf(n) < 0).map(([n]) => n).sort(), ['Armazém', 'Operação'], 'lembra o último aberto');
     assert.deepEqual(errors, []);
     await page.close();
 

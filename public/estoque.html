@@ -16,6 +16,10 @@
   <script src="shared/seletor-endereco.js"></script>
   <script src="shared/expedicao-grade.js"></script>
   <script src="shared/conteudo-posicao.js"></script>
+  <script src="shared/kardex.js"></script>
+  <script src="shared/painel-movimentos.js"></script>
+  <script src="shared/painel-movimentos-tela.js"></script>
+  <link rel="stylesheet" href="shared/painel-movimentos.css">
   <script src="auth_check.js"></script>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="shared/theme.css">
@@ -291,8 +295,8 @@
       <div class="card-title" id="lvCount">Lotes vencendo</div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Situação</th><th style="text-align:right">Saldo</th></tr></thead>
-          <tbody id="lvBody"><tr><td colspan="6" class="no-data">Carregando...</td></tr></tbody>
+          <thead><tr><th>Item</th><th>Lote</th><th>Endereço</th><th>Validade</th><th>Situação</th><th style="text-align:right">Saldo</th><th></th></tr></thead>
+          <tbody id="lvBody"><tr><td colspan="7" class="no-data">Carregando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -302,11 +306,14 @@
        somava movimento do saldo do item com o do lote (o consumo aparecia duas
        vezes) e não fechava com o saldo; o Kardex separa as duas coisas. ═══ -->
   <div class="tab-panel" id="tab-historico">
-    <div class="kt-toolbar">
-      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="hmCodigo" placeholder="Código do material ou SKU do produto..."></div>
+    <!-- Painel de movimentações (27/10/2026, pedido do usuário: "algo dinâmico,
+         visual ... que transmita a informação de forma precisa e rápida").
+         Desenho em shared/painel-movimentos-tela.js; abre só ao entrar na aba. -->
+    <div id="painelMovimentos"></div>
+    <div class="kt-toolbar" style="max-width:none;margin-top:4px">
+      <div class="kt-search"><span class="icon">🔍</span><input type="text" id="hmCodigo" placeholder="Saldo corrido de um item: código do material ou SKU do produto..."></div>
       <button class="btn btn-primary" id="btnBuscarHistorico">Abrir no Kardex</button>
     </div>
-    <div class="section-note">O histórico de movimentações agora fica no <a href="kardex.html"><b>Kardex</b></a>: cada entrada, saída, consumo e ajuste com saldo corrido, período, exportação e a conciliação de todos os itens. Digite o código e abra.</div>
   </div>
 
   <!-- ═══ Aba: Estrutura de Ruas -- pedido do usuário: 3 telas paralelas
@@ -794,6 +801,7 @@ function ativarAbaEstoque(target, pushUrl) {
   document.querySelectorAll('#mainTabsEstoque .tab').forEach(function(t) { t.classList.toggle('active', t.getAttribute('data-tab') === target); });
   document.querySelectorAll('#mainPanelsEstoque > .tab-panel').forEach(function(p) { p.classList.toggle('active', p.id === 'tab-' + target); });
   document.getElementById('propBarWrap').style.display = ['agregado', 'lotes', 'posicoes'].indexOf(target) >= 0 ? '' : 'none';
+  if (target === 'historico') iniciarPainelMovimentos();
   if (pushUrl) {
     var url = new URL(location.href);
     url.searchParams.set('tab', target);
@@ -1410,7 +1418,7 @@ function renderLotesVencendo() {
   document.getElementById('lvCount').textContent = 'Lotes vencendo em até ' + dias + ' dias (' + linhas.length + ')';
   var tbody = document.getElementById('lvBody');
   if (!linhas.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-data">Nenhum lote vencendo nesse período.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">Nenhum lote vencendo nesse período.</td></tr>';
     return;
   }
   tbody.innerHTML = linhas.map(function(x) {
@@ -1428,6 +1436,8 @@ function renderLotesVencendo() {
       '<td>' + fmtData(l.dataValidade) + '</td>' +
       '<td>' + situacao + '</td>' +
       '<td style="text-align:right">' + fmtNum(l.saldoLote || 0) + ' ' + escapeHtml(l.unidade || '') + '</td>' +
+      // Investigar o item: o Kardex mostra todas as movimentações dele (aceita o código ou a chave do item).
+      '<td style="text-align:right;white-space:nowrap"><a class="btn btn-ghost btn-sm" style="text-decoration:none" href="kardex.html?item=' + encodeURIComponent(l.itemCodigo || x.itemKey) + '" title="Abrir o Kardex deste item para ver todas as movimentações">Ver kardex →</a></td>' +
     '</tr>';
   }).join('');
 }
@@ -1436,6 +1446,11 @@ function renderLotesVencendo() {
    Aba: Histórico de Movimentações -- busca por item, lê só
    movimentos_estoque/{itemKey} (não a árvore inteira).
    ═══════════════════════════════════════════════════════════════════ */
+var painelMovimentos = null;
+function iniciarPainelMovimentos() {
+  if (painelMovimentos || typeof PainelMovimentosTela === 'undefined' || typeof db === 'undefined') return;
+  painelMovimentos = PainelMovimentosTela.iniciar({container: document.getElementById('painelMovimentos'), db: db, kardexUrl: 'kardex.html'});
+}
 function buscarHistorico() {
   var codigo = document.getElementById('hmCodigo').value.trim();
   location.href = 'kardex.html' + (codigo ? '?item=' + encodeURIComponent(codigo) : '');
